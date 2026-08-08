@@ -1,16 +1,21 @@
 package com.thorium.preview;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
 import android.app.DownloadManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.Settings;
 import android.util.Log;
+import android.view.Display;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -32,22 +37,112 @@ import android.widget.Toast;
 import java.io.File;
 import java.net.URI;
 import java.net.URLEncoder;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** A small browser that remains inside Lucent and routes ordinary web
  * downloads through Android's DownloadManager into the public Downloads
- * directory. It deliberately retains WebView's default TLS validation. */
+ * directory. It deliberately retains WebView's default TLS validation.
+ *
+ * On a dual-screen Thor this window belongs on the physical lower display,
+ * the same surface the preview player uses: it is a companion window, never
+ * a second library. It runs in its own task so it stacks above the resident
+ * PreviewActivity instead of replacing it, which keeps Lucent — not Android's
+ * launcher — in ownership of that display for the whole browsing session. */
 public final class BrowserActivity extends Activity {
     public static final String EXTRA_URL = "com.thorium.preview.BROWSER_URL";
+    /** Returned by {@link #open} when Android refused the window entirely. */
+    static final int LAUNCH_FAILED = Integer.MIN_VALUE;
     private static final String HOME = "https://www.google.com/";
     private static final String PREFS = "lucent_browser";
     private static final String LAST_URL = "last_url";
     private static final String TAG = "LucentBrowser";
     private static final int BAR_COLOR = Color.rgb(11, 14, 20);
     private static final int FIELD_COLOR = Color.rgb(27, 32, 42);
+    // 43821 belongs to PreviewService and 43822 to the secondary gameplay
+    // router; a distinct request code keeps the three PendingIntents from
+    // overwriting one another under FLAG_UPDATE_CURRENT.
+    private static final int PENDING_INTENT_REQUEST = 43823;
+    /** Downloads handed to Android's DownloadManager during this process.
+     * The system service owns every transfer from enqueue onward, so this is
+     * evidence for the teardown log, never a handle used to cancel one. */
+    private static final AtomicInteger HANDED_OFF_DOWNLOADS = new AtomicInteger();
 
     private WebView webView;
     private EditText address;
     private TextView progress;
+
+    /** Opens Lucent's browser on the display it belongs to and returns that
+     * display id, or {@link #LAUNCH_FAILED}. Callable from the service, which
+     * is why it carries the same background-activity-start handling as the
+     * preview and secondary-gameplay launches. */
+    static int open(Context context, String requestedUrl) {
+        if (context == null) return LAUNCH_FAILED;
+        Intent browser = new Intent(context, BrowserActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                .putExtra(EXTRA_URL, requestedUrl == null ? "" : requestedUrl);
+        int displayId = targetDisplayId(context);
+        boolean overlays = Settings.canDrawOverlays(context);
+        try {
+            if (displayId < 0) {
+                // Single-screen devices — and the dual-screen-gameplay
+                // exception — keep the historical primary-display launch.
+                context.startActivity(browser);
+                Log.i(TAG, "open displayId=" + Display.DEFAULT_DISPLAY +
+                        " path=startActivity(default)");
+                return Display.DEFAULT_DISPLAY;
+            }
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(displayId);
+            if (Build.VERSION.SDK_INT >= 34) {
+                options.setPendingIntentCreatorBackgroundActivityStartMode(
+                        ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+                options.setPendingIntentBackgroundActivityStartMode(
+                        ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+            }
+            // The user-granted overlay capability is Android's own exemption
+            // for a background service to show a window; without it, a
+            // creator-and-sender opted-in PendingIntent is the supported route.
+            if (overlays) {
+                context.startActivity(browser, options.toBundle());
+            } else {
+                PendingIntent pending = PendingIntent.getActivity(
+                        context, PENDING_INTENT_REQUEST, browser,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE,
+                        options.toBundle());
+                pending.send(context, 0, null, null, null, null, options.toBundle());
+            }
+            Log.i(TAG, "open displayId=" + displayId + " path=" +
+                    (overlays ? "startActivity(canDrawOverlays)" : "PendingIntent") +
+                    " (SDK=" + Build.VERSION.SDK_INT + ")");
+            return displayId;
+        } catch (PendingIntent.CanceledException | RuntimeException failure) {
+            Log.e(TAG, "Unable to open the Lucent browser on display " + displayId, failure);
+            return LAUNCH_FAILED;
+        }
+    }
+
+    /** The lower display whenever the device has one, otherwise -1 for the
+     * main display. */
+    static int targetDisplayId(Context context) {
+        int secondary = context == null ? -1 : BootReceiver.secondaryDisplayId(context);
+        if (secondary < 0) {
+            Log.i(TAG, "targetDisplayId=main reason=no-secondary-display");
+            return -1;
+        }
+        if (PreviewActivity.isGameplaySurfaceActive()) {
+            // A DS/3DS/Wii U session renders its lower screen through
+            // PreviewActivity's SurfaceView on that very display. Launching
+            // over it would stop that Activity and tear the gameplay Surface
+            // down mid-frame, so the browser yields and opens on the main
+            // display instead.
+            Log.i(TAG, "targetDisplayId=main reason=dual-screen-gameplay-owns-display-"
+                    + secondary);
+            return -1;
+        }
+        Log.i(TAG, "targetDisplayId=" + secondary + " reason=secondary-display-present");
+        return secondary;
+    }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -166,6 +261,16 @@ public final class BrowserActivity extends Activity {
 
         if (state == null || webView.restoreState(state) == null)
             webView.loadUrl(initialUrl(getIntent()));
+        Log.i(TAG, "Browser created on displayId=" +
+                (getDisplay() == null ? -1 : getDisplay().getDisplayId()));
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        // PreviewService already armed the break when it opened this window.
+        // Re-asserting here covers a start it did not initiate — a relaunch
+        // after a configuration or display change, or a restored task.
+        notifyPreviewService(PreviewService.ACTION_BROWSER_OPENED);
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -270,7 +375,12 @@ public final class BrowserActivity extends Activity {
                 DownloadManager manager = (DownloadManager)
                         getSystemService(Context.DOWNLOAD_SERVICE);
                 if (manager == null) throw new IllegalStateException("DownloadManager unavailable");
+                // enqueue() transfers ownership to the system's
+                // android.providers.downloads process. Nothing in Lucent may
+                // call manager.remove(id) afterwards: the transfer has to
+                // outlive this Activity, this display, and this process.
                 long downloadId = manager.enqueue(request);
+                HANDED_OFF_DOWNLOADS.incrementAndGet();
                 // Download URLs regularly carry signed query tokens; keep them
                 // out of the log.
                 Log.i(TAG, "Queued background download " + downloadId +
@@ -336,12 +446,35 @@ public final class BrowserActivity extends Activity {
 
     @Override protected void onDestroy() {
         if (webView != null) {
+            // stopLoading() only abandons the page this WebView is rendering.
+            // Downloads left this Activity at enqueue() time and are owned by
+            // the system DownloadManager, so tearing the window down — whether
+            // the user pressed CLOSE or Android relaunched us on another
+            // display — cannot interrupt one.
             webView.stopLoading();
             webView.setDownloadListener(null);
             webView.destroy();
             webView = null;
         }
+        // A configuration- or display-driven relaunch is not a close: onStart
+        // re-arms the break, and resuming previews in between would flash the
+        // lower display back to a movie for a frame.
+        if (!isChangingConfigurations())
+            notifyPreviewService(PreviewService.ACTION_BROWSER_CLOSED);
+        Log.i(TAG, "Browser destroyed; " + HANDED_OFF_DOWNLOADS.get() +
+                " download(s) handed to DownloadManager keep running in the background");
         super.onDestroy();
+    }
+
+    private void notifyPreviewService(String action) {
+        // A package-scoped broadcast to the already-running service, not
+        // startService: onDestroy can run once this process has left the
+        // foreground, where a background service start would be refused.
+        try {
+            sendBroadcast(new Intent(action).setPackage(getPackageName()));
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Unable to tell the preview service about " + action, error);
+        }
     }
 
     private int dp(int value) {

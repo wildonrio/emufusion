@@ -52,6 +52,13 @@ public final class PreviewService extends Service {
     public static final String ACTION_CLOSE = "com.thorium.preview.CLOSE";
     public static final String ACTION_LAUNCH = "com.thorium.preview.LAUNCH";
     public static final String ACTION_COMPLETED = "com.thorium.preview.COMPLETED";
+    /** Broadcast to PreviewActivity: hold every decoder paused and silent. */
+    public static final String ACTION_PAUSE = "com.thorium.preview.PAUSE";
+    /** Broadcast to PreviewActivity: start the paused decoders again. */
+    public static final String ACTION_RESUME = "com.thorium.preview.RESUME";
+    /** Broadcast from BrowserActivity when its window appears/disappears. */
+    public static final String ACTION_BROWSER_OPENED = "com.thorium.preview.BROWSER_OPENED";
+    public static final String ACTION_BROWSER_CLOSED = "com.thorium.preview.BROWSER_CLOSED";
     public static final String EXTRA_VIDEO = "video";
     public static final String EXTRA_ART = "art";
     public static final String EXTRA_TITLE = "title";
@@ -63,7 +70,11 @@ public final class PreviewService extends Service {
     public static final String EXTRA_SOUND_ENABLED = "sound_enabled";
     public static final String EXTRA_SEQUENCE = "sequence";
     public static final String EXTRA_ADVANCE = "advance";
+    /** Persisted so a PreviewActivity rebuilt during a browser break knows it
+     * must come back paused rather than playing under the browser. */
+    public static final String EXTRA_BROWSER_ACTIVE = "browser_active";
     public static final int PORT = 43821;
+    private static final String BROWSER_TAG = "LucentBrowser";
 
     private volatile boolean running;
     private volatile long suppressPlayUntil;
@@ -73,6 +84,12 @@ public final class PreviewService extends Service {
     // let the normal Pegasus heartbeat resurrect lower-display playback until
     // a subsequent /play request explicitly returns placement to the Thor.
     private volatile boolean placementBlank;
+    // A browser break. While Lucent's browser window exists, preview playback
+    // is suspended: previewActive is false so the watchdog cannot fire,
+    // /heartbeat cannot resurrect it, and /play and /transition record the
+    // user's newest selection without starting a decoder under the browser.
+    private volatile boolean browserActive;
+    private volatile boolean resumePreviewAfterBrowser;
     private volatile long lastPegasusHeartbeat;
     private volatile long lastPreviewSequence;
     private volatile long requestedLaunchSequence;
@@ -97,6 +114,19 @@ public final class PreviewService extends Service {
             mainHandler.postDelayed(this, 750L);
         }
     };
+    // BrowserActivity reports its own lifecycle instead of the service merely
+    // assuming it: a package-scoped broadcast to this already-running service
+    // is delivered even when the browser is torn down after the process has
+    // left the foreground, where a background startService would be refused.
+    private final android.content.BroadcastReceiver browserReceiver =
+            new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context context, Intent intent) {
+            if (ACTION_BROWSER_OPENED.equals(intent.getAction())) beginBrowserBreak();
+            else if (ACTION_BROWSER_CLOSED.equals(intent.getAction())) endBrowserBreak();
+        }
+    };
+    private boolean browserReceiverRegistered;
     private ServerSocket server;
     // Requests are handled off the accept loop on a small bounded pool so a
     // single stalled client can never wedge the whole localhost control plane.
@@ -151,6 +181,15 @@ public final class PreviewService extends Service {
         // the platform's five-second deadline.
         ensureForeground();
         ensureControlToken();
+        android.content.IntentFilter browserFilter =
+                new android.content.IntentFilter(ACTION_BROWSER_OPENED);
+        browserFilter.addAction(ACTION_BROWSER_CLOSED);
+        registerReceiver(browserReceiver, browserFilter);
+        browserReceiverRegistered = true;
+        // A break can only be stale here: this is a fresh service instance, so
+        // no browser window of ours is open yet.
+        getSharedPreferences("preview", MODE_PRIVATE).edit()
+                .putBoolean(EXTRA_BROWSER_ACTIVE, false).apply();
         importManager = new ImportManager(this);
         updateManager = new UpdateManager(this);
         libraryIndexManager = new LibraryIndexManager();
@@ -210,6 +249,9 @@ public final class PreviewService extends Service {
             gameplayActive = true;
             placementBlank = false;
             previewActive = false;
+            // A game started; closing the browser later must not put a movie
+            // back on the lower display underneath it.
+            resumePreviewAfterBrowser = false;
             suppressPlayUntil = SystemClock.elapsedRealtime() + 5000L;
             mainHandler.removeCallbacks(pegasusWatchdog);
             // Keep the secondary display owned by Lucent but render it fully
@@ -231,6 +273,7 @@ public final class PreviewService extends Service {
         } else if (intent != null && ACTION_SUSPEND.equals(intent.getAction())) {
             placementBlank = true;
             previewActive = false;
+            resumePreviewAfterBrowser = false;
             sendBroadcast(new Intent(ACTION_BLANK).setPackage(getPackageName()));
         } else if (intent != null && ACTION_LAUNCH.equals(intent.getAction())) {
             long sequence = intent.getLongExtra(EXTRA_SEQUENCE, 0L);
@@ -405,6 +448,16 @@ public final class PreviewService extends Service {
                         .putBoolean(EXTRA_ADVANCE, advance)
                         .putLong(EXTRA_SEQUENCE, sequence)
                         .apply();
+                if (browserActive) {
+                    // Pegasus keeps running on the upper display during a
+                    // break, so the user can still move the selection. Keep
+                    // the newest one on record — closing the browser resumes
+                    // what is selected then, not what was selected on open —
+                    // but never start a decoder underneath the browser.
+                    resumePreviewAfterBrowser = true;
+                    respond(writer, "200 OK", "{\"ok\":true,\"browserActive\":true}");
+                    return;
+                }
                 previewActive = true;
                 lastPegasusHeartbeat = SystemClock.elapsedRealtime();
                 mainHandler.removeCallbacks(pegasusWatchdog);
@@ -424,6 +477,14 @@ public final class PreviewService extends Service {
                         ",\"completedSeq\":" + completed + "}");
             } else if ("/heartbeat".equals(path)) {
                 long now = SystemClock.elapsedRealtime();
+                if (browserActive) {
+                    // The break owns preview state until the browser closes.
+                    // Resurrecting playback here would both put a movie back
+                    // under the browser and reorder the lower-display task
+                    // over it on every heartbeat.
+                    respond(writer, "200 OK", "{\"ok\":true,\"browserActive\":true}");
+                    return;
+                }
                 if (placementBlank) {
                     respond(writer, "200 OK", "{\"ok\":true,\"placementBlank\":true}");
                     return;
@@ -448,6 +509,7 @@ public final class PreviewService extends Service {
             } else if ("/hide".equals(path)) {
                 suppressPlayUntil = SystemClock.elapsedRealtime() + 1500L;
                 previewActive = false;
+                resumePreviewAfterBrowser = false;
                 sendBroadcast(new Intent(ACTION_HIDE).setPackage(getPackageName()));
                 respond(writer, "200 OK", "{\"ok\":true}");
             } else if ("/transition".equals(path)) {
@@ -463,6 +525,13 @@ public final class PreviewService extends Service {
                 // the incoming decoder has rendered; PreviewActivity then
                 // performs the short crossfade.
                 suppressPlayUntil = 0L;
+                if (browserActive) {
+                    // Navigating the library during a break arms the resume
+                    // without ending the break.
+                    resumePreviewAfterBrowser = true;
+                    respond(writer, "200 OK", "{\"ok\":true,\"browserActive\":true}");
+                    return;
+                }
                 previewActive = true;
                 lastPegasusHeartbeat = SystemClock.elapsedRealtime();
                 respond(writer, "200 OK", "{\"ok\":true}");
@@ -545,6 +614,7 @@ public final class PreviewService extends Service {
                 placementBlank = true;
                 suppressPlayUntil = SystemClock.elapsedRealtime() + 1500L;
                 previewActive = false;
+                resumePreviewAfterBrowser = false;
                 sendBroadcast(new Intent(ACTION_BLANK).setPackage(getPackageName()));
                 respond(writer, "200 OK", "{\"ok\":true}");
             } else if ("/import/scan".equals(path)) {
@@ -556,12 +626,18 @@ public final class PreviewService extends Service {
                 respond(writer, "202 Accepted", importManager.statusJson());
             } else if ("/browser/open".equals(path)) {
                 String requestedUrl = parseQuery(query).getOrDefault("url", "");
-                Intent browser = new Intent(this, BrowserActivity.class)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                                | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                        .putExtra(BrowserActivity.EXTRA_URL, requestedUrl);
-                startActivity(browser);
-                respond(writer, "202 Accepted", "{\"ok\":true}");
+                // Break first: the decoders must be silent and still before
+                // the window appears, so no movie is ever heard underneath
+                // the browser and the watchdog is already disarmed when the
+                // lower-display task loses the front.
+                beginBrowserBreak();
+                int displayId = BrowserActivity.open(this, requestedUrl);
+                boolean opened = displayId != BrowserActivity.LAUNCH_FAILED;
+                // A refused window would otherwise leave previews stopped
+                // with nothing on screen to close.
+                if (!opened) endBrowserBreak();
+                respond(writer, opened ? "202 Accepted" : "500 Internal Server Error",
+                        "{\"ok\":" + opened + ",\"displayId\":" + displayId + "}");
             } else if ("/import/initial".equals(path)) {
                 importManager.startInitialScan();
                 respond(writer, "202 Accepted", importManager.statusJson());
@@ -604,6 +680,58 @@ public final class PreviewService extends Service {
             }
         } catch (Exception ignored) {
         }
+    }
+
+    /** Stops preview playback for as long as Lucent's browser is open.
+     *
+     * Three things fight a naive pause and are neutralised here: the 750 ms
+     * pegasusWatchdog (disarmed, and previewActive false so a queued run
+     * returns immediately), /heartbeat (short-circuits on browserActive), and
+     * /play and /transition (record the selection without showing it). */
+    private synchronized void beginBrowserBreak() {
+        if (browserActive) return;
+        browserActive = true;
+        resumePreviewAfterBrowser = previewActive;
+        previewActive = false;
+        mainHandler.removeCallbacks(pegasusWatchdog);
+        getSharedPreferences("preview", MODE_PRIVATE).edit()
+                .putBoolean(EXTRA_BROWSER_ACTIVE, true).apply();
+        sendBroadcast(new Intent(ACTION_PAUSE).setPackage(getPackageName()));
+        Log.i(BROWSER_TAG, "browser break started resumeOnClose="
+                + resumePreviewAfterBrowser + " gameplayActive=" + gameplayActive);
+    }
+
+    /** Ends the break and puts the lower display back the way the user left
+     * it — the newest selection playing, or Lucent's own black surface. */
+    private synchronized void endBrowserBreak() {
+        if (!browserActive) return;
+        browserActive = false;
+        getSharedPreferences("preview", MODE_PRIVATE).edit()
+                .putBoolean(EXTRA_BROWSER_ACTIVE, false).apply();
+        // Ordered ahead of the update below: the same receiver takes both, so
+        // the decoders are unpaused before a new selection reaches them.
+        sendBroadcast(new Intent(ACTION_RESUME).setPackage(getPackageName()));
+        boolean resume = resumePreviewAfterBrowser && !gameplayActive && !placementBlank;
+        resumePreviewAfterBrowser = false;
+        if (resume) {
+            previewActive = true;
+            lastPegasusHeartbeat = SystemClock.elapsedRealtime();
+            mainHandler.removeCallbacks(pegasusWatchdog);
+            mainHandler.postDelayed(pegasusWatchdog, 750L);
+            // Doubles as the reorder that brings the lower-display task back
+            // above the closing browser task.
+            showLastPlayer();
+        } else if (!PreviewActivity.isGameplaySurfaceActive()) {
+            // Nothing to resume, but Lucent still owns that display: show its
+            // OLED-black surface rather than let Android's launcher appear as
+            // the browser task disappears. A dual-screen game is the one case
+            // that already owns the display and must not be touched.
+            launchPlayerOnSecondary(new Intent(this, PreviewActivity.class)
+                    .setAction(ACTION_BLANK)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+        }
+        Log.i(BROWSER_TAG, "browser break ended resumedPreview=" + resume);
     }
 
     private void reloadLucentFrontend() {
@@ -755,6 +883,14 @@ public final class PreviewService extends Service {
         running = false;
         previewActive = false;
         mainHandler.removeCallbacks(pegasusWatchdog);
+        try {
+            if (browserReceiverRegistered) unregisterReceiver(browserReceiver);
+        } catch (RuntimeException ignored) {
+        }
+        // Deliberately absent: any DownloadManager teardown. Downloads started
+        // from the browser belong to the system download service from enqueue
+        // onward and must survive this service, the browser window, and the
+        // process itself.
         try {
             if (server != null) server.close();
         } catch (Exception ignored) {

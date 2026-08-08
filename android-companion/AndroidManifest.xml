@@ -52,9 +52,20 @@
             android:excludeFromRecents="true"
             android:exported="false" />
 
+        <!-- Lucent's in-app browser is a lower-display companion window on the
+             Thor. Its own taskAffinity keeps it in a separate task so it
+             stacks above the resident preview surface instead of replacing it
+             (and so the launch display id is honoured), singleTask reuses the
+             one window, and excludeFromRecents stops it appearing as a second
+             Lucent entry. Non-exported with no launcher category: only
+             Lucent's own /browser/open opens it. -->
         <activity
             android:name=".BrowserActivity"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+            android:configChanges="density|keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:taskAffinity="com.thorium.preview.browser"
             android:exported="false" />
 
         <service

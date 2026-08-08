@@ -269,7 +269,7 @@ python3 "$PROJECT_DIR/tools/patch_main_activity_right_stick.py" \
 MANIFEST_COMPONENTS="$BUILD_DIR/work/manifest-components.xml"
 printf '%s\n' \
 '        <activity android:name="com.thorium.preview.PreviewActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" android:excludeFromRecents="true" android:launchMode="singleTop" android:resizeableActivity="true" android:screenOrientation="landscape" android:taskAffinity="com.thorium.preview.preview" android:exported="false"/>' \
-'        <activity android:name="com.thorium.preview.BrowserActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" android:exported="false"/>' \
+'        <activity android:name="com.thorium.preview.BrowserActivity" android:configChanges="density|keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" android:excludeFromRecents="true" android:launchMode="singleTask" android:resizeableActivity="true" android:taskAffinity="com.thorium.preview.browser" android:exported="false"/>' \
 '        <activity android:name="com.thorium.preview.RomLaunchActivity" android:excludeFromRecents="true" android:noHistory="true" android:taskAffinity="com.thorium.preview.romlaunch" android:exported="false"/>' \
 '        <service android:name="com.thorium.preview.PreviewService" android:exported="false"/>' \
 '        <provider android:name="com.thorium.preview.UpdateFileProvider" android:authorities="com.thorium.preview.updates" android:exported="false" android:grantUriPermissions="true"/>' \

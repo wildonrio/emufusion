@@ -37,6 +37,10 @@ import android.util.Log;
 public final class PreviewActivity extends Activity {
     private static volatile boolean running;
     private static volatile boolean resumed;
+    // True only while a dual-screen (DS/3DS/Wii U) session is rendering into
+    // this Activity's SurfaceView. Anything that would take the lower display
+    // — the in-app browser above all — has to yield while this is set.
+    private static volatile boolean gameplaySurfaceActive;
     private FrameLayout root;
     private ImageView artwork;
     private TextView titleView;
@@ -54,6 +58,9 @@ public final class PreviewActivity extends Activity {
     private boolean ownsVisibilityFlags;
     private int activeSlot = -1;
     private boolean soundEnabled;
+    // A "browser break": every decoder is held paused and silent while
+    // Lucent's browser is open, then started again where it stopped.
+    private boolean playersPaused;
     private long selectionGeneration;
     private long currentSequence;
     private boolean advanceOnCompletion;
@@ -77,6 +84,10 @@ public final class PreviewActivity extends Activity {
             } else if (PreviewService.ACTION_AUDIO.equals(intent.getAction())) {
                 applySoundEnabled(intent.getBooleanExtra(
                         PreviewService.EXTRA_SOUND_ENABLED, false));
+            } else if (PreviewService.ACTION_PAUSE.equals(intent.getAction())) {
+                pausePlayers();
+            } else if (PreviewService.ACTION_RESUME.equals(intent.getAction())) {
+                resumePlayers();
             } else if (PreviewService.ACTION_UPDATE.equals(intent.getAction())) {
                 showSelection(
                         intent.getStringExtra(PreviewService.EXTRA_VIDEO),
@@ -115,6 +126,11 @@ public final class PreviewActivity extends Activity {
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         soundEnabled = getSharedPreferences("preview", MODE_PRIVATE)
                 .getBoolean(PreviewService.EXTRA_SOUND_ENABLED, false);
+        // A browser break outlives this Activity: the service records it, so a
+        // lower display rebuilt mid-break comes back still and silent instead
+        // of playing a movie underneath the browser.
+        playersPaused = getSharedPreferences("preview", MODE_PRIVATE)
+                .getBoolean(PreviewService.EXTRA_BROWSER_ACTIVE, false);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         // The lower-screen movie must never steal controller focus from
         // Pegasus on the upper display.
@@ -131,6 +147,8 @@ public final class PreviewActivity extends Activity {
         registerReceiver(receiver, new IntentFilter(PreviewService.ACTION_BLANK));
         registerReceiver(receiver, new IntentFilter(PreviewService.ACTION_AUDIO));
         registerReceiver(receiver, new IntentFilter(PreviewService.ACTION_CLOSE));
+        registerReceiver(receiver, new IntentFilter(PreviewService.ACTION_PAUSE));
+        registerReceiver(receiver, new IntentFilter(PreviewService.ACTION_RESUME));
         receiverRegistered = true;
 
         gestures = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
@@ -500,12 +518,38 @@ public final class PreviewActivity extends Activity {
         applyPlayerVolumes();
     }
 
+    /** Holds every decoder where it stands for a browser break.
+     *
+     * Pausing rather than releasing is deliberate. release() would drop the
+     * decoded frame and leave the window background exposed, and returning
+     * from the browser would then need a cold prepareAsync behind that black
+     * window. A paused MediaPlayer keeps its last frame on screen and resumes
+     * with a single start(), so the break is silent and still rather than
+     * blank, and the return is immediate. */
+    private void pausePlayers() {
+        if (playersPaused) return;
+        playersPaused = true;
+        // Mute first: a decoder that pause() refuses (an unprepared warm
+        // neighbour, say) must still not be audible under the browser.
+        applyPlayerVolumes();
+        if (slots == null) return;
+        for (PlayerSlot slot : slots) slot.pause();
+    }
+
+    private void resumePlayers() {
+        if (!playersPaused) return;
+        playersPaused = false;
+        if (slots != null)
+            for (PlayerSlot slot : slots) slot.resume();
+        applyPlayerVolumes();
+    }
+
     private void applyPlayerVolumes() {
         if (slots == null) return;
         for (int index = 0; index < slots.length; ++index) {
             MediaPlayer player = slots[index].player;
             if (player == null) continue;
-            float volume = soundEnabled && index == activeSlot ? 1f : 0f;
+            float volume = soundEnabled && !playersPaused && index == activeSlot ? 1f : 0f;
             try {
                 player.setVolume(volume, volume);
             } catch (RuntimeException ignored) {
@@ -543,6 +587,7 @@ public final class PreviewActivity extends Activity {
         launchButton.setVisibility(View.GONE);
         blackout.setVisibility(View.GONE);
         gameplayGeneration = generation;
+        gameplaySurfaceActive = true;
         Log.i("LucentPreview", "showGameplaySurface generation=" + generation +
                 " displayId=" + (getDisplay() == null ? -1 : getDisplay().getDisplayId()));
         gameplaySurface = new SurfaceView(this);
@@ -599,6 +644,11 @@ public final class PreviewActivity extends Activity {
             SecondaryGameplaySurfaceRouter.surfaceDestroyed(gameplayGeneration);
             root.removeView(existing);
             gameplaySurface = null;
+            // Only an instance that actually held the Surface clears the flag.
+            // The primary-display reject path also reaches onDestroy, and
+            // clearing it from there would tell the browser that a live
+            // dual-screen session had ended.
+            gameplaySurfaceActive = false;
         }
         gameplayGeneration = 0L;
         if (restorePreviewViews) {
@@ -657,6 +707,7 @@ public final class PreviewActivity extends Activity {
         if (ownsVisibilityFlags) {
             running = false;
             resumed = false;
+            gameplaySurfaceActive = false;
         }
         try {
             if (receiverRegistered) unregisterReceiver(receiver);
@@ -716,6 +767,24 @@ public final class PreviewActivity extends Activity {
             }
         }
 
+        /** Suspends decoding without releasing the decoder, so the rendered
+         * frame stays on the lower display for the whole break. */
+        void pause() {
+            if (player == null || !prepared) return;
+            try {
+                player.pause();
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        void resume() {
+            if (player == null || !prepared) return;
+            try {
+                player.start();
+            } catch (RuntimeException ignored) {
+            }
+        }
+
         private void open() {
             if (pendingSource == null || pendingSource.isEmpty() || !view.isAvailable()) return;
             try {
@@ -749,7 +818,9 @@ public final class PreviewActivity extends Activity {
                             + " durationMs=" + mediaPlayer.getDuration());
                     applyCrop(mediaPlayer.getVideoWidth(), mediaPlayer.getVideoHeight());
                     prepared = true;
-                    mediaPlayer.start();
+                    // A decoder that finishes preparing mid-break must not
+                    // undo the break; resumePlayers() starts it afterwards.
+                    if (!playersPaused) mediaPlayer.start();
                 });
                 // Game selections hard-loop here even on vendor players that
                 // emit completion despite looping. System-level previews report
@@ -863,5 +934,11 @@ public final class PreviewActivity extends Activity {
 
     static boolean isVisible() {
         return running && resumed;
+    }
+
+    /** True while a dual-screen game owns this Activity's lower-display
+     * Surface. The in-app browser reads it to stay off that display. */
+    static boolean isGameplaySurfaceActive() {
+        return running && gameplaySurfaceActive;
     }
 }
