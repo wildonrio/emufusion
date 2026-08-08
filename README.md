@@ -47,4 +47,8 @@ Lucent does not bundle games, firmware, or keys, and it does not download ROMs. 
 
 ## Licensing
 
-The complete Lucent application is a modified Pegasus distribution licensed under GPLv3, with corresponding source and reproducible build instructions provided in this repository. The standalone `theme/` package is independently available under the MIT License. See [LICENSING.md](LICENSING.md), [SOURCE_OFFER.md](SOURCE_OFFER.md), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The complete Lucent application is a modified Pegasus distribution licensed under GPLv3 (`GPL-3.0-only`), with corresponding source and reproducible build instructions provided in this repository. The standalone `theme/` package is independently available under the MIT License.
+
+This application uses the **Qt toolkit, version 5.15.10, under the GNU Lesser General Public License version 3**. Qt is not modified by Lucent, its complete corresponding source is available from the Qt project, and the packaged Qt libraries can be replaced with your own build — see [SOURCE_OFFER.md](SOURCE_OFFER.md) for the procedure. The APK also bundles OpenSSL 1.1.1t under the dual OpenSSL/SSLeay license and LLVM libc++ under Apache-2.0 with the LLVM exception.
+
+See [LICENSING.md](LICENSING.md), [SOURCE_OFFER.md](SOURCE_OFFER.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and [docs/qt-dependency-notes.md](docs/qt-dependency-notes.md).

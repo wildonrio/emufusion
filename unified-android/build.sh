@@ -295,6 +295,65 @@ cp "$ROOT_DIR/LICENSING.md" "$DECODED/assets/LICENSING.md"
 cp "$ROOT_DIR/SOURCE_OFFER.md" "$DECODED/assets/SOURCE_OFFER.md"
 cp "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$DECODED/assets/THIRD_PARTY_NOTICES.md"
 cp "$ROOT_DIR/theme/LICENSE" "$DECODED/assets/THEME_LICENSE"
+# LGPL-3.0 obligation for the bundled Qt: the license text has to travel with
+# the binaries, not just be linked from a README. LGPLv3 incorporates GPLv3 by
+# reference, and that text is already packaged above as assets/LICENSE.
+cp "$ROOT_DIR/docs/licenses/LGPL-3.0.txt" "$DECODED/assets/LICENSE-LGPL-3.0.txt"
+
+# Licence gate. Qt and OpenSSL were shipped undocumented for several releases
+# because nothing tied the packaged library set to the notices. This binds
+# them: a bundled base library with no THIRD_PARTY_NOTICES.md entry, or a
+# notice whose version no longer matches the binary, fails the build here
+# rather than in a release audit. The libretro cores have their own generated
+# notice bundles and are excluded; so is Pegasus, which is the base itself.
+NOTICES="$DECODED/assets/THIRD_PARTY_NOTICES.md"
+UNDOCUMENTED_LIBS=
+for lib_path in "$DECODED/lib/arm64-v8a/"*.so; do
+    [ -f "$lib_path" ] || continue
+    lib_name=${lib_path##*/}
+    case "$lib_name" in
+        liblucent_*|libpegasus-fe_*) continue ;;
+        libqml_QtQuick_Timeline_*) notice_heading='### Qt Quick Timeline' ;;
+        libQt5*|libplugins_*|libqml_*) notice_heading='## The Qt Toolkit' ;;
+        libcrypto.so|libssl.so) notice_heading='## OpenSSL' ;;
+        libc++_shared.so) notice_heading='## LLVM libc++' ;;
+        *) notice_heading= ;;
+    esac
+    if [ -z "$notice_heading" ] || ! grep -q "^$notice_heading" "$NOTICES"; then
+        UNDOCUMENTED_LIBS="$UNDOCUMENTED_LIBS $lib_name"
+    fi
+done
+# A blanket libQt5* rule would let a newly bundled Qt module - Qt WebEngine
+# and Qt Charts do not have the plain LGPL terms the rest of Qt has - ride in
+# under the general Qt notice. The notice enumerates the modules it covers, so
+# require each packaged module to actually be named there.
+for lib_path in "$DECODED/lib/arm64-v8a/"libQt5*.so; do
+    [ -f "$lib_path" ] || continue
+    qt_module=${lib_path##*/lib}
+    qt_module=${qt_module%_arm64-v8a.so}
+    grep -q "$qt_module" "$NOTICES" ||
+        UNDOCUMENTED_LIBS="$UNDOCUMENTED_LIBS $qt_module"
+done
+if [ -n "$UNDOCUMENTED_LIBS" ]; then
+    printf 'Refusing to build: bundled libraries with no THIRD_PARTY_NOTICES.md entry:%s\n' \
+        "$UNDOCUMENTED_LIBS" >&2
+    exit 1
+fi
+# The notices name exact versions, so the binaries must still agree with them.
+PACKAGED_QT_VERSION=$(LC_ALL=C grep -a -o 'Qt 5\.[0-9][0-9]*\.[0-9][0-9]*' \
+    "$DECODED/lib/arm64-v8a/libQt5Core_arm64-v8a.so" | head -1)
+if ! grep -q "${PACKAGED_QT_VERSION#Qt }" "$NOTICES"; then
+    printf 'Refusing to build: packaged %s is not the version documented in THIRD_PARTY_NOTICES.md\n' \
+        "$PACKAGED_QT_VERSION" >&2
+    exit 1
+fi
+PACKAGED_OPENSSL_VERSION=$(LC_ALL=C grep -a -o 'OpenSSL [0-9][0-9.]*[a-z]*' \
+    "$DECODED/lib/arm64-v8a/libcrypto.so" | head -1)
+if ! grep -q "$PACKAGED_OPENSSL_VERSION" "$NOTICES"; then
+    printf 'Refusing to build: packaged %s is not the version documented in THIRD_PARTY_NOTICES.md\n' \
+        "$PACKAGED_OPENSSL_VERSION" >&2
+    exit 1
+fi
 cp "$ROOT_DIR/engines/registry.json" "$DECODED/assets/engine-registry.json"
 cp "$ROOT_DIR/engines/registry.schema.json" "$DECODED/assets/engine-registry.schema.json"
 cp "$ROOT_DIR/engines/phase3-registry.json" "$DECODED/assets/phase3-engine-registry.json"

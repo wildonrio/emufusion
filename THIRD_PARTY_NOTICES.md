@@ -27,6 +27,107 @@ theme are Lucent additions. Platform and emulator names and logos are used for
 identification and remain the property of their respective owners; their
 presence does not imply sponsorship or endorsement.
 
+## The Qt Toolkit (Qt 5.15.10)
+
+**This application uses the Qt toolkit, version 5.15.10, under the GNU Lesser
+General Public License version 3 (LGPL-3.0).** Qt is the GUI, QML, networking,
+multimedia, and database toolkit that the Pegasus frontend runtime and the
+Lucent theme run on. Lucent neither compiles nor modifies Qt: the exact Qt
+binaries in the APK are the ones linked into the checksum-pinned upstream
+Pegasus Android build, and they are repacked unchanged.
+
+- Project: <https://www.qt.io/>
+- Source code: <https://code.qt.io/cgit/qt/qt5.git/> — the exact packaged
+  version is the `v5.15.10-lts-lgpl` tag,
+  <https://code.qt.io/cgit/qt/qt5.git/tag/?h=v5.15.10-lts-lgpl>
+- Copyright: The Qt Company Ltd. and other Qt contributors
+- Licenses: LGPL-3.0 for the modules listed below, except Qt Quick Timeline,
+  which is GPL-3.0-or-later (see the separate entry). Qt is additionally
+  available under commercial terms from The Qt Company; Lucent does not use and
+  does not sublicense those terms.
+- License text: `LICENSE-LGPL-3.0.txt` is included in the APK alongside this
+  file, and the GPLv3 text it incorporates by reference is included as
+  `LICENSE`. Both are also at <https://www.gnu.org/licenses/lgpl-3.0.html> and
+  <https://www.gnu.org/licenses/gpl-3.0.html>.
+
+The version determination is recorded in `docs/qt-dependency-notes.md`; it is
+read from the build string embedded in the packaged
+`libQt5Core_arm64-v8a.so`.
+
+Packaged Qt modules (all `_arm64-v8a`): Qt5Core, Qt5Gui, Qt5Qml, Qt5QmlModels,
+Qt5QmlWorkerScript, Qt5Quick, Qt5QuickParticles, Qt5QuickShapes, Qt5Network,
+Qt5Multimedia, Qt5MultimediaQuick, Qt5Sql, Qt5Svg, Qt5Gamepad, and
+Qt5AndroidExtras. The APK additionally contains the matching Qt platform,
+image-format, media, audio, SQL-driver, icon-engine, gamepad-backend and QML
+plugins built from the same Qt sources and covered by the same terms.
+
+### Relinking rights (LGPL-3.0 section 4)
+
+You may modify Qt and use your modified Qt with Lucent. Because Lucent ships Qt
+as separate shared objects rather than statically linked code, a modified Qt can
+be substituted without rebuilding Lucent:
+
+1. Build the Qt 5.15.10 modules listed above for `arm64-v8a` with your changes,
+   keeping the packaged `SONAME`s (for example
+   `libQt5Core_arm64-v8a.so`).
+2. Replace the corresponding files under `lib/arm64-v8a/` in the APK, leaving
+   `res/values/arrays.xml` (`qt_libs`, `load_local_libs`, `bundled_libs`)
+   unchanged so the Qt bootstrap loads your libraries by the same names.
+3. Re-zipalign and re-sign the APK with your own key. `unified-android/build.sh`
+   performs exactly these steps and accepts a different signing identity through
+   documented environment variables.
+
+Lucent applies no patch to any Qt library. The only binary Lucent modifies is
+Pegasus's own `libpegasus-fe_arm64-v8a.so`; those patches are in
+`unified-android/tools/` and are applied by `unified-android/build.sh`.
+
+### Qt Quick Timeline (GPL-3.0-or-later)
+
+`libqml_QtQuick_Timeline_qtquicktimelineplugin_arm64-v8a.so` comes from the
+`qtquicktimeline` module, which — unlike the rest of the packaged Qt — offers no
+LGPL option. It is available commercially or under the GNU General Public
+License version 3 or later as approved by the KDE Free Qt Foundation, and Lucent
+conveys it under GPL-3.0, the same license as the application as a whole.
+
+- Source code: <https://code.qt.io/cgit/qt/qtquicktimeline.git/> (branch `5.15`)
+- License text: included as `LICENSE`, and at
+  <https://www.gnu.org/licenses/gpl-3.0.html>
+
+## OpenSSL 1.1.1t
+
+Lucent packages the OpenSSL 1.1.1t cryptography and TLS libraries
+(`libcrypto.so`, `libssl.so`, `SONAME`s `libcrypto.so.1.1` and `libssl.so.1.1`)
+as bundled by the upstream Pegasus Android build for Qt Network's HTTPS support.
+They are repacked unchanged.
+
+- Project: <https://www.openssl.org/>
+- Source code: <https://github.com/openssl/openssl/tree/OpenSSL_1_1_1t>
+- Copyright: The OpenSSL Project Authors, and Eric Young and Tim Hudson for the
+  original SSLeay code
+- License: the dual **OpenSSL License and original SSLeay License**. The
+  Apache-2.0 relicensing applies only from OpenSSL 3.0 onward and does **not**
+  cover this version.
+- License text: <https://www.openssl.org/source/license-openssl-ssleay.txt>
+
+Both licenses require that the above attributions be retained; this notice
+serves that purpose, and it ships inside the APK. The version was read from the
+`OpenSSL 1.1.1t  7 Feb 2023` string in the packaged `libcrypto.so`.
+
+Note for maintainers: OpenSSL 1.1.1 reached end of life on 2023-09-11. Moving to
+a maintained branch requires rebuilding the upstream Pegasus Android package and
+is tracked with the wider Qt toolchain work, not here.
+
+## LLVM libc++
+
+`libc++_shared.so` is the Android NDK build of the LLVM C++ standard library,
+bundled by the upstream Pegasus Android build and required by Qt and by every
+Lucent native host and core.
+
+- Project: <https://libcxx.llvm.org/>
+- Copyright: the LLVM Project contributors
+- License: Apache License 2.0 with the LLVM exception
+- License text: <https://llvm.org/LICENSE.txt>
+
 ## Apache Commons Compress
 
 Lucent uses Apache Commons Compress 1.21 to inspect and extract verified ROM
