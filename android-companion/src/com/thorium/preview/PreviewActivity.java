@@ -338,6 +338,14 @@ public final class PreviewActivity extends Activity {
                                String system, String score,
                                String preloadPrev, String preloadNext, String preloadAux,
                                long sequence, boolean advance) {
+        // A dual-screen game owns this display until it hands it back. A
+        // preview selection arriving mid-session — the Pegasus heartbeat
+        // resurrecting playback, the 750 ms watchdog, a late ACTION_UPDATE —
+        // must not evict its Surface, or the engine goes on rendering a lower
+        // screen nobody can see for the rest of the session. The selection is
+        // already persisted, so the session's own teardown (ACTION_BLANK from
+        // SecondaryGameplaySurfaceRouter.release) shows it a moment later.
+        if (gameplaySurface != null) return;
         leaveGameplaySurface(true);
         final long generation = ++selectionGeneration;
         video = safe(video);
@@ -591,8 +599,29 @@ public final class PreviewActivity extends Activity {
         Log.i("LucentPreview", "showGameplaySurface generation=" + generation +
                 " displayId=" + (getDisplay() == null ? -1 : getDisplay().getDisplayId()));
         gameplaySurface = new SurfaceView(this);
-        gameplaySurface.setBackgroundColor(Color.BLACK);
-        gameplaySurface.setZOrderMediaOverlay(true);
+        // Compose this Surface ABOVE the window, and give it no View background.
+        //
+        // Both halves are load-bearing, and either one alone renders a
+        // perfectly good frame invisible. setZOrderMediaOverlay(true) puts the
+        // Surface at sublayer -1 — above other media Surfaces but *below* this
+        // Activity's window — so the window has to keep a transparent hole
+        // punched wherever the SurfaceView sits. Giving a View a background
+        // clears PFLAG_SKIP_DRAW, which moves that hole punch out of
+        // dispatchDraw() and into draw(); draw() punches the hole and then
+        // calls View.draw(), which immediately repaints the very same
+        // rectangle with the background. The window ends up opaque black
+        // directly over the Surface.
+        //
+        // That is exactly what the Thor showed: SurfaceFlinger had the
+        // 1240x1080 RGB_565 gameplay layer present, opaque and composited on
+        // display 4 underneath a full-screen window layer, melonDS reported
+        // its 256x192 bottom crop drawn with drawFrame returning true, and the
+        // physical lower screen read a uniform #000000 — not even the root
+        // gradient, which proves the hole was punched and then refilled.
+        // setZOrderOnTop lifts the Surface above the window altogether, so no
+        // hole is needed and no sibling view — the root gradient, the
+        // blackout, the artwork, a preview TextureView — can cover it again.
+        gameplaySurface.setZOrderOnTop(true);
         gameplaySurface.setFocusable(false);
         gameplaySurface.setFocusableInTouchMode(false);
         gameplaySurface.getHolder().addCallback(new SurfaceHolder.Callback() {
