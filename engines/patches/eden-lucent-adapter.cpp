@@ -21,8 +21,11 @@
 #include <thread>
 
 #include <android/native_window.h>
+#include <dlfcn.h>
 
 #include "lucent_native_adapter.h"
+
+extern "C" const lucent_native_adapter* lucent_native_adapter_entry(void);
 
 #include "common/fs/path_util.h"
 #include "core/core.h"
@@ -41,7 +44,27 @@ struct lucent_native_engine {
     std::atomic<bool> started{false};
     std::atomic<bool> loaded{false};
     ANativeWindow* window{nullptr};
+    // InitializeEmulation builds the render window, so it cannot run until
+    // Lucent has handed us a surface. load() therefore only prepares the
+    // system and keeps the content path for start().
+    std::string content_path;
 };
+
+/**
+ * Directory the adapter itself was loaded from, which is also where the
+ * Vulkan driver hook libraries sit. Derived from our own symbol rather than
+ * passed in, so the ABI does not need to carry an Android-specific path.
+ */
+static std::string adapter_library_directory() {
+    Dl_info info{};
+    if (dladdr(reinterpret_cast<const void*>(&lucent_native_adapter_entry), &info) == 0 ||
+        info.dli_fname == nullptr) {
+        return std::string();
+    }
+    const std::string path(info.dli_fname);
+    const auto separator = path.find_last_of('/');
+    return separator == std::string::npos ? std::string() : path.substr(0, separator);
+}
 
 static void adapter_describe(lucent_native_capabilities* out) {
     if (out == nullptr) {
@@ -93,13 +116,19 @@ static bool adapter_load(lucent_native_engine* engine,
     Common::FS::SetAppDirectory(std::string(request->system_directory));
 
     auto& session = EmulationSession::GetInstance();
-    session.ConfigureFilesystemProvider(std::string(request->content_path));
+    // The Vulkan driver has to be resolved before InitializeEmulation, which
+    // hands the loaded library to its render window. An empty custom-driver
+    // triple asks for the system driver.
+    session.InitializeGpuDriver(adapter_library_directory(), std::string(),
+                                std::string(), std::string());
+    // InitializeSystem creates the filesystem and the manual content provider.
+    // Nothing that touches content may run before it: ConfigureFilesystemProvider
+    // dereferences that provider, and calling it first is a null dereference.
     session.InitializeSystem(false);
-    const auto status =
-        session.InitializeEmulation(std::string(request->content_path), 0, true);
-    if (status != Core::SystemResultStatus::Success) {
-        return fail("Eden could not initialize this Switch title");
-    }
+    // InitializeEmulation itself calls ConfigureFilesystemProvider, so the
+    // adapter must not call it separately -- and it builds EmuWindow_Android
+    // from the native window, so it has to wait for start().
+    engine->content_path.assign(request->content_path);
     engine->loaded.store(true);
     return true;
 }
@@ -128,6 +157,17 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
     engine->window = static_cast<ANativeWindow*>(io->primary_window);
     auto& session = EmulationSession::GetInstance();
     session.SetNativeWindow(engine->window);
+
+    // Now that a surface exists, bring the title up. This is the call that
+    // builds the render window and loads the ROM, so it belongs here rather
+    // than in load().
+    const auto status = session.InitializeEmulation(engine->content_path, 0, true);
+    if (status != Core::SystemResultStatus::Success) {
+        std::snprintf(error, error_size,
+                      "Eden could not initialize this Switch title (status %d)",
+                      static_cast<int>(status));
+        return false;
+    }
 
     // Eden's loop blocks until HaltEmulation, so it gets its own thread. Lucent
     // keeps ownership of the surface lifetime and stops us before detaching it.

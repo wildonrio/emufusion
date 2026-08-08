@@ -53,7 +53,7 @@ public final class InWindowGameHost
     // Select+Start held together resets the running game. Three seconds is far
     // enough past the 1 s Stop hold and past any Start press a game asks for
     // that it cannot be reached by accident.
-    private static final long RESET_COMBO_HOLD_MS = 3000L;
+    private static final long RESET_COMBO_HOLD_MS = 2000L;
     // About three 60 fps frame periods: long enough that every core's next
     // input poll observes the synthesized Select press, short enough to feel
     // like a tap.
@@ -714,11 +714,25 @@ public final class InWindowGameHost
         comboConsumedStart = true;
         stopHoldTriggered = false;
         releaseLeakedStartPress();
-        EngineSession target = session;
-        boolean applied = target != null && target.reset();
-        Log.i(TAG, "Reset combo fired engine=" + request.engineId +
-                " system=" + request.systemId + " applied=" + applied +
-                " marker=reset-combo");
+        final EngineSession target = session;
+        if (target == null) return;
+        // reset() takes the engine's own lock and, on hardware sessions, waits
+        // on the render thread. Running it here would block the UI thread for
+        // as long as the core takes to power-cycle, which looked exactly like
+        // the game freezing instead of resetting. Hand it to the retirement
+        // executor so the combo returns immediately.
+        RETIREMENT_RELEASES.execute(() -> {
+            boolean applied = false;
+            try {
+                applied = target.reset();
+            } catch (Throwable failure) {
+                Log.w(TAG, "Reset combo failed engine=" + request.engineId +
+                        " marker=reset-combo-failure", failure);
+            }
+            Log.i(TAG, "Reset combo fired engine=" + request.engineId +
+                    " system=" + request.systemId + " applied=" + applied +
+                    " marker=reset-combo");
+        });
     }
 
     private void cancelResetCombo() {

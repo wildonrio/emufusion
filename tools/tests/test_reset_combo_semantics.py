@@ -27,7 +27,7 @@ def method_body(source: str, signature: str) -> str:
 
 
 class ResetComboSemanticsTest(unittest.TestCase):
-    """Select+Start held for three seconds resets the running game.
+    """Select+Start held for two seconds resets the running game.
 
     The combo shares its two buttons with behaviour that already exists —
     Select taps through to the core and Select held for one second exits to the
@@ -42,8 +42,12 @@ class ResetComboSemanticsTest(unittest.TestCase):
         self.arm = method_body(self.source, "private void armResetCombo")
         self.fire = method_body(self.source, "private void fireResetCombo")
 
-    def test_combo_fires_after_three_seconds_of_both_buttons(self):
-        self.assertIn("RESET_COMBO_HOLD_MS = 3000L", self.source)
+    def test_combo_fires_after_two_seconds_of_both_buttons(self):
+        # Two seconds: three felt like the game had hung rather than reset.
+        self.assertIn("RESET_COMBO_HOLD_MS = 2000L", self.source)
+        # The reset itself must never run on the UI thread; doing so
+        # blocked on the engine lock and looked exactly like a freeze.
+        self.assertIn("RETIREMENT_RELEASES.execute", self.source)
         self.assertIn("mainHandler.postDelayed", self.arm)
         self.assertIn("RESET_COMBO_HOLD_MS);", self.arm)
         self.assertIn("fireResetCombo();", self.arm)

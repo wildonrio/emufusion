@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 EDEN_COMMIT = "c0ffc900cdf19b9373549c59a7e6b22c33615ea4"
 SUPERSEDED_COMMIT = "5ec94b19714f75489cdfc62d890d2f94d45514ce"
-ADAPTER_SHA256 = "5657cc3c349e40d2bf432928b9b8bc6d18b7b502093bfe2197a64db02ec917da"
+ADAPTER_SHA256 = "86eaf8a8c90e3f9adafc88ed7aa3f20d0a335892712f9c2dc54ab06349bae7f7"
 ADAPTER_LIBRARY = "liblucent_native_adapter_eden.so"
 STAGED_ADAPTER = ROOT / "engines" / "build" / "arm64-v8a" / ADAPTER_LIBRARY
 ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-lucent-adapter.cpp"
