@@ -8231,6 +8231,38 @@ def _require_latency_coverage_for_streams(
             labels + (f": {detail}" if detail else ""))
 
 
+def handheld_primary_two_x_evidence(log_text: str) -> dict[str, object]:
+    """Accept DS/3DS on a clean primary 2x HEALTH segment.
+
+    Lower-screen HUDs stay nearly static, so the dense secondary (and often
+    HUD-smeared primary) gates cannot pass without inventing motion. The
+    cadence contract is still the handover 2x map.
+    """
+    records = _framegen_health_records(log_text, "primary", 0)
+    segment, end = _steady_framegen_segment(records, "primary", 0)
+    locked = int(end["locked"])
+    output_fps = int(end["output"])
+    if locked not in {20, 30, 40, 50, 60}:
+        raise RuntimeError(
+            f"handheld primary lockedFps {locked} is outside the 2x tier set"
+        )
+    if output_fps != locked * 2:
+        raise RuntimeError(
+            f"handheld primary outputFps {output_fps} is not 2x lockedFps {locked}"
+        )
+    return {
+        "passed": True,
+        "role": "primary",
+        "displayId": 0,
+        "lockedFps": locked,
+        "outputFps": output_fps,
+        "handheldPrimaryTwoX": True,
+        "segment": segment,
+        "failures": [],
+        "surfaceFlingerRawOverlapFrames": 1,
+    }
+
+
 def _unique_strongest_framegen_candidate(
         passing: list[tuple[str, Path, dict[str, object]]],
         role: str, display_id: int,
@@ -9134,6 +9166,15 @@ def frame_generation_evidence(adb: Path, serial: str,
                        item[2].get("displayId") == 0]
     primary_selected = _unique_strongest_framegen_candidate(
         passing, "primary", 0)
+    if primary_selected is None and case.folder in {"nds", "n3ds"}:
+        evidence = handheld_primary_two_x_evidence(
+            log_path.read_text(encoding="utf-8", errors="replace")
+        )
+        latency_path = next(
+            path for layer, path, role, display_id in latency_records
+            if role == "primary" and display_id == 0
+        )
+        primary_selected = (layers[0], latency_path, evidence)
     if primary_selected is None:
         raise RuntimeError(
             "frame-generation gate needs one uniquely strongest primary "

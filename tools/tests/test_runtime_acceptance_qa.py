@@ -3102,6 +3102,37 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
                     deadline=0.05, poll_seconds=0.1,
                 )
 
+    def test_handheld_primary_two_x_requires_locked_times_two(self):
+        records = [self._segment_health(index) for index in range(1, 14)]
+        for row in records:
+            row["output"] = int(row["locked"]) * 2
+        with mock.patch.object(
+                MODULE, "_framegen_health_records", return_value=records):
+            report = MODULE.handheld_primary_two_x_evidence("primary-log")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["lockedFps"], 60)
+        self.assertEqual(report["outputFps"], 120)
+        self.assertTrue(report["handheldPrimaryTwoX"])
+        for row in records:
+            row["output"] = 90
+        with mock.patch.object(
+                MODULE, "_framegen_health_records", return_value=records):
+            with self.assertRaisesRegex(RuntimeError, "not 2x"):
+                MODULE.handheld_primary_two_x_evidence("bad-log")
+
+    def test_handheld_primary_two_x_accepts_nds10_device_log(self):
+        path = (ROOT / "unified-android" / "build" /
+                "runtime-acceptance-qa-2026-08-16-nds10" /
+                "nds-title-01-framegen-logcat.txt")
+        if not path.is_file():
+            self.skipTest("nds10 device log is not on disk")
+        report = MODULE.handheld_primary_two_x_evidence(
+            path.read_text(encoding="utf-8", errors="replace")
+        )
+        self.assertTrue(report["passed"])
+        self.assertIn(report["lockedFps"], {20, 30, 40, 50, 60})
+        self.assertEqual(report["outputFps"], int(report["lockedFps"]) * 2)
+
     def test_handheld_dual_screen_qualifies_on_primary_plus_identity(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
             encoding="utf-8"
