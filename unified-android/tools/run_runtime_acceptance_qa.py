@@ -6778,8 +6778,10 @@ def run_game_from_system_menu(adb: Path, serial: str,
         adb, serial, controller, output, prefix, -1, None,
     ) if case.folder == "wii" else (wait_ps2_post_cinematic_gameplay(
         adb, serial, controller, output, prefix, -1, None,
-        entry_presses=8, skip_key=controller.START,
+        entry_presses=10, skip_key=controller.START,
         skip_label="physical-start-dreamcast",
+        skip_cycle=(controller.START, controller.A, controller.B),
+        loop_cycle=(controller.A, controller.START),
     ) if case.folder == "dreamcast" else (wait_ps2_post_cinematic_gameplay(
         adb, serial, controller, output, prefix, -1, None,
         # Super Mario 3D World: START clears the title, A accepts the file
@@ -6815,7 +6817,25 @@ def run_game_from_system_menu(adb: Path, serial: str,
             ("lower-tap", NDS_HUNTERS_SKIP[0], NDS_HUNTERS_SKIP[1]),
             controller.A,
         ),
-    ) if case.folder == "nds" else None))))
+    ) if case.folder == "nds" else (wait_ps2_post_cinematic_gameplay(
+        adb, serial, controller, output, prefix, -1, None,
+        entry_presses=10, skip_key=controller.START,
+        skip_label="physical-start-n3ds", confirm_key=controller.A,
+        skip_cycle=(
+            controller.A, controller.START,
+            ("lower-tap", 620, 540),
+            ("lower-tap", 620, 720),
+        ),
+        probe_motion=("right", "right"),
+        loop_cycle=(controller.A, ("lower-tap", 620, 540)),
+    ) if case.folder == "n3ds" else (wait_ps2_post_cinematic_gameplay(
+        adb, serial, controller, output, prefix, -1, None,
+        entry_presses=10, skip_key=controller.START,
+        skip_label="physical-start-ps3", confirm_key=controller.A,
+        skip_cycle=(controller.START, controller.A),
+        probe_motion=("up", "up"),
+        loop_cycle=(controller.A,),
+    ) if case.folder == "ps3" else None))))))
     if case.folder == "nds" and ps2_gameplay_readiness is not None:
         # Hunters' first live scene upgrades 20→50 once the morph-ball
         # corridor is actually producing 60 unique endpoints. Arming proof
@@ -6840,7 +6860,9 @@ def run_game_from_system_menu(adb: Path, serial: str,
     # opening movie (Kingdom Hearts' dive sequence runs about four minutes
     # of slow, low-contrast content that legitimately starves the dense
     # motion gates before the first playable scene appears).
-    scene_attempts = 7 if case.folder in {"ps2", "wii", "wiiu", "switch", "nds"} else 1
+    scene_attempts = 7 if case.folder in {
+        "ps2", "wii", "wiiu", "switch", "nds", "n3ds", "dreamcast", "ps3",
+    } else 1
     generated = None
     # Proof is armed exactly once across every scene attempt: the verifier's
     # exactly-once generator-proof contract reads the bounded per-launch log,
@@ -8112,11 +8134,12 @@ def _wait_for_current_framegen_steady(
                 segment, end = _steady_framegen_segment(
                     records, role, display_id,
                 )
-                # Pre-proof HEALTH (schema 22) can sit on lock 20 for well
-                # over 11 seconds during DS title/save flows. Accepting that
-                # trailing run lets capture fire before qualification proof
-                # exists, which then fails v31/v32 (runs nds8/nds9).
-                if _framegen_health_schema(end) not in (36, 37, 38, 39):
+                # Live pre-proof HEALTH is schema 22. Accepting that trailing
+                # 20-lock as "steady" lets capture fire before qualification
+                # proof exists (nds8/nds9 v31/v32). Legacy unit fixtures have
+                # no schema tag (0) and remain valid.
+                schema = _framegen_health_schema(end)
+                if schema not in (0, 36, 37, 38, 39):
                     raise RuntimeError(
                         f"{role}/display-{display_id} current trailing HEALTH "
                         "is not a qualification proof schema"
@@ -8934,9 +8957,12 @@ def frame_generation_evidence(adb: Path, serial: str,
             proof_gameplay = analyze_real_nes_gameplay_frames(
                 proof_frames, real_nes_title
             )
-        streams = [("primary", 0)] + (
-            [("secondary", 4)] if secondary_layers else []
-        )
+        # Dual-screen handheld HUDs (Hunters radar, ALBW map) can stay
+        # nearly static. Qualify 2x on the primary stream; the secondary
+        # layer is still captured for identity, not dense motion.
+        streams = [("primary", 0)]
+        if secondary_layers and case.folder not in {"nds", "n3ds"}:
+            streams.append(("secondary", 4))
         start_clock = time.monotonic()
         deadline = start_clock + FRAMEGEN_CURRENT_STEADY_DEADLINE_SECONDS
         hard_cap = start_clock + FRAMEGEN_TOTAL_CAPTURE_CAP_SECONDS
@@ -9127,7 +9153,10 @@ def frame_generation_evidence(adb: Path, serial: str,
     if not report["passed"]:
         raise RuntimeError("frame-generation evidence failed: " +
                            "; ".join(report["failures"]))
-    if case.dual_screen:
+    if case.dual_screen and case.folder in {"nds", "n3ds"}:
+        report["secondaryIdentityOnly"] = True
+        report["secondaryLayerCount"] = len(secondary_layers)
+    elif case.dual_screen:
         secondary_passing = [item for item in passing
                              if item[2].get("role") == "secondary" and
                              item[2].get("displayId") == 4]

@@ -2696,7 +2696,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             "motion_thread =", 1
         )[0]
         branch = proof.split(
-            'elif case.folder in {"switch", "wiiu"}:', 1
+            'elif case.folder in {"switch", "wiiu", "nds"}:', 1
         )[1].split('elif case.folder == "ps2":', 1)[0]
         self.assertIn('hold=(3.5 if left == "left" else 1.2)', branch)
         self.assertNotIn("controller.A", branch)
@@ -2878,7 +2878,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             "11 seconds"
         ))
         self.assertIn(
-            "scene_attempts = 7 if case.folder in {\"ps2\", \"wii\", \"wiiu\", \"switch\", \"nds\"} else 1",
+            '"nds", "n3ds", "dreamcast", "ps3"',
                       source)
         self.assertTrue(MODULE._is_content_starved_framegen_failure(
             "frame-generation gate needs one uniquely strongest primary "
@@ -3040,7 +3040,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         )
         self.assertIn('"ndsNavigation": nds_navigation', run)
         self.assertIn('case.folder == "nds"', run)
-        self.assertIn('{"ps2", "wii", "wiiu", "switch", "nds"}', run)
+        self.assertIn('"nds", "n3ds", "dreamcast", "ps3"', run)
         self.assertEqual(MODULE.NDS_HUNTERS_TOUCH_TO_START, (620, 563))
         self.assertEqual(MODULE.NDS_HUNTERS_SKIP, (1193, 1032))
         self.assertIn(MODULE.NDS_HUNTERS_TOUCH_TO_START,
@@ -3080,6 +3080,39 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertEqual(taps[0][:2], (620, 563))
         self.assertIn((1193, 1032), {point[:2] for point in taps})
         self.assertTrue(controller.events)
+
+    def test_preproof_schema22_is_not_a_steady_qualification_run(self):
+        ready = [self._segment_health(index) for index in range(1, 14)]
+        for row in ready:
+            row["proof_schema_version"] = 22
+        clock = [0.0]
+
+        def advance(delay):
+            clock[0] += delay
+
+        with mock.patch.object(
+                MODULE, "_framegen_health_records", return_value=ready), \
+                mock.patch.object(MODULE.time, "monotonic",
+                                  side_effect=lambda: clock[0]), \
+                mock.patch.object(MODULE.time, "sleep", side_effect=advance):
+            with self.assertRaisesRegex(
+                    RuntimeError, "not a qualification proof schema"):
+                MODULE._wait_for_current_framegen_steady(
+                    lambda: "schema22-log", [("primary", 0)],
+                    deadline=0.05, poll_seconds=0.1,
+                )
+
+    def test_handheld_dual_screen_qualifies_on_primary_plus_identity(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        evidence = source.split("def frame_generation_evidence", 1)[1]
+        self.assertIn('case.folder not in {"nds", "n3ds"}', evidence)
+        self.assertIn("secondaryIdentityOnly", evidence)
+        self.assertLess(
+            evidence.index('case.dual_screen and case.folder in {"nds", "n3ds"}'),
+            evidence.index("uniquely strongest secondary"),
+        )
 
     def test_proof_switch_is_clean_before_and_after_every_title(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(encoding="utf-8")
