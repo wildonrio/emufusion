@@ -1770,6 +1770,18 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             "dolphin", "wii", 0, 0, 1, 1,
         ))
 
+    def test_runtime_checkpoint_accepts_aps3e_without_quick_resume(self):
+        ready = (
+            "Adapter ready engine=aps3e system=ps3 quickResume=false "
+            "persistentSave=true dualScreen=false"
+        )
+        self.assertEqual(
+            MODULE.runtime_checkpoint_outcome(
+                ready, ready, "aps3e", "ps3", 0, 0
+            ),
+            "unsupported",
+        )
+
     def test_preinput_menu_classifier_rejects_title_splash_and_wrong_reference(self):
         cases = (
             (23.0, "Lucent Callback Test PRESENTS", False),

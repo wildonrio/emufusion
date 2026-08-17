@@ -1,12 +1,17 @@
 {
   "schemaVersion": 1,
   "engineId": "cemu",
-  "systems": ["wiiu"],
+  "systems": [
+    "wiiu"
+  ],
   "route": "native-adapter",
   "buildProfile": "android-arm64-native-adapter-vulkan",
-  "closureScope": "exact-staged-source-and-submodule-closure-for-this-build-profile",
+  "closureScope": "staged-source-and-vcpkg-manifest-dependency-closure-for-this-build-profile",
   "reproducible": false,
-  "reproducibleNote": "The Android ARM64 Cemu-as-adapter build is not yet byte-reproducible. This lock pins the upstream identity and records the adapter ABI contract; the multi-week core build (engines/build_native_adapter.sh) has not been implemented, so no artifactSha256/independentBuilds proof exists yet. The Java NativeAdapterCatalog stays fail-closed until a reproducible adapter with a signed hash ships.",
+  "previousDeterminismObservation": "SUPERSEDED AND NOT RE-ESTABLISHED FOR THE CURRENT ARTIFACT (36a2a805...), which was produced by an INCREMENTAL relink in the same build-lucent-static tree after TWO translation units changed, both to fix the process abort during internal Wii U gameplay. (1) src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp: InitializeSurface now retires the swapchain a window already has -- after a device wait -- BEFORE constructing its replacement. It previously assigned straight from std::make_unique, which constructs the new SwapchainInfoVk, and therefore asks Android for a SECOND VkSurfaceKHR on the same ANativeWindow, before operator= destroys the old one; Android allows only one, so the call failed with VK_ERROR_NATIVE_WINDOW_IN_USE_KHR (-1000000001) and the constructor threw. (2) engines/patches/cemu-lucent-adapter.cpp: surface_recreated now rebuilds a surface only for a window that actually changed identity, every ABI entry point is wrapped in an exception barrier so no Cemu throw can ever again cross into Lucent's C frames and reach std::terminate, HostSignalDispositions brackets CemuCommonInit() so Cemu's ExceptionHandler_Init() cannot permanently own SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGINT, SIGQUIT, SIGSEGV, SIGSYS, SIGTERM and SIGTRAP for the whole Lucent process, and NeedAdditionalBlocks() no longer claims a permanent audio backlog. Only those two translation units and one static archive were rebuilt; the section table is byte-for-byte the same shape as the previous artifact, all four PT_LOAD segments remain 16 KiB aligned, definedDynamicSymbolCount is unchanged at 31847, and the library grew by 1600 bytes over 023dc0e6. The intermediate artifact ee65a4af... carried only the signal-handler bracket and was never installed on a device. The previous shipped artifact (023dc0e6...) was itself produced by an INCREMENTAL relink in the same build-lucent-static tree after patching LatteRenderTarget.cpp, imgui_extension.cpp and swkbd.cpp; only those three translation units and two static archives were rebuilt. No second, independent build of this artifact has been attempted. The history below is retained because every earlier hash is still accounted for. Against the previous c++_shared artifact (18d839a7...), recompiling the adapter translation unit and relinking in the SAME build tree on the SAME machine reproduced an identical SHA-256; that was a weak determinism signal only and was never a reproducibility claim. The first c++_static artifact (54b75210...) came out of a FRESH build directory, build-lucent-static, because switching ANDROID_STL requires a clean configure. Two further INCREMENTAL relinks of that same tree followed, each after the adapter translation unit changed: 94bf2142... (required_firmware 0 -> 1 plus the explicit KeyCache_Prepare call) and the artifact now staged, 1aae9852... (one-shot process init so a title can be launched twice per process, plus adopting the swapchain's real extent so the picture is not clipped at the bottom). Each hash differs for an understood reason and none is a determinism datum. There is still no determinism observation for the artifact now staged.",
+  "determinismObservation": "The current a4570055... artifact is an incremental relink in the existing build-lucent-static tree after ONE translation-unit change in engines/patches/cemu-lucent-adapter.cpp: process init now pins GetConfig().vsync to SwapchainInfoVk::VSync::FIFO before any renderer exists. Cemu's default vsync=0 selected VK_PRESENT_MODE_IMMEDIATE_KHR, and on Lucent's SurfaceTexture-backed windows Android's BufferQueue drops the queued image whenever a new present arrives before the consumer latched the previous one \u2014 bursty presents therefore physically lost unique frames, and the frame-generation qualification measured the source rate swinging 21-59 Hz on content the guest renders steadily (NES Remix, 2026-08-16). FIFO queues every image and back-pressures the producer, pacing Cemu to the consumer without losing frames. The previous e350166c... artifact's history is retained below. This artifact is source- and ELF-shape verified (4 aligned PT_LOAD segments, unchanged dynamic symbol count, +672 bytes) but has not been independently rebuilt byte-for-byte; reproducible therefore remains false.",
+  "buildEnvironmentCaveat": "The staged Cemu tree was moved from /Users/tyleryoung/Codex/cemu to /Users/tyleryoung/Code/cemu at some point, and the pre-existing vcpkg_installed tree it depends on still contains absolute paths under the old location. A symlink /Users/tyleryoung/Codex/cemu -> /Users/tyleryoung/Code/cemu was created so those cached paths resolve; without it, configuring this build profile requires re-running vcpkg from scratch. This is an artefact of the local environment, not of the upstream project, and is one more reason the build is not yet reproducible.",
+  "reproducibleNote": "Exactly ONE build of this tree exists. No second, independent, byte-identical build has been attempted, so no reproducibility claim is made and no independentBuilds proof is recorded. The dependency closure below is also incomplete: the build consumed a vcpkg_installed tree that was populated out of band by an earlier Gradle run, so the vcpkg packages are named but their source archive hashes are NOT pinned. Every gate in engines/phase3-registry.json stays false and shipped stays false. The Java NativeAdapterCatalog remains fail-closed: it requires an opt-in asset naming cemu, a phase3 artifact manifest recording the SHA-256 below, and a byte-matching bundled .so, none of which exist yet.",
   "adapterAbi": {
     "header": "unified-android/native/include/lucent_native_adapter.h",
     "abiVersion": 1,
@@ -15,30 +20,260 @@
     "renderKind": "LUCENT_NATIVE_RENDER_VULKAN_WINDOW"
   },
   "core": {
-    "repository": "https://github.com/cemu-project/Cemu",
-    "commit": "daacdda0bab55dd78a2b5aac2c12d6ebe8c8e868",
-    "archive": "https://codeload.github.com/cemu-project/Cemu/tar.gz/daacdda0bab55dd78a2b5aac2c12d6ebe8c8e868",
-    "archiveSha256": "6e29804a6a7900ec35a4197b91044e0ae752ad44af3437656a86afcd176b397b"
+    "repository": "https://github.com/SSimco/Cemu",
+    "release": "0.5",
+    "forkOf": "https://github.com/cemu-project/Cemu",
+    "commit": "5897c6d3092612ef410137ba2f7c35043b9b3061",
+    "commitVerifiedAgainstStagedTree": false,
+    "stagedTree": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+    "localArchive": {
+      "path": "/Users/tyleryoung/Code/cemu/Cemu-0.5.tar.gz",
+      "sha256": "64df434bcf88411a7a9c354b22a969d1a2de988e774f873ac69963d17076f848",
+      "sizeBytes": 21642212
+    },
+    "note": "IDENTITY CORRECTION. The previous version of this lock pinned cemu-project/Cemu at commit daacdda0bab55dd78a2b5aac2c12d6ebe8c8e868. That is the DESKTOP repository and it does not describe the tree that was actually compiled. The staged tree is the Android port: it contains src/android (a Kotlin/Compose frontend with 190 JNI entry points), src/gui/androidgui, src/input/api/Android and src/Cafe/Filesystem/fscDeviceAndroidSAF.cpp, none of which exist in the desktop repository. It was extracted from a source archive named Cemu-0.5, its files are dated 2026-04-25, and SSimco/Cemu -- a fork of cemu-project/Cemu described as 'Android port for the cemu emulator' -- published release 0.5 on April 25. The commit recorded above is the one upstream tag 0.5 points to, read from the GitHub ref API. The staged tree has no .git directory, so it has NOT been verified byte-for-byte against that commit -- hence commitVerifiedAgainstStagedTree=false. Only the local archive hash above is independently verifiable today. Re-fetching that commit and diffing it against the staged tree is a prerequisite for the source gate."
+  },
+  "license": {
+    "core": "MPL-2.0",
+    "compatibleWithGpl3Only": true,
+    "verdict": "COMPATIBLE. Cemu is Mozilla Public License 2.0 (LICENSE.txt). A repository-wide scan of src/ found NO file carrying the Exhibit B 'Incompatible With Secondary Licenses' notice, which is the marker that would forbid relicensing. MPL-2.0 section 3.3 therefore permits distributing the Larger Work under a Secondary License, and section 1.12 defines a Secondary License as the GNU GPL v2.0, LGPL v2.1, AGPL v3.0 'or any later versions' -- GPL-3.0-only qualifies. Cemu's own files remain MPL-2.0 file-by-file and their headers must be preserved; only engines/patches/cemu-lucent-adapter.cpp is Lucent-authored and GPL-3.0-or-later.",
+    "perFileExceptions": "Cemu's README states that individual files in src/ may carry their own headers. The SPDX scan found 4 MIT, 1 Apache-2.0 and 1 MPL-2.0 identifier, all GPL-3.0 compatible. The only files matching a broader copyright/GPL text search were src/audio/xaudio2_7/* (Windows-only, not compiled for Android), src/Cafe/HW/Espresso/Recompiler/BackendX64/* (x86-only, not compiled for arm64) and src/gui/wxgui/* (wxWidgets UI, ENABLE_WXWIDGETS=OFF). None reach the arm64 adapter artifact.",
+    "dependencies": "All GPL-3.0 compatible: libadrenotools BSD-2-Clause, ZArchive MIT, cubeb ISC, imgui MIT, Vulkan-Headers Apache-2.0/MIT, xbyak_aarch64 Apache-2.0, vcpkg MIT, boost BSL-1.0, fmt MIT, glm MIT, pugixml MIT, rapidjson MIT, libzip BSD-3-Clause, zlib/zstd/libpng permissive, glslang BSD-3-Clause/Apache-2.0, libtiff libtiff, curl curl. OpenSSL is 3.5.0, which is Apache-2.0 and therefore GPL-3.0 compatible (the GPL-incompatible advertising clause applies only to OpenSSL 1.x). metal-cpp, SDL2, wxWidgets, hidapi and libusb are excluded from this build profile."
   },
   "toolchain": {
     "androidAbi": "arm64-v8a",
-    "androidApi": 24,
-    "ndkVersion": "27.0.12077973",
+    "androidApi": 30,
+    "ndkVersion": "29.0.14206865",
     "cmakeVersion": "3.31.6",
-    "note": "Pinned to match Lucent's other in-process engines; the exact NDK/CMake/Ninja artifact hashes will be recorded here once the reproducible adapter build is implemented."
+    "buildType": "Release",
+    "sdkRoot": "/Users/tyleryoung/Code/cemu/Cemu-0.5/android-sdk",
+    "note": "Recorded from the environment that produced the artifact below. NDK 29.0.14206865 was chosen because it is the NDK the staged tree had already been configured and compiled with; 27.0.12077973 and 28.2.13676358 are also present in this SDK. The previous version of this lock claimed NDK 27.0.12077973, which no build ever used. Toolchain archive hashes are NOT pinned, which is one reason reproducible stays false."
   },
   "cmakeOptions": {
+    "ANDROID_ABI": "arm64-v8a",
+    "ANDROID_PLATFORM": "android-30",
+    "ANDROID_STL": "c++_static",
+    "CMAKE_BUILD_TYPE": "Release",
+    "ENABLE_VCPKG": "ON",
+    "VCPKG_TARGET_ANDROID": "ON",
     "ENABLE_VULKAN": true,
-    "ENABLE_OPENGL": false,
-    "ENABLE_WXWIDGETS": false,
-    "ENABLE_CUBEB": false,
-    "androidMaxPageSize": 16384,
-    "note": "Cemu is a standalone Vulkan emulator. The adapter target builds Cemu's core without its own Activity/UI and exports only lucent_native_adapter_entry; Lucent owns the surfaces, audio, input, and saves."
+    "ENABLE_OPENGL": "OFF",
+    "ENABLE_WXWIDGETS": "OFF",
+    "ENABLE_SDL": "OFF",
+    "ENABLE_BLUEZ": "OFF",
+    "ENABLE_DISCORD_RPC": "OFF",
+    "ENABLE_NSYSHID_LIBUSB": "OFF",
+    "ENABLE_WAYLAND": "OFF",
+    "ENABLE_HIDAPI": "OFF",
+    "BUNDLE_SPEEX": "ON",
+    "ENABLE_CUBEB": "ON",
+    "CMAKE_SHARED_LINKER_FLAGS": "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384",
+    "LUCENT_ADAPTER_SOURCE": "engines/patches/cemu-lucent-adapter.cpp",
+    "LUCENT_ADAPTER_INCLUDE": "unified-android/native/include",
+    "note": "These mirror the arguments Cemu's own src/android/app/build.gradle.kts passes to its externalNativeBuild, plus Release, the 16 KiB page-size link policy and the two Lucent adapter variables, EXCEPT for ANDROID_STL -- see stlChangeNote. ENABLE_CUBEB stays ON because Cemu's audio device factory does not compile out, but the adapter never constructs a cubeb stream: it installs its own IAudioAPI subclass that forwards to Lucent's audio sink. Configuring by hand additionally requires ANDROID_NDK to be passed explicitly, because cmake/vcpkg_android.cmake overwrites the ANDROID_NDK_HOME environment variable with ${ANDROID_NDK} before the NDK toolchain has defined it.",
+    "stlChangeNote": "ANDROID_STL WAS DELIBERATELY CHANGED FROM c++_shared TO c++_static ON 2026-08-08, AND THIS IS THE ONE PLACE THE BUILD DEVIATES FROM CEMU'S OWN GRADLE ARGUMENTS. The c++_shared artifact was confirmed DEAD ON ARRIVAL on the user's AYN Thor: dlopen failed with 'cannot locate symbol _ZTVNSt6__ndk114basic_ofstreamIcNS_11char_traitsIcEEEE', the vtable for std::__ndk1::basic_ofstream<char>. Root cause, measured rather than inferred: the libc++_shared.so that unified-android/build.sh packages (sha256 021c4a7693be29d49b011fee9f9f5ec0b3f1e691e3ad3e3f4a4af4b9e5a932f5, 6235072 bytes) DEFINES ZERO basic_ofstream symbols, while the NDK 29.0.14206865 libc++_shared.so this artifact was compiled against defines 7. The packaged runtime came from an older NDK than the one that built Cemu, so the symbol Cemu needs simply does not exist in the copy on the device and the adapter never reached its first instruction. The static runtime was chosen over shipping a matching libc++_shared.so because a second shared runtime could collide with what Lucent's other engines already expect, whereas a static one is private to this artifact by construction. Consequences, all verified on the new artifact: libc++_shared.so is GONE from neededLibraries, undefined std::__ndk1 symbols fell from 278 to 0, the previously missing vtable is now defined inside the library, and definedDynamicSymbolCount rose 29700 -> 31847 because libc++'s own symbols are now defined here. Those extra exports cannot leak into the process: lucent_native_adapter_host.c opens the adapter with RTLD_NOW|RTLD_LOCAL. No duplicate-symbol or ODR hazard exists in the dependency chain either -- the whole closure was re-checked and all 42 vcpkg packages in the arm64-android triplet are STATIC archives (VCPKG_LIBRARY_LINKAGE static, zero .so files), so nothing under this library pulls the shared runtime back in transitively. vcpkg did NOT rebuild: triplets/arm64-android.cmake passes only -DANDROID_ABI to port builds and never ANDROID_STL, so the port ABI hashes were unchanged and the existing vcpkg_installed tree was reused unmodified. Only the top-level link changed, via the NDK's -static-libstdc++."
   },
-  "patches": [],
+  "patches": [
+    {
+      "path": "engines/patches/cemu-lucent-adapter.cpp",
+      "role": "adapter-translation-unit",
+      "note": "Compiled INTO Cemu's own libCemuAndroid.so. Implements the lucent_native_adapter vtable and exports lucent_native_adapter_entry. It reproduces initializeEmulation/prepareTitle/initializeSystems/initializeRenderer/launchTitle in the exact order EmulationViewModel.kt uses them, deliberately omitting the two steps that would require Cemu's Java frontend (see javaFrontendIndependence). It additionally calls KeyCache_Prepare() between CemuCommonInit() and the title parse, so the disc-key cache is loaded from Lucent's validated system directory before TitleInfo can latch KeyCache's one-shot sKeyCachePrepared flag. See relaunchInProcess and outputGeometry for the two behaviours where the adapter deliberately does NOT mirror Cemu's Android frontend.",
+      "sha256": "5e569661268c1621a1b7ccccd218bc47fe382a43d3c1ea52df72881c429bb71c",
+      "sizeBytes": 54275
+    },
+    {
+      "path": "src/android/app/src/main/cpp/CMakeLists.txt",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. Adds a guarded block that compiles ${LUCENT_ADAPTER_SOURCE} into the CemuAndroid target and adds ${LUCENT_ADAPTER_INCLUDE} to its include path, both only when LUCENT_ADAPTER_SOURCE is defined. An ordinary Cemu build that never sets that variable is unaffected.",
+      "sha256": "99c5be0c94cabd5e00f03b2572971c6753f6d8282a44533bdd988d55abae4bf4",
+      "sizeBytes": 1458
+    },
+    {
+      "path": "src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "sha256": "6fcea774dda71e0ad540cc29fd37b81dde8dcbe7936b1029561c6bd95e1fb76d",
+      "sizeBytes": 172908,
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. InitializeSurface() destroys the swapchain a window already owns -- after WaitDeviceIdle(), and clearing swapchainImageIndex -- BEFORE constructing the replacement. It previously assigned directly from std::make_unique<SwapchainInfoVk>(...), and std::make_unique CONSTRUCTS the new object before operator= destroys the old one. SwapchainInfoVk's constructor is what creates the VkSurfaceKHR, so re-initialising a window that still had a live surface asked Android for a second surface on the SAME ANativeWindow. Android permits exactly one, so vkCreateAndroidSurfaceKHR returned VK_ERROR_NATIVE_WINDOW_IN_USE_KHR (-1000000001) and CreateAndroidSurface threw std::runtime_error. Under Cemu's own frontend that throw has C++ frames to unwind into; driven through Lucent's C adapter table it had none, so it reached std::terminate and killed the whole app -- the 'libc++abi: terminating' process restart reported during internal Wii U gameplay. The device wait is the second half of the fix: ~SwapchainInfoVk tears down the image views and swapchain, and in-flight GPU work must not still reference them. Upstream is unaffected in behaviour when the pointer is empty, which is every first-time call, so this is a strict repair of the re-init path."
+    },
+    {
+      "path": "src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "sha256": "9f88e45a910bdcbb2fa05446e963c5b48079c61ed0ea0d0cb47bc62340b50c3a",
+      "sizeBytes": 44042,
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. Removes the '#if !BOOST_PLAT_ANDROID' that compiled swkbd::render(!isPadView) out of LatteRenderTarget_copyToBackbuffer. Upstream removes it because Cemu's own Android frontend substitutes a host IME (src/android/app/src/main/cpp/NativeSwkbd.cpp installs an AndroidSwkbdCallbacks that JNI-calls info/cemu/cemu/nativeinterface/NativeSwkbd$SwkbdState). Lucent boots this library with NO Cemu dex, so setSwkbdCallbacks() is never called and swkbdAppear() reached nothing at all: any title that opens the system keyboard -- Zelda: The Wind Waker HD's name entry is the reproducer -- showed no keyboard on either screen and could not be started. swkbd::render() is a self-contained ImGui key grid that calls swkbd::keyInput directly and needs no IME, and its two neighbours nn::erreula::render and LatteOverlay_render were never ifdef'd out, so the ImGui path here already runs on Android."
+    },
+    {
+      "path": "src/imgui/imgui_extension.cpp",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "sha256": "2fe045c93db3c1dfd5e046186bd8855725c847fea159ea72c29300414eebc1d5",
+      "sizeBytes": 7437,
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. Makes ImGui_UpdateWindowInformation's existing gamepad feed actually reach ImGui, which is what lets the re-enabled swkbd be OPERATED rather than only drawn. Three changes: (1) io.NavInputs[] is cleared each frame -- ImGui 1.89 dropped the memset it used to do for backends, so the 1.0f writes latched permanently and the first A press left ImGuiKey_GamepadFaceDown held down forever; (2) ImGuiBackendFlags_HasGamepad is set, without which nav_gamepad_active is false in NavUpdate() and the entire legacy NavInputs -> ImGuiKey translation at imgui.cpp:8535 is skipped -- Cemu only ever set HasMouseCursors, so gamepad navigation was inert on every platform; (3) both the feed and the flag are given to exactly ONE window (the GamePad view when it is open, the TV otherwise), because the two windows have separate ImGui contexts but swkbd and erreula share one internal state, so navigating both would type every character twice. NOTHING in the adapter had to change: Lucent's set_control writes EmulatedController's override map, and VPADController::is_a_down()/is_start_down()/is_*_down() read that map through is_mapping_down(), so InputManager::get_controller(0) -- the loop this function already ran -- was ALREADY reporting Lucent's pad."
+    },
+    {
+      "path": "src/Cafe/OS/libs/swkbd/swkbd.cpp",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "sha256": "bd7f77988b67a61932610643feee302755453597d048bb5d8a4fb3b144175db2",
+      "sizeBytes": 22560,
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. Wraps the NavInputs Cancel (backspace) and Input (accept) block at the end of swkbd::render() in 'if (io.BackendFlags & ImGuiBackendFlags_HasGamepad)'. render() runs once PER WINDOW against a single shared swkbdInternalState, and only the window imgui_extension.cpp feeds gamepad state to carries that flag; ungated, the GamePad pass sets cancelState and the TV pass clears it again on the same frame, so a held B deletes one character every frame instead of one per press. No behaviour change on a single-window host. It also implements resetForTitleShutdown(), which hides and clears the guest-system-area pointer before CafeSystem destroys that title's memory, preventing an open keyboard and stale pointer from surviving into the next in-process title."
+    },
+    {
+      "path": "src/Cafe/OS/libs/swkbd/swkbd.h",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "sha256": "870a7bb8d4f2075bf246dd4bec82867fd6fbabfb4d7a601bb5a07e25e69f73d9",
+      "sizeBytes": 896,
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. Declares resetForTitleShutdown(), the title-lifecycle boundary used by the Lucent adapter before CafeSystem::ShutdownTitle invalidates swkbd's guest-owned system-area state."
+    },
+    {
+      "path": "src/Cafe/OS/libs/coreinit/coreinit_MEM.cpp",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "sha256": "9050d790373a60fc20a4514d2c61e4b48aa9d6dcd2f29624cdbb9af53663b0f5",
+      "sizeBytes": 21000,
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. Adds a one-shot boundary between process-owned SysAllocator allocations and the per-title suffix of the 32 MiB early-mapped CEMU_AREA bump allocator, then clears and rewinds only that suffix after CafeSystem::ShutdownTitle has joined guest threads. It also resets host-side MEM heap indexes that otherwise retain pointers into the reclaimed title suffix. This closes the measured same-process relaunch SIGTRAP: on the failing launch x19 showed sysAreaAllocatorOffset=0x1dd5000 immediately before coreinit::InitSysHeap requested another 8 MiB, which necessarily exceeds the 0x02000000 CEMU_AREA ceiling and takes coreinit_allocFromSysArea's explicit cemu_assert(false) path. Process-owned pointers below the captured boundary are never moved or cleared."
+    },
+    {
+      "path": "src/Cafe/OS/libs/coreinit/coreinit_MEM.h",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "sha256": "dd3d0deb46b0118fe1f17c5e378d3058a0596b8eba7294d31bfd091eb7d0d699",
+      "sizeBytes": 5298,
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. Declares the process-boundary capture and post-title system-area rewind used by the Lucent adapter, and exposes MEMResetToDefaultState so the rewind also retires host heap indexes into reclaimed title memory."
+    },
+    {
+      "path": "src/Cafe/HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp",
+      "pathIsRelativeTo": "/Users/tyleryoung/Code/cemu/Cemu-0.5",
+      "role": "local-source-patch",
+      "sha256": "d28cec7cbe76930980624cf23b54c7a30660f776ecb83c3709d8fd94f12d66f7",
+      "sizeBytes": 50714,
+      "note": "Local patch to the vendored Cemu tree, NOT an upstream contribution. The AArch64 entry trampoline is generated only once per process, while PPCRecompiler_init() frees and reserves a new ppcRecompilerInstanceData block for every title. The stock trampoline embedded the first reservation address forever. On the measured third same-process title, x27 still contained the retired 0x79b4237000 base and the JIT faulted at x27 + 0x20000000 = 0x79d4237000, exactly the offset of ppcRecompilerDirectJumpTable. The trampoline now embeds only the stable address of the global pointer and dereferences it on every entry, so it always uses the active title's reservation."
+    }
+  ],
+  "bootOrder": {
+    "source": "src/android/app/src/main/java/info/cemu/cemu/emulation/EmulationViewModel.kt and CemuApplication.kt",
+    "sequence": [
+      "initializeEmulation() -- process-wide: config filename, CreateCemuDirectories, NetworkConfig::LoadOnce, ActiveSettings::Init, LatteOverlay_init, CemuCommonInit",
+      "setSurfaceSize() then setSurface() -- from the SurfaceHolder callbacks, per canvas",
+      "prepareTitle(path)",
+      "initializeSystems() -- default controller, key states, audio devices",
+      "initializeRenderer() -- InitializeGlobalVulkan, VulkanRenderer, then initializeSurface(main)",
+      "initializeSurface(pad) -- when the GamePad canvas exists",
+      "launchTitle()"
+    ],
+    "note": "CRITICAL AND COUNTER-INTUITIVE: prepareTitle runs BEFORE initializeSystems and BEFORE initializeRenderer. PrepareForegroundTitle is what loads the per-title game profile, and the Vulkan driver selection path (get_custom_driver_path) reads g_current_game_profile->GetDriverSetting(). Building the renderer first would configure it against the default profile. The adapter maps this onto the ABI as load() = initializeEmulation + prepareTitle, and start() = surfaces + initializeSystems + initializeRenderer + initializeSurface + launchTitle."
+  },
+  "javaFrontendIndependence": {
+    "requiredJavaClasses": 0,
+    "note": "MEASURED, not asserted. A mechanical extraction over every native source in src/android/app/src/main/cpp, src/gui/androidgui, src/Common/android, src/input/api/Android and src/Cafe/Filesystem (joining adjacent C++ string literals before matching, so split signatures are not missed) found 47 distinct FindClass-ed classes, 40 of them Cemu-own info/cemu/* classes. Only ONE is reachable from the boot sequence this adapter drives: info/cemu/cemu/nativeinterface/NativeFiles, pulled in because initializeEmulation() constructs AndroidFilesystemCallbacks. The adapter does not install those callbacks, so it needs ZERO Cemu Java classes. FilesystemAndroid's accessors are all null-safe and are only consulted for content:// URIs, so leaving the callbacks unset is correct as long as Lucent passes real filesystem paths. The adapter also skips Cemu's TestSurface (a throwaway SurfaceTexture built purely so VulkanRenderer has something to probe) by pointing window_main at Lucent's real surface, which removes the last two platform FindClass calls. Net result: the adapter's boot path performs no JNI at all. src/gui/androidgui/AndroidWindowSystem.cpp is entirely JNI-free stubs, so the error/notify callbacks that fire from deep inside the emulator core are safe.",
+    "hiddenApiFields": "CLEAN. No GetFieldID for java.lang.{Double,Integer,Boolean}.value anywhere in the tree. The only boxed type touched is java.lang.Integer via its public constructor, on a code path (getControllerMappings) the adapter never calls. Cemu needs no equivalent of the Eden id_cache patch.",
+    "jniOnLoad": "Cemu's JNI_OnLoad (src/android/app/src/main/cpp/NativeLib.cpp) only calls JNIUtils::SetJavaVM. Lucent's host already dlsym-s and invokes JNI_OnLoad after dlopen, so JNIUtils::GetEnv() would work if anything reached for it. Nothing on the adapter's path does.",
+    "diagnosticsCaveat": "WindowSystem::ShowErrorDialog is an empty stub on Android, so emulator-core boot failures produce no message anywhere. The adapter's load() error string, derived from Cemu's own TitleInfo/PrepareForegroundTitle status codes, is the only diagnostic Lucent will get."
+  },
+  "vulkan": {
+    "adrenotoolsRequired": false,
+    "note": "DIFFERENT FROM EDEN. Cemu links libadrenotools but calls adrenotools_open_libvulkan only from load_custom_driver(), which returns early unless a custom driver directory is configured. The default path in dlopen_vulkan_loader() is a plain dlopen(\"libvulkan.so\"), so the libhook_impl.so / libmain_hook.so pair that Eden always needs is NOT required for Cemu and does not have to be packaged alongside this adapter. The adapter still sets ActiveSettings native-lib and internal paths so the custom-driver branch has valid roots if a user ever enables it."
+  },
+  "audio": {
+    "wiredToLucentSink": true,
+    "note": "DIFFERENT FROM EDEN, DELIBERATELY. The Eden adapter never used lucent_native_io.audio_sink and Switch is silent as a result. This adapter installs a LucentAudioAPI subclass of Cemu's IAudioAPI into g_tvAudio under g_audioMutex and forwards every FeedBlock straight to the sink as interleaved stereo s16 at 48 kHz, AX_SAMPLES_PER_3MS_48KHZ * 4 frames per block. Cubeb is never opened. g_padAudio is deliberately left unset: the Wii U mixes TV and GamePad audio separately, and creating both would push a duplicate of the same programme into Lucent's single sink."
+  },
+  "input": {
+    "wiredToLucentControls": true,
+    "note": "DIFFERENT FROM EDEN, DELIBERATELY. The Eden adapter left set_control a no-op stub. This adapter drives EmulatedController::setButtonValue / setAxisValue, which write the m_overriddenButtonMappings / m_overriddenAxisMappings tables that get_axis_value() and is_mapping_down() consult BEFORE any physical controller. That is Cemu's equivalent of Eden's VirtualGamepad: player-indexed, already bound to the guest VPAD, and needing no GUID, no InputAPI::Device registration and no user input profile. Buttons map to VPADController::ButtonId; Lucent's Start/Select map to the Wii U's Plus/Minus. Sticks are split across the opposing directional magnitudes because VPAD resolves them as (left > right) ? -left : right, with the unused side explicitly zeroed. The GamePad touchscreen is wired through InputManager::m_pad_mouse. ASSUMPTION TO VERIFY: LUCENT_PAD_TOUCH_X/Y are treated as normalised 0..1 and scaled by the pad window size, because no Lucent caller sends them yet and the ABI header does not specify a unit."
+  },
+  "runtimeInputs": {
+    "keysAndFirmwareBundled": false,
+    "requiredFirmwareCount": 1,
+    "userSuppliedFiles": [
+      {
+        "name": "keys.txt",
+        "userLocation": "Games/wiiu/Keys/keys.txt on device storage (also found under Games/wiiu, ROMs/wiiu, BIOS/wiiu or the generic Games/ROMs roots)",
+        "installedAt": "<engine-system/cemu>/keys.txt",
+        "readBy": "KeyCache_Prepare() via ActiveSettings::GetUserDataPath(\"keys.txt\"), src/Cafe/Filesystem/FST/KeyCache.cpp",
+        "format": "ONE 32-hex-character AES-128 disc key per line. '#' and ';' begin comments; spaces, tabs, '-' and '_' are stripped. It is NOT a '<title-id> = <key>' table -- Cemu tries every cached key against the disc header and keeps whichever decrypts it (FSTVolume::FindDiscKey)."
+      }
+    ],
+    "note": "CORRECTED 2026-08-08. The previous entry reported requiredFirmwareCount = 0 and was wrong in effect, not in emulator fact. Cemu itself needs NO console firmware dump and no system key file for content that is already decrypted (standalone RPX/ELF, extracted content, WUA) -- that part stands. But NativeAdapterSystemDirectory uses required_firmware as its GATE ('if (requiredFirmware <= 0) return root'), so declaring 0 meant Lucent installed nothing and handed Cemu an empty system directory. A real Wii U library is overwhelmingly encrypted .wux/.wud disc images, so on the user's AYN Thor every title failed with 'adapter rejected content: this disc image is encrypted and no disc key was supplied' even though the user's keys.txt was sitting at /sdcard/Games/wiiu/Keys/keys.txt. describe() now reports required_firmware = 1 and names keys.txt as the one user-supplied blob; load() calls Cemu's own KeyCache_Prepare() after CemuCommonInit() so the cache is populated from <system_directory>/keys.txt before any title is parsed. The fail-closed NO_DISC_KEY / NO_TITLE_TIK error strings are unchanged and still fire when the supplied keys do not fit the disc. Decrypted content is unaffected: Cemu simply never consults the cache for it. Nothing is ever bundled in the APK -- the user's file is copied into the app-private per-engine root. NOTE: Cemu keeps Wii U game saves INSIDE its emulated NAND (mlc01/usr/save), not in a flat per-title directory, so the ABI's separate save_directory is not used by this engine; every Cemu root is set to Lucent's system directory and Lucent's save handling must treat the mlc tree there as the save location."
+  },
+  "dualScreen": {
+    "supported": true,
+    "note": "Cemu's Android port has first-class dual-screen support: WindowSystem::WindowInfo carries canvas_main and canvas_pad, VulkanRenderer::InitializeSurface takes an isMainCanvas flag and drives two swapchains, and StopUsingPadAndWait tears the GamePad one down independently. The adapter binds lucent_native_io.primary_window to canvas_main (TV, display 0) and lower_window to canvas_pad (GamePad, display 4) and sets pad_open accordingly, so describe() reports dual_screen = true. With a null lower_window it leaves pad_open false and Cemu composites the GamePad view into the TV output."
+  },
+  "relaunchInProcess": {
+    "supportedUpstream": false,
+    "supportedByAdapter": true,
+    "note": "MEASURED, not asserted. Cemu upstream runs ONE title per process on Android: EmulationActivity.kt::onQuit calls finish() then exitProcess(0), and initializeEmulation() is invoked once from CemuApplication. Lucent keeps the library mapped and launches again in the same process, and the first version of this adapter re-ran the whole initializeEmulation() body on every load(), which made a second launch of the same title fail with 'adapter rejected content: Cemu could not prepare this Wii U title'. The adapter now runs that body EXACTLY ONCE per process, which is the same shape as Cemu's own in-process relaunch path, coreinit::OSLauncherThread (src/Cafe/OS/libs/coreinit/coreinit_Misc.cpp), which does ShutdownTitle -> PrepareForegroundTitle -> LaunchForegroundTitle and re-runs no initialisation at all.",
+    "globalsThatBlockedRelaunch": [
+      "CafeTitleList sTLList / sTLListPending / sTLMap -- CemuCommonInit() calls CafeTitleList::Initialize() (which re-runs LoadCacheFile() into an already populated list; upstream asserts sTLList.empty() there) and then CafeTitleList::Refresh(), which starts RefreshWorkerThread. That worker snapshots sTLList into sTLListPending and, after scanning, ERASES AND DELETES every TitleInfo it did not rediscover. Lucent registers no Cemu game_paths and the title lives outside the emulated MLC, so nothing is ever rediscovered and the worker frees the exact TitleInfo that CafeSystem::PrepareForegroundTitle -> LoadAndMountForegroundTitle -> CafeTitleList::GetGameInfo needs. Worse, the worker's removal loop runs WITHOUT holding sTLMutex while CafeTitleList::AddDiscoveredTitle holds it, and CafeTitleList::AddTitle deletes the newly parsed duplicate and keeps the old pointer -- so the two can free the same TitleInfo. This is the primary suspect for the observed failure. The adapter now runs Refresh() once and additionally spins on CafeTitleList::IsScanning() before AddTitleFromPath so the first load cannot race it either.",
+      "CafeTitleList sTLScanPaths -- AddScanPath() appends without clearing, so every re-init duplicated every configured scan path.",
+      "CafeSystem sTitlePaused -- ShutdownTitle() does NOT reset it, and the adapter's flush_save() calls PauseTitle() to quiesce the emulated filesystem before exit. The flag therefore stayed latched into the next title, making PauseTitle() a silent no-op and ResumeTitle() resume threads that were never suspended. The adapter now calls CafeSystem::ResumeTitle() before ShutdownTitle(), which both clears the latch and gives OSSchedulerEnd() runnable cores to join.",
+      "_rdtscFrequency / PPCTimer -- PPCTimer_init() detaches a thread that measures for three seconds and then writes _rdtscFrequency. Re-running it under a live title rewrote the guest's timebase mid-session.",
+      "InputManager controllers -- CemuCommonInit() calls InputManager::instance().load(), which rebuilds the EmulatedController whose override maps the adapter drives.",
+      "GraphicPack2 -- LoadAll() re-read every graphic pack from disk on each init, after ShutdownTitle() had already called GraphicPack2::Reset().",
+      "CafeSystem s_initialized -- this one is BENIGN. CafeSystem::Initialize() is latched behind it, so fsc_init()/memory_init()/PPCCore_init() correctly ran once even in the broken version. KeyCache's sKeyCachePrepared is benign for the same reason: the cache stays populated.",
+      "coreinit sysAreaAllocatorOffset -- CEMU_AREA is mapped early and survives CafeSystem::DestroyMemorySpace, so the stock bump allocator never rewound. Every title permanently consumed an 8 MiB coreinit system heap plus smaller guest structures. The measured failing relaunch reached coreinit_allocFromSysArea with x19=0x1dd5000 before requesting the next 8 MiB, beyond the 32 MiB area, and deliberately SIGTRAPed. Lucent now captures the process-owned prefix once before the first title, then clears and rewinds only the title suffix after ShutdownTitle; MEMResetToDefaultState retires host heap indexes into that suffix.",
+      "AArch64 generated recompiler entry -- the interface trampoline is emitted only once per process, but upstream embedded the then-current ppcRecompilerInstanceData address even though PPCRecompiler_init frees and re-reserves that block for each title. On the measured third same-process launch x27 still held the retired 0x79b4237000 base and generated code faulted at x27 + 0x20000000 = 0x79d4237000, exactly the beginning of ppcRecompilerDirectJumpTable. Lucent's AArch64 trampoline now dereferences the stable global-pointer address every time it enters generated code, preserving per-title allocation cleanup while eliminating the stale base."
+    ],
+    "leaksAcceptedNotFixed": [
+      "CafeSystem::MlcStorageUnmountAllTitles() clears m_mlcMountedTitles without deleting the TitleInfo* it allocated in MlcStorageMountTitle, so one TitleInfo leaks per mounted title per session. Upstream defect; not patched here.",
+      "TitleInfo::Copy() overwrites m_parsedMetaXml/m_parsedAppXml/m_parsedCosXml without deleting the previous allocations, so assigning sGameInfo_ForegroundTitle leaks the previous title's parsed XML. Upstream defect; not patched here.",
+      "Cemu's own desktop frontend carries the comment 'unfinished - memory leaks and crashes after repeated use (after 3x usually)' on MainWindow::EndEmulation (src/gui/wxgui/MainWindow.cpp), which is the closest upstream equivalent of what the adapter now does. UNPROVEN on device: how many relaunches this survives has not been measured."
+    ],
+    "knownLimitation": "A title that load() prepared but start() never launched cannot be un-prepared: CafeSystem releases /vol/content, the virtual MLC mounts and the Wii U memory space only from ShutdownTitle(), which returns immediately unless a title is actually running, and none of UnmountForegroundTitle/UnmountBaseDirectories/DestroyMemorySpace is exposed in CafeSystem.h. Rather than double-mount and corrupt the FSC tree, the adapter tracks that state and fails the NEXT load() closed with 'a previous Wii U title is still resident; close and reopen Lucent to play again'. Lucent's normal flow always calls start() immediately after load(), so this only fires when start() itself failed.",
+    "latestRegressionStatus": "HOST-FIXED, THOR-UNVERIFIED. Exact APK f352 proved the system-area rewind across Super Mario 3D World -> Twilight Princess, then exposed a distinct third-title AArch64 stale-JIT-base SIGSEGV. The rebuilt e350166c... artifact compiles and passes source/hash/ELF/host gates; its regression test proves the entry trampoline loads the current instance before branching and locks the exact measured 0x79b4237000 + 0x20000000 = 0x79d4237000 fault arithmetic. It has not been packaged into an exact APK or proven by three or more alternating Cemu titles on the Thor."
+  },
+  "outputGeometry": {
+    "letterboxed": true,
+    "note": "ROOT CAUSE OF THE BOTTOM CROP, and why it is not in Lucent's blitter. Cemu presents through its own Vulkan swapchain, and on Android SwapchainInfoVk::ChooseSwapExtent returns VkSurfaceCapabilitiesKHR::currentExtent unconditionally -- the size passed to VulkanRenderer::InitializeSurface is DISCARDED, because currentExtent is only 0xFFFFFFFF on desktop window systems. Everything downstream, however, keeps trusting WindowSystem's phys_width/phys_height: LatteRenderTarget_getScreenImageArea centres the 16:9 letterbox inside phys_* (kKeepAspectRatio), while VulkanRenderer::DrawBackbufferQuad sets the viewport from that rectangle but the scissor and render area from the swapchain extent at origin 0,0. The adapter was filling phys_* from ANativeWindow_getWidth/getHeight, which can be a few rows taller than the surface the compositor actually gives Vulkan once gesture/navigation insets are applied. The image was therefore centred against the taller number, pushed down by half the difference, and hard-clipped at the bottom by the scissor -- correct scale, missing bottom edge. The same mismatch also made VulkanRenderer::UpdateSwapchainProperties compare phys_* against getExtent() on every AcquireNextSwapchainImage, always see a difference, and rebuild the swapchain every frame without converging. FIX: after each InitializeSurface the adapter reads VulkanRenderer::GetChainInfoPtr(mainCanvas)->getExtent() and writes it back into width/height/phys_width/phys_height (and the pad equivalents), so the letterbox, the scissor and the recreation check all describe the same surface. Cemu's own frontend does not need this because its SurfaceHolder callback reports the post-inset size. dpi_scale is NOT involved: the only non-wxWidgets reader of it in the whole tree is LatteOverlay's ImGui font scaling. There is no integer-scaling mode; fullscreen_scaling is only kKeepAspectRatio or kStretch. Android also forces VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR with no rotation compensation anywhere, so a rotated currentTransform would transpose currentExtent relative to ANativeWindow -- another reason to trust the swapchain rather than the window. UNPROVEN on device: the fix is derived from the source, not yet confirmed against the user's Thor."
+  },
+  "quickResume": {
+    "supported": false,
+    "note": "Cemu has no savestate or full-machine snapshot API at all, so serialize_size/serialize return 0 and unserialize returns false. describe() reports has_quick_resume = false and Lucent must expose only 'flush normal saves and exit'."
+  },
+  "artifact": {
+    "fileName": "liblucent_native_adapter_cemu.so",
+    "stagedPath": "engines/build/arm64-v8a/liblucent_native_adapter_cemu.so",
+    "sha256": "a457005516da9c0a8eccd3579b29c5b755df8c2e72bbc861ce6341ff972131ea",
+    "sizeBytes": 23596912,
+    "elfMachine": "AARCH64",
+    "elfType": "DYN",
+    "ptLoadAlignment": "0x4000",
+    "stripped": true,
+    "soname": "libCemuAndroid.so",
+    "requiredExports": [
+      "lucent_native_adapter_entry"
+    ],
+    "exportsOnlyTheAdapterEntry": false,
+    "definedDynamicSymbolCount": 31850,
+    "neededLibraries": [
+      "libandroid.so",
+      "libOpenSLES.so",
+      "liblog.so",
+      "libdl.so",
+      "libm.so",
+      "libc.so"
+    ],
+    "note": "MEASURED, not asserted. lucent_native_adapter_entry is the only lucent_* symbol in the dynamic table and all four PT_LOAD segments are 16 KiB aligned, but the library is NOT reduced to the adapter entry: it is Cemu's whole native library (SONAME libCemuAndroid.so) with the adapter compiled in, so it still exports Cemu's, OpenSSL's and boost's symbol tables, and since the STL is now static it additionally exports libc++'s. Lucent dlopens it by absolute path from the app-private native library directory with RTLD_NOW|RTLD_LOCAL (unified-android/native/lucent_native_adapter_host.c), so neither the SONAME/filename difference nor those extra exports reach the global symbol namespace. -fvisibility=hidden plus --exclude-libs,ALL has still NOT been applied, so this artifact does not meet the one-exported-symbol goal recorded in engines/build_native_adapter.sh. The only remaining non-platform runtime dependency note is libOpenSLES.so, pulled in by cubeb even though the adapter never opens a cubeb stream -- it is a platform library present on every Android device, so it is not a packaging problem, only a note that the dependency is not dead-stripped."
+  },
   "dependencies": [
     {
-      "note": "Dependency closure stub. Cemu vendors its third-party libraries as git submodules (e.g. dependencies/, Externals/). Each submodule's repository/commit/archiveSha256 must be pinned here (mirroring engines/dolphin-source-lock.json) before the adapter build can claim a reproducible closure. Left empty deliberately: no dependency has been audited or pinned yet."
+      "note": "Dependency closure stub. The build consumed a vcpkg manifest (vcpkg.json, builtin-baseline f0fb3ddba5135b80982668de39dbaa139c00d281) whose packages were installed out of band into src/android/app/.cxx/Debug/1h4c246t/arm64-v8a/vcpkg_installed by an earlier Gradle run, plus eight git submodules (ZArchive, cubeb, vcpkg, Vulkan-Headers, imgui, metal-cpp, xbyak_aarch64, libadrenotools) whose commits are not recorded because the staged tree has no .git. Each package's repository/commit/archiveSha256 must be pinned here (mirroring engines/dolphin-source-lock.json) before this lock can claim a reproducible closure. Left populated with this note deliberately: no dependency has been individually pinned yet. Licences ARE audited -- see license.dependencies above."
     }
-  ]
+  ],
+  "softwareKeyboard": {
+    "supported": true,
+    "implementation": "cemu-own-imgui-swkbd",
+    "hostImeRequired": false,
+    "inputRoutes": [
+      "gamepad-nav",
+      "gamepad-shortcuts",
+      "drc-touch"
+    ],
+    "note": "MEASURED, not asserted. Cemu's Android frontend hands the system software keyboard to a host IME through a Kotlin class Lucent's dex does not contain, so with no patch the keyboard never appeared and Wind Waker HD could not get past name entry. Cemu's own ImGui keyboard is re-enabled instead (see the three local source patches). It is driven by two routes, both of which reach it through code paths that ALREADY existed and needed no adapter change: (1) TOUCH on the GamePad/DRC view -- adapter_set_control's LUCENT_PAD_TOUCH_X/Y/PRESSED already write InputManager::m_pad_mouse in phys_pad_* pixels, which is exactly the space Renderer::ImguiBegin gives the pad context as io.DisplaySize, and ImGui_UpdateWindowInformation already turns m_pad_mouse into io.MousePos/io.MouseDown[0] for the pad window ONLY (io.MouseDown[0] = padDown != mainWindow), so the TV can never double-click it. (2) GAMEPAD -- D-pad navigates, A activates the focused key, B backspaces and Start accepts, fed from VPADController::is_*_down() reading the same override map adapter_set_control writes. An Android IME on the second display was deliberately REJECTED: an activity on display 4 becomes the focused app with no focused window on this device and causes input-dispatch ANRs, so adding a focusable keyboard window there would land straight on that bug. The keyboard is DRAWN on both screens (matching desktop Cemu) but only the GamePad view is INPUT-LIVE, which is also where a real Wii U puts it."
+  }
 }
