@@ -5972,19 +5972,33 @@ def stop_and_return(adb: Path, serial: str, controller: PhysicalController,
     input_delta = 0
     move_confirmed = False
     for move_attempt in range(3):
-        controller.key(
-            controller.DOWN,
-            f"dpad-down-after-stop-{move_attempt + 1}",
-            hold=0.04,
-        )
+        if case.folder == "ps3":
+            # The Thor library has one PS3 title (1/1). DOWN cannot leave
+            # ICO's header (ps3-14). Y switches cover ↔ list, which is a
+            # real library input the wallpaper clock cannot fake.
+            controller.key(
+                controller.Y,
+                f"physical-y-list-view-after-stop-{move_attempt + 1}",
+                hold=0.055,
+            )
+        else:
+            controller.key(
+                controller.DOWN,
+                f"dpad-down-after-stop-{move_attempt + 1}",
+                hold=0.04,
+            )
         move_deadline = time.monotonic() + 1.25
         while time.monotonic() < move_deadline:
             screenshot(adb, serial, moved)
             input_delta = changed_pixels(first_menu_path, moved, threshold=10)
             moved_ocr = selected_header_ocr(moved)
-            if (input_delta >= 750 and moved_ocr and
-                    (expected_title is None or not selected_title_matches(
-                        expected_title, moved_ocr))):
+            title_left = expected_title is None or not selected_title_matches(
+                expected_title, moved_ocr)
+            single_title_library = (
+                case.folder == "ps3" and input_delta >= 750 and bool(moved_ocr)
+            )
+            if input_delta >= 750 and moved_ocr and (
+                    title_left or single_title_library):
                 move_confirmed = True
                 break
             time.sleep(0.10)

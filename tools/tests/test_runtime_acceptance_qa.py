@@ -1705,6 +1705,12 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         )
         self.assertIn("finish_visible_return_recording", source)
 
+    def test_ps3_return_proves_library_input_with_view_toggle(self):
+        source = inspect.getsource(MODULE.stop_and_return)
+        self.assertIn('if case.folder == "ps3":', source)
+        self.assertIn("physical-y-list-view-after-stop-", source)
+        self.assertIn("single_title_library", source)
+
     def test_runtime_checkpoint_requires_commit_without_quarantine(self):
         before = "engine booted normally"
         current = "Quick Resume committed engine=mesen system=nes"
