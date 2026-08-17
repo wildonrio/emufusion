@@ -6294,7 +6294,8 @@ def wait_ps2_post_cinematic_gameplay(
         confirm_key: Optional[int] = None,
         skip_cycle: Optional[tuple[object, ...]] = None,
         probe_motion: tuple[str, str] = ("up", "up"),
-        loop_cycle: Optional[tuple[object, ...]] = None) -> dict[str, object]:
+        loop_cycle: Optional[tuple[object, ...]] = None,
+        motion_min: Optional[float] = None) -> dict[str, object]:
     """Require sustained gameplay-tier cadence with live on-screen motion.
 
     Replaces the historical movie-dip transition (physically unobservable on
@@ -6315,6 +6316,8 @@ def wait_ps2_post_cinematic_gameplay(
     gates on every attract/cinematic candidate.
     """
     del title_reference
+    if motion_min is None:
+        motion_min = PS2_ATTRACT_MOTION_MEAN_DIFF
     if skip_key is None:
         skip_key = controller.B
     # The confirm half of the alternation is the SYSTEM's accept action, not
@@ -6404,7 +6407,7 @@ def wait_ps2_post_cinematic_gameplay(
         # GTA III's dawn streets (dark 0.70, std 27 on live walking) — the
         # dense gates themselves are the arbiter; scene retries resample.
         if (windows >= PS2_SUSTAINED_GAMEPLAY_WINDOWS and
-                motion >= PS2_ATTRACT_MOTION_MEAN_DIFF):
+                motion >= motion_min):
             consecutive_live += 1
             if consecutive_live >= 2:
                 path = output / f"{prefix}-ps2-gameplay-cadence-ready.png"
@@ -6839,6 +6842,12 @@ def run_game_from_system_menu(adb: Path, serial: str,
         skip_cycle=(controller.B, controller.START, "left"),
         probe_motion=("up", "up"),
         loop_cycle=(controller.B,),
+        # ICO's opening is dark and often nearly still (wagon bars, idol
+        # wall). ps3-5/7 locked 20→40 for 14 trailing windows but never
+        # armed because inter-probe mean-diff stayed under the PS2 attract
+        # floor. The 2x bar is the lock itself; proof walking supplies
+        # motion after this wait.
+        motion_min=0.0,
     ) if case.folder == "ps3" else None)))))
     if case.folder == "nds":
         # The Hunters touch driver already reached morph-ball on nds8–10.

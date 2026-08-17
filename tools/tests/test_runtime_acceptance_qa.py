@@ -2810,13 +2810,14 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         marker = 'skip_label="physical-cross-ps3"'
         self.assertIn(marker, run)
         start = run.index(marker)
-        ps3_wait = run[max(0, start - 800): start + 500]
+        ps3_wait = run[max(0, start - 800): start + 1200]
         self.assertIn("confirm_key=controller.B", ps3_wait)
         self.assertIn(
             'skip_cycle=(controller.B, controller.START, "left")', ps3_wait
         )
         self.assertIn("loop_cycle=(controller.B,)", ps3_wait)
         self.assertIn("timeout=1080.0", ps3_wait)
+        self.assertIn("motion_min=0.0", ps3_wait)
         self.assertNotIn("confirm_key=controller.A", ps3_wait)
         self.assertNotIn("loop_cycle=(controller.A,)", ps3_wait)
         self.assertNotIn("loop_cycle=(controller.B, controller.START)", ps3_wait)
@@ -2891,7 +2892,8 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn('"physical-cross-ps2-title-menu"', source)
         self.assertIn('skip_label: str = "physical-cross-ps2"', source)
         self.assertIn('f"{skip_label}-menu-or-skip-', source)
-        self.assertIn("motion >= PS2_ATTRACT_MOTION_MEAN_DIFF", source)
+        self.assertIn("motion >= motion_min", source)
+        self.assertIn("motion_min = PS2_ATTRACT_MOTION_MEAN_DIFF", source)
         self.assertGreater(MODULE.PS2_ATTRACT_MOTION_MEAN_DIFF,
                            MODULE.PS2_LIVE_MOTION_MEAN_DIFF)
         self.assertLess(
