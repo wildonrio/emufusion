@@ -6212,6 +6212,29 @@ def ps2_sustained_gameplay_windows(log: str, baseline_presents: int) -> int:
     return windows
 
 
+def ps2_best_gameplay_windows(log: str, baseline_presents: int) -> int:
+    """Longest consecutive eligible-tier run after baseline, not the trailing one.
+
+    Trailing count drops to zero the moment a later 15 Hz ICO window lands,
+    even if the same launch already posted fourteen 20→40 windows. PS3 uses
+    the peak so a collection-to-cinematic 20+ burst during entry presses
+    still arms once a structured ICO frame is on screen.
+    """
+    windows = 0
+    best = 0
+    for match in PS2_CADENCE_HEALTH.finditer(log):
+        if int(match.group("presents")) <= baseline_presents:
+            continue
+        locked = int(match.group("locked"))
+        producer_hz = float(match.group("producer_hz"))
+        if locked >= 20 and producer_hz >= locked * 0.9:
+            windows += 1
+            best = max(best, windows)
+        else:
+            windows = 0
+    return best
+
+
 def ps2_navigation_cadence_phase(log: str, baseline_presents: int) -> str:
     """Classify boot vs title-ready using fresh compact cadence prefixes.
 
@@ -6295,7 +6318,9 @@ def wait_ps2_post_cinematic_gameplay(
         skip_cycle: Optional[tuple[object, ...]] = None,
         probe_motion: tuple[str, str] = ("up", "up"),
         loop_cycle: Optional[tuple[object, ...]] = None,
-        motion_min: Optional[float] = None) -> dict[str, object]:
+        motion_min: Optional[float] = None,
+        use_best_windows: bool = False,
+        min_structure: float = 0.0) -> dict[str, object]:
     """Require sustained gameplay-tier cadence with live on-screen motion.
 
     Replaces the historical movie-dip transition (physically unobservable on
@@ -6315,7 +6340,7 @@ def wait_ps2_post_cinematic_gameplay(
     keeps proof off dark transitions, which is what starved the content
     gates on every attract/cinematic candidate.
     """
-    del title_reference
+    leave_reference = title_reference
     if motion_min is None:
         motion_min = PS2_ATTRACT_MOTION_MEAN_DIFF
     if skip_key is None:
@@ -6374,9 +6399,11 @@ def wait_ps2_post_cinematic_gameplay(
     consecutive_live = 0
     skip_presses = 0
     while time.monotonic() < deadline:
-        windows = ps2_sustained_gameplay_windows(
-            qa.logs(adb, serial), baseline_presents
-        )
+        log_now = qa.logs(adb, serial)
+        windows = ps2_best_gameplay_windows(log_now, baseline_presents) \
+            if use_best_windows else ps2_sustained_gameplay_windows(
+                log_now, baseline_presents
+            )
         # GTA III's intro plays several scenes; each skips on a button press
         # but a press is consumed per scene. Keep skipping (bounded) until a
         # live controlled scene passes acceptance — once in gameplay, Cross
@@ -6403,11 +6430,18 @@ def wait_ps2_post_cinematic_gameplay(
         previous_probe = probe
         green, dark = ps2_platform_signature(probe)
         structure = probe_gray_stddev(probe)
+        left_reference = True
+        if leave_reference is not None and (
+                use_best_windows or min_structure > 0.0):
+            left_reference = screenshot_mean_abs_diff(
+                leave_reference, probe) >= PS2_LIVE_MOTION_MEAN_DIFF
         # Brightness/structure pre-gates mispredicted the verifier on
         # GTA III's dawn streets (dark 0.70, std 27 on live walking) — the
         # dense gates themselves are the arbiter; scene retries resample.
         if (windows >= PS2_SUSTAINED_GAMEPLAY_WINDOWS and
-                motion >= motion_min):
+                motion >= motion_min and
+                structure >= min_structure and
+                left_reference):
             consecutive_live += 1
             if consecutive_live >= 2:
                 path = output / f"{prefix}-ps2-gameplay-cadence-ready.png"
@@ -6824,7 +6858,7 @@ def run_game_from_system_menu(adb: Path, serial: str,
         probe_motion=("right", "right"),
         loop_cycle=(controller.A, ("lower-tap", 620, 540)),
     ) if case.folder == "n3ds" else (wait_ps2_post_cinematic_gameplay(
-        adb, serial, controller, output, prefix, -1, None,
+        adb, serial, controller, output, prefix, -1, presented_path,
         # ICO & Shadow of the Colossus Collection is the first packaged
         # aPS3e title. It lands on a two-game selector with ICO already
         # highlighted. Circle (raw A) and START left that screen unchanged
@@ -6837,17 +6871,20 @@ def run_game_from_system_menu(adb: Path, serial: str,
         # opening cinematic is unskippable and ran ~12 minutes in ps3-5
         # with brief 20→40 locks, so the wait stays Cross-only and long
         # enough to reach the playable cage.
-        timeout=1080.0, entry_presses=12, skip_key=controller.START,
+        timeout=1080.0, entry_presses=4, skip_key=controller.START,
         skip_label="physical-cross-ps3", confirm_key=controller.B,
         skip_cycle=(controller.B, controller.START, "left"),
         probe_motion=("up", "up"),
         loop_cycle=(controller.B,),
         # ICO's opening is dark and often nearly still (wagon bars, idol
-        # wall). ps3-5/7 locked 20→40 for 14 trailing windows but never
-        # armed because inter-probe mean-diff stayed under the PS2 attract
-        # floor. The 2x bar is the lock itself; proof walking supplies
-        # motion after this wait.
+        # wall). ps3-5/7/8 posted 14–25 consecutive 20→40 windows during
+        # entry, then dropped to 15 Hz before the first probe, so the
+        # trailing count was 0. Use the peak lock, ignore the PS2 attract
+        # motion floor, and require a structured frame that is not the
+        # collection selector (rejects black loads and the still menu).
         motion_min=0.0,
+        use_best_windows=True,
+        min_structure=8.0,
     ) if case.folder == "ps3" else None)))))
     if case.folder == "nds":
         # The Hunters touch driver already reached morph-ball on nds8–10.

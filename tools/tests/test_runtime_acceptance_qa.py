@@ -2818,6 +2818,9 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn("loop_cycle=(controller.B,)", ps3_wait)
         self.assertIn("timeout=1080.0", ps3_wait)
         self.assertIn("motion_min=0.0", ps3_wait)
+        self.assertIn("use_best_windows=True", ps3_wait)
+        self.assertIn("min_structure=8.0", ps3_wait)
+        self.assertIn("prefix, -1, presented_path,", run)
         self.assertNotIn("confirm_key=controller.A", ps3_wait)
         self.assertNotIn("loop_cycle=(controller.A,)", ps3_wait)
         self.assertNotIn("loop_cycle=(controller.B, controller.START)", ps3_wait)
@@ -2871,6 +2874,13 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         ))
         self.assertEqual(2, MODULE.ps2_sustained_gameplay_windows(
             baseline + unstable + first_gameplay + second_gameplay, 120
+        ))
+        drop = health(600, 15.0, 15, 15)
+        self.assertEqual(0, MODULE.ps2_sustained_gameplay_windows(
+            baseline + first_gameplay * 10 + drop, 120
+        ))
+        self.assertEqual(10, MODULE.ps2_best_gameplay_windows(
+            baseline + first_gameplay * 10 + drop, 120
         ))
         self.assertGreaterEqual(MODULE.PS2_SUSTAINED_GAMEPLAY_WINDOWS, 8)
         self.assertGreater(MODULE.PS2_TITLE_DEPARTURE_MEAN_DIFF, 0.0)
