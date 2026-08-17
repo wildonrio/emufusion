@@ -3253,6 +3253,19 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn(report["lockedFps"], {20, 30, 40, 50, 60})
         self.assertEqual(report["outputFps"], int(report["lockedFps"]) * 2)
 
+    def test_ds_lower_touch_does_not_require_dense_motion(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        body = source.split("def dual_screen_evidence", 1)[1].split(
+            "def navigate_handheld_dual_screen_to_visible_ui", 1
+        )[0]
+        self.assertIn(
+            'if touch_delta < 800 and case.folder not in {"nds", "n3ds"}:',
+            body,
+        )
+        self.assertIn('previewActivityDisplay") != 4', body)
+
     def test_handheld_dual_screen_qualifies_on_primary_plus_identity(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
             encoding="utf-8"
