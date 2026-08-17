@@ -9180,6 +9180,9 @@ def frame_generation_evidence(adb: Path, serial: str,
                 # schema-39 waiter never becomes ready (ps3-10). A completed
                 # 11 s 20→40 run in this launch log is the cadence bar.
                 last_failure = str(failure)
+                # wait_for_steady just expired this deadline; give the
+                # fallback one short dump so schema-22 20→40 can be read.
+                deadline = min(hard_cap, time.monotonic() + 20.0)
                 captured = bounded_log()
                 try:
                     primary_two_x_any_segment(captured)
