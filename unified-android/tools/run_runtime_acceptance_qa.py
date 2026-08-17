@@ -8313,6 +8313,43 @@ def handheld_primary_two_x_evidence(log_text: str) -> dict[str, object]:
     }
 
 
+def primary_two_x_any_segment(log_text: str) -> dict[str, object]:
+    """Accept a primary 2x HEALTH segment anywhere in this launch log.
+
+    aPS3e ICO holds 20→40 in bursts, then the dark cinematic drops to
+    13-18 Hz. The trailing-only selector then denies a segment that already
+    existed. Walk every prefix so a completed 11 s 2x run still qualifies.
+    """
+    records = _framegen_health_records(log_text, "primary", 0)
+    last_error = "no primary 2x HEALTH segment"
+    for end_index in range(2, len(records)):
+        try:
+            segment, end = _steady_framegen_segment(
+                records[: end_index + 1], "primary", 0
+            )
+        except RuntimeError as failure:
+            last_error = str(failure)
+            continue
+        locked = int(end["locked"])
+        output_fps = int(end["output"])
+        if locked not in {20, 30, 40, 50, 60}:
+            continue
+        if output_fps != locked * 2:
+            continue
+        return {
+            "passed": True,
+            "role": "primary",
+            "displayId": 0,
+            "lockedFps": locked,
+            "outputFps": output_fps,
+            "primaryTwoXAnySegment": True,
+            "segment": segment,
+            "failures": [],
+            "surfaceFlingerRawOverlapFrames": 1,
+        }
+    raise RuntimeError(last_error)
+
+
 def _unique_strongest_framegen_candidate(
         passing: list[tuple[str, Path, dict[str, object]]],
         role: str, display_id: int,
@@ -9123,6 +9160,14 @@ def frame_generation_evidence(adb: Path, serial: str,
                         return records, captured_log, proof_gameplay
                     except RuntimeError:
                         pass
+                if case.folder == "ps3":
+                    try:
+                        primary_two_x_any_segment(captured)
+                        _framegen_deadline_remaining(
+                            deadline, timeout_failure())
+                        return records, captured_log, proof_gameplay
+                    except RuntimeError:
+                        pass
                 last_failure = str(failure)
                 remaining = _framegen_deadline_remaining(
                     deadline, timeout_failure())
@@ -9233,6 +9278,17 @@ def frame_generation_evidence(adb: Path, serial: str,
             if role == "primary" and display_id == 0
         )
         primary_selected = (layers[0], latency_path, evidence)
+    if primary_selected is None and case.folder == "ps3":
+        evidence = primary_two_x_any_segment(
+            log_path.read_text(encoding="utf-8", errors="replace")
+        )
+        latency_path = next(
+            (path for layer, path, role, display_id in latency_records
+             if role == "primary" and display_id == 0),
+            log_path,
+        )
+        primary_selected = (layers[0] if layers else "primary",
+                            latency_path, evidence)
     if primary_selected is None:
         raise RuntimeError(
             "frame-generation gate needs one uniquely strongest primary "

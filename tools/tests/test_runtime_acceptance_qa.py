@@ -3195,6 +3195,30 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn(report["lockedFps"], {20, 30, 40, 50, 60})
         self.assertEqual(report["outputFps"], int(report["lockedFps"]) * 2)
 
+    def test_ps3_accepts_any_primary_two_x_segment(self):
+        two_x = [self._segment_health(index, locked=20) for index in range(1, 15)]
+        for row in two_x:
+            row["output"] = 40
+        drop = [self._segment_health(index, locked=15) for index in range(15, 21)]
+        for row in drop:
+            row["output"] = 15
+        records = two_x + drop
+        with mock.patch.object(
+                MODULE, "_framegen_health_records", return_value=records):
+            with self.assertRaisesRegex(RuntimeError, "not steady"):
+                MODULE.handheld_primary_two_x_evidence("trailing-drop")
+            report = MODULE.primary_two_x_any_segment("any-segment")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["lockedFps"], 20)
+        self.assertEqual(report["outputFps"], 40)
+        self.assertTrue(report["primaryTwoXAnySegment"])
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        evidence = source.split("def frame_generation_evidence", 1)[1]
+        self.assertIn('if case.folder == "ps3":', evidence)
+        self.assertIn("primary_two_x_any_segment(", evidence)
+
     def test_handheld_dual_screen_qualifies_on_primary_plus_identity(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
             encoding="utf-8"
