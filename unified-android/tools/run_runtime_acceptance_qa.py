@@ -6799,26 +6799,6 @@ def run_game_from_system_menu(adb: Path, serial: str,
         loop_cycle=(controller.A,),
     ) if case.folder == "wiiu" else (wait_ps2_post_cinematic_gameplay(
         adb, serial, controller, output, prefix, -1, None,
-        # Metroid Prime Hunters: the title is TOUCH TO START, the crawl is
-        # SKIP on the lower display, and A/START never leave that card
-        # (run nds7, 2026-08-16). Cycle the measured display-4 taps with
-        # the two physical confirms, then prove live motion.
-        entry_presses=8, skip_key=controller.START,
-        skip_label="physical-start-nds", confirm_key=controller.A,
-        skip_cycle=(
-            ("lower-tap", NDS_HUNTERS_SKIP[0], NDS_HUNTERS_SKIP[1]),
-            ("lower-tap", NDS_HUNTERS_TOUCH_TO_START[0],
-             NDS_HUNTERS_TOUCH_TO_START[1]),
-            controller.A,
-            controller.START,
-        ),
-        probe_motion=("right", "right"),
-        loop_cycle=(
-            ("lower-tap", NDS_HUNTERS_SKIP[0], NDS_HUNTERS_SKIP[1]),
-            controller.A,
-        ),
-    ) if case.folder == "nds" else (wait_ps2_post_cinematic_gameplay(
-        adb, serial, controller, output, prefix, -1, None,
         entry_presses=10, skip_key=controller.START,
         skip_label="physical-start-n3ds", confirm_key=controller.A,
         skip_cycle=(
@@ -6835,13 +6815,13 @@ def run_game_from_system_menu(adb: Path, serial: str,
         skip_cycle=(controller.START, controller.A),
         probe_motion=("up", "up"),
         loop_cycle=(controller.A,),
-    ) if case.folder == "ps3" else None))))))
-    if case.folder == "nds" and ps2_gameplay_readiness is not None:
-        # Hunters' first live scene upgrades 20→50 once the morph-ball
-        # corridor is actually producing 60 unique endpoints. Arming proof
-        # across that upgrade (run nds8) made the compositor snapshot miss
-        # the later settled 50→100 stretch.
-        time.sleep(20.0)
+    ) if case.folder == "ps3" else None)))))
+    if case.folder == "nds":
+        # The Hunters touch driver already reached morph-ball on nds8–10.
+        # The generic PS2 wait then held START/A for minutes, crashed the
+        # process to the launcher (nds11), and never armed proof.
+        ps2_gameplay_readiness = nds_navigation or {"handheldDriven": True}
+        time.sleep(8.0)
     real_nes_readiness = prepare_real_nes_gameplay(
         adb, serial, controller, output, prefix, str(expected_title),
         nes_logcat_capture,
@@ -9065,6 +9045,14 @@ def frame_generation_evidence(adb: Path, serial: str,
                 _framegen_deadline_remaining(deadline, timeout_failure())
                 return records, captured_log, proof_gameplay
             except (OSError, ValueError, RuntimeError) as failure:
+                if case.folder in {"nds", "n3ds"}:
+                    try:
+                        handheld_primary_two_x_evidence(captured)
+                        _framegen_deadline_remaining(
+                            deadline, timeout_failure())
+                        return records, captured_log, proof_gameplay
+                    except RuntimeError:
+                        pass
                 last_failure = str(failure)
                 remaining = _framegen_deadline_remaining(
                     deadline, timeout_failure())
