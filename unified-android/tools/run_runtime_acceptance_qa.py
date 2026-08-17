@@ -9128,9 +9128,7 @@ def frame_generation_evidence(adb: Path, serial: str,
                     return records, captured_log, proof_gameplay
                 except RuntimeError as inner:
                     last_failure = str(inner)
-                    remaining = _framegen_deadline_remaining(
-                        deadline, timeout_failure())
-                    time.sleep(min(0.1, remaining))
+                    _framegen_deadline_remaining(deadline, timeout_failure())
                     continue
             # A slow JIT warm-up may consume most of the steady deadline;
             # give the capture pass a fresh bounded window from this steady
