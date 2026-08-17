@@ -2815,7 +2815,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn(
             'skip_cycle=(controller.B, controller.START, "left")', ps3_wait
         )
-        self.assertIn("loop_cycle=(controller.B,)", ps3_wait)
+        self.assertIn("loop_cycle=(controller.B, controller.START)", ps3_wait)
         self.assertIn("timeout=720.0", ps3_wait)
         self.assertNotIn("confirm_key=controller.A", ps3_wait)
         self.assertNotIn("loop_cycle=(controller.A,)", ps3_wait)

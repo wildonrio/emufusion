@@ -6827,15 +6827,17 @@ def run_game_from_system_menu(adb: Path, serial: str,
         # highlighted. Circle (raw A) and START left that screen unchanged
         # for the whole 8-minute wait (run ps3-4); Cross (raw south B, the
         # same Thor Odin mapping as PS2/PSP) is the collection confirm.
-        # START is still required on ICO's own "PRESS START BUTTON" title.
-        # Do not send START in the sampling loop or it pauses live gameplay.
-        # ICO's opening cinematic is several minutes; give the wait room
-        # past the collection + title + New Game + intro.
+        # START is still required on ICO's own "PRESS START BUTTON" title
+        # and to skip the HD-collection opening cinematic (ps3-5 spent the
+        # whole 12-minute wait inside that intro at 13-17 Hz). Cross stays
+        # in the loop to advance dialogue. START during later gameplay
+        # toggles pause; the live-motion gate rejects a frozen picture and
+        # the next START unpauses, same as Dreamcast's loop.
         timeout=720.0, entry_presses=12, skip_key=controller.START,
         skip_label="physical-cross-ps3", confirm_key=controller.B,
         skip_cycle=(controller.B, controller.START, "left"),
         probe_motion=("up", "up"),
-        loop_cycle=(controller.B,),
+        loop_cycle=(controller.B, controller.START),
     ) if case.folder == "ps3" else None)))))
     if case.folder == "nds":
         # The Hunters touch driver already reached morph-ball on nds8–10.
