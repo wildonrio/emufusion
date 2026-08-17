@@ -6595,8 +6595,11 @@ def run_game_from_system_menu(adb: Path, serial: str,
         if case.folder == "wiiu" and boot_assist_count[0] % 2 == 1:
             controller.hat("left", f"physical-advance-{case.folder}-boot-focus")
         else:
+            # aPS3e ICO collection (ps3-4): Circle (raw A) is cancel on the
+            # Thor Odin mapping. Cross (raw south B) is the collection confirm.
+            boot_key = controller.B if case.folder == "ps3" else controller.A
             controller.key(
-                controller.A, f"physical-advance-{case.folder}-boot-gate",
+                boot_key, f"physical-advance-{case.folder}-boot-gate",
                 hold=0.055)
 
     presented = wait_presented_frame(
@@ -6819,11 +6822,20 @@ def run_game_from_system_menu(adb: Path, serial: str,
         loop_cycle=(controller.A, ("lower-tap", 620, 540)),
     ) if case.folder == "n3ds" else (wait_ps2_post_cinematic_gameplay(
         adb, serial, controller, output, prefix, -1, None,
-        entry_presses=10, skip_key=controller.START,
-        skip_label="physical-start-ps3", confirm_key=controller.A,
-        skip_cycle=(controller.START, controller.A),
+        # ICO & Shadow of the Colossus Collection is the first packaged
+        # aPS3e title. It lands on a two-game selector with ICO already
+        # highlighted. Circle (raw A) and START left that screen unchanged
+        # for the whole 8-minute wait (run ps3-4); Cross (raw south B, the
+        # same Thor Odin mapping as PS2/PSP) is the collection confirm.
+        # START is still required on ICO's own "PRESS START BUTTON" title.
+        # Do not send START in the sampling loop or it pauses live gameplay.
+        # ICO's opening cinematic is several minutes; give the wait room
+        # past the collection + title + New Game + intro.
+        timeout=720.0, entry_presses=12, skip_key=controller.START,
+        skip_label="physical-cross-ps3", confirm_key=controller.B,
+        skip_cycle=(controller.B, controller.START, "left"),
         probe_motion=("up", "up"),
-        loop_cycle=(controller.A,),
+        loop_cycle=(controller.B,),
     ) if case.folder == "ps3" else None)))))
     if case.folder == "nds":
         # The Hunters touch driver already reached morph-ball on nds8–10.
@@ -8926,10 +8938,10 @@ def frame_generation_evidence(adb: Path, serial: str,
                     controller.motion_pair(left, right, hold=2.0)
                 else:
                     controller.motion_pair(left, right)
-                    action_key = (controller.B if case.folder == "psp"
+                    action_key = (controller.B if case.folder in {"psp", "ps3"}
                                   else controller.A)
                     action_label = ("physical-cross-gameplay-action" if
-                                    case.folder == "psp"
+                                    case.folder in {"psp", "ps3"}
                                     else "physical-a-gameplay-action")
                     controller.key(action_key, action_label, hold=0.04)
                 if case.lower_touch:

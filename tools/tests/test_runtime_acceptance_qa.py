@@ -2795,10 +2795,33 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn('controller.motion_pair(left, right, hold=2.0)',
                       ps2_branch)
         self.assertIn('"physical-cross-ps2-sprint"', ps2_branch)
-        self.assertIn('action_key = (controller.B if case.folder == "psp"',
+        self.assertIn('action_key = (controller.B if case.folder in {"psp", "ps3"}',
                       motion)
         self.assertIn('controller.key(action_key, action_label', motion)
         self.assertIn('"physical-cross-gameplay-action"', motion)
+
+    def test_ps3_collection_uses_cross_not_circle(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        run = source.split("def run_game_from_system_menu", 1)[1].split(
+            "def main_activity_surface_layers", 1
+        )[0]
+        marker = 'skip_label="physical-cross-ps3"'
+        self.assertIn(marker, run)
+        start = run.index(marker)
+        ps3_wait = run[max(0, start - 800): start + 500]
+        self.assertIn("confirm_key=controller.B", ps3_wait)
+        self.assertIn(
+            'skip_cycle=(controller.B, controller.START, "left")', ps3_wait
+        )
+        self.assertIn("loop_cycle=(controller.B,)", ps3_wait)
+        self.assertIn("timeout=720.0", ps3_wait)
+        self.assertNotIn("confirm_key=controller.A", ps3_wait)
+        self.assertNotIn("loop_cycle=(controller.A,)", ps3_wait)
+        self.assertIn(
+            'boot_key = controller.B if case.folder == "ps3"', run
+        )
 
     def test_ps2_proof_waits_for_title_departure_and_sustained_gameplay(self):
         # Physical recalibration 2026-08-15 (Thor, God of War, schema-39
