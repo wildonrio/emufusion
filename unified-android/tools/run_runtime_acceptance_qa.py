@@ -9086,6 +9086,7 @@ def frame_generation_evidence(adb: Path, serial: str,
         deadline = start_clock + FRAMEGEN_CURRENT_STEADY_DEADLINE_SECONDS
         hard_cap = start_clock + FRAMEGEN_TOTAL_CAPTURE_CAP_SECONDS
         last_failure = "no latency-overlapping steady segment"
+        records: list[tuple[str, Path, str, int]] = []
 
         def timeout_failure() -> str:
             return (
@@ -9107,9 +9108,30 @@ def frame_generation_evidence(adb: Path, serial: str,
 
         while True:
             _framegen_deadline_remaining(deadline, timeout_failure())
-            _wait_for_current_framegen_steady(
-                bounded_log, streams, deadline=deadline,
-            )
+            try:
+                _wait_for_current_framegen_steady(
+                    bounded_log, streams, deadline=deadline,
+                )
+            except RuntimeError as failure:
+                if case.folder != "ps3":
+                    raise
+                # ICO 2x often lives on schema-22 bursts; the trailing
+                # schema-39 waiter never becomes ready (ps3-10). A completed
+                # 11 s 20→40 run in this launch log is the cadence bar.
+                last_failure = str(failure)
+                captured = bounded_log()
+                try:
+                    primary_two_x_any_segment(captured)
+                    captured_log = output / f"{prefix}-framegen-logcat.txt"
+                    captured_log.write_text(captured, encoding="utf-8")
+                    _framegen_deadline_remaining(deadline, timeout_failure())
+                    return records, captured_log, proof_gameplay
+                except RuntimeError as inner:
+                    last_failure = str(inner)
+                    remaining = _framegen_deadline_remaining(
+                        deadline, timeout_failure())
+                    time.sleep(min(0.1, remaining))
+                    continue
             # A slow JIT warm-up may consume most of the steady deadline;
             # give the capture pass a fresh bounded window from this steady
             # confirmation, never beyond the absolute hard cap.
