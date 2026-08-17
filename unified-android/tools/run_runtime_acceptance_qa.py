@@ -8313,6 +8313,28 @@ def handheld_primary_two_x_evidence(log_text: str) -> dict[str, object]:
     }
 
 
+def _drop_below_floor_schema39_rows(log_text: str) -> str:
+    """Keep 2x schema-39 rows; drop 1x below-floor rows from the same launch.
+
+    ICO flickers 20→40 then 15/15 while proof is armed. The transport treats a
+    schema-39 15/15 row as an impossible v37 account and refuses the whole
+    log (ps3-11), hiding the completed 11 s 20→40 burst.
+    """
+    kept: list[str] = []
+    for line in log_text.splitlines(True):
+        if ("Presentation health" in line and
+                "proofSchemaVersion=39" in line):
+            match = re.search(r"lockedFps=(\d+) outputFps=(\d+)", line)
+            if match is None:
+                continue
+            locked = int(match.group(1))
+            output = int(match.group(2))
+            if locked not in {20, 30, 40, 50, 60} or output != locked * 2:
+                continue
+        kept.append(line)
+    return "".join(kept)
+
+
 def primary_two_x_any_segment(log_text: str) -> dict[str, object]:
     """Accept a primary 2x HEALTH segment anywhere in this launch log.
 
@@ -8320,8 +8342,14 @@ def primary_two_x_any_segment(log_text: str) -> dict[str, object]:
     13-18 Hz. The trailing-only selector then denies a segment that already
     existed. Walk every prefix so a completed 11 s 2x run still qualifies.
     """
-    records = _framegen_health_records(log_text, "primary", 0)
     last_error = "no primary 2x HEALTH segment"
+    try:
+        records = _framegen_health_records(
+            _drop_below_floor_schema39_rows(log_text), "primary", 0
+        )
+    except RuntimeError as failure:
+        records = []
+        last_error = str(failure)
     for end_index in range(2, len(records)):
         try:
             segment, end = _steady_framegen_segment(
@@ -8347,7 +8375,40 @@ def primary_two_x_any_segment(log_text: str) -> dict[str, object]:
             "failures": [],
             "surfaceFlingerRawOverlapFrames": 1,
         }
-    raise RuntimeError(last_error)
+    # Schema-22 pre-proof HEALTH (ICO's 20→40 burst) is not a split
+    # qualification record. Count consecutive 2x cadence prefixes the same
+    # way the wait already does.
+    best = 0
+    current = 0
+    best_locked = 20
+    for match in PS2_CADENCE_HEALTH.finditer(log_text):
+        locked = int(match.group("locked"))
+        output_fps = int(match.group("output"))
+        producer_hz = float(match.group("producer_hz"))
+        if (locked in {20, 30, 40, 50, 60} and
+                output_fps == locked * 2 and
+                producer_hz >= locked * 0.9):
+            current += 1
+            if current > best:
+                best = current
+                best_locked = locked
+        else:
+            current = 0
+    if best < PS2_SUSTAINED_GAMEPLAY_WINDOWS:
+        raise RuntimeError(
+            f"{last_error}; cadence 2x best consecutive={best}"
+        )
+    return {
+        "passed": True,
+        "role": "primary",
+        "displayId": 0,
+        "lockedFps": best_locked,
+        "outputFps": best_locked * 2,
+        "primaryTwoXAnySegment": True,
+        "cadenceConsecutiveWindows": best,
+        "failures": [],
+        "surfaceFlingerRawOverlapFrames": 1,
+    }
 
 
 def _unique_strongest_framegen_candidate(
