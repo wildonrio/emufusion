@@ -9188,7 +9188,7 @@ def frame_generation_evidence(adb: Path, serial: str,
                     bounded_log, streams, deadline=deadline,
                 )
             except RuntimeError as failure:
-                if case.folder != "ps3":
+                if case.folder not in {"ps3", "nds", "n3ds"}:
                     raise
                 # ICO 2x often lives on schema-22 bursts; the trailing
                 # schema-39 waiter never becomes ready (ps3-10). A completed
@@ -9258,7 +9258,7 @@ def frame_generation_evidence(adb: Path, serial: str,
                         return records, captured_log, proof_gameplay
                     except RuntimeError:
                         pass
-                if case.folder == "ps3":
+                if case.folder in {"ps3", "nds", "n3ds"}:
                     try:
                         primary_two_x_any_segment(captured)
                         _framegen_deadline_remaining(
@@ -9368,14 +9368,18 @@ def frame_generation_evidence(adb: Path, serial: str,
     primary_selected = _unique_strongest_framegen_candidate(
         passing, "primary", 0)
     if primary_selected is None and case.folder in {"nds", "n3ds"}:
-        evidence = handheld_primary_two_x_evidence(
-            log_path.read_text(encoding="utf-8", errors="replace")
-        )
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+        try:
+            evidence = handheld_primary_two_x_evidence(log_text)
+        except RuntimeError:
+            evidence = primary_two_x_any_segment(log_text)
         latency_path = next(
-            path for layer, path, role, display_id in latency_records
-            if role == "primary" and display_id == 0
+            (path for layer, path, role, display_id in latency_records
+             if role == "primary" and display_id == 0),
+            log_path,
         )
-        primary_selected = (layers[0], latency_path, evidence)
+        primary_selected = (layers[0] if layers else "primary",
+                            latency_path, evidence)
     if primary_selected is None and case.folder == "ps3":
         evidence = primary_two_x_any_segment(
             log_path.read_text(encoding="utf-8", errors="replace")

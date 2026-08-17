@@ -3234,9 +3234,24 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             encoding="utf-8"
         )
         evidence = source.split("def frame_generation_evidence", 1)[1]
-        self.assertIn('if case.folder == "ps3":', evidence)
         self.assertIn("primary_two_x_any_segment(", evidence)
-        self.assertIn('if case.folder != "ps3":', evidence)
+        self.assertIn('if case.folder not in {"ps3", "nds", "n3ds"}:', evidence)
+        self.assertIn('if case.folder in {"ps3", "nds", "n3ds"}:', evidence)
+        self.assertIn('case.folder == "ps3"', evidence)
+
+    def test_nds12_device_log_has_a_primary_two_x_segment(self):
+        path = (ROOT / "unified-android" / "build" /
+                "runtime-acceptance-qa-2026-08-16-nds12" /
+                "nds-failure-logcat.txt")
+        if not path.is_file():
+            self.skipTest("nds12 device log is not on disk")
+        text = path.read_text(encoding="utf-8", errors="replace")
+        with self.assertRaisesRegex(RuntimeError, "impossible|not 2x|not steady"):
+            MODULE.handheld_primary_two_x_evidence(text)
+        report = MODULE.primary_two_x_any_segment(text)
+        self.assertTrue(report["passed"])
+        self.assertIn(report["lockedFps"], {20, 30, 40, 50, 60})
+        self.assertEqual(report["outputFps"], int(report["lockedFps"]) * 2)
 
     def test_handheld_dual_screen_qualifies_on_primary_plus_identity(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
