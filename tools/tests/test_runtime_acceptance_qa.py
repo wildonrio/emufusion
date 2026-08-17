@@ -2622,6 +2622,24 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             valid, "aps3e", "ps3"
         ))
 
+    def test_aps3e_health_after_route_satisfies_presented_frame(self):
+        valid = "\n".join((
+            "In-window route accepted engine=aps3e system=ps3 activity=MainActivity",
+            "Presentation health base generator=1 role=primary displayId=0 "
+            "lockedFps=40 outputFps=80",
+        ))
+        self.assertTrue(MODULE.has_presented_frame_telemetry(
+            valid, "aps3e", "ps3"
+        ))
+        stale = "\n".join((
+            "Presentation health base generator=1 role=primary displayId=0 "
+            "lockedFps=40 outputFps=80",
+            "In-window route accepted engine=aps3e system=ps3 activity=MainActivity",
+        ))
+        self.assertFalse(MODULE.has_presented_frame_telemetry(
+            stale, "aps3e", "ps3"
+        ))
+
     def test_slow_disc_boot_systems_get_extended_assisted_presented_wait(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(encoding="utf-8")
         self.assertIn('slow_disc_boot = case.folder in {"wiiu", "ps3"}', source)

@@ -4683,7 +4683,15 @@ def has_presented_frame_telemetry(log: str, engine: str, system: str) -> bool:
     # a started playback bound to this exact route is engine-owned proof the
     # guest advanced.  The visible-screenshot and changed-pixel requirements
     # in the caller still hold independently.
-    return f"Adapter audio playback started engine={engine} " in log[route_index:]
+    if f"Adapter audio playback started engine={engine} " in log[route_index:]:
+        return True
+    # aPS3e ICO presented a 40/80 badge with no adapter-audio line
+    # (run ps3-2). Frame-generator HEALTH after this exact route is
+    # engine-owned proof a guest frame reached the compositor.
+    return (
+        "Presentation health base generator=1 role=primary" in
+        log[route_index:]
+    )
 
 
 def wait_presented_frame(adb: Path, serial: str, engine: str, system: str,
