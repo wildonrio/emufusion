@@ -2625,11 +2625,19 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
     def test_aps3e_health_after_route_satisfies_presented_frame(self):
         valid = "\n".join((
             "In-window route accepted engine=aps3e system=ps3 activity=MainActivity",
-            "Presentation health base generator=1 role=primary displayId=0 "
+            "Presentation health generator=1 role=primary displayId=0 "
             "lockedFps=40 outputFps=80",
         ))
         self.assertTrue(MODULE.has_presented_frame_telemetry(
             valid, "aps3e", "ps3"
+        ))
+        valid_base = "\n".join((
+            "In-window route accepted engine=aps3e system=ps3 activity=MainActivity",
+            "Presentation health base generator=1 role=primary displayId=0 "
+            "lockedFps=40 outputFps=80",
+        ))
+        self.assertTrue(MODULE.has_presented_frame_telemetry(
+            valid_base, "aps3e", "ps3"
         ))
         stale = "\n".join((
             "Presentation health base generator=1 role=primary displayId=0 "

@@ -4688,9 +4688,10 @@ def has_presented_frame_telemetry(log: str, engine: str, system: str) -> bool:
     # aPS3e ICO presented a 40/80 badge with no adapter-audio line
     # (run ps3-2). Frame-generator HEALTH after this exact route is
     # engine-owned proof a guest frame reached the compositor.
+    tail = log[route_index:]
     return (
-        "Presentation health base generator=1 role=primary" in
-        log[route_index:]
+        "Presentation health base generator=1 role=primary" in tail or
+        "Presentation health generator=1 role=primary" in tail
     )
 
 
