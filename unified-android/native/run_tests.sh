@@ -8,6 +8,8 @@ CC=${CC:-cc}
 CFLAGS=${CFLAGS:-}
 LDFLAGS=${LDFLAGS:-}
 JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}
+# jni.h includes jni_md.h from the platform folder (darwin locally, linux on CI).
+case "$(uname -s)" in Darwin) JNI_PLATFORM=darwin ;; *) JNI_PLATFORM=linux ;; esac
 
 "$CC" -std=c11 -O1 -Wall -Wextra -Werror $CFLAGS \
     "$NATIVE_DIR/tests/state_capture_growth_test.c" $LDFLAGS -ldl -lpthread -lm \
@@ -107,7 +109,7 @@ mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
     -ldl $LDFLAGS -o "$TEST_DIR/input_trace_host_test"
 "$TEST_DIR/input_trace_host_test"
 "$CC" -std=c11 -O1 -Wall -Wextra -Werror -fsanitize=address,undefined \
-    -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/darwin" \
+    -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/$JNI_PLATFORM" \
     -I"$NATIVE_DIR/tests/fake-android" \
     "$NATIVE_DIR/lucent_framegen_timer_jni.c" \
     "$NATIVE_DIR/tests/framegen_timer_test.c" \
