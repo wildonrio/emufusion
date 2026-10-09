@@ -64,6 +64,9 @@ final class UpdateManager {
     // A failed automatic check (offline, DNS, GitHub unreachable) must not use
     // up the six-hour window: the next library visit after this retries.
     private static final long RETRY_AFTER_FAILURE_MS = 10L * 60L * 1000L;
+    // The installed APK's versionName, reported with every status so the theme
+    // labels show the real app version rather than its own bundled constant.
+    private static volatile String installedAppVersion = "";
     private static final long MAX_THEME = 512L * 1024L * 1024L;
     private static final long MAX_APK = 768L * 1024L * 1024L;
     private static final long MAX_CHEATS = CheatArchive.MAX_ARCHIVE_BYTES;
@@ -94,6 +97,7 @@ final class UpdateManager {
 
     UpdateManager(Context context) {
         this.context = context.getApplicationContext();
+        installedAppVersion = currentVersionName();
         // A process can be killed while a network request is in flight. Never
         // resurrect that persisted progress state as though work were still
         // running: there is no worker left to complete it. Terminal states are
@@ -672,6 +676,7 @@ final class UpdateManager {
             value.put("running", "checking".equals(state) || "theme".equals(state) ||
                     "cheats".equals(state) || "software".equals(state));
             value.put("themeVersion", ThemeInstaller.installedVersion());
+            value.put("appVersion", installedAppVersion);
         } catch (Exception ignored) {}
         return value;
     }

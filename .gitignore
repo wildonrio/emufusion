@@ -22,3 +22,6 @@ aqtinstall.log
 backend/lucent-multiplayer
 backend/*.db
 backend/testing/.venv/
+# Python bytecode caches.
+__pycache__/
+*.pyc

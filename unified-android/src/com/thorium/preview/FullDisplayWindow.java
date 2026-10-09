@@ -5,7 +5,9 @@ import android.os.Build;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 
 /**
  * Gives the frontend the whole panel.
@@ -44,8 +46,24 @@ public final class FullDisplayWindow {
         }
     }
 
+    /**
+     * Lets a landscape window run under a display cutout. By default Android
+     * keeps it clear of the camera cutout, which on a phone such as a Pixel 6
+     * held sideways left a 128px black band down one side of the library and of
+     * every game. Devices without a cutout, such as the Thor, are unaffected.
+     */
+    public static void extendIntoCutout(Window window) {
+        if (window == null || Build.VERSION.SDK_INT < 28) return;
+        WindowManager.LayoutParams attributes = window.getAttributes();
+        int shortEdges = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        if (attributes.layoutInDisplayCutoutMode == shortEdges) return;
+        attributes.layoutInDisplayCutoutMode = shortEdges;
+        window.setAttributes(attributes);
+    }
+
     private static void applyOnce(Activity activity) {
         try {
+            extendIntoCutout(activity.getWindow());
             // Hiding the bars is the part that actually frees the strip: the
             // window reserves space for the navigation bar even when the
             // content view is told not to fit system windows.

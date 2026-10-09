@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.18
-VERSION_CODE=92
+VERSION_NAME=3.2.19
+VERSION_CODE=93
 
 case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;

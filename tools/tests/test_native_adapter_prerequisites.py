@@ -539,7 +539,8 @@ class NativeAdapterPrerequisiteExecutingTest(unittest.TestCase):
             [str(JAVAC), "-source", "8", "-target", "8", "-encoding", "UTF-8",
              "-classpath", str(ANDROID_JAR), "-d", str(classes),
              str(GAME / "NativeAdapterPrerequisites.java"),
-             str(GAME / "NativeAdapterSystemDirectory.java"), str(harness)],
+             str(GAME / "NativeAdapterSystemDirectory.java"),
+             str(GAME / "Aps3eLocalizedStrings.java"), str(harness)],
             text=True, capture_output=True,
         )
         self.assertEqual(0, compile_result.returncode, compile_result.stderr)

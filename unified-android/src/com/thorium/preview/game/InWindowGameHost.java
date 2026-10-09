@@ -1202,7 +1202,22 @@ public final class InWindowGameHost
         overlay.setClickable(true);
         LinearLayout panel = new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(34), dp(28), dp(34), dp(30));
+        // Fit every row on short landscape screens -- a 720px phone, and the
+        // Thor's 1080px panel at 2.3x -- instead of pushing Exit below the
+        // fold. Rows shrink only as far as needed; the scroller stays as the
+        // fallback for anything still taller.
+        int rows = "cemu".equals(request.engineId) ? 7 : 6;
+        int available = activity.getResources().getDisplayMetrics().heightPixels - dp(32);
+        boolean compact = dp(28 + 30) + dp(54 + 8) + rows * dp(58 + 8) > available;
+        int gap = compact ? dp(6) : dp(8);
+        int titleHeight = compact ? dp(40) : dp(54);
+        int padTop = compact ? dp(16) : dp(28);
+        int padBottom = compact ? dp(16) : dp(30);
+        int rowHeight = dp(58);
+        if (compact) rowHeight = Math.max(dp(40), Math.min(dp(58),
+                (available - padTop - padBottom - titleHeight - gap) / rows - gap));
+        float rowText = rowHeight < dp(48) ? 15f : 17f;
+        panel.setPadding(dp(34), padTop, dp(34), padBottom);
         GradientDrawable background = new GradientDrawable();
         background.setColor(Color.rgb(24, 24, 29));
         background.setCornerRadius(dp(20));
@@ -1214,10 +1229,18 @@ public final class InWindowGameHost
         title.setTextSize(24f);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setGravity(Gravity.CENTER_HORIZONTAL);
-        panel.addView(title, rowParams(dp(54)));
+        // Long names ("ICO(TM) and Shadow of the Colossus(TM) Collection") must
+        // not wrap under the first button: shrink to one line, then ellipsize.
+        title.setMaxLines(1);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        if (android.os.Build.VERSION.SDK_INT >= 26)
+            title.setAutoSizeTextTypeUniformWithConfiguration(
+                    15, 24, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        panel.addView(title, pauseRowParams(titleHeight, gap));
         Button resumeButton = menuButton("Resume");
         resumeButton.setOnClickListener(view -> hidePauseMenu());
-        panel.addView(resumeButton, rowParams(dp(58)));
+        resumeButton.setTextSize(rowText);
+        panel.addView(resumeButton, pauseRowParams(rowHeight, gap));
         pauseButtons.add(resumeButton);
         if ("cemu".equals(request.engineId)) {
             primaryScreenButton = menuButton("Switch to GamePad");
@@ -1225,7 +1248,8 @@ public final class InWindowGameHost
             primaryScreenButton.setOnClickListener(view -> {
                 if (session != null && session.switchPrimaryScreen()) hidePauseMenu();
             });
-            panel.addView(primaryScreenButton, rowParams(dp(58)));
+            primaryScreenButton.setTextSize(rowText);
+        panel.addView(primaryScreenButton, pauseRowParams(rowHeight, gap));
             pauseButtons.add(primaryScreenButton);
         }
         Button controls = menuButton("Controls");
@@ -1233,7 +1257,8 @@ public final class InWindowGameHost
             if (session == null || !session.openControls())
                 explainUnavailable("Control remapping is unavailable for this core.");
         });
-        panel.addView(controls, rowParams(dp(58)));
+        controls.setTextSize(rowText);
+        panel.addView(controls, pauseRowParams(rowHeight, gap));
         pauseButtons.add(controls);
         // Disabled until the engine reports what this game actually has. The
         // menu can be opened before the core finishes loading, and an entry
@@ -1243,7 +1268,8 @@ public final class InWindowGameHost
         cheatsButton.setEnabled(false);
         cheatsButton.setAlpha(0.45f);
         cheatsButton.setOnClickListener(view -> showCheatsPanel());
-        panel.addView(cheatsButton, rowParams(dp(58)));
+        cheatsButton.setTextSize(rowText);
+        panel.addView(cheatsButton, pauseRowParams(rowHeight, gap));
         pauseButtons.add(cheatsButton);
         restoreButton = menuButton("Restore earlier point");
         restoreButton.setEnabled(false);
@@ -1252,16 +1278,19 @@ public final class InWindowGameHost
             if (session == null || !session.openRestoreHistory())
                 explainUnavailable("No earlier restore points are available yet.");
         });
-        panel.addView(restoreButton, rowParams(dp(58)));
+        restoreButton.setTextSize(rowText);
+        panel.addView(restoreButton, pauseRowParams(rowHeight, gap));
         pauseButtons.add(restoreButton);
         Button multiplayer = menuButton("Multiplayer (Alpha)");
         multiplayer.setOnClickListener(view -> toggleMultiplayerOverlay());
-        panel.addView(multiplayer, rowParams(dp(58)));
+        multiplayer.setTextSize(rowText);
+        panel.addView(multiplayer, pauseRowParams(rowHeight, gap));
         pauseButtons.add(multiplayer);
         Button exit = menuButton("Exit to EmuFusion");
         exit.setTextColor(Color.rgb(255, 151, 151));
         exit.setOnClickListener(view -> exitToLibrary("pause-menu-exit"));
-        panel.addView(exit, rowParams(dp(58)));
+        exit.setTextSize(rowText);
+        panel.addView(exit, pauseRowParams(rowHeight, gap));
         pauseButtons.add(exit);
         // A landscape phone can be shorter than the six menu rows. Keep Exit
         // reachable by touch and controller focus rather than clipping it
@@ -1381,6 +1410,13 @@ public final class InWindowGameHost
             view.setBackground(state);
         });
         return button;
+    }
+
+    private LinearLayout.LayoutParams pauseRowParams(int height, int gap) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, height);
+        params.topMargin = gap;
+        return params;
     }
 
     private LinearLayout.LayoutParams rowParams(int height) {
@@ -2859,8 +2895,6 @@ public final class InWindowGameHost
     }
 
     private static String title(File file) {
-        String name = file.getName();
-        int dot = name.lastIndexOf('.');
-        return dot > 0 ? name.substring(0, dot) : name;
+        return GameTitles.forFile(file);
     }
 }

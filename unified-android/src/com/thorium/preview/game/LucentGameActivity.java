@@ -460,6 +460,7 @@ public final class LucentGameActivity extends Activity
         // decor and query the controller from the View instead.  A controller
         // may still be unavailable until attachment; onResume retries it.
         View decor = getWindow().getDecorView();
+        com.thorium.preview.FullDisplayWindow.extendIntoCutout(getWindow());
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController controller =
                     decor.getWindowInsetsController();

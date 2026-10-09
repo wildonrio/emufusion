@@ -221,6 +221,13 @@ final class NativeAdapterSystemDirectory {
         Os.setenv("APS3E_ENABLE_LOG", "true", true);
         Os.setenv("APS3E_ANDROID_API_VERSION",
                 Integer.toString(Build.VERSION.SDK_INT), true);
+        // aPS3e reads each RPCS3 interface string from an environment variable
+        // named after its key while the library loads, and otherwise shows the
+        // key itself ("PROGRESS DIALOG COMPILING PPU MODULES"). Its own app sets
+        // them from strings.xml; publish the same English text here.
+        String[] strings = Aps3eLocalizedStrings.KEYS_AND_VALUES;
+        for (int i = 0; i + 1 < strings.length; i += 2)
+            Os.setenv(strings[i], strings[i + 1], false);
         return root;
     }
 

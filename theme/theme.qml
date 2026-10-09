@@ -9,7 +9,12 @@ FocusScope {
     width: 1920
     height: 1080
 
-    readonly property string lucentVersion: "3.2.18"
+    readonly property string lucentVersion: "3.2.19"
+    // The installed app's versionName from the updater status; labels fall back
+    // to the bundled constant until the first status arrives.
+    property string installedAppVersion: ""
+    readonly property string displayVersion: installedAppVersion !== "" ?
+            installedAppVersion : lucentVersion
 
     // ---- Vertical envelope ------------------------------------------------
     // Android used to reserve the bottom 55 px of the panel for its navigation
@@ -2709,6 +2714,7 @@ FocusScope {
             try {
                 var payload = JSON.parse(request.responseText)
                 root.updateStatusMessage = String(payload.message || "")
+                if (payload.appVersion) root.installedAppVersion = String(payload.appVersion)
                 if (Boolean(payload.installReady) && !root.updatePromptDismissed) {
                     root.updatePromptChoice = 0
                     root.updatePromptOpen = true
@@ -9516,7 +9522,7 @@ FocusScope {
             Text {
                 x: 50
                 y: 94
-                text: "EMUFUSION " + root.lucentVersion +
+                text: "EMUFUSION " + root.displayVersion +
                       "  •  Display changes apply instantly; updates run automatically at startup"
                 color: "#9da7b8"
                 font.family: global.fonts.sans
@@ -10454,7 +10460,7 @@ FocusScope {
 
             Text {
                 x: 56; y: 42
-                text: "EMUFUSION  " + root.lucentVersion
+                text: "EMUFUSION  " + root.displayVersion
                 color: "white"
                 font.family: global.fonts.condensed
                 font.pixelSize: 48
@@ -11189,7 +11195,7 @@ FocusScope {
 
             Text {
                 x: 58; y: 98
-                text: "EmuFusion " + root.lucentVersion
+                text: "EmuFusion " + root.displayVersion
                 color: "#8a94a6"
                 font.family: global.fonts.sans
                 font.pixelSize: 16
