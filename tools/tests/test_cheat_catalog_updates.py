@@ -23,14 +23,21 @@ class CheatCatalogUpdateTests(unittest.TestCase):
         self.sources = json.loads(SOURCES.read_text(encoding="utf-8"))
         self.dolphin = json.loads(DOLPHIN.read_text(encoding="utf-8"))
 
-    def test_release_manifest_pins_the_official_download(self):
+    def test_release_manifest_never_pins_a_moving_download(self):
+        # The buildbot rebuilds cheats.zip in place (37 MB, last on 2026-10-09),
+        # so a pinned checksum fails every update check -- and 3.2.19 retries
+        # failed checks. Only an immutable copy in a release may be advertised.
         included = {row["id"]: row for row in self.sources["included"]}
-        libretro = included["libretro-database"]
-        self.assertEqual(libretro["distribution"], self.manifest["cheatCatalogUrl"])
-        self.assertEqual(libretro["snapshotSha256"], self.manifest["cheatCatalogSha256"])
-        self.assertEqual("CC-BY-SA-4.0", self.manifest["cheatCatalogLicense"])
-        self.assertEqual(libretro["source"], self.manifest["cheatCatalogSource"])
+        moving = included["libretro-database"]["distribution"]
+        url = self.manifest.get("cheatCatalogUrl")
+        if url is None:
+            for key in ("cheatCatalogVersion", "cheatCatalogSha256"):
+                self.assertNotIn(key, self.manifest)
+            return
+        self.assertNotEqual(moving, url)
+        self.assertRegex(url, r"^https://github\.com/wildonrio/(emufusion|pegasus-lucent)/releases/download/")
         self.assertRegex(self.manifest["cheatCatalogSha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual("CC-BY-SA-4.0", self.manifest["cheatCatalogLicense"])
 
     def test_update_session_verifies_and_atomically_installs_the_archive(self):
         source = UPDATER.read_text(encoding="utf-8")
