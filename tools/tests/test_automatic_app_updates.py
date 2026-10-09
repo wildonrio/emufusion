@@ -40,6 +40,17 @@ class AutomaticAppUpdateTest(unittest.TestCase):
         self.assertLess(UPDATE.index("AppRelease candidate = appRelease(release)"),
                         UPDATE.index("manifest.optInt(\"companionVersionCode\""))
 
+    def test_failed_automatic_check_retries_soon(self):
+        # October 9: the Thor's first post-release check ran with Wi-Fi
+        # disconnected; it must not then wait six hours to try again.
+        worker = UPDATE.split("void checkAsync(boolean userInitiated) {", 1)[1].split(
+            "worker.start();", 1)[0]
+        failure = worker.split("catch (Exception error) {", 1)[1].split("} finally {", 1)[0]
+        self.assertIn("if (!userInitiated) retrySoonAfterFailure();", failure)
+        retry = UPDATE.split("private void retrySoonAfterFailure() {", 1)[1].split("}", 1)[0]
+        self.assertIn("- RECHECK_INTERVAL_MS + RETRY_AFTER_FAILURE_MS", retry)
+        self.assertIn("RETRY_AFTER_FAILURE_MS = 10L * 60L * 1000L", UPDATE)
+
     def test_renamed_repository_keeps_the_legacy_channel_trusted(self):
         # pegasus-lucent was renamed to emufusion; installs from before the
         # rename and GitHub's redirects both still use the old name.

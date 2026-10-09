@@ -61,6 +61,9 @@ final class UpdateManager {
     // Re-check on library return once this long has passed since the last
     // automatic check, so a long-running service still finds new releases.
     private static final long RECHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
+    // A failed automatic check (offline, DNS, GitHub unreachable) must not use
+    // up the six-hour window: the next library visit after this retries.
+    private static final long RETRY_AFTER_FAILURE_MS = 10L * 60L * 1000L;
     private static final long MAX_THEME = 512L * 1024L * 1024L;
     private static final long MAX_APK = 768L * 1024L * 1024L;
     private static final long MAX_CHEATS = CheatArchive.MAX_ARCHIVE_BYTES;
@@ -149,12 +152,19 @@ final class UpdateManager {
             } catch (Exception error) {
                 Log.e(TAG, "Update check failed", error);
                 setStatus("error", 1, "Update check failed safely", false, false);
+                if (!userInitiated) retrySoonAfterFailure();
             } finally {
                 running.set(false);
             }
         }, "lucent-update-check");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    private void retrySoonAfterFailure() {
+        context.getSharedPreferences(UPDATE_PREFERENCES, 0).edit()
+                .putLong(LAST_AUTOMATIC_CHECK, System.currentTimeMillis()
+                        - RECHECK_INTERVAL_MS + RETRY_AFTER_FAILURE_MS).apply();
     }
 
     String statusJson() {
