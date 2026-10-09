@@ -1,4 +1,5 @@
 """Execute the actual host idle-sleep policy, then check lifecycle wiring."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -8,7 +9,7 @@ from tools.tests.test_in_window_activity_recreation import java_block
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST = ROOT / 'unified-android/src/com/thorium/preview/game/InWindowGameHost.java'
-JDK = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JDK = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 
 
 class InWindowIdleSleepTest(unittest.TestCase):

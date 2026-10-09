@@ -1,4 +1,5 @@
 """Execute actual error latch/UI guard bodies; no Android or device qualification."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -8,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 GAME = ROOT / "unified-android/src/com/thorium/preview/game"
 VIDEO = ROOT / "unified-android/src/com/thorium/lucent/video"
 PREVIEW = ROOT / "android-companion/src/com/thorium/preview/PreviewActivity.java"
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 def method(source, signature):

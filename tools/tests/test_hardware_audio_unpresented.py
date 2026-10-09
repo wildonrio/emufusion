@@ -14,7 +14,7 @@ from tools.tests.test_hardware_audio_resume import method
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'unified-android/src/com/thorium/preview/game/PpssppGlesEngineSession.java'
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 ENV = dict(os.environ, JAVA_TOOL_OPTIONS='-Djava.awt.headless=true -Dapple.awt.UIElement=true')
 
 

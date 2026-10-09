@@ -3,6 +3,7 @@
 The observer block is extracted unchanged from the Android session. Frame,
 logging and reset/storage boundaries are fakes; all sampling/decision code is real.
 """
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -11,7 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SESSION = ROOT / 'unified-android/src/com/thorium/preview/game/LibretroEngineSession.java'
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 
 
 def observer(source):

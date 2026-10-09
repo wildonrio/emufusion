@@ -139,7 +139,7 @@ misaudited          atari2600  atari5200  atari800  amstradcpc  atarist
                     c64  odyssey2
 blocked-replacement segacd  sega32x  virtualboy  msx
 unpackaged          colecovision  intellivision
-unadvertised        wonderswan  neogeopocket  pcenginecd
+unadvertised        wonderswan  neogeopocket
 missing             atarilynx  vectrex  pcfx  cdi  x68000
 ```
 
@@ -253,7 +253,9 @@ else**. So:
 |---|---|---|
 | `wonderswan` | Beetle Cygne (staged, reproducible, audited) | Engine claims only `wonderswancolor`; no alias. Phase 1 deliberately withheld the mono model pending a separately licensed fixture. |
 | `neogeopocket` | Beetle NeoPop (staged, reproducible, audited) | Engine claims `ngp`; no alias for `neogeopocket`, `neogeopocketcolor` or `ngpc`. `SystemControlLayouts` and `docs/controller-mapping.md` already name those ids, so such a library gets controls but no engine. |
-| `pcenginecd` | Beetle PCE Fast (staged, reproducible, audited) | Deliberately deferred "until Lucent can enforce a user-supplied system-card identity per system"; a test asserts `pcenginecd` is absent from the engine's `systems`. |
+
+`pcenginecd` has since left Phase 4: Phase 1's Beetle PCE Fast row now advertises
+it behind a user-supplied system-card firmware contract (`PcEngineCdFirmware`).
 
 None of these needs a new engine, and adding one would be a mistake — it would
 add compliance surface for no capability. What they need is a QA fixture, an

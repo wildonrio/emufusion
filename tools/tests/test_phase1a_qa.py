@@ -28,7 +28,7 @@ class Phase1AQATest(unittest.TestCase):
                 "nes", "snes", "gb", "gbc", "gba", "sg1000", "mastersystem",
                 "gamegear", "colecovision", "intellivision", "psx", "nds",
                 "zxspectrum", "arcade", "neogeo", "neogeocd", "dos", "windows",
-                "pcengine", "ngp", "wonderswancolor",
+                "pcengine", "pcenginecd", "ngp", "wonderswancolor",
                 "amstradcpc", "atari2600", "atari5200", "atari7800",
                 "atari800", "atarist", "c64", "megadrive", "msx", "n64",
                 "odyssey2", "sega32x", "segacd", "virtualboy",

@@ -159,24 +159,31 @@ class MallocDebugPackagingTest(unittest.TestCase):
 
     def test_actual_late_lsfg_manifest_branch_composes_without_duplicate_debuggable(self):
         build = (ROOT / 'unified-android/build.sh').read_text()
-        marker = build.index('# The debug-signed qualification artifact accepts owner-staged derived')
-        start = build.rindex('if [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then', 0, marker)
+        # The LSFG qualification APK's debuggable edit now shares the single
+        # LUCENT_DEBUGGABLE manifest branch; it must still precede malloc_debug.
+        start = build.index('if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ] || [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then')
         end = build.index('\nfi', start) + 3
+        self.assertIn('android:debuggable="true"', build[start:end])
         diagnostic_start = build.index('if [ "${LUCENT_MALLOC_DEBUG:-0}" = 1 ]; then')
         diagnostic_end = build.index('\nfi', diagnostic_start) + 3
         self.assertLess(end, diagnostic_start)
         branch = build[start:end] + '\n' + build[diagnostic_start:diagnostic_end]
-        with tempfile.TemporaryDirectory() as folder:
-            path = self.stage(folder)
-            # Pinned base APK has no debuggable attribute before the LSFG edit.
-            (path / 'AndroidManifest.xml').write_text(MANIFEST.replace(" android:debuggable='false'", ''))
-            environment = dict(os.environ, PROJECT_DIR=str(ROOT / 'unified-android'), DECODED=folder,
-                               INCLUDE_LSFG_FRAMEGEN='1', LUCENT_MALLOC_DEBUG='1')
-            result = subprocess.run(['sh', '-eu', '-c', branch], env=environment, capture_output=True, text=True)
-            self.assertEqual(0, result.returncode, result.stderr)
-            text = (path / 'AndroidManifest.xml').read_text()
-            self.assertEqual(1, text.count('android:debuggable='))
-            self.assertEqual('true', ET.fromstring(text).find('application').get(MODULE.ANDROID + 'debuggable'))
+        # Pinned base APK has no debuggable attribute before the LSFG edit;
+        # apktool may instead emit an explicit debuggable="false".
+        for base in (MANIFEST.replace(" android:debuggable='false'", ''),
+                     MANIFEST.replace("android:debuggable='false'", 'android:debuggable="false"')):
+            with self.subTest(base=base), tempfile.TemporaryDirectory() as folder:
+                path = self.stage(folder)
+                (path / 'AndroidManifest.xml').write_text(base)
+                environment = dict(os.environ, PROJECT_DIR=str(ROOT / 'unified-android'), DECODED=folder,
+                                   INCLUDE_LSFG_FRAMEGEN='1', LUCENT_MALLOC_DEBUG='1')
+                environment.pop('LUCENT_DEBUGGABLE', None)
+                result = subprocess.run(['sh', '-eu', '-c', branch], env=environment, capture_output=True, text=True)
+                self.assertEqual(0, result.returncode, result.stderr)
+                text = (path / 'AndroidManifest.xml').read_text()
+                self.assertEqual(1, text.count('android:debuggable='))
+                self.assertEqual('true', ET.fromstring(text).find('application').get(MODULE.ANDROID + 'debuggable'))
+                self.assertTrue((path / 'lib/arm64-v8a/wrap.sh').exists())
 
 
 if __name__ == '__main__':

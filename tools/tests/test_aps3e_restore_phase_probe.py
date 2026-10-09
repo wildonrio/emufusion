@@ -10,11 +10,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'engines/diagnostics'))
 from prepare_restore_phase_probe import prepare, prepare_wrapper
 from prepare_core_error_trace import LISTENER
+from tools.tests.test_aps3e_fresh_savestate import reviewed_adapter
 
 
 class RestorePhaseProbeTest(unittest.TestCase):
     def test_new_attempt_preserves_previous_qa_destinations(self):
-        original = (ROOT/'engines/patches/aps3e-lucent-adapter.cpp').read_bytes()
+        original = reviewed_adapter()
         baseline = prepare(original)
         candidate = prepare(original, attempt='atomic1')
         self.assertEqual(candidate, baseline.replace(
@@ -36,7 +37,7 @@ class RestorePhaseProbeTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('c++'), 'compiler absent')
     def test_actual_callback_phase_order_and_normal_destination(self):
-        text = prepare((ROOT/'engines/patches/aps3e-lucent-adapter.cpp').read_bytes())
+        text = prepare(reviewed_adapter())
         self.assertIn('std::filesystem::exists(save / "lucent-restore-phase2.SAVESTAT.zst", ec)', text)
         start = text.index('static bool adapter_unserialize(lucent_native_engine* engine,')
         body = text[start:text.index('static bool adapter_surface_recreated(', start)]

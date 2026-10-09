@@ -3,6 +3,7 @@
 The captured aa09 values are request identities, not simulated proof of physical
 display. Android/GPU work remains outside this bounded host regression.
 """
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
 VIDEO = ROOT / "unified-android/src/com/thorium/lucent/video"
 FIXTURE = Path(__file__).with_name("fixtures") / "external_physical_slot_reservation.java.in"
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 class ExternalPhysicalSlotReservationTest(unittest.TestCase):

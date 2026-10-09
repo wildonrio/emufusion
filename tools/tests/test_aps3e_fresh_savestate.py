@@ -1,4 +1,5 @@
 """Execute extracted adapter capture functions against real temporary files."""
+import hashlib
 import importlib.util
 from pathlib import Path
 import shutil
@@ -12,6 +13,25 @@ GEN = ROOT/'engines/diagnostics/prepare_fresh_savestate.py'
 spec = importlib.util.spec_from_file_location('fresh_capture', GEN)
 generator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(generator)
+
+# The SHA-pinned PS3 probe chain was reviewed against the adapter before native
+# L3/R3 stick clicks were mapped (test_native_stick_clicks.py). That edit is in
+# virtual_key(), outside every probed function, so the reviewed input is the
+# current adapter minus exactly those two cases, verified against the pin.
+STICK_CLICKS = (b'        case LUCENT_PAD_L3: return kL3;\n'
+                b'        case LUCENT_PAD_R3: return kR3;\n')
+
+
+def reviewed_adapter(expected_sha=generator.EXPECTED_SHA):
+    current = SRC.read_bytes()
+    if hashlib.sha256(current).hexdigest() == expected_sha:
+        return current
+    if current.count(STICK_CLICKS) != 1:
+        raise AssertionError('Adapter stick-click mapping changed; re-review the pinned probe chain')
+    reviewed = current.replace(STICK_CLICKS, b'', 1)
+    if hashlib.sha256(reviewed).hexdigest() != expected_sha:
+        raise AssertionError('Adapter drifted beyond stick clicks; re-review the pinned probe chain')
+    return reviewed
 
 PREFIX = r'''
 #include <cassert>
@@ -118,7 +138,8 @@ class FreshSavestateTest(unittest.TestCase):
     def test_restore_write_preserves_destination_and_reports_failed_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for label, text in [('old',SRC.read_text()),('new',generator.prepare(SRC.read_bytes()))]:
+            # 'old' is the shipping adapter; 'new' is the probe applied to its reviewed input.
+            for label, text in [('old',SRC.read_text()),('new',generator.prepare(reviewed_adapter()))]:
                 start = text.index('bool write_file_atomic(')
                 body = text[start:text.index('int virtual_key(',start)]
                 suffix = r'''
@@ -147,23 +168,28 @@ int main(int argc, char** argv) {
                 self.assertEqual(result.returncode,10 if label=='old' else 0)
 
     def test_preserves_unrelated_code_and_rejects_drift(self):
-        old = SRC.read_bytes()
+        current = SRC.read_bytes()
+        old = reviewed_adapter()
         new = generator.prepare(old)
         for marker in ('static void adapter_set_control(', 'static bool adapter_unserialize('):
             end = '\n}\n'
-            before = old.decode()[old.decode().index(marker):].split(end, 1)[0]
+            before = current.decode()[current.decode().index(marker):].split(end, 1)[0]
             after = new[new.index(marker):].split(end, 1)[0]
             self.assertEqual(before, after)
         self.assertNotIn('newest_state(', new)
         with self.assertRaises(ValueError):
             generator.prepare(old+b'\n')
+        if current != old:
+            # The pin is a review gate: the edited shipping adapter is refused.
+            with self.assertRaises(ValueError):
+                generator.prepare(current)
 
     @unittest.skipUnless(shutil.which('c++'), 'compiler absent')
     def test_actual_capture_stale_timeout_wrong_game_and_fresh_commit(self):
         old = SRC.read_bytes()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for label, text in [('old', old.decode()), ('new', generator.prepare(old))]:
+            for label, text in [('old', old.decode()), ('new', generator.prepare(reviewed_adapter()))]:
                 start = text.index('std::filesystem::path newest_state(') if label=='old' else text.index('struct capture_file {')
                 helpers = text[start:text.index('bool write_file_atomic(', start)]
                 start = text.index('static std::size_t adapter_serialize_size(')

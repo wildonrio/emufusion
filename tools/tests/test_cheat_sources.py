@@ -118,13 +118,33 @@ class CheatSourceTests(unittest.TestCase):
 
     def test_import_manager_hook_is_guarded_and_per_game(self):
         source = IMPORTER.read_text(encoding="utf-8")
-        self.assertIn('setStatus("cheats", 0.76, "Downloading cheats…"', source)
-        hook = source.index("GameCheatDownloader.fetch(context, game.system.folder")
-        self.assertGreater(hook, source.index("calculateCriticComposite(game);"))
-        self.assertLess(hook, source.index("game.archived = false;"))
-        window = source[hook - 200:hook + 400]
-        self.assertIn("try {", window)
-        self.assertIn("catch (Throwable failed)", window)
+        # The per-game download is now the last stage of the checkpointed,
+        # per-game media queue (reported as a "media" status with the
+        # "Cheats" stage label) instead of a separate "cheats" pass.
+        queue = source[source.index("private boolean enrichMediaQueue("):
+                       source.index("private List<Candidate> discoverCandidates(")]
+        self.assertIn('String[] stages = {"Ratings", "Box art", "Wallpaper", "Video", "Cheats"};',
+                      queue)
+        self.assertIn("for (int index = 0; index < games.size(); index++) {", queue)
+        hook = queue.index("game.cheats = GameCheatDownloader.fetch(context, game.system.folder")
+        self.assertGreater(hook, queue.index("calculateCriticComposite(game);"))
+        attempt = queue.rindex("try {", 0, hook)
+        self.assertIn("if (stage == 0) {", queue[attempt:hook])
+        call = queue[hook:].split(";", 1)[0]
+        self.assertIn("SystemClock.elapsedRealtime() + 15_000L", call,
+                      "the per-game cheat stage must be time-bounded")
+        cleanup = queue[hook:].split("} finally {", 1)[1].split("}", 1)[0]
+        self.assertIn("transfer.close();", cleanup)
+        # The guard moved into the bounded fetch overload the importer calls:
+        # every failure is logged and reported as zero cheats, never thrown.
+        downloader = DOWNLOADER.read_text(encoding="utf-8")
+        bounded = downloader[downloader.index(
+            "String originalName, File cacheRoot, long deadlineElapsedRealtime) {"):]
+        bounded = bounded[:bounded.index("\n    }\n")]
+        self.assertIn("try {", bounded)
+        self.assertIn("catch (Throwable failed)", bounded)
+        self.assertTrue(bounded.rstrip().endswith("return 0;\n        }"),
+                        "bounded cheat fetch must swallow failures as zero cheats")
         self.assertIn('out.append("x-lucent-cheats: ")', source)
         self.assertIn('value.put("cheats", cheats);', source)
         self.assertIn('game.cheats = value.optInt("cheats", 0);', source)

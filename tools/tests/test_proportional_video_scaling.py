@@ -234,9 +234,11 @@ class ProportionalVideoScalingTest(unittest.TestCase):
         self.assertNotIn("drawWidth", draw)
         self.assertNotIn("drawHeight", draw)
         # A dual-screen crop is half the picture, so the engine's whole-frame
-        # aspect must not be applied to it.
-        self.assertIn("float sourceAspect = dualScreen ? 0f : displayAspect;",
+        # aspect must not be applied to it. The single-panel phone layout
+        # recomposes both 4:3 screens side by side, which is exactly 8:3.
+        self.assertIn("float sourceAspect = phoneDs ? 8f / 3f : dualScreen ? 0f : displayAspect;",
                       self.libretro)
+        self.assertIn("boolean phoneDs = dualScreen && !splitScreens", self.libretro)
 
     def test_hardware_sessions_resolve_and_forward_one_authoritative_aspect(self):
         session = HARDWARE_SESSION.read_text(encoding="utf-8")

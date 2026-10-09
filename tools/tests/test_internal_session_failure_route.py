@@ -34,6 +34,7 @@ class NativeAdapterSystemDirectory {
   }
 }
 class NativeAdapterPrerequisites { static void record(Activity a,String s,boolean b) {} }
+class PrivateDiagnosticsSession { int failures; void failed(boolean outOfMemory) { failures++; } }
 class ExternalGameFallback {
   static boolean explicitExternal; static int launched;
   static boolean canLaunchSwitch(Activity a) { return explicitExternal; }
@@ -42,6 +43,7 @@ class ExternalGameFallback {
 public class InternalFailureProbe {
   static final String TAG = "test";
   Activity activity = new Activity(); Request request = new Request(); Handler mainHandler = new Handler();
+  PrivateDiagnosticsSession privateDiagnostics = new PrivateDiagnosticsSession();
   boolean libraryReturned; Object retiringSession = new Object();
   int fatal, retired, runtime, exits; String message; Throwable failure;
   static String clean(String s) { return s == null ? "" : s.trim(); }
@@ -69,6 +71,7 @@ public class InternalFailureProbe {
                 system + " failure did not remain visible inside EmuFusion; external=" + preference);
           check(ExternalGameFallback.launched == 0 && host.exits == 0 && host.retired == 0,
                 system + " silently launched or retired during load failure");
+          check(host.privateDiagnostics.failures == 1, system + " session error was not recorded once");
           cases++;
         }
       }
@@ -85,6 +88,8 @@ public class InternalFailureProbe {
     host.onSessionError("outer message",failure);
     check(host.runtime == 1 && host.fatal == 0 && host.retired == 0 && host.failure == failure,
           "runtime presentation error lost dedicated recovery path");
+    check(host.privateDiagnostics.failures == 0,
+          "runtime presentation error bypassed its dedicated recovery path");
     System.out.println("PASS internal failures=" + cases + ", retirement=2, presentation=1");
   }
 }

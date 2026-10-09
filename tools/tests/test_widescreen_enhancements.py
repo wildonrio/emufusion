@@ -84,6 +84,9 @@ class WidescreenEnhancementsTest(unittest.TestCase):
             "unified-android/src/com/thorium/preview/ExperimentalGlesRenderLoop.java"))
 
     def test_pinned_core_sources_still_advertise_exact_tokens(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        if not list((ROOT / "engines/build/sources").glob("dolphin-*/Source/Core/DolphinLibretro/Common/Options.h")):
+            self.skipTest("local-only input absent: engines/build/sources (pinned core trees)")
         def one(pattern):
             paths = list((ROOT / "engines/build/sources").glob(pattern))
             self.assertEqual(1, len(paths), pattern)

@@ -72,8 +72,8 @@ MAIN_ACTIVITY = "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 # identity gate rather than weakening it to a structural/theme-name check.
 # Re-pinned for the WIDESCREEN HACK Settings slot (23); the theme.qml byte
 # identity otherwise stays the reviewed product source.
-FROZEN_THEME_QML = "8680a9999c0a374dc44c296a215b6243cd29965d55fc67321a72ff9bcccc02e2"
-FROZEN_THEME_CFG = "89163b758b21e36d7be4bb4ab22502936a84957e5580003bfd1d3a3c8b8cf2b5"
+FROZEN_THEME_QML = "3e7f0c8110313d00668a6bd9a6e41d38e36527414d854b972da4f1e683023bfb"
+FROZEN_THEME_CFG = "b10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9"
 ROUTE = re.compile(r"In-window route accepted engine=([^ ]+) system=([^\s]+)")
 RETURN = re.compile(
     r"Returned to Lucent immediately in same window engine=([^ ]+) "
@@ -1430,12 +1430,12 @@ IMPORT_ACTIVE_STATES = {
     "identified",
     "transferring",
     "artwork",
-    "video",
-    # 2026-09-06: ImportManager.runScan emits "cheats" while GameCheatDownloader
-    # fetches per-game cheat catalogs between the video and scores passes.
-    "cheats",
-    "scores",
-    "writing",
+    # The per-game media pass (box art, video, scores and cheats for each game)
+    # reports "media", and "waiting" while it is held for the network.
+    "media",
+    "waiting",
+    "indexing",
+    "cheats-refresh",
     "artless",
 }
 IMPORT_STATES = IMPORT_TERMINAL_STATES | IMPORT_ACTIVE_STATES

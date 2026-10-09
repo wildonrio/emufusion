@@ -1,4 +1,5 @@
 """Exercise the production EGL priority block with a deterministic fake driver."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -45,7 +46,7 @@ class ExternalGpuPriorityTest(unittest.TestCase):
   reset();PriorityProbe other=new PriorityProbe();other.appOwnedPresentation=false;other.run();check(EGL14.hints==0);
  }
 }'''
-        jdk=Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        jdk=Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'PriorityProbe.java'
             path.write_text(java)

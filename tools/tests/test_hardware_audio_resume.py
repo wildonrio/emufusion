@@ -4,6 +4,7 @@ This is a JVM behavior test, not a source-string pass: resume, focus gain and
 PCM delivery methods are extracted unchanged from the production Java source.
 Android focus, the render-loop scheduler and AudioTrack are test doubles.
 """
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -12,7 +13,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "unified-android/src/com/thorium/preview/game/PpssppGlesEngineSession.java"
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 def method(source, signature):

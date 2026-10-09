@@ -212,6 +212,10 @@ class DolphinDescriptorBatchesTest(unittest.TestCase):
         self.assertIn('NUM_UTILITY_PIXEL_SAMPLERS = 8;', constants)
 
     def test_actual_methods_and_frame_reset_integration(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        for needed in (HEADERS, SOURCE, PATCH):
+            if not needed.exists():
+                self.skipTest("local-only input absent: " + str(needed))
         self.assertTrue(HEADERS.is_dir())
         with tempfile.TemporaryDirectory(prefix='dolphin-descriptor-batch-') as directory:
             directory = Path(directory)

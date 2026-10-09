@@ -1,4 +1,5 @@
 """Execute the production pair-availability predicate during async work."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -29,7 +30,7 @@ class PairProbe {
   p.retained.remove(2L);check(!p.hasAdjacentPair(1,2));
  }
 }'''
-        jdk=Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        jdk=Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'PairProbe.java'
             path.write_text(code)

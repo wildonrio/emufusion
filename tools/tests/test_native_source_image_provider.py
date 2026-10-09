@@ -1,4 +1,5 @@
 """Compile actual provider attachment/default methods; no device or clock proof."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "unified-android/src"
 GAME = SRC / "com/thorium/preview/game"
 VIDEO = SRC / "com/thorium/lucent/video"
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 class NativeSourceImageProviderTest(unittest.TestCase):

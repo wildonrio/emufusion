@@ -2,6 +2,7 @@
 #include "surface_present_timing.hpp"
 
 #include <array>
+#include <initializer_list>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
@@ -20,7 +21,8 @@ uint64_t earliestAllowedScan(const std::array<uint64_t, N>& scans,
 }
 
 int main() {
-    for (uint64_t invalid : {0ULL, 1ULL, kSurfaceDriverPresentLeadNs}) {
+    // uint64_t is unsigned long on Linux, so 0ULL would not share its type.
+    for (uint64_t invalid : std::initializer_list<uint64_t>{0, 1, kSurfaceDriverPresentLeadNs}) {
         bool rejected = false;
         try { (void)startupDriverPresentTimeNs(invalid); }
         catch (const std::invalid_argument&) { rejected = true; }

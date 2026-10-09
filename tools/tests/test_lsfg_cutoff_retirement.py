@@ -96,9 +96,11 @@ extern "C" int poll(pollfd* p,nfds_t count,int timeout){
 extern "C" int close(int fd){++fds.at(fd).closes;assert(fds.at(fd).closes==1);return 0;}
 struct sync_fence_info {int status;uint64_t timestamp_ns;};
 struct sync_file_info {int status;uint32_t num_fences;sync_fence_info child;};
+// GCC reads "new struct X{...}" as a type definition; name the type once.
+typedef struct sync_file_info SyncFileInfo;
 struct sync_file_info* sync_file_info(int fd){const auto& f=fds.at(fd);
     if(f.infoError!=0){errno=f.infoError;return nullptr;}
-    return new struct sync_file_info{f.status,f.count,{f.childStatus,f.signalNs}};}
+    return new SyncFileInfo{f.status,f.count,{f.childStatus,f.signalNs}};}
 void sync_file_info_free(struct sync_file_info* info){delete info;}
 const sync_fence_info* sync_get_fence_info(struct sync_file_info* info){return &info->child;}
 std::vector<std::string> logs;

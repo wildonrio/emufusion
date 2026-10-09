@@ -35,7 +35,11 @@ class RifeQualificationPackagingTest(unittest.TestCase):
     def test_spatial_qualification_build_selects_matching_manifest(self):
         source=(ROOT / "unified-android/build.sh").read_text()
         self.assertIn('RIFE_SPATIAL_DISPATCH=${LUCENT_RIFE_SPATIAL_DISPATCH:-0}',source)
-        self.assertIn('upstream-prepared-v22-spatial/prepared-manifest.json',source)
+        # The prepared upstream tree is now the v23 flow-only revision; the
+        # spatial build must verify the same tree Gradle compiles from.
+        self.assertIn('upstream-prepared-v23-flow-only-spatial/prepared-manifest.json',source)
+        gradle=(ROOT / "experiments/rife-ncnn-vulkan-android/android-benchmark/app/build.gradle").read_text()
+        self.assertIn('spatialDispatch ?\n        "build/upstream-prepared-v23-flow-only-spatial"',gradle)
         self.assertIn('then set -- -PspatialDispatch; else set --; fi',source)
         self.assertIn('"$RIFE_GRADLE" --no-daemon "$@"',source)
         self.assertIn('--prepared-manifest "$RIFE_PREPARED_MANIFEST"',source)
@@ -284,7 +288,13 @@ class RifeQualificationPackagingTest(unittest.TestCase):
         self.assertIn(":app:assembleRelease :app:assembleDebugAndroidTest", build)
         self.assertIn('RIFE_APP_APK="$RIFE_BENCHMARK_DIR/app/build/outputs/apk/release/app-release-unsigned.apk"', build)
         self.assertIn("RIFE_GRADLE=${RIFE_GRADLE:-/opt/homebrew/bin/gradle}", build)
-        self.assertIn("build/upstream-prepared-v12/prepared-manifest.json", build)
+        # Default (non-spatial) qualification verifies the v23 flow-only tree,
+        # which is exactly the default prepared root the benchmark Gradle uses.
+        self.assertIn('RIFE_PREPARED_MANIFEST="$RIFE_BENCHMARK_DIR/build/'
+                      'upstream-prepared-v23-flow-only/prepared-manifest.json"', build)
+        gradle = (ROOT / "experiments/rife-ncnn-vulkan-android/android-benchmark/"
+                  "app/build.gradle").read_text(encoding="utf-8")
+        self.assertIn(': "build/upstream-prepared-v23-flow-only")', gradle)
         self.assertIn('--llvm-readelf "$RIFE_LLVM_READELF"', build)
         self.assertIn("verify_host_artifacts.py", build)
         self.assertIn("stage_rife_framegen_qualification.py", build)

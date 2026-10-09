@@ -1,4 +1,5 @@
 """Planning-clock invariant regression; synthetic, not a Thor trace replay."""
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class PhysicalClockEpochDriftTest(unittest.TestCase):
     def test_thor_startup_fractional_clock_with_missing_generated_slots(self):
         """Isolate frequency/phase math; deliberately excludes GPU/queue latency."""
-        jdk = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        jdk = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         source = ROOT / 'unified-android/src/com/thorium/lucent/video/PhysicalPresentationClock.java'
         harness = '''
 import com.thorium.lucent.video.PhysicalPresentationClock;
@@ -46,7 +47,7 @@ public class ThorStartupClockProbe {
             print(result.stdout.strip())
 
     def test_phase_tracking_preserves_output_slots_and_committed_deadlines(self):
-        jdk = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        jdk = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         javac = str(jdk / 'javac') if (jdk / 'javac').exists() else shutil.which('javac')
         java = str(jdk / 'java') if (jdk / 'java').exists() else shutil.which('java')
         if not javac or not java:
@@ -75,7 +76,7 @@ public class ThorStartupClockProbe {
         self.assertNotIn('externalPhysicalClock.anchorNs()', app_owned_planning)
 
     def test_recent_epoch_prediction_stays_within_physical_slot_tolerance(self):
-        jdk = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        jdk = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         javac = str(jdk / 'javac') if (jdk / 'javac').exists() else shutil.which('javac')
         java = str(jdk / 'java') if (jdk / 'java').exists() else shutil.which('java')
         if not javac or not java:

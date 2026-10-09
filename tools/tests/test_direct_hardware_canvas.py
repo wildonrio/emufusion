@@ -2,13 +2,14 @@
 
 These check ownership/timestamp forwarding, not GPU cadence; that needs a device.
 """
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA = Path('/opt/homebrew/opt/openjdk@17/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 
 
 class DirectHardwareCanvasTest(unittest.TestCase):

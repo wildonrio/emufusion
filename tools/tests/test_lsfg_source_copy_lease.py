@@ -112,7 +112,9 @@ void fixedRetirementStillRequired() {
 }
 
 void noResetUntilIdle() {
-    Fixture f;std::array<Prepared,3> prepared;
+    // Occupy every fixed slot (three presentation plus the unreserved
+    // continuous-inference slot), so no idle slot remains for reuse.
+    Fixture f;std::array<Prepared,Fixture::kFixedSlotCount> prepared;
     for(auto& p:prepared)p=begin(f);
     for(const auto& p:prepared)f.deviceFunctions_.status.at(f.live_[p.slotIndex].copyFence)=VK_SUCCESS;
     assert(!f.referencesSourceImage(&left));

@@ -5,6 +5,7 @@ checkpoint storage and native-close boundaries are fakes; real Java threads and
 latches make acknowledgement ordering deterministic without an Android build.
 """
 
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SESSION = ROOT / "unified-android/src/com/thorium/preview/game/LibretroEngineSession.java"
 HOST = ROOT / "unified-android/src/com/thorium/preview/game/InWindowGameHost.java"
 FIRMWARE = ROOT / "unified-android/src/com/thorium/preview/game/PcEngineCdFirmware.java"
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 def member(source, signature):

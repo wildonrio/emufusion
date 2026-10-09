@@ -327,7 +327,10 @@ public class EndpointTest implements ExternalFrameGenerationTransport {
 
     def test_existing_renderer_consumes_loss_before_any_new_pair_or_presentation(self):
         renderer = (ROOT / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java").read_text()
-        render = method(renderer, "private void renderFrame(long frameTimeNanos)")
+        # renderFrame is now a trace-section wrapper around renderTracedFrame.
+        self.assertIn("renderTracedFrame(frameTimeNanos);",
+                      method(renderer, "private void renderFrame(long frameTimeNanos)"))
+        render = method(renderer, "private void renderTracedFrame(long frameTimeNanos)")
         consume = render.index("consumeExternalEndpointDiscontinuities();")
         self.assertLess(consume, render.index("pollPhysicalPresentations();"))
         self.assertLess(consume, render.index("prepareBufferedPairIfPossible();"))

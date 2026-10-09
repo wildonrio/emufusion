@@ -12,18 +12,23 @@ GEN = ROOT / 'engines/diagnostics/prepare_native_stop_probe.py'
 spec = importlib.util.spec_from_file_location('stop_probe', GEN)
 generator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(generator)
+from tools.tests.test_aps3e_fresh_savestate import reviewed_adapter
 
 
 class StopProbeTest(unittest.TestCase):
     def test_narrow_change_and_drift_rejected(self):
-        old = SRC.read_bytes()
+        current = SRC.read_bytes()
+        old = reviewed_adapter(generator.EXPECTED_SHA)
         self.assertEqual(generator.prepare(old).replace(generator.NEW, generator.OLD, 1), old.decode())
         with self.assertRaises(ValueError):
             generator.prepare(old + b'\n')
+        if current != old:
+            with self.assertRaises(ValueError):
+                generator.prepare(current)
 
     @unittest.skipUnless(shutil.which('c++'), 'compiler absent')
     def test_scope_and_stopped_boundary(self):
-        text = generator.prepare(SRC.read_bytes())
+        text = generator.prepare(reviewed_adapter(generator.EXPECTED_SHA))
         body = text[text.index(generator.OLD):text.index('static std::size_t adapter_serialize_size')]
         prefix = r'''
 #include <cassert>

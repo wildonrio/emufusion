@@ -69,11 +69,15 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # The Settings sheet gained slot 23, WIDESCREEN HACK (a persisted
         # pre-launch core preference served by settings/widescreen-hack); it is
         # library chrome and does not alter the in-window return flow.
+        # EmuFusion 3.2.18/3.2.19 renamed the package and bumped the version
+        # label; the version text now prefers the installed versionName from
+        # the updater status. Those are library chrome only and do not alter
+        # the in-window return flow.
         # The pin exists so unrelated runtime-return work cannot alter the theme
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "8680a9999c0a374dc44c296a215b6243cd29965d55fc67321a72ff9bcccc02e2",
+            "3e7f0c8110313d00668a6bd9a6e41d38e36527414d854b972da4f1e683023bfb",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):
@@ -199,7 +203,12 @@ class InWindowInstantReturnTest(unittest.TestCase):
         self.assertIn("mainHandler.post(() -> finishGeneratorStartup(generation, output,", started)
         finished = surface.split("private void finishGeneratorStartup(", 1)[1].split(
             "public void surfaceDestroyed(", 1)[0]
-        self.assertIn("if (generation != surfaceGeneration || !surfaceLive || runtimePresentationFailed) {", finished)
+        # An owner-requested switch to Direct (frame generation Off) also
+        # cancels an in-flight startup; the original three guards remain.
+        self.assertRegex(
+            finished,
+            r"if \(generation != surfaceGeneration \|\| !surfaceLive \|\| runtimePresentationFailed \|\|"
+            r"\s*ownerRequestedDirect\) \{")
         self.assertIn("retireCancelledStartup(problem);", finished)
         retirement = surface.split("private void retireCancelledStartup(", 1)[1].split(
             "public void surfaceDestroyed(", 1)[0]
@@ -258,7 +267,16 @@ class InWindowInstantReturnTest(unittest.TestCase):
         self.assertIn("RETIRING_SESSIONS.remove(ending);", finish)
         self.assertLess(finish.index("releaseSessionWhenComplete(ending, () ->"),
                         finish.index("RETIRING_SESSIONS.remove(ending);"))
-        self.assertIn("mainHandler.post(InWindowGameHost::restorePendingRecreations);", finish)
+        # Completion hops back to the UI thread, where adapters that cannot
+        # reuse the process begin a clean frontend restart and every other
+        # engine restores pending recreations.
+        completion = finish.split("releaseSessionWhenComplete(ending, () ->", 1)[1].split(
+            "dispatchQtTerminalShutdownIfReady();", 1)[0]
+        self.assertLess(completion.index("RETIRING_SESSIONS.remove(ending);"),
+                        completion.index("mainHandler.post(() -> {"))
+        posted = completion.split("mainHandler.post(() -> {", 1)[1]
+        self.assertIn("if (requiresCleanFrontendRestart()) beginCleanFrontendRestart();", posted)
+        self.assertIn("else restorePendingRecreations();", posted)
         self.assertNotIn("activity.runOnUiThread", finish)
 
     def test_late_save_failures_cleanup_without_reopening_game_overlay(self):

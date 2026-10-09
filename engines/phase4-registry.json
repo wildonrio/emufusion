@@ -31,7 +31,7 @@
   "expectedSystems": [
     "atari2600", "atari5200", "atari800", "amstradcpc", "atarist", "c64",
     "odyssey2", "segacd", "sega32x", "virtualboy", "msx", "colecovision",
-    "intellivision", "wonderswan", "neogeopocket", "pcenginecd", "atarilynx",
+    "intellivision", "wonderswan", "neogeopocket", "atarilynx",
     "vectrex", "pcfx", "cdi", "x68000"
   ],
   "engines": [
@@ -601,44 +601,6 @@
             "name": "Adding a second Neo Geo Pocket engine",
             "license": "n/a",
             "reason": "Rejected on principle. The registered ngp row already covers the monochrome model, so a second engine would add compliance surface for no capability."
-          }
-        ]
-      },
-      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
-      "shipped": false
-    },
-    {
-      "id": "pcenginecd-routing",
-      "systems": ["pcenginecd"],
-      "category": "unadvertised",
-      "priorEngine": "beetle-pce-fast",
-      "priorPhase": 1,
-      "blocker": "Beetle PCE Fast supports PC Engine CD, but Phase 1 deliberately excluded the system, recording that it is \"deferred until Lucent can enforce a user-supplied system-card identity per system\". A test asserts pcenginecd is absent from the engine's systems array, so a large and significant library is unreachable by design rather than by accident.",
-      "status": "research",
-      "candidate": {
-        "name": "Beetle PCE Fast",
-        "repository": "https://github.com/libretro/beetle-pce-fast-libretro",
-        "license": {
-          "spdx": "GPL-2.0-or-later",
-          "auditRef": "engines/audits/beetle-pce-fast-license.json",
-          "distributionGate": "compatible-candidate",
-          "evidence": "Lucent's own audit at engines/audits/beetle-pce-fast-license.json concluded \"GPL-3.0-compatible candidate through the GPL-2.0-or-later option, subject to complete release notice and corresponding-source review.\" No new licence work is needed for this row.",
-          "evidenceUrl": "https://github.com/libretro/beetle-pce-fast-libretro"
-        },
-        "androidArm64": {
-          "route": "libretro-core",
-          "evidence": "Already solved. The pinned source is reproducible, passed the full callback and 100-cycle state gate on ARM64 Android, and unified-android/build.sh already stages liblucent_core_beetle_pce_fast.so."
-        },
-        "firmware": {
-          "required": true,
-          "note": "This is the whole reason the system is deferred. PC Engine CD requires a user-supplied system card ROM, and the Phase 1 row explicitly declines to advertise the system until a per-system firmware identity can be enforced. The Phase 4 work is that firmware contract, not engine or build work."
-        },
-        "rationale": "PC Engine CD is the single largest library any already-approved Lucent engine can reach but does not expose. The engine, the build, the reproducibility proof and the state qualification are all done; only the firmware contract and the system id are missing, which makes this the cheapest genuine coverage gain in Phase 4.",
-        "rejectedAlternatives": [
-          {
-            "name": "Beetle SuperGrafx or a second PC Engine engine",
-            "license": "GPL-2.0-or-later",
-            "reason": "Rejected as out of scope. The staged core already handles CD content; adding another NEC core would not remove the firmware requirement, which is the actual blocker."
           }
         ]
       },

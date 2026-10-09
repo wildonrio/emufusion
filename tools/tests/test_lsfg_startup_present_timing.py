@@ -11,6 +11,10 @@ NATIVE = ROOT / "unified-android/lsfg-qualification-native"
 
 class LsfgStartupPresentTimingTest(unittest.TestCase):
     def test_build_gate_accepts_driver_bound_but_rejects_old_tokenless_substitution(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        for needed in (ROOT / "experiments/lsfg-vulkan-android-inprocess/tools/verify_owned_wsi_setup_source.py",):
+            if not needed.exists():
+                self.skipTest("local-only input absent: " + str(needed))
         gate = ROOT / "experiments/lsfg-vulkan-android-inprocess/tools/verify_owned_wsi_setup_source.py"
         import sys
         with tempfile.TemporaryDirectory(prefix="lsfg-driver-gate-") as temporary:

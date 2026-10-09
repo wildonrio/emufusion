@@ -1,3 +1,4 @@
+import os
 import importlib.util
 import json
 import pathlib
@@ -93,7 +94,7 @@ class VoiceFeedbackIntegrationTest(unittest.TestCase):
             self.assertNotIn(forbidden, MANAGER)
 
     def test_execute_actual_diagnostic_field_boundary(self):
-        java = pathlib.Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+        java = pathlib.Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
         if not (java / "javac").is_file():
             self.skipTest("JDK 17 is required for the executable field-boundary check")
         with tempfile.TemporaryDirectory(prefix="emufusion-feedback-fields-") as work:

@@ -1,5 +1,6 @@
 """Focused activity-recreation contracts; no emulator or device is required."""
 
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -393,7 +394,7 @@ public class Process {
         throw new AssertionError("unexpected terminal process termination");
     }
 }''', encoding="utf-8")
-        cls.java = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+        cls.java = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
         result = subprocess.run([str(cls.java / "javac"), "-d", str(directory), str(target),
                                  str(os_stub), str(process_stub)],
                                 capture_output=True, text=True)

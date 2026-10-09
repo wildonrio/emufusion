@@ -1,4 +1,5 @@
 """Execute the production clock-owner decision with fake clock observations."""
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -10,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class PhysicalClockRetentionTest(unittest.TestCase):
     def test_measurement_gap_does_not_reset_guest_clock(self):
-        java_home = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        java_home = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         javac = str(java_home / 'javac') if (java_home / 'javac').exists() else shutil.which('javac')
         java = str(java_home / 'java') if (java_home / 'java').exists() else shutil.which('java')
         if not javac or not java:

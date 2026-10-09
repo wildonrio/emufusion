@@ -45,6 +45,10 @@ class GetllarReadBarrierTest(unittest.TestCase):
 
     @unittest.skipUnless(SOURCE.is_file(), "local pinned aPS3e source not available")
     def test_roundtrip_with_and_without_diagnostic_blocks_preserves_other_edits(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        for needed in (SOURCE, TRACE_PATCH):
+            if not needed.exists():
+                self.skipTest("local-only input absent: " + str(needed))
         original = SOURCE.read_bytes()
         with tempfile.TemporaryDirectory(prefix="aps3e-getllar-regression-") as folder:
             work = Path(folder)

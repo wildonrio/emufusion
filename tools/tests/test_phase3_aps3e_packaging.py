@@ -75,6 +75,10 @@ class Aps3eIdentityTest(unittest.TestCase):
                              hashlib.sha256(target.read_bytes()).hexdigest())
 
     def test_staged_release_adapter_matches_the_lock(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        for needed in (STAGED,):
+            if not needed.exists():
+                self.skipTest("local-only input absent: " + str(needed))
         self.assertTrue(STAGED.is_file())
         self.assertEqual(LOCK["artifact"]["bytes"], STAGED.stat().st_size)
         self.assertEqual(LOCK["artifact"]["sha256"],

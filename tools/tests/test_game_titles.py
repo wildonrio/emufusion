@@ -19,7 +19,7 @@ HOST = (ROOT / 'unified-android/src/com/thorium/preview/game/InWindowGameHost.ja
 def jdk_tool(name):
     home = os.environ.get('JAVA_HOME')
     candidates = [Path(home) / 'bin' / name] if home else []
-    candidates.append(Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin') / name)
+    candidates.append(Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin') / name)
     for candidate in candidates:
         if candidate.is_file():
             return str(candidate)

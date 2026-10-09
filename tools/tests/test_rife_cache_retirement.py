@@ -1,4 +1,5 @@
 """Run actual cache retirement methods with fake native slots and Images."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -9,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[2]
 
 class CacheRetirementTest(unittest.TestCase):
     def test_old_outputs_retire_only_after_worker_and_future_outputs_survive(self):
-        jdk=Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        jdk=Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         if not (jdk/'javac').exists(): self.skipTest('JDK17 unavailable')
         source=(ROOT/'unified-android/qualification-src/com/thorium/preview/game/RifePresentationTransport.java').read_text()
         release=source.split('@Override public void releaseBefore(long minimumSequence) {',1)[1].split(

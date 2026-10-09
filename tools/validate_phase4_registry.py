@@ -45,11 +45,13 @@ CATEGORIES = {
 INCUMBENT_CATEGORIES = {"misaudited", "blocked-replacement", "unpackaged"}
 
 # Systems Phase 4 exists to close. Kept here so the registry cannot silently
-# grow or shrink its own scope.
+# grow or shrink its own scope. pcenginecd left the set when Phase 1's
+# beetle-pce-fast row gained the system-card firmware contract and began
+# advertising it (engines/registry.json).
 PHASE_FOUR_SYSTEMS = {
     "atari2600", "atari5200", "atari800", "segacd", "sega32x", "virtualboy",
     "c64", "msx", "amstradcpc", "atarist", "odyssey2", "colecovision",
-    "intellivision", "atarilynx", "wonderswan", "neogeopocket", "pcenginecd",
+    "intellivision", "atarilynx", "wonderswan", "neogeopocket",
     "vectrex", "pcfx", "cdi", "x68000",
 }
 

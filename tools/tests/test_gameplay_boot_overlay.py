@@ -1,4 +1,5 @@
 """Execute the production first-frame callback against a small view fixture."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -7,7 +8,7 @@ import unittest
 from tools.tests.test_in_window_activity_recreation import java_block
 
 ROOT = Path(__file__).resolve().parents[2]
-JDK = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JDK = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 
 
 class GameplayBootOverlayTest(unittest.TestCase):

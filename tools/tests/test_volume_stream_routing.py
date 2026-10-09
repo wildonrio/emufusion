@@ -278,9 +278,14 @@ class EngineAudioFocusTest(unittest.TestCase):
             self.assertIn("audioFocus.request()", source,
                           f"{path.name} never requests audio focus")
             # Focus kept after a session ends leaves every other app ducked, so
-            # the definitive teardown has to give it back.
+            # the definitive teardown has to give it back. release() now
+            # delegates to the acknowledged releaseWhenComplete(), which owns
+            # the abandon (before any blocking teardown).
             release = source.split("public void release()", 1)[1]
-            self.assertIn("audioFocus.abandon()", release.split("\n    }", 1)[0],
+            self.assertIn("releaseWhenComplete(", release.split("\n    }", 1)[0],
+                          f"{path.name} release() no longer reaches the definitive teardown")
+            complete = source.split("public void releaseWhenComplete(Completion completion)", 1)[1]
+            self.assertIn("audioFocus.abandon()", complete.split("\n    }\n", 1)[0],
                           f"{path.name} leaks audio focus on release")
 
     def test_lost_focus_produces_silence_rather_than_attenuation(self):

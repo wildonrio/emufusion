@@ -4,6 +4,7 @@ GL, timers and the diagnostic observer are recording leaves. Provider decode,
 ledger validity and allocation checks belong to the real observer's own tests.
 Nothing here establishes source-clock or generated-frame authority.
 """
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -12,7 +13,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 def method(source, signature):

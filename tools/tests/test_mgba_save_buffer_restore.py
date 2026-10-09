@@ -1,4 +1,5 @@
 """Execute the production cartridge-save restore method before the first frame."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -8,7 +9,7 @@ from tools.tests.test_libretro_release_completion import method
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'unified-android/src/com/thorium/preview/game/LibretroEngineSession.java'
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 SHELL = r'''
 import java.io.*;
 import java.util.*;

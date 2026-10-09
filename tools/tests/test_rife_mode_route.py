@@ -1,4 +1,5 @@
 """Execute the production route body with deterministic Android/loader leaves."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -7,7 +8,7 @@ import unittest
 from tools.tests.test_framegen_startup_fallback import method
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 
 
 class RifeModeRouteTest(unittest.TestCase):

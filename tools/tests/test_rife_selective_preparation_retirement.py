@@ -1,4 +1,5 @@
 """Execute selective obsolete-job retirement without global cache invalidation."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -59,7 +60,7 @@ class SelectivePreparationRetirementTest(unittest.TestCase):
   check(!valid.discardRequested&&p.retires==1);
  }
 }'''
-        jdk = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        jdk = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'RetirementProbe.java'
             path.write_text(java)

@@ -13,15 +13,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install validator dependencies
-        run: python3 -m pip install jsonschema
+      # Many tests compile small Java harnesses; they find javac via JAVA_HOME.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install test dependencies
+        run: |
+          python3 -m pip install jsonschema numpy pillow
+          # C probes include vulkan/vulkan.h.
+          sudo apt-get update -qq && sudo apt-get install -y -qq libvulkan-dev
       - name: Registry validators
         run: |
           python3 tools/validate_engine_registry.py
           python3 tools/validate_phase2_registry.py
           python3 tools/validate_phase3_registry.py
+      # Tests whose only problem is a local-only input (engines/build, docs/qa,
+      # evidence, sibling checkouts) are reported as skipped; see the script.
       - name: Python test suite
-        run: python3 -m unittest discover -s tools/tests
+        run: python3 tools/run_ci_tests.py -s tools/tests
       - name: Frozen theme hashes
         run: |
           printf '3e7f0c8110313d00668a6bd9a6e41d38e36527414d854b972da4f1e683023bfb  theme/theme.qml\nb10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9  theme/theme.cfg\n' | shasum -a 256 -c -

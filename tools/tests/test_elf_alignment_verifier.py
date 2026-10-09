@@ -81,12 +81,17 @@ class ElfAlignmentVerifierTest(unittest.TestCase):
         self.assertIn("ALLOWED_4K_LIBS=", build)
         self.assertIn("--allow-4k-lib", build)
         self.assertIn("MUST SHRINK TO ZERO BEFORE RELEASE", build)
-        # The release path stays strict: no allowlist at all.
+        # The release path stays strict: no allowlist at all. (Its report is
+        # no longer discarded to /dev/null; the gate itself is unchanged.)
+        strict_gate = 'if [ "${LUCENT_REQUIRE_16K_ALIGNMENT:-0}" = 1 ]; then\n'
         self.assertIn(
-            'if [ "${LUCENT_REQUIRE_16K_ALIGNMENT:-0}" = 1 ]; then\n'
-            '    python3 "$PROJECT_DIR/tools/verify_elf_alignment.py" "$OUTPUT" >/dev/null',
+            strict_gate +
+            '    python3 "$PROJECT_DIR/tools/verify_elf_alignment.py" "$OUTPUT"',
             build,
         )
+        strict = build.split(strict_gate, 1)[1].split("\nelse\n", 1)[0]
+        self.assertNotIn("--allow-4k-lib", strict)
+        self.assertNotIn("ALLOWED_4K_LIBS", strict)
         # Libraries known to be correctly 16 KiB aligned must never be waived.
         allowlist = build.split("ALLOWED_4K_LIBS=\"", 1)[1].split('"', 1)[0]
         for aligned in (

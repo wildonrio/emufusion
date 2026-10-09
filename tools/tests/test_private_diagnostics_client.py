@@ -11,13 +11,30 @@ import unittest
 from tools.private_diagnostics_receiver import AggregateStore, Receiver, validated_report
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
-ANDROID = ROOT.parent / 'cemu/Cemu-0.5/android-sdk/platforms/android-36/android.jar'
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
+
+
+def android_jar():
+    """android.jar from ANDROID_HOME/ANDROID_SDK_ROOT (CI runners ship an SDK), else the build Mac's SDK."""
+    roots = [os.environ.get('ANDROID_HOME'), os.environ.get('ANDROID_SDK_ROOT'),
+             str(ROOT.parent / 'cemu/Cemu-0.5/android-sdk'), str(Path.home() / 'Library/Android/sdk')]
+    for root in filter(None, roots):
+        jars = sorted(Path(root).glob('platforms/android-3[4-9]/android.jar'))
+        if jars:
+            return jars[-1]
+    return None
+
+
+ANDROID = android_jar()
 PACKAGE = ROOT / 'android-companion/src/com/thorium/preview'
 ENV = dict(os.environ, JAVA_TOOL_OPTIONS='-Djava.awt.headless=true -Dapple.awt.UIElement=true')
 
 
 class PrivateDiagnosticsClientTest(unittest.TestCase):
+    def setUp(self):
+        if ANDROID is None:
+            self.skipTest('local-only input absent: an Android SDK platform android.jar')
+
     def test_transport_compiles_against_android_not_desktop_boot_classes(self):
         with tempfile.TemporaryDirectory(prefix='emufusion-private-android-api-') as work:
             subprocess.run([str(JAVA / 'javac'), '-source', '8', '-target', '8',

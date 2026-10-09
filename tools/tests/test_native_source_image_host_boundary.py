@@ -3,6 +3,7 @@
 This catches ABI-capacity disagreement across the Java modules. It does not load
 an Android native library or qualify the real Vulkan image/timestamp join.
 """
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -14,7 +15,7 @@ from tools.tests.test_lsfg_endpoint_lifetime import method
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "unified-android/src"
 VIDEO = SRC / "com/thorium/lucent/video"
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 class NativeSourceImageHostBoundaryTest(unittest.TestCase):

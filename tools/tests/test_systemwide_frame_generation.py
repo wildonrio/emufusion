@@ -54,7 +54,16 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn(
             "PhysicalPresentationDeadline.nextAlignedOutputDirect(", app_owned
         )
-        self.assertIn("externalPhysicalClock.anchorNs()", app_owned)
+        # App-owned EGL plans follow the phase-tracked calibrated anchor
+        # rather than the raw first-row anchor; generated output uses the
+        # dedicated queue-lead planner.
+        self.assertEqual(app_owned.count(
+            "externalPhysicalClock.trackedPlanningAnchorNs()"), 2)
+        self.assertNotIn("externalPhysicalClock.anchorNs()", app_owned)
+        self.assertRegex(
+            app_owned,
+            r"PhysicalPresentationDeadline\.\s+nextAlignedAppOwnedGenerated\(",
+        )
         self.assertIn("externalPhysicalClock.planningPeriodNs()", app_owned)
         self.assertIn("externalLastPlannedPhysicalNs", app_owned)
         self.assertIn("externalRatePathActive ?", app_owned)
@@ -388,8 +397,10 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             "                            commit.actualPresentTimeNs",
             poll,
         )
+        # The snapshot is now emitted through the bounded, CRC-checked
+        # CadenceSnapshotLog (chunked Log.i parts) rather than one Log.i line.
         report = generator.split(
-            'Log.i(TAG, "App swap cadence"', 1
+            'CadenceSnapshotLog.write(TAG, generatorId, "App swap cadence"', 1
         )[1].split("publishReportedFrameRate", 1)[0]
         self.assertIn("externalSlotErrorSignedMinNs", report)
         self.assertIn("externalSlotErrorSignedMaxNs", report)
@@ -1107,8 +1118,14 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             "private void pollPreparedPresentation()", 1
         )[1].split("private long takeProofSequence()", 1)[0]
         self.assertIn("if (proof.sceneCutRisk) {", private_poll)
-        self.assertIn("current.discardRequested = true", private_poll)
-        self.assertIn("discardPreparedPresentation()", private_poll)
+        # A scene cut now discards only this pair's private image; earlier
+        # ready midpoints and unrelated queued work survive.
+        scene_cut = private_poll.split("if (proof.sceneCutRisk) {", 1)[1].split(
+            "return;", 1)[0]
+        self.assertIn("current.discardRequested = true", scene_cut)
+        self.assertIn("discardCurrentPreparation();", scene_cut)
+        self.assertNotIn("discardPreparedPresentation()", scene_cut)
+        self.assertNotIn("throw new", scene_cut)
         self.assertNotIn(
             'throw new IllegalStateException(\n'
             '                    "RIFE private generated output crossed',
@@ -1424,14 +1441,23 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         )[0]
         self.assertIn("is_framebuffer_sentinel", probe)
         self.assertIn("glReadPixels(0", probe)
-        self.assertIn("backend->content_width * numerator / 4u", probe)
+        # Probe the actual framebuffer allocation (incl. sentinel padding),
+        # not the display-fit content size, so large VI targets are not
+        # cropped at the readback edge.
+        self.assertIn("probe_width = backend->framebuffer_width;", probe)
+        self.assertIn("probe_height = backend->framebuffer_height;", probe)
+        self.assertIn("(uint64_t)probe_width * numerator / 4u", probe)
+        self.assertIn("(uint64_t)probe_height * numerator / 4u", probe)
+        self.assertNotIn("backend->content_width", probe)
+        self.assertNotIn("backend->content_height", probe)
         self.assertIn("for (sample = 0; sample < 3u; ++sample)", probe)
         self.assertIn("*source_width = right - left", probe)
         self.assertIn("*source_height = top - bottom", probe)
         self.assertNotIn("near_black_edge_run", backend)
         self.assertNotIn("bottom_trim", probe)
         self.assertNotIn("top_trim", probe)
-        self.assertIn("(top - bottom) * 3u < backend->content_height * 2u", probe)
+        self.assertIn("(right - left) * 3u < probe_width * 2u", probe)
+        self.assertIn("(top - bottom) * 3u < probe_height * 2u", probe)
         # 2026-09-06: the swap-restore fix for Dolphin's cached FBO binding
         # split the body that used to live directly in present_if_ready out
         # into present_current_frame (present_if_ready is now a thin
@@ -1706,9 +1732,25 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("int portraitWidth = Math.min(panelWidth, panelHeight);", clockwise)
         self.assertIn("int portraitHeight = Math.max(panelWidth, panelHeight);", clockwise)
         self.assertIn("setFixedSize(portraitWidth, portraitHeight)", clockwise)
-        self.assertIn("SurfaceControl.BUFFER_TRANSFORM_ROTATE_90", clockwise)
-        self.assertIn("setBufferTransform(gameplaySurface.getSurfaceControl()",
-                      clockwise)
+        # The quarter-turn is now queued behind SurfaceView's own geometry
+        # transaction (applying it in surfaceCreated was overwritten on Thor's
+        # Android 13) and targets the captured owner's SurfaceControl.
+        self.assertIn(
+            "postClockwiseSurfaceTransform(surfaceOwner, surfaceGeneration);",
+            clockwise,
+        )
+        transform = clockwise.split(
+            "private void postClockwiseSurfaceTransform(SurfaceView owner", 1
+        )[1]
+        self.assertIn("owner.post(", transform)
+        self.assertIn("SurfaceControl control = owner.getSurfaceControl();",
+                      transform)
+        self.assertRegex(
+            transform,
+            r"transaction\.setBufferTransform\(control,\s+"
+            r"SurfaceControl\.BUFFER_TRANSFORM_ROTATE_90\)\.apply\(\);",
+        )
+        self.assertIn("gameplaySurface != owner", transform)
         self.assertNotIn("gameplaySurface.setRotation(90f)", clockwise)
 
     def test_interpolation_never_advances_emulation_or_audio(self):
@@ -1891,10 +1933,14 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             "int requiredPrimeDepth = generatedTimeline ?",
             prepare,
         )
-        self.assertIn(
-            "externalTransport != null ?\n" +
-            "                            ENDPOINT_FIFO_EXTERNAL_PRIME_DEPTH :",
+        # The external path still primes at least its four-endpoint depth;
+        # it may retain deeper look-ahead pairs, bounded by FIFO capacity.
+        self.assertRegex(
             prepare,
+            r"externalTransport != null \?\s+"
+            r"Math\.min\(ENDPOINT_FIFO_CAPACITY,\s+"
+            r"Math\.max\(ENDPOINT_FIFO_EXTERNAL_PRIME_DEPTH,\s+"
+            r"externalLookaheadPairCount\(\) \+ 2\)\)",
         )
         self.assertIn("endpointFifoCount < requiredPrimeDepth", prepare)
         self.assertIn("right == left + 1L", prepare)
@@ -2270,12 +2316,19 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             generator.index("private void presentAppOwnedExternalBuffered("):
             generator.index("private int appOwnedPhysicalScansPerOutput()")
         ]
-        self.assertIn(
-            "drawExternalGeneratedTexture(externalGeneratedTexture)",
+        # The generated image now comes from the transport-bound app-owned
+        # output (falling back to the shared texture); either source must
+        # still go through the Y-origin converting draw.
+        self.assertRegex(
             app_owned_present,
+            r"drawExternalGeneratedTexture\(generatedOutput\.textureId > 0 \?\s+"
+            r"generatedOutput\.textureId : externalGeneratedTexture\)",
         )
         self.assertNotIn(
             "drawTexture2d(externalGeneratedTexture)", app_owned_present
+        )
+        self.assertNotIn(
+            "drawTexture2d(generatedOutput", app_owned_present
         )
         self.assertIn(
             "drawTexture2d(historyTextures[selectedPhase >= 1f ?",
@@ -2306,9 +2359,29 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertNotIn("drawTexture2d(latestTexture)", present)
         viewport = generator[generator.index("private void setPresentationViewport()"):
                              generator.index("private void copyExternalTo")]
-        self.assertIn("Math.round(outputHeight * aspect)", viewport)
-        self.assertIn("(outputWidth - contentWidth) / 2", viewport)
+        # The viewport now delegates to the shared uniform, centred,
+        # contained fit (full-height pillarbox for every <=16:9 aspect) and
+        # converts its top-left rectangle into GL's bottom-left origin.
+        self.assertIn(
+            "PresentationGeometry.fitInside(\n"
+            "                        outputWidth, outputHeight, aspect)",
+            viewport,
+        )
+        self.assertIn(
+            "glViewport(bounds.left, outputHeight - bounds.bottom,\n"
+            "                bounds.width(), bounds.height())",
+            viewport,
+        )
         self.assertNotIn("outputWidth / aspect", viewport)
+        geometry = self.read(
+            "unified-android/src/com/thorium/lucent/video/"
+            "PresentationGeometry.java"
+        )
+        fit = geometry.split("public static Rectangle fitInside(", 1)[1].split(
+            "public static Rectangle fitFrameInside(", 1)[0]
+        self.assertIn("width = Math.round(height * aspect)", fit)
+        self.assertIn("int left = (surfaceWidth - width) / 2", fit)
+        self.assertIn("if (height > surfaceHeight)", fit)
 
     def test_qualification_readback_requires_an_actual_generated_present(self):
         generator = self.read(
@@ -3481,8 +3554,12 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn(".18*cc(tv,rv)", generator)
         self.assertIn(".07*(cc(txpv,rxpv)", generator)
         self.assertIn("uBypassSearch", generator)
+        # The copy-only early return is now allowed only when no proposal
+        # (temporal, reciprocal, global seed or neighbour) is requested.
         self.assertIn(
-            "if(uBypassSearch>.5&&uUseTemporalGuide<.5){gl_FragColor=enc(c);return;}",
+            "if(uBypassSearch>.5&&uUseTemporalGuide<.5&&uUseReciprocalGuide<.5"
+            "&&uUseGlobalSeed<.5&&uUseNeighborProposal<.5)"
+            "{gl_FragColor=enc(c);return;}",
             generator,
         )
         self.assertIn("uniform sampler2D uReference,uTarget,uPriorFlow,uTemporalFlow", generator)
@@ -4139,7 +4216,17 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertNotIn("(top + row) * frameWidth + left", method)
         self.assertNotIn("generatorFrameColors", session)
         self.assertNotIn("DualScreenLayout.forGeneratorUpload", session)
-        self.assertIn("primaryGenerator.submitSoftwareFrame(frameColors", session)
+        # The primary upload now carries presentationColors: the decoded
+        # libretro rows themselves, or (phone DS) the same rows copied
+        # side-by-side without any vertical flip. The generator alone
+        # reverses rows inside each crop.
+        self.assertIn("int[] presentationColors = frameColors;", session)
+        self.assertIn(
+            "DualScreenLayout.dsSideBySide(frameColors, dsPhoneColors", session
+        )
+        self.assertIn(
+            "primaryGenerator.submitSoftwareFrame(presentationColors", session
+        )
         self.assertIn("lowerGenerator.submitSoftwareFrame(frameColors", session)
 
     def test_proof_rearm_resets_lattice_and_regional_telemetry(self):
@@ -4171,7 +4258,13 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         session = self.read(
             "unified-android/src/com/thorium/preview/game/LibretroEngineSession.java"
         )
-        self.assertIn("long scheduledNs = pacer.deadlineNanos();", session)
+        # The stamp is the direct-display vsync due time when that clock is
+        # active, otherwise the pacer's absolute deadline -- never arrival.
+        self.assertRegex(
+            session,
+            r"long scheduledNs = displayDueNs != 0\s+"
+            r"\? displayDueNs : pacer\.deadlineNanos\(\);",
+        )
         self.assertIn("newest.producerTimestampNs = scheduledNs;", session)
         self.assertIn("frame.producerTimestampNs)", session)
         pacer = self.read(
@@ -4283,7 +4376,10 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertNotIn("Math.floor(", report)
         self.assertNotIn("Math.min(targetOutput", report)
         self.assertIn("committed * 1_000_000_000.0 / elapsedNs", report)
-        self.assertIn('Log.i(TAG, "App swap cadence"', report)
+        self.assertIn(
+            'CadenceSnapshotLog.write(TAG, generatorId, "App swap cadence"',
+            report,
+        )
         self.assertIn("reportSourceAdmissionDiagnostic(now)", report)
         self.assertIn('Log.i(TAG, "Source admission diagnostic"', report)
         self.assertIn('" hwSubmits=" + hardware', report)
@@ -4474,10 +4570,19 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             ),
             1,
         )
-        self.assertIn("exact visible-target token validated",
+        # One Android timestamp policy per transaction: the validated
+        # compositor token alone (keeps SurfaceFlinger backpressure), or the
+        # explicit desired-present bound for tokenless calibration -- never
+        # both (Thor 13d7 overwrite of an uncommitted predecessor).
+        self.assertIn("Select ONE Android timestamp policy",
                       transaction_configuration)
-        self.assertIn("never identifies another panel scan",
-                      transaction_configuration)
+        self.assertRegex(
+            transaction_configuration,
+            r"if \(compositorFrameTimelineVsyncId != 0\) \{\s+"
+            r"setFrameTimeline_\(transaction, [^;]*;\s+"
+            r"\} else \{\s+"
+            r"ASurfaceTransaction_setDesiredPresentTime\(",
+        )
         self.assertLess(
             live_present.index("setFrameTimeline_(transaction"),
             live_present.index("ASurfaceTransaction_setDesiredPresentTime"),
@@ -4509,10 +4614,16 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         )
         # Rejections now preserve present identity/reason through the ledger
         # helper, rather than returning an unreported false.
+        # The result is captured so the RAII entry fence can be disarmed: an
+        # explicit false returns the caller's acquire FD untouched.
         for reason in ("frame-timeline-api-missing", "timeline-revised",
                        "submission-window-missed"):
-            self.assertIn('return rejectImmediate(presentId, "' + reason + '"',
-                          live_present[:transaction_create])
+            self.assertRegex(
+                live_present[:transaction_create],
+                r"const bool result = rejectImmediate\(presentId, \""
+                + re.escape(reason) +
+                r"\",[^;]*;\s+entryFence\.fd = -1;\s+return result;",
+            )
         self.assertIn("transactionApplyStartNs", live_present)
         self.assertIn("transactionApplyEndNs", live_present)
         self.assertIn("std::lock_guard<std::mutex> applyLock(applyMutex_)",
@@ -4760,9 +4871,15 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         # game.
         self.assertIn("MotionEvent.AXIS_HAT_X", motion)
         self.assertIn("MotionEvent.AXIS_HAT_Y", motion)
+        # Local controls now route through setLocalControl, which applies the
+        # value to the local player and mirrors it to any netplay relay.
         for ordinal in ("PAD_DPAD_LEFT", "PAD_DPAD_RIGHT",
                         "PAD_DPAD_UP", "PAD_DPAD_DOWN"):
-            self.assertIn("active.setControl(" + ordinal, motion)
+            self.assertIn("setLocalControl(active, " + ordinal, motion)
+        local = session.split(
+            "private void setLocalControl(NativeAdapterHost active", 1
+        )[1].split("\n    }", 1)[0]
+        self.assertIn("active.setControl(LOCAL_PLAYER, control, value);", local)
 
     def test_launch_never_blocks_qt_and_spinner_is_delayed_until_needed(self):
         theme = self.read("theme/theme.qml")

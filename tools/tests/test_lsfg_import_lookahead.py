@@ -17,6 +17,7 @@ def fixture():
         "@Override public boolean visibleSubmissionReady()",
         "@Override public boolean hasAdjacentPair(",
         "@Override public boolean hasPreparedLookahead(",
+        "private static final class AdmissionDiagnostics",
     ))
     return r'''
 import java.util.*;
@@ -25,6 +26,8 @@ public class EndpointTest {
     boolean generatedRatePathActive,closed,preparationInFlight,wrongOwner;
     RuntimeException fatalFailure;
     int retireCalls,retryCalls;
+    enum EnqueueResult {NOT_READY}
+    final AdmissionDiagnostics admission=new AdmissionDiagnostics();
     final LinkedHashMap<Long,RetainedEndpoint> retained=new LinkedHashMap<>();
     final WorkQueue preparationWorker=new WorkQueue(),owner=new WorkQueue();
     static class WorkQueue {

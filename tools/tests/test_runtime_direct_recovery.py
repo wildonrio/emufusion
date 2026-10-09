@@ -1,4 +1,5 @@
 """Run actual recovery/acknowledgement methods with deterministic ownership leaves."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -6,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 GAME = ROOT / 'unified-android/src/com/thorium/preview/game'
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 HOST_ERROR_SOURCE = GAME / 'InWindowGameHost.java'
 
 

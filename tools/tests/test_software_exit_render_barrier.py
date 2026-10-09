@@ -4,6 +4,7 @@ Only Android/core and drawing boundaries are fakes. The actual locking and
 eligibility code runs on real Java threads; no source-string assertions stand
 in for ownership/timeout behavior.
 """
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,7 +14,7 @@ from tools.tests.test_libretro_release_completion import method
 
 ROOT = Path(__file__).resolve().parents[2]
 SESSION = ROOT / 'unified-android/src/com/thorium/preview/game/LibretroEngineSession.java'
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 
 SHELL = r'''
 import java.util.concurrent.*;

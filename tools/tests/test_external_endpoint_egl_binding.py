@@ -26,6 +26,8 @@ class ExternalEndpointEglBindingTest(unittest.TestCase):
             "private void initializeEgl()",
             "private void publishExternalEndpoint(",
             "private void releaseGl()",
+            "private void discardFullImageCapture()",
+            "private static boolean requiresNonblockingBuiltinSwap(boolean hasExternalTransport)",
         ]
         # The pre-fix implementation has no helper. Retaining it verbatim lets
         # the behavior tests fail on its real bindings, not missing-symbol noise.
@@ -62,12 +64,19 @@ public class EglBindingFixture {
         static final int EGL_DEFAULT_DISPLAY=0,EGL_RENDERABLE_TYPE=1,
             EGL_SURFACE_TYPE=2,EGL_WINDOW_BIT=4,EGL_PBUFFER_BIT=8,EGL_RED_SIZE=9,
             EGL_GREEN_SIZE=10,EGL_BLUE_SIZE=11,EGL_ALPHA_SIZE=12,EGL_NONE=13,
-            EGL_CONTEXT_CLIENT_VERSION=14,EGL_WIDTH=15,EGL_HEIGHT=16;
+            EGL_CONTEXT_CLIENT_VERSION=14,EGL_WIDTH=15,EGL_HEIGHT=16,EGL_EXTENSIONS=17,
+            EGL_MIN_SWAP_INTERVAL=18,EGL_MAX_SWAP_INTERVAL=19;
         static EGLSurface current=EGL_NO_SURFACE;
         static EGLContext context=EGL_NO_CONTEXT;
         static String failAt="";
         static int binds, swaps, destroys;
         static EGLDisplay eglGetDisplay(int ignored) { return new EGLDisplay(); }
+        static String eglQueryString(EGLDisplay d,int name){return "";}
+        static int eglGetError(){return 0;}
+        static boolean eglQueryContext(EGLDisplay d,EGLContext c,int name,int[] v,int o){return false;}
+        static boolean eglGetConfigAttrib(EGLDisplay d,EGLConfig c,int name,int[] v,int o){
+            v[o]=name==EGL_MAX_SWAP_INTERVAL?1:0;return true;
+        }
         static boolean eglInitialize(EGLDisplay d,int[] a,int b,int[] c,int e){return true;}
         static boolean eglChooseConfig(EGLDisplay d,int[] a,int b,EGLConfig[] c,
                 int e,int f,int[] count,int g) { c[0]=new EGLConfig();count[0]=1;return true; }
@@ -122,7 +131,18 @@ public class EglBindingFixture {
         static void deleting(){check(EGL14.context!=EGL14.EGL_NO_CONTEXT,"GL deletion without context");trace.add("gl-delete");}
     }
     static class Build { static class VERSION { static final int SDK_INT=33; } }
-    static class Log { static void i(String tag,String value){trace.add("log");} }
+    static class Log {
+        static void i(String tag,String value){trace.add("log");}
+        static void w(String tag,String value){trace.add("log");}
+    }
+    static int requestedEndpointInterval;
+    static class TransportFactory {
+        int endpointSwapInterval(){return requestedEndpointInterval;}
+        boolean nativeSoftwareGeometry(){return false;}
+    }
+    TransportFactory externalTransportFactory=new TransportFactory();
+    EGLConfig endpointEglConfig;
+    Closable fullImageCapture;boolean fullImageQueued;int fullImageTexture,fullImageFramebuffer;
     static class Lease {long lease(int slot){return 7L;}}
     static class ExternalFrameGenerationTransport {
         final boolean appOwned;boolean closed;long sequence,timestamp;
@@ -188,7 +208,11 @@ public class EglBindingFixture {
         EglBindingFixture t=initialized(appOwned);
         check(EGL14.current==(appOwned?t.eglSurface:t.eglEndpointSurface),"wrong working surface after initialize");
         check(t.eglSurface!=t.eglEndpointSurface,"surface handles must not alias");
-        check(trace.contains("interval:endpoint:0"),"endpoint lost zero swap interval");
+        check(trace.contains("interval:endpoint:"+requestedEndpointInterval),"endpoint lost factory swap interval");
+        if(appOwned)check(trace.lastIndexOf("interval:output:0")>trace.indexOf("interval:endpoint:"+requestedEndpointInterval),
+              "app-owned visible output lost nonblocking swap");
+        else check(trace.stream().filter(e->e.startsWith("interval:")).count()==1,
+              "external endpoint swap policy overridden");
         check(EGL14.swaps==0,"setup submitted an unannounced endpoint");
     }
     static void exportCase(boolean appOwned,String failure){
@@ -223,8 +247,9 @@ public class EglBindingFixture {
         check(EGL14.current==(restore?t.eglEndpointSurface:t.eglSurface),"unexpected context after failed bind");
     }
     static void builtInCase(){
-        EglBindingFixture t=new EglBindingFixture();t.initializeEgl();
+        EglBindingFixture t=new EglBindingFixture();t.externalTransportFactory=null;t.initializeEgl();
         check(EGL14.current==t.eglSurface && t.eglEndpointSurface==EGL14.EGL_NO_SURFACE,"built-in output routing changed");
+        check(trace.contains("interval:output:0"),"built-in output lost nonblocking swap");
         check(!trace.contains("create:pbuffer") && !trace.contains("create:endpoint"),"built-in created external surface");
         t.releaseGl();check(EGL14.destroys==1,"built-in surface not retired once");
     }
@@ -244,7 +269,7 @@ public class EglBindingFixture {
     }
     public static void main(String[] args){
         boolean appOwned=args[1].equals("app");
-        if(args[0].equals("init"))initCase(appOwned);
+        if(args[0].equals("init")){requestedEndpointInterval=args.length>2?Integer.parseInt(args[2]):0;initCase(appOwned);}
         else if(args[0].equals("release"))releaseCase(appOwned);
         else if(args[0].equals("bind-failure"))bindFailureCase(args[2].equals("restore"));
         else if(args[0].equals("built-in"))builtInCase();
@@ -269,6 +294,8 @@ public class EglBindingFixture {
 
     def test_app_owned_setup_keeps_visible_output_current(self):
         self.run_case("init", "app")
+        # RIFE's factory requests interval 1 for its private endpoint queue only.
+        self.run_case("init", "app", "1")
 
     def test_external_export_never_switches_surface(self):
         for failure in ("", "timestamp", "render", "swap"):

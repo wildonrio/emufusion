@@ -1,4 +1,5 @@
 """Compile Java parser against bytes emitted by the actual C ABI; no device proof."""
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -6,7 +7,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 class NativeSourceImageJavaTest(unittest.TestCase):

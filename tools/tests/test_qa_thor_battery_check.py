@@ -46,6 +46,10 @@ class ThorBatteryCheckTest(unittest.TestCase):
             self.assertFalse(check_battery(dump)[0])
 
     def test_captured_thor_failures_refused_without_adb(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        for needed in (ROOT / "docs/qa/gles-off-timestamp-gate-2026-09-10",):
+            if not needed.exists():
+                self.skipTest("local-only input absent: " + str(needed))
         evidence = ROOT / "docs/qa/gles-off-timestamp-gate-2026-09-10"
         for name in ("battery-before-package.txt", "device-after-package.txt"):
             self.assertFalse(check_battery((evidence / name).read_text())[0])

@@ -184,6 +184,9 @@ public class ProvenanceTest {
         void cancelExpectedEndpoint(long s){check(seq==s);cancelled++;long l=values.lease(0);if(l!=0)values.release(0,l);}
         void resetEndpointTimeline(){resets++;}
     }
+    static class TransportFactory {boolean nativeSoftwareGeometry(){return false;}}
+    TransportFactory externalTransportFactory;
+    Object deferredExternalPreparation,pendingAppOwnedRequest,pendingAppOwnedPreparation;
     static final int ENDPOINT_FIFO_CAPACITY=6,NATIVE_HISTORY_BASE=6,NATIVE_ADMISSION_SLOT=8;
     static final String TAG="test";long generatorId=1;
     final NativeSourceImageObserver nativeSourceImageObserverInitial=new NativeSourceImageObserver(6);
@@ -282,7 +285,17 @@ public class ProvenanceTest {
         check(nativeEndpointProvenance.compare(0,lease(0),4,lease(4))==NativeSourceImage.Pair.CLASSIFIED_TIMESTAMP_MISMATCH);
         discardEndpointFifoHead();check(lease(0)==0 && frame(1)==900);
     }
+    void heldReseed(){
+        // With no retained presentation endpoint, an actual held image re-seeds
+        // Direct presentation even without a sustainable generation rate.
+        frameRate.sustainable=false;provider.held=true;classify(1000,1000,false,true);consumeClassifiedFrame(false);
+        check(endpointFifoCount==1 && endpointSequence==1 && lease(8)==0);
+        check(frame(endpointFifoHead)==900 && pixels(endpointFifoHead)==NativeSourceImageLedger.PixelVerdict.HELD);
+        provider.frame=901;classify(2000,2000,false,true);consumeClassifiedFrame(false);
+        check(endpointFifoCount==1 && endpointSequence==1 && lease(8)==0);
+    }
     void rejectionAndResets(){
+        lastPresentationEndpointTimestampNs=500;// a prior endpoint exists: held frames are not re-seeds
         frameRate.sustainable=false;classify(1000,1000,false,true);consumeClassifiedFrame(false);
         check(lease(8)==0 && endpointFifoCount==0);
         observeUnique=false;classify(2000,2000,true,true);consumeClassifiedFrame(true);check(lease(8)==0);
@@ -308,7 +321,9 @@ public class ProvenanceTest {
         consumeEndpointIntoHistory(0,true);provider.swap++;
         classify(9000,9000,true,true);consumeClassifiedFrame(true);consumeEndpointIntoHistory(1,false);
         check(nativeEndpointProvenance.compare(6,lease(6),7,lease(7))==NativeSourceImage.Pair.EPOCH_CHANGED);
+        deferredExternalPreparation=pendingAppOwnedRequest=pendingAppOwnedPreparation=new Object();
         invalidateBufferedPairForReprime(false);check(lease(6)==0 && lease(7)==0);
+        check(deferredExternalPreparation==null && pendingAppOwnedRequest==null && pendingAppOwnedPreparation==null);
     }
     void hotLoop(){
         classify(1000,1000,true,true);consumeClassifiedFrame(true);consumeEndpointIntoHistory(0,true);
@@ -316,6 +331,7 @@ public class ProvenanceTest {
     }
     public static void main(String[] args){
         new ProvenanceTest().exactDelayedAndRotation();new ProvenanceTest().missingHeldAndErrors();
+        new ProvenanceTest().heldReseed();
         new ProvenanceTest().rejectionAndResets();new ProvenanceTest().overflowAndEpochs();
         ProvenanceTest warm=new ProvenanceTest();for(int i=0;i<50000;i++)warm.hotLoop();
         com.sun.management.ThreadMXBean bean=(com.sun.management.ThreadMXBean)ManagementFactory.getThreadMXBean();

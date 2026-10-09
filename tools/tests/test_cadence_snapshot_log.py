@@ -1,4 +1,5 @@
 """Exercise the production Java emitter against the independent Python decoder."""
+import os
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -6,7 +7,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 SPEC = importlib.util.spec_from_file_location('timing_snapshot_verifier',
     ROOT / 'unified-android/tools/verify_rife_frame_generation_timing.py')
 VERIFIER = importlib.util.module_from_spec(SPEC)

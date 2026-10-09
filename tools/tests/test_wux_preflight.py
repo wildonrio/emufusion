@@ -1,4 +1,5 @@
 """Run the real Java disc preflight on constructed WUX/RVZ containers."""
+import os
 import hashlib
 from pathlib import Path
 import struct
@@ -8,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'unified-android/src/com/thorium/preview/game/DiscImagePreflight.java'
-JDK = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JDK = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 
 
 class WuxPreflightTest(unittest.TestCase):

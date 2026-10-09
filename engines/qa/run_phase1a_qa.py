@@ -74,6 +74,10 @@ CASES = (
              "emufusion-internal-pc-callback-test.zip", state_cycles=100),
     TestCase("pcengine", "PC Engine", "beetle-pce-fast", "lucent-pce-qa.pce",
              require_input_effect=True),
+    TestCase(
+        "pcenginecd", "PC Engine CD", "beetle-pce-fast", None,
+        "Needs the owner's own system card (syscard3.pce) and a CD image; neither can be redistributed, so this bundled matrix cannot run it. The PcEngineCdFirmware importer is covered by its own tests.",
+    ),
     TestCase("ngp", "Neo Geo Pocket Color", "beetle-neopop", "stargunner.ngc",
              require_input_effect=True),
     TestCase("wonderswancolor", "WonderSwan Color", "beetle-cygne", "bug-witch.wsc",

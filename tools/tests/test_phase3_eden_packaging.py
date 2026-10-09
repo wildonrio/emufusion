@@ -189,6 +189,10 @@ class Phase3EdenIdentityTest(unittest.TestCase):
         silently change the artifact. Each entry is re-hashed here so that
         editing the tree without updating the lock fails.
         """
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        for needed in (ROOT / "engines/build/switch-src/eden/src",):
+            if not needed.exists():
+                self.skipTest("local-only input absent: " + str(needed))
         local = [entry for entry in SOURCE_LOCK["patches"]
                  if entry.get("role") == "local-source-patch"]
         for entry in local:

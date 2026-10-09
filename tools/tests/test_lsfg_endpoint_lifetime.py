@@ -2,6 +2,7 @@
 
 These are bounded ownership/math regressions, not device cadence evidence.
 """
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -10,7 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 TRANSPORT = ROOT / "unified-android/qualification-src/com/thorium/preview/game/LsfgPresentationTransport.java"
-JAVA_HOME = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA_HOME = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 GAME = ROOT / "unified-android/src/com/thorium/preview/game"
 
 

@@ -1,11 +1,12 @@
 """Compile and execute actual sealed-transfer/retention methods, including allocation accounting."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA = Path("/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin")
+JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
 class NativeSourceImageLedgerTest(unittest.TestCase):

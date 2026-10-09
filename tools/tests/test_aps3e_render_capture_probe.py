@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from tools.tests.test_aps3e_fresh_savestate import reviewed_adapter
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -13,8 +14,9 @@ class RenderCaptureProbeTest(unittest.TestCase):
     def test_actual_queue_scope_once_and_existing_slot(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary); output=root/'adapter.cpp'
+            reviewed=root/'reviewed-adapter.cpp'; reviewed.write_bytes(reviewed_adapter())
             subprocess.run(['python3',str(ROOT/'engines/diagnostics/prepare_render_capture_probe.py'),
-                '--source',str(ROOT/'engines/patches/aps3e-lucent-adapter.cpp'),
+                '--source',str(reviewed),
                 '--output',str(output)],check=True,capture_output=True)
             text=output.read_text()
             start=text.index('static void qa_capture_input(')

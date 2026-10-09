@@ -111,6 +111,8 @@ public class ContentProbe {
         with tempfile.TemporaryDirectory(prefix='cemu-content-prereq-') as tmp:
             path = Path(tmp)
             (path / 'NativeAdapterSystemDirectory.java').write_text(source)
+            (path / 'Aps3eLocalizedStrings.java').write_text(re.sub(
+                r'^package .*;\s*', '', (GAME / 'Aps3eLocalizedStrings.java').read_text(), flags=re.M))
             (path / 'ContentProbe.java').write_text(harness)
             built = subprocess.run([str(JAVAC), *map(str, path.glob('*.java'))],
                                    capture_output=True, text=True, timeout=60)

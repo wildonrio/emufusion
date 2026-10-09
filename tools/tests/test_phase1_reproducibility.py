@@ -18,6 +18,9 @@ SPEC.loader.exec_module(MODULE)
 
 class Phase1ReproducibilityTest(unittest.TestCase):
     def test_checked_in_lock_and_artifacts_verify(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        if not list((ROOT / "engines/build/arm64-v8a").glob("*_libretro.so")):
+            self.skipTest("local-only input absent: engines/build/arm64-v8a/*_libretro.so")
         self.assertEqual([], MODULE.verify(
             ROOT / "engines/registry.json",
             ROOT / "engines/reproducibility-lock.json",
@@ -26,6 +29,9 @@ class Phase1ReproducibilityTest(unittest.TestCase):
         ))
 
     def test_tampered_artifact_fails(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        if not list((ROOT / "engines/build/arm64-v8a").glob("*_libretro.so")):
+            self.skipTest("local-only input absent: engines/build/arm64-v8a/*_libretro.so")
         lock = json.loads((ROOT / "engines/reproducibility-lock.json").read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

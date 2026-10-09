@@ -8,7 +8,7 @@ import unittest
 from tools.tests.test_host_acknowledged_retirement import method, member
 
 ROOT = Path(__file__).resolve().parents[2]
-JDK = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JDK = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 PATHS = {
     'NativeAdapterStopPolicy.java': 'unified-android/src/com/thorium/lucent/emulators/',
     'InWindowGameHost.java': 'unified-android/src/com/thorium/preview/game/',

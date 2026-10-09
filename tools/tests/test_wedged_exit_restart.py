@@ -5,13 +5,14 @@ returned to the library over the retained Surface ('Core frame still running at
 exit'), but the checkpoint could never finish, so the frozen frame stayed on top
 until the app was force-stopped.
 """
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 HOST = ROOT / 'unified-android/src/com/thorium/preview/game/InWindowGameHost.java'
 
 

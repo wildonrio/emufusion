@@ -31,8 +31,10 @@ class NativeQaStorageWiringTest(unittest.TestCase):
         session = (GAME / "NativeAdapterEngineSession.java").read_text()
         self.assertIn("NativeAdapterSystemDirectory.saveDirectoryName(request.qualificationSession)", session)
         self.assertIn("entry.id, request.systemId, request.qualificationSession);", session)
+        # resolve() also receives the opened content so decrypted Wii U
+        # images can skip disc-key gating; the namespace is unchanged.
         self.assertIn("entry.id, request.systemId, capabilities.requiredFirmware,\n"
-                      "                        request.qualificationSession);", session)
+                      "                        request.qualificationSession, game);", session)
         self.assertLess(session.index("NativeAdapterSystemDirectory.prepareForOpen"),
                         session.index("new NativeAdapterHost(entry.coreFile, trusted)"))
         self.assertIn('NativeQualificationStorage.supports(', session)
@@ -46,8 +48,15 @@ class NativeQaStorageWiringTest(unittest.TestCase):
         self.assertIn('return resolve(context, engineId, systemId, requiredFirmware, "");', source)
         resolve = source[source.index("int requiredFirmware, String qualificationSession)"):]
         resolve = resolve[:resolve.index("private static IllegalStateException unavailable")]
-        self.assertEqual(resolve.count("NativeAdapterPrerequisites.record("), 2)
-        self.assertEqual(resolve.count("if (qualificationSession == null || qualificationSession.isEmpty())"), 2)
+        # Three successful outcomes record readiness: an existing install, the
+        # decrypted Wii U content path, and a fresh install. Each record must
+        # be guarded so a QA namespace never marks normal prerequisites.
+        guard = "if (qualificationSession == null || qualificationSession.isEmpty())"
+        self.assertEqual(resolve.count("NativeAdapterPrerequisites.record("), 3)
+        self.assertEqual(resolve.count(guard), 3)
+        for before in resolve.split("NativeAdapterPrerequisites.record(")[:-1]:
+            self.assertTrue(before.rstrip().endswith(guard),
+                            "prerequisite record is not guarded by the QA namespace check")
         self.assertEqual(resolve.count("throw unavailable(context, systemId, qualificationSession);"), 2)
 
 

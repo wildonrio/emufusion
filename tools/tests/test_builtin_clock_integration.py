@@ -41,9 +41,14 @@ public class ClockIntegrationTest {
         static FrameGenerationRenderer renderer;
         static FrameGenerationRenderer find(Object surface) { return renderer; }
     }
+    static class Panel implements FrameGenerationRenderer {
+        double hz; Panel(double hz) { this.hz=hz; }
+        public double physicalPanelHz() { return hz; }
+    }
     Object surface=new Object(), netplayRelay;
-    double declaredVideoHz=60.0, last=-1;
+    double declaredVideoHz=60.0, last=-1, physicalFgClockDeclaration;
     boolean physicalFgClockApplied, accepts=true;
+    FrameGenerationRenderer physicalFgClockOwner;
     int calls;
     boolean setPacedVideoHz(double hz) { ++calls; last=hz; return accepts; }
 ''' + body + '''
@@ -69,6 +74,15 @@ public class ClockIntegrationTest {
         FrameGenerationRendererRegistry.renderer=()->80.0;
         int before=t.calls; t.updatePhysicalFgClock();
         assert t.calls==before : "no large guest slowdown";
+        Panel panel=new Panel(119.945005);
+        FrameGenerationRendererRegistry.renderer=panel; t.updatePhysicalFgClock();
+        assert t.physicalFgClockApplied && t.physicalFgClockOwner==panel && t.last==119.945005/2;
+        panel.hz=0.0; before=t.calls; t.updatePhysicalFgClock();
+        assert t.physicalFgClockApplied && t.calls==before :
+                "the owner's unavailable measurement retains the trim during priming";
+        t.declaredVideoHz=59.73; t.updatePhysicalFgClock();
+        assert !t.physicalFgClockApplied && t.physicalFgClockOwner==null && t.last==0.0 :
+                "a core declaration change releases the retained trim";
     }
 }
 '''

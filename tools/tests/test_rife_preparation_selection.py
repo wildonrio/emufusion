@@ -1,11 +1,12 @@
 """Behavioral host test of real transport selection; no Android/JNI execution."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 ROOT=Path(__file__).resolve().parents[2]
-JAVA=Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA=Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 ANDROID=Path('/Users/tyleryoung/Library/Android/sdk/platforms/android-35/android.jar')
 CLASSES=ROOT/'unified-android/build/classes'
 

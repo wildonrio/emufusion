@@ -1,4 +1,5 @@
 """Execute production endpoint preparation with fake imports and queued worker."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -72,7 +73,7 @@ class EndpointProbe {
   }
  }
 }'''
-        jdk = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+        jdk = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'EndpointProbe.java'
             path.write_text(java)

@@ -73,6 +73,10 @@ int main(int argc, char** argv) {
                 run([executable, library, directory, game, binding_status, row_status])
 
     def test_compiled_value_ledger_boundaries_lifetime_exact_keys_and_content_holds(self):
+        # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
+        for needed in (EDEN / "common/lucent_source_image_types.h",):
+            if not needed.exists():
+                self.skipTest("local-only input absent: " + str(needed))
         source = r'''
 #include "eden-lucent-source-image.h"
 #include <cassert>

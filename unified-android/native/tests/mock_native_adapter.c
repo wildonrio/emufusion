@@ -18,6 +18,10 @@
  * Building with -DMOCK_ABI_MISMATCH produces an otherwise-identical adapter that
  * advertises the wrong ABI so the host's fail-closed ABI gate can be exercised.
  */
+
+/* strdup is POSIX; glibc hides it under -std=c11 without this, and the
+ * implicit int declaration then truncates the returned pointer. */
+#define _POSIX_C_SOURCE 200809L
 #include "../include/lucent_native_adapter.h"
 #include "../include/lucent_native_source_image.h"
 

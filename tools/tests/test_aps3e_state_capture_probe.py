@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from tools.tests.test_aps3e_fresh_savestate import reviewed_adapter
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -21,8 +22,9 @@ class StateCaptureProbeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output=root/'adapter.cpp'
+            reviewed=root/'reviewed-adapter.cpp'; reviewed.write_bytes(reviewed_adapter())
             subprocess.run(['python3',str(ROOT/'engines/diagnostics/prepare_state_capture_probe.py'),
-                '--source',str(ROOT/'engines/patches/aps3e-lucent-adapter.cpp'),
+                '--source',str(reviewed),
                 '--output',str(output)],check=True,capture_output=True)
             text=output.read_text()
             start=text.index('static bool adapter_flush_save(')

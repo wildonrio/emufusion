@@ -20,7 +20,7 @@ from tools.private_diagnostics_receiver import AggregateStore, Handler, Receiver
 
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin')
+JAVA = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 PACKAGE = ROOT / 'android-companion/src/com/thorium/preview'
 SYSTEMS = ('switch', 'wiiu', 'ps3', 'wii', 'gamecube', 'ps2', 'psp', 'dreamcast',
            '3ds', 'psx', 'nds', 'n64', 'snes', 'nes', 'gb', 'gbc', 'gba',
