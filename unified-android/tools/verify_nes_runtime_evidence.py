@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -548,7 +549,7 @@ def analyze_cheat_panel(path: Path, log_text: str) -> dict[str, object]:
     if panel.width < 640 or panel.height < 360 or max(
             ImageStat.Stat(panel).mean[:3]) < 5.0:
         raise ValueError("NES Cheats panel capture is absent/blank")
-    tesseract = Path("/opt/homebrew/bin/tesseract")
+    tesseract = Path(shutil.which("tesseract") or "/opt/homebrew/bin/tesseract")
     if not tesseract.is_file():
         raise ValueError("tesseract is required to verify the NES Cheats panel")
     completed = subprocess.run(
@@ -797,7 +798,7 @@ def _expected_real_activation(title: str, state: str) -> list[tuple[int, int, in
 
 
 def _real_menu_state_from_pixels(path: Path, title: str) -> str | None:
-    tesseract = Path("/opt/homebrew/bin/tesseract")
+    tesseract = Path(shutil.which("tesseract") or "/opt/homebrew/bin/tesseract")
     if not tesseract.is_file():
         raise ValueError("tesseract is required for real-title readiness")
     completed = subprocess.run(
