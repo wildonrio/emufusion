@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import unittest
 
@@ -61,6 +62,20 @@ class AutomaticAppUpdateTest(unittest.TestCase):
                           UPDATE)
         self.assertIn("for (String url : MANIFEST_URLS)", UPDATE)
         self.assertNotIn("fetch(MANIFEST_URL,", UPDATE)
+
+    def test_release_manifest_points_at_published_app_only(self):
+        # Installs up to versionCode 91 trust only the pre-rename download
+        # prefix; GitHub redirects it to the renamed repository. The theme
+        # ships inside the APK -- the v3.2.0 theme zip the manifest pinned was
+        # never uploaded -- so no theme download is advertised.
+        release = json.loads((ROOT / "release-manifest.json").read_text(encoding="utf-8"))
+        version = release["companionVersionName"]
+        self.assertEqual(
+            "https://github.com/wildonrio/pegasus-lucent/releases/download/v%s/emufusion-%s.apk"
+            % (version, version), release["companionApkUrl"])
+        self.assertRegex(release["companionSha256"], r"^[0-9a-f]{64}$")
+        for key in ("themeVersion", "themeZipUrl", "themeSha256"):
+            self.assertNotIn(key, release)
 
     def test_verified_download_automatically_opens_installer(self):
         app_branch = UPDATE.split("if (appNew) {", 1)[1].split("} else {", 1)[0]
