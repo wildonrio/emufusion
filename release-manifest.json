@@ -8,8 +8,8 @@
   "cheatCatalogSha256": "13bcd12479d0c2fb81ab30379261ef5c9019b9eb19b1c1e4284d06ec998bebfd",
   "cheatCatalogLicense": "CC-BY-SA-4.0",
   "cheatCatalogSource": "https://github.com/libretro/libretro-database",
-  "companionVersionCode": 92,
-  "companionVersionName": "3.2.18",
-  "companionApkUrl": "https://github.com/wildonrio/pegasus-lucent/releases/download/v3.2.18/emufusion-3.2.18.apk",
-  "companionSha256": "3e0b268f4d91fa4a851a1b5b50b2b36c2376e9e08b8e4d78dab23d9942710444"
+  "companionVersionCode": 93,
+  "companionVersionName": "3.2.19",
+  "companionApkUrl": "https://github.com/wildonrio/pegasus-lucent/releases/download/v3.2.19/emufusion-3.2.19.apk",
+  "companionSha256": "9ac79d95a91680388ca73e32cab47eac7ac3b6a15bd568fb7646a32fd0e5e12d"
 }
