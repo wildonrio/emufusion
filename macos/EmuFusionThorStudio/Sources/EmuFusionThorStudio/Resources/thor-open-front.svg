@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" role="img" aria-label="Dimensionally calibrated AYN Thor open, viewed straight on"
+     data-device-width-mm="150" data-device-depth-mm="94" data-device-closed-height-mm="25.6">
+  <defs>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#555b64"/><stop offset=".09" stop-color="#292d34"/>
+      <stop offset=".76" stop-color="#17191e"/><stop offset="1" stop-color="#090a0d"/>
+    </linearGradient>
+    <linearGradient id="deck" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#363a42"/><stop offset=".32" stop-color="#292d34"/><stop offset="1" stop-color="#15171b"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#171a20"/><stop offset=".48" stop-color="#030405"/><stop offset="1" stop-color="#11151a"/>
+    </linearGradient>
+    <radialGradient id="led" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#50d9ff" stop-opacity=".9"/><stop offset=".36" stop-color="#32c5ff" stop-opacity=".38"/><stop offset="1" stop-color="#32c5ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-20%" width="160%" height="170%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-opacity=".74"/></filter>
+    <filter id="blur" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="#07090c"/>
+  <ellipse cx="960" cy="1054" rx="490" ry="24" fill="#000" opacity=".85" filter="url(#blur)"/>
+
+  <!--
+    Calibrated scale: 5.8 SVG units/mm.
+    Each half has an exact 150:94 bounding ratio: 870 x 545.2.
+    The 6-inch 16:9 panel is 132.83 x 74.72 mm (770.4 x 433.35).
+    The 3.92-inch 1240:1080 panel is 75.08 x 65.39 mm (435.5 x 379.3).
+  -->
+  <g id="top-half" filter="url(#shadow)">
+    <rect x="525" y="6" width="870" height="545.2" rx="31" fill="url(#shell)"/>
+    <rect x="531" y="12" width="858" height="533.2" rx="27" fill="#242830" stroke="#747b86" stroke-opacity=".54" stroke-width="2"/>
+    <rect x="551" y="38" width="818" height="486" rx="18" fill="url(#glass)"/>
+    <rect id="top-screen-cutout" x="574.8" y="64.8" width="770.4" height="433.35" rx="9" fill="#020407" stroke="#010203" stroke-width="5"/>
+    <circle cx="960" cy="28" r="4" fill="#06080a" stroke="#69717c" stroke-width="1.3"/>
+  </g>
+
+  <!-- Full-width Thor barrel hinge, in front of both calibrated halves. -->
+  <g id="hinge">
+    <rect x="535" y="514" width="850" height="66" rx="27" fill="#080a0d" stroke="#454b54" stroke-width="3"/>
+    <rect x="609" y="520" width="702" height="49" rx="22" fill="url(#shell)"/>
+    <path d="M635 545h650" stroke="#9299a4" stroke-opacity=".2" stroke-width="2"/>
+    <path d="M609 521v47M1311 521v47" stroke="#050608" stroke-width="7"/>
+  </g>
+
+  <g id="lower-half" filter="url(#shadow)">
+    <path d="M525 556Q525 530 552 530H1368Q1395 530 1395 556V1039Q1395 1075.2 1358 1075.2H562Q525 1075.2 525 1039Z" fill="url(#shell)"/>
+    <path d="M532 558Q532 538 555 538H1365Q1388 538 1388 558V1034Q1388 1067 1352 1068H568Q532 1067 532 1034Z" fill="url(#deck)" stroke="#69707b" stroke-opacity=".48" stroke-width="2"/>
+    <path d="M546 565Q546 548 564 548H1356Q1374 548 1374 565V960H546Z" fill="#171a20" opacity=".72"/>
+    <rect x="725" y="548" width="470" height="414" rx="13" fill="#050608" opacity=".82"/>
+    <rect id="bottom-screen-cutout" x="742.25" y="565" width="435.5" height="379.3" rx="9" fill="#020407" stroke="#030507" stroke-width="7"/>
+  </g>
+
+  <!-- Dedicated Stop and Play controls sit directly below the hinge. -->
+  <g id="transport-controls" fill="#111419" stroke="#666e79" stroke-width="2.2">
+    <circle cx="636" cy="577" r="25"/>
+    <rect x="628" y="569" width="16" height="16" rx="2" fill="#89919c" stroke="none"/>
+    <circle cx="1284" cy="577" r="25"/>
+    <path d="M1278 566l17 11-17 11z" fill="#89919c" stroke="none"/>
+  </g>
+
+  <!-- RGB Hall-effect stick wells, following the Thor's asymmetric layout. -->
+  <circle cx="636" cy="681" r="72" fill="url(#led)" opacity=".55"/>
+  <circle cx="1284" cy="829" r="72" fill="url(#led)" opacity=".55"/>
+  <g id="left-stick">
+    <circle cx="636" cy="681" r="56" fill="#080a0d" stroke="#67707b" stroke-width="4"/>
+    <circle cx="636" cy="681" r="42" fill="#252a30" stroke="#050609" stroke-width="5"/>
+    <circle cx="636" cy="681" r="32" fill="#181b20" stroke="#515864" stroke-width="2"/>
+    <path d="M615 670q21-15 42 0M615 682q21-15 42 0M615 694q21-15 42 0" fill="none" stroke="#414751" stroke-width="3" opacity=".82"/>
+  </g>
+  <g id="right-stick">
+    <circle cx="1284" cy="829" r="56" fill="#080a0d" stroke="#67707b" stroke-width="4"/>
+    <circle cx="1284" cy="829" r="42" fill="#252a30" stroke="#050609" stroke-width="5"/>
+    <circle cx="1284" cy="829" r="32" fill="#181b20" stroke="#515864" stroke-width="2"/>
+    <path d="M1263 818q21-15 42 0M1263 830q21-15 42 0M1263 842q21-15 42 0" fill="none" stroke="#414751" stroke-width="3" opacity=".82"/>
+  </g>
+
+  <!-- Thor D-pad. -->
+  <g id="dpad" fill="#111419" stroke="#5d6570" stroke-width="2">
+    <circle cx="636" cy="833" r="59" fill="#0d1014" stroke="#3f454e"/>
+    <path d="M620 785h32v32h32v32h-32v32h-32v-32h-32v-32h32z"/>
+    <path d="M628 801l8-9 8 9zM628 865l8 9 8-9zM604 825l-9 8 9 8zM668 825l9 8-9 8z" fill="#717985" stroke="none"/>
+  </g>
+
+  <!-- Nintendo-order ABXY: X top, Y left, A right, B bottom. -->
+  <g id="face-buttons" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="17" font-weight="700" text-anchor="middle">
+    <circle cx="1284" cy="648" r="24" fill="#12151a" stroke="#737b86" stroke-width="2.5"/><text x="1284" y="654" fill="#eef1f4">X</text>
+    <circle cx="1236" cy="696" r="24" fill="#12151a" stroke="#737b86" stroke-width="2.5"/><text x="1236" y="702" fill="#eef1f4">Y</text>
+    <circle cx="1332" cy="696" r="24" fill="#12151a" stroke="#737b86" stroke-width="2.5"/><text x="1332" y="702" fill="#eef1f4">A</text>
+    <circle cx="1284" cy="744" r="24" fill="#12151a" stroke="#737b86" stroke-width="2.5"/><text x="1284" y="750" fill="#eef1f4">B</text>
+  </g>
+
+  <!-- Physical Home and Back/Return buttons, below the control clusters. -->
+  <g id="navigation-controls" fill="#111419" stroke="#68717c" stroke-width="2">
+    <circle cx="636" cy="977" r="19"/>
+    <path d="M627 977v9h18v-9M624 978l12-11 12 11" fill="none" stroke="#a2a9b2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="1284" cy="977" r="19"/>
+    <path d="M1292 968h-10q-10 0-10 9t10 9h7M1277 963l-7 6 7 6" fill="none" stroke="#a2a9b2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Speaker slots sit outboard of Home and Back. -->
+  <g fill="#07090b">
+    <rect x="563" y="973" width="48" height="7" rx="3.5"/><rect x="1309" y="973" width="48" height="7" rx="3.5"/>
+    <path d="M570 976h34M1316 976h34" stroke="#484f59" stroke-width="1" stroke-dasharray="2 3"/>
+  </g>
+
+  <!-- Recessed AYN system strip and its two physical round keys. -->
+  <g id="ayn-strip">
+    <path d="M772 1001h376l-13 49H785z" fill="#171a1f" stroke="#5e6671" stroke-width="2"/>
+    <circle cx="812" cy="1025" r="13" fill="#101216" stroke="#666e78" stroke-width="2"/>
+    <circle cx="1108" cy="1025" r="13" fill="#101216" stroke="#666e78" stroke-width="2"/>
+    <rect x="918" y="1011" width="84" height="27" rx="13.5" fill="#101216" stroke="#606873" stroke-width="2"/>
+    <text x="960" y="1029" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="700" text-anchor="middle" fill="#848c97">AYN</text>
+  </g>
+
+  <!-- Front edge details visible in a straight-on presentation. -->
+  <g fill="#080a0d" stroke="#4d5560" stroke-width="1.3">
+    <rect x="588" y="1054" width="74" height="12" rx="6"/><rect x="1258" y="1054" width="74" height="12" rx="6"/>
+    <rect x="918" y="1058" width="84" height="7" rx="3.5"/>
+  </g>
+</svg>

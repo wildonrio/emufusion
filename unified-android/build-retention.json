@@ -1,0 +1,335 @@
+{
+  "keep_per_flavor": 2,
+  "minimum_age_days": 1,
+  "pinned_sha256": {
+    "9dd272e8310922b4cdd1ac9d4c6596b261a25032a53d9f4e200964e6687a910b": "Current complete normal candidate 3.2.17 (91): automatic GitHub app updates on every build (deferred during gameplay), fusion loading video 3e50fc59, footer legend fit for narrow windows. Same natives as 25332 (BlastEm fix vs 21a4); classes2.dex and assets differ. October9 clean-phone PSP/Switch (Thor-owned inputs) checks. 25332 kept as rollback. Debug-signed personal build.",
+    "25332a8dcf03586a0314c456e93465008234d8d24ff7b96497aa30512026aa46": "Rollback for 9dd2: Current complete normal candidate: non-blocking UI-thread LibretroHost input/pause, BlastEm frame-end rebase hang fix (core e479c08d) and bounded wedged-exit frontend restart. Same natives as fda1; classes2.dex only. October9 clean-phone retest; 21a4 kept as rollback. Debug/local qualification, not release.",
+    "2d4e2c1e7f2cd21c9143ba02014bf6232f0d01123d1f7d7ff9d28bb66d404e5f": "Current normal complete portable qualification APK with verified PS3 input-lifetime fix, October7. Fresh single-screen install survey next. Retain155 rollback during qualification; not public release.",
+    "155f9e7fcbbf8bc3f8b4cdd9658b46db72776217ca6c3f72be5e04ba96b94769": "Current complete candidate for missing PS3/Switch/WiiU L3/R3 input wiring; native builds and package gates verified October7, runtime trial pending. Keep0b68 rollback until trial closes. Not a public release.",
+    "18f3043423957378b629ccdae9e2119238605a8c31f8d5036c1082dd7af11f96": "Existing reference required to recover four compressed APK deltas in docs/qa/android-portability-2026-10-05-full-build/archived-apks.json; preserve until those dependent historical archives are retired together. This is not an additional APK copy.",
+    "0b68df393681a1144874befb04a1927426fb23bf0551e7cfba32df312d009120": "Current complete portable qualification APK with Wii U phone TV/GamePad and stylus correction plus PS3 face labels; October7 bounded4KiB WiiU display/touch/gameplay/exit validation passed. Other systems not all retested; no public release.",
+    "9998e201d2bda021c372303a73bd4fbc7a02486f3ef6043377e73898025bac27": "Compressed recovery for 172 removed duplicate decoded libraries from the retired September9 PS3 log-access packaging trial. Exact original paths/member hashes recorded in October7 retired-output-compaction receipt. Keep this 182MiB archive instead of 1.23GiB of extracted duplicates; not a deployment baseline.",
+    "ee7e2abb1e19d9bff3bb64445b04287a844676ffc68b7890e7ea00fcdf779fdb": "Current full portable build with N64 phone C-arrow correction; bounded simulator validation October7. Reuses all normal3f21 emulator natives; qualification only, not public release.",
+    "3f21ad9470f96d4d3a1500f2347fdce9b3c5ca18a38d0e4e6f45a8dcc67adcec": "Latest normal portable full build with tested SPU argument-map fix; bounded16KiB Shadow gameplay/resume/Exit pass, October7",
+    "6cee9fce77b7ebff4f079e8f1a671c9310ef3b5afd8fd1c5f66d4d64783e43b1": "Previous normal full portable candidate and exact pre-argument-map rollback/comparison; onlyPS3 executable differs versus3f21",
+    "59521d8bbff477d03658f54d49b4e2998c6a9272210186ca89c965c531334924": "16KiB simulator rollback and retained narrow-pointer normal build, October 6; local qualification only",
+    "f39419d9b34670dfb9dd96d8c42eb78f18866a76915787f5c164cedbc63f1e07": "4 KiB simulator rollback; PS3 write-watch finished.json",
+    "9be4fbd89c415b398d9dadbc30eacb2651bb15932834286e73b0208d9e6e2dc8": "16 KiB simulator rollback; GC shared-PCM finished.json",
+    "e8aefd6a1485b505eb93ec0e66038751e42d12efb4e81e4388580a655a16fd07": "Last documented physical Thor installation; retain without waking device",
+    "7ba8d787f58e2698f1c3d056e13f0c1eb415be5d063c6e1a3f8e5b1ee37c6591": "Published release-manifest companion APK"
+  },
+  "retired_diagnostic_apks": {
+    "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
+      "sha256": "6bad9af0afd9663dd06ee0f4329d12aeab8aab94dbceff3083fd659d8c85cbdf",
+      "reason": "Closed and verified input-lifetime diagnostic;595 restored with identity and protected data preserved, simulator terminal. Exact tested native is now in normal2d4e complete build. Keep native, compressed symbols, source, method regressions, package receipts and runtime evidence; obsolete diagnostic package only."
+    },
+    "docs/qa/android-portability-2026-10-05-gc-input/emufusion-gc-input-observer.apk": {
+      "sha256": "54596deda240be3ae7ed0314c285127e35d7cbdf9a392e38fbcf36a076515c03",
+      "reason": "Closed October5 GameCube input observer. Its historical pending16KiB restoration has been superseded by verified pinned9be4 in October7 nds-first-use/finished.json; the primary4KiB fixture is now pinnedf394. Keep the observer native, source, symbols, restore-result.json and all input/audio evidence. This observer APK is no longer installed or required as rollback."
+    },
+    "docs/qa/android-portability-2026-10-05-vulkan-reset/wii-install/installed-base.apk": {
+      "sha256": "306d48f41cfcae9923633ad3b698a29d8f3925cf05a1cff859c280a34d83e598",
+      "reason": "Obsolete installed-APK readback from the closed October5 Vulkan/Wii trial. The original4KiB/16KiB fixtures have since advanced to pinnedf394/9be4, verified in October7 n64-phone-controls and nds-first-use finished receipts. Preserve all native libraries, source, symbols, installation identities and runtime evidence; remove only this old package copy and signing sidecar."
+    },
+    "docs/qa/android-portability-2026-10-05-dolphin-wii-batches/install-trial/installed-base.apk": {
+      "sha256": "bb8e4fc87246393f4b2b3208162b8a302f64fbe07dd8add52976f81458806fb7",
+      "reason": "Closed October5 Wii trial readback. outcome.json verifies restoring its original306d48 baseline; the retained primary4KiB fixture has since advanced to pinnedf394, verified in October7 n64-phone-controls/finished.json. No longer installed or required as rollback. Preserve native libraries, source, screenshots, installation identities, hashes and performance-failure evidence."
+    },
+    "docs/qa/android-portability-2026-10-05-dolphin-wii-batches/install-restore/installed-base.apk": {
+      "sha256": "306d48f41cfcae9923633ad3b698a29d8f3925cf05a1cff859c280a34d83e598",
+      "reason": "Obsolete full APK readback of the October5 Wii trial's historical rollback. Same primary4KiB app identity now verified at pinnedf394 in October7 n64-phone-controls/finished.json. Keep the small installed-byte/identity receipts and native symbols; this duplicate package is no longer an active rollback."
+    },
+    "docs/qa/android-portability-2026-10-05-wiiu-content-inputs/emufusion-wiiu-content-inputs.apk": {
+      "sha256": "03244295e4269f8f2be4c174c3ddb5df0f6e244f5773c1b456b2989d5e128515",
+      "reason": "Completed WiiU prerequisite trial superseded by normal portable builds. October5 wiiu-current-runtime outcome/restore-result/finished.json verify pinnedf394 restored, original app identities and installation-boundary saves preserved, emulator0/reader255 terminal. Keep source, native libraries, symbols, recipes, runtime screenshots and limitations; retire only this obsolete install package and its signing sidecar."
+    },
+    "unified-android/build/lucent-3.2.16-lsfg-framegen-qualification-f31bd30458de89668efdb07ab327ae4e36953aa7dec28db7390777c3556005cf.apk": {
+      "sha256": "f31bd30458de89668efdb07ab327ae4e36953aa7dec28db7390777c3556005cf",
+      "reason": "October7 owner-requested cleanup: superseded normal candidate, not an installed baseline. Its GBA, Switch and PS3 trials record restoration to pinned9be4/f394 and simulator shutdown. Current ee7, preceding3f21, targeted6cee/595 comparisons and physical/public rollbacks retained. Preserve native outputs, symbols, recipes and all trial evidence; stale generic regression-comparison pin retired."
+    },
+    "docs/qa/android-portability-2026-10-03-ps2-clock/emufusion-ps2-clock.apk": {
+      "sha256": "f57e108c3159dbab6663c750433c93d38a6770a050dd4a97d3826a7547445c10",
+      "reason": "Initial r1 clock trial superseded by r2 in its outcome.json and later normal PS2 builds. Retained primary16KiB fixture now restored to pinned9be4 with both identities and checked files verified. Preserve clock patches, native libraries, symbols and failed-audio evidence."
+    },
+    "docs/qa/android-portability-2026-10-03-ps3-event-wake/package/emufusion-spurs-trace.apk": {
+      "sha256": "77033e438d7da1f23ceeea9b0bc489ed813f65be00313a94c8d1f7459bb618f9",
+      "reason": "Rejected ICO event-wake experiment; outcome.json verifies exact normal baseline restoration and unchanged identity/config. Later primary4KiB baseline is pinnedf394. Keep rejected hypothesis, source, native symbols and all runtime evidence; no active use of this APK."
+    },
+    "docs/qa/android-portability-2026-10-03-ps3-reservation/package/emufusion-spurs-trace.apk": {
+      "sha256": "1dcf108e4e40c4880c226b261c5cba6d38c581c7c9c32ef9f7fc76263949ea2e",
+      "reason": "Rejected ICO reservation-fence experiment; outcome.json verifies exact normal baseline restoration and unchanged identity/config. Later primary4KiB baseline is pinnedf394. Retain source, native symbols, build recipe and failure evidence instead of the obsolete install package."
+    },
+    "docs/qa/android-portability-2026-10-04-flycast-pages/emufusion-flycast-pages.apk": {
+      "sha256": "70b6ec175fe1f23eeafea32ec01058377849f61f231c211a9ea474d8d5817b01",
+      "reason": "Historical Flycast alignment candidate superseded by current normal portable builds. Both recorded original app identities match the primary4KiB/16KiB fixtures, now preserved at pinnedf394/9be4. Keep native outputs, symbols, source and original failed-gameplay/state evidence."
+    },
+    "docs/qa/android-portability-2026-10-06-private-diagnostics/emufusion-private-diagnostics-disabled.apk": {
+      "sha256": "dff6e24ed78ea72a46c662cbd807a03219160e7c8d175bc985403e3790d416b8",
+      "reason": "Closed disabled-client experiment integrated into later complete builds. outcome.json and finished.json verify pinnedf394 restored, both identities and checked files preserved, and simulator shutdown. Keep privacy boundary source, tests and transport limitations; no receiver/release acceptance implied."
+    },
+    "docs/qa/android-portability-2026-10-03-16k/package/emufusion-n64-pages.apk": {
+      "sha256": "95fa4ae2086d9f2466a5689113de28dc05e63672afcb802e6294fb4df96e0c6c",
+      "reason": "Rejected initial package with inconsistent engine indexes, explicitly superseded by package-v2 in the trial outcome. Never a current rollback. Preserve source, both rebuilt cores, symbols and rejection evidence."
+    },
+    "docs/qa/android-portability-2026-10-03-16k/package-v2/emufusion-n64-pages.apk": {
+      "sha256": "fe329c374f091e038bbd04713ae96789cdabddb4e62c19ebb40c1932da6a80c8",
+      "reason": "Closed October3 N64 page-size trial superseded by complete portable builds. Both original runtime fixtures now have verified pinned f394/9be4 rollbacks; current ee7 includes later N64 corrections. Preserve native outputs, sources, symbols and runtime evidence."
+    },
+    "docs/qa/android-portability-2026-10-03-window-theme/emufusion-window-theme.apk": {
+      "sha256": "62d6ea366a16159bf20a55edcd3ce86076ea8791c303744a4264465e9cb90ecd",
+      "reason": "Closed startup-theme trial integrated into normal build.sh and superseded by complete portable builds. Original16KiB fixture now restored to pinned9be4; retain source patch, resource dumps, regression and runtime evidence."
+    },
+    "docs/qa/android-portability-2026-10-03-window-theme/resources-only.apk": {
+      "sha256": "b96b38a37099b8496aa00c4b259673ccb022cf5f5bbb1ee6cd43c1fc3a7984f9",
+      "reason": "Reproducible resource-only packaging intermediate from closed startup-theme trial. Retain source patch, build recipe and resource inspection evidence; not an installable current/rollback app."
+    },
+    "docs/qa/android-portability-2026-10-05-mame-pages/emufusion-qt-bgra.apk": {
+      "sha256": "d4c6aa35efbc271a0c9f3fa48797b0e2b8e1e6f1c3382349bc1ce82a86db807e",
+      "reason": "Incomplete first graphics patch explicitly superseded by graphics-r2 in outcome.json. Preserve r2 package, original/fixed native libraries, source and before/after screenshots; this initial package is no longer a rollback."
+    },
+    "docs/qa/android-portability-2026-10-06-normal-candidate/rejected-registry-mismatch.apk": {
+      "sha256": "16550062fb23a12de417ce55cc5a2eeae5bf47704b7f901a488ccf2fd66227ed",
+      "reason": "Rejected stale-PS2-registry package, never installed or published per outcome.json. Corrected assembly and newer normal candidates supersede it. Preserve recipes, inputs, verification failures and all source/native outputs."
+    },
+    "unified-android/build/lucent-3.2.16-lsfg-framegen-qualification-18878afe3e13d24cd2784bdd3ed72a4e32e8f03b26c569d26ecdbde4509ca709.apk": {
+      "sha256": "18878afe3e13d24cd2784bdd3ed72a4e32e8f03b26c569d26ecdbde4509ca709",
+      "reason": "Completed October6 normal-candidate assembly-only trial, never installed/published per outcome.json. Superseded by pinned f31/595/6cee/3f21/ee7 packages. Retire immediately after closure instead of waiting one day; preserve source, native inputs and package evidence."
+    },
+    "docs/qa/android-portability-2026-10-04-software-pages/emufusion-software-pages.apk": {
+      "sha256": "59ad7d6f863e9b44f7345bb7766c6224419565ac808729662663733a3dc4e68f",
+      "reason": "Completed October 4 alignment precursor superseded by complete normal portable builds. Its retained16KiB fixture now has verified pinned9be4 restoration in October7 nds-first-use/finished.json. Preserve rebuilt cores, symbols, recipes, loader/runtime evidence and current APK pins."
+    },
+    "docs/qa/android-portability-2026-10-05-phone-triggers/emufusion-phone-triggers.apk": {
+      "sha256": "afd1c460addfbbe3c52238dc0c216a22b64be91315ce8deb117ed921aa849e7d",
+      "reason": "Closed never-installed phone-label precursor; outcome.json confirms install was not attempted. Superseded by normal portable builds and current ee7e2abb phone-control candidate. Preserve source, View tests, package receipts and deployment-failure evidence."
+    },
+    "docs/qa/android-portability-2026-10-05-ps2-descriptor-integration/emufusion-ps2-descriptor-integration.apk": {
+      "sha256": "745980f34a9065ce6fc05cdc8f26b876881c058effed68d59470ba25ffff697e",
+      "reason": "Closed PS2 integration trial; outcome.json and finished.json verify original pinnedf394 restored and both identities/all302 checked saves unchanged. Later normal integration supersedes this package. Keep both native variants, source, symbols, performance limitations and all evidence."
+    },
+    "docs/qa/android-portability-2026-10-05-ps2-descriptor-batch/emufusion-ps2-descriptor-batch.apk": {
+      "sha256": "52f902c5e7a430647d16066ac1132b05674c3dc312da530b588c49a0e77f0730",
+      "reason": "Closed descriptor-batch trial, superseded by subsequent normal builds. finished.json verifies pinnedf394 rollback, all checked saves unchanged, property restoration and emulator shutdown. Keep native, source, symbols, performance/validation evidence and build recipes."
+    },
+    "docs/qa/android-portability-2026-10-04-state-growth/emufusion-state-growth.apk": {
+      "sha256": "5f171c1dc0d7c07c6a05fc045fb65fea9f5c5fd7e0430782eed9d51dc6d8778e",
+      "reason": "Completed serializer-growth precursor superseded by complete normal portable builds; retained16KiB fixture is now verified pinned9be4. Keep both native hosts, source, symbols and regression/runtime evidence; current rollback and candidate APKs remain pinned."
+    },
+    "docs/qa/android-portability-2026-10-04-library-reconcile/emufusion-library-reconcile.apk": {
+      "sha256": "0f5127a3e6fd48c2bcd3ea2ab1a7bac03aba2ec27550af2896ee0001f2c89efe",
+      "reason": "Completed library-reconciliation precursor superseded by later normal portable builds. Its4KiB fixture now uses pinnedf394, verified in October7 switch-gameplay/finished.json. Keep source snapshots, recipes, regression/screenshots/log evidence and all active APK pins."
+    },
+    "docs/qa/android-portability-2026-10-04-highend-pages/emufusion-highend-pages.apk": {
+      "sha256": "4122698d5fd77d1260bcba8ea51d60bbff3035e573c6e2615e3daaa55e1f039c",
+      "reason": "Completed PPSSPP/Play alignment precursor superseded by complete normal portable builds. Retained16KiB fixture is now verified pinned9be4; both independent native builds, symbols, source, promotion and runtime evidence remain."
+    },
+    "docs/qa/recovered-baseline-2026-09-15/contiguous-package/flow-export.apk": {
+      "sha256": "2b24f1afbcb09995871a863e4f81e8375d5a5c6f9b1d6f8393c499005e312f88",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/recovered-baseline-2026-09-15/diagnostic-package/flow-export.apk": {
+      "sha256": "7355bde7f7443a72be0ef03ce79aafeb516554ffeafe730e9f77511708f7043b",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/recovered-baseline-2026-09-15/full-endpoints-package/flow-export.apk": {
+      "sha256": "8cf0ddf671a4651306f65e241a309a4cb02da2fbb7a8736912928c8fef9920e7",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/recovered-baseline-2026-09-15/low-motion-package/flow-export.apk": {
+      "sha256": "f1d3a137f4b3b0ce5d136a19eda0cce83e87bdf283c867633be7f4e285ccf079",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/recovered-baseline-2026-09-15/throttled-package/flow-export.apk": {
+      "sha256": "a7e7bf2de73c5631fdf70d50aa06bf9c502a2877a5885e1a7a350f211746195f",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/smoothing-apk-2026-09-15/smoothing.apk": {
+      "sha256": "2c6fe3dc8abb39f6fae9419bff12aa34cdd6173c9e4b5faa7a1d64990c9a2330",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/submission-overlay-2026-09-15/submission.apk": {
+      "sha256": "30bc2043cd5cb3894e78489965aeb4a4ec0d78dbcb873eaaf813572262fd5bd0",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/async-signature-2026-09-15/async-signature.apk": {
+      "sha256": "ca1774162bd79850561d0b3dfd220c74430e833b3b1316ab1e4ed271308ed376",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/software-signature-2026-09-15/async-signature.apk": {
+      "sha256": "8680614375dc38d3a2d69c261527c5dfde84905a170edf6cb961d377e68f0355",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/guidance-apk-2026-09-16/async-signature.apk": {
+      "sha256": "8c3431dab9656b79c1b3dadf440853e8d3494b5b525b2b55fca9bbc5bc361adb",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/capture-apk-2026-09-16/capture.apk": {
+      "sha256": "0ebb9055d71588234527e5e280fdbe1821e095fe96f79c6cbbabccca3612b426",
+      "reason": "Retired September diagnostic superseded by later source builds; not a current installed or rollback package. Preserve recovered installed.apk, decoded source/overlays, packaging recipes and audit evidence. Custom name previously escaped cleanup; current rollbacks remain pinned."
+    },
+    "docs/qa/android-portability-2026-10-06-native-start-pause/emufusion-native-start-pause.apk": {
+      "sha256": "4b821c2719b1dfdc5020c54e29b3f7117c8e41a52d92db099770735d9715d3de",
+      "reason": "Closed Java-only startup-pause probe superseded by combined trial and subsequent normal builds. Parent outcome.json and finished.json record original f394 restoration and emulator shutdown. Keep sources, compiled native, symbols, recipes and all evidence."
+    },
+    "docs/qa/android-portability-2026-10-06-native-start-pause/emufusion-native-start-pause-combined.apk": {
+      "sha256": "331e0e682712c4634e3de582d72eb8a34124ed7310954a43197ef457ab9831c3",
+      "reason": "Completed startup-pause trial; outcome.json and finished.json verify original f394 restoration, retained saves and emulator shutdown. Superseded by later normal builds; current simulator rollbacks pinned. Keep exact native, symbols, Java/source and runtime evidence."
+    },
+    "docs/qa/android-portability-2026-10-05-ps2-clock-integration/emufusion-ps2-integrated-clock.apk": {
+      "sha256": "db39b33088ad291f4b636f5ebc98a112761818eb124ca2f70a87907592bb4055",
+      "reason": "Closed PS2 timing integration precursor superseded by complete normal builds. outcome.json and restore-result.json verify original5f004 restoration, identities and memory cards preserved, emulator stopped. Current f394/595 rollbacks pinned; keep both native variants, symbols and evidence."
+    },
+    "docs/qa/android-portability-2026-10-06-hardware-startup-pcm/emufusion-hardware-startup-pcm.apk": {
+      "sha256": "29d5ef82f76cbeefcb6c4666a7d537d5e428426f782b2e2ee350add56abddfba",
+      "reason": "Closed shared PCM startup trial superseded by later normal builds. finished.json records restored f394 and emulator shutdown. Keep source, compiled inputs, symbols and all runtime evidence; current simulator rollback remains pinned."
+    },
+    "docs/qa/android-portability-2026-10-05-dolphin-wii-batches/emufusion-dolphin-descriptors.apk": {
+      "sha256": "bb8e4fc87246393f4b2b3208162b8a302f64fbe07dd8add52976f81458806fb7",
+      "reason": "Closed Dolphin descriptor trial, superseded by normal integration. outcome.json records exact306d baseline restoration after bounded gameplay and exits. Later simulator baselines f394/595 retained; source, native, logs, screenshots and recipes remain."
+    },
+    "docs/qa/android-portability-2026-10-05-ps2-blend-control/emufusion-ps2-basic-control.apk": {
+      "sha256": "3bfbfeb466b87bdd807e9624b29e876cf232ea23e3af5d8ccf5ae976dab11c97",
+      "reason": "Closed rejected lower-blending control, not promoted. outcome.json/finished.json verify normal f394 restoration and simulator shutdown. Preserve the source, native outputs, symbols, measurements and failure evidence."
+    },
+    "docs/qa/android-portability-2026-10-05-vulkan-semaphore/emufusion-vulkan-semaphore.apk": {
+      "sha256": "14f4a0f96049692d26069312cd7bddae48adc4a81221c9614a4cda580f98b862",
+      "reason": "Closed Vulkan semaphore trial integrated into later normal builds. outcome.json and restore-result.json record restored baseline and owned emulator/logcat termination. Current simulator rollbacks pinned; all source, native, symbols and diagnostic evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-wide-fs-debug/emufusion-ps3-wide-fs-debug.apk": {
+      "sha256": "1ed8a068f64d2834deca830e50ec64326ad8cb39201681f966caaaba85e69460",
+      "reason": "Completed diagnostic precursor fully integrated in retained normal6cee and now3f21. Parent and sibling16KiB outcomes verify original f394/595 restoration and shutdown; new normal16KiB regression also passed. Keep native, symbols, source, link inputs and all evidence; stale integration pin retired."
+    },
+    "docs/qa/android-portability-2026-10-07-ps3-thread-map/emufusion-ps3-thread-map.apk": {
+      "sha256": "eabf77b1da4bfb6cc197a84a33a49875e89f8b4e885916ec3da5017cc9964a3e",
+      "reason": "Bounded Shadow argument-map trial closed; original f394, both identities/config/rotation and all340 files restored unchanged; AVD and reader terminal. Exact tested native, symbols, source, recipes and outcome retained for normal integration."
+    },
+    "docs/qa/android-portability-2026-10-04-core-pages/emufusion-ds-psx-pages.apk": {
+      "sha256": "a19492904b95fdcac801037c7f4582639140ee642f9a45b65cc064addedeb586",
+      "reason": "Completed DS/PSX page-size trial superseded by later complete normal builds. outcome.json and promotion.json retained; current normal6cee and f394/595 simulator rollbacks remain pinned. Preserve source, native, symbols and runtime evidence."
+    },
+    "docs/qa/android-portability-2026-10-04-flycast-input-compare/emufusion-input-observer.apk": {
+      "sha256": "63fd180be847618f78d0ef68f2171712190a3df3209a0eefa355d4fadd0d1a3a",
+      "reason": "Closed observation-only Dreamcast trial. outcome.json records observer removal, clean APK restoration and emulator shutdown. Current simulator rollbacks pinned; preserve all native/source/runtime evidence."
+    },
+    "docs/qa/android-portability-2026-10-05-ps2-pipeline/emufusion-ps2-pipeline-observer.apk": {
+      "sha256": "2f564f5bad8d8c66b96417aad9b11ad428df0d5b9a559d217de8206ba099c590",
+      "reason": "Closed PS2 pipeline observer. finished.json verifies pinned original f394 restored, all checked saves unchanged and emulator shutdown. Keep source, symbols, logs and outcome."
+    },
+    "docs/qa/android-portability-2026-10-05-dolphin-batch-overflow/emufusion-batch-retest.apk": {
+      "sha256": "0822302d4f877ccb5fe926a53f5a9c9a167126266e440c854e53b33e4174a417",
+      "reason": "Closed Dolphin overflow trial superseded by normal builds. restore-result.json confirms normal e66b restoration, no app process and emulator shutdown. Current rollbacks pinned; native/source/evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-04-qt-source/emufusion-qt-source.apk": {
+      "sha256": "227e34f2334029c5f4e253950049d65d11cf864cc0772423af238793f9d5263b",
+      "reason": "Historical isolated Qt trial superseded by later complete normal builds and current pinned simulator baselines f394/595. finish.json records shutdown. Source frontend lock, native, recipes and all evidence remain."
+    },
+    "docs/qa/android-portability-2026-10-06-consolidated/emufusion-consolidated.apk": {
+      "sha256": "0133963d16a16f5d7c1528ac62ec923f9069c40d9e413a06cacb4b292b028d24",
+      "reason": "Closed consolidated candidate superseded by normal6cee. finished.json records restoration of pinned9be4, unchanged original107 saves and emulator shutdown. All source/native/provenance/runtime evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-04-psp-pacing/recovery-clean/emufusion-psp-recovery.apk": {
+      "sha256": "7090f362a2dd7acd5ff416b9d3dc05b96be895e35dc9ec5d98befa90c6523897",
+      "reason": "October 7 space cleanup: completed PSP trial, integrated into later normal builds. recovery-clean/outcome.json and finish.json retained; current f394/595 simulator rollbacks and normal6cee pinned. Retain native, recipes, screenshots and logs."
+    },
+    "docs/qa/android-portability-2026-10-04-psp-pacing/recovery/emufusion-psp-recovery.apk": {
+      "sha256": "72928adf517dd7764ccb92774f3d33787d2cc1634c707ebb04a919b0f2ba2383",
+      "reason": "Completed diagnostic PSP recovery probe superseded by clean7090 and later normal builds; finish.json records clean807 restoration and simulator shutdown. Native, recipe and evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-04-psp-pacing/emufusion-psp-pacing-probe.apk": {
+      "sha256": "1c24e087ef956b410ceeccbc0fab5a305d47d65a762aee9e68f04481820c731d",
+      "reason": "Completed PSP pacing probe superseded by recovery/clean integration; parent outcome.json and finish.json retained. Not a current baseline; current rollbacks pinned."
+    },
+    "docs/qa/android-portability-2026-10-04-psp-pacing/native-probe/emufusion-psp-native-probe.apk": {
+      "sha256": "21f194c11f7ce7e2a5ef839d1c281de9b00121b5e715dc2bdafa6254d720ac69",
+      "reason": "Completed PSP native timing observer superseded by recovery/clean integration; parent outcome.json and finish.json retained. Native, symbols and build recipe retained."
+    },
+    "docs/qa/android-portability-2026-10-04-psp-pacing/catchup/emufusion-psp-pacing-probe.apk": {
+      "sha256": "cd5e2db304b6663fcadcf16ce46ff61723ef46dc07d2a173addc5c777288e183",
+      "reason": "Completed PSP debt-retention diagnostic superseded by direct-FBO recovery; outcome.json and finish.json retained. Current normal and rollback packages pinned."
+    },
+    "docs/qa/android-portability-2026-10-06-n64-gl-error/emufusion-gles-error-trace.apk": {
+      "sha256": "46288ca9cfc77b9d25a53649d56575b21b2f1c582d091b194a765d2932425f3a",
+      "reason": "Closed N64 GL observer trial, superseded by clean integration. outcome.json/finished.json verify original f394 restoration and AVD shutdown. Source, native, symbols and runtime evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-06-n64-gl-error/core3/emufusion-n64-gl-error.apk": {
+      "sha256": "e60e1934b881464283fced1b40d267c9d9c2d9045633a43ce43bcd44b79bf043",
+      "reason": "Closed intermediate N64 observer, superseded by core5/core6 and normal clean integration. Original f394 restored per parent finished.json; source, native and evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-06-n64-gl-error/core5/emufusion-n64-gl-error.apk": {
+      "sha256": "509c81ed7746cb18e37b06eceb9b2bf581d7cf8d9c7d71e043e776062f888b1e",
+      "reason": "Closed fixed-but-instrumented N64 trial; uninstrumented core6 and normal clean integration supersede it. Original f394 restored per finished.json; source, symbols and evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-06-n64-gl-error/core2/emufusion-n64-gl-error.apk": {
+      "sha256": "9c542d7d2b9a0c41383836bcc33af44e3a8d409bccfc1ce8906025702ad2f6c5",
+      "reason": "Closed intermediate N64 observer, superseded by final EGL-reader fix and normal integration. Original f394 restored per parent finished.json; native, source and evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-06-n64-gl-error/fbo/emufusion-gles-error-trace.apk": {
+      "sha256": "beb59f11915a04496c605979b2cb4b10eff62dc0c1e3c985a86b13d3288c0f0e",
+      "reason": "Closed N64 FBO observer; attribution completed and clean fix integrated. Original f394 restored per parent finished.json; native and diagnostic evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-06-n64-gl-error/core6/emufusion-n64-gl-error.apk": {
+      "sha256": "2d68022951b7e5b01eae9c72afb6a6285b73f38a88536787817ecfa41efe9d89",
+      "reason": "Closed uninstrumented N64 precursor superseded by android-portability-2026-10-06-n64-clean-integration and normal6cee. Original f394 restored per parent finished.json; clean native and all evidence retained."
+    },
+    "docs/qa/android-portability-2026-10-04-switch-handheld/emufusion-switch-handheld.apk": {
+      "sha256": "2bb8849b928ab335b02288fbe61757c95f28f512edf3f8de6546a8660f8a6e74",
+      "reason": "Completed initial handheld-mode trial superseded by r2 and later normal builds; outcome.json retains launch/menu/exit evidence and limitations. Not a current simulator baseline. Native and source retained."
+    },
+    "docs/qa/android-portability-2026-10-04-switch-handheld/r2/emufusion-switch-handheld.apk": {
+      "sha256": "807dfefd587d040ef21dcef05dd91e66ff0508a7d29cd7c03c011b1cb47a9159",
+      "reason": "Completed handheld-mode trial and historical PSP rollback, superseded by later normal builds. outcome.json/r2/finish.json retain evidence; current f394/595 rollback APKs pinned."
+    },
+    "docs/qa/android-portability-2026-10-04-start-failure/emufusion-start-failure-fix.apk": {
+      "sha256": "3b2849a6296080df1d27a50894f4fdc9be5cbc735383fb538b18d2ffbe3f2be9",
+      "reason": "Completed failed-start lifecycle trial integrated into later normal builds; outcome.json retains bounded launch/exit evidence. Simulator stopped; current normal and rollback APKs pinned."
+    },
+    "docs/qa/android-portability-2026-10-04-switch-load/emufusion-switch-load-fix.apk": {
+      "sha256": "bead416649418f956feade027c91308479f671d3ba49f73b93cb0a484ff6a6e2",
+      "reason": "Completed failed-Load lifetime trial integrated into later normal builds; outcome.json retains causal diagnosis, verification and limitations. Source/native/symbols retained; not a current rollback."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-putllc-phases/emufusion-ps3-putllc-phases.apk": {
+      "sha256": "8f7f03b3b80087eb6af77e6344c052653f98beb76369df9ef13fe9fa431fe975",
+      "reason": "Closed observation-only subphase trial; original f394, both identities/config and all340 files unchanged, AVD stopped. Complete frozen journal, native, symbols, recipes, source and outcome retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-release-timing/emufusion-ps3-release-timing.apk": {
+      "sha256": "bd0093c87a863a6be453c5c7f5bbeb9a9faa7733c1c3ed346a88f46101e03f8d",
+      "reason": "Closed observation-only timing trial; original f394 restored, both identities/config and all340 tracked files unchanged. Complete frozen journal, source, native, symbols, recipes and screenshots retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-job-generations/emufusion-ps3-job-generations.apk": {
+      "sha256": "4fc1e4dcda6530f6d14c018d183ac2ed712c0380367abe224e22bf8605bfa728",
+      "reason": "Closed observation-only ICO argument trace; original f394 restored with both identities and all340 checked files unchanged. Complete4096-record journal, contexts, source, native, symbols and recipe retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-fs-debug-control/emufusion-ps3-fs-debug-control.apk": {
+      "sha256": "75af617fab1dbd4e67b6c1e40bb4d5a2d09ea5a16410ee19633fb1991e244a3d",
+      "reason": "Closed instruction-only control; normal6cee integration verified. Native, symbols, recipe and finished.json retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-fs-path-control/emufusion-ps3-fs-path-control.apk": {
+      "sha256": "c3096b6564ec01574ad154854fc8a5d4f7c9c8138bcee7a8ee3165fa107703ec",
+      "reason": "Closed source-path control; reciprocal analysis complete. Native, symbols, recipe and finished.json retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-rebuild-prefix118/emufusion-ps3-rebuild-prefix118.apk": {
+      "sha256": "2ca93f3760323d2722df5d556df1ae20292ba3844eae7cc4419a152f9a88608c",
+      "reason": "Completed bisection control, superseded by integrated wide-pointer core. Native, symbols, recipe and finished.json retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-rebuild-quarter1/emufusion-ps3-rebuild-quarter1.apk": {
+      "sha256": "58cbe5cd62666076df26fa7e24a28d420d829b51a0bd9f2d68e16f65ea3978bd",
+      "reason": "Completed bisection control, superseded by integrated wide-pointer core. Native, symbols, recipe and finished.json retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-ppu-interpreter/emufusion-ps3-ppu-mmio.apk": {
+      "sha256": "de1f7aef1663b7c069224d81af7620d1d675b4791eeb8e6ca587446b61cbbc8a",
+      "reason": "Closed rejected interpreter control; original f394 restored. Native, symbols and finished.json retained."
+    },
+    "docs/qa/android-portability-2026-10-06-ps3-wide-pointer/emufusion-ps3-wide-pointer.apk": {
+      "sha256": "2ea51abe0278477f6606c2312f8f59aa71e93d49ab787f875104bdac1985d159",
+      "reason": "Initial startup-only candidate superseded by tested normal6cee. Original595 restored; source, objects, symbols and runtime-finished.json retained."
+    },
+    "unified-android/build/lucent-3.2.16-lsfg-framegen-qualification-3d26410e60f611b6af21bd34907adce4e0fb674fd992894cf6c8300d1a4dc62e.apk": {
+      "sha256": "3d26410e60f611b6af21bd34907adce4e0fb674fd992894cf6c8300d1a4dc62e",
+      "reason": "Intermediate October8 candidate (UI-thread input fix only) superseded by fda1/25332 which add the BlastEm fix. Its wedged-core device trial is closed; receipts in docs/qa/android-portability-2026-10-08-current-build-survey retained."
+    },
+    "unified-android/build/lucent-3.2.16-lsfg-framegen-qualification-fda1b54f0845ca645c6da488530c71eabf9b4ec3bdb5e5aa8b91840193938dfb.apk": {
+      "sha256": "fda1b54f0845ca645c6da488530c71eabf9b4ec3bdb5e5aa8b91840193938dfb",
+      "reason": "October9 BlastEm-fix candidate superseded by 25332 (adds wedged-exit restart; identical natives). Its Sonic 2 soak/gameplay trial is closed and recorded in docs/qa/android-portability-2026-10-08-current-build-survey/results.json."
+    }
+  }
+}

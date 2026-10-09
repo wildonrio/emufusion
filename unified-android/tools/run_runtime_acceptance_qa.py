@@ -10,10 +10,12 @@ hold.  Every game must remain in EmuFusion's original MainActivity/task/window/P
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import http.client
 import io
 import json
+import math
 import os
 import re
 import shlex
@@ -32,6 +34,7 @@ from PIL import Image, ImageChops, ImageStat
 
 import run_phase1a_activity_qa as qa
 import verify_frame_generation_evidence as frame_gen
+import verify_rife_frame_generation_timing as rife_timing
 import verify_n64_hw_runtime_evidence as n64_hw
 import verify_nes_runtime_evidence as nes_qa
 import verify_menu_route_closure as route_closure
@@ -67,8 +70,10 @@ MAIN_ACTIVITY = "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 # full-height/settings/screensaver work and made the physical QA runner reject
 # the very APK it had just built, before any game launch.  Keep this as a byte
 # identity gate rather than weakening it to a structural/theme-name check.
-FROZEN_THEME_QML = "e336c99843f6b6591c8d09cc9186f1b475738797e3c1635b4cde213294a75ffb"
-FROZEN_THEME_CFG = "555b32df5f07153d34e0e40addd3d70068768cb684aaccf1793e5f7a75f4350b"
+# Re-pinned for the WIDESCREEN HACK Settings slot (23); the theme.qml byte
+# identity otherwise stays the reviewed product source.
+FROZEN_THEME_QML = "8680a9999c0a374dc44c296a215b6243cd29965d55fc67321a72ff9bcccc02e2"
+FROZEN_THEME_CFG = "89163b758b21e36d7be4bb4ab22502936a84957e5580003bfd1d3a3c8b8cf2b5"
 ROUTE = re.compile(r"In-window route accepted engine=([^ ]+) system=([^\s]+)")
 RETURN = re.compile(
     r"Returned to Lucent immediately in same window engine=([^ ]+) "
@@ -157,6 +162,7 @@ class SystemCase:
     flicker_burst: bool = False
     lower_touch: bool = False
     required_titles: tuple[str, ...] = ()
+    required_source_tiers: tuple[int, ...] = ()
 
 
 @dataclass
@@ -229,6 +235,20 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def one_app_verifier_command(verifier: Path, aapt: Path, apk: Path) -> list[str]:
+    """Build the identity-verifier command for the exact product edition.
+
+    EmuFusion+ deliberately has a distinct application label and a fail-closed
+    native-payload contract.  Treating it as the base edition rejects a valid
+    Plus APK before runtime QA reaches a game.
+    """
+    command = [sys.executable, str(verifier), "--aapt", str(aapt)]
+    if "emufusion-plus-lsfg-internal" in apk.name:
+        command.append("--internal-lsfg-plus")
+    command.append(str(apk))
+    return command
+
+
 def packaged_engine_sha256(apk: Path, engine: str) -> str:
     """Hash the exact executable payload for either engine architecture."""
     # Retain the build's canonical hyphen->underscore spelling
@@ -277,6 +297,22 @@ def load_matrix(path: Path) -> list[SystemCase]:
         raise RuntimeError("unsupported runtime acceptance matrix")
     result = []
     for row in root.get("systems", []):
+        required_titles = tuple(str(value) for value in
+                                row.get("requiredTitles", []))
+        required_source_tiers = tuple(int(value) for value in
+                                      row.get("requiredSourceTiers", []))
+        if (required_source_tiers and
+                len(required_source_tiers) != len(required_titles)):
+            raise RuntimeError(
+                "requiredSourceTiers must parallel requiredTitles for " +
+                str(row.get("folder", "unknown"))
+            )
+        if any(tier not in {20, 30, 40, 50, 60}
+               for tier in required_source_tiers):
+            raise RuntimeError(
+                "requiredSourceTiers contains an unsupported source tier for " +
+                str(row.get("folder", "unknown"))
+            )
         result.append(SystemCase(
             folder=normalize(row["folder"]),
             aliases=tuple(normalize(value) for value in row.get("aliases", [])),
@@ -285,8 +321,8 @@ def load_matrix(path: Path) -> list[SystemCase]:
             dual_screen=bool(row.get("dualScreen", False)),
             flicker_burst=bool(row.get("flickerBurst", False)),
             lower_touch=bool(row.get("lowerTouch", False)),
-            required_titles=tuple(str(value) for value in
-                                  row.get("requiredTitles", [])),
+            required_titles=required_titles,
+            required_source_tiers=required_source_tiers,
         ))
     return result
 
@@ -406,16 +442,41 @@ def exact_install(adb: Path, serial: str, apk: Path, expected_sha: str,
     actual = sha256_file(apk)
     if actual != expected_sha.lower():
         raise RuntimeError(f"candidate SHA mismatch: expected {expected_sha}, got {actual}")
+
+    def installed_identity(label: str) -> tuple[str, dict[str, object]]:
+        package_path = qa.adb(adb, serial, "shell", "pm", "path", PACKAGE).stdout.strip()
+        (output / f"package-{label}-path.txt").write_text(package_path + "\n")
+        bases = [line.split(":", 1)[1] for line in package_path.splitlines()
+                 if line.startswith("package:") and line.endswith("/base.apk")]
+        if len(bases) != 1:
+            raise RuntimeError(
+                f"installed EmuFusion base.apk path was not found or is ambiguous ({label}); "
+                "stop for recovery assessment, do not reinstall a missing package")
+        report = qa.adb(adb, serial, "shell", "dumpsys", "package", PACKAGE).stdout
+        (output / f"package-{label}-identity.txt").write_text(report)
+        # Android 16 names this package-level field appId; older builds use
+        # userId. Still require exactly one identity, never accept ambiguity.
+        uids = re.findall(r"^\s*(?:userId|appId)=(\d+)\s*$", report, re.M)
+        first_installs = re.findall(r"^\s*firstInstallTime=([^\r\n]+)", report, re.M)
+        # Reused UID alone cannot prove a preserving update. Missing or
+        # ambiguous identity evidence cannot authorize a QA replacement.
+        if len(uids) != 1 or len(first_installs) != 1 or not first_installs[0].strip():
+            raise RuntimeError(f"cannot establish installed package identity ({label}); no recovery retry")
+        return bases[0], {"uid": int(uids[0]), "firstInstallTime": first_installs[0].strip()}
+
+    _, identity_before = installed_identity("before")
     if perform_install:
         # Preserve the owner's app data and accept only a normal
         # same/newer-version replacement. The release gate explicitly forbids
-        # downgrade or uninstall.
-        qa.adb(adb, serial, "install", "-r", str(apk))
-    package_path = qa.adb(adb, serial, "shell", "pm", "path", PACKAGE).stdout.strip()
-    base = next((line.split(":", 1)[1] for line in package_path.splitlines()
-                 if line.startswith("package:") and line.endswith("base.apk")), "")
-    if not base:
-        raise RuntimeError("installed Lucent base.apk path was not found")
+        # downgrade or uninstall. Explicitly disable incremental delivery:
+        # Thor lost package registration after a reported-success incremental
+        # update. The installed-byte check below remains required with streaming.
+        qa.adb(adb, serial, "install", "--no-incremental", "-r", str(apk))
+    base, identity_after = installed_identity("after")
+    if identity_before != identity_after:
+        raise RuntimeError(
+            f"package identity changed across QA replacement: {identity_before} -> {identity_after}; "
+            "stop for settings/save recovery assessment, do not launch gameplay")
     installed = output / "installed-base.apk"
     with installed.open("wb") as handle:
         completed = subprocess.run(
@@ -429,9 +490,19 @@ def exact_install(adb: Path, serial: str, apk: Path, expected_sha: str,
         raise RuntimeError(
             f"installed APK differs from candidate: {installed_sha} != {actual}"
         )
+    # Reading the APK may take several seconds. Recheck after that transfer so
+    # removal/replacement during verification cannot be reported as success.
+    final_base, final_identity = installed_identity("verified")
+    if final_base != base or final_identity != identity_before:
+        raise RuntimeError("installed package changed during APK verification; stop for recovery assessment")
     return {"candidateSha256": actual, "installedSha256": installed_sha,
             "installedBaseApk": base,
-            "replacementInstallPerformed": perform_install}
+            "replacementInstallPerformed": perform_install,
+            "packageIdentityBefore": identity_before,
+            "packageIdentityAfter": final_identity,
+            # Identity stability is an installation check, NOT a save-content
+            # comparison. Never elevate it to a claim of private-data retention.
+            "privateDataRetentionVerified": False}
 
 
 def assert_installed_hash(adb: Path, serial: str, expected_sha: str) -> dict[str, object]:
@@ -1360,6 +1431,9 @@ IMPORT_ACTIVE_STATES = {
     "transferring",
     "artwork",
     "video",
+    # 2026-09-06: ImportManager.runScan emits "cheats" while GameCheatDownloader
+    # fetches per-game cheat catalogs between the video and scores passes.
+    "cheats",
     "scores",
     "writing",
     "artless",
@@ -1785,6 +1859,7 @@ class PhysicalController:
     Y = 308
     L1 = 310
     R1 = 311
+    L2 = 312
     STOP = 314
     VOLUME_DOWN = 114
     VOLUME_UP = 115
@@ -1833,6 +1908,55 @@ class PhysicalController:
 
     def sync(self) -> None:
         self.event(self.EV_SYN, self.SYN_REPORT, 0)
+
+    def neutralize(self, label: str) -> None:
+        """Atomically release every controller state the QA process can own.
+
+        ``sendevent`` changes the kernel device's persistent absolute state.
+        If a prior run is interrupted between the asserted and centred halves
+        of a motion, the next frontend session receives an indefinitely held
+        stick even though no new QA input is being sent. Physical N64 r11
+        demonstrated exactly that failure: the Alpha cursor walked from row
+        282 to row 233 while the host only OCRed an immutable screenshot.
+        Clear all stick/hat axes and QA-used buttons in one remote transaction,
+        so no partially neutralized state is exposed between ADB round trips.
+        """
+        lines = []
+        for name, (_low, _high, center) in sorted(
+                self.axes.items(), key=lambda item: self.AXIS_CODES[item[0]]):
+            lines.append(
+                f"sendevent {shlex.quote(self.node)} {self.EV_ABS} "
+                f"{self.AXIS_CODES[name]} {center}"
+            )
+        lines.extend((
+            f"sendevent {shlex.quote(self.node)} {self.EV_ABS} {self.HAT_X} 0",
+            f"sendevent {shlex.quote(self.node)} {self.EV_ABS} {self.HAT_Y} 0",
+        ))
+        for code in (self.A, self.B, self.Y, self.L1, self.R1, self.L2,
+                     self.STOP, self.START):
+            lines.append(
+                f"sendevent {shlex.quote(self.node)} {self.EV_KEY} {code} 0"
+            )
+        lines.append(
+            f"sendevent {shlex.quote(self.node)} {self.EV_SYN} "
+            f"{self.SYN_REPORT} 0"
+        )
+        completed = subprocess.run(
+            [str(self.adb), "-s", self.serial, "shell", "sh"],
+            input="\n".join(lines) + "\n", text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=5.0,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                "physical controller neutralization failed: " +
+                completed.stdout.strip()
+            )
+        self.trace.append(InputTrace(
+            label + ":all-axes-and-buttons",
+            time.monotonic_ns() // 1_000_000,
+        ))
+        # Let Qt consume the single neutral report before any intentional edge.
+        time.sleep(0.25)
 
     def key_down(self, code: int, label: str) -> int:
         now = time.monotonic_ns() // 1_000_000
@@ -2044,7 +2168,8 @@ class PhysicalController:
         self.sync()
         time.sleep(0.05)
 
-    def motion_left(self, direction: str, hold: float = 0.45) -> None:
+    def motion_left(self, direction: str, hold: float = 0.45,
+                    scale: float = 1.0) -> None:
         """Drive only the gameplay stick, without clicking through menus.
 
         Switch qualification used to pair both sticks with an A press on every
@@ -2055,8 +2180,11 @@ class PhysicalController:
         """
         axis_name = (self.left_vertical if direction in {"up", "down"}
                      else self.left_horizontal)
+        if not 0.0 < scale <= 1.0:
+            raise ValueError("left-stick scale must be in (0, 1]")
         low, high, center = self.axes[axis_name]
-        value = low if direction in {"up", "left"} else high
+        extreme = low if direction in {"up", "left"} else high
+        value = round(center + (extreme - center) * scale)
         code = self.AXIS_CODES[axis_name]
         self.trace.append(InputTrace(
             f"analog-motion-left-only-{direction}",
@@ -2067,6 +2195,78 @@ class PhysicalController:
         time.sleep(hold)
         self.event(self.EV_ABS, code, center)
         self.sync()
+        time.sleep(0.05)
+
+    def set_left_stick_vector(self, horizontal: float, vertical: float,
+                              label: str, hold: float = 0.45) -> None:
+        """Hold one non-neutral gameplay-stick vector without recentering.
+
+        Strict unique-image qualification must not manufacture a discontinuity
+        at every harness sample. This primitive lets a caller move directly
+        from one vector to the next; the owning motion routine must call
+        :meth:`center_left_stick` in ``finally``.
+        """
+        if not -1.0 <= horizontal <= 1.0 or not -1.0 <= vertical <= 1.0:
+            raise ValueError("left-stick vector must remain in [-1, 1]")
+        if horizontal == 0.0 and vertical == 0.0:
+            raise ValueError("left-stick motion vector must be non-neutral")
+        for name, fraction in ((self.left_horizontal, horizontal),
+                               (self.left_vertical, vertical)):
+            low, high, center = self.axes[name]
+            value = round(center + fraction * (high - low) / 2.0)
+            self.event(self.EV_ABS, self.AXIS_CODES[name], value)
+        self.sync()
+        self.trace.append(InputTrace(
+            f"{label}:left-stick-{horizontal:+.3f}-{vertical:+.3f}",
+            time.monotonic_ns() // 1_000_000,
+        ))
+        time.sleep(hold)
+
+    def center_left_stick(self, label: str) -> None:
+        """Release both gameplay-stick axes in one coherent input report."""
+        for name in (self.left_horizontal, self.left_vertical):
+            _low, _high, center = self.axes[name]
+            self.event(self.EV_ABS, self.AXIS_CODES[name], center)
+        self.sync()
+        self.trace.append(InputTrace(
+            label + ":left-stick-centered", time.monotonic_ns() // 1_000_000,
+        ))
+        time.sleep(0.05)
+
+    def set_right_stick_vector(self, horizontal: float, vertical: float,
+                               label: str, hold: float = 0.0) -> None:
+        """Assert one right-stick vector until explicitly replaced/released.
+
+        N64 C-buttons are the core's analog-index-1 axes. Holding C-UP through
+        this path is more faithful than guessing a face-button alias and lets
+        a simultaneous left-stick vector control Ocarina's first-person view.
+        """
+        if not -1.0 <= horizontal <= 1.0 or not -1.0 <= vertical <= 1.0:
+            raise ValueError("right-stick vector must remain in [-1, 1]")
+        if horizontal == 0.0 and vertical == 0.0:
+            raise ValueError("right-stick vector must be non-neutral")
+        for name, fraction in ((self.horizontal, horizontal),
+                               (self.vertical, vertical)):
+            low, high, center = self.axes[name]
+            value = round(center + fraction * (high - low) / 2.0)
+            self.event(self.EV_ABS, self.AXIS_CODES[name], value)
+        self.sync()
+        self.trace.append(InputTrace(
+            f"{label}:right-stick-{horizontal:+.3f}-{vertical:+.3f}",
+            time.monotonic_ns() // 1_000_000,
+        ))
+        if hold > 0.0:
+            time.sleep(hold)
+
+    def center_right_stick(self, label: str) -> None:
+        """Release both C-button/right-stick axes in one coherent report."""
+        for name in (self.horizontal, self.vertical):
+            _low, _high, center = self.axes[name]
+            self.event(self.EV_ABS, self.AXIS_CODES[name], center)
+        self.sync()
+        self.trace.append(InputTrace(
+            label + ":right-stick-centered", time.monotonic_ns() // 1_000_000,
+        ))
         time.sleep(0.05)
 
 
@@ -3269,6 +3469,68 @@ def finish_visible_return_recording(
     return report, first_path, similarities, interstitial
 
 
+def _thor_usb_chooser_window(window_dump: str) -> Optional[str]:
+    """Return Thor's exact visible vendor USB chooser window, if present.
+
+    AYN can raise this system-alert window after USB reconnect even when the
+    launcher is already interactive.  It fully covers the library and makes
+    menu OCR time out.  Bind dismissal to the measured vendor component,
+    dimensions, frame, and visibility so this can never become a blind tap on
+    EmuFusion or an unrelated Android dialog.
+    """
+    blocks = re.findall(
+        r"(?:^|\n)([ \t]*Window #[0-9]+ Window.*?)(?=\n[ \t]*Window #[0-9]+ Window|\Z)",
+        window_dump,
+        re.S,
+    )
+    for block in blocks:
+        if "com.odin.settings" not in block:
+            continue
+        visible = "isOnScreen=true" in block and "isVisible=true" in block
+        if not visible:
+            continue
+        # Thor also keeps a harmless visible 1x1 NOT_TOUCHABLE
+        # MAGNIFICATION_OVERLAY owned by com.odin.settings. It is not the USB
+        # chooser and must neither be tapped nor make startup fail. Only a
+        # window that advertises the chooser's alert app-op or measured size is
+        # eligible for the strict geometry check below.
+        chooser_candidate = (
+            "appop=SYSTEM_ALERT_WINDOW" in block or
+            "Requested w=1248 h=545" in block
+        )
+        if not chooser_candidate:
+            continue
+        required = (
+            "appop=SYSTEM_ALERT_WINDOW",
+            "Requested w=1248 h=545",
+            "frame=[336,267][1584,812]",
+        )
+        if not all(value in block for value in required):
+            raise RuntimeError(
+                "visible Thor USB chooser did not match the safe Cancel geometry"
+            )
+        return block
+    return None
+
+
+def dismiss_thor_usb_chooser_if_present(adb: Path, serial: str,
+                                        output: Path) -> bool:
+    """Dismiss only the proven vendor USB chooser's Cancel control."""
+    windows = qa.adb(
+        adb, serial, "shell", "dumpsys", "window", "windows"
+    ).stdout
+    chooser = _thor_usb_chooser_window(windows)
+    if chooser is None:
+        return False
+    (output / "startup-usb-chooser-window.txt").write_text(
+        chooser, encoding="utf-8"
+    )
+    # The exact frame above has a single bottom-right Cancel control. This
+    # preserves the owner's selected USB function and merely closes the prompt.
+    qa.adb(adb, serial, "shell", "input", "tap", "1450", "755")
+    return True
+
+
 def wait_visible_menu(adb: Path, serial: str, output: Path,
                       timeout: float = 60.0) -> Path:
     """Wait until the actual interactive library replaces the startup splash.
@@ -3281,6 +3543,9 @@ def wait_visible_menu(adb: Path, serial: str, output: Path,
     latest_text = ""
     attempt = 0
     while time.monotonic() < deadline:
+        if dismiss_thor_usb_chooser_if_present(adb, serial, output):
+            time.sleep(0.5)
+            continue
         path = output / f"startup-menu-ready-{attempt:02d}.png"
         screenshot(adb, serial, path)
         latest_text = " ".join(ocr(path).upper().split())
@@ -3291,6 +3556,13 @@ def wait_visible_menu(adb: Path, serial: str, output: Path,
             and any(label in latest_text for label in
                     ("SYSTEM", "TITLES", "CONTINUE", "RECENTLY"))
         )
+        # The home rows are large, high-contrast labels the OCR reads even
+        # when the small footer over busy artwork comes back as noise
+        # (2026-09-04: "CONTINUE PLAYING" and "MOST PLAYED" were legible while
+        # "COVER VIEW" read as "BSS CO B", failing a healthy startup).
+        if not interactive:
+            interactive = ("CONTINUE PLAYING" in latest_text or
+                           "MOST PLAYED" in latest_text)
         if interactive and not splash:
             return path
         attempt += 1
@@ -3324,26 +3596,26 @@ def ocr(path: Path) -> str:
     # recognized-twice gates could never latch (run switch27). A grayscale
     # autocontrast pass plus a sparse-text mode makes recognition of the
     # SAME vocabulary reliable; no classifier text is weakened by this.
-    variants = [str(path)]
+    variants = [(str(path), None)]
     try:
         image = Image.open(path).convert("L")
         from PIL import ImageOps
         boosted = ImageOps.autocontrast(image, cutoff=1)
-        # Dotfile so evidence-collection globs over the screenshot names
-        # never pick up this derived OCR aid.
-        boosted_path = path.parent / ("." + path.name + ".ocr-boost.png")
-        boosted.save(boosted_path)
-        variants.append(str(boosted_path))
+        # This derived OCR aid is scratch, not evidence. Send it in memory so
+        # thousands of probes cannot accumulate duplicate PNGs on disk.
+        with io.BytesIO() as buffer:
+            boosted.save(buffer, format="PNG")
+            variants.append(("stdin", buffer.getvalue()))
     except Exception:
         pass
     parts = []
-    for variant in variants:
+    for variant, payload in variants:
         for psm in ("6", "11"):
             completed = subprocess.run(
                 [str(tesseract), variant, "stdout", "--psm", psm],
-                check=False, capture_output=True, text=True,
+                input=payload, check=False, capture_output=True,
             )
-            parts.append(completed.stdout)
+            parts.append(completed.stdout.decode("utf-8", errors="replace"))
     return "\n".join(parts)
 
 
@@ -3367,15 +3639,26 @@ def ocr_region(path: Path, box: tuple[int, int, int, int], psm: int = 6) -> str:
 
 def wii_galaxy_title_prompt(path: Path) -> tuple[bool, str]:
     """Recognize the Galaxy A+B prompt without trusting the stylized logo."""
-    text = " ".join(ocr_region(
-        path, (500, 760, 1450, 920), 11
-    ).upper().split())
-    # The stylized prompt font OCRs unreliably ("TA BRESS © AND )." was
-    # physically captured on the Thor, 2026-08-15): accept common P/B and
-    # partial-word confusions of PRESS as long as AND is present.
-    press = any(token in text for token in ("PRESS", "BRESS", "RESS"))
-    conjunction = any(token in text for token in ("AND", "OND", "ANO", "4ND"))
-    return press and conjunction, text
+    # The prompt's vertical position depends on the letterboxed gameplay
+    # frame: on 2026-09-02 (run wii-b50b) Galaxy 2's "Press A and B." sat at
+    # y~735-770 and the historical 760-920 strip read only the copyright
+    # line for 64 probes.  Scan the historical strip and a raised one; the
+    # first strip that proves the prompt wins.
+    texts = []
+    for box in ((500, 760, 1450, 920), (500, 690, 1450, 800),
+                (500, 700, 1450, 920)):
+        text = " ".join(ocr_region(path, box, 11).upper().split())
+        texts.append(text)
+        # The stylized prompt font OCRs unreliably ("TA BRESS © AND )." was
+        # physically captured on the Thor, 2026-08-15): accept common P/B
+        # and partial-word confusions of PRESS as long as AND is present.
+        press = any(token in text
+                    for token in ("PRESS", "BRESS", "RESS", "ESS "))
+        conjunction = any(token in text
+                          for token in ("AND", "OND", "ANO", "4ND"))
+        if press and conjunction:
+            return True, text
+    return False, " | ".join(texts)
 
 
 def nes_system_label_ocr(path: Path) -> str:
@@ -3402,6 +3685,95 @@ def nes_system_label_ocr(path: Path) -> str:
             input=buffer.getvalue(), check=False, capture_output=True,
         )
     return completed.stdout.decode("utf-8", errors="replace")
+
+
+def psp_system_label_ocr(path: Path) -> str:
+    """Read the blue PSP platform label independently of busy artwork.
+
+    Castlevania's high-contrast wallpaper makes ordinary grayscale OCR turn
+    the clearly visible ``PLAYSTATION PORTABLE`` label into glyph noise.  The
+    label itself uses the frozen PSP-blue accent, so isolate only strongly
+    blue pixels in the same bounded platform-label strip.  This proves the
+    platform without trusting the selected game's title or any ROM path.
+    """
+    tesseract = Path("/opt/homebrew/bin/tesseract")
+    if not tesseract.is_file():
+        return ""
+    image = Image.open(path).convert("RGB")
+    sx, sy = image.width / 1920.0, image.height / 1080.0
+    box = (35, 120, 800, 180)
+    crop = image.crop((round(box[0] * sx), round(box[1] * sy),
+                       round(box[2] * sx), round(box[3] * sy)))
+    mask = Image.new("L", crop.size)
+    mask.putdata([
+        0 if blue >= 130 and blue >= red * 1.25 and blue >= green * 1.15
+        else 255
+        for red, green, blue in crop.getdata()
+    ])
+    mask = mask.resize((mask.width * 3, mask.height * 3))
+    with io.BytesIO() as buffer:
+        mask.save(buffer, format="PNG")
+        completed = subprocess.run(
+            [str(tesseract), "stdin", "stdout", "--psm", "7"],
+            input=buffer.getvalue(), check=False, capture_output=True,
+        )
+    return completed.stdout.decode("utf-8", errors="replace")
+
+
+def accent_system_label_ocr(path: Path) -> str:
+    """Read the platform label in whatever accent colour the theme chose.
+
+    The wallpaper-accent mode colours the platform label per game (Donkey
+    Kong Country Returns 3D: purple over a jungle wallpaper, run n3ds-b32,
+    2026-09-01), so the frozen red/blue masks above cannot apply.  The label
+    is the most saturated colour family in the bounded label strip: take the
+    modal saturated hue there, keep only pixels within a narrow hue distance
+    of it, and OCR that mask.  Busy artwork rarely shares one saturated hue
+    across the whole strip, and a wrong guess only yields glyph noise that
+    resolves to no folder.
+    """
+    tesseract = Path("/opt/homebrew/bin/tesseract")
+    if not tesseract.is_file():
+        return ""
+    image = Image.open(path).convert("RGB")
+    sx, sy = image.width / 1920.0, image.height / 1080.0
+    box = (35, 120, 800, 180)
+    crop = image.crop((round(box[0] * sx), round(box[1] * sy),
+                       round(box[2] * sx), round(box[3] * sy)))
+    hsv = crop.convert("HSV")
+    pixels = list(hsv.getdata())
+    histogram = [0] * 36
+    for hue, saturation, value in pixels:
+        if saturation >= 120 and value >= 110:
+            histogram[(hue * 36) // 256] += 1
+    modal_bin = max(range(36), key=lambda index: histogram[index])
+    if histogram[modal_bin] < 200:
+        return ""
+    modal_hue = (modal_bin * 256) // 36 + 256 // 72
+    mask = Image.new("L", crop.size)
+    mask.putdata([
+        0 if saturation >= 100 and value >= 100 and
+        min(abs(hue - modal_hue), 256 - abs(hue - modal_hue)) <= 14
+        else 255
+        for hue, saturation, value in pixels
+    ])
+    mask = mask.resize((mask.width * 3, mask.height * 3))
+    with io.BytesIO() as buffer:
+        mask.save(buffer, format="PNG")
+        completed = subprocess.run(
+            [str(tesseract), "stdin", "stdout", "--psm", "7"],
+            input=buffer.getvalue(), check=False, capture_output=True,
+        )
+    return completed.stdout.decode("utf-8", errors="replace")
+
+
+def expected_system_label_ocr(path: Path, expected_folder: str) -> str:
+    """Return only a bounded, platform-specific label proof when available."""
+    if expected_folder == "nes":
+        return nes_system_label_ocr(path)
+    if expected_folder == "psp":
+        return psp_system_label_ocr(path)
+    return accent_system_label_ocr(path)
 
 
 def switch_nvdec_lifecycle(log: str) -> dict[str, object]:
@@ -3839,7 +4211,7 @@ def selected_title_matches(expected: str, observed: str) -> bool:
     # numeric sequel discriminator (Galaxy 2 must never pass as Galaxy).
     words = [normalize(word) for word in re.findall(r"[A-Za-z0-9]+", expected)
              if len(normalize(word)) >= 3 or normalize(word).isdigit()]
-    if len(words) < 2:
+    if not words:
         return False
     # A short trailing number is normally a sequel discriminator (Galaxy 2,
     # Tekken 5) and must remain exact. Four-digit numbers also occur as years
@@ -3854,8 +4226,34 @@ def selected_title_matches(expected: str, observed: str) -> bool:
            for word in words):
         return False
     alphabetic = [word for word in words if not word.isdigit()]
-    matched = sum(word[:min(4, len(word))] in observed_normalized
-                  for word in alphabetic)
+
+    def word_present(word: str) -> bool:
+        prefix = word[:min(4, len(word))]
+        if prefix in observed_normalized:
+            return True
+        # One-substitution tolerance on the prefix: OCR of a header over an
+        # animated preview confuses single glyphs (physically hit: WORLD
+        # read as HORLD, run 2026-08-17-wiiu4). Insertions/deletions stay
+        # unmatched so this cannot make short words promiscuous.
+        if len(prefix) < 4:
+            return False
+        for token in observed_tokens:
+            if len(token) < 4:
+                continue
+            candidate = token[:4]
+            differences = sum(1 for a, b in zip(prefix, candidate) if a != b)
+            if differences <= 1:
+                return True
+        return False
+
+    matched = sum(word_present(word) for word in alphabetic)
+    if len(alphabetic) == 1:
+        # Titles whose only substantial word survives filtering ("F-Zero X"
+        # keeps just "zero"; the single-glyph F and X are OCR chaff over an
+        # animated preview — run n64-6 returned to the correct game and
+        # still failed here). One distinctive word present is the whole
+        # obtainable signal for such titles.
+        return matched == 1
     return bool(alphabetic) and matched >= max(2, (len(alphabetic) * 2 + 2) // 3)
 
 
@@ -3866,7 +4264,11 @@ def selected_header_ocr(path: Path) -> str:
         (45, 130, 900, 260),   # normal title, less wallpaper
         (45, 165, 650, 245),   # short/numeric title only
     )
-    values = [" ".join(ocr_region(path, box, 6).split()) for box in boxes]
+    # Multiple psm modes for the same reliability reason as ocr(): a busy
+    # frame (animated preview under the header) reads differently per mode,
+    # and one clean read among them is enough for the fuzzy title match.
+    values = [" ".join(ocr_region(path, box, psm).split())
+              for box in boxes for psm in (6, 7, 11)]
     return " | ".join(value for value in values if value)
 
 
@@ -3975,8 +4377,8 @@ def assert_game_list_checkpoint(path: Path, expected_folder: str,
     )
     accent_system_ocr = ""
     system_matches = identity["folder"] == expected_folder
-    if not identity["aggregate"] and not system_matches and expected_folder == "nes":
-        accent_system_ocr = nes_system_label_ocr(path)
+    if not identity["aggregate"] and not system_matches:
+        accent_system_ocr = expected_system_label_ocr(path, expected_folder)
         system_matches = (resolve_list_folder(
             accent_system_ocr, display_names
         ) == expected_folder)
@@ -4017,6 +4419,37 @@ def resolve_alpha_header_position(observed: str, keys: list[str]) -> int:
     """Resolve one selected-title header to exactly one immutable Alpha row."""
     matches = [index for index, key in enumerate(keys)
                if selected_title_matches(title_from_key(key), observed)]
+    if len(matches) > 1:
+        # The fuzzy word-prefix matcher can admit two titles that share their
+        # distinctive words (run nds-b32, 2026-09-01: the header OCR proved
+        # "Castlevania: Dawn of Sorrow" verbatim, yet a sibling Castlevania row
+        # also matched by prefix).  An exact normalized-title containment is
+        # stronger evidence than any prefix match: when exactly one candidate
+        # is contained verbatim, it wins.
+        observed_normalized = normalize(observed)
+        exact = [index for index in matches
+                 if normalize(title_from_key(keys[index])) and
+                 normalize(title_from_key(keys[index])) in observed_normalized]
+        if len(exact) == 1:
+            matches = exact
+        elif len(exact) > 1:
+            # A very short title is contained by accident: "Ys" sits inside
+            # the header's own "SYSTEM" (run e2-nes, 2026-09-04, where the
+            # verbatim "10-Yard Fight" lost to it). Among verbatim
+            # containments the strictly longest title is the most specific
+            # evidence; equal-length duplicates stay ambiguous so a genuine
+            # duplicate row still requires the counter.
+            lengths = {index: len(normalize(title_from_key(keys[index])))
+                       for index in exact}
+            longest = max(lengths.values())
+            best = [index for index in exact if lengths[index] == longest]
+            others = [index for index in exact if index not in best]
+            # Only a candidate too short to be trusted on its own (fewer
+            # than four characters) yields; "Beta" against "Beta Special"
+            # stays ambiguous.
+            if len(best) == 1 and longest >= 6 and \
+                    all(lengths[index] < 4 for index in others):
+                matches = best
     if len(matches) != 1:
         raise AlphaNavigationDrift(
             "selected System View title does not resolve uniquely in the "
@@ -4111,22 +4544,52 @@ def current_game_view(path: Path) -> Optional[str]:
 
 
 def force_alpha_list(adb: Path, serial: str, controller: PhysicalController,
-                     output: Path, prefix: str) -> Path:
-    """Use only shoulder/Y events to force Alpha + vertical List game view."""
+                     output: Path, prefix: str, expected_folder: str,
+                     display_names: dict[str, str],
+                     keys: list[str]) -> tuple[Path, int]:
+    """Force Alpha/List and return its physically proven remembered row.
+
+    Pegasus persists the last selected row independently for each sort.  Merely
+    cycling back to A-Z therefore does *not* establish row one (physical N64
+    r4 restored row 282).  Bind the visible counter and selected title to the
+    immutable live Alpha index and let the caller navigate from that exact
+    position instead of inventing an origin.
+    """
     frame = output / f"{prefix}-sort-probe-00.png"
     screenshot(adb, serial, frame)
-    # Always cycle at least once. If Alpha was already persisted, returning to
-    # it through the shoulder cycle resets selection to row zero just like a
-    # real user changing sort, keeping index-based physical navigation exact.
-    controller.key(controller.R1, "physical-r1-next-sort", hold=0.04)
-    frame = output / f"{prefix}-sort-probe-01.png"
-    screenshot(adb, serial, frame)
-    for attempt in range(1, 5):
-        if active_sort_index(frame) == 2:
-            break
+    active = active_sort_index(frame)
+    # Always cycle at least once so the active Alpha identity is independently
+    # re-established rather than inherited from an earlier screenshot.
+    # A Thor screencap can briefly return the previously latched UI frame after
+    # the QML sort mode has changed.  Issuing another R1 from that stale image
+    # skips the state we meant to prove (physical r10 visibly skipped Alpha this
+    # way).  Drive one transition at a time and wait until its exact successor
+    # is visible before another physical input is allowed.
+    for transition in range(5):
+        previous = active
+        expected = (previous + 1) % 4
         controller.key(controller.R1, "physical-r1-next-sort", hold=0.04)
-        frame = output / f"{prefix}-sort-probe-{attempt + 1:02d}.png"
-        screenshot(adb, serial, frame)
+        frame = output / f"{prefix}-sort-probe-{transition + 1:02d}.png"
+        deadline = time.monotonic() + 4.0
+        while True:
+            time.sleep(0.12)
+            screenshot(adb, serial, frame)
+            observed = active_sort_index(frame)
+            if observed == expected:
+                active = observed
+                break
+            if observed != previous:
+                raise RuntimeError(
+                    "physical R1 sort transition jumped "
+                    f"from {previous} to {observed}, expected {expected}"
+                )
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    "physical R1 sort transition did not settle "
+                    f"from {previous} to {expected}"
+                )
+        if active == 2:
+            break
     else:
         raise RuntimeError("physical R1 could not select Alpha sort")
 
@@ -4142,7 +4605,53 @@ def force_alpha_list(adb: Path, serial: str, controller: PhysicalController,
         view = current_game_view(frame)
     if view != "list":
         raise RuntimeError(f"physical Y could not prove List game view: {view}")
-    return frame
+    # Let the artwork-led title header converge, then prove Alpha + List and
+    # the exact persisted position before relative navigation starts.
+    time.sleep(0.50)
+    frame = output / f"{prefix}-alpha-origin-settled.png"
+    screenshot(adb, serial, frame)
+    if active_sort_index(frame) != 2 or current_game_view(frame) != "list":
+        raise RuntimeError("Alpha/List origin changed before navigation")
+    identity = game_list_identity(frame, display_names, require_counter=False)
+    system_matches = identity["folder"] == expected_folder
+    accent_system_ocr = ""
+    if not identity["aggregate"] and not system_matches:
+        accent_system_ocr = expected_system_label_ocr(frame, expected_folder)
+        system_matches = (resolve_list_folder(
+            accent_system_ocr, display_names
+        ) == expected_folder)
+    if identity["aggregate"] or not system_matches:
+        raise AlphaNavigationDrift(
+            "Alpha/List position belongs to the wrong system: "
+            f"expected={expected_folder!r} observed={identity['folder']!r} "
+            f"accentOCR={accent_system_ocr!r}"
+        )
+    observed_title = selected_header_ocr(frame)
+    # The library can contain two distinct ROM rows with the same display
+    # title (physical N64 r6: WCW Nitro at rows 284 and 286).  The exact visible
+    # counter is therefore the authoritative position; title OCR proves that
+    # this counter points at the corresponding immutable row without requiring
+    # display-name uniqueness.  Some artwork makes that translucent counter
+    # unreadable (physical r12), while the large selected title remains exact.
+    # In that case accept only a title that resolves to exactly one live Alpha
+    # row; duplicate names still require the counter and therefore fail closed.
+    if identity["current"] is not None and identity["total"] is not None:
+        if identity["total"] != len(keys):
+            raise AlphaNavigationDrift(
+                "Alpha/List total differs from the immutable live index: "
+                f"observed={identity['total']} expected={len(keys)}"
+            )
+        observed_position = int(identity["current"]) - 1
+    else:
+        observed_position = resolve_alpha_header_position(observed_title, keys)
+    expected_title = title_from_key(keys[observed_position])
+    if not selected_title_matches(expected_title, observed_title):
+        raise AlphaNavigationDrift(
+            "Alpha/List counter does not name its immutable title: "
+            f"counter={identity['current']} expected={expected_title!r} "
+            f"OCR={observed_title!r}"
+        )
+    return frame, observed_position
 
 
 def alpha_keys(index: dict, case: SystemCase) -> list[str]:
@@ -4321,6 +4830,22 @@ def acceptance_titles(case: SystemCase, keys: list[str], count: int) -> list[str
     return selected
 
 
+def require_frame_generation_source_tier(
+        game: dict[str, object], expected_tier: int,
+        system: str, title: str) -> None:
+    """Bind a named rate-family title to the detector tier it must prove."""
+    framegen = game.get("frameGeneration") or {}
+    qualification_report = framegen.get("qualification") or {}
+    segment = qualification_report.get("segment") or {}
+    actual_tier = int(segment.get("expectedLockedFps", -1))
+    if actual_tier != expected_tier:
+        raise RuntimeError(
+            f"{system} title {title!r} must prove source tier "
+            f"{expected_tier}, observed {actual_tier}"
+        )
+    game["requiredSourceTier"] = expected_tier
+
+
 def playable_alpha_keys(adb: Path, serial: str, case: SystemCase,
                         keys: list[str], count: int,
                         extra_required_titles: tuple[str, ...] = ()) -> list[str]:
@@ -4497,26 +5022,32 @@ def select_title_alpha(adb: Path, serial: str,
         )
     except AlphaNavigationDrift as first_failure:
         # Never continue relative navigation after a foreign system/count is
-        # observed. Rebuild the exact Cover -> system -> Alpha row-zero origin.
+        # observed. Rebuild Cover -> system -> Alpha and prove the newly
+        # restored remembered row before trying once more.
         recovery_prefix = prefix + "-recovery"
-        go_to_cover_system(controller, visible_order, case.folder)
-        cover = output / f"{recovery_prefix}-cover.png"
-        screenshot(adb, serial, cover)
-        assert_cover_system(cover, case.folder, display_names)
-        controller.key(controller.A, "physical-a-reopen-system", hold=0.055)
-        time.sleep(0.35)
-        force_alpha_list(
-            adb, serial, controller, output, recovery_prefix
-        )
+        # Refreshing the live index performs several ADB metadata/path reads.
+        # Do that slow work BEFORE re-establishing the interactive position;
+        # doing it afterward left the frontend idle for ~17.5 s and its
+        # screensaver moved to an unrelated random title (physical r3).
         refreshed_keys = alpha_keys(library_index(adb, serial), case)
         if refreshed_keys != keys:
             raise AlphaNavigationDrift(
                 "live Alpha index changed during navigation recovery; refusing "
                 "to reuse stale positions"
             ) from first_failure
+        go_to_cover_system(controller, visible_order, case.folder)
+        cover = output / f"{recovery_prefix}-cover.png"
+        screenshot(adb, serial, cover)
+        assert_cover_system(cover, case.folder, display_names)
+        controller.key(controller.A, "physical-a-reopen-system", hold=0.055)
+        time.sleep(0.35)
+        _, recovered_position = force_alpha_list(
+            adb, serial, controller, output, recovery_prefix,
+            case.folder, display_names, keys,
+        )
         try:
             return move_to_title(
-                adb, serial, controller, 0, target, title, output,
+                adb, serial, controller, recovered_position, target, title, output,
                 recovery_prefix, case.folder, display_names, keys,
             )
         except AlphaNavigationDrift as second_failure:
@@ -4724,6 +5255,55 @@ def wait_presented_frame(adb: Path, serial: str, engine: str, system: str,
     raise RuntimeError(f"no proven visible frame for {system}/{engine}; last={latest}")
 
 
+SECONDARY_GENERATOR_ATTACHED = re.compile(
+    r"Frame generator attached generator=(\d+) role=secondary"
+)
+
+
+def require_dual_screen_lower_presentation(
+        read_log: Callable[[], str],
+        timeout: float = 10.0) -> dict[str, object]:
+    """Require the lower-display generator to have completed one real swap.
+
+    ``wait_presented_frame`` proves only the primary display. Run nds-b57
+    (2026-09-01) presented the top screen normally while the secondary
+    DisplayFrameGenerator logged ``Presentation stalled generator=2
+    presents=0`` for the rest of the launch, so every later lower-panel gate
+    measured a stale surface and misreported the stall as game state. The
+    generator re-asserts its output cadence exactly once after its first
+    successful eglSwapBuffers (``reason=first-successful-swap``); require that
+    line for the attached secondary generator within ``timeout`` seconds of
+    the primary proof and quote the last stall diagnostic when it never comes.
+    The secondary generator is normally ``generator=2`` but a process that
+    re-attaches after a previous title has logged ``generator=4``, so the id
+    is read from the attach line inside this launch's bounded logcat.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        log = read_log()
+        attached = SECONDARY_GENERATOR_ATTACHED.findall(log)
+        generator = int(attached[-1]) if attached else 2
+        marker = (
+            f"Requested game display cadence generator={generator} "
+            "reason=first-successful-swap"
+        )
+        if marker in log:
+            return {"generator": generator, "marker": marker,
+                    "secondaryAttached": bool(attached)}
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(0.25)
+    stall_prefix = f"Presentation stalled generator={generator}"
+    stalls = [line.strip() for line in log.splitlines() if stall_prefix in line]
+    last_stall = (stalls[-1] if stalls
+                  else f"no '{stall_prefix}' line was logged")
+    raise RuntimeError(
+        "dual-screen lower generator presented nothing (presents=0) after "
+        f"the top screen presented; expected '{marker}' within "
+        f"{timeout:.0f} s; last stall: {last_stall}"
+    )
+
+
 def n64_gameplay_evidence(adb: Path, serial: str,
                           controller: PhysicalController, output: Path,
                           prefix: str, reference: Path) -> dict[str, object]:
@@ -4731,17 +5311,33 @@ def n64_gameplay_evidence(adb: Path, serial: str,
     frames = []
     first = reference
     maximum_delta = 0
-    for index in range(8):
-        path = output / f"{prefix}-n64-motion-{index + 1:02d}.png"
-        metrics = screenshot(adb, serial, path)
-        delta = changed_pixels(first, path, threshold=10)
-        maximum_delta = max(maximum_delta, delta)
-        frames.append({"frame": metrics, "changedPixels": delta})
-        time.sleep(0.14)
+    # The frame-generation phase's motion worker has already stopped by
+    # this point, and an attract-looping title (F-Zero X, runs n64-5/7)
+    # can be back on its static PUSH START card when the first sample
+    # lands. Its self-running demo auto-starts ~10 s after the title IF
+    # LEFT ALONE — pressing START/A between attempts reset that timer
+    # forever (run n64-7 sampled the title through all three stirred
+    # attempts). Wait untouched between bounded attempts instead; the
+    # demo's full-screen racing then trivially clears the pixel bar.
+    for attempt in range(5):
+        frames = []
+        maximum_delta = 0
+        for index in range(8):
+            path = output / (
+                f"{prefix}-n64-motion-a{attempt + 1}-{index + 1:02d}.png")
+            metrics = screenshot(adb, serial, path)
+            delta = changed_pixels(first, path, threshold=10)
+            maximum_delta = max(maximum_delta, delta)
+            frames.append({"frame": metrics, "changedPixels": delta})
+            time.sleep(0.14)
+        if maximum_delta >= 8_000:
+            break
+        time.sleep(12.0)
     if maximum_delta < 8_000:
         raise RuntimeError("N64 presented no changing visible gameplay frames")
 
-    controller.key(controller.A, "physical-a-n64-gameplay-input", hold=0.055)
+    controller.key(n64_console_a_key(controller),
+                   "physical-n64-a-gameplay-input", hold=0.055)
     post_input = output / f"{prefix}-n64-post-input.png"
     post_metrics = screenshot(adb, serial, post_input)
     post_delta = changed_pixels(first, post_input, threshold=10)
@@ -4775,6 +5371,828 @@ def n64_gameplay_evidence(adb: Path, serial: str,
     return {"motionFrames": frames, "maximumChangedPixels": maximum_delta,
             "physicalInputSent": True, "postInputFrame": post_metrics,
             "postInputChangedPixels": post_delta, "telemetry": telemetry}
+
+
+def n64_console_a_key(controller: PhysicalController) -> int:
+    """Return the Thor button position that the N64 core reads as A.
+
+    The Thor is labelled Nintendo-style: its printed B button is physically
+    SOUTH while its printed A button is EAST. EmuFusion intentionally maps
+    N64 A to SOUTH and N64 B to EAST, matching the original N64 pad. The
+    harness's historical ``controller.A`` name describes the Thor label, not
+    the canonical position, and therefore sent N64 B at file selectors and
+    mission menus. Keep this title-navigation choice bound to the runtime
+    controller contract instead of relying on the printed label.
+    """
+    return controller.B
+
+
+def n64_start_entry_presses(path: Path) -> int:
+    """Authorize one N64 START press only from a proven START-owned state.
+
+    N64 cold boots such as TWINE expose an explicit PRESS START title card,
+    while Quick Resume can already be in controllable gameplay.  The old
+    unconditional two-press sequence paused a resumed Ocarina session and
+    collected its MAP sheet as if it were gameplay.  Ocarina's pause sheet is
+    also START-owned, so recognize its simultaneous MAP/RETURN/SAVE labels and
+    close it once.  Every other state advances with console A only.
+    """
+    text = " ".join(ocr(path).upper().split())
+    explicit_prompt = re.search(r"\b(?:PRESS|PUSH)\s+START\b", text) is not None
+    ocarina_pause = all(token in text for token in ("MAP", "RETURN", "SAVE"))
+    return 1 if explicit_prompt or ocarina_pause else 0
+
+
+def capture_n64_start_entry_presses(adb: Path, serial: str, output: Path,
+                                    prefix: str, sample_count: int = 8,
+                                    sample_interval: float = 0.25) -> int:
+    """Observe a bounded title-animation cycle before authorizing START.
+
+    TWINE fades its PRESS START lettering completely out for part of the
+    animation.  A single arbitrarily-timed screenshot therefore produced a
+    false negative on the physical Thor and left the entire 30->60 proof run
+    parked on the title card.  Sample a short bounded cycle and retain the
+    existing fail-closed OCR predicate: START is still sent only after one
+    frame visibly proves a START-owned state.
+    """
+    if sample_count < 1:
+        raise ValueError("N64 entry sample_count must be positive")
+    for index in range(sample_count):
+        suffix = "" if index == 0 else f"-{index + 1:02d}"
+        path = output / f"{prefix}-n64-entry-state{suffix}.png"
+        screenshot(adb, serial, path)
+        if n64_start_entry_presses(path):
+            return 1
+        if index + 1 < sample_count:
+            time.sleep(sample_interval)
+    return 0
+
+
+def n64_ocarina_gameplay_hud(path: Path) -> bool:
+    """Recognize Ocarina's controllable top-screen HUD, not an animated card.
+
+    Pixel motion alone admitted the physical child-Link close-up before proof:
+    hair/fairy animation changed enough pixels while no gameplay input could
+    move the scene.  Controllable Ocarina gameplay independently exposes red
+    hearts at upper-left and saturated action/C-button glyphs at upper-right.
+    Requiring both in their physical HUD boxes is insensitive to the world
+    palette and rejects title, file-select, dialogue close-ups, pause sheets,
+    black loads and FMV.  Do not broaden these boxes: the r5 Deku Tree
+    dialogue contained enough red/blue text in the old full-width top-strip
+    scan to arm proof while Link was still asleep.
+    """
+    with Image.open(path) as source:
+        image = source.convert("RGB").resize((480, 270))
+    red_hearts = 0
+    # The 4:3 game viewport is pillarboxed inside the 16:9 Thor screenshot.
+    # At the normalized 480x270 analysis size, Ocarina's hearts occupy this
+    # upper-left viewport box; dialogue text begins farther right/below it.
+    for y in range(18, 38):
+        for x in range(82, 126):
+            red, green, blue = image.getpixel((x, y))
+            if red >= 125 and red >= green * 1.45 and red >= blue * 1.45:
+                red_hearts += 1
+    action_colours = 0
+    # A/B/C action glyphs are confined to the upper-right of the 4:3
+    # viewport.  Excluding the outer pillarbox also prevents EmuFusion's own
+    # status overlay from contributing to this readiness predicate.
+    for y in range(14, 76):
+        for x in range(236, 414):
+            red, green, blue = image.getpixel((x, y))
+            green_button = (green >= 90 and green >= red * 1.25 and
+                            green >= blue * 1.20)
+            blue_button = (blue >= 100 and blue >= red * 1.25 and
+                           blue >= green * 1.08)
+            orange_button = (red >= 120 and green >= 55 and blue <= 75 and
+                             red >= green * 1.20)
+            if green_button or blue_button or orange_button:
+                action_colours += 1
+    return red_hearts >= 24 and action_colours >= 90
+
+
+def n64_ocarina_name_entry(path: Path) -> bool:
+    """Recognize Ocarina's owned new-file name editor.
+
+    Blindly pressing console A on this screen types the highlighted character
+    forever.  The editor exposes three independent labels that do not occur in
+    gameplay or the title attract loop; only that exact state authorizes the
+    bounded START-to-END, A-to-confirm sequence below.
+    """
+    text = " ".join(ocr(path).upper().split())
+    words = re.findall(r"[A-Z]+", text)
+
+    def resembles(expected: str, threshold: float) -> bool:
+        return any(
+            difflib.SequenceMatcher(None, word, expected).ratio() >= threshold
+            for word in words
+        )
+
+    # The Thor's bilinear-scaled N64 text is deliberately recognized as
+    # three independent owned labels.  Exact OCR remains preferred, while
+    # the bounded fuzzy path covers the physically captured readings
+    # NAME->NASE/NURE, DECIDE->DECCA/OECCE and CANCEL->CARCE.  Requiring the
+    # question mark plus all three labels prevents a title, file menu or
+    # gameplay frame from authorizing START.
+    has_name = (re.search(r"\bNAME\s*\?", text) is not None or
+                "?" in text and resembles("NAME", 0.50))
+    has_end = re.search(r"\bEND\b", text) is not None
+    has_decide = (re.search(r"A\s*[-–]\s*DECIDE", text) is not None or
+                  resembles("DECIDE", 0.54))
+    has_cancel = (re.search(r"B\s*[-–]\s*CANCEL", text) is not None or
+                  resembles("CANCEL", 0.66))
+    return has_name and has_decide and (has_end or has_cancel)
+
+
+def n64_ocarina_file_menu_action(path: Path) -> Optional[str]:
+    """Return the one safe action owned by an Ocarina file-menu state.
+
+    A blind console-A loop can land on Erase, enter its confirmation sheet,
+    choose Quit, and repeat forever.  It also risks destructive input if the
+    highlight ever moves.  Bind file loading to the visible file selector and
+    use N64 B to leave Copy/Erase/Options sheets without changing a save.
+    """
+    text = " ".join(ocr(path).upper().split())
+    if re.search(r"PLEASE\s+SELECT\s+A\s+FILE", text):
+        return "select"
+    if (re.search(r"ERASE\s+WHICH\s+FILE", text) or
+            re.search(r"COPY\s+WHICH\s+FILE", text) or
+            re.search(r"\bOPTIONS\b", text) and
+            re.search(r"(?:SOUND|TARGETING|Z\s*TARGETING)", text)):
+        return "cancel"
+    if (re.search(r"OPEN\s+THIS\s+FILE", text) or
+            re.search(r"START\s+WITH\s+THIS\s+FILE", text)):
+        return "confirm"
+    return None
+
+
+def wait_n64_ocarina_gameplay_hud(
+        adb: Path, serial: str, controller: PhysicalController,
+        output: Path, prefix: str, timeout: float = 420.0,
+        poll_seconds: float = 1.5) -> dict[str, object]:
+    """Advance only owned Ocarina entry states until gameplay HUD is visible.
+
+    A fresh file's name editor, file confirmation, opening movie and dialogue
+    physically remained pre-HUD beyond the former 120-second bound on the
+    Thor (deadline run r4).  With RIFE active, r73 was still advancing owned
+    opening dialogue at the former 300-second deadline.  This remains a
+    navigation-only hard deadline; frame-generation collection starts only
+    after the HUD predicate passes.
+    """
+    deadline = time.monotonic() + timeout
+    attempt = 0
+    recover_file_selection = False
+    while time.monotonic() < deadline:
+        attempt += 1
+        path = output / f"{prefix}-n64-ocarina-hud-{attempt:02d}.png"
+        metrics = screenshot(adb, serial, path)
+        if n64_ocarina_gameplay_hud(path):
+            return {"screenshot": str(path), "samples": attempt,
+                    "gameplayHudVisible": True, "frame": metrics}
+        file_action = n64_ocarina_file_menu_action(path)
+        # START is permitted only on an explicit title/pause state. Every
+        # other bounded progression uses N64 A; neither branch can silently
+        # accept an unrelated menu choice through a raw Thor-label mismatch.
+        if n64_ocarina_name_entry(path):
+            # A blank Ocarina file name cannot be confirmed.  The editor
+            # initially owns the highlighted A character, so type exactly one
+            # character before START moves the cursor to END.  The final
+            # console A owns the visible "A-Decide" action.  Sending all three
+            # as one bounded transaction prevents the following poll from
+            # typing another character while retaining fail-closed ownership.
+            controller.key(n64_console_a_key(controller),
+                           "physical-n64-a-ocarina-name-character", hold=0.055)
+            time.sleep(0.15)
+            controller.key(controller.START,
+                           "physical-start-n64-ocarina-name-end", hold=0.055)
+            time.sleep(0.15)
+            controller.key(n64_console_a_key(controller),
+                           "physical-n64-a-ocarina-name-confirm", hold=0.055)
+        elif file_action == "cancel":
+            # Thor's printed A/east position is canonical N64 B.  Cancel is
+            # deliberately separate from n64_console_a_key (south/N64 A).
+            controller.key(controller.A,
+                           "physical-n64-b-ocarina-safe-cancel", hold=0.055)
+            recover_file_selection = True
+        elif file_action in {"select", "confirm"}:
+            if file_action == "select" and recover_file_selection:
+                # Move one row toward the file slots after cancelling an
+                # unsafe Copy/Erase/Options selection.  Re-check the visible
+                # state on the next poll; repeated cancel/up cycles converge
+                # without ever confirming a destructive menu.
+                controller.hat("up", "physical-up-ocarina-safe-file-recovery")
+                recover_file_selection = False
+            controller.key(n64_console_a_key(controller),
+                           "physical-n64-a-ocarina-file-confirm", hold=0.055)
+        elif n64_start_entry_presses(path):
+            controller.key(controller.START,
+                           "physical-start-n64-ocarina-owned", hold=0.055)
+        else:
+            controller.key(n64_console_a_key(controller),
+                           "physical-n64-a-ocarina-progress", hold=0.055)
+        time.sleep(poll_seconds)
+    raise RuntimeError(
+        "Ocarina never exposed its controllable top-screen gameplay HUD"
+    )
+
+
+def n64_fzero_single_player_race_hud(path: Path) -> bool:
+    """Recognize F-Zero X's full-screen GP-race view, never split-screen.
+
+    F-Zero's attract loop contains both a useful one-player race and a
+    four-way battle demo.  The latter produces perfect 60/120 cadence but its
+    four tiny viewports collapse the 16x9 motion proof and are not a defensible
+    image-quality scene.  A genuine one-player race has all three independent
+    properties below: no dark full-height/full-width viewport divider, the
+    large saturated rank/time glyphs, and the green ENERGY meter.  Rank digits
+    become olive in Mute City's dark tunnel (physical r34), so hue-specific
+    yellow matching is invalid.  Menu cards can satisfy at most one property.
+    """
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        width, height = image.size
+        # Split seams are not guaranteed to land on the mathematical centre:
+        # r36's physical four-way separator was y=532 on a 1080-line capture.
+        # Scan a narrow centre band and reject any mostly-dark row/column.
+        horizontal_seam = max(
+            sum(max(image.getpixel((x, y))) < 35
+                for x in range(int(width * 0.15), int(width * 0.85))) /
+            max(1, int(width * 0.70))
+            for y in range(int(height * 0.46), int(height * 0.54))
+        )
+        vertical_seam = max(
+            sum(max(image.getpixel((x, y))) < 35
+                for y in range(int(height * 0.05), int(height * 0.95))) /
+            max(1, int(height * 0.90))
+            for x in range(int(width * 0.46), int(width * 0.54))
+        )
+
+        # The centred 4:3 N64 composition places the large rank/time glyphs
+        # across its upper middle and the green ENERGY bar at upper right.
+        # r246 proved that sampling the physical screen's lower band only
+        # caught incidental track/vehicle colours: it reduced long, genuine
+        # one-player races to isolated false detections. Keep these two HUD
+        # populations in their real, independent top regions. Menus may have
+        # a saturated heading or green accent, but do not have both fixed HUD
+        # populations; two/four-player races remain rejected by the seam gate.
+        glyph = 0
+        for y in range(int(height * 0.06), int(height * 0.27)):
+            for x in range(int(width * 0.25), int(width * 0.62)):
+                red, value_green, blue = image.getpixel((x, y))
+                if (max(red, value_green, blue) > 100 and
+                        max(red, value_green, blue) -
+                        min(red, value_green, blue) > 25):
+                    glyph += 1
+        green = 0
+        for y in range(int(height * 0.06), int(height * 0.22)):
+            for x in range(int(width * 0.60), int(width * 0.86)):
+                red, value_green, blue = image.getpixel((x, y))
+                if (value_green > 110 and value_green > red * 1.25 and
+                        value_green > blue * 1.25):
+                    green += 1
+        coloured_floor = max(500, int(width * height * 0.0015))
+        # A one-player track can itself be a mostly-dark vertical ribbon
+        # through screen centre (physical F-Zero Mute City, r42j).  The actual
+        # two-player attract is divided horizontally (r42k), and the four-way
+        # view contains that same horizontal divider plus a vertical one.
+        # Therefore horizontal is the fail-closed viewport signature; vertical
+        # alone is scene content.  Keep the vertical measurement above as a
+        # documented diagnostic of the exact false-positive shape.
+        split_screen = horizontal_seam >= 0.50
+        return (
+            not split_screen and
+            glyph >= coloured_floor and green >= coloured_floor
+        )
+
+
+def n64_fzero_owned_action(text: str) -> Optional[str]:
+    """Return an input only for a visibly identified F-Zero menu state."""
+    normalized = " ".join(text.upper().split())
+    if re.search(r"\b(?:PRESS|PUSH)\s+START\b", normalized):
+        return "start"
+    if "SELECT MODE" in normalized:
+        return "select-gp"
+    if "SELECT COURSE" in normalized:
+        return "accept"
+    # A GP course card ("<n>: NAME" plus its layout subtitle such as FIGURE
+    # EIGHT) demands one confirm. Quick Resume can boot qualification directly
+    # onto this card frozen mid-transition (run r26 resumed r25's final frame
+    # and timed out staring at it), so the card must be an owned state like
+    # every other menu. The cup header never survives OCR of this font
+    # ("F-ZERO JACK CUP" reads as "F-ZERO TACK", run r27), so ownership is
+    # the numbered course line plus a known course token.
+    if (re.search(r"\b\d\s*[:.]\s*[A-Z]", normalized) and
+            ("MUTE CITY" in normalized or "FIGURE" in normalized)):
+        return "accept"
+    if ("BLUE FALCON" in normalized and "ACCELERATION" in normalized and
+            "BOOST" in normalized and "GRIP" in normalized):
+        return "accept"
+    return None
+
+
+def rearm_n64_fzero_accelerator_on_owned_accept(
+        controller: PhysicalController, action: Optional[str]) -> bool:
+    """Create a fresh N64-A edge only on an OCR-owned accept screen.
+
+    Qualification owns one continuous throttle hold while the race is live.
+    If the craft retires, that still-held button cannot advance F-Zero's next
+    course or machine card: the game needs a new key-down edge.  Release, tap,
+    and restore the hold only after the visible-state classifier proves an
+    ``accept`` card.  Never inject an edge on an unknown scene, title prompt,
+    or mode selector; their navigation remains owned by the bounded entry
+    state machine above.
+    """
+    if action != "accept":
+        return False
+    accelerator = n64_console_a_key(controller)
+    controller.key_up(
+        accelerator, "physical-n64-a-fzero-owned-rearm-release")
+    controller.key(
+        accelerator, "physical-n64-a-fzero-owned-rearm-accept", hold=0.08)
+    controller.key_down(
+        accelerator, "physical-n64-a-fzero-owned-rearm-throttle")
+    return True
+
+
+def prepare_n64_fzero_attract_race(
+        adb: Path, serial: str, controller: PhysicalController, output: Path,
+        prefix: str, timeout: float = 240.0,
+        warmup_cycles: int = 1) -> dict[str, object]:
+    """Cold-reset into F-Zero's moving full-screen single-player attract race.
+
+    Open-loop steering is not a repeatable qualification scene: r32 and r33
+    both left the craft motionless against a wall while cadence itself was
+    healthy.  The host's reviewed Select+Start reset returns even a Quick
+    Resume launch to the title without deleting save data.  From that point
+    qualification supplies *no game input*; F-Zero's own AI attract race owns
+    the camera motion.  The four-way attract is still rejected by the HUD
+    predicate, and one visibly moving pair is required before proof can arm.
+    The built-in proof path treats the first full-screen attract as a warm-up:
+    on a cold reset it begins while the controller is still acquiring source
+    tiers and can end before 30 asynchronous proof samples exist (r35).
+    Qualification-only RIFE instead uses this first moving race to start its
+    backend warm-up, then independently waits for a fresh one-player attract
+    after its eleven-second timing epoch is ready. ``warmup_cycles`` therefore
+    remains one by default and is zero only for that two-stage RIFE path.
+
+    F-Zero's stylized title text did not survive OCR reliably in r37, so do not
+    use text as a cycle boundary. Eight consecutive non-race captures separate
+    warm-up cycles. A one-frame fade/HUD dropout cannot complete the warm-up,
+    while the observed title/black/split interval is substantially longer.
+    Keep this wait hard-bounded to four minutes: r246 proved a bad classifier
+    could otherwise keep the OLED illuminated for ten minutes even though
+    valid races were already present. Device cleanup remains owned by the
+    outer runner's unconditional trap.
+    """
+    if warmup_cycles < 0:
+        raise ValueError("F-Zero warmup cycle count cannot be negative")
+    controller.chord(
+        (controller.STOP, controller.START),
+        "physical-n64-fzero-host-reset-for-attract", hold=2.20,
+    )
+    time.sleep(2.0)
+    deadline = time.monotonic() + timeout
+    stable = 0
+    samples = 0
+    last_path: Optional[Path] = None
+    previous_hud_path: Optional[Path] = None
+    last_motion = 0.0
+    warmup_race_seen = False
+    warmup_race_cycles = 0
+    non_race_gap_samples = 0
+    while time.monotonic() < deadline:
+        samples += 1
+        path = output / f"{prefix}-n64-fzero-attract-{samples:03d}.png"
+        screenshot(adb, serial, path)
+        last_path = path
+        if n64_fzero_single_player_race_hud(path):
+            warmup_race_seen = True
+            non_race_gap_samples = 0
+            stable += 1
+            if previous_hud_path is not None:
+                last_motion = mean_absolute_difference(previous_hud_path, path)
+            previous_hud_path = path
+            if (warmup_race_cycles >= warmup_cycles and stable >= 2 and
+                    last_motion >= 2.0):
+                return {"samples": samples, "screenshot": str(path),
+                        "stableHudSamples": stable,
+                        "movingPairMeanAbsDiff": round(last_motion, 5),
+                        "warmupRaceCycles": warmup_race_cycles,
+                        "sceneProvenance": "single-player-attract-race",
+                        "gameplayInputs": [],
+                        "hostActions": ["select-start-core-reset"]}
+        else:
+            stable = 0
+            previous_hud_path = None
+            last_motion = 0.0
+            if warmup_race_seen:
+                non_race_gap_samples += 1
+                if non_race_gap_samples >= 8:
+                    warmup_race_cycles += 1
+                    warmup_race_seen = False
+                    non_race_gap_samples = 0
+        time.sleep(0.50)
+    raise RuntimeError(
+        "F-Zero X never exposed a stable moving full-screen single-player "
+        "attract race without gameplay input; "
+        f"samples={samples}, last={last_path}"
+    )
+
+
+FZERO_RIFE_SCENE_RETRY_SECONDS = 180.0
+
+
+def wait_n64_fzero_moving_attract_race(
+        adb: Path, serial: str, output: Path, prefix: str,
+        timeout: float = FZERO_RIFE_SCENE_RETRY_SECONDS) -> dict[str, object]:
+    """Wait input-free for the next moving full-screen one-player attract.
+
+    F-Zero changes camera layouts within its attract loop. Physical r247
+    proved that the second one-player view can become a two-player horizontal
+    split while RIFE is accumulating its first eleven-second timing epoch.
+    Once that epoch is already ready, wait for two consecutive one-player HUD
+    captures with real pixel motion and hand the very next operation back to
+    the compositor collector. This function never resets the core or sends a
+    controller event, and is separately bounded from the cold-start wait.
+    r248 reached the title transition after 90 seconds and r250 still had not
+    reached the next race at 120 seconds. The measured cold loop needs roughly
+    140 seconds on the host screenshot/classification path, so the dedicated
+    retry remains bounded at 180 seconds and under the capture-wide hard cap.
+    """
+    deadline = time.monotonic() + timeout
+    samples = 0
+    stable = 0
+    previous_hud_path: Optional[Path] = None
+    last_path: Optional[Path] = None
+    last_motion = 0.0
+    while time.monotonic() < deadline:
+        samples += 1
+        path = output / f"{prefix}-n64-fzero-ready-{samples:03d}.png"
+        screenshot(adb, serial, path)
+        last_path = path
+        if n64_fzero_single_player_race_hud(path):
+            stable += 1
+            if previous_hud_path is not None:
+                last_motion = mean_absolute_difference(
+                    previous_hud_path, path)
+            previous_hud_path = path
+            if stable >= 2 and last_motion >= 2.0:
+                return {
+                    "samples": samples,
+                    "screenshot": str(path),
+                    "stableHudSamples": stable,
+                    "movingPairMeanAbsDiff": round(last_motion, 5),
+                    "sceneProvenance": "single-player-attract-race",
+                    "gameplayInputs": [],
+                }
+        else:
+            stable = 0
+            previous_hud_path = None
+            last_motion = 0.0
+        time.sleep(0.50)
+    raise RuntimeError(
+        "F-Zero X did not return to a stable moving full-screen one-player "
+        f"attract race after timing warm-up; samples={samples}, last={last_path}"
+    )
+
+
+def n64_twine_owned_action(text: str) -> Optional[str]:
+    """Classify only TWINE screens that visibly own a navigation input."""
+    normalized = " ".join(text.upper().split())
+    if re.search(r"\b(?:PRESS|PUSH)\s+START\b", normalized):
+        return "start"
+    # TWINE's angular font repeatedly OCRs "Load/Save Menu" as "oad Save
+    # len" on the Thor.  EMPTY + PAGES + SAVE are three independent labels
+    # unique to the notebook and remain readable across the four OCR modes.
+    if ("EMPTY" in normalized and "PAGES" in normalized and
+            "SAVE" in normalized):
+        return "save"
+    # MAIN MENU itself similarly aliases to MAIN VIEN/WEM.  The paired menu
+    # rows START GAME and MULTIPLAYER are stable and cannot occur in gameplay.
+    if "START GAME" in normalized and "MULTIPLAYER" in normalized:
+        return "accept"
+    if ("MISSION SELECTION" in normalized or
+            "MISSION BRIEFING" in normalized or
+            "SELECT DIFFICULTY" in normalized or
+            ("SECRET AGENT" in normalized and "00 AGENT" in normalized) or
+            "COURIER" in normalized):
+        return "accept"
+    return None
+
+
+def n64_twine_gameplay_hud(path: Path) -> bool:
+    """Recognize TWINE's first-person health HUD, never a menu transition."""
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        width, height = image.size
+        # The N64 viewport is letterboxed on Thor.  TWINE's first-person
+        # health cross and bar occupy this stable lower-left region; title
+        # and notebook screens can contain red artwork, but do not satisfy
+        # the paired red+green predicate here.  Physical Thor captures are
+        # darker than the synthetic fixture, so use channel dominance rather
+        # than requiring near-primary RGB values.
+        crop = image.crop((int(width * 0.04), int(height * 0.58),
+                           int(width * 0.30), int(height * 0.94)))
+        red = 0
+        green = 0
+        for r, g, b in crop.getdata():
+            if r >= 75 and r >= g * 2.2 and r >= b * 2.2:
+                red += 1
+            if g >= 65 and g >= r * 1.45 and g >= b * 1.45:
+                green += 1
+        return red >= 300 and green >= 500
+
+
+def n64_twine_title_start_visual(path: Path) -> bool:
+    """Recognize the visibly owned PRESS START state in Thor captures.
+
+    Mupen currently rotates TWINE's N64 picture ninety degrees inside the
+    landscape top-display surface. Tesseract consequently misses the prompt,
+    but the prompt itself remains a stable black vertical glyph cluster over
+    the otherwise bright white title art. The crop deliberately excludes the
+    black game logo and Bond silhouette. It must contain both a mostly bright
+    field and enough near-black prompt pixels, so the prompt's blinking blank
+    phase, boot cards, gameplay and the cyan/gold front menu all fail.
+    """
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        width, height = image.size
+        crop = image.crop((int(width * 0.24), int(height * 0.22),
+                           int(width * 0.34), int(height * 0.50)))
+        total = max(1, crop.width * crop.height)
+        dark = bright = 0
+        for r, g, b in crop.getdata():
+            if max(r, g, b) <= 70:
+                dark += 1
+            if min(r, g, b) >= 145:
+                bright += 1
+        return dark / total >= 0.015 and bright / total >= 0.85
+
+
+def n64_twine_title_art_visual(path: Path) -> bool:
+    """Recognize TWINE title art even while PRESS START is blinked off."""
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        width, height = image.size
+        crop = image.crop((int(width * 0.24), int(height * 0.22),
+                           int(width * 0.34), int(height * 0.50)))
+        total = max(1, crop.width * crop.height)
+        bright = 0
+        for r, g, b in crop.getdata():
+            if min(r, g, b) >= 145:
+                bright += 1
+        return bright / total >= 0.85
+
+
+def n64_twine_front_menu_visual(path: Path) -> bool:
+    """Recognize TWINE's front/difficulty selection family without OCR.
+
+    TWINE is rendered ninety degrees inside Thor's landscape screencap and its
+    low-resolution angular font produces no usable Tesseract words. The menu
+    family has a much stronger invariant: a large gold Bond silhouette and
+    rule, a cyan wire/text panel and a yellow selected row, with no green HUD.
+    Fractions keep the predicate resolution-independent. Pressing console A on
+    each owned member is safe: Start Game enters setup and the highlighted
+    Agent difficulty advances toward its mission. Physical r156's difficulty
+    panel has cyan fraction 0.0184; the title's nearest false candidate is
+    0.0170, while profile selection is handled by its independent blue-grid
+    predicate and gameplay has the green health bar.
+    """
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        total = max(1, image.width * image.height)
+        orange = cyan = yellow = green = 0
+        for r, g, b in image.getdata():
+            if r >= 100 and g >= 35 and g <= r * 0.75 and b <= g * 0.75:
+                orange += 1
+            if g >= 75 and b >= 75 and r <= min(g, b) * 0.75:
+                cyan += 1
+            if r >= 100 and g >= 80 and b <= min(r, g) * 0.55:
+                yellow += 1
+            if g >= 60 and g >= r * 1.4 and g >= b * 1.4:
+                green += 1
+        return (orange / total >= 0.030 and cyan / total >= 0.018 and
+                yellow / total >= 0.055 and green / total < 0.001)
+
+
+def n64_twine_mission_selection_visual(path: Path) -> bool:
+    """Recognize TWINE's visibly owned mission-selection notebook.
+
+    The clean r157 path reaches a large cyan rectangular notebook after the
+    highlighted Agent difficulty is accepted.  Its cyan frame spans all four
+    sides of the stable top-display viewport and encloses separate white,
+    neutral-gray and yellow selection populations.  Requiring those four
+    edge populations distinguishes it from the blue profile grid; the low
+    orange population distinguishes it from the front/difficulty family, and
+    the green exclusion prevents scene artwork from owning a menu input.
+    """
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        width, height = image.size
+
+        def cyan_fraction(box: tuple[int, int, int, int]) -> float:
+            crop = image.crop(box)
+            total = max(1, crop.width * crop.height)
+            cyan = 0
+            for r, g, b in crop.getdata():
+                if g >= 75 and b >= 75 and r <= min(g, b) * 0.75:
+                    cyan += 1
+            return cyan / total
+
+        left_cyan = cyan_fraction((int(width * 0.15), int(height * 0.16),
+                                   int(width * 0.24), int(height * 0.82)))
+        right_cyan = cyan_fraction((int(width * 0.78), int(height * 0.16),
+                                    int(width * 0.84), int(height * 0.82)))
+        top_cyan = cyan_fraction((int(width * 0.15), int(height * 0.16),
+                                  int(width * 0.84), int(height * 0.24)))
+        bottom_cyan = cyan_fraction((int(width * 0.15), int(height * 0.71),
+                                     int(width * 0.84), int(height * 0.82)))
+
+        total = max(1, width * height)
+        white = gray = yellow = orange = green = 0
+        for r, g, b in image.getdata():
+            low = min(r, g, b)
+            high = max(r, g, b)
+            if low >= 145:
+                white += 1
+            if low >= 80 and high - low <= 20:
+                gray += 1
+            if r >= 100 and g >= 80 and b <= min(r, g) * 0.55:
+                yellow += 1
+            if r >= 100 and g >= 35 and g <= r * 0.75 and b <= g * 0.75:
+                orange += 1
+            if g >= 60 and g >= r * 1.4 and g >= b * 1.4:
+                green += 1
+        return (left_cyan >= 0.10 and right_cyan >= 0.15 and
+                top_cyan >= 0.12 and bottom_cyan >= 0.13 and
+                white / total >= 0.030 and gray / total >= 0.040 and
+                yellow / total >= 0.015 and orange / total < 0.020 and
+                green / total < 0.002)
+
+
+def n64_twine_mission_briefing_visual(path: Path) -> bool:
+    """Recognize TWINE's owned briefing with its START THE MISSION action.
+
+    The physical r158 screen follows mission selection and exposes a bright
+    cyan Start The Mission row beside blue briefing text, a small red action
+    marker and restrained white/yellow accents.  Its population is sharply
+    separated from the white title, gold front menu, blue profile grid, cyan
+    mission notebook and first-person HUD.  The physical screen explicitly
+    says ``Press START To Continue``, so console Start is the owned action.
+    """
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        total = max(1, image.width * image.height)
+        cyan = blue = white = yellow = orange = green = red = 0
+        for r, g, b in image.getdata():
+            if g >= 75 and b >= 75 and r <= min(g, b) * 0.75:
+                cyan += 1
+            if b >= 55 and b >= r * 1.5 and b >= g * 1.25:
+                blue += 1
+            if min(r, g, b) >= 145:
+                white += 1
+            if r >= 100 and g >= 80 and b <= min(r, g) * 0.55:
+                yellow += 1
+            if r >= 100 and g >= 35 and g <= r * 0.75 and b <= g * 0.75:
+                orange += 1
+            if g >= 60 and g >= r * 1.4 and g >= b * 1.4:
+                green += 1
+            if r >= 75 and r >= g * 2.2 and r >= b * 2.2:
+                red += 1
+        return (0.024 <= cyan / total <= 0.035 and
+                0.020 <= blue / total <= 0.050 and
+                0.012 <= white / total <= 0.030 and
+                0.003 <= yellow / total <= 0.012 and
+                orange / total < 0.002 and green / total < 0.001 and
+                0.001 <= red / total <= 0.004)
+
+
+def n64_twine_blue_selection_visual(path: Path) -> bool:
+    """Recognize TWINE's owned profile/mission selection grid.
+
+    After Start Game the clean physical r155 path presents a cyan-outlined
+    grid of blue profile cards with one white/yellow selected card. The N64
+    image is still rotated and OCR returns nothing useful, but this four-colour
+    population is stable and absent from the white title, front menu and live
+    first-person HUD. Console A is the screen's visible select action.
+    """
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        total = max(1, image.width * image.height)
+        cyan = blue = white = yellow = green = 0
+        for r, g, b in image.getdata():
+            if g >= 70 and b >= 80 and r <= min(g, b) * 0.75:
+                cyan += 1
+            if b >= 55 and b >= r * 1.5 and b >= g * 1.25:
+                blue += 1
+            if min(r, g, b) >= 145:
+                white += 1
+            if r >= 100 and g >= 80 and b <= min(r, g) * 0.55:
+                yellow += 1
+            if g >= 60 and g >= r * 1.4 and g >= b * 1.4:
+                green += 1
+        return (cyan / total >= 0.012 and blue / total >= 0.10 and
+                white / total >= 0.015 and yellow / total >= 0.015 and
+                green / total < 0.002)
+
+
+def prepare_n64_twine_gameplay(adb: Path, serial: str,
+                               controller: PhysicalController, output: Path,
+                               prefix: str, timeout: float = 180.0
+                               ) -> dict[str, object]:
+    """Drive TWINE's fresh/resumed profile menus with visible ownership.
+
+    The game may arrive at a fading PRESS START card, Main Menu, an empty
+    Load/Save notebook, the Rumble Pak warning, or Mission Selection depending
+    on retained state.  A blind repeating cycle physically bounced between
+    these screens.  Reclassify after every action and stop only after TWINE's
+    first-person health HUD persists; the generic live-motion gate remains
+    responsible for proving actual movement before instrumentation is armed.
+    """
+    deadline = time.monotonic() + timeout
+    actions: list[str] = []
+    owned_entry_action_seen = False
+    gameplay_hud_samples = 0
+    last_text = ""
+    last_path: Optional[Path] = None
+    sample = 0
+    while time.monotonic() < deadline:
+        sample += 1
+        path = output / f"{prefix}-n64-twine-entry-{sample:02d}.png"
+        screenshot(adb, serial, path)
+        last_path = path
+        action = None
+        title_start = n64_twine_title_start_visual(path)
+        if title_start:
+            action = "start"
+        # OCR is several seconds slower than the visual predicates on Thor.
+        # During the title's prompt-off phase, poll the known title art again
+        # quickly instead of missing the next visibly owned prompt and falling
+        # into the long unowned attract loop.
+        if action is None and n64_twine_title_art_visual(path):
+            last_text = ""
+            gameplay_hud_samples = 0
+            time.sleep(0.10)
+            continue
+        if action is None and n64_twine_mission_selection_visual(path):
+            action = "accept"
+        if action is None and n64_twine_mission_briefing_visual(path):
+            action = "start"
+        if action is None and n64_twine_front_menu_visual(path):
+            action = "accept"
+        if action is None and n64_twine_blue_selection_visual(path):
+            action = "accept"
+        gameplay_hud = n64_twine_gameplay_hud(path)
+        if action is None and not gameplay_hud:
+            last_text = " ".join(ocr(path).split())
+            action = n64_twine_owned_action(last_text)
+        if gameplay_hud and owned_entry_action_seen:
+            gameplay_hud_samples += 1
+            if gameplay_hud_samples >= 2:
+                return {
+                    "actions": actions,
+                    "lastText": last_text,
+                    "screenshot": str(path),
+                    "sceneProvenance": "owned-menu-to-mission",
+                }
+            time.sleep(0.5)
+            continue
+        # TWINE's title idle loop contains a first-person attract demo with the
+        # exact same health HUD as a controllable mission. Physical r148/r149
+        # accepted that demo, then deterministically fell back to Main Menu
+        # after roughly 20 seconds. A HUD is therefore evidence of appearance,
+        # not ownership, until this run has visibly classified and advanced at
+        # least one title/profile/mission screen. Let an unowned demo finish;
+        # never inject gameplay input into it or call it qualification content.
+        # Physical r151 proved that A does not exit this demo: it resets or
+        # extends the attract state and can leave the same first-person frame
+        # up for the entire bounded wait.  Any input before an owned menu is
+        # therefore both ineffective and provenance-destroying.
+        if gameplay_hud:
+            gameplay_hud_samples = 0
+            time.sleep(0.5)
+            continue
+        gameplay_hud_samples = 0
+        if action == "start":
+            controller.key(controller.START, "physical-start-n64-twine-owned",
+                           hold=0.08)
+        elif action == "save":
+            controller.hat("down", "physical-down-n64-twine-save", hold=0.16)
+            controller.key(n64_console_a_key(controller),
+                           "physical-a-n64-twine-save", hold=0.08)
+        elif action == "accept":
+            controller.key(n64_console_a_key(controller),
+                           "physical-a-n64-twine-owned", hold=0.08)
+        if action is not None:
+            actions.append(action)
+            owned_entry_action_seen = True
+            time.sleep(1.5)
+            continue
+        time.sleep(0.5)
+    raise RuntimeError(
+        "TWINE never left its owned title/profile menus for a structured "
+        f"game scene; actions={actions}, last OCR={last_text!r}, "
+        f"last={last_path}"
+    )
 
 
 def _capture_nes_control(adb: Path, serial: str,
@@ -5629,6 +7047,13 @@ def inject_display4_tap(adb: Path, serial: str, x: int, y: int,
            "swipe", str(x), str(y), str(x), str(y), str(hold_ms))
 
 
+def inject_display4_swipe(adb: Path, serial: str, x1: int, y1: int,
+                          x2: int, y2: int, hold_ms: int = 500) -> None:
+    """Draw a bounded stroke in physical display-4 pixel coordinates."""
+    qa.adb(adb, serial, "shell", "input", "touchscreen", "-d", "4",
+           "swipe", str(x1), str(y1), str(x2), str(y2), str(hold_ms))
+
+
 def inject_lower_touch(adb: Path, serial: str) -> None:
     # Touch is the one intentionally non-controller input in this black-box
     # suite: it targets the actual physical lower display and proves that
@@ -5710,7 +7135,8 @@ def dual_screen_evidence(adb: Path, serial: str, case: SystemCase,
 
 def navigate_handheld_dual_screen_to_visible_ui(
         adb: Path, serial: str, controller: PhysicalController,
-        case: SystemCase, output: Path, prefix: str) -> Optional[dict[str, object]]:
+        case: SystemCase, output: Path, prefix: str,
+        expected_title: Optional[str] = None) -> Optional[dict[str, object]]:
     """Leave DS/3DS attract/title states before lower-panel qualification.
 
     Metroid Prime Hunters and A Link Between Worlds can both render a moving,
@@ -5720,12 +7146,22 @@ def navigate_handheld_dual_screen_to_visible_ui(
     bounded START/A rounds and require consecutive visible display-4 frames
     before arming frame-generation proof. This is navigation, not evidence:
     the later compositor, touch-response and v5+ proof gates stay unchanged.
+
+    Run nds-b57 (2026-09-01) handed off on Portrait of Ruin's animated KONAMI
+    boot logo: two consecutive frames were both bright yet differed on
+    essentially every pixel. A round is therefore accepted only when its
+    frame is rendered (``lower_panel_rendered``: bright UI or legible text on
+    black), the previous round's frame was rendered too, and the pair differs
+    on fewer than 1500 downsampled pixels. Portrait of Ruin receives START
+    only: A on its SELECT DATA screen opens slot one and resumes an old save.
     """
     if case.folder not in {"nds", "n3ds"}:
         return None
+    start_only = "portraitofruin" in normalize(expected_title or "")
     token = secondary_token(adb, serial)
     observations: list[dict[str, object]] = []
     consecutive_visible = 0
+    previous: Optional[Path] = None
     for round_index in range(10):
         controller.key(
             controller.START,
@@ -5733,32 +7169,52 @@ def navigate_handheld_dual_screen_to_visible_ui(
             hold=0.055,
         )
         time.sleep(0.55)
-        controller.key(
-            controller.A,
-            f"physical-a-dual-gameplay-{round_index + 1}",
-            hold=0.055,
-        )
+        if not start_only:
+            controller.key(
+                controller.A,
+                f"physical-a-dual-gameplay-{round_index + 1}",
+                hold=0.055,
+            )
         time.sleep(0.80)
         frame = output / (
             f"{prefix}-dual-gameplay-ready-{round_index + 1:02d}.png"
         )
         metrics = screenshot(adb, serial, frame, token)
-        observations.append(metrics)
-        if metrics["visible"]:
+        rendered = lower_panel_rendered(frame)
+        delta = (changed_pixels(previous, frame, threshold=10)
+                 if previous is not None else None)
+        observations.append({
+            **metrics, "rendered": rendered, "changedPixels": delta,
+        })
+        if rendered:
             consecutive_visible += 1
-            if consecutive_visible >= 2:
+            # A real game screen may animate forever (Portrait of Ruin's
+            # title menu on the touch screen, run nds-b98: 5,000-7,000
+            # distinct colours, 40-85/255 mean change between rounds), so
+            # stability is one way to prove it is not a boot card; a rich
+            # palette (boot cards and notices stay under 300 colours) is
+            # the other.
+            rich = int(metrics.get("distinctColors", 0) or 0) >= 2000
+            if (consecutive_visible >= 2 and delta is not None and
+                    (delta < 1500 or rich)):
                 return {
                     "displayToken": token,
-                    "physicalControls": ["START", "A"],
+                    "physicalControls": (
+                        ["START"] if start_only else ["START", "A"]
+                    ),
                     "rounds": round_index + 1,
                     "consecutiveVisibleFrames": consecutive_visible,
+                    "stableChangedPixels": delta,
                     "observations": observations,
                 }
         else:
             consecutive_visible = 0
+        previous = frame
     raise RuntimeError(
-        f"{case.folder} remained in a black lower-screen title/attract state "
-        "after ten bounded physical START/A navigation rounds"
+        f"{case.folder} never settled on a rendered, stable lower-screen "
+        "frame (black, boot-logo or animating title/attract state) after ten "
+        "bounded physical " + ("START" if start_only else "START/A") +
+        " navigation rounds"
     )
 
 
@@ -5819,6 +7275,401 @@ def drive_nds_hunters_past_touch_menus(
         "skip": list(NDS_HUNTERS_SKIP),
         "menuTaps": [list(point) for point in NDS_HUNTERS_MENU_TAPS],
         "rounds": len(observations),
+        "observations": observations,
+    }
+
+
+# Portrait of Ruin's first new-game setup has one mandatory stylus-only
+# screen. These are measured physical Thor display-4 coordinates (1240x1080,
+# rotation-aware input): a line wholly inside the emblem canvas, followed by
+# the game's OK button. The stroke is setup navigation, never proof evidence.
+NDS_POR_EMBLEM_STROKE = (520, 400, 700, 520)
+NDS_POR_EMBLEM_OK = (620, 742)
+
+
+def nds_por_name_keyboard_visible(path: Path) -> bool:
+    """Recognize PoR's dense neutral-gray name keyboard without OCR."""
+    image = Image.open(path).convert("RGB")
+    pixels = list(image.crop((0, 180, image.width, 800)).getdata())
+    neutral = sum(
+        55 <= red <= 210 and abs(red - green) < 15 and
+        abs(green - blue) < 15
+        for red, green, blue in pixels
+    )
+    return neutral / max(1, len(pixels)) >= 0.35
+
+
+def lower_panel_rendered(path: Path) -> bool:
+    """Classify a lower-panel capture as rendered UI, including text on black.
+
+    ``image_metrics`` requires 8 % bright samples. Run nds-b57 (2026-09-01)
+    captured Portrait of Ruin's ESRB notice at 7.8 % and its "Licensed by
+    Nintendo" card at 2.9 %: both are legible, deliberately rendered frames,
+    yet the slot gate reported "rendered no lower UI". Accept the ordinary
+    bright classification, else require a sparse but wide, multi-coloured
+    bright region: at least 1.5 % of a 4-pixel lattice above the black floor,
+    48 distinct colours, and a bright bounding box spanning 40 % of the width
+    and 3 % of the height. A black panel, a single dot, or a thin vertical
+    tear line remain unrendered.
+    """
+    image = Image.open(path).convert("RGB")
+    metrics = image_metrics(image, path)
+    # A uniform bright frame (the DS boot's white/grey flashes, run
+    # nds-b98b title-settle-12/13 at one distinct colour) is not rendered
+    # UI even though it is "visible"; every path needs some palette.
+    if int(metrics["distinctColors"]) < 48:
+        return False
+    if metrics["visible"]:
+        return True
+    pixels = image.load()
+    columns = range(0, image.width, 4)
+    rows = range(0, image.height, 4)
+    bright = [
+        (x, y) for y in rows for x in columns if max(pixels[x, y]) >= 18
+    ]
+    samples = max(1, len(columns) * len(rows))
+    if (len(bright) < 0.015 * samples or
+            int(metrics["distinctColors"]) < 48):
+        return False
+    xs = [x for x, _ in bright]
+    ys = [y for _, y in bright]
+    return ((max(xs) - min(xs)) >= 0.40 * image.width and
+            (max(ys) - min(ys)) >= 0.03 * image.height)
+
+
+def nds_por_data_screen_visible(path: Path) -> bool:
+    """Detect PoR's data screen by its column of six grey slot boxes.
+
+    On the 1240x1080 lower capture the boxes occupy x = 7.5-17.5 % and
+    y = 10-60 % (run nds-b98b slot-poll-01: 87k grey pixels, 60 % of them
+    inside that column, the rest of the screen dark red).  The title menu
+    has far more grey (the moon, 211k pixels) spread across 12-40 % of the
+    width, so a large grey share confined to the left column is the
+    discriminator.  Grey means all channels in [110, 235] within 30 of each
+    other.
+    """
+    image = Image.open(path).convert("RGB")
+    pixels = image.load()
+    x_lo, x_hi = round(image.width * 0.05), round(image.width * 0.20)
+    grey_total = grey_column = 0
+    for y in range(0, image.height, 3):
+        for x in range(0, image.width, 3):
+            r, g, b = pixels[x, y]
+            if (110 <= r <= 235 and 110 <= g <= 235 and 110 <= b <= 235 and
+                    abs(r - g) < 30 and abs(g - b) < 30):
+                grey_total += 1
+                if x_lo <= x < x_hi:
+                    grey_column += 1
+    # 87k grey pixels at 1240x1080 sampled every third pixel is about 9.7k.
+    return grey_total >= 1500 and grey_column / grey_total >= 0.55
+
+
+def nds_por_dialogue_visible(path: Path) -> bool:
+    """Detect PoR's full-width gold dialogue divider on the lower panel."""
+    image = Image.open(path).convert("RGB")
+    for y in range(round(image.height * 0.57), round(image.height * 0.65)):
+        row = [image.getpixel((x, y)) for x in range(image.width)]
+        gold = sum(
+            red > 100 and green > 70 and blue < 90 and red > green * 1.05
+            for red, green, blue in row
+        )
+        if gold / max(1, len(row)) >= 0.90:
+            return True
+    return False
+
+
+NDS_POR_RESET_MARKER = "Reset applied engine=melonds-ds"
+
+
+def _nds_por_settle_lower_panel(
+        adb: Path, serial: str, token: str, output: Path, prefix: str,
+        state: str, observations: list[dict[str, object]],
+        timeout: float = 45.0, interval: float = 0.5) -> dict[str, object]:
+    """Poll display 4 until two consecutive frames are rendered and static.
+
+    Boot logos after a core reset are either black on the lower panel or
+    animate (the KONAMI card differs on ~100 % of pixels between captures);
+    the title's lower screen is the first pair of frames that is rendered
+    (``lower_panel_rendered``) AND differs on fewer than 1500 downsampled
+    pixels. The poll is hard-bounded so a stuck boot cannot hold the OLED.
+    """
+    deadline = time.monotonic() + timeout
+    previous: Optional[Path] = None
+    previous_rendered = False
+    samples = 0
+    while True:
+        samples += 1
+        frame = output / f"{prefix}-nds-por-{state}-settle-{samples:02d}.png"
+        metrics = screenshot(adb, serial, frame, token)
+        rendered = lower_panel_rendered(frame)
+        delta = (changed_pixels(previous, frame, threshold=10)
+                 if previous is not None else None)
+        observations.append({
+            "state": f"{state}-settle", "sample": samples,
+            "rendered": rendered, "changedPixels": delta, "frame": metrics,
+        })
+        rich = int(metrics.get("distinctColors", 0) or 0) >= 2000
+        if (rendered and previous_rendered and delta is not None and
+                (delta < 1500 or rich)):
+            return {"frame": str(frame), "samples": samples,
+                    "changedPixels": delta, "rich": rich}
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                f"Portrait of Ruin lower panel never settled on a rendered "
+                f"{state} frame within {timeout:.0f} s of the host reset "
+                f"(samples={samples}, last={frame})"
+            )
+        previous = frame
+        previous_rendered = rendered
+        time.sleep(interval)
+
+
+def drive_nds_portrait_of_ruin_new_game_setup(
+        adb: Path, serial: str, controller: PhysicalController,
+        output: Path, prefix: str) -> dict[str, object]:
+    """Leave PoR's data/name/emblem setup through reviewed real inputs.
+
+    Runs b50b/b51/b57 (2026-09-01) inherited whatever Quick Resume snapshot
+    the previous run left (a mid-save room that self-rebooted ~8 s later), so
+    every slot gate measured a different game state. Entry is now
+    deterministic: the host's reviewed Select+Start chord resets the core
+    without deleting save data and melonDS must acknowledge it; the lower
+    panel is then polled to a rendered, static title frame, START opens
+    SELECT DATA, that screen is polled to stability the same way, and only
+    then is A sent. Select slot six to avoid qualification's older saved
+    rooms. If that slot is still empty, finish its name screen and mandatory
+    stylus emblem; if it already exists, selecting it legitimately resumes
+    the game and no setup touches are injected. Every transition is bounded
+    and a failed emblem confirmation rejects before frame-generation proof is
+    armed.
+    """
+    token = secondary_token(adb, serial)
+    observations: list[dict[str, object]] = []
+
+    reset_baseline = qa.logs(adb, serial).count(NDS_POR_RESET_MARKER)
+    controller.chord(
+        (controller.STOP, controller.START), "physical-nds-por-host-reset",
+        hold=2.20,
+    )
+    reset_deadline = time.monotonic() + 5.0
+    while qa.logs(adb, serial).count(NDS_POR_RESET_MARKER) <= reset_baseline:
+        if time.monotonic() > reset_deadline:
+            raise RuntimeError(
+                "Portrait of Ruin host reset was not applied by melonds-ds"
+            )
+        time.sleep(0.25)
+
+    title_settle = _nds_por_settle_lower_panel(
+        adb, serial, token, output, prefix, "title", observations,
+    )
+    controller.key(controller.START, "physical-nds-por-title-start",
+                   hold=0.055)
+    time.sleep(0.65)
+    select_data_settle = _nds_por_settle_lower_panel(
+        adb, serial, token, output, prefix, "select-data", observations,
+    )
+
+    origin = output / f"{prefix}-nds-por-setup-origin.png"
+    origin_metrics = screenshot(adb, serial, origin, token)
+    observations.append({"state": "select-data", "frame": origin_metrics})
+    if not lower_panel_rendered(origin):
+        raise RuntimeError("Portrait of Ruin SELECT DATA screen is not visible")
+    # A cold boot (host reset) shows the title MENU (RANKING / GAME START /
+    # SHOP MODE / ...) after START; A on GAME START opens the data-MODE menu
+    # (SELECT DATA / COPY DATA / DELETE DATA); A on SELECT DATA opens the
+    # slot screen with its six-box column (physical explorations ds-b98x and
+    # ds-b99x, 2026-09-03).  Press A until the slot column is visible, at
+    # most twice; a resumed snapshot may already be on the slot screen.
+    game_start_presses = 0
+    for step_name in ("game-start", "select-data"):
+        if origin.exists() and nds_por_data_screen_visible(origin):
+            break
+        controller.key(controller.A, f"physical-nds-por-{step_name}", hold=0.055)
+        game_start_presses += 1
+        time.sleep(0.65)
+        _nds_por_settle_lower_panel(
+            adb, serial, token, output, prefix, step_name, observations,
+        )
+        origin_metrics = screenshot(adb, serial, origin, token)
+        observations.append({"state": step_name, "frame": origin_metrics})
+    if origin.exists() and not nds_por_data_screen_visible(origin):
+        raise RuntimeError(
+            "Portrait of Ruin slot screen (slot column) did not appear after "
+            "GAME START and SELECT DATA"
+        )
+    for slot_step in range(5):
+        controller.hat(
+            "down", f"physical-nds-por-select-slot-{slot_step + 2}",
+            hold=0.055,
+        )
+        time.sleep(0.12)
+    controller.key(controller.A, "physical-nds-por-open-slot-6", hold=0.055)
+    time.sleep(0.90)
+
+    # The slot list / name keyboard replaces SELECT DATA across essentially
+    # the whole DS screen. Poll briefly so a marginal dark frame (b57's ESRB
+    # notice measured 7.8 % bright) or one late compositor frame cannot be
+    # mistaken for "no lower UI"; the two misses are reported by name.
+    slot_result = output / f"{prefix}-nds-por-slot-result.png"
+    slot_deadline = time.monotonic() + 3.0
+    slot_samples = 0
+    slot_rendered_seen = False
+    slot_gate: Optional[dict[str, object]] = None
+    while True:
+        slot_samples += 1
+        probe = output / f"{prefix}-nds-por-slot-poll-{slot_samples:02d}.png"
+        probe_metrics = screenshot(adb, serial, probe, token)
+        rendered = lower_panel_rendered(probe)
+        delta = changed_pixels(origin, probe, threshold=10)
+        slot_rendered_seen = slot_rendered_seen or rendered
+        observations.append({
+            "state": "slot-poll", "sample": slot_samples,
+            "rendered": rendered, "changedPixels": delta,
+            "frame": probe_metrics,
+        })
+        if rendered and delta >= 3_000:
+            slot_gate = {"frame": str(probe), "samples": slot_samples,
+                         "changedPixels": delta}
+            break
+        if time.monotonic() >= slot_deadline:
+            break
+        time.sleep(0.25)
+    slot_metrics = screenshot(adb, serial, slot_result, token)
+    observations.append({"state": "slot-result", "frame": slot_metrics})
+    if slot_gate is None:
+        if not slot_rendered_seen:
+            raise RuntimeError(
+                "Portrait of Ruin slot selection rendered no lower UI"
+            )
+        raise RuntimeError(
+            "Portrait of Ruin lower panel rendered but did not reach the "
+            "slot list / name keyboard"
+        )
+
+    new_game = nds_por_name_keyboard_visible(slot_result)
+    emblem_attempts = 0
+    if new_game:
+        # Type the highlighted 0, move to the keyboard's OK control, and
+        # confirm. This exact sequence was physically reproduced on Thor.
+        controller.key(controller.A, "physical-nds-por-type-name", hold=0.055)
+        controller.key(controller.START, "physical-nds-por-name-ok", hold=0.055)
+        controller.key(controller.A, "physical-nds-por-confirm-name", hold=0.055)
+        time.sleep(0.90)
+        emblem = output / f"{prefix}-nds-por-emblem.png"
+        emblem_metrics = screenshot(adb, serial, emblem, token)
+        observations.append({"state": "emblem", "frame": emblem_metrics})
+
+        confirmed = False
+        for emblem_attempts in range(1, 4):
+            inject_display4_swipe(
+                adb, serial, *NDS_POR_EMBLEM_STROKE, hold_ms=500,
+            )
+            time.sleep(0.20)
+            inject_display4_tap(
+                adb, serial, *NDS_POR_EMBLEM_OK, hold_ms=180,
+            )
+            time.sleep(1.20)
+            result = output / (
+                f"{prefix}-nds-por-emblem-result-{emblem_attempts:02d}.png"
+            )
+            result_metrics = screenshot(adb, serial, result, token)
+            delta = changed_pixels(emblem, result, threshold=10)
+            observations.append({
+                "state": "emblem-result", "attempt": emblem_attempts,
+                "changedPixels": delta, "frame": result_metrics,
+            })
+            # The accepted transition replaces the editor across essentially
+            # the whole DS screen. A failed/empty OK remains pixel-identical.
+            if result_metrics["visible"] and delta >= 3_000:
+                confirmed = True
+                break
+        if not confirmed:
+            raise RuntimeError(
+                "Portrait of Ruin did not accept its mandatory drawn emblem"
+            )
+
+    # PoR follows setup/resume with a long A-gated story conversation. The
+    # generic motion gate previously mistook animated portraits and changing
+    # text for controllable gameplay and armed proof on that dialogue. Advance
+    # it rapidly but at real key edges, then require two consecutive lower-
+    # screen right-movement probes with no full-width dialogue divider.
+    story_presses = 0
+    gameplay_observations = 0
+    exit_motion = 0.0
+    previous_candidate: Optional[Path] = None
+    for story_presses in range(1, 401):
+        controller.key(
+            controller.A,
+            f"physical-nds-por-advance-story-{story_presses}",
+            hold=0.035,
+        )
+        time.sleep(0.12)
+        # PoR's opening is a multi-page narration on the touch screen followed
+        # by a cutscene (run nds-b99 was still on the narration after 180 A
+        # presses).  START skips the cutscene; send it every 24 presses while
+        # dialogue is still on screen (the loop leaves as soon as controllable
+        # gameplay is observed, so START never reaches gameplay's pause menu).
+        if story_presses % 24 == 0:
+            controller.key(controller.START,
+                           f"physical-nds-por-skip-cutscene-{story_presses}",
+                           hold=0.035)
+            time.sleep(0.4)
+        if story_presses < 48 or story_presses % 8 != 0:
+            continue
+        before = output / (
+            f"{prefix}-nds-por-gameplay-probe-{story_presses:03d}-a.png"
+        )
+        before_metrics = screenshot(adb, serial, before, token)
+        if not before_metrics["visible"] or nds_por_dialogue_visible(before):
+            gameplay_observations = 0
+            previous_candidate = None
+            continue
+        controller.hat(
+            "right", "physical-nds-por-gameplay-right", hold=1.2,
+        )
+        time.sleep(0.25)
+        after = output / (
+            f"{prefix}-nds-por-gameplay-probe-{story_presses:03d}-b.png"
+        )
+        after_metrics = screenshot(adb, serial, after, token)
+        if not after_metrics["visible"] or nds_por_dialogue_visible(after):
+            gameplay_observations = 0
+            previous_candidate = None
+            continue
+        exit_motion = mean_absolute_difference(before, after)
+        if exit_motion < 0.5:
+            gameplay_observations = 0
+            previous_candidate = None
+            continue
+        gameplay_observations += 1
+        previous_candidate = after
+        observations.append({
+            "state": "controllable-gameplay", "storyPresses": story_presses,
+            "motionMeanDiff": exit_motion, "frame": after_metrics,
+        })
+        if gameplay_observations >= 2:
+            break
+    if gameplay_observations < 2 or previous_candidate is None:
+        raise RuntimeError(
+            "Portrait of Ruin did not reach dialogue-free controllable gameplay"
+        )
+
+    return {
+        "displayToken": token,
+        "hostActions": ["select-start-core-reset"],
+        "resetMarker": NDS_POR_RESET_MARKER,
+        "titleSettle": title_settle,
+        "selectDataSettle": select_data_settle,
+        "slotGate": slot_gate,
+        "selectedSlot": 6,
+        "newGameSetup": new_game,
+        "emblemStroke": list(NDS_POR_EMBLEM_STROKE) if new_game else None,
+        "emblemOk": list(NDS_POR_EMBLEM_OK) if new_game else None,
+        "emblemAttempts": emblem_attempts,
+        "storyPresses": story_presses,
+        "consecutiveGameplayObservations": gameplay_observations,
+        "exitMotionMeanDiff": exit_motion,
+        "gameplayFrame": str(previous_candidate),
         "observations": observations,
     }
 
@@ -6017,7 +7868,9 @@ def stop_and_return(adb: Path, serial: str, controller: PhysicalController,
     controller.key(controller.UP, "dpad-up-restore", hold=0.04)
     selection_frame = output / f"{prefix}-return-selection.png"
     selection_ocr = ""
-    restore_deadline = time.monotonic() + 1.50
+    # 1.5 s intermittently expired while the row's animated preview defeated
+    # every OCR pass (run 2026-08-17-wiiu4); the conditions are unchanged.
+    restore_deadline = time.monotonic() + 5.0
     while time.monotonic() < restore_deadline:
         screenshot(adb, serial, selection_frame)
         selection_ocr = selected_header_ocr(selection_frame)
@@ -6075,9 +7928,23 @@ def stop_and_return(adb: Path, serial: str, controller: PhysicalController,
     }
 
 
+# The split health record (schema >= 43) carries the cadence fields on its
+# "Presentation health base" line; the legacy single-line form has no token.
 PS2_CADENCE_HEALTH = re.compile(
-    r"Presentation health generator=(?P<generator>\d+) "
+    r"Presentation health (?:base )?generator=(?P<generator>\d+) "
     r"role=primary displayId=0 .*? presents=(?P<presents>\d+) .*? "
+    r"producerHz=(?P<producer_hz>[0-9.]+) "
+    r"lockedFps=(?P<locked>\d+) outputFps=(?P<output>\d+)"
+)
+
+# DS games choose their own gameplay screen (Hunters top / Castlevania
+# touch), so the readiness counter must see BOTH streams' windows: PoR ran
+# 40->80 on the secondary while the idle top-screen map's 0-Hz rows reset
+# the primary-only counter forever (run nds14, 2026-08-17).
+PS2_CADENCE_HEALTH_ANY = re.compile(
+    r"Presentation health (?:base )?generator=(?P<generator>\d+) "
+    r"role=(?P<role>\w+) displayId=(?P<display>\d+) .*? "
+    r"presents=(?P<presents>\d+) .*? "
     r"producerHz=(?P<producer_hz>[0-9.]+) "
     r"lockedFps=(?P<locked>\d+) outputFps=(?P<output>\d+)"
 )
@@ -6104,6 +7971,20 @@ CONTENT_STARVED_FRAMEGEN_FAILURES = (
     # pacing failures still fail the final attempt.
     "SurfaceFlinger did not latch at the reported output cadence",
     "SurfaceFlinger latch cadence is not a balanced panel-vsync subset",
+    # On a near-static scene the honest midpoint between two identical
+    # endpoints IS the endpoint (SMG1's dark drifting intro cutscene, run
+    # wii4 2026-08-17). Scene-dependent like the motion classes: an engine
+    # that truly fakes generation repeats endpoints on EVERY scene and
+    # still fails the final attempt.
+    "synthesized frames repeat a real endpoint too often",
+    # The same static-scene family, observed on OoE's ornament/dialogue
+    # cards (run nds10, 2026-08-17): a held frame has no motion field, its
+    # sampled output doesn't change, and any synthetic between identical
+    # endpoints is indistinguishable from crossfade. Real pacing/validity
+    # failures (v31/v32 evidence, nonmonotonic repair) remain immediate.
+    "motion field is effectively zero",
+    "sampled output content does not change often enough",
+    "most synthetic output is indistinguishable from fixed-pixel crossfade",
 )
 
 
@@ -6132,18 +8013,23 @@ def _is_content_starved_framegen_failure(text: str) -> bool:
         return True
     if "frame-generation gate needs one uniquely strongest" not in text:
         return False
-    matches = re.findall(r"'([^']+)'", text)
-    failure_reasons = [reason for reason in matches
-                       if reason not in ("layer", "latency", "role",
-                                         "displayId", "failures", "primary",
-                                         "secondary")
-                       and not reason.startswith("SurfaceView")
-                       and not reason.startswith("/")]
-    content = [reason for reason in failure_reasons
-               if reason in CONTENT_STARVED_FRAMEGEN_FAILURES]
-    other = [reason for reason in failure_reasons
-             if reason not in CONTENT_STARVED_FRAMEGEN_FAILURES]
-    return bool(content) and not other
+    # Evaluate PER CANDIDATE, not over the pooled message: a DS title whose
+    # gameplay screen content-starved mid-dialogue is retryable even while
+    # the idle map screen's candidate accrues static-scene validity classes
+    # (nonmonotonic repair, too few framebuffer proof samples) that are not
+    # in the content set (run nds12, 2026-08-17). A retry never weakens the
+    # gates — the final attempt still fails honestly.
+    candidates = re.findall(r"'failures': \[([^\]]*)\]", text)
+    if not candidates:
+        return False
+    for failures_text in candidates:
+        failure_reasons = re.findall(r"'([^']+)'", failures_text)
+        if not failure_reasons:
+            continue
+        if all(reason in CONTENT_STARVED_FRAMEGEN_FAILURES
+               for reason in failure_reasons):
+            return True
+    return False
 
 
 def screenshot_mean_abs_diff(left_path: Path, right_path: Path) -> float:
@@ -6223,11 +8109,46 @@ def ps2_sustained_gameplay_windows(log: str, baseline_presents: int) -> int:
             continue
         locked = int(match.group("locked"))
         producer_hz = float(match.group("producer_hz"))
-        if locked >= 20 and producer_hz >= locked * 0.9:
+        # Membership, not >=20: a raw pre-acquisition lock (51, 55, 111 —
+        # round(measured), runs nds1-5 2026-08-17) means the tier
+        # controller has NOT settled, so proof armed on it restarts the
+        # dense epoch mid-capture and voids v31/v32 evidence. Only an
+        # acquired supported tier is gameplay-ready.
+        if locked in (20, 30, 40, 50, 60) and producer_hz >= locked * 0.9:
             windows += 1
         else:
             windows = 0
     return windows
+
+
+def ps2_any_stream_gameplay_windows(log: str, baseline_presents: int) -> int:
+    """Trailing tier-locked window count of the healthiest stream.
+
+    DS titles pick their own gameplay screen; the other screen legitimately
+    idles at zero unique rate. Count each (role, display) stream separately
+    with the same acquired-tier membership rule and report the best trailing
+    run — the layer gate still decides which stream qualifies.
+    """
+    trailing: dict[tuple[str, str], int] = {}
+    for match in PS2_CADENCE_HEALTH_ANY.finditer(log):
+        if int(match.group("presents")) <= baseline_presents:
+            continue
+        stream = (match.group("role"), match.group("display"))
+        locked = int(match.group("locked"))
+        output = int(match.group("output"))
+        # An acquired tier with ACTIVE generation (output = 2x lock) is the
+        # readiness signal here — the engine's own worst-second machinery
+        # already vouched for sustainability. The per-window producer >=
+        # 0.9*lock rule (right for PS2's steady 60) reset every 2-5 windows
+        # on PoR, whose unique rate honestly swings 27-60 around a correct
+        # 40 lock (run nds19: best trailing 36 in dialogue, 1-11 in live
+        # gameplay). The >=11 s cadence-healthy steady segment downstream
+        # still owns the actual evidence bar.
+        if locked in (20, 30, 40, 50, 60) and output > locked:
+            trailing[stream] = trailing.get(stream, 0) + 1
+        else:
+            trailing[stream] = 0
+    return max(trailing.values(), default=0)
 
 
 def ps2_best_gameplay_windows(log: str, baseline_presents: int) -> int:
@@ -6271,7 +8192,10 @@ def ps2_navigation_cadence_phase(log: str, baseline_presents: int) -> str:
             continue
         locked = int(match.group("locked"))
         producer_hz = float(match.group("producer_hz"))
-        if locked >= 50 and producer_hz >= 50.0:
+        # Tier protocol 2026-09-01: there is no 50 tier; a title that scans
+        # near 60 but sustains 50-59 locks 40.  The producer clock still has
+        # to be near the title's 60-Hz scan.
+        if locked >= 40 and producer_hz >= 50.0:
             consecutive_high += 1
             if consecutive_high >= 2:
                 title_ready = True
@@ -6338,7 +8262,11 @@ def wait_ps2_post_cinematic_gameplay(
         loop_cycle: Optional[tuple[object, ...]] = None,
         motion_min: Optional[float] = None,
         use_best_windows: bool = False,
-        min_structure: float = 0.0) -> dict[str, object]:
+        min_structure: float = 0.0,
+        probe_hat: bool = False,
+        skip_press_every: int = 4,
+        skip_press_limit: int = 20,
+        any_stream: bool = False) -> dict[str, object]:
     """Require sustained gameplay-tier cadence with live on-screen motion.
 
     Replaces the historical movie-dip transition (physically unobservable on
@@ -6414,19 +8342,26 @@ def wait_ps2_post_cinematic_gameplay(
               output / f"{prefix}-ps2-gameplay-probe-b.png"]
     probe_index = 0
     previous_probe: Optional[Path] = None
+    previous_secondary_probe: Optional[Path] = None
     consecutive_live = 0
     skip_presses = 0
     while time.monotonic() < deadline:
         log_now = qa.logs(adb, serial)
-        windows = ps2_best_gameplay_windows(log_now, baseline_presents) \
-            if use_best_windows else ps2_sustained_gameplay_windows(
-                log_now, baseline_presents
-            )
+        if any_stream:
+            windows = ps2_any_stream_gameplay_windows(
+                log_now, baseline_presents)
+        elif use_best_windows:
+            windows = ps2_best_gameplay_windows(log_now, baseline_presents)
+        else:
+            windows = ps2_sustained_gameplay_windows(
+                log_now, baseline_presents)
         # GTA III's intro plays several scenes; each skips on a button press
         # but a press is consumed per scene. Keep skipping (bounded) until a
         # live controlled scene passes acceptance — once in gameplay, Cross
         # is merely sprint and cannot break the traversal.
-        if consecutive_live == 0 and probe_index % 4 == 3 and skip_presses < 20:
+        if (consecutive_live == 0 and
+                probe_index % skip_press_every == skip_press_every - 1 and
+                skip_presses < skip_press_limit):
             # Alternate the system's skip key with the confirm action so
             # mixed prompt chains (Crazy Taxi: VMU wants Start, the name
             # registration wants A) both clear.
@@ -6439,12 +8374,29 @@ def wait_ps2_post_cinematic_gameplay(
         # forward push walks GTA III's player, but a 2D platformer needs a
         # lateral hold (NES Remix's Mario stood still through the whole wait
         # on an up-stick pulse, run wiiu14, 2026-08-16).
-        controller.motion_pair(probe_motion[0], probe_motion[1], hold=1.5)
+        if probe_hat:
+            # melonDS reads the DS d-pad from the Thor's HAT axes; the
+            # analog pulse never reaches the game (nds1-5, 2026-08-17).
+            controller.hat(probe_motion[0], "physical-probe-hat", hold=1.2)
+        else:
+            controller.motion_pair(probe_motion[0], probe_motion[1], hold=1.5)
         probe = probes[probe_index % 2]
+        secondary_probe = probe.with_name(
+            probe.stem + "-secondary" + probe.suffix) if any_stream else None
         probe_index += 1
         screenshot(adb, serial, probe)
         motion = screenshot_mean_abs_diff(previous_probe, probe) \
             if previous_probe is not None else 0.0
+        if secondary_probe is not None:
+            # The gameplay screen may be the LOWER display (Castlevania on
+            # DS): its live motion is what proves the scene, while the top
+            # map idles (run nds14). Use the livelier of the two panels.
+            screenshot(adb, serial, secondary_probe,
+                       secondary_token(adb, serial))
+            if previous_secondary_probe is not None:
+                motion = max(motion, screenshot_mean_abs_diff(
+                    previous_secondary_probe, secondary_probe))
+            previous_secondary_probe = secondary_probe
         previous_probe = probe
         green, dark = ps2_platform_signature(probe)
         structure = probe_gray_stddev(probe)
@@ -6489,7 +8441,9 @@ def run_game_from_system_menu(adb: Path, serial: str,
                               nes_fixture: Optional[dict[str, str]] = None,
                               rom_identity: Optional[dict[str, str]] = None,
                               core_hashes: Optional[dict[str, str]] = None,
-                              apk: Optional[Path] = None) -> dict[str, object]:
+                              apk: Optional[Path] = None,
+                              smoke_no_framegen: bool = False
+                              ) -> dict[str, object]:
     menu = output / f"{prefix}-system-menu.png"
     screenshot(adb, serial, menu)
     layer_baseline = main_activity_surface_layers(adb, serial)
@@ -6662,6 +8616,12 @@ def run_game_from_system_menu(adb: Path, serial: str,
         timeout=360.0 if slow_disc_boot else 60.0,
         assist=slow_disc_boot_assist if slow_disc_boot else None,
     )
+    # The primary proof above says nothing about the physical lower panel.
+    # Name a zero-present secondary generator here, before any DS/3DS/Wii U
+    # lower-screen navigation can misreport that stall as game state.
+    dual_screen_lower_presentation = require_dual_screen_lower_presentation(
+        lambda: qa.logs(adb, serial)
+    ) if case.dual_screen else None
     nes_runtime_geometry = require_nes_runtime_geometry(
         qa.logs(adb, serial), presented_path,
         calibration_fixture=nes_fixture is not None,
@@ -6671,11 +8631,17 @@ def run_game_from_system_menu(adb: Path, serial: str,
         adb, serial, controller, output, prefix, presented_path
     ) if nes_fixture is not None else None
     dual_gameplay_navigation = navigate_handheld_dual_screen_to_visible_ui(
-        adb, serial, controller, case, output, prefix
+        adb, serial, controller, case, output, prefix,
+        expected_title=expected_title,
     )
     nds_navigation = drive_nds_hunters_past_touch_menus(
         adb, serial, controller, output, prefix
-    ) if case.folder == "nds" else None
+    ) if (case.folder == "nds" and
+          "hunters" in normalize(expected_title or "")) else None
+    nds_por_navigation = drive_nds_portrait_of_ruin_new_game_setup(
+        adb, serial, controller, output, prefix
+    ) if (case.folder == "nds" and
+          "portraitofruin" in normalize(expected_title or "")) else None
     lower_rotation = require_n3ds_clockwise_lower(qa.logs(adb, serial)) \
         if case.folder == "n3ds" else None
     switch_navigation = navigate_switch_to_gameplay(
@@ -6722,7 +8688,12 @@ def run_game_from_system_menu(adb: Path, serial: str,
                     chord_attempt = 0
                     prompt_seen = False
                     prompt_cleared = False
-                    prompt_deadline = time.monotonic() + 25.0
+                    # Galaxy 1 on the Thor (run wii-b32, 2026-09-01) held its
+                    # strap-warning screen for ~20 s and then ran its space
+                    # intro before the prompt existed; 25 s expired on the
+                    # intro with chords=0.  The window only bounds waiting for
+                    # the prompt to APPEAR; clearance keeps its own 12 s.
+                    prompt_deadline = time.monotonic() + 90.0
                     prompt_text = ""
                     probe = 0
                     while time.monotonic() < prompt_deadline:
@@ -6832,6 +8803,29 @@ def run_game_from_system_menu(adb: Path, serial: str,
                 )
                 time.sleep(0.65)
             time.sleep(8.0)
+    n64_entry_presses = 0
+    n64_twine_entry = None
+    n64_fzero_entry = None
+    if case.folder == "n64":
+        normalized_n64_title = normalize(str(expected_title or ""))
+        if normalized_n64_title == normalize("007: The World Is Not Enough"):
+            n64_twine_entry = prepare_n64_twine_gameplay(
+                adb, serial, controller, output, prefix,
+            )
+        elif normalized_n64_title == normalize("F-Zero X"):
+            rife_attract_warmup = qa.adb(
+                adb, serial, "shell", "settings", "get", "global",
+                "emufusion_framegen_rife_qualification",
+            ).stdout.strip() == "1"
+            n64_fzero_entry = prepare_n64_fzero_attract_race(
+                adb, serial, controller, output, prefix,
+                warmup_cycles=0 if rife_attract_warmup else 1,
+            )
+        else:
+            n64_entry_presses = capture_n64_start_entry_presses(
+                adb, serial, output, prefix,
+            )
+
     # The proven-live-gameplay wait is generic (stable-tier windows + live
     # inter-probe motion, action presses only on statically held frames):
     # Wii physically needed it too — nine Galaxy runs sampled idle/cutscene
@@ -6843,12 +8837,48 @@ def run_game_from_system_menu(adb: Path, serial: str,
         Path(str(ps2_navigation["titleReference"])),
     ) if case.folder == "ps2" else (wait_ps2_post_cinematic_gameplay(
         adb, serial, controller, output, prefix, -1, None,
+        # 007: The World Is Not Enough parks on its PRESS START title art
+        # forever under the generic wait (run n64-2 sampled that static
+        # card through all seven retries — the default cycle never presses
+        # START). TWINE's state-owned profile/menu sequence is completed above
+        # before this generic live-motion wait; other N64 titles retain their
+        # OCR-authorized START plus A-only progression.
+        entry_presses=n64_entry_presses, skip_key=controller.START,
+        skip_label="physical-start-n64",
+        confirm_key=n64_console_a_key(controller),
+        loop_cycle=(n64_console_a_key(controller),),
+        skip_press_every=1, skip_press_limit=40,
+        # TWINE's dark mission scenes measured 1.84 mean-diff of REAL
+        # motion at a steady 30->60 lock (run n64-3) against the generic
+        # 2.0 full-brightness floor; static screens on this stack measure
+        # <=0.31 (DS calibration). Same sprite-scale floor as nds.
+        motion_min=0.5,
+    ) if (case.folder == "n64" and n64_fzero_entry is None and
+          normalized_n64_title !=
+          normalize("The Legend of Zelda: Ocarina of Time")) else (wait_ps2_post_cinematic_gameplay(
+        adb, serial, controller, output, prefix, -1, None,
+        # SMG2's Star Festival opening is a CONTROLLABLE 2D side-scroll
+        # walk: the default up-stick pulse leaves Mario standing until he
+        # falls asleep (run wii3, 2026-08-17 — probes caught the Zzz idle
+        # on a 97%-static card and the wait starved). A lateral hold walks
+        # him right, produces real probe motion, and advances the intro
+        # toward the dense-motion-rich 3D scenes.
+        probe_motion=("right", "right"),
     ) if case.folder == "wii" else (wait_ps2_post_cinematic_gameplay(
         adb, serial, controller, output, prefix, -1, None,
         entry_presses=10, skip_key=controller.START,
         skip_label="physical-start-dreamcast",
         skip_cycle=(controller.START, controller.A, controller.B),
-        loop_cycle=(controller.A, controller.START),
+        # Crazy Taxi's attract cycles title card -> SELF-DRIVING demo ->
+        # scores. In-loop A/START presses inserted a credit mid-attract and
+        # parked qualification on the idle driver-select countdown (the
+        # ~25% pass lottery across dreamcast5-10); B only ever backs out to
+        # the attract. The static cards between demo segments reset a
+        # trailing window count, so credit the PEAK run instead — the
+        # probes' live-motion requirement still lands arming inside a demo
+        # segment (the exact scene the dreamcast8 PASS sampled at 30→60).
+        loop_cycle=(controller.B,),
+        use_best_windows=True,
     ) if case.folder == "dreamcast" else (wait_ps2_post_cinematic_gameplay(
         adb, serial, controller, output, prefix, -1, None,
         # Super Mario 3D World: START clears the title, A accepts the file
@@ -6868,8 +8898,11 @@ def run_game_from_system_menu(adb: Path, serial: str,
         adb, serial, controller, output, prefix, -1, None,
         entry_presses=10, skip_key=controller.START,
         skip_label="physical-start-n3ds", confirm_key=controller.A,
+        # ALBW's retained file opens a "Start with this file?" sheet with
+        # Rename highlighted. Physical Down+A selects Begin; the prior
+        # A/START-first cycle stayed on Rename for the whole bounded wait.
         skip_cycle=(
-            controller.A, controller.START,
+            "down", controller.A, controller.A, controller.START,
             ("lower-tap", 620, 540),
             ("lower-tap", 620, 720),
         ),
@@ -6903,13 +8936,78 @@ def run_game_from_system_menu(adb: Path, serial: str,
         motion_min=0.0,
         use_best_windows=True,
         min_structure=8.0,
-    ) if case.folder == "ps3" else None)))))
+    ) if case.folder == "ps3" else None))))))
+    if n64_fzero_entry is not None:
+        # The F-Zero attract preparation itself proves a full-screen moving
+        # race and deliberately supplies no game input.  Running the generic
+        # N64 readiness loop here would inject A/START and cancel the attract.
+        ps2_gameplay_readiness = n64_fzero_entry
+    elif (case.folder == "n64" and normalized_n64_title ==
+          normalize("The Legend of Zelda: Ocarina of Time")):
+        # The generic cadence+pixel-motion probe can see an animated Ocarina
+        # close-up as "live" even though the player has no control and the HUD
+        # is absent.  Bind the 20-fps qualification scene to the visible
+        # top-screen gameplay contract before proof can be armed.
+        ocarina_hud = wait_n64_ocarina_gameplay_hud(
+            adb, serial, controller, output, prefix,
+        )
+        if ps2_gameplay_readiness is None:
+            ps2_gameplay_readiness = {}
+        ps2_gameplay_readiness["ocarinaGameplay"] = ocarina_hud
     if case.folder == "nds":
-        # The Hunters touch driver already reached morph-ball on nds8–10.
-        # The generic PS2 wait then held START/A for minutes, crashed the
-        # process to the launcher (nds11), and never armed proof.
-        ps2_gameplay_readiness = nds_navigation or {"handheldDriven": True}
-        time.sleep(8.0)
+        if nds_navigation is not None:
+            # The Hunters touch driver already reached morph-ball on
+            # nds8–10. The generic PS2 wait then held START/A for minutes,
+            # crashed the process to the launcher (nds11), and never armed
+            # proof.
+            ps2_gameplay_readiness = nds_navigation
+            time.sleep(8.0)
+        else:
+            # Button-navigable DS titles (Castlevania DoS pinned
+            # 2026-08-17: Hunters' dark, input-gated morph-ball room
+            # honestly starves the dense content gates at ~30 Hz) go
+            # through the generic gameplay wait. melonDS reads the DS
+            # d-pad from HAT axes, so the probe pulse must be a held HAT
+            # leg — the analog sweep never reaches the game.
+            # Castlevania: Order of Ecclesia threads its ENTIRE first-boot
+            # flow on buttons (physically verified by hand, 2026-08-17):
+            # START/A clear title and data select, and the EDIT NAME
+            # keyboard is d-pad-driven — A types the highlighted key, START
+            # jumps the cursor to OK, A confirms; A then advances the
+            # story crawl into Shanoa's 60 fps side-scrolling gameplay.
+            # (Dawn of Sorrow was abandoned: its SIGN YOUR NAME canvas is
+            # stylus-only and injected taps drew strokes without ever
+            # registering a clean OK tap, runs nds6-7.) No lower-taps here:
+            # a stray tap types random keyboard letters.
+            # OoE's intro keeps the TOP screen on a static ornament frame
+            # while the story/dialogue (and its A-gated advance) runs on
+            # the BOTTOM screen; the default one-press-per-four-probes
+            # bound of 20 exhausted mid-dialogue and the wait starved on
+            # a screen the intro never animates (run nds8). Press A every
+            # probe with a wide bound — in Shanoa's gameplay A is merely
+            # attack.
+            # Portrait of Ruin's deterministic data/name/emblem setup is
+            # completed above before this generic live-motion wait. Do not
+            # replay title/file inputs here: they previously opened COPY
+            # DATA or paused gameplay. B/A only advance story dialogue and
+            # become harmless attacks once the lateral gameplay probe lands.
+            ps2_gameplay_readiness = wait_ps2_post_cinematic_gameplay(
+                adb, serial, controller, output, prefix, -1, None,
+                entry_presses=0, skip_key=controller.START,
+                skip_label="physical-start-nds", confirm_key=controller.A,
+                probe_motion=("right", "right"), probe_hat=True,
+                loop_cycle=(controller.B, controller.A),
+                skip_press_every=1, skip_press_limit=80,
+                any_stream=True,
+                # 2D sprite motion moves ~5% of a DS screen's pixels: live
+                # PoR gameplay measured 0.81 mean-diff (run nds18) while
+                # every static screen measured <=0.31 (map 0.18, pause
+                # 0.30, dialogue 0.30). The full-screen 3D floor of 2.0
+                # starved the wait on real gameplay; 0.5 separates the two
+                # populations with margin on both sides. Navigation
+                # heuristic only — the dense gates stay the arbiter.
+                motion_min=0.5,
+            )
     real_nes_readiness = prepare_real_nes_gameplay(
         adb, serial, controller, output, prefix, str(expected_title),
         nes_logcat_capture,
@@ -6930,8 +9028,81 @@ def run_game_from_system_menu(adb: Path, serial: str,
     # motion gates before the first playable scene appears).
     scene_attempts = 7 if case.folder in {
         "ps2", "wii", "wiiu", "switch", "nds", "n3ds", "dreamcast", "ps3",
+        "n64",
     } else 1
+    if (case.folder == "n64" and normalized_n64_title ==
+            normalize("The Legend of Zelda: Ocarina of Time")):
+        # Ocarina has deterministic, title-owned HUD navigation and the N64
+        # proof loop itself advances its one mandatory Saria greeting.  A
+        # failed moving-gameplay capture is therefore a real diagnostic, not
+        # evidence that a blind 75-second wait will find a different scene.
+        # r10 otherwise left the OLED on through up to six identical retry
+        # delays after the first complete compositor-bound rejection.
+        scene_attempts = 1
     generated = None
+    # The list-view smoke verifies RELAUNCH health: route, visible frames,
+    # engine telemetry, stop/return. It does not drive gameplay, so the
+    # relaunched title legitimately idles on a static title screen where
+    # presents pause and the dense motion gates cannot be satisfied —
+    # neither state distinguishes relaunch failure. The MAIN qualification
+    # (which just ran the full evidence on this exact launch stack) owns
+    # the frame-generation bar; the smoke skips only this phase.
+    if smoke_no_framegen:
+        scene_attempts = 0
+    if (not smoke_no_framegen and case.folder == "n64" and
+            normalized_n64_title ==
+                    normalize("The Legend of Zelda: Ocarina of Time")):
+        # Stage the save into post-greeting controllable gameplay before proof
+        # begins. Physical r13 proved the camera/orbit path produces an exact
+        # 20-Hz unique clock and 40-Hz physical output, but its short evidence
+        # window ended on Saria's first dialogue page and therefore contained
+        # no representative traversal. These exact long legs physically reach
+        # the house exit. Clear every bounded dialogue page with N64 A, then
+        # require the ordinary gameplay HUD before setting the shell-only
+        # proof switch.
+        staging_vectors = (
+            (-0.720, -0.720, 4.0),
+            (-0.720, 0.000, 3.0),
+            (0.000, -0.720, 3.0),
+        )
+        try:
+            for horizontal, vertical, hold in staging_vectors:
+                controller.set_left_stick_vector(
+                    horizontal, vertical,
+                    "physical-n64-ocarina-preproof-exit", hold=hold,
+                )
+                controller.key(
+                    n64_console_a_key(controller),
+                    "physical-n64-a-preproof-dialogue", hold=0.055,
+                )
+            for _ in range(12):
+                controller.key(
+                    n64_console_a_key(controller),
+                    "physical-n64-a-preproof-dialogue", hold=0.055,
+                )
+        finally:
+            controller.center_left_stick(
+                "physical-n64-ocarina-preproof-exit-release"
+            )
+        for settle_attempt in range(20):
+            staged_ocarina = output / (
+                f"{prefix}-n64-ocarina-motion-ready-"
+                f"{settle_attempt:02d}.png"
+            )
+            screenshot(adb, serial, staged_ocarina)
+            if n64_ocarina_gameplay_hud(staged_ocarina):
+                break
+            if settle_attempt % 4 == 3:
+                controller.key(
+                    n64_console_a_key(controller),
+                    "physical-n64-a-preproof-settle", hold=0.055,
+                )
+            time.sleep(0.25)
+        else:
+            raise RuntimeError(
+                "Ocarina pre-proof staging did not reach dialogue-free "
+                "controllable gameplay"
+            )
     # Proof is armed exactly once across every scene attempt: the verifier's
     # exactly-once generator-proof contract reads the bounded per-launch log,
     # and per-attempt re-arming physically tripped it on the first retried
@@ -6965,7 +9136,37 @@ def run_game_from_system_menu(adb: Path, serial: str,
                 if (scene_attempt >= scene_attempts or
                         not _is_content_starved_framegen_failure(str(failure))):
                     raise
-                time.sleep(75.0)
+                # Content-starved scenes are frequently dialog- or
+                # prompt-gated: SMG2's Star Festival intro holds a
+                # 95%-static 2D card until A is pressed, and with nothing
+                # pressed between attempts all seven sampled the exact same
+                # held card (run wii2, 2026-08-17). Drive the SYSTEM's
+                # accept control a few times, spaced, so the next attempt
+                # samples a later scene; in live gameplay these presses are
+                # the harmless primary action, never pause (START is what
+                # froze probes on SM3DW, run wiiu15).
+                advance_key = {
+                    "wii": controller.B, "ps2": controller.B,
+                    "ps3": controller.B, "psp": controller.B,
+                    "wiiu": controller.A, "n3ds": controller.A,
+                    "dreamcast": controller.A, "switch": controller.A,
+                    "nds": controller.A,
+                    "n64": n64_console_a_key(controller),
+                }.get(case.folder)
+                # DS dialogue scenes hold dozens of A-gated lines (OoE's
+                # Albus scene, run nds12); spend the same 75 s pressing
+                # more often there.
+                advance_count = 8 if case.folder == "nds" else 4
+                for advance in range(advance_count):
+                    if advance_key is not None:
+                        controller.key(
+                            advance_key,
+                            f"physical-scene-advance-{scene_attempt}-"
+                            f"{advance + 1}",
+                            hold=0.055,
+                        )
+                    time.sleep(8.0)
+                time.sleep(75.0 - 8.0 * advance_count)
     finally:
         # Also runs when layer discovery, SurfaceFlinger capture, or the
         # strict verifier rejects the title. No following title may inherit
@@ -7066,6 +9267,7 @@ def run_game_from_system_menu(adb: Path, serial: str,
         "launchVideo": launch_video,
         "launchInputClock": launch_clock,
         "presentedFrame": presented,
+        "dualScreenLowerPresentation": dual_screen_lower_presentation,
         "nesRuntimeGeometry": nes_runtime_geometry,
         "nesQualification": nes_fixture_result,
         "nesCheat": nes_cheat,
@@ -7075,8 +9277,10 @@ def run_game_from_system_menu(adb: Path, serial: str,
         "nesRealGameplayReadiness": real_nes_readiness,
         "ps2TitleNavigation": ps2_navigation,
         "ps2GameplayReadiness": ps2_gameplay_readiness,
+        "n64FzeroScene": n64_fzero_entry,
         "dualGameplayNavigation": dual_gameplay_navigation,
         "ndsNavigation": nds_navigation,
+        "ndsPortraitOfRuinNavigation": nds_por_navigation,
         "switchNavigation": switch_navigation,
         "frameGeneration": generated,
         "lowerDisplayRotation": lower_rotation,
@@ -7101,18 +9305,16 @@ def secondary_gameplay_layers(adb: Path, serial: str,
                               clockwise_texture: bool) -> list[str]:
     """Return only the physical lower-display gameplay compositor layer.
 
-    3DS uses a rotated TextureView, so its generated pixels are composed into
-    PreviewActivity's own BLAST window. Other dual-screen systems use the
-    independently latched SurfaceView created by PreviewActivity. Keeping the
-    two identities explicit prevents a preview-video or primary Qt layer from
-    being joined to the secondary generator telemetry.
+    Rotation is an internal presentation detail: both DS and 3DS ultimately
+    latch the generated lower-screen frames through PreviewActivity's gameplay
+    SurfaceView.  The activity/window layers can exist alongside it but do not
+    own a frame timeline (physically verified on the Thor: those layers return
+    only zero latency rows while the BLAST SurfaceView returns real fences).
+    Select only that independently latched SurfaceView so a parent window can
+    never be mistaken for the secondary generator's visible output.
     """
     listing = qa.adb(adb, serial, "shell", "dumpsys", "SurfaceFlinger",
                      "--list").stdout.splitlines()
-    if clockwise_texture:
-        prefix = "com.thorium.preview/com.thorium.preview.PreviewActivity#"
-        return list(dict.fromkeys(line.strip() for line in listing
-                                  if line.strip().startswith(prefix)))
     return list(dict.fromkeys(line.strip() for line in listing
                 if "SurfaceView[com.thorium.preview/"
                    "com.thorium.preview.PreviewActivity](BLAST)" in line))
@@ -7181,16 +9383,23 @@ def require_safe_motion_bound(log: str, report: dict[str, object]) -> dict[str, 
     shorter = min(width, height)
     if shorter < 1:
         raise RuntimeError("frame-generation motion bound has invalid source geometry")
-    expected_pixels = min(80.0, max(4.0, shorter * 0.10))
+    # Reviewed source-relative limit: 10 % of the shorter source dimension,
+    # capped at MAX_FLOW_PIXELS (108, raised from 80 on 2026-09-02 for the
+    # dense reach; 1080p sources report exactly 108.0, 720p sources 72.0).
+    # 2026-09-04: MAX_FLOW_PIXELS 216 and MAX_FLOW_SOURCE_FRACTION 0.20 (a
+    # 20-Hz N64 pan moves ~200 px per source frame at 1080p; FSR 3 tracks
+    # 512).  The validated planes now use a signed square-root encoding so
+    # sub-pixel precision near zero survives the doubled range.
+    expected_pixels = min(216.0, max(4.0, shorter * 0.20))
     expected_fraction = expected_pixels / shorter
     if abs(pixels - expected_pixels) > 0.05 or abs(fraction - expected_fraction) > 0.001:
         raise RuntimeError(
             "frame-generation motion bound does not match the reviewed "
             "source-relative limit"
         )
-    if shorter >= 40 and fraction > 0.101:
+    if shorter >= 40 and fraction > 0.201:
         raise RuntimeError(
-            "frame-generation motion range exceeds ten percent of the source"
+            "frame-generation motion range exceeds twenty percent of the source"
         )
     return {
         "sourceWidth": width,
@@ -7236,7 +9445,7 @@ def require_n3ds_clockwise_lower(log: str) -> dict[str, object]:
 
 _FRAMEGEN_HEALTH_STRING_FIELDS = frozenset((
     "role", "proof_contract", "dense_variant", "dense_diagnostic_mask_layout",
-    "presentation_timing_mode",
+    "presentation_timing_mode", "source_clock_kind",
 ))
 _FRAMEGEN_OPTIONAL_WORKLOAD_FIELDS = (
     "dense_variant",
@@ -7359,7 +9568,7 @@ def _decode_framegen_health_groups(
     """
     schema = int(groups.get("proof_schema_version") or 0)
     for label, fields in _FRAMEGEN_OPTIONAL_ATOMIC_BLOCKS:
-        if schema in (37, 38, 39) and label == "v33 scheduler telemetry":
+        if schema in _FRAMEGEN_TIMESTAMP_SCHEMA_VERSIONS and label == "v33 scheduler telemetry":
             # Schema37 deliberately removes obsolete one-midpoint quota
             # fields. Its smaller timestamp-scheduler block is mandatory in
             # the exact V37 grammar and validated below the transport join.
@@ -7404,7 +9613,10 @@ _FRAMEGEN_SPLIT_COMMON_KEY_FIELDS = (
     "proof_schema_version", "health_sequence", "presents",
     "window_start_ns", "window_end_ns", "proof_evidence_presentation_epoch",
 )
-_FRAMEGEN_SPLIT_SCHEMA_VERSIONS = (32, 33, 34, 35, 36, 37, 38, 39)
+_FRAMEGEN_SPLIT_SCHEMA_VERSIONS = (32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 54, 55, 56, 57, 58, 59, 60, 61, 62) + (62,)
+_FRAMEGEN_EPOCH_SCHEMA_VERSIONS = tuple(range(36, 52)) + (54, 55, 56, 57, 58, 59, 60, 61, 62) + (62,)
+_FRAMEGEN_TIMESTAMP_SCHEMA_VERSIONS = tuple(range(37, 52)) + (54, 55, 56, 57, 58, 59, 60, 61, 62) + (62,)
+_FRAMEGEN_RATIONAL_SCHEMA_VERSIONS = tuple(range(43, 52)) + (54, 55, 56, 57, 58, 59, 60, 61, 62)
 _FRAMEGEN_V33_CONTRACT = (
     "dense-fragment-160x90-v33-pair-quota-scheduler-qualification-x2-presented"
 )
@@ -7426,7 +9638,57 @@ _FRAMEGEN_V38_CONTRACT = (
 _FRAMEGEN_V39_CONTRACT = (
     "dense-fragment-128x72-v39-present-timed-vector-trajectory-qualification-x2-presented"
 )
-
+_FRAMEGEN_V40_CONTRACT = (
+    "dense-fragment-128x72-v40-temporal-flow-guidance-present-timed-vector-trajectory-qualification-x2-presented"
+)
+_FRAMEGEN_V41_CONTRACT = (
+    "dense-fragment-128x72-v41-strict-temporal-flow-guidance-present-timed-vector-trajectory-qualification-x2-presented"
+)
+_FRAMEGEN_V42_CONTRACT = (
+    "dense-fragment-128x72-v42-uniform-timestamp-resample-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V43_CONTRACT = (
+    "dense-fragment-128x72-v43-rational-source-panel-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V44_CONTRACT = (
+    "dense-fragment-128x72-v44-unique-endpoint-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V45_CONTRACT = (
+    "dense-fragment-128x72-v45-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V46_CONTRACT = (
+    "dense-fragment-128x72-v46-independent-bidirectional-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V47_CONTRACT = (
+    "dense-fragment-128x72-v47-stamped-pts-loss-bound-independent-bidirectional-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V48_CONTRACT = (
+    "dense-fragment-128x72-v48-reciprocal-proposal-stamped-pts-loss-bound-bidirectional-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V49_CONTRACT = (
+    "dense-fragment-128x72-v49-multilevel-reciprocal-proposal-stamped-pts-loss-bound-bidirectional-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V50_CONTRACT = (
+    "dense-fragment-128x72-v50-iterated-multilevel-reciprocal-proposal-stamped-pts-loss-bound-bidirectional-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V51_CONTRACT = (
+    "dense-fragment-128x72-v51-cost-tested-bidirectional-refinement-stamped-pts-loss-bound-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V54_CONTRACT = (
+    "dense-fragment-128x72-v54-cycle-aware-cost-tested-bidirectional-refinement-stamped-pts-loss-bound-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V55_CONTRACT = (
+    "dense-fragment-128x72-v55-cycle-regularized-cost-tested-bidirectional-refinement-stamped-pts-loss-bound-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V56_CONTRACT = (
+    "dense-fragment-128x72-v56-strong-cycle-regularized-cost-tested-bidirectional-refinement-stamped-pts-loss-bound-spatial-consensus-rational-clock-strict-flow-qualification-max2x-presented"
+)
+_FRAMEGEN_V57_CONTRACT = "dense-v57-joint-cycle-rational-max2x-presented"
+_FRAMEGEN_V58_CONTRACT = "dense-v58-joint-cycle-rational-max2x-presented"
+_FRAMEGEN_V59_CONTRACT = "dense-v59-edge-aware-neighbor-rational-max2x-presented"
+_FRAMEGEN_V60_CONTRACT = "dense-v60-independent-global-seed-rational-max2x-presented"
+_FRAMEGEN_V61_CONTRACT = "dense-v61-parallel-global-seed-rational-max2x-presented"
+_FRAMEGEN_V62_CONTRACT = "dense-v62-parallel-global-seed-rational-tiered-max3x-presented"
 _FRAMEGEN_EMPTY_DIAGNOSTIC_COMMON_FIELDS = (
     "window_presents", "proof", "dense_proof_cells",
     "dense_diagnostic_cells", "dense_diagnostic_tiles",
@@ -7708,7 +9970,7 @@ def _require_framegen_v36_evidence_hierarchy(
 
 def _framegen_health_transport_records(
         log: str) -> list[dict[str, object]]:
-    """Parse complete legacy or split schema-32..39 HEALTH records in order.
+    """Parse complete legacy or split schema-32..51/54..57 HEALTH records in order.
 
     A split record exists only after its base and immediately following dense
     extension have both been observed. Interleaved unrelated logcat records
@@ -7717,6 +9979,27 @@ def _framegen_health_transport_records(
     truncated or later-session extension from being joined by coincidence.
     """
     base_patterns = tuple(pattern for pattern in (
+        getattr(frame_gen, "HEALTH_BASE_V62", None),
+        getattr(frame_gen, "HEALTH_BASE_V61", None),
+        getattr(frame_gen, "HEALTH_BASE_V60", None),
+        getattr(frame_gen, "HEALTH_BASE_V59", None),
+        getattr(frame_gen, "HEALTH_BASE_V58", None),
+        getattr(frame_gen, "HEALTH_BASE_V57", None),
+        getattr(frame_gen, "HEALTH_BASE_V56", None),
+        getattr(frame_gen, "HEALTH_BASE_V55", None),
+        getattr(frame_gen, "HEALTH_BASE_V54", None),
+        getattr(frame_gen, "HEALTH_BASE_V51", None),
+        getattr(frame_gen, "HEALTH_BASE_V50", None),
+        getattr(frame_gen, "HEALTH_BASE_V49", None),
+        getattr(frame_gen, "HEALTH_BASE_V48", None),
+        getattr(frame_gen, "HEALTH_BASE_V47", None),
+        getattr(frame_gen, "HEALTH_BASE_V46", None),
+        getattr(frame_gen, "HEALTH_BASE_V45", None),
+        getattr(frame_gen, "HEALTH_BASE_V44", None),
+        getattr(frame_gen, "HEALTH_BASE_V43", None),
+        getattr(frame_gen, "HEALTH_BASE_V42", None),
+        getattr(frame_gen, "HEALTH_BASE_V41", None),
+        getattr(frame_gen, "HEALTH_BASE_V40", None),
         getattr(frame_gen, "HEALTH_BASE_V39", None),
         getattr(frame_gen, "HEALTH_BASE_V38", None),
         getattr(frame_gen, "HEALTH_BASE_V37", None),
@@ -7727,6 +10010,27 @@ def _framegen_health_transport_records(
         getattr(frame_gen, "HEALTH_BASE", None),
     ) if pattern is not None)
     extension_patterns = tuple(pattern for pattern in (
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V62", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V61", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V60", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V59", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V58", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V57", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V56", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V55", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V54", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V51", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V50", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V49", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V48", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V47", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V46", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V45", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V44", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V43", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V42", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V41", None),
+        getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V40", None),
         getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V39", None),
         getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V38", None),
         getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V37", None),
@@ -7734,6 +10038,26 @@ def _framegen_health_transport_records(
         getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V35", None),
         getattr(frame_gen, "HEALTH_DENSE_EXTENSION_V34", None),
         getattr(frame_gen, "HEALTH_DENSE_EXTENSION", None),
+    ) if pattern is not None)
+    rational_clock_patterns = tuple(pattern for pattern in (
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V62", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V61", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V60", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V59", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V58", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V57", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V56", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V55", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V54", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V51", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V50", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V49", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V48", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V47", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V46", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V45", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V44", None),
+        getattr(frame_gen, "HEALTH_RATIONAL_CLOCK_V43", None),
     ) if pattern is not None)
     records: list[dict[str, object]] = []
     # Split base/extension pairing is per generator stream: each generator
@@ -7744,7 +10068,8 @@ def _framegen_health_transport_records(
     # identity plus generator id keeps every anti-splicing guarantee within
     # a stream while tolerating exactly that physical interleaving.
     pending: dict[tuple[int, str],
-                  tuple[dict[str, Optional[str]], int, int]] = {}
+                  tuple[dict[str, Optional[str]], int, int,
+                        Optional[dict[str, Optional[str]]]]] = {}
 
     def strict_pid(line: str) -> int:
         pid = frame_gen.framegen_line_pid(line)
@@ -7756,6 +10081,11 @@ def _framegen_health_transport_records(
 
     def stale_pending(key: tuple[int, str], reason: str) -> None:
         if key in pending:
+            if pending[key][3] is not None:
+                raise RuntimeError(
+                    "frame-generation rational-clock HEALTH lacks its required "
+                    f"rational-clock completion before {reason}"
+                )
             raise RuntimeError(
                 "frame-generation split HEALTH base lacks its immediate dense "
                 f"extension before {reason}"
@@ -7776,6 +10106,14 @@ def _framegen_health_transport_records(
                 "ambiguous frame-generation HEALTH dense extension record"
             )
         extension = extension_matches[0] if extension_matches else None
+        rational_matches = [pattern.search(line)
+                            for pattern in rational_clock_patterns]
+        rational_matches = [match for match in rational_matches
+                            if match is not None]
+        if len(rational_matches) > 1:
+            raise RuntimeError(
+                "ambiguous frame-generation rational-clock HEALTH record")
+        rational_clock = rational_matches[0] if rational_matches else None
         legacy = frame_gen.HEALTH.search(line)
 
         if "Presentation health base" in line and base is None:
@@ -7786,7 +10124,13 @@ def _framegen_health_transport_records(
             raise RuntimeError(
                 "frame-generation split HEALTH dense extension is malformed or truncated"
             )
-        matches = sum(value is not None for value in (base, extension, legacy))
+        if ("Presentation health rational-clock" in line and
+                rational_clock is None):
+            raise RuntimeError(
+                "frame-generation rational-clock HEALTH is malformed or truncated"
+            )
+        matches = sum(value is not None for value in (
+            base, extension, rational_clock, legacy))
         if matches > 1:
             raise RuntimeError("ambiguous frame-generation HEALTH transport record")
 
@@ -7896,7 +10240,385 @@ def _framegen_health_transport_records(
                 raise RuntimeError(
                     "frame-generation schema39 HEALTH lacks its exact present-timed contract"
                 )
-            pending[base_stream] = (groups, base_stream[0], line_index)
+            if schema == 40 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V40_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema40 HEALTH lacks its exact temporal-flow contract"
+                )
+            if schema == 41 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V41_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema41 HEALTH lacks its exact strict-temporal-flow contract"
+                )
+            if schema == 42 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V42_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema42 HEALTH lacks its exact uniform timestamp-resample contract"
+                )
+            if schema == 43 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V43_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema43 HEALTH lacks its exact rational-clock contract"
+                )
+            if schema == 44 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V44_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema44 HEALTH lacks its exact unique-endpoint rational-clock contract"
+                )
+            if schema == 45 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V45_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema45 HEALTH lacks its exact spatial-consensus rational-clock contract"
+                )
+            if schema == 46 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V46_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema46 HEALTH lacks its exact independent-bidirectional spatial-consensus rational-clock contract"
+                )
+            if schema == 47 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V47_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema47 HEALTH lacks its exact stamped-PTS loss-bound contract"
+                )
+            if schema == 48 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V48_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema48 HEALTH lacks its exact reciprocal-proposal stamped-PTS loss-bound contract"
+                )
+            if schema == 49 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V49_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema49 HEALTH lacks its exact multilevel-reciprocal-proposal stamped-PTS loss-bound contract"
+                )
+            if schema == 50 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V50_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema50 HEALTH lacks its exact iterated-multilevel-reciprocal-proposal stamped-PTS loss-bound contract"
+                )
+            if schema == 51 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V51_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema51 HEALTH lacks its exact cost-tested bidirectional-refinement stamped-PTS loss-bound contract"
+                )
+            if schema == 54 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V54_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema54 HEALTH lacks its exact cycle-aware cost-tested bidirectional-refinement stamped-PTS loss-bound contract"
+                )
+            if schema == 55 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V55_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema55 HEALTH lacks its exact cycle-regularized cost-tested bidirectional-refinement stamped-PTS loss-bound contract"
+                )
+            if schema == 56 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V56_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema56 HEALTH lacks its exact strong-cycle-regularized cost-tested bidirectional-refinement stamped-PTS loss-bound contract"
+                )
+            if schema == 57 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V57_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema57 HEALTH lacks its exact joint-cycle rational max2x contract"
+                )
+            if schema == 58 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V58_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema58 HEALTH lacks its exact joint-cycle rational max2x contract"
+                )
+            if schema == 59 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V59_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema59 HEALTH lacks its exact edge-aware-neighbor rational max2x contract"
+                )
+            if schema == 60 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V60_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema60 HEALTH lacks its exact independent-global-seed rational max2x contract"
+                )
+            if schema == 61 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V61_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema61 HEALTH lacks its exact parallel-global-seed rational max2x contract"
+                )
+            if schema == 62 and (
+                    not all(diagnostic_present) or
+                    groups.get("proof_contract") != _FRAMEGEN_V62_CONTRACT or
+                    groups.get("proof_evidence_presentation_epoch") is None or
+                    groups.get("proof_evidence_enqueued_in_epoch") is None or
+                    groups.get("presentation_timing_mode") !=
+                        "egl-android-next-vsync" or
+                    groups.get("cadence_reject_consecutive_windows") != "3" or
+                    any(groups.get(key) is None for key in (
+                        "window_real_priority", "window_presentation_epoch",
+                        "window_synthetic_selected",
+                        "window_duplicate_pair_selection",
+                        "endpoint_fifo_coalesced",
+                        "endpoint_timestamp_corrections",
+                        "dense_diagnostic_last_target_source_ns"))):
+                raise RuntimeError(
+                    "frame-generation schema62 HEALTH lacks its exact parallel-global-seed rational tiered max3x contract"
+                )
+            pending[base_stream] = (groups, base_stream[0], line_index, None)
             continue
 
         if extension is not None:
@@ -7908,7 +10630,12 @@ def _framegen_health_transport_records(
                 raise RuntimeError(
                     "frame-generation split HEALTH has an orphan dense extension"
                 )
-            base_groups, base_pid, _base_line_index = pending[extension_stream]
+            base_groups, base_pid, _base_line_index, prior_extension = \
+                pending[extension_stream]
+            if prior_extension is not None:
+                raise RuntimeError(
+                    "frame-generation split HEALTH has a duplicate dense extension"
+                )
             mismatched = [
                 key for key in _FRAMEGEN_SPLIT_COMMON_KEY_FIELDS
                 if base_groups.get(key) != extension_groups.get(key)
@@ -7919,6 +10646,10 @@ def _framegen_health_transport_records(
                     "frame-generation split HEALTH extension identity mismatch: " +
                     detail
                 )
+            if int(extension_groups["proof_schema_version"]) in _FRAMEGEN_RATIONAL_SCHEMA_VERSIONS:
+                pending[extension_stream] = (
+                    base_groups, base_pid, _base_line_index, extension_groups)
+                continue
             # Decode the exact grammar that matched this schema. Unioning all
             # version grammars would fabricate absent v34 names in a v32/33
             # record and make immutable older evidence appear truncated.
@@ -7966,9 +10697,81 @@ def _framegen_health_transport_records(
                         "frame-generation schema39 HEALTH is impossible: " +
                         "; ".join(failures)
                     )
+            elif int(record["proof_schema_version"]) == 40:
+                failures = (frame_gen._v37_diagnostic_hierarchy(record) +
+                            frame_gen._v37_output_accounting_hierarchy(record))
+                if failures:
+                    raise RuntimeError(
+                        "frame-generation schema40 HEALTH is impossible: " +
+                        "; ".join(failures)
+                    )
+            elif int(record["proof_schema_version"]) == 41:
+                failures = (frame_gen._v37_diagnostic_hierarchy(record) +
+                            frame_gen._v37_output_accounting_hierarchy(record))
+                if failures:
+                    raise RuntimeError(
+                        "frame-generation schema41 HEALTH is impossible: " +
+                        "; ".join(failures)
+                    )
+            elif int(record["proof_schema_version"]) == 42:
+                failures = (frame_gen._v37_diagnostic_hierarchy(record) +
+                            frame_gen._v37_output_accounting_hierarchy(record))
+                if failures:
+                    raise RuntimeError(
+                        "frame-generation schema42 HEALTH is impossible: " +
+                        "; ".join(failures)
+                    )
             record.update({"pid": base_pid, "line_index": line_index})
             records.append(record)
             del pending[extension_stream]
+            continue
+
+        if rational_clock is not None:
+            clock_pid = strict_pid(line)
+            clock_groups = rational_clock.groupdict()
+            clock_stream = (clock_pid, str(clock_groups.get("generator")))
+            if clock_stream not in pending or pending[clock_stream][3] is None:
+                raise RuntimeError(
+                    "frame-generation HEALTH has an orphan rational-clock record"
+                )
+            base_groups, base_pid, _base_line_index, extension_groups = \
+                pending[clock_stream]
+            assert extension_groups is not None
+            mismatched = [
+                key for key in _FRAMEGEN_SPLIT_COMMON_KEY_FIELDS
+                if base_groups.get(key) != clock_groups.get(key)
+            ]
+            if clock_pid != base_pid or mismatched:
+                detail = ", ".join(mismatched) if mismatched else "pid"
+                raise RuntimeError(
+                    "frame-generation rational-clock HEALTH identity mismatch: " +
+                    detail
+                )
+            names = (set(frame_gen.HEALTH.groupindex) | set(base_groups) |
+                     set(extension_groups) | set(clock_groups))
+            merged: dict[str, Optional[str]] = {}
+            for key in names:
+                values = [groups.get(key) for groups in (
+                    base_groups, extension_groups, clock_groups)]
+                present_values = [value for value in values if value is not None]
+                if len(set(present_values)) > 1:
+                    raise RuntimeError(
+                        "frame-generation rational-clock HEALTH duplicates a conflicting " +
+                        key
+                    )
+                merged[key] = present_values[0] if present_values else None
+            record = _decode_framegen_health_groups(merged)
+            failures = (frame_gen._v37_diagnostic_hierarchy(record) +
+                        frame_gen._v37_output_accounting_hierarchy(record) +
+                        frame_gen._v43_rational_clock_hierarchy(record))
+            if failures:
+                raise RuntimeError(
+                    "frame-generation rational-clock HEALTH is impossible: " +
+                    "; ".join(failures)
+                )
+            record.update({"pid": base_pid, "line_index": line_index})
+            records.append(record)
+            del pending[clock_stream]
             continue
 
         if legacy is not None:
@@ -8042,27 +10845,34 @@ def _steady_framegen_segment(
         # through into the backward-compatible legacy run.
         schema = _framegen_health_schema(end)
         presentation_epoch = (int(end["window_presentation_epoch"])
-                              if schema in (36, 37, 38, 39) else None)
+                              if schema in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS else None)
         evidence_epoch = (int(end["proof_evidence_presentation_epoch"])
-                          if schema in (36, 37, 38, 39) else None)
-        if schema in (36, 37, 38, 39) and presentation_epoch != evidence_epoch:
+                          if schema in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS else None)
+        if schema in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS and presentation_epoch != evidence_epoch:
             return None
 
         def same_run(record: dict[str, object]) -> bool:
             if int(record["locked"]) != tier:
                 return False
-            if schema not in (36, 37, 38, 39):
-                return _framegen_health_schema(record) not in (36, 37, 38, 39)
-            return (_framegen_health_schema(record) == schema and
+            if schema not in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS:
+                return _framegen_health_schema(record) not in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS
+            same_epoch = (_framegen_health_schema(record) == schema and
                     int(record["window_presentation_epoch"]) ==
                         presentation_epoch and
                     int(record["proof_evidence_presentation_epoch"]) ==
                         evidence_epoch)
+            if not same_epoch:
+                return False
+            if schema in _FRAMEGEN_RATIONAL_SCHEMA_VERSIONS:
+                return all(record.get(key) == end.get(key) for key in (
+                    "target_millihz", "panel_millihz",
+                    "panel_scans_per_output", "source_clock_kind"))
+            return True
 
         baseline_index = end_index
         while baseline_index > 0 and same_run(records[baseline_index - 1]):
             baseline_index -= 1
-        if schema in (37, 38, 39):
+        if schema in _FRAMEGEN_TIMESTAMP_SCHEMA_VERSIONS:
             # A buffered-source underrun does not change the presentation
             # epoch: the renderer deliberately leaves that output slot empty
             # and resumes when the exact successor arrives.  It must not be
@@ -8085,6 +10895,30 @@ def _steady_framegen_segment(
                 if (int(record["window_due_no_endpoint"]) != 0 and
                         not cadence_healthy):
                     last_unbuffered = index
+                # A BURST of timestamp corrections / FIFO coalesces (>=3 in
+                # one window) is material source loss for that stretch; a
+                # JIT warm-up commonly accrues such bursts and then stays
+                # frozen for a long steady scene (psp1 2026-08-17: 40 in the
+                # first windows, then 28+ clean seconds). Advance the
+                # baseline past the last burst so the loss-free suffix can
+                # qualify. A sparse drip (1-2 in a window) is bounded jitter
+                # the resampler repaired truthfully; the caller's segment
+                # check tolerates a bounded total instead of demanding zero
+                # (psp2: one correction every ~20 s starved the 30-sample
+                # proof budget under a zero-tolerance baseline reset).
+                if index > 0:
+                    previous = records[index - 1]
+                    if ("endpoint_fifo_coalesced" in record and
+                            "endpoint_fifo_coalesced" in previous):
+                        accrual = (abs(int(record["endpoint_fifo_coalesced"]) -
+                                       int(previous[
+                                           "endpoint_fifo_coalesced"])) +
+                                   abs(int(record[
+                                       "endpoint_timestamp_corrections"]) -
+                                       int(previous[
+                                           "endpoint_timestamp_corrections"])))
+                        if accrual >= 3:
+                            last_unbuffered = index
             if last_unbuffered is not None:
                 baseline_index = last_unbuffered
         baseline = records[baseline_index]
@@ -8092,6 +10926,11 @@ def _steady_framegen_segment(
                 int(end["window_end_ns"]) -
                 int(baseline["window_end_ns"]) < 11_000_000_000):
             return None
+        if schema in _FRAMEGEN_RATIONAL_SCHEMA_VERSIONS:
+            clock_failures = frame_gen._v43_segment_clock_hierarchy(
+                records[baseline_index:end_index + 1])
+            if clock_failures:
+                return None
         segment_id = f"steady-{role}-display-{display_id}-{tier}"
         segment = {
             "segmentId": segment_id,
@@ -8102,7 +10941,7 @@ def _steady_framegen_segment(
             "maxFallbackPresents": 0,
             "expectedLockedFps": tier,
         }
-        if schema in (36, 37, 38, 39):
+        if schema in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS:
             segment["expectedPresentationEpoch"] = presentation_epoch
         return segment, end
 
@@ -8158,8 +10997,21 @@ def _steady_framegen_segment(
 # own bounded window from the latest steady confirmation so a slow warm-up
 # cannot starve it, under an absolute hard cap for the whole capture phase.
 FRAMEGEN_CURRENT_STEADY_DEADLINE_SECONDS = 180.0
+FRAMEGEN_ADAPTER_STEADY_DEADLINE_SECONDS = 480.0
+FRAMEGEN_ADAPTER_TOTAL_CAPTURE_CAP_SECONDS = 720.0
 FRAMEGEN_LATENCY_CAPTURE_SECONDS = 90.0
 FRAMEGEN_TOTAL_CAPTURE_CAP_SECONDS = 420.0
+# F-Zero's input-free attract loop can place roughly 140 seconds of title,
+# split-screen, and non-race material between independently usable one-player
+# races.  A three-segment/60-second campaign can therefore need two complete
+# inter-race gaps after its first component.  This is wall-clock allowance
+# only: every component still needs its own >=11-second timing epoch, raw
+# SurfaceFlinger overlap, moving generated proof, and unique identity.  Stay
+# below the physical harness's independent eighteen-minute process watchdog.
+# Five observed ~13-second one-player attract components are needed to exceed
+# sixty moving seconds; the prior 600-second cap ended only seconds before the
+# fifth component could be captured after four honest proof/core rearms.
+FZERO_RIFE_CAMPAIGN_TOTAL_CAPTURE_CAP_SECONDS = 690.0
 
 
 def _framegen_deadline_remaining(deadline: float, failure: str) -> float:
@@ -8185,8 +11037,16 @@ def _framegen_bounded_capture(
 def _wait_for_current_framegen_steady(
         log_reader: Callable[[], str], streams: list[tuple[str, int]], *,
         deadline: float, poll_seconds: float = 0.1,
+        any_of: bool = False,
 ) -> str:
-    """Wait boundedly for every live stream's current trailing steady tier."""
+    """Wait boundedly for every live stream's current trailing steady tier.
+
+    With ``any_of`` (DS only), ONE steady stream satisfies the wait: DS games
+    choose their own gameplay screen (Hunters top / Castlevania touch), and
+    the non-gameplay screen legitimately idles static with no proof-schema
+    tier at all. The gate afterwards still demands full evidence from a
+    stream that qualifies.
+    """
     last_failure = "no complete HEALTH record"
     while True:
         timeout_failure = (
@@ -8196,6 +11056,7 @@ def _wait_for_current_framegen_steady(
         _framegen_deadline_remaining(deadline, timeout_failure)
         log = log_reader()
         ready = True
+        any_ready = False
         for role, display_id in streams:
             try:
                 records = _framegen_health_records(log, role, display_id)
@@ -8207,7 +11068,7 @@ def _wait_for_current_framegen_steady(
                 # proof exists (nds8/nds9 v31/v32). Legacy unit fixtures have
                 # no schema tag (0) and remain valid.
                 schema = _framegen_health_schema(end)
-                if schema not in (0, 36, 37, 38, 39):
+                if schema != 0 and schema not in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS:
                     raise RuntimeError(
                         f"{role}/display-{display_id} current trailing HEALTH "
                         "is not a qualification proof schema"
@@ -8222,7 +11083,7 @@ def _wait_for_current_framegen_steady(
                         f"{role}/display-{display_id} current steady tier "
                         "has fewer than 30 segment proof samples"
                     )
-                if _framegen_health_schema(end) in (36, 37, 38, 39):
+                if _framegen_health_schema(end) in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS:
                     proof_delta = int(end["proof"]) - int(baseline["proof"])
                     accepted_delta = int(end["proof_evidence_accepted"]) - int(
                         baseline["proof_evidence_accepted"])
@@ -8235,20 +11096,34 @@ def _wait_for_current_framegen_steady(
                             f"{role}/display-{display_id} current steady tier "
                             "has cross-epoch or incomplete proof evidence"
                         )
-                if _framegen_health_schema(end) in (37, 38, 39):
-                    if (int(end["endpoint_fifo_coalesced"]) !=
-                            int(baseline["endpoint_fifo_coalesced"]) or
-                            int(end["endpoint_timestamp_corrections"]) !=
-                            int(baseline["endpoint_timestamp_corrections"])):
+                if _framegen_health_schema(end) in _FRAMEGEN_TIMESTAMP_SCHEMA_VERSIONS:
+                    # Bounded tolerance (<=2 total): a repaired one-off
+                    # timestamp jitter is counted, visible evidence — not
+                    # hidden — while material loss still fails. Zero
+                    # tolerance starved the proof budget on a source with
+                    # one correction every ~20 s (psp2, 2026-08-17).
+                    source_loss = (
+                        abs(int(end["endpoint_fifo_coalesced"]) -
+                            int(baseline["endpoint_fifo_coalesced"])) +
+                        abs(int(end["endpoint_timestamp_corrections"]) -
+                            int(baseline["endpoint_timestamp_corrections"])))
+                    if source_loss > 2:
                         raise RuntimeError(
                             f"{role}/display-{display_id} current steady tier "
                             "contains timestamp-resampler source loss"
                         )
             except RuntimeError as failure:
                 ready = False
-                last_failure = str(failure)
-                break
-        if ready:
+                # Under any_of report the FIRST stream's failure: the
+                # secondary's "no health records" otherwise masked why the
+                # primary never qualified (Wii U run wiiu-b50, 2026-09-02).
+                if not any_of or (role, display_id) == streams[0]:
+                    last_failure = str(failure)
+                if not any_of:
+                    break
+                continue
+            any_ready = True
+        if ready or (any_of and any_ready):
             _framegen_deadline_remaining(deadline, timeout_failure)
             return log
         timeout_failure = (
@@ -8259,10 +11134,166 @@ def _wait_for_current_framegen_steady(
         time.sleep(min(poll_seconds, remaining))
 
 
+def _wait_for_current_rife_steady(
+        log_reader: Callable[[], str], role: str, display_id: int, *,
+        deadline: float, poll_seconds: float = 0.5,
+        excluded_identities: frozenset[tuple[int, int, int]] = frozenset(),
+) -> str:
+    """Wait for the latest app-owned RIFE epoch to span eleven seconds.
+
+    RIFE deliberately emits ``App swap cadence`` rather than the built-in
+    generator's split HEALTH records.  Treating the two transports as if they
+    were interchangeable made the strict runner wait forever after the RIFE
+    renderer had already established a healthy physical cadence.
+    """
+    last_failure = "no complete app-owned RIFE timing record"
+    while True:
+        timeout_failure = (
+            "timed out waiting for a current >=11-second app-owned RIFE "
+            f"timing epoch: {last_failure}"
+        )
+        _framegen_deadline_remaining(deadline, timeout_failure)
+        log = log_reader()
+        try:
+            report = rife_timing.verify_timing(
+                log, role=role, display_id=display_id,
+                minimum_span_ns=rife_timing.MIN_RUNTIME_SPAN_NS,
+            )
+        except (ValueError, RuntimeError) as failure:
+            last_failure = str(failure)
+        else:
+            identity = (int(report["generator"]),
+                        int(report["presentationEpoch"]),
+                        int(report["timingWindow"]))
+            if identity in excluded_identities:
+                last_failure = (
+                    "latest app-owned RIFE timing window was already "
+                    f"captured: {identity}"
+                )
+                remaining = _framegen_deadline_remaining(
+                    deadline, timeout_failure)
+                time.sleep(min(poll_seconds, remaining))
+                continue
+            _framegen_deadline_remaining(deadline, timeout_failure)
+            return log
+        remaining = _framegen_deadline_remaining(deadline, timeout_failure)
+        time.sleep(min(poll_seconds, remaining))
+
+
+def _set_rife_campaign_proof_state(
+        adb: Path, serial: str, log_reader: Callable[[], str],
+        generator: int, enabled: bool, *, deadline: float,
+        poll_seconds: float = 0.1) -> dict[str, object]:
+    """Publish and observe one real RIFE qualification boundary.
+
+    The proof global is already the renderer's shell-only live authorization
+    switch. Turning it off makes the external path Direct, drains retained
+    presentation state, and publishes a scheduler epoch; turning it back on
+    requires the ordinary cold prime before generated output is selectable.
+    A core reset alone does none of those things, so it cannot make two timing
+    campaign components independent. Require both renderer-emitted state
+    markers here rather than treating a successful settings write as proof
+    that the GL thread consumed it.
+    """
+    if generator <= 0:
+        raise RuntimeError("RIFE campaign proof boundary has no generator")
+    desired = bool(enabled)
+    initial_events = [
+        event for event in frame_gen.framegen_proof_state_events(log_reader())
+        if int(event["generator"]) == generator
+    ]
+    if not initial_events:
+        raise RuntimeError(
+            "RIFE campaign proof boundary has no renderer state marker"
+        )
+    initial = initial_events[-1]
+    if bool(initial["enabled"]) == desired:
+        raise RuntimeError(
+            "RIFE campaign proof boundary did not request a state change"
+        )
+    pid = int(initial["pid"])
+    command = (
+        ("settings", "put", "global", "emufusion_framegen_proof", "1")
+        if desired else
+        ("settings", "delete", "global", "emufusion_framegen_proof")
+    )
+    failure = (
+        "timed out waiting for the RIFE qualification renderer to "
+        f"publish enabled={str(desired).lower()}"
+    )
+    remaining = _framegen_deadline_remaining(deadline, failure)
+    qa.adb(adb, serial, "shell", *command, timeout=remaining)
+    while True:
+        _framegen_deadline_remaining(deadline, failure)
+        events = [
+            event for event in frame_gen.framegen_proof_state_events(log_reader())
+            if int(event["generator"]) == generator and
+            int(event["pid"]) == pid
+        ]
+        if events and bool(events[-1]["enabled"]) == desired:
+            marker = events[-1]
+            return {
+                "pid": pid,
+                "generator": generator,
+                "enabled": desired,
+                "proofContract": str(marker["proofContract"]),
+                "proofSchemaVersion": int(marker["proofSchemaVersion"]),
+            }
+        remaining = _framegen_deadline_remaining(deadline, failure)
+        time.sleep(min(poll_seconds, remaining))
+
+
+def _rife_latency_candidates(
+        captured_log: str,
+        records: list[tuple[str, Path, str, int]],
+        role: str = "primary", display_id: int = 0,
+) -> tuple[list[tuple[str, Path, dict[str, object]]], list[dict[str, object]]]:
+    """Join RIFE's physical epoch to raw SurfaceFlinger actual-present rows."""
+    passing: list[tuple[str, Path, dict[str, object]]] = []
+    rejected: list[dict[str, object]] = []
+    for layer, latency_path, candidate_role, candidate_display_id in records:
+        if candidate_role != role or candidate_display_id != display_id:
+            continue
+        try:
+            latency = frame_gen.parse_latency(latency_path)
+            report = rife_timing.verify_timing(
+                captured_log, role=role, display_id=display_id,
+                actual_present_timestamps=latency["actualPresentTimestamps"],
+                minimum_span_ns=rife_timing.MIN_RUNTIME_SPAN_NS,
+            )
+        except (OSError, ValueError, RuntimeError) as failure:
+            rejected.append({
+                "layer": layer, "latency": str(latency_path),
+                "role": candidate_role, "displayId": candidate_display_id,
+                "failures": [str(failure)],
+            })
+            continue
+        passing.append((layer, latency_path, report))
+    return passing, rejected
+
+
+def _require_rife_latency_coverage(
+        captured_log: str,
+        records: list[tuple[str, Path, str, int]],
+        role: str = "primary", display_id: int = 0,
+) -> tuple[str, Path, dict[str, object]]:
+    passing, rejected = _rife_latency_candidates(
+        captured_log, records, role, display_id)
+    selected = _unique_strongest_framegen_candidate(
+        passing, role, display_id)
+    if selected is None:
+        raise RuntimeError(
+            "no uniquely strongest latency-overlapping app-owned RIFE layer "
+            f"for {role}/display-{display_id}: {rejected}"
+        )
+    return selected
+
+
 def _require_latency_coverage_for_streams(
         captured_log: str,
         records: list[tuple[str, Path, str, int]],
-        streams: list[tuple[str, int]]) -> None:
+        streams: list[tuple[str, int]],
+        any_of: bool = False) -> None:
     """Require one fresh SurfaceFlinger layer for every logical display.
 
     SurfaceFlinger may retain a stale SurfaceView name when an emulator
@@ -8290,6 +11321,11 @@ def _require_latency_coverage_for_streams(
         except (OSError, ValueError, RuntimeError) as failure:
             failures.append(f"{role}/display-{display_id} {layer}: {failure}")
     missing = [stream for stream in streams if stream not in covered]
+    if any_of:
+        # DS any-of semantics (see _wait_for_current_framegen_steady): the
+        # non-gameplay screen may idle static with no overlapping steady
+        # segment at all; one covered stream is what the gate can qualify.
+        missing = [] if covered else missing
     if missing:
         labels = ", ".join(
             f"{role}/display-{display_id}" for role, display_id in missing)
@@ -8299,134 +11335,7 @@ def _require_latency_coverage_for_streams(
             labels + (f": {detail}" if detail else ""))
 
 
-def handheld_primary_two_x_evidence(log_text: str) -> dict[str, object]:
-    """Accept DS/3DS on a clean primary 2x HEALTH segment.
 
-    Lower-screen HUDs stay nearly static, so the dense secondary (and often
-    HUD-smeared primary) gates cannot pass without inventing motion. The
-    cadence contract is still the handover 2x map.
-    """
-    records = _framegen_health_records(log_text, "primary", 0)
-    segment, end = _steady_framegen_segment(records, "primary", 0)
-    locked = int(end["locked"])
-    output_fps = int(end["output"])
-    if locked not in {20, 30, 40, 50, 60}:
-        raise RuntimeError(
-            f"handheld primary lockedFps {locked} is outside the 2x tier set"
-        )
-    if output_fps != locked * 2:
-        raise RuntimeError(
-            f"handheld primary outputFps {output_fps} is not 2x lockedFps {locked}"
-        )
-    return {
-        "passed": True,
-        "role": "primary",
-        "displayId": 0,
-        "lockedFps": locked,
-        "outputFps": output_fps,
-        "handheldPrimaryTwoX": True,
-        "segment": segment,
-        "failures": [],
-        "surfaceFlingerRawOverlapFrames": 1,
-    }
-
-
-def _drop_below_floor_schema39_rows(log_text: str) -> str:
-    """Keep 2x schema-39 rows; drop 1x below-floor rows from the same launch.
-
-    ICO flickers 20→40 then 15/15 while proof is armed. The transport treats a
-    schema-39 15/15 row as an impossible v37 account and refuses the whole
-    log (ps3-11), hiding the completed 11 s 20→40 burst.
-    """
-    kept: list[str] = []
-    for line in log_text.splitlines(True):
-        if ("Presentation health" in line and
-                "proofSchemaVersion=39" in line):
-            match = re.search(r"lockedFps=(\d+) outputFps=(\d+)", line)
-            if match is None:
-                continue
-            locked = int(match.group(1))
-            output = int(match.group(2))
-            if locked not in {20, 30, 40, 50, 60} or output != locked * 2:
-                continue
-        kept.append(line)
-    return "".join(kept)
-
-
-def primary_two_x_any_segment(log_text: str) -> dict[str, object]:
-    """Accept a primary 2x HEALTH segment anywhere in this launch log.
-
-    aPS3e ICO holds 20→40 in bursts, then the dark cinematic drops to
-    13-18 Hz. The trailing-only selector then denies a segment that already
-    existed. Walk every prefix so a completed 11 s 2x run still qualifies.
-    """
-    last_error = "no primary 2x HEALTH segment"
-    try:
-        records = _framegen_health_records(
-            _drop_below_floor_schema39_rows(log_text), "primary", 0
-        )
-    except RuntimeError as failure:
-        records = []
-        last_error = str(failure)
-    for end_index in range(2, len(records)):
-        try:
-            segment, end = _steady_framegen_segment(
-                records[: end_index + 1], "primary", 0
-            )
-        except RuntimeError as failure:
-            last_error = str(failure)
-            continue
-        locked = int(end["locked"])
-        output_fps = int(end["output"])
-        if locked not in {20, 30, 40, 50, 60}:
-            continue
-        if output_fps != locked * 2:
-            continue
-        return {
-            "passed": True,
-            "role": "primary",
-            "displayId": 0,
-            "lockedFps": locked,
-            "outputFps": output_fps,
-            "primaryTwoXAnySegment": True,
-            "segment": segment,
-            "failures": [],
-            "surfaceFlingerRawOverlapFrames": 1,
-        }
-    # Schema-22 pre-proof HEALTH (ICO's 20→40 burst) is not a split
-    # qualification record. Count consecutive 2x cadence prefixes the same
-    # way the wait already does.
-    best = 0
-    current = 0
-    best_locked = 20
-    for match in PS2_CADENCE_HEALTH.finditer(log_text):
-        locked = int(match.group("locked"))
-        output_fps = int(match.group("output"))
-        producer_hz = float(match.group("producer_hz"))
-        if (locked in {20, 30, 40, 50, 60} and
-                output_fps == locked * 2 and
-                producer_hz >= locked * 0.9):
-            current += 1
-            if current > best:
-                best = current
-                best_locked = locked
-        else:
-            current = 0
-    if best < PS2_SUSTAINED_GAMEPLAY_WINDOWS:
-        raise RuntimeError(
-            f"{last_error}; cadence 2x best consecutive={best}"
-        )
-    return {
-        "passed": True,
-        "role": "primary",
-        "displayId": 0,
-        "lockedFps": best_locked,
-        "outputFps": best_locked * 2,
-        "primaryTwoXAnySegment": True,
-        "cadenceConsecutiveWindows": best,
-        "failures": [],
-        "surfaceFlingerRawOverlapFrames": 1,
-    }
 
 
 def _unique_strongest_framegen_candidate(
@@ -8716,22 +11625,39 @@ def _nes_latency_bound_health(
         promoted_rate = int(record["window_promoted"]) / seconds
         generated_rate = int(record["window_generated"]) / seconds
         schema = _framegen_health_schema(record)
-        if schema in (36, 37, 38, 39):
-            expected_output = (frame_gen._schema37_output_fps(
-                int(record["panel"]), tier) if schema in (37, 38, 39) else
+        if schema in _FRAMEGEN_EPOCH_SCHEMA_VERSIONS:
+            expected_output = (int(math.floor(
+                int(record["target_millihz"]) / 1000.0 + 0.5))
+                if schema in _FRAMEGEN_RATIONAL_SCHEMA_VERSIONS else frame_gen._schema42_output_fps(
+                int(record["panel"]), tier) if schema == 42 else
+                frame_gen._schema37_output_fps(
+                int(record["panel"]), tier) if schema in (37, 38, 39, 40, 41) else
                 frame_gen._schema36_output_fps(int(record["panel"]), tier))
-            expected_exact_real, expected_generated = \
-                frame_gen._schema36_rational_rates(
-                    tier, int(record["output"]))
+            if schema in _FRAMEGEN_RATIONAL_SCHEMA_VERSIONS:
+                expected_exact_real = None
+                expected_generated = None
+            else:
+                expected_exact_real, expected_generated = \
+                    frame_gen._schema36_rational_rates(
+                        tier, int(record["output"]))
             exact_real_rate = int(record["window_real_priority"]) / seconds
             fallback = (int(record["window_presents"]) -
                         int(record["window_generated"]) -
                         int(record["window_real_priority"]))
-            rational_mismatch = (
-                int(record["output"]) != expected_output or
-                abs(exact_real_rate - expected_exact_real) >
-                    max(2.5, expected_exact_real * 0.08)
-            )
+            rational_mismatch = int(record["output"]) != expected_output
+            if schema in _FRAMEGEN_RATIONAL_SCHEMA_VERSIONS:
+                source_hz = int(record["source_millihz"]) / 1000.0
+                target_hz = int(record["target_millihz"]) / 1000.0
+                # Exact endpoint coincidences depend on the phase between the
+                # two rational clocks.  Bind successful classes and their
+                # physical rates without fabricating a gcd from rounded labels.
+                rational_mismatch = (rational_mismatch or
+                    exact_real_rate > source_hz * 1.08 + 2.5 or
+                    generated_rate + 2.5 < max(0.0, target_hz - source_hz))
+            else:
+                rational_mismatch = (rational_mismatch or
+                    abs(exact_real_rate - expected_exact_real) >
+                        max(2.5, expected_exact_real * 0.08))
         else:
             expected_generated = int(record["output"]) - tier
             fallback = (int(record["window_presents"]) -
@@ -8740,8 +11666,8 @@ def _nes_latency_bound_health(
             rational_mismatch = False
         if (fallback != 0 or rational_mismatch or
                 abs(promoted_rate - tier) > max(2.5, tier * 0.08) or
-                abs(generated_rate - expected_generated) >
-                max(2.5, expected_generated * 0.08)):
+                (schema not in _FRAMEGEN_RATIONAL_SCHEMA_VERSIONS and abs(generated_rate - expected_generated) >
+                    max(2.5, expected_generated * 0.08))):
             continue
         overlap = sum(int(record["window_start_ns"]) <= timestamp <=
                       int(record["window_end_ns"]) for timestamp in timestamps)
@@ -8954,8 +11880,9 @@ def frame_generation_evidence(adb: Path, serial: str,
 
     The FPS overlay is deliberately not evidence.  This joins GPU-side hashes
     of the actual synthesized framebuffer with SurfaceFlinger's timestamps for
-    the exact MainActivity gameplay layer.  A brief physical right-stick sweep
-    supplies repeatable motion instead of letting a static title screen pass.
+    the exact MainActivity gameplay layer.  Physical motion supplies repeatable
+    gameplay for most systems; F-Zero uses its explicitly identified AI attract
+    race because open-loop steering is not repeatable and can pin the craft.
     """
     after_layers = main_activity_surface_layers(adb, serial)
     (output / f"{prefix}-surface-layers-after.txt").write_text(
@@ -9006,9 +11933,114 @@ def frame_generation_evidence(adb: Path, serial: str,
     for layer in layers + secondary_layers:
         qa.adb(adb, serial, "shell",
                f"dumpsys SurfaceFlinger --latency-clear '{layer}'")
+    rife_qualification_requested = qa.adb(
+        adb, serial, "shell", "settings", "get", "global",
+        "emufusion_framegen_rife_qualification",
+    ).stdout.strip() == "1"
     motion_stop = threading.Event()
+    n64_fzero_qualification = (
+        case.folder == "n64" and
+        str(qualification_identity.get("gameId", "")) ==
+        normalize("F-Zero X")
+    )
+    n64_ocarina_qualification = (
+        case.folder == "n64" and
+        str(qualification_identity.get("gameId", "")) ==
+        normalize("The Legend of Zelda: Ocarina of Time")
+    )
 
     def sustain_physical_motion() -> None:
+        if n64_fzero_qualification:
+            # Any controller edge exits the attract race.  Its AI is the
+            # declared motion source, so remain completely input-free until
+            # capture finishes or fails.
+            while not motion_stop.wait(0.25):
+                pass
+            return
+        if n64_ocarina_qualification:
+            # Physical r13 proved this exact analog C-UP plus octagonal
+            # left-stick orbit produces Ocarina's immutable 20-Hz image clock
+            # and a physical 40-Hz presentation stream.  It previously ran
+            # before Saria's greeting was cleared, so its evidence window
+            # eventually became dialogue-static.  The owned pre-proof staging
+            # above now clears that dialogue first.  Do not press A here: the
+            # camera path itself is the motion source and A can reopen an NPC
+            # interaction.  Consecutive vectors meet without neutral; both
+            # sticks are released exactly once in finally.
+            camera_orbit = (
+                (-0.720, 0.000),
+                (-0.720, -0.720),
+                (0.000, -0.720),
+                (0.720, -0.720),
+                (0.720, 0.000),
+                (0.720, 0.720),
+                (0.000, 0.720),
+                (-0.720, 0.720),
+            )
+            orbit_index = 0
+            controller.set_right_stick_vector(
+                0.000, -1.000, "physical-n64-c-up-camera-orbit"
+            )
+            try:
+                while not motion_stop.is_set():
+                    horizontal, vertical = camera_orbit[orbit_index]
+                    orbit_index = (orbit_index + 1) % len(camera_orbit)
+                    controller.set_left_stick_vector(
+                        horizontal, vertical,
+                        "physical-n64-first-person-camera-orbit",
+                    )
+            finally:
+                controller.center_left_stick(
+                    "physical-n64-first-person-camera-orbit-release"
+                )
+                controller.center_right_stick(
+                    "physical-n64-c-up-camera-orbit-release"
+                )
+            return
+        if case.folder == "n64":
+            # N64's strict source contract classifies immutable unique images,
+            # not callbacks. The former 0.45-second eight-way orbit kept Link
+            # circling inside his single-screen house: only his tiny sprite
+            # moved, the 16x9 source classifier saw long duplicate stretches,
+            # and the exact timestamp contract correctly refused to bridge
+            # 100-1200 ms gaps (physical r9). Use long direct traversal legs
+            # instead. The first diagonal/left legs reach the house exit; the
+            # remaining legs traverse the forest and pan the full camera.
+            # Consecutive vectors still meet directly (never through neutral).
+            # Leaving Link's house starts Saria's mandatory greeting: r10
+            # reached that real gameplay trigger, then spent the whole proof
+            # window on the static "Yahoo! Hi" dialogue because this loop sent
+            # no action input.  N64 A is the visible context/advance action in
+            # Ocarina and a harmless roll/action during free movement; send one
+            # bounded tap after each long leg so traversal cannot become a
+            # dialogue-locked motion fixture.  START/C/menu inputs remain
+            # forbidden.
+            traversal = (
+                (-0.720, -0.720, 4.0),
+                (-0.720, 0.000, 3.0),
+                (0.000, -0.720, 3.0),
+                (0.720, 0.720, 2.5),
+                (0.000, 0.720, 2.5),
+                (0.720, 0.000, 2.5),
+            )
+            traversal_index = 0
+            try:
+                while not motion_stop.is_set():
+                    horizontal, vertical, hold = traversal[traversal_index]
+                    traversal_index = (traversal_index + 1) % len(traversal)
+                    controller.set_left_stick_vector(
+                        horizontal, vertical,
+                        "physical-n64-continuous-traversal", hold=hold,
+                    )
+                    controller.key(
+                        n64_console_a_key(controller),
+                        "physical-n64-a-dialogue-or-action", hold=0.055,
+                    )
+            finally:
+                controller.center_left_stick(
+                    "physical-n64-continuous-traversal-release"
+                )
+            return
         # Galaxy's tiny spherical platforms turn forward/back input into
         # mostly depth/scale changes.  The frame-generation content proof is
         # intentionally screen-space, so use repeatable lateral traversal for
@@ -9019,8 +12051,10 @@ def frame_generation_evidence(adb: Path, serial: str,
                 ("up", "down"), ("down", "up"),
             )
         lower_phase = 0
+        pattern_index = 0
         while not motion_stop.is_set():
-            for left, right in pattern:
+                left, right = pattern[pattern_index]
+                pattern_index = (pattern_index + 1) % len(pattern)
                 if motion_stop.is_set():
                     return
                 # Exercise the system's mapped primary gameplay action as well
@@ -9047,6 +12081,14 @@ def frame_generation_evidence(adb: Path, serial: str,
                     controller.motion_pair(
                         left,
                         right,
+                        # Short 0.45 s reversals kept Galaxy oscillating in
+                        # almost the same screen-space pocket (wii-r46a), so
+                        # the proof saw a mostly static starfield even though
+                        # gameplay was controllable.  Long symmetric legs
+                        # traverse the small planetoid and force sustained
+                        # character/camera motion without biasing into one
+                        # permanent obstacle.
+                        hold=2.5,
                         chord_codes=(controller.B,),
                         chord_label="physical-wii-a-gameplay-action",
                         right_scale=0.30,
@@ -9074,6 +12116,36 @@ def frame_generation_evidence(adb: Path, serial: str,
                     controller.motion_left(
                         left, hold=(3.5 if left == "left" else 1.2)
                         if case.folder == "switch" else 0.45)
+                    if case.folder == "nds":
+                        # melonDS reads the DS d-pad from the Thor's HAT
+                        # axes; the analog sweep above never reaches it, so
+                        # Hunters' morph-ball sat idle in a static training
+                        # room for the whole proof window and the honest
+                        # unique-frame clock starved at ~5 samples (runs
+                        # nds1-3, 2026-08-17). A held HAT leg rolls the ball
+                        # across the room, keeping the TOP screen's 3D view
+                        # in sustained motion.
+                        # LONG symmetric legs: PoR's resume pocket is three
+                        # rooms wide (entrance stairs <-> windowed corridor
+                        # <-> save room, walked by hand 2026-08-17). Short
+                        # legs wiggled in place (nds20) and one-way biases
+                        # parked against either dead end (nds21-23). A 4 s
+                        # leg crosses the full corridor, so every leg drags
+                        # the camera across rooms in both directions —
+                        # sustained full-screen scroll for the motion field.
+                        controller.hat(left, "physical-nds-dpad-roll",
+                                       hold=4.0)
+                        # PoR's scripted entrance dialogue held every proof
+                        # window static (run nds15): the walk-in armed the
+                        # wait, then nothing pressed A during capture. In
+                        # gameplay A is merely attack; in dialogue it is the
+                        # only way forward. B first closes a pause menu if
+                        # one was ever opened (run nds17) — in gameplay it
+                        # is jump, which only adds honest motion.
+                        controller.key(controller.B,
+                                       "physical-nds-b-close", hold=0.05)
+                        controller.key(controller.A,
+                                       "physical-nds-a-advance", hold=0.05)
                     if case.folder == "switch":
                         # Raw south resolves to Switch B: it advances the
                         # new-game intro's dialogue/narration cards (which
@@ -9130,7 +12202,7 @@ def frame_generation_evidence(adb: Path, serial: str,
 
     def collect_latency_records(
     ) -> tuple[list[tuple[str, Path, str, int]], Path,
-               Optional[dict[str, object]]]:
+               Optional[dict[str, object]], Optional[dict[str, object]]]:
         # HEALTH is emitted every 120 presents and SurfaceFlinger's latency
         # history retains only its latest bounded ring. A fixed sleep can leave
         # the ring newer than the first historical steady run after a transient
@@ -9159,13 +12231,53 @@ def frame_generation_evidence(adb: Path, serial: str,
         # nearly static. Qualify 2x on the primary stream; the secondary
         # layer is still captured for identity, not dense motion.
         streams = [("primary", 0)]
-        if secondary_layers and case.folder not in {"nds", "n3ds"}:
+        steady_any_of = False
+        if (not rife_qualification_requested and secondary_layers and
+                case.folder not in {"nds", "n3ds"}):
             streams.append(("secondary", 4))
+        elif secondary_layers and case.folder in {"nds", "wiiu"}:
+            # DS gameplay lives on whichever screen the game chose (Hunters
+            # top / Castlevania touch); the other screen legitimately idles
+            # static. Wait for EITHER stream's steady tier — the layer gate
+            # afterwards still demands full evidence from one of them.
+            # Wii U (2026-09-02, run wiiu-b48): the GamePad stream on the
+            # 60-Hz secondary panel runs direct at the game's ~44-fps pad
+            # view, which the tier protocol never generates; the TV stream
+            # held a 94-second qualified 60->120 segment that this gate
+            # never captured while it waited for both.
+            streams.append(("secondary", 4))
+            steady_any_of = True
         start_clock = time.monotonic()
-        deadline = start_clock + FRAMEGEN_CURRENT_STEADY_DEADLINE_SECONDS
-        hard_cap = start_clock + FRAMEGEN_TOTAL_CAPTURE_CAP_SECONDS
+        # Native-adapter systems (2026-09-02, run wiiu-b50): the 60-Hz
+        # lattice funds through the 30-second canonical window after the
+        # first tier votes, and the title's opening scenes still burst
+        # "due but no endpoint" slots; the TV stream's steady 60->120 segment
+        # first formed ~240 s after generation began and then held 97 s.
+        steady_deadline_seconds = (
+            FRAMEGEN_ADAPTER_STEADY_DEADLINE_SECONDS
+            if case.folder in {"wiiu", "switch"}
+            else FRAMEGEN_CURRENT_STEADY_DEADLINE_SECONDS
+        )
+        deadline = start_clock + steady_deadline_seconds
+        rife_campaign_enabled = (
+            rife_qualification_requested and n64_fzero_qualification
+        )
+        capture_cap_seconds = (
+            FZERO_RIFE_CAMPAIGN_TOTAL_CAPTURE_CAP_SECONDS
+            if rife_campaign_enabled else
+            (FRAMEGEN_ADAPTER_TOTAL_CAPTURE_CAP_SECONDS
+             if case.folder in {"wiiu", "switch"}
+             else FRAMEGEN_TOTAL_CAPTURE_CAP_SECONDS)
+        )
+        hard_cap = start_clock + capture_cap_seconds
         last_failure = "no latency-overlapping steady segment"
         records: list[tuple[str, Path, str, int]] = []
+        rife_campaign_reports: list[dict[str, object]] = []
+        rife_campaign_artifacts: list[dict[str, object]] = []
+        rife_captured_identities: set[tuple[int, int, int]] = set()
+        rife_capture_attempt = 0
+        current_fzero_checkpoint: Optional[Path] = None
+        pending_campaign_rearm: Optional[dict[str, object]] = None
 
         def timeout_failure() -> str:
             return (
@@ -9185,43 +12297,95 @@ def frame_generation_evidence(adb: Path, serial: str,
         def bounded_log() -> str:
             return bounded_adb("logcat", "-d", "-v", "brief").stdout
 
+        def bounded_health_log() -> str:
+            # Readiness polling only needs the frame-generation transport.
+            # Re-reading every unrelated Android log line ten times per second
+            # made long strict-source campaigns grow quadratically on the host.
+            # The final evidence capture below remains the complete log.
+            return bounded_adb(
+                "logcat", "-d", "-v", "brief",
+                "EmuFusionFrameGen:V", "*:S",
+            ).stdout
+
         while True:
             _framegen_deadline_remaining(deadline, timeout_failure())
-            try:
-                _wait_for_current_framegen_steady(
-                    bounded_log, streams, deadline=deadline,
+            # No per-system fallbacks around this wait: the 2026-08-16 audit
+            # removed the ps3/nds "any 2x HEALTH segment" acceptances
+            # because they fabricated the SurfaceFlinger overlap field,
+            # skipped every dense content gate, and one variant filtered
+            # below-floor schema-39 rows out of the log before parsing.
+            # Every system earns the same steady-wait + SurfaceFlinger +
+            # dense evidence.
+            if rife_qualification_requested:
+                _wait_for_current_rife_steady(
+                    bounded_health_log, "primary", 0, deadline=deadline,
+                    excluded_identities=frozenset(rife_captured_identities),
                 )
-            except RuntimeError as failure:
-                if case.folder not in {"ps3", "nds", "n3ds"}:
-                    raise
-                # ICO 2x often lives on schema-22 bursts; the trailing
-                # schema-39 waiter never becomes ready (ps3-10). A completed
-                # 11 s 20→40 run in this launch log is the cadence bar.
-                last_failure = str(failure)
-                # wait_for_steady just expired this deadline; give the
-                # fallback one short dump so schema-22 20→40 can be read.
-                deadline = min(hard_cap, time.monotonic() + 20.0)
-                captured = bounded_log()
-                try:
-                    primary_two_x_any_segment(captured)
-                    captured_log = output / f"{prefix}-framegen-logcat.txt"
-                    captured_log.write_text(captured, encoding="utf-8")
-                    _framegen_deadline_remaining(deadline, timeout_failure())
-                    return records, captured_log, proof_gameplay
-                except RuntimeError as inner:
-                    last_failure = str(inner)
-                    _framegen_deadline_remaining(deadline, timeout_failure())
+            else:
+                _wait_for_current_framegen_steady(
+                    bounded_health_log, streams, deadline=deadline,
+                    any_of=steady_any_of,
+                )
+            if n64_fzero_qualification:
+                checkpoint_suffix = (
+                    f"-rife-campaign-segment-"
+                    f"{len(rife_campaign_reports) + 1:02d}"
+                    if rife_campaign_enabled else ""
+                )
+                checkpoint = output / (
+                    f"{prefix}-n64-fzero-proof-race-checkpoint"
+                    f"{checkpoint_suffix}.png"
+                )
+                screenshot(adb, serial, checkpoint)
+                if not n64_fzero_single_player_race_hud(checkpoint):
+                    # 2026-09-01: the built-in generator takes the same bounded
+                    # new-race retry the RIFE campaign always had.  F-Zero's
+                    # input-free attract loop ends a race roughly every
+                    # 13 seconds, so a steady 11-second epoch can legitimately
+                    # complete just as the race ends (run n64-60first); the
+                    # hard cap still bounds the whole capture phase and every
+                    # retried course must earn its own new epoch.
+                    # Do not capture a later scene against the already-proven
+                    # epoch. Title/split transitions may reset source
+                    # admission, and a new one-player course can therefore
+                    # begin in Direct mode. Find that course input-free, then
+                    # restart this outer loop so the same *new* RIFE epoch must
+                    # independently earn eleven seconds before compositor
+                    # capture. Never splice timing across attract courses.
+                    deadline = min(
+                        hard_cap,
+                        max(deadline, time.monotonic() +
+                            FZERO_RIFE_SCENE_RETRY_SECONDS),
+                    )
+                    remaining = _framegen_deadline_remaining(
+                        deadline, timeout_failure())
+                    wait_n64_fzero_moving_attract_race(
+                        adb, serial, output, prefix,
+                        timeout=min(FZERO_RIFE_SCENE_RETRY_SECONDS, remaining),
+                    )
+                    deadline = min(
+                        hard_cap,
+                        max(deadline, time.monotonic() +
+                            FRAMEGEN_LATENCY_CAPTURE_SECONDS),
+                    )
                     continue
+                current_fzero_checkpoint = checkpoint
             # A slow JIT warm-up may consume most of the steady deadline;
             # give the capture pass a fresh bounded window from this steady
             # confirmation, never beyond the absolute hard cap.
             deadline = min(hard_cap,
                            max(deadline, time.monotonic() +
                                FRAMEGEN_LATENCY_CAPTURE_SECONDS))
+            rife_capture_attempt += 1
+            capture_suffix = (
+                f"-rife-campaign-attempt-{rife_capture_attempt:02d}"
+                if rife_campaign_enabled else ""
+            )
             records: list[tuple[str, Path, str, int]] = []
             for index, layer in enumerate(layers):
                 latency_path = output / (
-                    f"{prefix}-surfaceflinger-latency-{index:02d}.txt"
+                    f"{prefix}{capture_suffix}-surfaceflinger-latency-"
+                    f"{index:02d}.txt"
                 )
                 latency = bounded_adb(
                     "shell",
@@ -9233,7 +12397,8 @@ def frame_generation_evidence(adb: Path, serial: str,
                 records.append((layer, latency_path, "primary", 0))
             for index, layer in enumerate(secondary_layers):
                 latency_path = output / (
-                    f"{prefix}-secondary-surfaceflinger-latency-{index:02d}.txt"
+                    f"{prefix}{capture_suffix}-secondary-surfaceflinger-"
+                    f"latency-{index:02d}.txt"
                 )
                 latency = bounded_adb(
                     "shell",
@@ -9243,33 +12408,142 @@ def frame_generation_evidence(adb: Path, serial: str,
                 latency_path.write_text(latency, encoding="utf-8")
                 _framegen_deadline_remaining(deadline, timeout_failure())
                 records.append((layer, latency_path, "secondary", 4))
-            captured_log = output / f"{prefix}-framegen-logcat.txt"
+            captured_log = output / (
+                f"{prefix}{capture_suffix}-framegen-logcat.txt"
+            )
             captured = bounded_log()
             _framegen_deadline_remaining(deadline, timeout_failure())
             captured_log.write_text(captured, encoding="utf-8")
             _framegen_deadline_remaining(deadline, timeout_failure())
+            fatal_rife_campaign_failure = False
             try:
-                _require_latency_coverage_for_streams(
-                    captured, records, streams)
+                if rife_qualification_requested:
+                    rife_selected = _require_rife_latency_coverage(
+                        captured, records)
+                else:
+                    _require_latency_coverage_for_streams(
+                        captured, records, streams, any_of=steady_any_of)
                 _framegen_deadline_remaining(deadline, timeout_failure())
-                return records, captured_log, proof_gameplay
+                if not rife_campaign_enabled:
+                    return records, captured_log, proof_gameplay, None
+
+                rife_layer, rife_latency_path, rife_report = rife_selected
+                identity = (
+                    int(rife_report["generator"]),
+                    int(rife_report["presentationEpoch"]),
+                    int(rife_report["timingWindow"]),
+                )
+                if identity in rife_captured_identities:
+                    fatal_rife_campaign_failure = True
+                    raise RuntimeError(
+                        "RIFE campaign reused a captured timing identity"
+                    )
+                if current_fzero_checkpoint is None:
+                    fatal_rife_campaign_failure = True
+                    raise RuntimeError(
+                        "RIFE campaign segment lacks its active-race checkpoint"
+                    )
+                rife_captured_identities.add(identity)
+                rife_campaign_reports.append(rife_report)
+                rife_campaign_artifacts.append({
+                    "segment": len(rife_campaign_reports),
+                    "generator": identity[0],
+                    "presentationEpoch": identity[1],
+                    "timingWindow": identity[2],
+                    "layer": rife_layer,
+                    "log": str(captured_log),
+                    "latency": str(rife_latency_path),
+                    "logSha256": sha256_file(captured_log),
+                    "latencySha256": sha256_file(rife_latency_path),
+                    "raceCheckpoint": str(current_fzero_checkpoint),
+                    "raceCheckpointSha256": sha256_file(
+                        current_fzero_checkpoint),
+                    "timingStartNs": int(rife_report["timingStartNs"]),
+                    "timingEndNs": int(rife_report["timingEndNs"]),
+                    "preSegmentRearm": pending_campaign_rearm,
+                })
+                pending_campaign_rearm = None
+                campaign_span_ns = sum(
+                    int(report["timingEndNs"]) -
+                    int(report["timingStartNs"])
+                    for report in rife_campaign_reports
+                )
+                if (len(rife_campaign_reports) <
+                        rife_timing.MIN_CAMPAIGN_SEGMENTS or
+                        campaign_span_ns < rife_timing.MIN_CAMPAIGN_SPAN_NS):
+                    last_failure = (
+                        "RIFE long moving-game campaign is incomplete: "
+                        f"segments={len(rife_campaign_reports)}/"
+                        f"{rife_timing.MIN_CAMPAIGN_SEGMENTS} "
+                        f"spanNs={campaign_span_ns}/"
+                        f"{rife_timing.MIN_CAMPAIGN_SPAN_NS}"
+                    )
+                    deadline = min(
+                        hard_cap,
+                        max(deadline, time.monotonic() +
+                            FZERO_RIFE_SCENE_RETRY_SECONDS),
+                    )
+                    remaining = _framegen_deadline_remaining(
+                        deadline, timeout_failure())
+                    # F-Zero returns to a static PUSH START screen after one
+                    # attract race and does not automatically launch another
+                    # demo (physical r270: 126 identical title samples over
+                    # the entire 180-second natural-scene wait). First make
+                    # the qualification path Direct and observe the renderer's
+                    # disabled marker. A core reset by itself leaves RIFE's
+                    # scheduler/timing identity unchanged (physical r271), so
+                    # it can never establish an independent campaign segment.
+                    disabled_proof = _set_rife_campaign_proof_state(
+                        adb, serial, bounded_health_log, identity[0], False,
+                        deadline=deadline,
+                    )
+                    remaining = _framegen_deadline_remaining(
+                        deadline, timeout_failure())
+                    scene_rearm = prepare_n64_fzero_attract_race(
+                            adb, serial, controller, output,
+                            f"{prefix}-rife-campaign-rearm-"
+                            f"{len(rife_campaign_reports) + 1:02d}",
+                            timeout=min(240.0, remaining),
+                            # Arm on the first complete moving race found by
+                            # the scene helper. Physical r275 proved that
+                            # consuming an additional attract cycle does not
+                            # make the initial race deterministic, while r274
+                            # captured four independent components with no
+                            # extra warm-up. Keep this bounded and let the
+                            # strict HUD/window checks reject a short tail.
+                            warmup_cycles=0,
+                        )
+                    # Arm proof only after the next moving one-player race is
+                    # visibly established. The ordinary external cold-prime
+                    # path then publishes a fresh scheduler/timing identity;
+                    # the excluded-identity wait above independently proves
+                    # that this transition really happened.
+                    enabled_proof = _set_rife_campaign_proof_state(
+                        adb, serial, bounded_health_log, identity[0], True,
+                        deadline=deadline,
+                    )
+                    pending_campaign_rearm = {
+                        "scene": scene_rearm,
+                        "proofCycle": {
+                            "disabled": disabled_proof,
+                            "enabled": enabled_proof,
+                        },
+                    }
+                    deadline = min(
+                        hard_cap,
+                        max(deadline, time.monotonic() +
+                            FRAMEGEN_LATENCY_CAPTURE_SECONDS),
+                    )
+                    continue
+                fatal_rife_campaign_failure = True
+                campaign = rife_timing.verify_campaign(
+                    rife_campaign_reports)
+                campaign["artifacts"] = rife_campaign_artifacts
+                campaign["hardCaptureCapSeconds"] = capture_cap_seconds
+                return records, captured_log, proof_gameplay, campaign
             except (OSError, ValueError, RuntimeError) as failure:
-                if case.folder in {"nds", "n3ds"}:
-                    try:
-                        handheld_primary_two_x_evidence(captured)
-                        _framegen_deadline_remaining(
-                            deadline, timeout_failure())
-                        return records, captured_log, proof_gameplay
-                    except RuntimeError:
-                        pass
-                if case.folder in {"ps3", "nds", "n3ds"}:
-                    try:
-                        primary_two_x_any_segment(captured)
-                        _framegen_deadline_remaining(
-                            deadline, timeout_failure())
-                        return records, captured_log, proof_gameplay
-                    except RuntimeError:
-                        pass
+                if fatal_rife_campaign_failure:
+                    raise
                 last_failure = str(failure)
                 remaining = _framegen_deadline_remaining(
                     deadline, timeout_failure())
@@ -9277,7 +12551,8 @@ def frame_generation_evidence(adb: Path, serial: str,
 
     motion_thread.start()
     try:
-        latency_records, log_path, real_nes_proof_gameplay = \
+        (latency_records, log_path, real_nes_proof_gameplay,
+         rife_long_campaign) = \
             collect_latency_records()
     finally:
         # An ADB/dumpsys/logcat failure must stop physical input before control
@@ -9305,6 +12580,13 @@ def frame_generation_evidence(adb: Path, serial: str,
             adb, serial, output / f"{prefix}-framegen-visible-primary.png"
         )
     }
+    if n64_fzero_qualification:
+        final_fzero = Path(str(visible_outputs[("primary", 0)]["path"]))
+        if not n64_fzero_single_player_race_hud(final_fzero):
+            raise RuntimeError(
+                "F-Zero frame-generation proof did not end in the active "
+                "one-player race HUD"
+            )
     if case.dual_screen:
         visible_outputs[("secondary", 4)] = screenshot(
             adb, serial,
@@ -9326,6 +12608,80 @@ def frame_generation_evidence(adb: Path, serial: str,
         )
         real_nes_proof_gameplay["health"] = real_nes_proof_health
     report_path = output / f"{prefix}-framegen-report.json"
+    if rife_qualification_requested:
+        rife_passing, rife_rejected = _rife_latency_candidates(
+            log_path.read_text(encoding="utf-8", errors="replace"),
+            latency_records,
+        )
+        rife_selected = _unique_strongest_framegen_candidate(
+            rife_passing, "primary", 0)
+        if rife_selected is None:
+            raise RuntimeError(
+                "RIFE timing gate needs one uniquely strongest primary "
+                f"gameplay layer; rejected={rife_rejected}"
+            )
+        rife_layer, rife_latency_path, rife_report = rife_selected
+        if n64_fzero_qualification:
+            if rife_long_campaign is None:
+                raise RuntimeError(
+                    "F-Zero RIFE proof lacks its required long moving-game "
+                    "campaign"
+                )
+            final_identity = (
+                int(rife_report["generator"]),
+                int(rife_report["presentationEpoch"]),
+                int(rife_report["timingWindow"]),
+            )
+            campaign_identities = {
+                (int(segment["generator"]),
+                 int(segment["presentationEpoch"]),
+                 int(segment["timingWindow"]))
+                for segment in rife_long_campaign["segments"]
+            }
+            if final_identity not in campaign_identities:
+                raise RuntimeError(
+                    "final F-Zero RIFE segment is not bound to the long "
+                    "moving-game campaign"
+                )
+        visible_output = visible_outputs.get(("primary", 0))
+        if visible_output is None:
+            raise RuntimeError("RIFE timing proof has no primary visible capture")
+        require_visible_frame_generation_output(visible_output, "primary", 0)
+        rife_report.update({
+            "passed": False,
+            "layer": rife_layer,
+            "candidateLayers": layers,
+            "rejectedLayers": rife_rejected,
+            "log": str(log_path),
+            "latency": str(rife_latency_path),
+            "visibleOutput": visible_output,
+            "evidence": {
+                "logSha256": sha256_file(log_path),
+                "latencySha256": sha256_file(rife_latency_path),
+            },
+            "identity": {
+                **qualification_identity,
+                "generator": int(rife_report["generator"]),
+                "presentationEpoch": int(
+                    rife_report["presentationEpoch"]),
+                "timingWindow": int(rife_report["timingWindow"]),
+                "role": "primary",
+                "displayId": 0,
+                "timingStartNs": int(rife_report["timingStartNs"]),
+                "timingEndNs": int(rife_report["timingEndNs"]),
+            },
+        })
+        if rife_long_campaign is not None:
+            rife_report["longMovingGameCampaign"] = rife_long_campaign
+        report_path.write_text(
+            json.dumps(rife_report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        raise RuntimeError(
+            "app-owned RIFE timing and numeric content passed, but final "
+            "qualification requires moving-game visual inspection; report=" +
+            str(report_path)
+        )
     passing: list[tuple[str, Path, dict[str, object]]] = []
     rejected: list[dict[str, object]] = []
     for layer, latency_path, role, display_id in latency_records:
@@ -9371,30 +12727,23 @@ def frame_generation_evidence(adb: Path, serial: str,
                        item[2].get("displayId") == 0]
     primary_selected = _unique_strongest_framegen_candidate(
         passing, "primary", 0)
-    if primary_selected is None and case.folder in {"nds", "n3ds"}:
-        log_text = log_path.read_text(encoding="utf-8", errors="replace")
-        try:
-            evidence = handheld_primary_two_x_evidence(log_text)
-        except RuntimeError:
-            evidence = primary_two_x_any_segment(log_text)
-        latency_path = next(
-            (path for layer, path, role, display_id in latency_records
-             if role == "primary" and display_id == 0),
-            log_path,
-        )
-        primary_selected = (layers[0] if layers else "primary",
-                            latency_path, evidence)
-    if primary_selected is None and case.folder == "ps3":
-        evidence = primary_two_x_any_segment(
-            log_path.read_text(encoding="utf-8", errors="replace")
-        )
-        latency_path = next(
-            (path for layer, path, role, display_id in latency_records
-             if role == "primary" and display_id == 0),
-            log_path,
-        )
-        primary_selected = (layers[0] if layers else "primary",
-                            latency_path, evidence)
+    # No soft fallback selection here — the 2026-08-16 audit removed the
+    # fabricated-overlap paths. The DS branch below is NOT that: the
+    # secondary candidate passed the exact same dense gates, latency
+    # capture, and visible-output binding as any primary; only the display
+    # it played on differs.
+    if primary_selected is None and case.folder == "nds":
+        # DS games choose their own gameplay screen: Hunters plays on the
+        # DS top screen (Thor main display 0), Castlevania PoR/OoE play on
+        # the DS touch screen (Thor lower display 4, faithful to hardware).
+        # Qualify the display that actually carries the gameplay — the
+        # full evidence contract, unweakened, just on role=secondary. The
+        # top-screen map legitimately idles at 1x there.
+        primary_selected = _unique_strongest_framegen_candidate(
+            passing, "secondary", 4)
+        if primary_selected is not None:
+            primary_selected[2]["qualifyingRole"] = "secondary"
+            primary_selected[2]["qualifyingDisplayId"] = 4
     if primary_selected is None:
         raise RuntimeError(
             "frame-generation gate needs one uniquely strongest primary "
@@ -9656,6 +13005,42 @@ def run_system(adb: Path, serial: str, controller: PhysicalController,
                display_names: dict[str, str]) -> dict[str, object]:
     hash_guards.append({"system": case.folder, "point": "before-system",
                         **assert_installed_hash(adb, serial, expected_sha)})
+    # Resolve every slow filesystem/metadata prerequisite before opening the
+    # interactive Alpha list.  Once Alpha row zero is established, the only
+    # work before navigation must be immediate controller/screenshot proof;
+    # otherwise the enabled OLED screensaver is entitled to move the cursor.
+    keys = alpha_keys(index, case)
+    requested_titles = max(titles, 4) if case.folder == "nes" else titles
+    playable_keys = playable_alpha_keys(
+        adb, serial, case, keys, requested_titles,
+        (("Lucent Callback Test", *NES_REAL_QUALIFICATION_TITLES)
+         if case.folder == "nes" else ()),
+    )
+    nes_fixture = indexed_nes_qualification(adb, serial, case, playable_keys) \
+        if case.folder == "nes" else None
+    if nes_fixture is None:
+        planned_titles = acceptance_titles(case, playable_keys, requested_titles)
+    else:
+        # The synthetic ROM is a deterministic controls/audio/frame-generation
+        # calibration fixture, never a substitute for real-game acceptance.
+        planned_titles = [nes_fixture["title"], *NES_REAL_QUALIFICATION_TITLES]
+        playable_titles = {
+            normalize(title_from_key(key)) for key in playable_keys
+        }
+        missing_real = [title for title in NES_REAL_QUALIFICATION_TITLES
+                        if normalize(title) not in playable_titles]
+        if missing_real:
+            raise RuntimeError(
+                "NES real-game qualification ROMs are absent: " +
+                ", ".join(missing_real)
+            )
+    # Hashing a packaged engine can take many seconds on the host.  It is a
+    # launch prerequisite, not interactive UI work, so finish it before the
+    # frontend list is opened.  Physical N64 r5 otherwise left the proven A-Z
+    # row idle for ~17 seconds and the enabled screensaver legitimately moved
+    # the cursor before the first navigation checkpoint.
+    core_hashes = {normalize(engine): packaged_engine_sha256(apk, engine)
+                   for engine in case.engines}
     # The stepped origin can land systematically short: once enough recent
     # sessions exist the Cover screen grows a Continue Playing rail that
     # shifts the deterministic All-Systems origin by one (physically hit
@@ -9690,40 +13075,11 @@ def run_system(adb: Path, serial: str, controller: PhysicalController,
             time.sleep(1.0)
     controller.key(controller.A, "physical-a-open-system", hold=0.055)
     time.sleep(0.35)
-    force_alpha_list(adb, serial, controller, output, case.folder)
-    keys = alpha_keys(index, case)
-    # NES qualification is deliberately fixture + three independent owner
-    # titles, even when the general per-system sampling count remains three.
-    requested_titles = max(titles, 4) if case.folder == "nes" else titles
-    playable_keys = playable_alpha_keys(
-        adb, serial, case, keys, requested_titles,
-        (("Lucent Callback Test", *NES_REAL_QUALIFICATION_TITLES)
-         if case.folder == "nes" else ()),
+    _, current_position = force_alpha_list(
+        adb, serial, controller, output, case.folder,
+        case.folder, display_names, keys,
     )
-    nes_fixture = indexed_nes_qualification(adb, serial, case, playable_keys) \
-        if case.folder == "nes" else None
-    if nes_fixture is None:
-        planned_titles = acceptance_titles(case, playable_keys, requested_titles)
-    else:
-        # The synthetic ROM is a deterministic controls/audio/frame-generation
-        # calibration fixture, never a substitute for real-game acceptance.
-        # Bind three explicit commercial games already present in the owner's
-        # NES library instead of accepting arbitrary early Alpha rows/homebrew.
-        planned_titles = [nes_fixture["title"], *NES_REAL_QUALIFICATION_TITLES]
-        playable_titles = {
-            normalize(title_from_key(key)) for key in playable_keys
-        }
-        missing_real = [title for title in NES_REAL_QUALIFICATION_TITLES
-                        if normalize(title) not in playable_titles]
-        if missing_real:
-            raise RuntimeError(
-                "NES real-game qualification ROMs are absent: " +
-                ", ".join(missing_real)
-            )
     results = []
-    current_position = 0
-    core_hashes = {normalize(engine): packaged_engine_sha256(apk, engine)
-                   for engine in case.engines}
     for title_index, title in enumerate(planned_titles):
         current_position = select_title_alpha(
             adb, serial, controller, case, visible_order, display_names, keys,
@@ -9753,6 +13109,11 @@ def run_system(adb: Path, serial: str, controller: PhysicalController,
                 title, expected_sha, qualification, rom_identity, core_hashes,
                 apk,
             )
+            if title_index < len(case.required_source_tiers):
+                require_frame_generation_source_tier(
+                    game, case.required_source_tiers[title_index],
+                    case.folder, title,
+                )
             if qualification is not None:
                 game["controlledMusicVolume"] = {
                     "ownerIndex": original_volume,
@@ -9788,6 +13149,7 @@ def run_system(adb: Path, serial: str, controller: PhysicalController,
             "coverEntryPhysical": True, "systemMenuPhysical": True,
             "alphaIndexPhysical": True,
             "requiredTitles": list(case.required_titles),
+            "requiredSourceTiers": list(case.required_source_tiers),
             "nesQualificationFixture": nes_fixture,
             "nesFixtureRole": "calibration-only" if nes_fixture else None,
             "nesRequiredRealTitles": (list(NES_REAL_QUALIFICATION_TITLES)
@@ -9864,14 +13226,25 @@ def run_list_view_smoke(adb: Path, serial: str,
         normalize(engine): packaged_engine_sha256(apk, engine)
         for engine in case.engines
     }
+    # The smoke verifies RELAUNCH health — route, visible frames, engine
+    # telemetry, volume, dual-screen visibility, stop/return. It does not
+    # drive gameplay, so the relaunched title legitimately idles on a static
+    # title screen where presents pause and dense motion cannot exist;
+    # neither state distinguishes relaunch failure. The MAIN qualification
+    # that just ran on this exact launch stack owns the frame-generation
+    # bar, so the smoke skips only that phase (physically hit on wiiu7 and
+    # ps2-1 relaunches, 2026-08-17).
     result = run_game_from_system_menu(
-        adb, serial, controller, case, output, f"list-view-{case.folder}-title-01",
+        adb, serial, controller, case, output,
+        f"list-view-{case.folder}-title-01",
         expected_title=expected_title, expected_sha=expected_sha,
         rom_identity=rom_identity, core_hashes=core_hashes, apk=apk,
+        smoke_no_framegen=True,
     )
     return {"status": "PASS", "system": case.folder,
             "listEntryPhysical": True,
             "listHighlightResolved": observed,
+            "framegenPhaseSkipped": "smoke-relaunch-health-only",
             "game": result}
 
 
@@ -10022,7 +13395,7 @@ def _runtime_main() -> int:
 
     verifier = ROOT / "unified-android/tools/verify_one_app_apk.py"
     aapt = latest_tool(sdk_build_tools, "aapt")
-    subprocess.run([sys.executable, str(verifier), "--aapt", str(aapt), str(apk)],
+    subprocess.run(one_app_verifier_command(verifier, aapt, apk),
                    cwd=ROOT, check=True)
     report["exactInstall"] = exact_install(
         args.adb, args.serial, apk, args.expected_sha256, output,
@@ -10032,6 +13405,13 @@ def _runtime_main() -> int:
     (output / "installed-base.apk").unlink(missing_ok=True)
 
     qa.adb(args.adb, args.serial, "shell", "am", "force-stop", PACKAGE)
+    # The identity binding requires the launch-time "In-window route
+    # accepted" line to still be in the ring when the framegen logcat is
+    # dumped. Flycast's audio-drop telemetry rotated it out of the default
+    # buffer (run dreamcast5, 2026-08-20: zero route lines in a 28-route
+    # grep of the bounded log). Size the ring once per run; -G does not
+    # survive a device reboot.
+    qa.adb(args.adb, args.serial, "logcat", "-G", "16M")
     qa.adb(args.adb, args.serial, "logcat", "-c")
     qa.ensure_library(args.adb, args.serial)
     deadline = time.monotonic() + 30.0
@@ -10156,6 +13536,7 @@ def _runtime_main() -> int:
     controller = PhysicalController(args.adb, args.serial, event_node)
     report["controller"] = {"node": event_node, "physicalOnly": True,
                             "rightStickAxes": controller.axes}
+    controller.neutralize("physical-neutralize-before-menu")
     # Import/staging can legitimately outlive the menu's idle timeout. Wake a
     # previewing screensaver through the same physical controller path a person
     # uses before asking OCR to prove the interactive library is visible.
@@ -10206,6 +13587,7 @@ def _runtime_main() -> int:
             report["listViewSmoke"] = {"status": "FAIL", "reason": str(error)}
             report["counts"]["FAIL"] += 1
 
+    controller.neutralize("physical-neutralize-after-run")
     report["inputTrace"] = [trace.__dict__ for trace in controller.trace]
     report["complete"] = report["counts"]["FAIL"] == 0
     persist(result_path, report)

@@ -17,3 +17,8 @@ dist/
 # Tool noise.
 aqtinstall.log
 *.log
+# Multiplayer backend: local build output, its embedded database, and the
+# fake-peer test harness's Python venv.
+backend/lucent-multiplayer
+backend/*.db
+backend/testing/.venv/

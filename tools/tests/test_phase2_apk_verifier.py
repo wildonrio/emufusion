@@ -208,6 +208,14 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
             "fileName": f"liblucent_core_{engine_id.replace('-', '_')}.so",
             "sha256": hashlib.sha256(payload).hexdigest(),
         } for engine_id, payload in payloads.items()]}
+        ps2_variant_payload = b"armsx2-16k-core"
+        ps2_variant = {
+            "hostPageSize": 16384, "fileName": "liblucent_core_armsx2_16k.so",
+            "sourceCommit": commits["armsx2"],
+            "sha256": hashlib.sha256(ps2_variant_payload).hexdigest(),
+        }
+        ps2_artifact = next(a for a in artifacts["artifacts"] if a["engineId"] == "armsx2")
+        ps2_artifact.update(hostPageSize=4096, pageSizeVariants=[ps2_variant])
         play_patches = [{
             "path": f"engines/patches/play-{index}.patch",
             "sha256": hashlib.sha256(f"patch-{index}".encode()).hexdigest(),
@@ -343,10 +351,7 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
             "archiveSha256": hashlib.sha256(
                 f"armsx2-dependency-{index}".encode()).hexdigest(),
         } for index in range(7)]
-        armsx2_patch = {
-            "path": "engines/patches/armsx2-libretro-android-build.patch",
-            "sha256": hashlib.sha256(b"armsx2-patch").hexdigest(),
-        }
+        armsx2_patches = [dict(patch) for patch in MODULE.ARMSX2_PATCHES]
         armsx2_lock = {
             "core": {
                 "repository": "https://github.com/example/armsx2",
@@ -361,7 +366,7 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
                 "ninjaVersion": "1.12.1",
             },
             "dependencies": armsx2_dependencies,
-            "patches": [armsx2_patch],
+            "patches": armsx2_patches,
         }
         azahar_lock = {
             "core": {
@@ -453,18 +458,19 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
             "checksums": [{"algorithm": "SHA256",
                            "checksumValue": dependency["archiveSha256"]}],
         } for dependency in armsx2_dependencies)
-        armsx2_patch_id = "SPDXRef-armsx2-patch"
-        sbom["packages"].append({
-            "SPDXID": armsx2_patch_id,
-            "name": armsx2_patch["path"],
-            "checksums": [{"algorithm": "SHA256",
-                           "checksumValue": armsx2_patch["sha256"]}],
-        })
-        sbom["relationships"].append({
-            "spdxElementId": armsx2_patch_id,
-            "relationshipType": "PATCH_FOR",
-            "relatedSpdxElement": "SPDXRef-armsx2-source",
-        })
+        for index, patch in enumerate(armsx2_patches):
+            patch_id = f"SPDXRef-armsx2-patch-{index}"
+            sbom["packages"].append({
+                "SPDXID": patch_id,
+                "name": patch["path"],
+                "checksums": [{"algorithm": "SHA256",
+                               "checksumValue": patch["sha256"]}],
+            })
+            sbom["relationships"].append({
+                "spdxElementId": patch_id,
+                "relationshipType": "PATCH_FOR",
+                "relatedSpdxElement": "SPDXRef-armsx2-source",
+            })
         applewin_patch_id = "SPDXRef-applewin-patch"
         sbom["packages"].append({
             "SPDXID": applewin_patch_id,
@@ -505,6 +511,11 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
             "relatedSpdxElement": azahar_archive_id,
         })
         with zipfile.ZipFile(path, "w") as apk:
+            apk.writestr("lib/arm64-v8a/liblucent_core_armsx2_16k.so", ps2_variant_payload)
+            sbom["packages"].append({
+                "name": ps2_variant["fileName"], "versionInfo": commits["armsx2"],
+                "checksums": [{"algorithm": "SHA256", "checksumValue": ps2_variant["sha256"]}],
+            })
             for engine_id, payload in payloads.items():
                 normalized = engine_id.replace("-", "_")
                 apk.writestr(f"lib/arm64-v8a/liblucent_core_{normalized}.so", payload)
@@ -608,12 +619,38 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
                         sbom = json.loads(payload)
                         sbom["relationships"] = [
                             row for row in sbom["relationships"]
-                            if row.get("spdxElementId") != "SPDXRef-armsx2-patch"
+                            if row.get("spdxElementId") != "SPDXRef-armsx2-patch-1"
                         ]
                         payload = json.dumps(sbom).encode()
                     out.writestr(item, payload)
             self.assertTrue(any("bind ARMSX2 patch" in error
                                 for error in MODULE.verify(unbound)))
+
+    def test_ps2_frame_clock_patch_cannot_be_omitted_or_relabelled(self):
+        current_lock = json.loads((ROOT / "engines/armsx2-source-lock.json").read_text())
+        self.assertEqual(current_lock["patches"], MODULE.ARMSX2_PATCHES)
+        mutations = [
+            MODULE.ARMSX2_PATCHES[:1],
+            [MODULE.ARMSX2_PATCHES[0]] * 2,
+            list(reversed(MODULE.ARMSX2_PATCHES)),
+            [MODULE.ARMSX2_PATCHES[0], dict(MODULE.ARMSX2_PATCHES[1], sha256="0"*64)],
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.make_apk(Path(directory))
+            self.assertEqual([], MODULE.verify(path))
+            for index, patches in enumerate(mutations):
+                with self.subTest(patches=patches):
+                    altered = Path(directory) / f"old-clock-{index}.apk"
+                    with zipfile.ZipFile(path) as source, zipfile.ZipFile(altered, "w") as out:
+                        for item in source.infolist():
+                            payload = source.read(item.filename)
+                            if item.filename == MODULE.ARMSX2_LOCK:
+                                lock = json.loads(payload)
+                                lock["patches"] = patches
+                                payload = json.dumps(lock).encode()
+                            out.writestr(item, payload)
+                    self.assertTrue(any("exact integration and frame-clock" in error
+                                        for error in MODULE.verify(altered)))
 
     def test_tampered_or_missing_armsx2_runtime_asset_fails(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -626,6 +663,54 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
             errors = MODULE.verify(replacement)
             self.assertTrue(any("runtime asset revision" in error for error in errors))
             self.assertTrue(any("required runtime asset" in error for error in errors))
+
+    def test_source_built_azahar_requires_matching_build_and_git_closure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original = self.make_apk(Path(directory))
+            with zipfile.ZipFile(original) as archive:
+                data = {name: archive.read(name) for name in archive.namelist()}
+            lock = json.loads(data[MODULE.AZAHAR_LOCK])
+            sha = lock.pop('releaseArtifact')['memberSha256']
+            lock['sourceBuild'] = dict(artifactSha256=sha, androidAbi='arm64-v8a', androidApi=23,
+                ndkVersion='27.0.12077973', linkAlignment=16384, builtinKeyblob=False)
+            lock['patches'] = [dict(path='engines/patches/azahar-android-strerror.patch', sha256='1' * 64)]
+            lock['dependencies'] = [dict(path=f'externals/pin-{i}', repository='https://github.com/example/dependency',
+                commit=f'{i + 1:040x}', gitTreeSha1=f'{i + 53:040x}') for i in range(52)]
+            sbom = json.loads(data[MODULE.SBOM])
+            source_id = 'SPDXRef-azahar-local-source'
+            sbom['packages'].append(dict(name='Azahar source', SPDXID=source_id))
+            for relation in sbom['relationships']:
+                if relation['spdxElementId'] == 'SPDXRef-azahar-binary' and relation['relationshipType'] == 'EXTRACTED_FROM':
+                    relation.update(relationshipType='GENERATED_FROM', relatedSpdxElement=source_id)
+            for i, dep in enumerate(lock['dependencies']):
+                dep_id = f'SPDXRef-azahar-dep-{i}'
+                sbom['packages'].append(dict(name=dep['path'], SPDXID=dep_id, versionInfo=dep['commit'],
+                    checksums=[dict(algorithm='SHA1', checksumValue=dep['gitTreeSha1'])]))
+                sbom['relationships'].append(dict(spdxElementId=source_id, relationshipType='DEPENDS_ON', relatedSpdxElement=dep_id))
+            def package(changed_lock, changed_sbom):
+                target = Path(directory) / 'source.apk'
+                with zipfile.ZipFile(target, 'w') as archive:
+                    for name, value in data.items():
+                        if name == MODULE.AZAHAR_LOCK: value = json.dumps(changed_lock).encode()
+                        if name == MODULE.SBOM: value = json.dumps(changed_sbom).encode()
+                        archive.writestr(name, value)
+                return MODULE.verify(target)
+            self.assertEqual([], package(lock, sbom))
+            for key, value in [('artifactSha256', '0' * 64), ('linkAlignment', 4096), ('builtinKeyblob', True)]:
+                altered = json.loads(json.dumps(lock))
+                altered['sourceBuild'][key] = value
+                self.assertTrue(any('source-build artifact/profile' in x for x in package(altered, sbom)))
+            altered = json.loads(json.dumps(lock))
+            altered['dependencies'].pop()
+            self.assertTrue(any('gitlink closure' in x for x in package(altered, sbom)))
+            altered_sbom = json.loads(json.dumps(sbom))
+            altered_sbom['relationships'] = [r for r in sbom['relationships'] if r['relatedSpdxElement'] != 'SPDXRef-azahar-dep-0']
+            self.assertTrue(any('Azahar Git dependency' in x for x in package(lock, altered_sbom)))
+            altered_sbom = json.loads(json.dumps(sbom))
+            for row in altered_sbom['relationships']:
+                if row['spdxElementId'] == 'SPDXRef-azahar-binary' and row['relationshipType'] == 'GENERATED_FROM':
+                    row['relationshipType'] = 'EXTRACTED_FROM'
+            self.assertTrue(any('source-built' in x for x in package(lock, altered_sbom)))
 
     def test_tampered_azahar_release_provenance_fails(self):
         with tempfile.TemporaryDirectory() as directory:

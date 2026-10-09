@@ -20,6 +20,19 @@ public final class NativeAdapterStopPolicy {
         return !isAps3e(engineId);
     }
 
+    /** Engines whose next guest needs a fresh process, even after normal Stop. */
+    public static boolean requiresCleanFrontendRestart(String engineId) {
+        // Thor Off-to-Off Metroid relaunch hangs on both a034e602 and b321bab2
+        // despite acknowledged native close. Keep normal Switch cleanup, then
+        // renew its process before admitting another guest.
+        return isAps3e(engineId) || "eden".equals(engineId);
+    }
+
+    /** Only aPS3e intentionally retains native resources for process exit. */
+    public static boolean allowsForcedFrontendRestart(String engineId) {
+        return isAps3e(engineId);
+    }
+
     private static boolean isAps3e(String engineId) {
         return "aps3e".equals(engineId);
     }

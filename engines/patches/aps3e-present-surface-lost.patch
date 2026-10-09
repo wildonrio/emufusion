@@ -1,0 +1,15 @@
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -140,6 +140,12 @@
+ 		case VK_ERROR_OUT_OF_DATE_KHR:
+ 			swapchain_unavailable = true;
+ 			break;
++		case VK_ERROR_SURFACE_LOST_KHR:
++			// A replacement Android window requires a new VkSurface, not just
++			// a swapchain rebuilt against the abandoned window's VkSurface.
++			surface_lost = true;
++			swapchain_unavailable = true;
++			break;
+ 		default:
+ 			// Other errors not part of rpcs3. This can be caused by 3rd party injectors with bad code, of which we have no control over.
+ 			// Let the application attempt to recover instead of crashing outright.

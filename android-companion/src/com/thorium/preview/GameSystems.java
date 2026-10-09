@@ -138,7 +138,10 @@ final class GameSystems {
                 "psp playstationportable sonypsp", "SonyPSPVideoSnaps", "PSP", "psp");
         add("xbox360", "Microsoft Xbox 360", "Microsoft - Xbox 360", "iso xex",
                 "xbox360 microsoftxbox360", "", "Xbox 360", "xbox-360");
-        add("ps3", "Sony PlayStation 3", "Sony - PlayStation 3", "iso pkg",
+        // PKG is an installation package, not a directly bootable title. The
+        // importer separately recognizes decrypted PS3_GAME/USRDIR/EBOOT.BIN
+        // directory dumps; only verified ISO remains a file launch shape.
+        add("ps3", "Sony PlayStation 3", "Sony - PlayStation 3", "iso",
                 "ps3 playstation3 sonyplaystation3", "", "PlayStation 3", "playstation-3");
         add("wii", "Nintendo Wii", "Nintendo - Wii", "wbfs rvz iso wad",
                 "wii nintendowii", "nintendo-wii-video-snaps", "Wii", "wii");
@@ -152,7 +155,12 @@ final class GameSystems {
                 "PlayStation Vita", "playstation-vita");
         add("wiiu", "Nintendo Wii U", "Nintendo - Wii U", "wux wua rpx",
                 "wiiu nintendowiiu", "nintendo-wii-u-video-snaps", "Wii U", "wii-u");
-        add("windows", "Microsoft Windows", "Microsoft - Windows", "exe msi bat cmd",
+        // The built-in PC route is DOSBox Pure. Keep this list aligned with the
+        // pinned core's retro_system_info instead of accepting MSI/CMD files
+        // that the internal engine cannot load. Windows 3.x/9x guests remain
+        // user-supplied disk images; EmuFusion never bundles an operating system.
+        add("windows", "Microsoft Windows", "Microsoft - Windows",
+                "zip dosz exe com bat iso chd cue ins img ima vhd jrc m3u m3u8 conf",
                 "windows windows10 pc", "", "PC", "pc");
         add("switch", "Nintendo Switch", "Nintendo - Nintendo Switch", "nsp xci",
                 "switch nintendoswitch", "nintendo-switch-video-archive", 
@@ -180,6 +188,11 @@ final class GameSystems {
 
     static SystemDef byFolder(String folder) { return BY_FOLDER.get(folder); }
     static Iterable<SystemDef> all() { return BY_FOLDER.values(); }
+
+    /** Resolves a folder name, collection name, or any declared alias. */
+    static SystemDef byAlias(String value) {
+        return value == null || value.isEmpty() ? null : BY_ALIAS.get(normalizeAlias(value));
+    }
 
     static SystemDef byPath(File file) {
         String ext = extension(file.getName());

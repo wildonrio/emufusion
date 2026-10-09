@@ -1,6 +1,6 @@
 # Open firmware qualification
 
-Lucent never downloads or bundles proprietary console firmware. Every accepted
+EmuFusion never downloads or bundles proprietary console firmware. Every accepted
 firmware identity must have a primary upstream source, an explicit
 redistribution license, a pinned source archive, and a SHA-256 identity.
 
@@ -8,7 +8,7 @@ redistribution license, a pinned source archive, and a SHA-256 identity.
 
 The pinned 8bitworkshop tree contains `minbios.asm`, an adjacent 8 KiB ROM,
 and the repository's GPL-3.0 license text. `fetch_open_firmware.sh gearcoleco`
-can stage the candidate for audit, but Lucent does **not** accept or package it.
+can stage the candidate for audit, but EmuFusion does **not** accept or package it.
 
 The upstream Makefile specifies `naken_asm -b minbios.asm` followed by an
 8,192-byte extraction. A pinned contemporary naken_asm build and the current
@@ -56,7 +56,7 @@ can boot its GPL-licensed 4-Tris test content. The same archive does not include
 their corresponding assembly source or file-scoped copyright/license notices,
 however, and the replacements are intentionally incomplete and incompatible
 with many original cartridges. A top-level GPL text beside binary-only firmware
-is not enough evidence for Lucent to represent those firmware images as clearly
+is not enough evidence for EmuFusion to represent those firmware images as clearly
 open and safely redistributable.
 
 Consequently FreeIntv remains deny-by-default: its registry entry requires

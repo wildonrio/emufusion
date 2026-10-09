@@ -1,0 +1,49 @@
+BlastEm NEW_CORE: defer frame-end cycle rebase to top-level syncs.
+
+A rebase run from a sync inside m68k_execute() left its local target_cycle
+~2^32 ahead, so retro_run never returned (Sonic 2 attract demo, Aquatic Ruin
+water-palette HInt stalling on a full VDP FIFO). Evidence:
+docs/qa/android-portability-2026-10-08-current-build-survey/blastem-freeze/
+
+--- a/genesis.c
++++ b/genesis.c
+@@ -561,6 +561,21 @@
+ #define ADJUST_BUFFER (8*MCLKS_LINE*313)
+ #define MAX_NO_ADJUST (UINT32_MAX-ADJUST_BUFFER)
+ 
++#ifdef NEW_CORE
++//The interpreter core's m68k_execute() keeps running until context->cycles reaches
++//the target_cycle it was called with, which it holds in a local. Frame end handling
++//below can rebase every cycle counter by almost 2^32 (MAX_NO_ADJUST). If that runs
++//in a sync made from inside m68k_execute() (address == 0, e.g. a VDP port access
++//that stalls past the end of the frame), the local bound is left billions of cycles
++//ahead of the rebased counter and m68k_execute() never returns, so neither does
++//resume_context()/retro_run(). Only do frame end handling in syncs made from the
++//top-level loops in start_genesis()/resume_genesis(), which pass the current PC as
++//address and recompute target_cycle before m68k_execute() is entered again.
++#define FRAME_END_SYNC_POINT(address) (address)
++#else
++#define FRAME_END_SYNC_POINT(address) 1
++#endif
++
+ static m68k_context *sync_components(m68k_context * context, uint32_t address)
+ {
+ 	genesis_context * gen = context->system;
+@@ -590,7 +605,7 @@
+ 		context->should_return = 1;
+ 		gen->reset_cycle = CYCLE_NEVER;
+ 	}
+-	if (v_context->frame != gen->last_frame) {
++	if (v_context->frame != gen->last_frame && FRAME_END_SYNC_POINT(address)) {
+ #ifndef IS_LIB
+ 		if (gen->ym->scope) {
+ 			scope_render(gen->ym->scope);
+@@ -867,7 +882,7 @@
+ 		context->should_return = 1;
+ 		gen->reset_cycle = CYCLE_NEVER;
+ 	}
+-	if (v_context->frame != gen->last_frame) {
++	if (v_context->frame != gen->last_frame && FRAME_END_SYNC_POINT(address)) {
+ #ifndef IS_LIB
+ 		if (gen->psg->scope) {
+ 			scope_render(gen->psg->scope);

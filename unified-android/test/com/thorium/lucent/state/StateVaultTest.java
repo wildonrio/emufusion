@@ -39,6 +39,12 @@ public final class StateVaultTest {
     }
 
     private static void largeStatePolicySkipsRecoveryCopyAndRefusesUnsafeExit() {
+        TestSupport.truth(!QuickResumePolicy.allowsRuntimeRestore("armsx2"),
+                "ARMSX2 silent black-frame restores are quarantined");
+        TestSupport.truth(QuickResumePolicy.allowsRuntimeRestore("dolphin"),
+                "Dolphin's EGL reset is now handled by restoreQuickResume's"
+                + " recreateSurface recovery, so it is no longer quarantined"
+                + " (2026-09-06)");
         TestSupport.truth(QuickResumePolicy.shouldCopyPreviousToRecovery(64 * 1024 * 1024),
                 "64 MiB state retains recovery-copy convenience");
         TestSupport.truth(!QuickResumePolicy.shouldCopyPreviousToRecovery(

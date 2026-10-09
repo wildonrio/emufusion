@@ -1,0 +1,77 @@
+--- a/Source/Core/VideoBackends/Vulkan/CommandBufferManager.cpp
++++ b/Source/Core/VideoBackends/Vulkan/CommandBufferManager.cpp
+@@ -193,37 +193,37 @@
+-VkDescriptorSet CommandBufferManager::AllocateDescriptorSet(VkDescriptorSetLayout set_layout)
+-{
+-  VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+-  FrameResources& resources = GetCurrentFrameResources();
+-
+-  if (!resources.descriptor_pools.empty()) [[likely]]
+-  {
+-    VkDescriptorSetAllocateInfo allocate_info = {
+-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr,
+-        resources.descriptor_pools[resources.current_descriptor_pool_index], 1, &set_layout};
+-
+-    VkResult res =
+-        vkAllocateDescriptorSets(g_vulkan_context->GetDevice(), &allocate_info, &descriptor_set);
+-    if (res != VK_SUCCESS &&
+-        resources.descriptor_pools.size() > resources.current_descriptor_pool_index + 1)
+-    {
+-      // Mark the next descriptor set as active and try again.
+-      resources.current_descriptor_pool_index++;
+-      descriptor_set = AllocateDescriptorSet(set_layout);
+-    }
+-  }
+-
+-  if (descriptor_set == VK_NULL_HANDLE) [[unlikely]]
+-  {
+-    VkDescriptorPool descriptor_pool = CreateDescriptorPool(DESCRIPTOR_SETS_PER_POOL);
+-    m_descriptor_set_count += DESCRIPTOR_SETS_PER_POOL;
+-    if (descriptor_pool == VK_NULL_HANDLE) [[unlikely]]
+-      return VK_NULL_HANDLE;
+-
+-    resources.descriptor_pools.push_back(descriptor_pool);
+-    resources.current_descriptor_pool_index =
+-        static_cast<u32>(resources.descriptor_pools.size()) - 1;
+-    descriptor_set = AllocateDescriptorSet(set_layout);
+-  }
+-
+-  return descriptor_set;
+-}
++VkDescriptorSet CommandBufferManager::AllocateDescriptorSet(VkDescriptorSetLayout set_layout)
++{
++  FrameResources& resources = GetCurrentFrameResources();
++  bool created_pool = false;
++  for (;;)
++  {
++    if (resources.current_descriptor_pool_index >= resources.descriptor_pools.size())
++    {
++      // A fresh pool that cannot satisfy one set must not recurse forever.
++      if (created_pool)
++        return VK_NULL_HANDLE;
++      VkDescriptorPool pool = CreateDescriptorPool(DESCRIPTOR_SETS_PER_POOL);
++      if (pool == VK_NULL_HANDLE)
++        return VK_NULL_HANDLE;
++      resources.descriptor_pools.push_back(pool);
++      m_descriptor_set_count += DESCRIPTOR_SETS_PER_POOL;
++      created_pool = true;
++    }
++
++    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
++    VkDescriptorSetAllocateInfo allocate_info = {
++        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr,
++        resources.descriptor_pools[resources.current_descriptor_pool_index], 1, &set_layout};
++    VkResult res =
++        vkAllocateDescriptorSets(g_vulkan_context->GetDevice(), &allocate_info, &descriptor_set);
++    // The result, not an output handle, determines whether allocation succeeded.
++    // Some Android drivers write a non-null handle even on pool exhaustion.
++    if (res == VK_SUCCESS)
++      return descriptor_set;
++    if (res != VK_ERROR_OUT_OF_POOL_MEMORY && res != VK_ERROR_FRAGMENTED_POOL)
++    {
++      LOG_VULKAN_ERROR(res, "vkAllocateDescriptorSets failed: ");
++      return VK_NULL_HANDLE;
++    }
++    ++resources.current_descriptor_pool_index;
++  }
++}

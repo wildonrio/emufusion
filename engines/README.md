@@ -1,4 +1,4 @@
-# Lucent engine supply chain
+# EmuFusion engine supply chain
 
 `registry.json` is the authoritative Phase 1 candidate inventory. A pinned
 commit records what will be audited; it does not approve or ship that engine.
@@ -58,19 +58,23 @@ settings, or configuration.
 | MAME | Passed 2026-08-06 for Arcade and Neo Geo AES | Constrained driver set; source/Makefile/NDK/recipe/output fingerprints pinned; exact qualified core SHA `8e099718…` is safely reusable; Neo Geo CD remains firmware-blocked |
 
 The script always builds into ignored development output. It does not copy any
-core into Lucent and does not change an engine's approval, qualification, or
+core into EmuFusion and does not change an engine's approval, qualification, or
 shipping status.
 
 ## Phase 2 qualification payload
 
 `phase2-registry.json` is the fail-closed authority for the larger-system
 candidates. The explicit qualification APK currently stages PPSSPP, Play!,
-ARMSX2, Flycast, Azahar, and Virtual Jaguar in Lucent's own GLES/Vulkan host.
+ARMSX2, Flycast, Azahar, and Virtual Jaguar in EmuFusion's own GLES/Vulkan host.
 Their exact source archives, dependencies, integration patches, official
 release archives, and toolchains are locked by `*-source-lock.json` files as
-applicable. Azahar is a checksum-verified official prebuilt and is modeled in
-the SPDX document as `EXTRACTED_FROM` its release ZIP, not as a Lucent
-source-reproduced binary. No Phase 2 engine is shipped or auto-selected, and
+applicable. Azahar now builds the same pinned 2125.1.3 source and 52 recursive
+Git links with the Android error-signature patch and 16 KiB alignment. Its
+SPDX artifact is `GENERATED_FROM` source, not `EXTRACTED_FROM` the older release
+ZIP. Two clean builds at different paths on the current host match the tested
+core; runtime audio/performance and release qualification remain open. The
+previous upstream core is retained beside the staged output as a hash-named
+backup. No Phase 2 engine is shipped, and
 open dependency/license, legal-content, firmware, state, renderer,
 performance, and device gates remain binding.
 

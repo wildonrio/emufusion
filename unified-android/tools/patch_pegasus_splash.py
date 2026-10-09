@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Blank the embedded Pegasus startup PNG so Lucent opens with no splash.
+"""Blank the embedded Pegasus startup PNG so EmuFusion opens with no splash.
 
 The frontend reserves a 700x227 startup image. Drawing a wordmark there made
-every cold start flash a branded loading screen. Lucent replaces the slot with
+every cold start flash a branded loading screen. EmuFusion replaces the slot with
 a fully transparent PNG of the same geometry, so the library is the first thing
 the user sees. Attribution lives in About/licensing, not on a splash.
 """

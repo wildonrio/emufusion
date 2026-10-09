@@ -27,7 +27,7 @@ class Phase1AQATest(unittest.TestCase):
             {
                 "nes", "snes", "gb", "gbc", "gba", "sg1000", "mastersystem",
                 "gamegear", "colecovision", "intellivision", "psx", "nds",
-                "zxspectrum", "arcade", "neogeo", "neogeocd", "dos",
+                "zxspectrum", "arcade", "neogeo", "neogeocd", "dos", "windows",
                 "pcengine", "ngp", "wonderswancolor",
                 "amstradcpc", "atari2600", "atari5200", "atari7800",
                 "atari800", "atarist", "c64", "megadrive", "msx", "n64",
@@ -65,7 +65,7 @@ class Phase1AQATest(unittest.TestCase):
 
     def test_generated_fixtures_are_deterministic(self):
         expected = {
-            "nes": (FIXTURES.make_nes(), "296af0aadc69db18543fdddb17269700adf50312c456be77074c35bbd7851a74"),
+            "nes": (FIXTURES.make_nes(), "42019e9ca4a3a11815a9e13b7c60734a73fb7ae3cb06a140915daa4605ee8508"),
             "snes": (FIXTURES.make_snes(), "e841dcdca175a4473b8d5db9c59f48f7291e3974f89917aa136ba137e5c14cbc"),
             "sg1000": (FIXTURES.make_sega(None), "2b98b5c06119e72b24bb35c7bb576babc1da495416389bccfd014e0e2de93e24"),
             "mastersystem": (FIXTURES.make_sega(0x4C), "772ff72c94820cb1efb792ede85ce105d5cf0867deba644d4d094f9c97f37fd9"),
@@ -174,11 +174,13 @@ class Phase1AQATest(unittest.TestCase):
     def test_mame_build_reuses_only_exact_qualified_artifact(self):
         recipe = (ROOT / "engines" / "build_core.sh").read_text(encoding="utf-8")
         for value in (
-            "8e099718b1ccbcd2505433e5060cb6d16828911e96e05e3a44a9949283225bd0",
+            "1160d48a52f0271e3a83bb57498fe5f86069336be6eb175be9d3842795fc0d07",
             "1c4a54b31c5ed242a901b4a472d412819b5e08405df1c58066bd555f9dd52515",
             "08e3e6f9e21ea6ec1c9d9b0882f576a9abb03aa5aeeeefb3ad8bc4a3f13d96de",
             "LUCENT_FORCE_REBUILD",
-            "recipeRevision=2",
+            "recipeRevision=3",
+            "elfMaxPageSize=16384",
+            "elfCommonPageSize=16384",
         ):
             self.assertIn(value, recipe)
 

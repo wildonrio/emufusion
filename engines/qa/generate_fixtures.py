@@ -83,30 +83,393 @@ def stage(name: str, source: Path, expected_sha256: str) -> Path:
     return destination
 
 
+class _NesAssembler:
+    """The tiny, deterministic subset of 6502 assembly used by the NES ROM.
+
+    Keeping the source here avoids depending on a downloaded assembler while
+    still making every branch and absolute address reviewable.  It deliberately
+    supports only the two relocation forms used below.
+    """
+
+    def __init__(self, origin: int = 0x8000) -> None:
+        self.origin = origin
+        self.code = bytearray()
+        self.labels: dict[str, int] = {}
+        self.fixups: list[tuple[str, int, str]] = []
+
+    def emit(self, *values: int) -> None:
+        self.code.extend(value & 0xFF for value in values)
+
+    def label(self, name: str) -> None:
+        if name in self.labels:
+            raise ValueError(f"duplicate NES label: {name}")
+        self.labels[name] = self.origin + len(self.code)
+
+    def absolute(self, opcode: int, label: str) -> None:
+        self.emit(opcode, 0, 0)
+        self.fixups.append(("absolute", len(self.code) - 2, label))
+
+    def branch(self, opcode: int, label: str) -> None:
+        self.emit(opcode, 0)
+        self.fixups.append(("branch", len(self.code) - 1, label))
+
+    def finish(self) -> bytes:
+        for kind, offset, label in self.fixups:
+            if label not in self.labels:
+                raise ValueError(f"missing NES label: {label}")
+            target = self.labels[label]
+            if kind == "absolute":
+                self.code[offset:offset + 2] = target.to_bytes(2, "little")
+                continue
+            source_after_operand = self.origin + offset + 1
+            displacement = target - source_after_operand
+            if not -128 <= displacement <= 127:
+                raise ValueError(
+                    f"NES branch {label} is out of range: {displacement}"
+                )
+            self.code[offset] = displacement & 0xFF
+        return bytes(self.code)
+
+
 def make_nes() -> bytes:
-    # Mapper 0, battery-backed PRG RAM. The 6502 program disables interrupts
-    # and writes a blue PPU backdrop before looping forever.  The visible
-    # backdrop lets the Android qualification path prove that Lucent presents
-    # core video rather than merely receiving a callback.
+    """Build EmuFusion's original, redistributable NES qualification ROM.
+
+    The NROM-128 cartridge deliberately exercises what a physical acceptance
+    run must prove instead of merely calling libretro callbacks:
+
+    * a white one-tile border touches all four 256x240 source edges, with a
+      solid coloured interior, so full-height 4:3 geometry is measurable;
+    * broad spatial motion, a sprite and a counter advance on deterministic
+      60/50/40/30 unique-image schedules while callbacks remain native-rate;
+    * A/B/Select/Start/Up/Down/Left/Right each select a distinct interior
+      colour, while Start also freezes motion for exact Quick Resume evidence;
+    * pulse channel 1 emits an approximately 440 Hz constant-volume tone; and
+    * a Mesen custom cheat ``6000:3F`` changes the border from white to red.
+
+    All mutable state is ordinary CPU/PPU/APU/RAM state and therefore belongs
+    to the core's serialized snapshot.  No proprietary code or artwork is
+    embedded.
+    """
+    # Mapper 0, horizontal mirroring, battery-backed 8 KiB PRG RAM.
     header = bytearray(b"NES\x1a" + bytes([1, 1, 0x02, 0x00]) + bytes(8))
+    asm = _NesAssembler()
+
+    # Zero-page contract used by the physical verifier.
+    pad, last_pad, frame, motion_x = 0x00, 0x01, 0x02, 0x03
+    frozen, control_colour, border_colour = 0x04, 0x05, 0x06
+    cadence_mode, cadence_phase, scroll_x, control_hold = 0x07, 0x08, 0x09, 0x0A
+    last_direction, direction_hold = 0x0B, 0x0C
+
+    asm.label("reset")
+    asm.emit(0x78, 0xD8)                    # SEI; CLD
+    asm.emit(0xA2, 0x40, 0x8E, 0x17, 0x40) # disable APU frame IRQ
+    asm.emit(0xA2, 0xFF, 0x9A, 0xE8)       # stack=$01FF; X=0
+    asm.emit(0x8E, 0x00, 0x20)             # PPUCTRL=0
+    asm.emit(0x8E, 0x01, 0x20)             # PPUMASK=0
+    asm.emit(0x8E, 0x10, 0x40)             # disable DMC IRQ
+    asm.emit(0x2C, 0x02, 0x20)
+    asm.label("wait_vblank_1")
+    asm.emit(0x2C, 0x02, 0x20)
+    asm.branch(0x10, "wait_vblank_1")      # BPL
+
+    # Clear all 2 KiB internal RAM, including the OAM staging page.
+    asm.emit(0xA9, 0x00, 0xA2, 0x00)       # LDA #0; LDX #0
+    asm.label("clear_ram")
+    for page in range(8):
+        asm.emit(0x9D, 0x00, page)
+    asm.emit(0xE8)
+    asm.branch(0xD0, "clear_ram")
+    asm.emit(0x8D, 0x00, 0x60)             # actual cheat-observable RAM=0
+    # NES OAM treats Y=0 as visible. Hide all 64 entries before defining the
+    # two authored sprites below; zero-filled unused entries would otherwise
+    # contaminate the upper-left geometry/control oracle after the first DMA.
+    asm.emit(0xA9, 0xF8, 0xA2, 0x00)
+    asm.label("hide_oam")
+    asm.emit(0x9D, 0x00, 0x02, 0xE8, 0xE8, 0xE8, 0xE8)
+    asm.branch(0xD0, "hide_oam")
+
+    asm.label("wait_vblank_2")
+    asm.emit(0x2C, 0x02, 0x20)
+    asm.branch(0x10, "wait_vblank_2")
+
+    # Palette $3F00-$3F1F.
+    asm.emit(0xA9, 0x3F, 0x8D, 0x06, 0x20)
+    asm.emit(0xA9, 0x00, 0x8D, 0x06, 0x20)
+    asm.emit(0xA2, 0x00)
+    asm.label("copy_palette")
+    asm.absolute(0xBD, "palette_data")     # LDA palette_data,X
+    asm.emit(0x8D, 0x07, 0x20, 0xE8, 0xE0, 0x20)
+    asm.branch(0xD0, "copy_palette")
+
+    # Copy one complete 32x30 nametable plus attributes. Each source page has
+    # its own 256-byte loop: interleaving page0[X], page1[X], ... would scramble
+    # the intended row-major border even though it still writes 1024 bytes.
+    asm.emit(0xA9, 0x20, 0x8D, 0x06, 0x20)
+    asm.emit(0xA9, 0x00, 0x8D, 0x06, 0x20)
+    for page in range(4):
+        asm.emit(0xA2, 0x00)
+        asm.label(f"copy_nametable_{page}")
+        asm.absolute(0xBD, f"nametable_{page}")
+        asm.emit(0x8D, 0x07, 0x20)
+        asm.emit(0xE8)
+        asm.branch(0xD0, f"copy_nametable_{page}")
+
+    # Sprite 0 is continuous motion. Sprite 1 is a per-control position marker.
+    asm.emit(0xA9, 0x70, 0x8D, 0x00, 0x02) # Y
+    asm.emit(0xA9, 0x02, 0x8D, 0x01, 0x02) # tile
+    asm.emit(0xA9, 0x00, 0x8D, 0x02, 0x02) # attributes
+    asm.emit(0xA9, 0x20, 0x8D, 0x03, 0x02) # X
+    asm.emit(0xA9, 0xF8, 0x8D, 0x04, 0x02) # hidden Y
+    asm.emit(0xA9, 0x07, 0x8D, 0x05, 0x02) # tile
+    asm.emit(0xA9, 0x01, 0x8D, 0x06, 0x02) # palette 1
+    asm.emit(0xA9, 0x18, 0x8D, 0x07, 0x02) # X
+
+    # Pulse 1: duty=50%, constant volume=15, timer=253 (~440.4 Hz NTSC).
+    asm.emit(0xA9, 0x01, 0x8D, 0x15, 0x40) # enable pulse 1
+    asm.emit(0xA9, 0xBF, 0x8D, 0x00, 0x40)
+    asm.emit(0xA9, 0x00, 0x8D, 0x01, 0x40)
+    asm.emit(0xA9, 0xFD, 0x8D, 0x02, 0x40)
+    asm.emit(0xA9, 0xF8, 0x8D, 0x03, 0x40)
+
+    # Enable NMI, background and sprites (including the leftmost 8 pixels).
+    asm.emit(0xA9, 0x80, 0x8D, 0x00, 0x20)
+    asm.emit(0xA9, 0x1E, 0x8D, 0x01, 0x20)
+    asm.emit(0xA9, 0x00, 0x8D, 0x05, 0x20, 0x8D, 0x05, 0x20)
+    asm.label("main")
+    asm.absolute(0x4C, "main")
+
+    asm.label("nmi")
+    asm.emit(0x48, 0x8A, 0x48, 0x98, 0x48) # preserve A/X/Y
+
+    # Read controller 1 into $00 in canonical NES bit order:
+    # bit0=A, 1=B, 2=Select, 3=Start, 4=Up, 5=Down, 6=Left, 7=Right.
+    asm.emit(0xA9, 0x01, 0x8D, 0x16, 0x40)
+    asm.emit(0xA9, 0x00, 0x8D, 0x16, 0x40, 0x85, pad)
+    asm.emit(0xA2, 0x08)
+    asm.label("read_pad")
+    asm.emit(0xAD, 0x16, 0x40, 0x4A, 0x66, pad, 0xCA)
+    asm.branch(0xD0, "read_pad")
+
+    # Retain a recent direction long enough for the host's reviewed Stop/Select
+    # latch to deliver Select on release. Select+direction can then select a
+    # mode directly even though the two guest edges are intentionally ordered.
+    asm.emit(0xA5, pad, 0x29, 0xF0)
+    asm.branch(0xF0, "direction_neutral")
+    asm.emit(0x85, last_direction, 0xA9, 0x1E, 0x85, direction_hold)
+    asm.absolute(0x4C, "direction_done")
+    asm.label("direction_neutral")
+    asm.emit(0xA5, direction_hold)
+    asm.branch(0xF0, "direction_done")
+    asm.emit(0xC6, direction_hold)
+    asm.label("direction_done")
+
+    # Plain Select cycles the unique-image cadence 60->50->40->30. A recently
+    # held direction selects directly: Up=60, Right=50, Down=40, Left=30.
+    # Emulation continues at native cadence; intentionally repeated images are
+    # submitted normally and production's latestImageIsUnique() decides which
+    # ones are real producer frames. No test clock or timestamp is fabricated.
+    asm.emit(0xA5, pad, 0x29, 0x04)
+    asm.branch(0xF0, "select_done")
+    asm.emit(0xA5, last_pad, 0x29, 0x04)
+    asm.branch(0xD0, "select_done")
+    asm.emit(0xA5, direction_hold)
+    asm.branch(0xF0, "select_cycle")
+    asm.emit(0xA5, last_direction, 0xC9, 0x10)
+    asm.branch(0xF0, "select_mode_60")
+    asm.emit(0xC9, 0x80)
+    asm.branch(0xF0, "select_mode_50")
+    asm.emit(0xC9, 0x20)
+    asm.branch(0xF0, "select_mode_40")
+    asm.emit(0xA9, 0x03)
+    asm.absolute(0x4C, "select_store_mode")
+    asm.label("select_mode_60")
+    asm.emit(0xA9, 0x00)
+    asm.absolute(0x4C, "select_store_mode")
+    asm.label("select_mode_50")
+    asm.emit(0xA9, 0x01)
+    asm.absolute(0x4C, "select_store_mode")
+    asm.label("select_mode_40")
+    asm.emit(0xA9, 0x02)
+    asm.absolute(0x4C, "select_store_mode")
+    asm.label("select_cycle")
+    asm.emit(0xE6, cadence_mode, 0xA5, cadence_mode, 0x29, 0x03,
+             0x85, cadence_mode)
+    asm.absolute(0x4C, "select_reset_phase")
+    asm.label("select_store_mode")
+    asm.emit(0x85, cadence_mode)
+    asm.label("select_reset_phase")
+    asm.emit(0xA9, 0x00, 0x85, cadence_phase)
+    asm.label("select_done")
+
+    # Start's rising edge toggles a persistent freeze.  A frozen screenshot is
+    # the semantic state oracle for Stop -> Quick Resume -> relaunch.
+    asm.emit(0xA5, pad, 0x29, 0x08)
+    asm.branch(0xF0, "start_done")
+    asm.emit(0xA5, last_pad, 0x29, 0x08)
+    asm.branch(0xD0, "start_done")
+    asm.emit(0xA5, frozen, 0x49, 0x01, 0x85, frozen)
+    asm.label("start_done")
+    asm.emit(0xA5, pad, 0x85, last_pad)
+    asm.emit(0xA5, frozen)
+    asm.branch(0xD0, "motion_done")
+    # Six-NMI schedule: mode0 updates 6/6, mode1 5/6, mode2 4/6 and
+    # mode3 3/6. Broad tile scrolling makes every scheduled update visible to
+    # the generator's 16x9 content signature; unscheduled callbacks are exact
+    # repeated pixels and therefore remain submitted-but-not-unique evidence.
+    asm.emit(0xE6, cadence_phase, 0xA5, cadence_phase, 0xC9, 0x06)
+    asm.branch(0x90, "phase_ready")         # BCC
+    asm.emit(0xA9, 0x00, 0x85, cadence_phase)
+    asm.label("phase_ready")
+    asm.emit(0xA5, cadence_mode)
+    asm.branch(0xF0, "visual_update")
+    asm.emit(0xC9, 0x01)
+    asm.branch(0xF0, "mode_50")
+    asm.emit(0xC9, 0x02)
+    asm.branch(0xF0, "mode_40")
+    # mode 30: update phases 0,2,4 only.
+    asm.emit(0xA5, cadence_phase, 0x29, 0x01)
+    asm.branch(0xD0, "motion_done")
+    asm.absolute(0x4C, "visual_update")
+    asm.label("mode_50")
+    asm.emit(0xA5, cadence_phase)
+    asm.branch(0xF0, "motion_done")
+    asm.absolute(0x4C, "visual_update")
+    asm.label("mode_40")
+    asm.emit(0xA5, cadence_phase)
+    asm.branch(0xF0, "motion_done")
+    asm.emit(0xC9, 0x03)
+    asm.branch(0xF0, "motion_done")
+    asm.label("visual_update")
+    asm.emit(0xE6, frame, 0xE6, motion_x, 0xE6, scroll_x,
+             0xA5, scroll_x, 0x29, 0x07, 0x85, scroll_x)
+    asm.label("motion_done")
+    asm.emit(0xA5, motion_x, 0x8D, 0x03, 0x02)
+
+    # Every control has both a unique colour and a unique marker Y position.
+    asm.emit(0xA5, pad)
+    asm.branch(0xF0, "neutral_control")
+    asm.emit(0xA2, 0x00, 0xA5, pad)
+    asm.label("find_control")
+    asm.emit(0x4A)
+    asm.branch(0xB0, "control_found")
+    asm.emit(0xE8, 0xE0, 0x08)
+    asm.branch(0xD0, "find_control")
+    asm.label("control_found")
+    asm.absolute(0xBD, "control_colours")
+    asm.emit(0x85, control_colour)
+    asm.absolute(0xBD, "control_y")
+    asm.emit(0x8D, 0x04, 0x02)
+    asm.emit(0xA9, 0x1E, 0x85, control_hold)
+    asm.absolute(0x4C, "control_done")
+    asm.label("neutral_control")
+    # The Thor host intentionally latches a short Stop/Select tap only after
+    # release. Retain every control's authored colour/marker for 30 NMIs so the
+    # physical screenshot proves Select as reliably as ordinary face buttons.
+    asm.emit(0xA5, control_hold)
+    asm.branch(0xF0, "neutral_expired")
+    asm.emit(0xC6, control_hold)
+    asm.absolute(0x4C, "control_done")
+    asm.label("neutral_expired")
+    asm.emit(0xA9, 0x21, 0x85, control_colour)
+    asm.emit(0xA9, 0xF8, 0x8D, 0x04, 0x02)
+    asm.label("control_done")
+
+    # Mesen's custom-code format 6000:3F overrides this read.  The border's
+    # white->red transition is large and deterministic, not a log-only pass.
+    asm.emit(0xAD, 0x00, 0x60, 0xC9, 0x3F)
+    asm.branch(0xD0, "cheat_off")
+    asm.emit(0xA9, 0x16)
+    asm.absolute(0x4C, "cheat_colour_done")
+    asm.label("cheat_off")
+    asm.emit(0xA9, 0x30)
+    asm.label("cheat_colour_done")
+    asm.emit(0x85, border_colour)
+
+    # Update the two background colours and one visible four-state counter tile.
+    asm.emit(0xA9, 0x3F, 0x8D, 0x06, 0x20)
+    asm.emit(0xA9, 0x01, 0x8D, 0x06, 0x20)
+    asm.emit(0xA5, control_colour, 0x8D, 0x07, 0x20)
+    asm.emit(0xA5, border_colour, 0x8D, 0x07, 0x20)
+    asm.emit(0xA9, 0x20, 0x8D, 0x06, 0x20)
+    asm.emit(0xA9, 0x6F, 0x8D, 0x06, 0x20)
+    asm.emit(0xA5, frame, 0x4A, 0x4A, 0x4A, 0x4A, 0x29, 0x03,
+             0x18, 0x69, 0x03, 0x8D, 0x07, 0x20)
+    asm.emit(0xA9, 0x02, 0x8D, 0x14, 0x40) # OAM DMA
+    asm.emit(0xA5, scroll_x, 0x8D, 0x05, 0x20)
+    asm.emit(0xA9, 0x00, 0x8D, 0x05, 0x20)
+    asm.emit(0x68, 0xA8, 0x68, 0xAA, 0x68, 0x40) # restore; RTI
+
+    asm.label("irq")
+    asm.emit(0x40)
+    asm.label("palette_data")
+    asm.emit(*([0x0F, 0x21, 0x30, 0x16] * 4))
+    # Sprite palette 1 is reserved for the control-position marker. Its
+    # palette-index-1 magenta can never equal any control background (including
+    # Up's white field), making the unique authored Y oracle observable for all
+    # eight controls on the physical scaler.
+    asm.emit(*( [0x0F, 0x30, 0x27, 0x16] +
+                [0x0F, 0x25, 0x27, 0x16] +
+                [0x0F, 0x30, 0x27, 0x16] * 2 ))
+    asm.label("control_colours")
+    asm.emit(0x16, 0x2A, 0x28, 0x24, 0x30, 0x12, 0x1A, 0x27)
+    asm.label("control_y")
+    asm.emit(0x18, 0x30, 0x48, 0x60, 0x78, 0x90, 0xA8, 0xC0)
+
+    # Border tile 1 surrounds the complete source image. A deterministic,
+    # nonperiodic field of eight authored texture tiles fills it. This avoids
+    # aliasing against the generator's 16x9 signature lattice and gives its
+    # block matcher unique local patches instead of repeating vertical stripes.
+    nametable = bytearray(1024)
+    for row in range(30):
+        for column in range(32):
+            nametable[row * 32 + column] = (
+                1 if row in {0, 29} or column in {0, 31}
+                else 9 + ((row * 17 + column * 29 + row * column * 7 +
+                           (column >> 1) * 3) % 8)
+            )
+    for page in range(4):
+        asm.label(f"nametable_{page}")
+        asm.emit(*nametable[page * 256:(page + 1) * 256])
+
+    program = asm.finish()
+    if len(program) > 0x3FFA:
+        raise ValueError("NES qualification program overlaps interrupt vectors")
     prg = bytearray([0xEA] * 0x4000)
-    prg[:48] = bytes([
-        0x78, 0xD8,                         # SEI; CLD
-        0xA2, 0x40, 0x8E, 0x17, 0x40,       # disable APU frame IRQ
-        0xA2, 0xFF, 0x9A, 0xE8,             # initialize stack; X = 0
-        0x8E, 0x00, 0x20,                    # disable NMI
-        0x8E, 0x01, 0x20,                    # disable rendering
-        0x8E, 0x10, 0x40,                    # disable DMC IRQ
-        0xAD, 0x02, 0x20, 0x10, 0xFB,       # wait for vblank
-        0xA9, 0x3F, 0x8D, 0x06, 0x20,       # PPU address $3F00
-        0xA9, 0x00, 0x8D, 0x06, 0x20,
-        0xA9, 0x21, 0x8D, 0x07, 0x20,       # blue universal backdrop
-        0xA9, 0x08, 0x8D, 0x01, 0x20,       # enable background rendering
-        0x4C, 0x2D, 0x80,                    # loop forever
-    ])
-    for offset in (0x3FFA, 0x3FFC, 0x3FFE):
-        prg[offset : offset + 2] = b"\x00\x80"
-    return bytes(header + prg + bytearray(0x2000))
+    prg[:len(program)] = program
+    for offset, label in ((0x3FFA, "nmi"), (0x3FFC, "reset"), (0x3FFE, "irq")):
+        prg[offset:offset + 2] = asm.labels[label].to_bytes(2, "little")
+
+    chr_rom = bytearray(0x2000)
+
+    def tile(index: int, low: tuple[int, ...], high: tuple[int, ...]) -> None:
+        if len(low) != 8 or len(high) != 8:
+            raise ValueError("NES CHR tiles require two eight-byte planes")
+        start = index * 16
+        chr_rom[start:start + 16] = bytes(low + high)
+
+    tile(0, (0xF0,) * 8, (0x0F,) * 8)       # colour1 | colour2 stripes
+    tile(1, (0x00,) * 8, (0xFF,) * 8)       # solid palette colour 2
+    tile(2, (0x3C, 0x7E, 0xFF, 0xFF, 0xFF, 0xFF, 0x7E, 0x3C), (0x00,) * 8)
+    tile(3, (0x18,) * 8, (0x00,) * 8)
+    tile(4, (0xF0,) * 8, (0x00,) * 8)
+    tile(5, (0xAA, 0x55) * 4, (0x00,) * 8)
+    tile(6, (0x7E, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x7E), (0x00,) * 8)
+    tile(7, (0x18, 0x18, 0x18, 0xFF, 0xFF, 0x18, 0x18, 0x18), (0x00,) * 8)
+    tile(8, (0x0F,) * 8, (0xF0,) * 8)       # inverse broad-motion stripes
+    for tile_index in range(9, 17):
+        low_rows = []
+        high_rows = []
+        for y in range(8):
+            seed = (tile_index * 37 + y * 73 + 0x5A) & 0xFF
+            low = ((seed * 109) ^ (seed >> 3) ^ (y * 0x33) ^
+                   (tile_index * 0x17)) & 0xFF
+            # Complementary planes make every pixel palette value 1 or 2
+            # (never transparent) while retaining the PRNG-like spatial bits.
+            high = (~low) & 0xFF
+            low_rows.append(low)
+            high_rows.append(high)
+        tile(tile_index, tuple(low_rows), tuple(high_rows))
+    return bytes(header + prg + chr_rom)
 
 
 def make_snes() -> bytes:
@@ -294,7 +657,8 @@ def main() -> None:
     fixtures: list[dict[str, object]] = []
 
     def add(system: str, core: str, path: Path, provenance: str, license_id: str,
-            support_files: list[dict[str, str]] | None = None) -> None:
+            support_files: list[dict[str, str]] | None = None,
+            qualification: dict[str, object] | None = None) -> None:
         entry: dict[str, object] = {
             "system": system,
             "core": core,
@@ -305,11 +669,45 @@ def main() -> None:
         }
         if support_files:
             entry["supportFiles"] = support_files
+        if qualification:
+            entry["qualification"] = qualification
         fixtures.append(entry)
 
     add("nes", "mesen", write("lucent-callback-test.nes", make_nes()),
-        "Deterministically generated by this script; original Lucent QA fixture",
-        "GPL-3.0-only")
+        "Deterministically generated by this script; original EmuFusion qualification fixture",
+        "GPL-3.0-only", qualification={
+            "profile": "emufusion-nes-v1",
+            "nativeGeometry": {"width": 256, "height": 240,
+                               "displayAspect": "4:3"},
+            "edgeMarker": "one-tile solid-white border on all four source edges",
+            "continuousMotion": "broad nonperiodic textured field scroll, sprite X and counter advance on scheduled unique frames",
+            "cadenceModes": {
+                "selection": "plain Select cycles 60->50->40->30; Select+Up=60, Select+Right=50, Select+Down=40, Select+Left=30",
+                "schedulePeriodNmis": 6,
+                "60": {"uniqueFramesPerPeriod": 6, "repeatedFramesPerPeriod": 0},
+                "50": {"uniqueFramesPerPeriod": 5, "repeatedFramesPerPeriod": 1},
+                "40": {"uniqueFramesPerPeriod": 4, "repeatedFramesPerPeriod": 2},
+                "30": {"uniqueFramesPerPeriod": 3, "repeatedFramesPerPeriod": 3},
+                "clockSource": "native NES NMI; no host or timestamp override",
+            },
+            "audio": {"channel": "APU pulse 1", "frequencyHzApprox": 440.4,
+                      "constantVolume": 15},
+            "controls": {
+                "A": {"nesBit": 0, "palette": "16", "markerY": 24},
+                "B": {"nesBit": 1, "palette": "2A", "markerY": 48},
+                "Select": {"nesBit": 2, "palette": "28", "markerY": 72},
+                "Start": {"nesBit": 3, "palette": "24", "markerY": 96,
+                          "semanticAction": "toggle-motion-freeze"},
+                "Up": {"nesBit": 4, "palette": "30", "markerY": 120},
+                "Down": {"nesBit": 5, "palette": "12", "markerY": 144},
+                "Left": {"nesBit": 6, "palette": "1A", "markerY": 168},
+                "Right": {"nesBit": 7, "palette": "27", "markerY": 192},
+            },
+            "quickResumeOracle": "Start freezes all continuous visible state",
+            "cheat": {"format": "mesen-custom", "code": "6000:3F",
+                      "address": "6000", "value": "3F",
+                      "visibleEffect": "border white-to-red"},
+        })
     add("snes", "mesen-s", write("lucent-callback-test.sfc", make_snes()),
         "Deterministically generated by this script; original Lucent QA fixture",
         "GPL-3.0-only")
@@ -385,6 +783,10 @@ def main() -> None:
         "GPL-3.0-or-later")
     add("dos", "dosbox-pure", write("lucent-dos-callback-test.zip", make_dos_zip()),
         "Deterministically generated by this script; original Lucent DOS COM fixture",
+        "CC0-1.0")
+    add("windows", "dosbox-pure", write(
+        "emufusion-internal-pc-callback-test.zip", make_dos_zip()),
+        "Deterministically generated by this script; original EmuFusion internal-PC fixture",
         "CC0-1.0")
     add("atari7800", "prosystem", stage(
         "lucent-atari7800-qa.a78", OPEN_NEWCORES / "lucent-atari7800-qa.a78",

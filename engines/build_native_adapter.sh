@@ -1,5 +1,5 @@
 #!/bin/sh
-# Reproducible Android ARM64 build recipe for a Lucent Phase 3 native-adapter
+# Reproducible Android ARM64 build recipe for a EmuFusion Phase 3 native-adapter
 # engine (Wii U/Cemu first).
 #
 # STATUS: SKELETON ONLY. The actual Cemu-as-adapter core build is a separate,
@@ -26,15 +26,17 @@
 #      static const lucent_native_adapter whose abi_version equals
 #      LUCENT_NATIVE_ADAPTER_ABI_VERSION. Everything else stays hidden
 #      (-fvisibility=hidden -Wl,--no-undefined -Wl,--exclude-libs,ALL).
-#   6. Apply Lucent's 16 KiB page-size link policy
+#   6. Apply EmuFusion's 16 KiB page-size link policy
 #      (-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384) and produce
 #      liblucent_native_adapter_cemu.so.
 #   7. Normalize (strip .note.gnu.build-id), record artifactSha256, and prove
 #      byte-identical independent builds before flipping "reproducible": true and
 #      generating the signed phase3 artifact manifest the APK verifies.
 #
-# Until all of that exists, the Java NativeAdapterCatalog stays fail-closed:
-# no adapter .so is packaged, so Wii U resolves to its external Cemu route.
+# Until all of that exists, the Java NativeAdapterCatalog stays fail-closed on
+# the HASH: a build that does not pass LUCENT_INCLUDE_PHASE3_CEMU=1 packages no
+# adapter .so at all, and only then does Wii U resolve to its external Cemu
+# route. With the flag, the staged adapter is bundled and Wii U runs internally.
 
 set -eu
 

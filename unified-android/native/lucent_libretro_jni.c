@@ -32,7 +32,8 @@ static lucent_gles_jni_session *from_gles_handle(jlong handle) {
 JNIEXPORT jlong JNICALL
 Java_com_thorium_preview_LibretroHost_nativeCreate(
         JNIEnv *env, jclass type, jstring core_path, jstring trusted_root,
-        jstring system_directory, jstring save_directory) {
+        jstring system_directory, jstring save_directory,
+        jboolean widescreen_enhancements_enabled) {
     (void)type;
     char error[ERROR_SIZE] = {0};
     const char *core = (*env)->GetStringUTFChars(env, core_path, NULL);
@@ -41,7 +42,10 @@ Java_com_thorium_preview_LibretroHost_nativeCreate(
     const char *save = (*env)->GetStringUTFChars(env, save_directory, NULL);
     lucent_retro_host *host = NULL;
     if (core && root && system && save)
-        host = lucent_retro_create(core, root, system, save, error, sizeof(error));
+        host = lucent_retro_create_with_preferences(
+                core, root, system, save, NULL,
+                widescreen_enhancements_enabled == JNI_TRUE,
+                error, sizeof(error));
     if (host) {
         JavaVM *vm = NULL;
         if ((*env)->GetJavaVM(env, &vm) != JNI_OK || !vm ||
@@ -88,6 +92,35 @@ Java_com_thorium_preview_LibretroHost_nativeReset(
     if (!lucent_retro_reset(from_handle(handle), error, sizeof(error)) &&
             !(*env)->ExceptionCheck(env))
         throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_LibretroHost_nativeCheatReset(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    if (!lucent_retro_cheat_reset(from_handle(handle), error, sizeof(error)) &&
+            !(*env)->ExceptionCheck(env))
+        throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_LibretroHost_nativeCheatSet(
+        JNIEnv *env, jclass type, jlong handle, jint index, jboolean enabled,
+        jstring code) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    if (code == NULL) {
+        throw_state(env, "a cheat code is required");
+        return;
+    }
+    const char *native_code = (*env)->GetStringUTFChars(env, code, NULL);
+    if (native_code == NULL) return;
+    bool ok = lucent_retro_cheat_set(from_handle(handle), (unsigned)index,
+                                     enabled == JNI_TRUE, native_code, error,
+                                     sizeof(error));
+    (*env)->ReleaseStringUTFChars(env, code, native_code);
+    if (!ok && !(*env)->ExceptionCheck(env)) throw_state(env, error);
 }
 
 JNIEXPORT void JNICALL
@@ -149,39 +182,35 @@ Java_com_thorium_preview_LibretroHost_nativeSetPointer(
         throw_state(env, "invalid pointer port or coordinate");
 }
 
-JNIEXPORT jintArray JNICALL
-Java_com_thorium_preview_LibretroHost_nativeVideoInfo(
-        JNIEnv *env, jclass type, jlong handle) {
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_LibretroHost_nativeReadVideoInfo(
+        JNIEnv *env, jclass type, jlong handle, jintArray result) {
     (void)type;
     lucent_retro_video_info info;
-    if (!lucent_retro_latest_video_info(from_handle(handle), &info)) return NULL;
+    if (result == NULL || (*env)->GetArrayLength(env, result) != 6 ||
+            !lucent_retro_latest_video_info(from_handle(handle), &info))
+        return JNI_FALSE;
     if (info.pitch > INT32_MAX || info.byte_size > INT32_MAX || info.sequence > INT32_MAX)
-        return NULL;
+        return JNI_FALSE;
     jint values[6] = {(jint)info.width, (jint)info.height, (jint)info.pitch,
                      (jint)info.pixel_format, (jint)info.byte_size, (jint)info.sequence};
-    jintArray result = (*env)->NewIntArray(env, 6);
-    if (result) (*env)->SetIntArrayRegion(env, result, 0, 6, values);
-    return result;
+    (*env)->SetIntArrayRegion(env, result, 0, 6, values);
+    return (*env)->ExceptionCheck(env) ? JNI_FALSE : JNI_TRUE;
 }
 
-JNIEXPORT jbyteArray JNICALL
-Java_com_thorium_preview_LibretroHost_nativeCopyVideoFrame(
-        JNIEnv *env, jclass type, jlong handle, jint size) {
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_LibretroHost_nativeCopyVideoFrameInto(
+        JNIEnv *env, jclass type, jlong handle, jbyteArray destination) {
     (void)type;
-    if (size <= 0) return NULL;
-    void *bytes = malloc((size_t)size);
-    if (!bytes) {
-        throw_state(env, "out of memory copying video frame");
-        return NULL;
-    }
-    if (!lucent_retro_copy_video_frame(from_handle(handle), bytes, (size_t)size)) {
-        free(bytes);
-        return NULL;
-    }
-    jbyteArray result = (*env)->NewByteArray(env, size);
-    if (result) (*env)->SetByteArrayRegion(env, result, 0, size, (const jbyte *)bytes);
-    free(bytes);
-    return result;
+    if (destination == NULL) return JNI_FALSE;
+    jsize size = (*env)->GetArrayLength(env, destination);
+    if (size <= 0) return JNI_FALSE;
+    jbyte *bytes = (*env)->GetPrimitiveArrayCritical(env, destination, NULL);
+    if (bytes == NULL) return JNI_FALSE;
+    bool copied = lucent_retro_copy_video_frame(
+            from_handle(handle), bytes, (size_t)size);
+    (*env)->ReleasePrimitiveArrayCritical(env, destination, bytes, 0);
+    return copied ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jshortArray JNICALL
@@ -217,6 +246,17 @@ Java_com_thorium_preview_LibretroHost_nativeAvInfo(
     jdoubleArray result = (*env)->NewDoubleArray(env, 5);
     if (result) (*env)->SetDoubleArrayRegion(env, result, 0, 5, values);
     return result;
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_LibretroHost_nativeSetSynchronizedVideoRate(
+        JNIEnv *env, jclass type, jlong handle, jdouble declared_hz,
+        jdouble synchronized_hz) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    if (!lucent_retro_set_synchronized_video_rate(
+            from_handle(handle), declared_hz, synchronized_hz,
+            error, sizeof(error))) throw_state(env, error);
 }
 
 JNIEXPORT jbyteArray JNICALL
@@ -334,7 +374,8 @@ JNIEXPORT jlong JNICALL
 Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeCreateGles(
         JNIEnv *env, jclass type, jstring core_path, jstring trusted_root,
         jstring system_directory, jstring save_directory,
-        jint presentation_policy) {
+        jint presentation_policy, jint source_timeline_policy,
+        jboolean widescreen_enhancements_enabled) {
     (void)type;
     char error[ERROR_SIZE] = {0};
     const char *core = NULL;
@@ -371,8 +412,11 @@ Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeCreateGles(
     options.preferred_context =
             (options.context_capabilities & LUCENT_RETRO_HW_GLES3) ?
                     LUCENT_RETRO_HW_GLES3 : LUCENT_RETRO_HW_GLES2;
-    session->host = lucent_retro_create_with_options(
-            core, root, system, save, &options, error, sizeof(error));
+    options.source_timeline_policy = (uint32_t)source_timeline_policy;
+    session->host = lucent_retro_create_with_preferences(
+            core, root, system, save, &options,
+            widescreen_enhancements_enabled == JNI_TRUE,
+            error, sizeof(error));
     if (session->host) {
         JavaVM *vm = NULL;
         if ((*env)->GetJavaVM(env, &vm) != JNI_OK || !vm ||
@@ -435,6 +479,63 @@ Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeResetGles(
     if (!success && !(*env)->ExceptionCheck(env)) throw_state(env, error);
 }
 
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeCheatResetGles(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_gles_jni_session *session = from_gles_handle(handle);
+    bool success = session && session->host &&
+            lucent_retro_cheat_reset(session->host, error, sizeof(error));
+    if (!success && !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeCheatSetGles(
+        JNIEnv *env, jclass type, jlong handle, jint index, jboolean enabled,
+        jstring code) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_gles_jni_session *session = from_gles_handle(handle);
+    if (!session || !session->host || code == NULL) {
+        throw_state(env, "a loaded GLES session and cheat code are required");
+        return;
+    }
+    const char *native_code = (*env)->GetStringUTFChars(env, code, NULL);
+    if (native_code == NULL) return;
+    bool success = lucent_retro_cheat_set(session->host, (unsigned)index,
+            enabled == JNI_TRUE, native_code, error, sizeof(error));
+    (*env)->ReleaseStringUTFChars(env, code, native_code);
+    if (!success && !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeSetPresentationAspectGles(
+        JNIEnv *env, jclass type, jlong handle, jfloat aspect) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_gles_jni_session *session = from_gles_handle(handle);
+    if ((!session || !session->backend ||
+            !lucent_android_gles_set_presentation_aspect(
+                    session->backend, aspect, error, sizeof(error))) &&
+            !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeSetFgTimestampGles(
+        JNIEnv *env, jclass type, jlong handle, jboolean enabled) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_gles_jni_session *session = from_gles_handle(handle);
+    if (!session || !session->backend) {
+        throw_state(env, "GLES session and backend are required");
+        return;
+    }
+    if (!lucent_android_gles_set_fg_timestamp(session->backend,
+            enabled == JNI_TRUE, error, sizeof(error)) &&
+            !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
 static bool attach_java_surface(JNIEnv *env, lucent_gles_jni_session *session,
                                 jobject surface, bool recreate,
                                 char *error, size_t error_size) {
@@ -478,21 +579,60 @@ Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeRecreateSurfaceGles(
             !(*env)->ExceptionCheck(env)) throw_state(env, error);
 }
 
-JNIEXPORT jboolean JNICALL
-Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeRunAndPresentGles(
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeResizeSurfaceGles(
         JNIEnv *env, jclass type, jlong handle) {
     (void)type;
     char error[ERROR_SIZE] = {0};
+    lucent_gles_jni_session *session = from_gles_handle(handle);
+    if ((!session || !session->backend || !lucent_android_gles_surface_resized(
+            session->backend, error, sizeof(error))) &&
+            !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
+static jint run_gles_guest_step(JNIEnv *env, jlong handle, bool present_frame) {
+    char error[ERROR_SIZE] = {0};
     bool presented = false;
+    bool ready = false;
     lucent_gles_jni_session *session = from_gles_handle(handle);
     if (!session || !session->host || !session->backend ||
-            !lucent_retro_run_frame(session->host, error, sizeof(error)) ||
-            !lucent_android_gles_present_if_ready(
-                    session->backend, &presented, error, sizeof(error))) {
+            !lucent_android_gles_prepare_resume(session->backend, &ready,
+                                               error, sizeof(error))) {
         if (!(*env)->ExceptionCheck(env)) throw_state(env, error);
         return JNI_FALSE;
     }
-    return presented ? JNI_TRUE : JNI_FALSE;
+    /* 0 = no guest step; 1 = guest step without swap; 2 = guest step and swap.
+     * Keep warmup distinct from legitimate duplicate-video guest callbacks. */
+    if (!ready) return JNI_FALSE;
+    if (!lucent_retro_run_frame(session->host, error, sizeof(error)) ||
+            (present_frame && !lucent_android_gles_present_if_ready(
+                    session->backend, &presented, error, sizeof(error)))) {
+        if (!(*env)->ExceptionCheck(env)) throw_state(env, error);
+        return JNI_FALSE;
+    }
+    return presented ? 2 : 1;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeRunAndPresentStatusGles(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)type;
+    return run_gles_guest_step(env, handle, true);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeRunWithoutPresentStatusGles(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)type;
+    return run_gles_guest_step(env, handle, false);
+}
+
+/* Preserve the old bridge ABI for callers that do not consume work metrics. */
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeRunAndPresentGles(
+        JNIEnv *env, jclass type, jlong handle) {
+    return Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeRunAndPresentStatusGles(
+            env, type, handle) == 2 ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL
@@ -538,6 +678,19 @@ Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeSetAnalogAxisGles(
             !lucent_retro_set_analog_axis(session->host, (unsigned)port,
                     (unsigned)index, (unsigned)id, (int16_t)value))
         throw_state(env, "invalid experimental GLES analog input");
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeSetPointerGles(
+        JNIEnv *env, jclass type, jlong handle, jint port, jint x, jint y,
+        jboolean pressed) {
+    (void)type;
+    lucent_gles_jni_session *session = from_gles_handle(handle);
+    if (!session || port < 0 || x < INT16_MIN || x > INT16_MAX ||
+            y < INT16_MIN || y > INT16_MAX ||
+            !lucent_retro_set_pointer(session->host, (unsigned)port,
+                    (int16_t)x, (int16_t)y, pressed == JNI_TRUE))
+        throw_state(env, "invalid experimental GLES pointer input");
 }
 
 JNIEXPORT jintArray JNICALL
@@ -608,6 +761,29 @@ Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeAvInfoGles(
     result = (*env)->NewDoubleArray(env, 5);
     if (result) (*env)->SetDoubleArrayRegion(env, result, 0, 5, values);
     return result;
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeLastRunAudioDurationNanosGles(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)env;
+    (void)type;
+    lucent_gles_jni_session *session = from_gles_handle(handle);
+    return session && session->host ? (jlong)
+            lucent_retro_last_run_audio_duration_ns(session->host) : 0;
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeSetSynchronizedVideoRateGles(
+        JNIEnv *env, jclass type, jlong handle, jdouble declared_hz,
+        jdouble synchronized_hz) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_gles_jni_session *session = from_gles_handle(handle);
+    if (!session || !session->host ||
+            !lucent_retro_set_synchronized_video_rate(
+                    session->host, declared_hz, synchronized_hz,
+                    error, sizeof(error))) throw_state(env, error);
 }
 
 JNIEXPORT jbyteArray JNICALL

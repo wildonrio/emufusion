@@ -1,0 +1,160 @@
+--- a/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.h
++++ b/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.h
+@@ -9,1 +9,2 @@
+-#include "GS/Renderers/Vulkan/VKLoader.h"
++#include "GS/Renderers/Vulkan/VKLoader.h"
++#include "GS/Renderers/Vulkan/FrameDescriptorBatchCache.h"
+@@ -276,1 +276,2 @@
+-		VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
++		VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
++		FrameDescriptorBatchCache descriptor_batches;
+--- a/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.cpp
++++ b/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.cpp
+@@ -1383,21 +1383,11 @@
+-VkDescriptorSet GSDeviceVK::AllocateDescriptorSetFromFramePool(VkDescriptorSetLayout set_layout)
+-{
+-	VkDescriptorPool pool = m_frame_resources[m_current_frame].descriptor_pool;
+-	pxAssert(pool != VK_NULL_HANDLE);
+-
+-	VkDescriptorSetAllocateInfo allocate_info = {
+-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr, pool, 1, &set_layout};
+-
+-	VkDescriptorSet descriptor_set;
+-	VkResult res = vkAllocateDescriptorSets(m_device, &allocate_info, &descriptor_set);
+-	if (res == VK_SUCCESS)
+-		return descriptor_set;
+-
+-	// Pool exhausted. Recovery (flush the command buffer to reset the frame pool,
+-	// then restart the render pass and re-apply state) must be driven by the caller:
+-	// callers capture their command buffer and emit binding state before calling us,
+-	// so flushing here would leave them writing to a submitted command buffer with no
+-	// active render pass. Signal exhaustion with a null set and let the caller flush,
+-	// restart, and re-enter (mirroring the uniform-buffer overflow paths).
+-	return VK_NULL_HANDLE;
+-}
++VkDescriptorSet GSDeviceVK::AllocateDescriptorSetFromFramePool(VkDescriptorSetLayout set_layout)
++{
++	FrameResources& resources = m_frame_resources[m_current_frame];
++	pxAssert(resources.descriptor_pool != VK_NULL_HANDLE);
++	// Distinct sets per draw; batch only the driver allocations. Null still
++	// leaves exhaustion recovery with the caller's render-pass restart logic.
++	return resources.descriptor_batches.AllocateSet(m_device, resources.descriptor_pool,
++		set_layout, [](VkDevice device, const VkDescriptorSetAllocateInfo* info, VkDescriptorSet* sets) {
++			return vkAllocateDescriptorSets(device, info, sets);
++		});
++}
+@@ -1793,2 +1793,4 @@
+-		if (res != VK_SUCCESS)
+-			LOG_VULKAN_ERROR(res, "vkResetDescriptorPool failed: ");
++		if (res != VK_SUCCESS)
++			LOG_VULKAN_ERROR(res, "vkResetDescriptorPool failed: ");
++		else
++			resources.descriptor_batches.Reset();
+--- /dev/null
++++ b/pcsx2/GS/Renderers/Vulkan/FrameDescriptorBatchCache.h
+@@ -0,0 +1,105 @@
++// SPDX-License-Identifier: GPL-3.0+
++#pragma once
++
++#include <array>
++#include <cstdint>
++
++// One cache per fenced frame-pool generation. The owner calls Reset only after
++// the GPU has finished and vkResetDescriptorPool succeeds. Sets are never reused
++// within a generation: each draw still receives a distinct descriptor set.
++class FrameDescriptorBatchCache
++{
++public:
++	static constexpr std::uint32_t Capacity = 8192;
++	static constexpr std::uint32_t BatchSize = 32;
++	struct Statistics
++	{
++		std::uint64_t requests = 0, driver_calls = 0, failures = 0, allocated = 0;
++	};
++
++	void Reset()
++	{
++		m_batches = {};
++		m_allocated = 0;
++	}
++
++	const Statistics& GetStatistics() const { return m_statistics; }
++
++	template <typename Allocate>
++	VkDescriptorSet AllocateSet(VkDevice device, VkDescriptorPool pool,
++		VkDescriptorSetLayout layout, Allocate allocate, std::uint32_t batch_size = BatchSize)
++	{
++		m_statistics.requests++;
++		LayoutBatch* batch = nullptr;
++		for (auto& candidate : m_batches)
++		{
++			if (candidate.layout == layout)
++			{
++				batch = &candidate;
++				break;
++			}
++		}
++		if (!batch)
++		{
++			for (auto& candidate : m_batches)
++			{
++				if (candidate.layout == VK_NULL_HANDLE)
++				{
++					candidate.layout = layout;
++					batch = &candidate;
++					break;
++				}
++			}
++		}
++		if (batch && batch->remaining)
++			return batch->sets[--batch->remaining];
++		if (m_allocated >= Capacity)
++			return VK_NULL_HANDLE;
++
++		// Three hot layouts are currently used. Future extra layouts retain the
++		// ordinary one-set allocation path instead of evicting live generations.
++		std::uint32_t count = batch ? batch_size : 1;
++		if (!count || count > BatchSize) count = BatchSize;
++		if (count > Capacity - m_allocated) count = Capacity - m_allocated;
++		std::array<VkDescriptorSetLayout, BatchSize> layouts;
++		layouts.fill(layout);
++		std::array<VkDescriptorSet, BatchSize> sets{};
++		VkDescriptorSetAllocateInfo info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
++			nullptr, pool, count, layouts.data()};
++		m_statistics.driver_calls++;
++		VkResult result = allocate(device, &info, sets.data());
++		if (result != VK_SUCCESS && count > 1 &&
++			(result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL))
++		{
++			// A smaller allocation may still fit. A failed Vulkan allocation has
++			// no usable returned sets, even if a driver leaves non-null outputs.
++			m_statistics.failures++;
++			sets = {};
++			info.descriptorSetCount = count = 1;
++			m_statistics.driver_calls++;
++			result = allocate(device, &info, sets.data());
++		}
++		if (result != VK_SUCCESS)
++		{
++			m_statistics.failures++;
++			return VK_NULL_HANDLE;
++		}
++		m_allocated += count;
++		m_statistics.allocated += count;
++		if (!batch) return sets[0];
++		batch->sets = sets;
++		batch->remaining = count - 1;
++		return sets[count - 1];
++	}
++
++private:
++	struct LayoutBatch
++	{
++		VkDescriptorSetLayout layout = VK_NULL_HANDLE;
++		std::array<VkDescriptorSet, BatchSize> sets{};
++		std::uint32_t remaining = 0;
++	};
++	std::array<LayoutBatch, 3> m_batches{};
++	std::uint32_t m_allocated = 0;
++	Statistics m_statistics{};
++};

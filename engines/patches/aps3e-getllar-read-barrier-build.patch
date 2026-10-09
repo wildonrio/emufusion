@@ -1,0 +1,13 @@
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp
+@@ -4973,6 +4973,10 @@
+ 				mov_rdata(rdata, data);
+ 			}
+ 
++			// Complete payload reads before rechecking the reservation stamp.
++			// An acquire stamp load only orders operations that follow it; on
++			// ARM it cannot prevent this check from passing the preceding copy.
++			atomic_fence_acquire();
+ 			if (u64 time0 = vm::reservation_acquire(addr); (ntime & test_mask) != (time0 & test_mask))
+ 			{
+ 				// Reservation data has been modified recently

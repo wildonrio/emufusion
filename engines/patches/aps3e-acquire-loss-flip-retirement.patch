@@ -1,0 +1,14 @@
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -611,7 +611,11 @@
+             case VK_ERROR_SURFACE_LOST_KHR:
+                 surface_lost=true;
+                 swapchain_unavailable = true;
+                 reinitialize_swapchain();
++                // handle_emu_flip still sends the guest completion on return.
++                // Consume this request, as the unavailable-surface path does,
++                // so do_local_task cannot replay it and notify the guest twice.
++                rsx::thread::flip(info);
+                 return;
+ 		case VK_ERROR_OUT_OF_DATE_KHR:
+ 			rsx_log.warning("_vkAcquireNextImageKHR failed with VK_ERROR_OUT_OF_DATE_KHR. Flip request ignored until surface is recreated.");

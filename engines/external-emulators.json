@@ -1,0 +1,898 @@
+{
+  "$schema": "./external-emulators.schema.json",
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-09",
+  "packageIdsVerified": false,
+  "note": "Per-system directory of common standalone Android emulators, used by the Settings route picker to name each option and to reach its install source. Every option id here must also exist in android-companion/src/com/thorium/preview/EmulatorCatalog.java, which owns the direct-into-gameplay launch recipe; a name in this file can never make an unlaunchable emulator selectable. packageIdsVerified is false because no id below has been checked against a live Play listing or release page from this repository - they are the ids the shipping EmulatorCatalog already uses. Set an entry's verified flag only after confirming that exact package id resolves to that emulator.",
+  "emulators": [
+    {
+      "id": "2600emu",
+      "name": "2600.emu",
+      "packages": [
+        "com.explusalpha.A2600Emu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.A2600Emu"
+      },
+      "verified": false
+    },
+    {
+      "id": "armsx2",
+      "name": "ARMSX2 / AetherSX2",
+      "packages": [
+        "com.armsx2",
+        "xyz.aethersx2.android"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/ARMSX2/ARMSX2"
+      },
+      "verified": false
+    },
+    {
+      "id": "azahar",
+      "name": "Azahar",
+      "packages": [
+        "org.azahar_emu.azahar",
+        "io.github.lime3ds.android",
+        "org.citra.emu"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/azahar-emu/azahar/releases"
+      },
+      "verified": false
+    },
+    {
+      "id": "c64emu",
+      "name": "C64.emu",
+      "packages": [
+        "com.explusalpha.C64Emu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.C64Emu"
+      },
+      "verified": false
+    },
+    {
+      "id": "cemu",
+      "name": "Cemu",
+      "packages": [
+        "info.cemu.cemu"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/cemu-project/Cemu/releases"
+      },
+      "verified": false
+    },
+    {
+      "id": "colem",
+      "name": "ColEm",
+      "packages": [
+        "com.fms.colem.deluxe",
+        "com.fms.colem"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.fms.colem.deluxe"
+      },
+      "verified": false
+    },
+    {
+      "id": "colleen",
+      "name": "Colleen",
+      "packages": [
+        "name.nick.jubanka.colleen"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/romjacket/Colleen"
+      },
+      "verified": false
+    },
+    {
+      "id": "dolphin",
+      "name": "Dolphin",
+      "packages": [
+        "org.dolphinemu.dolphinemu"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://dolphin-emu.org/download/"
+      },
+      "verified": false
+    },
+    {
+      "id": "dosbox",
+      "name": "Magic DOSBox",
+      "packages": [
+        "bruenor.magicbox.free",
+        "bruenor.magicbox"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=bruenor.magicbox.free"
+      },
+      "verified": false
+    },
+    {
+      "id": "drastic",
+      "name": "DraStic",
+      "packages": [
+        "com.dsemu.drastic"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.dsemu.drastic"
+      },
+      "verified": false
+    },
+    {
+      "id": "duckstation",
+      "name": "DuckStation",
+      "packages": [
+        "com.github.stenzek.duckstation"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.github.stenzek.duckstation"
+      },
+      "verified": false
+    },
+    {
+      "id": "eden",
+      "name": "Eden",
+      "packages": [
+        "dev.eden.eden_emulator",
+        "dev.legacy.eden_emulator",
+        "org.citron.citron_emu"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://eden-emu.dev/downloads/"
+      },
+      "verified": false
+    },
+    {
+      "id": "epsxe",
+      "name": "ePSXe",
+      "packages": [
+        "com.epsxe.ePSXe"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.epsxe.ePSXe"
+      },
+      "verified": false
+    },
+    {
+      "id": "flycast",
+      "name": "Flycast",
+      "packages": [
+        "com.flycast.emulator",
+        "com.reicast.emulator"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/flyinghead/flycast/releases"
+      },
+      "verified": false
+    },
+    {
+      "id": "gbaemu",
+      "name": "GBA.emu",
+      "packages": [
+        "com.explusalpha.GbaEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.GbaEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "gbcemu",
+      "name": "GBC.emu",
+      "packages": [
+        "com.explusalpha.GbcEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.GbcEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "m64plus-fz",
+      "name": "M64Plus FZ",
+      "packages": [
+        "org.mupen64plusae.v3.fzurita.pro",
+        "org.mupen64plusae.v3.fzurita",
+        "org.mupen64plusae.v3.fzurita.amazon"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=org.mupen64plusae.v3.fzurita.pro"
+      },
+      "verified": false
+    },
+    {
+      "id": "mame4droid",
+      "name": "MAME4droid 2024",
+      "packages": [
+        "com.seleuco.mame4d2024"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/seleuco/MAME4droid-2024/releases"
+      },
+      "verified": false
+    },
+    {
+      "id": "mdemu",
+      "name": "MD.emu",
+      "packages": [
+        "com.explusalpha.MdEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.MdEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "melonds",
+      "name": "melonDS",
+      "packages": [
+        "me.magnum.melonds.nightly",
+        "me.magnum.melonds",
+        "me.magnum.melondualds"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/rafaelvcaetano/melonDS-android/releases"
+      },
+      "verified": false
+    },
+    {
+      "id": "msxemu",
+      "name": "MSX.emu",
+      "packages": [
+        "com.explusalpha.MsxEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.MsxEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "myboy",
+      "name": "My Boy!",
+      "packages": [
+        "com.fastemulator.gba",
+        "com.fastemulator.gbafree"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.fastemulator.gba"
+      },
+      "verified": false
+    },
+    {
+      "id": "neoemu",
+      "name": "NEO.emu",
+      "packages": [
+        "com.explusalpha.NeoEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.NeoEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "nesemu",
+      "name": "NES.emu",
+      "packages": [
+        "com.explusalpha.NesEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.NesEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "ngpemu",
+      "name": "NGP.emu",
+      "packages": [
+        "com.explusalpha.NgpEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.NgpEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "pceemu",
+      "name": "PCE.emu",
+      "packages": [
+        "com.PceEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.PceEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "ppsspp",
+      "name": "PPSSPP",
+      "packages": [
+        "org.ppsspp.ppssppgold",
+        "org.ppsspp.ppsspp"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://dev.ppsspp.org/download/"
+      },
+      "verified": false
+    },
+    {
+      "id": "redream",
+      "name": "Redream",
+      "packages": [
+        "io.recompiled.redream"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=io.recompiled.redream"
+      },
+      "verified": false
+    },
+    {
+      "id": "retroarch",
+      "name": "RetroArch",
+      "packages": [
+        "com.retroarch.aarch64",
+        "com.retroarch"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.retroarch.aarch64"
+      },
+      "verified": false
+    },
+    {
+      "id": "saturnemu",
+      "name": "Saturn.emu",
+      "packages": [
+        "com.explusalpha.SaturnEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.SaturnEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "scummvm",
+      "name": "ScummVM",
+      "packages": [
+        "org.scummvm.scummvm"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://www.scummvm.org/downloads/"
+      },
+      "verified": false
+    },
+    {
+      "id": "snes9x",
+      "name": "Snes9x EX+",
+      "packages": [
+        "com.explusalpha.Snes9xPlus"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.Snes9xPlus"
+      },
+      "verified": false
+    },
+    {
+      "id": "speccy",
+      "name": "Speccy",
+      "packages": [
+        "com.fms.speccy.deluxe",
+        "com.fms.speccy"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.fms.speccy.deluxe"
+      },
+      "verified": false
+    },
+    {
+      "id": "swanemu",
+      "name": "Swan.emu",
+      "packages": [
+        "com.explusalpha.SwanEmu"
+      ],
+      "install": {
+        "kind": "play",
+        "url": "https://play.google.com/store/apps/details?id=com.explusalpha.SwanEmu"
+      },
+      "verified": false
+    },
+    {
+      "id": "vita3k",
+      "name": "Vita3K",
+      "packages": [
+        "org.vita3k.emulator",
+        "org.vita3k.emulator.ikhoeyZX"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/Vita3K/Vita3K-Android/releases"
+      },
+      "verified": false
+    },
+    {
+      "id": "winlator",
+      "name": "Winlator",
+      "packages": [
+        "com.winlator.vanilla",
+        "com.winlator.cmod",
+        "com.winlator"
+      ],
+      "install": {
+        "kind": "web",
+        "url": "https://github.com/brunodev85/winlator/releases"
+      },
+      "verified": false
+    }
+  ],
+  "systems": {
+    "3do": [
+      {
+        "option": "retroarch-3do",
+        "app": "retroarch"
+      }
+    ],
+    "3ds": [
+      {
+        "option": "azahar"
+      },
+      {
+        "option": "retroarch-n3ds",
+        "app": "retroarch"
+      }
+    ],
+    "amiga": [
+      {
+        "option": "retroarch-amiga",
+        "app": "retroarch"
+      }
+    ],
+    "amigacd32": [
+      {
+        "option": "retroarch-amigacd32",
+        "app": "retroarch"
+      }
+    ],
+    "amstradcpc": [
+      {
+        "option": "retroarch-amstradcpc",
+        "app": "retroarch"
+      }
+    ],
+    "arcade": [
+      {
+        "option": "mame4droid"
+      },
+      {
+        "option": "retroarch-arcade",
+        "app": "retroarch"
+      }
+    ],
+    "atari2600": [
+      {
+        "option": "2600emu"
+      },
+      {
+        "option": "retroarch-atari2600",
+        "app": "retroarch"
+      }
+    ],
+    "atari5200": [
+      {
+        "option": "colleen"
+      },
+      {
+        "option": "retroarch-atari5200",
+        "app": "retroarch"
+      }
+    ],
+    "atari7800": [
+      {
+        "option": "retroarch-atari7800",
+        "app": "retroarch"
+      }
+    ],
+    "atari800": [
+      {
+        "option": "colleen"
+      },
+      {
+        "option": "retroarch-atari800",
+        "app": "retroarch"
+      }
+    ],
+    "atarist": [
+      {
+        "option": "retroarch-atarist",
+        "app": "retroarch"
+      }
+    ],
+    "c64": [
+      {
+        "option": "c64emu"
+      },
+      {
+        "option": "retroarch-c64",
+        "app": "retroarch"
+      }
+    ],
+    "colecovision": [
+      {
+        "option": "colem"
+      },
+      {
+        "option": "retroarch-colecovision",
+        "app": "retroarch"
+      }
+    ],
+    "dos": [
+      {
+        "option": "dosbox"
+      },
+      {
+        "option": "retroarch-dos",
+        "app": "retroarch"
+      }
+    ],
+    "dreamcast": [
+      {
+        "option": "flycast"
+      },
+      {
+        "option": "redream"
+      },
+      {
+        "option": "retroarch-dreamcast",
+        "app": "retroarch"
+      }
+    ],
+    "gamecube": [
+      {
+        "option": "dolphin"
+      }
+    ],
+    "gamegear": [
+      {
+        "option": "mdemu"
+      },
+      {
+        "option": "retroarch-gamegear",
+        "app": "retroarch"
+      }
+    ],
+    "gb": [
+      {
+        "option": "gbcemu"
+      },
+      {
+        "option": "retroarch-gb",
+        "app": "retroarch"
+      }
+    ],
+    "gba": [
+      {
+        "option": "gbaemu"
+      },
+      {
+        "option": "myboy"
+      },
+      {
+        "option": "retroarch-gba",
+        "app": "retroarch"
+      }
+    ],
+    "gbc": [
+      {
+        "option": "gbcemu"
+      },
+      {
+        "option": "retroarch-gbc",
+        "app": "retroarch"
+      }
+    ],
+    "intellivision": [
+      {
+        "option": "retroarch-intellivision",
+        "app": "retroarch"
+      }
+    ],
+    "jaguar": [
+      {
+        "option": "retroarch-jaguar",
+        "app": "retroarch"
+      }
+    ],
+    "mastersystem": [
+      {
+        "option": "mdemu"
+      },
+      {
+        "option": "retroarch-mastersystem",
+        "app": "retroarch"
+      }
+    ],
+    "megadrive": [
+      {
+        "option": "mdemu"
+      },
+      {
+        "option": "retroarch-megadrive",
+        "app": "retroarch"
+      }
+    ],
+    "msx": [
+      {
+        "option": "msxemu"
+      },
+      {
+        "option": "retroarch-msx",
+        "app": "retroarch"
+      }
+    ],
+    "n64": [
+      {
+        "option": "m64plus-fz"
+      },
+      {
+        "option": "retroarch-n64",
+        "app": "retroarch"
+      }
+    ],
+    "nds": [
+      {
+        "option": "melonds"
+      },
+      {
+        "option": "drastic"
+      },
+      {
+        "option": "retroarch-nds",
+        "app": "retroarch"
+      }
+    ],
+    "neogeo": [
+      {
+        "option": "neoemu"
+      },
+      {
+        "option": "retroarch-neogeo",
+        "app": "retroarch"
+      }
+    ],
+    "neogeocd": [
+      {
+        "option": "neoemu"
+      },
+      {
+        "option": "retroarch-neogeocd",
+        "app": "retroarch"
+      }
+    ],
+    "nes": [
+      {
+        "option": "nesemu"
+      },
+      {
+        "option": "retroarch-nes",
+        "app": "retroarch"
+      }
+    ],
+    "ngp": [
+      {
+        "option": "ngpemu"
+      },
+      {
+        "option": "retroarch-ngp",
+        "app": "retroarch"
+      }
+    ],
+    "odyssey2": [
+      {
+        "option": "retroarch-odyssey2",
+        "app": "retroarch"
+      }
+    ],
+    "pcengine": [
+      {
+        "option": "pceemu"
+      },
+      {
+        "option": "retroarch-pcengine",
+        "app": "retroarch"
+      }
+    ],
+    "pcenginecd": [
+      {
+        "option": "pceemu"
+      },
+      {
+        "option": "retroarch-pcenginecd",
+        "app": "retroarch"
+      }
+    ],
+    "ps2": [
+      {
+        "option": "armsx2"
+      },
+      {
+        "option": "retroarch-ps2",
+        "app": "retroarch"
+      }
+    ],
+    "psp": [
+      {
+        "option": "ppsspp"
+      },
+      {
+        "option": "retroarch-psp",
+        "app": "retroarch"
+      }
+    ],
+    "psvita": [
+      {
+        "option": "vita3k"
+      }
+    ],
+    "psx": [
+      {
+        "option": "duckstation"
+      },
+      {
+        "option": "epsxe"
+      },
+      {
+        "option": "retroarch-psx",
+        "app": "retroarch"
+      }
+    ],
+    "saturn": [
+      {
+        "option": "saturnemu"
+      },
+      {
+        "option": "retroarch-saturn",
+        "app": "retroarch"
+      }
+    ],
+    "scummvm": [
+      {
+        "option": "scummvm"
+      }
+    ],
+    "sega32x": [
+      {
+        "option": "mdemu"
+      },
+      {
+        "option": "retroarch-sega32x",
+        "app": "retroarch"
+      }
+    ],
+    "segacd": [
+      {
+        "option": "mdemu"
+      },
+      {
+        "option": "retroarch-segacd",
+        "app": "retroarch"
+      }
+    ],
+    "sg1000": [
+      {
+        "option": "mdemu"
+      },
+      {
+        "option": "retroarch-sg1000",
+        "app": "retroarch"
+      }
+    ],
+    "snes": [
+      {
+        "option": "snes9x"
+      },
+      {
+        "option": "retroarch-snes",
+        "app": "retroarch"
+      }
+    ],
+    "switch": [
+      {
+        "option": "eden"
+      }
+    ],
+    "virtualboy": [
+      {
+        "option": "retroarch-virtualboy",
+        "app": "retroarch"
+      }
+    ],
+    "wii": [
+      {
+        "option": "dolphin"
+      }
+    ],
+    "wiiu": [
+      {
+        "option": "cemu"
+      }
+    ],
+    "windows": [
+      {
+        "option": "winlator"
+      }
+    ],
+    "wonderswan": [
+      {
+        "option": "swanemu"
+      },
+      {
+        "option": "retroarch-wonderswan",
+        "app": "retroarch"
+      }
+    ],
+    "wonderswancolor": [
+      {
+        "option": "swanemu"
+      },
+      {
+        "option": "retroarch-wonderswancolor",
+        "app": "retroarch"
+      }
+    ],
+    "zxspectrum": [
+      {
+        "option": "speccy"
+      },
+      {
+        "option": "retroarch-zxspectrum",
+        "app": "retroarch"
+      }
+    ]
+  },
+  "unsupportedSystems": [
+    {
+      "system": "apple2",
+      "reason": "No maintained Apple II emulator ships an Android launch surface."
+    },
+    {
+      "system": "xbox",
+      "reason": "Xemu has no Android port."
+    },
+    {
+      "system": "xbox360",
+      "reason": "Xenia has no Android port."
+    }
+  ]
+}

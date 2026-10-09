@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Lucent's compact, device-independent text metadata lookup.
+"""Build EmuFusion's compact, device-independent text metadata lookup.
 
 Input is one or more Pegasus metadata trees.  ROM and media paths are never
 copied into the package; only canonical title, scores, date, and credits are

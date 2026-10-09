@@ -1,0 +1,86 @@
+--- a/src/Cafe/OS/libs/snd_user/snd_user.cpp
++++ b/src/Cafe/OS/libs/snd_user/snd_user.cpp
+@@ -36,6 +36,31 @@
+ 	};
+ 	static_assert(sizeof(MixControl) == 0xE, "sizeof(MixControl)");
+ 
++	// Guest memory is big-endian; MixControl above is host-side mixer state.
++	// A raw copy turns e.g. pan 0x0051 into 0x5100 on ARM64 and indexes far
++	// outside the 128-entry pan tables (Barbie Dreamhouse Party).
++	struct GuestMixControl
++	{
++		sint16be aux[AX_AUX_BUS_COUNT];
++		sint16be pan;
++		sint16be span;
++		sint16be fader;
++		sint16be lfe;
++
++		MixControl ToHost() const
++		{
++			MixControl result{};
++			for (size_t i = 0; i < AX_AUX_BUS_COUNT; ++i)
++				result.aux[i] = aux[i];
++			result.pan = pan;
++			result.span = span;
++			result.fader = fader;
++			result.lfe = lfe;
++			return result;
++		}
++	};
++	static_assert(sizeof(GuestMixControl) == 0xE, "sizeof(GuestMixControl)");
++
+ 	using MixMode = uint32_t;
+ 
+ 	struct MixChannel
+@@ -758,7 +783,7 @@
+ 		}
+ 	}
+ 
+-	void MIXInitDeviceControl(AXVPB* voice, uint32 device_type, uint32 index, MixControl* control, uint32 mode)
++	void MIXInitDeviceControl(AXVPB* voice, uint32 device_type, uint32 index, GuestMixControl* control, uint32 mode)
+ 	{
+ 		cemuLog_log(LogType::SoundAPI, "MIXInitDeviceControl(0x{:0x}, 0x{:x}, 0x{:x}, 0x{:x}, 0x{:x} )", MEMPTR(voice).GetMPTR(), device_type, index, MEMPTR(control).GetMPTR(), mode);
+ 
+@@ -778,7 +803,7 @@
+ 			cemu_assert_debug(index == 0);
+ 			_MIXChannelResetTV(&channel, index);
+ 
+-			memcpy(&channel.tv_control, control, sizeof(MixControl));
++			channel.tv_control = control->ToHost();
+ 			_MIXControl_SetDevicePan(&channel.tv_control, device_type, channel.tv_channels);
+ 
+ 			channel.tv_mode |= AX_UPDATE_MODE_40000000_VOLUME;
+@@ -789,7 +814,7 @@
+ 			cemu_assert_debug(index < 2);
+ 			_MIXChannelResetDRC(&channel, index);
+ 
+-			memcpy(&channel.drc_control[index], control, sizeof(MixControl));
++			channel.drc_control[index] = control->ToHost();
+ 			_MIXControl_SetDevicePan(&channel.drc_control[index], device_type, channel.drc_channels[index]);
+ 
+ 			channel.drc_mode[index] |= AX_UPDATE_MODE_40000000_VOLUME;
+@@ -800,7 +825,7 @@
+ 			cemu_assert_debug(index < 4);
+ 			_MIXChannelResetRmt(&channel, index);
+ 
+-			memcpy(&channel.rmt_control[index], control, sizeof(MixControl));
++			channel.rmt_control[index] = control->ToHost();
+ 			_MIXControl_SetDevicePan(&channel.rmt_control[index], device_type, channel.rmt_channels[index]);
+ 
+ 			channel.rmt_mode[index] = mode & 0xf;
+--- a/src/Cafe/OS/libs/snd_user/snd_user.h
++++ b/src/Cafe/OS/libs/snd_user/snd_user.h
+@@ -5,11 +5,11 @@
+ 
+ namespace snd_user
+ {
+-	struct MixControl;
++	struct GuestMixControl;
+ 
+ 	void MIXInit();
+ 	void MIXInitInputControl(snd_core::AXVPB* voice, uint16 input, uint32 mode);
+-	void MIXInitDeviceControl(snd_core::AXVPB* voice, uint32 device_type, uint32 index, MixControl* control, uint32 mode);
++	void MIXInitDeviceControl(snd_core::AXVPB* voice, uint32 device_type, uint32 index, GuestMixControl* control, uint32 mode);
+ 	void MIXSetDeviceSoundMode(uint32 device, uint32 mode);
+ 	void MIXUpdateSettings();
+ 	void MIXSetInput(snd_core::AXVPB* voice, uint16 input);

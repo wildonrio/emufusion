@@ -1,0 +1,68 @@
+--- a/Source/Core/Core/MemTools.cpp
++++ b/Source/Core/Core/MemTools.cpp
+@@ -259,6 +259,11 @@
+ 
+ #elif defined(_POSIX_VERSION) && !defined(_M_GENERIC) && !(defined(TARGET_OS_TV) && TARGET_OS_TV)
+ 
++// An embedded frontend (notably Android ART) can already own an alternate
++// signal stack. Only release our allocation, and restore the caller's stack.
++// Unloading before the first retro_run never installs our handler at all.
++static thread_local void* owned_signal_stack = nullptr;
++static thread_local stack_t previous_signal_stack{};
+ static struct sigaction old_sa_segv;
+ #if defined(__APPLE__)
+ static struct sigaction old_sa_bus;
+@@ -309,7 +314,10 @@
+ 
+ void InstallExceptionHandler()
+ {
+-  stack_t signal_stack;
++  if (owned_signal_stack)
++    return;
++
++  stack_t signal_stack{};
+ #ifdef __FreeBSD__
+   signal_stack.ss_sp = (char*)malloc(SIGSTKSZ);
+ #else
+@@ -317,8 +325,18 @@
+ #endif
+   signal_stack.ss_size = SIGSTKSZ;
+   signal_stack.ss_flags = 0;
+-  if (sigaltstack(&signal_stack, nullptr) != 0)
++  if (!signal_stack.ss_sp)
++  {
++    PanicAlertFmt("Could not allocate alternate signal stack");
++    return;
++  }
++  if (sigaltstack(&signal_stack, &previous_signal_stack) != 0)
++  {
++    free(signal_stack.ss_sp);
+     PanicAlertFmt("sigaltstack failed: {}", Common::LastStrerrorString());
++    return;
++  }
++  owned_signal_stack = signal_stack.ss_sp;
+   struct sigaction sa{};
+   sa.sa_sigaction = &sigsegv_handler;
+   sa.sa_flags = SA_SIGINFO;
+@@ -331,13 +349,16 @@
+ 
+ void UninstallExceptionHandler()
+ {
+-  stack_t signal_stack;
+-  stack_t old_stack;
+-  signal_stack.ss_flags = SS_DISABLE;
+-  if (!sigaltstack(&signal_stack, &old_stack) && !(old_stack.ss_flags & SS_DISABLE))
++  if (!owned_signal_stack)
++    return;
++
++  if (sigaltstack(&previous_signal_stack, nullptr) != 0)
+   {
+-    free(old_stack.ss_sp);
++    PanicAlertFmt("Could not restore alternate signal stack: {}", Common::LastStrerrorString());
++    return;
+   }
++  free(owned_signal_stack);
++  owned_signal_stack = nullptr;
+   sigaction(SIGSEGV, &old_sa_segv, nullptr);
+ #ifdef __APPLE__
+   sigaction(SIGBUS, &old_sa_bus, nullptr);

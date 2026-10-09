@@ -1,0 +1,6 @@
+<!-- Isolated test APK only. No trust configuration or CA is installed on the OS. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors><certificates src="@raw/fixture_ca" /></trust-anchors>
+    </base-config>
+</network-security-config>

@@ -33,6 +33,9 @@ typedef void (*__eglMustCastToProperFunctionPointerType)(void);
 #define EGL_NATIVE_VISUAL_ID 0x302E
 #define EGL_SUCCESS 0x3000
 #define EGL_CONTEXT_LOST 0x300E
+#define EGL_EXTENSIONS 0x3055
+const char *eglQueryString(EGLDisplay display, EGLint name);
+EGLBoolean eglSurfaceAttrib(EGLDisplay display, EGLSurface surface, EGLint name, EGLint value);
 EGLDisplay eglGetDisplay(void *display_id);
 EGLBoolean eglInitialize(EGLDisplay display, EGLint *major, EGLint *minor);
 EGLBoolean eglBindAPI(EGLint api);

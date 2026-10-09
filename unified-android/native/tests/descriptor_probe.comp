@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=BINDING_ID,std430) buffer Output { uint result; } output_data;
+layout(push_constant) uniform Parameters { uint value; } params;
+void main() { output_data.result=params.value; }

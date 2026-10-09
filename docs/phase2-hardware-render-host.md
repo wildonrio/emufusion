@@ -1,6 +1,6 @@
 # Phase 2 hardware-render host foundation
 
-Lucent's independent libretro host now understands the hardware-render
+EmuFusion's independent libretro host now understands the hardware-render
 negotiation boundary without enabling hardware cores in the Android product.
 This code uses only the MIT-licensed libretro ABI declarations; it does not
 embed RetroArch frontend code.
@@ -66,7 +66,7 @@ by the production JNI/session path.
   against dead GL objects; a replacement context must invoke `context_reset`
   before another frame can run.
 - The Android NDK build links only platform EGL/GLES/ANativeWindow APIs. Vulkan
-  is deliberately not advertised by this backend because Lucent still lacks a
+  is deliberately not advertised by this backend because EmuFusion still lacks a
   complete Vulkan render interface and swapchain owner.
 
 An opt-in `ExperimentalGlesLibretroHost` JNI wrapper now converts an Android

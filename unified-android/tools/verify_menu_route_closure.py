@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Fail closed when a Lucent menu route has no exact packaged engine factory.
+"""Fail closed when a EmuFusion menu route has no exact packaged engine factory.
 
 This verifier is deliberately independent of Android launch success.  A route
-can reach Lucent's in-window host and still fail one frame later because the
+can reach EmuFusion's in-window host and still fail one frame later because the
 APK does not contain the named core or because no bootstrap factory registered
 it.  The verifier joins the *installed metadata routes* to the signed APK's
 catalog, opt-in, artifact-manifest, native-library, and DEX bootstrap evidence
@@ -32,7 +32,7 @@ METADATA_ROOTS = (
     "/storage/emulated/0/Android/data/org.pegasus_frontend.android/files/pegasus-frontend",
     "/storage/emulated/0/Android/data/com.thorium.preview/files/pegasus-frontend",
 )
-PHASE3_SYSTEMS = frozenset({"ps3", "wiiu", "windows", "switch"})
+PHASE3_SYSTEMS = frozenset({"ps3", "wiiu", "switch"})
 SYSTEM_SHORTNAME_ALIASES = {
     "dc": "dreamcast",
     "ds": "nds",
@@ -62,9 +62,12 @@ SYSTEM_SHORTNAME_ALIASES = {
     "supernintendo": "snes",
     "tg16": "pcengine",
     "turbografx16": "pcengine",
+    "win": "windows",
+    "windows10": "windows",
+    "pc": "windows",
 }
 SYSTEM_SHORTNAME_ALIASES_SHA256 = \
-    "12f60957541ee966e3237829b2da39a279f47d647250f9819223b16e5f7545b3"
+    "3b0d421b6399c4b33b513335e11c3587b0d960aa577c538f996fc50ef122eb87"
 REQUIRED_ALIAS_ROUTES = {
     "gc": ("gamecube", "dolphin"),
     "genesis": ("megadrive", "blastem"),
@@ -146,16 +149,16 @@ def launcher_audit(value: str) -> list[dict[str, object]]:
         # a plain `am start` that either opens the emulator's install page
         # (-a VIEW -d https://... or market://...), launches the emulator via its
         # own deep-link scheme (e.g. -d dolphinemu://...), or hands a content URI
-        # through Lucent's own RomLaunchActivity trampoline. Any VIEW intent with
+        # through EmuFusion's own RomLaunchActivity trampoline. Any VIEW intent with
         # a scheme'd data URI is a legitimate external open/launch/install route;
         # it deliberately does NOT target MainActivity or the internal action.
         external_view_install = bool(
             re.search(r"-a\s+android\.intent\.action\.VIEW", command) and
             re.search(r"-d\s+[A-Za-z][A-Za-z0-9+.-]*://", command))
-        # An external component target must NOT be Lucent's own MainActivity: a
+        # An external component target must NOT be EmuFusion's own MainActivity: a
         # bare am-start onto the singleTask MainActivity without the internal
         # action is the historical stale route, not an external launch. The
-        # RomLaunchActivity trampoline (a different Lucent component) still
+        # RomLaunchActivity trampoline (a different EmuFusion component) still
         # counts as external.
         external_component = (bool(re.search(r"-n\s+\S+/\S+", command)) and
                               not internal_action and MAIN_ACTIVITY not in command)

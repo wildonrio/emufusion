@@ -1,0 +1,44 @@
+--- a/core/linux/posix_vmem.cpp
++++ b/core/linux/posix_vmem.cpp
+@@ -23,3 +23,4 @@
+ #ifdef __ANDROID__
+ #include <linux/ashmem.h>
++#include <dlfcn.h>
+ 
+@@ -29,12 +30,29 @@
+ // Android specific ashmem-device stuff for creating shared memory regions
+ static int ashmem_create_region(const char *name, size_t size)
+ {
+-	int fd = -1;
+-	if (ASharedMemory_create != nullptr)
+-	{
+-		fd = ASharedMemory_create(name, size);
+-		if (fd < 0)
+-			WARN_LOG(VMEM, "ASharedMemory_create failed: errno %d", errno);
+-	}
++	int fd = -1;
++	auto create = ASharedMemory_create;
++	void *androidLibrary = nullptr;
++	// The API-24 libretro build has no DT_NEEDED for libandroid, so the
++	// weak reference can be null even on modern Android. Resolve the public
++	// API explicitly instead of falling straight through to /dev/ashmem,
++	// which is no longer available to modern app processes.
++	if (create == nullptr)
++	{
++		androidLibrary = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
++		if (androidLibrary != nullptr)
++			create = reinterpret_cast<decltype(create)>(
++				dlsym(androidLibrary, "ASharedMemory_create"));
++	}
++	if (create != nullptr)
++	{
++		fd = create(name, size);
++		if (fd < 0)
++			WARN_LOG(VMEM, "ASharedMemory_create failed: errno %d", errno);
++	}
++	// The descriptor owns the allocation; no function pointer outlives this
++	// library reference. Keep the pre-26 device fallback below unchanged.
++	if (androidLibrary != nullptr)
++		dlclose(androidLibrary);
+ 
+ 	if (fd < 0)

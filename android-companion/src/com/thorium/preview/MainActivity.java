@@ -65,7 +65,7 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(Color.rgb(5, 7, 11));
         getWindow().setNavigationBarColor(Color.rgb(5, 7, 11));
         buildUi();
-        startLucentService();
+        startEmuFusionService();
         requestStorageIfNeeded(false);
     }
 
@@ -111,16 +111,16 @@ public final class MainActivity extends Activity {
         stage.addView(content, new LinearLayout.LayoutParams(contentWidth,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        TextView mark = label("LUCENT  /  ANDROID COMPANION  /  APP " + appVersionName(),
+        TextView mark = label("EMUFUSION  /  ANDROID COMPANION  /  APP " + appVersionName(),
                 12, Color.rgb(113, 230, 176));
         mark.setLetterSpacing(0.18f);
         content.addView(mark, matchWrap(0));
 
-        TextView title = label("Lucent", 38, Color.WHITE);
+        TextView title = label("EmuFusion", 38, Color.WHITE);
         title.setTypeface(Typeface.create("sans", Typeface.BOLD));
         content.addView(title, matchWrap(dp(8)));
 
-        TextView intro = label("Your library automation, media previews, and Lucent theme are managed here.",
+        TextView intro = label("Your library automation, media previews, and EmuFusion theme are managed here.",
                 17, Color.rgb(183, 193, 207));
         intro.setLineSpacing(0, 1.18f);
         content.addView(intro, matchWrap(dp(8)));
@@ -136,7 +136,7 @@ public final class MainActivity extends Activity {
         TextView ready = label("SYSTEM STATUS", 12, Color.rgb(113, 230, 176));
         ready.setLetterSpacing(0.15f);
         card.addView(ready, matchWrap(0));
-        serviceStatus = label("Starting Lucent service…", 18, Color.WHITE);
+        serviceStatus = label("Starting EmuFusion service…", 18, Color.WHITE);
         serviceStatus.setTypeface(Typeface.DEFAULT_BOLD);
         card.addView(serviceStatus, matchWrap(dp(12)));
         themeStatus = label("Checking theme installation…", 15, Color.rgb(182, 192, 205));
@@ -146,7 +146,7 @@ public final class MainActivity extends Activity {
 
         openPegasusButton = action("OPEN PEGASUS", true, view -> openPegasus());
         content.addView(openPegasusButton, buttonParams(0));
-        repairThemeButton = action("INSTALL / REPAIR LUCENT THEME", false,
+        repairThemeButton = action("INSTALL / REPAIR EMUFUSION THEME", false,
                 view -> repairTheme());
         content.addView(repairThemeButton, buttonParams(dp(10)));
         updateCheckButton = action("CHECK FOR UPDATES", false,
@@ -159,7 +159,7 @@ public final class MainActivity extends Activity {
                 view -> requestStorageIfNeeded(true));
         content.addView(grantAccessButton, buttonParams(dp(10)));
 
-        activityStatus = label("Lucent scans the complete device automatically after library access is granted.",
+        activityStatus = label("EmuFusion scans the complete device automatically after library access is granted.",
                 14, Color.rgb(146, 158, 174));
         activityStatus.setGravity(Gravity.CENTER);
         activityStatus.setLineSpacing(0, 1.15f);
@@ -168,14 +168,14 @@ public final class MainActivity extends Activity {
         content.addView(activityStatus, activityParams);
 
         TextView foot = label("The lower-screen player opens automatically only when Pegasus sends a preview. " +
-                "Opening Lucent itself will always return to this dashboard.",
+                "Opening EmuFusion itself will always return to this dashboard.",
                 13, Color.rgb(105, 118, 135));
         foot.setGravity(Gravity.CENTER);
         foot.setLineSpacing(0, 1.15f);
         content.addView(foot, matchWrap(0));
     }
 
-    private void startLucentService() {
+    private void startEmuFusionService() {
         Intent service = new Intent(this, PreviewService.class);
         // This visible Activity is already a foreground entry point. Reserve
         // startForegroundService for BootReceiver's background-only start.
@@ -183,9 +183,9 @@ public final class MainActivity extends Activity {
     }
 
     private void repairTheme() {
-        activityStatus.setText("Installing the bundled Lucent theme…");
+        activityStatus.setText("Installing the bundled EmuFusion theme…");
         ThemeInstaller.forceInstallBundled(this, () -> runOnUiThread(() -> {
-            activityStatus.setText("Lucent theme installed. Open Pegasus to use it.");
+            activityStatus.setText("EmuFusion theme installed. Open Pegasus to use it.");
             refreshStatus();
         }));
     }
@@ -243,20 +243,20 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshStatus() {
-        serviceStatus.setText("✓  Lucent service active");
+        serviceStatus.setText("✓  EmuFusion service active");
         serviceStatus.setTextColor(Color.rgb(113, 230, 176));
         File theme = new File(Environment.getExternalStorageDirectory(),
                 "pegasus-frontend/themes/lucent/theme.qml");
         String version = ThemeInstaller.installedVersion();
         boolean installed = theme.isFile();
         themeStatus.setText(installed
-                ? "✓  Lucent theme installed" +
+                ? "✓  EmuFusion theme installed" +
                         (version.isEmpty() ? "" : "  •  theme " + version) +
                         "  •  companion " + appVersionName()
                 : "○  Theme installation pending");
         themeStatus.setTextColor(installed ? Color.rgb(113, 230, 176) : Color.rgb(240, 184, 92));
         setActionState(repairThemeButton, installed ? 1 : 0,
-                installed ? "✓  LUCENT THEME INSTALLED" : "INSTALL / REPAIR LUCENT THEME");
+                installed ? "✓  EMUFUSION THEME INSTALLED" : "INSTALL / REPAIR EMUFUSION THEME");
         boolean permitted = hasLibraryAccess();
         permissionStatus.setText(permitted
                 ? "✓  Library access granted" : "○  Library access needs approval");
@@ -309,7 +309,7 @@ public final class MainActivity extends Activity {
                     JSONObject value = new JSONObject(response);
                     String state = value.optString("state");
                     boolean installReady = value.optBoolean("installReady", false);
-                    String statusMessage = value.optString("message", "Lucent is ready");
+                    String statusMessage = value.optString("message", "EmuFusion is ready");
                     runOnUiThread(() -> {
                         updateUpdateButtons(state, installReady);
                         if (!"idle".equals(state)) activityStatus.setText(statusMessage);
@@ -336,7 +336,7 @@ public final class MainActivity extends Activity {
         Thread thread = new Thread(() -> {
             String response = http(path);
             if (response.isEmpty()) return;
-            String message = message(response, "Lucent is ready");
+            String message = message(response, "EmuFusion is ready");
             JSONObject value;
             try {
                 value = new JSONObject(response);

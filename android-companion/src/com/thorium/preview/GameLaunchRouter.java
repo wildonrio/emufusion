@@ -10,11 +10,11 @@ import com.thorium.lucent.metadata.EngineSystemIdResolver;
 import com.thorium.lucent.metadata.MetadataGameLaunchCommand;
 
 /**
- * Builds Lucent's only supported game-launch route.
+ * Builds EmuFusion's only supported game-launch route.
  *
  * A game may launch only when an approved in-process engine is packaged and
  * available for its system. Pegasus accepts only {@code am start} metadata on
- * Android, so Lucent intercepts its exact internal action inside the inherited
+ * Android, so EmuFusion intercepts its exact internal action inside the inherited
  * launchAmCommand method before startActivity. No Activity lifecycle
  * transition, router Activity, emulator Activity, second task, or external
  * package participates in emulation.
@@ -42,10 +42,17 @@ public final class GameLaunchRouter {
                 Phase2QualificationCatalog.libraryEngineIdForSystem(context, normalized);
         if (!phase2.isEmpty()) return phase2;
         // Phase 3 native-adapter engines resolve INTERNAL only when the adapter
-        // .so is bundled and hash-verified. Switch does so in an opted-in
-        // qualification build (Eden); without that adapter the catalog is empty
-        // and Switch falls through to its external Eden route, exactly as Wii U
-        // still falls through to external Cemu.
-        return NativeAdapterCatalog.libraryEngineIdForSystem(context, normalized);
+        // .so is bundled and hash-verified. Switch (Eden) and Wii U (Cemu) both
+        // do so in an opted-in qualification build, each behind its own flag:
+        // LUCENT_INCLUDE_PHASE3_EDEN=1 and LUCENT_INCLUDE_PHASE3_CEMU=1. A build
+        // that omits a flag bundles no adapter for that engine, the catalog has
+        // no entry. A missing bundled engine is not permission to switch apps.
+        String nativeAdapter =
+                NativeAdapterCatalog.libraryEngineIdForSystem(context, normalized);
+        // Availability describes the verified APK, not this device's saved
+        // readiness flag. A fresh install has no flag; hiding a bundled engine
+        // here used to turn Switch launches into browser/download intents.
+        // The adapter independently validates user-supplied inputs at launch.
+        return nativeAdapter;
     }
 }

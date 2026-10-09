@@ -15,18 +15,21 @@ is stored in this repository or APK.
   `engines/patches/applewin-external-firmware.patch`, SHA-256
   `83c6b91f7af264a6e868a01a1684094a60a85f4441c717f160593b056cce1569`
 - Android ARM64 proof artifact SHA-256:
-  `89d220448e3de1796d176708b9b19ef03d12d64aedd1db1b3a689e9096eb4aae`
+  `e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84`
 
-Two fresh builds produced that same artifact. The checked-in build verifier
+October 5 normal staging uses the 16 KiB-aligned candidate accepted by the
+strict Android loader. Two clean builds at the same isolated path produced
+that artifact; path-independent reproduction is not proven. No gameplay or
+release gate was advanced by this staging change. The checked-in build verifier
 compares every `.rom` and `.bin` resource in the pinned upstream archive with
 the resulting ELF and rejects any exact embedded match.
 
 ## Fail-closed firmware boundary
 
 Upstream AppleWin normally compiles machine, video, disk-controller, and
-peripheral firmware into its resource library. Lucent's locked patch removes
+peripheral firmware into its resource library. EmuFusion's locked patch removes
 all of those resources from the core. The libretro frontend instead reads
-firmware from the app-private system directory supplied by Lucent's host.
+firmware from the app-private system directory supplied by EmuFusion's host.
 
 Before the core is loaded, `Phase2QualificationCatalog` requires the complete
 six-file Apple IIe Enhanced profile in
@@ -42,7 +45,7 @@ remain false.
 
 ## Host-side integration
 
-The qualification opt-in maps `apple2` to `applewin` through Lucent's normal
+The qualification opt-in maps `apple2` to `applewin` through EmuFusion's normal
 in-window `MainActivity` route. The physical QA harness accepts
 `--apple2-rom` and creates an AppleWin case, but no hardware run has been
 claimed by this work. Running the case still requires an explicitly authorized

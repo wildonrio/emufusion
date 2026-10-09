@@ -22,6 +22,7 @@ typedef void (*fn_emit_audio)(size_t);
 typedef bool (*fn_probe_null_environment)(void);
 typedef void (*fn_set_boolean)(bool);
 typedef void (*fn_set_double)(double);
+typedef bool (*fn_change_double)(double);
 typedef const char *(*fn_option_value)(const char *);
 typedef unsigned (*fn_count)(void);
 typedef int16_t (*fn_pointer_state)(unsigned);
@@ -75,7 +76,9 @@ int main(int argc, char **argv) {
     lucent_retro_hw_info hardware;
     uint16_t pixel = 0;
     int16_t audio[8] = {0};
+    int16_t runtime_rate_audio[16] = {0};
     int16_t high_rate_audio[16] = {0};
+    int16_t timing_audio[2048] = {0};
     uint8_t save_ram[8] = {1, 2, 3, 4, 5, 6, 7, 8};
     uint8_t save_copy[8] = {0};
     int16_t *overflow_audio = NULL;
@@ -83,11 +86,13 @@ int main(int argc, char **argv) {
     fn_emit_video emit_video;
     fn_emit_audio emit_audio;
     fn_probe_null_environment probe_null_environment;
+    fn_probe_null_environment overscan_enabled;
     fn_probe_null_environment callbacks_were_set_before_init;
     fn_set_boolean set_oversized_state;
     fn_set_boolean set_changing_state_size;
     fn_set_boolean set_oversized_save_ram;
     fn_set_double set_sample_rate;
+    fn_change_double change_runtime_sample_rate;
     fn_option_value option_value;
     fn_set_boolean set_prepare_exit_result;
     fn_count prepare_exit_count;
@@ -109,6 +114,8 @@ int main(int argc, char **argv) {
     emit_audio = (fn_emit_audio)dlsym(mock_library, "lucent_mock_emit_audio");
     probe_null_environment = (fn_probe_null_environment)dlsym(
             mock_library, "lucent_mock_probe_null_environment");
+    overscan_enabled = (fn_probe_null_environment)dlsym(
+            mock_library, "lucent_mock_overscan_enabled");
     callbacks_were_set_before_init = (fn_probe_null_environment)dlsym(
             mock_library, "lucent_mock_callbacks_were_set_before_init");
     set_oversized_state = (fn_set_boolean)dlsym(
@@ -119,6 +126,8 @@ int main(int argc, char **argv) {
             mock_library, "lucent_mock_set_oversized_save_ram");
     set_sample_rate = (fn_set_double)dlsym(
             mock_library, "lucent_mock_set_sample_rate");
+    change_runtime_sample_rate = (fn_change_double)dlsym(
+            mock_library, "lucent_mock_change_runtime_sample_rate");
     option_value = (fn_option_value)dlsym(
             mock_library, "lucent_mock_option_value");
     set_prepare_exit_result = (fn_set_boolean)dlsym(
@@ -133,10 +142,11 @@ int main(int argc, char **argv) {
     last_device = (fn_count)dlsym(mock_library, "lucent_mock_last_device");
     pointer_state = (fn_pointer_state)dlsym(
             mock_library, "lucent_mock_pointer_state");
-    CHECK(emit_video && emit_audio && probe_null_environment &&
+    CHECK(emit_video && emit_audio && probe_null_environment && overscan_enabled &&
             callbacks_were_set_before_init &&
             set_oversized_state && set_changing_state_size &&
-            set_oversized_save_ram && set_sample_rate && option_value &&
+            set_oversized_save_ram && set_sample_rate &&
+            change_runtime_sample_rate && option_value &&
             set_prepare_exit_result && prepare_exit_count && unload_count &&
             reset_count && port_device_count && last_port && last_device &&
             pointer_state,
@@ -152,9 +162,45 @@ int main(int argc, char **argv) {
             strcmp(option_value("puae_kickstart"),
                     strstr(argv[1], "lucent_core_puae") ? "aros" : "auto") == 0,
             "PUAE curated AROS profile was not applied exactly");
+    CHECK(option_value("dolphin_widescreen") &&
+            strcmp(option_value("dolphin_widescreen"), "enabled") == 0 &&
+            strcmp(option_value("dolphin_widescreen_hack"), "disabled") == 0 &&
+            strcmp(option_value("dolphin_aspect_ratio"), "3") == 0,
+            "Dolphin native-only widescreen profile was not applied exactly");
+    CHECK(option_value("dolphin_osd_enabled") &&
+            strcmp(option_value("dolphin_osd_enabled"), "disabled") == 0,
+            "Dolphin diagnostic OSD must be disabled by default");
+    CHECK(option_value("dolphin_efb_scale") &&
+            strcmp(option_value("dolphin_efb_scale"), "1") == 0,
+            "Dolphin must start at native resolution on unknown Android GPUs");
+    CHECK(strcmp(option_value("mupen64plus-aspect"), "4:3") == 0,
+            "Mupen native 4:3 profile was not applied exactly");
+    CHECK(strcmp(option_value("swanstation_GPU_WidescreenHack"), "false") == 0 &&
+            strcmp(option_value("swanstation_Display_AspectRatio"), "4:3") == 0,
+            "SwanStation original 4:3 profile was not applied exactly");
+    CHECK(strcmp(option_value("reicast_widescreen_cheats"), "disabled") == 0 &&
+            strcmp(option_value("reicast_widescreen_hack"), "disabled") == 0,
+            "Flycast generic widescreen transforms were not disabled");
+    CHECK(strcmp(option_value("armsx2_aspect_ratio"), "Auto 4:3/3:2") == 0 &&
+            strcmp(option_value("armsx2_widescreen_patches"), "disabled") == 0,
+            "ARMSX2 native automatic aspect profile was not applied exactly");
+    CHECK(strcmp(option_value("mesen_aspect_ratio"), "Auto") == 0,
+            "Mesen region-correct automatic aspect was not applied exactly");
+    CHECK(strcmp(option_value("dolphin_cheats_enabled"), "enabled") == 0 &&
+            strcmp(option_value("ppsspp_cheats"), "enabled") == 0,
+            "Dolphin/PPSSPP internal cheat support was not enabled for live cheats");
+    CHECK(strcmp(option_value("mupen64plus-169screensize"), "640x360") == 0,
+            "Mupen 16:9 size must keep the core default without an override");
+    CHECK(option_value("citra_resolution_factor") &&
+            strcmp(option_value("citra_resolution_factor"), "1") == 0,
+            "3DS portable default must not force sixteen times native pixels");
     CHECK(!callbacks_were_set_before_init(),
             "callbacks were registered before retro_init");
     CHECK(!probe_null_environment(), "null environment payload was accepted");
+    CHECK(!overscan_enabled(),
+          "frontend must explicitly crop overscan, not expose the raw signal"
+          " (2026-09-06: exposing it showed as an unwanted black band on the"
+          " Thor's flat panel)");
     {
         lucent_retro_host *second = lucent_retro_create(
                 argv[1], argv[2], argv[3], argv[4], error, sizeof(error));
@@ -173,6 +219,57 @@ int main(int argc, char **argv) {
     CHECK(lucent_retro_get_av_info(host, &av), "AV info unavailable");
     CHECK(av.frames_per_second == 60.0 && av.sample_rate == 48000.0 &&
           av.base_width == 1 && av.base_height == 1, "AV info mismatch");
+    CHECK(lucent_retro_set_synchronized_video_rate(
+                    host, 61.0, 60.0, error, sizeof(error)),
+          "SNES display synchronization was rejected");
+    emit_audio(600);
+    CHECK(lucent_retro_drain_audio(host, timing_audio, 1024) > 600,
+          "slower synchronized SNES clock did not upsample PCM");
+    CHECK(lucent_retro_set_synchronized_video_rate(
+                    host, 59.0, 60.0, error, sizeof(error)),
+          "GBA display synchronization was rejected");
+    emit_audio(600);
+    CHECK(lucent_retro_drain_audio(host, timing_audio, 1024) < 600,
+          "faster synchronized GBA clock did not downsample PCM");
+    CHECK(lucent_retro_set_synchronized_video_rate(
+                    host, 60.0988, 60.0, error, sizeof(error)),
+          "exact SNES display synchronization was rejected");
+    emit_audio(700);
+    CHECK(lucent_retro_drain_audio(host, timing_audio, 1024) == 701,
+          "exact SNES correction did not preserve PCM duration");
+    CHECK(lucent_retro_set_synchronized_video_rate(
+                    host, 59.7275, 60.0, error, sizeof(error)),
+          "exact GBA display synchronization was rejected");
+    emit_audio(700);
+    CHECK(lucent_retro_drain_audio(host, timing_audio, 1024) == 696,
+          "exact GBA correction did not preserve PCM duration");
+    CHECK(lucent_retro_set_synchronized_video_rate(
+                    host, 60.0, 60.0, error, sizeof(error)),
+          "native display timing could not be restored");
+    CHECK(lucent_retro_set_synchronized_video_rate(
+                    host, 59.7275, 60.0, error, sizeof(error)),
+          "display audio trim setup failed");
+    emit_audio(1);
+    CHECK(lucent_retro_drain_audio(host, timing_audio, 1024) == 0,
+          "downsampler must retain the first fractional sample");
+    CHECK(lucent_retro_set_synchronized_video_rate(
+                    host, 59.7275, 60.001, error, sizeof(error)),
+          "live display audio trim failed");
+    emit_audio(1);
+    CHECK(lucent_retro_drain_audio(host, timing_audio, 1024) == 1,
+          "live display trim discarded pending fractional PCM");
+    CHECK(lucent_retro_set_synchronized_video_rate(
+                    host, 60.0, 60.0, error, sizeof(error)),
+          "native timing restore after live trim failed");
+    CHECK(change_runtime_sample_rate(96000.0),
+          "runtime audio-rate change was rejected");
+    CHECK(lucent_retro_get_av_info(host, &av) && av.sample_rate == 48000.0,
+          "runtime input-rate change replaced the established Android sink rate");
+    emit_audio(16);
+    CHECK(lucent_retro_drain_audio(host, runtime_rate_audio, 8) == 8,
+          "runtime 2x input audio was not downsampled to the established sink");
+    CHECK(change_runtime_sample_rate(48000.0),
+          "runtime audio rate could not return to its established sink rate");
     CHECK(lucent_retro_set_joypad_button(host, 0, 0, true), "button setter failed");
     CHECK(lucent_retro_set_analog_axis(host, 0, RETRO_DEVICE_INDEX_ANALOG_LEFT,
                                       RETRO_DEVICE_ID_ANALOG_X, 12345),
@@ -202,6 +299,12 @@ int main(int argc, char **argv) {
           video.byte_size == 2 && video.sequence == 1, "video metadata mismatch");
     CHECK(lucent_retro_copy_video_frame(host, &pixel, sizeof(pixel)) && pixel == 1117,
           "video pixels mismatch");
+    {
+        uint16_t reusable[2] = {0, 0x5a5a};
+        CHECK(lucent_retro_copy_video_frame(host, reusable, sizeof(reusable)) &&
+              reusable[0] == 1117 && reusable[1] == 0x5a5a,
+              "larger reusable video destination was rejected or overwritten");
+    }
     {
         uint64_t sequence = video.sequence;
         emit_video(2, 1, 2); /* Two 16-bit pixels require a four-byte pitch. */
@@ -392,6 +495,137 @@ int main(int argc, char **argv) {
     CHECK(lucent_retro_unload_game(host, error, sizeof(error)),
           "high-rate mock unload failed");
     lucent_retro_destroy(host);
+
+    /* mGBA starts its Android session at 32,768 Hz, then games can raise the
+     * production rate to 65,536/131,072/262,144 Hz through SOUNDBIAS. The
+     * already-created AudioTrack cannot follow those runtime changes. Prove
+     * every real ratio preserves the established sink and drains exactly one
+     * 32 kHz output frame for each ratio-sized source window. */
+    set_sample_rate(32768.0);
+    host = lucent_retro_create(argv[1], argv[2], argv[3], argv[4], error, sizeof(error));
+    CHECK(host, "GBA-rate host could not be recreated after teardown");
+    CHECK(lucent_retro_load_game(host, argv[5], error, sizeof(error)),
+          "GBA-rate mock load failed");
+    CHECK(lucent_retro_get_av_info(host, &av) && av.sample_rate == 32768.0,
+          "GBA-rate sink did not start at 32,768 Hz");
+    CHECK(change_runtime_sample_rate(65536.0),
+          "GBA 2x runtime audio-rate change was rejected");
+    emit_audio(16);
+    CHECK(lucent_retro_get_av_info(host, &av) && av.sample_rate == 32768.0 &&
+          lucent_retro_drain_audio(host, runtime_rate_audio, 8) == 8,
+          "GBA 2x input did not preserve and feed the 32,768 Hz sink");
+    CHECK(change_runtime_sample_rate(131072.0),
+          "GBA 4x runtime audio-rate change was rejected");
+    emit_audio(32);
+    CHECK(lucent_retro_get_av_info(host, &av) && av.sample_rate == 32768.0 &&
+          lucent_retro_drain_audio(host, runtime_rate_audio, 8) == 8,
+          "GBA 4x input did not preserve and feed the 32,768 Hz sink");
+    CHECK(change_runtime_sample_rate(262144.0),
+          "GBA 8x runtime audio-rate change was rejected");
+    emit_audio(64);
+    CHECK(lucent_retro_get_av_info(host, &av) && av.sample_rate == 32768.0 &&
+          lucent_retro_drain_audio(host, runtime_rate_audio, 8) == 8,
+          "GBA 8x input did not preserve and feed the 32,768 Hz sink");
+    CHECK(change_runtime_sample_rate(32768.0),
+          "GBA runtime audio rate could not return to its sink rate");
+    emit_audio(8);
+    CHECK(lucent_retro_drain_audio(host, runtime_rate_audio, 8) == 8,
+          "GBA native-rate audio did not recover after resampled operation");
+    CHECK(lucent_retro_unload_game(host, error, sizeof(error)),
+          "GBA-rate mock unload failed");
+    lucent_retro_destroy(host);
+
+    host = lucent_retro_create_with_preferences(
+            argv[1], argv[2], argv[3], argv[4], NULL, false,
+            error, sizeof(error));
+    CHECK(host, "widescreen-off host could not be created");
+    CHECK(strcmp(option_value("dolphin_widescreen"), "disabled") == 0 &&
+            strcmp(option_value("dolphin_widescreen_hack"), "disabled") == 0 &&
+            strcmp(option_value("dolphin_aspect_ratio"), "3") == 0,
+            "Dolphin widescreen-off profile was not restored exactly");
+    CHECK(strcmp(option_value("dolphin_osd_enabled"), "disabled") == 0,
+            "Dolphin OSD default must not depend on the widescreen preference");
+    CHECK(strcmp(option_value("mupen64plus-aspect"), "4:3") == 0,
+            "Mupen 4:3 profile was not restored exactly");
+    CHECK(strcmp(option_value("swanstation_GPU_WidescreenHack"), "false") == 0 &&
+            strcmp(option_value("swanstation_Display_AspectRatio"), "4:3") == 0,
+            "SwanStation original 4:3 profile was not retained exactly");
+    CHECK(strcmp(option_value("reicast_widescreen_cheats"), "disabled") == 0 &&
+            strcmp(option_value("reicast_widescreen_hack"), "disabled") == 0,
+            "Flycast widescreen-off profile was not restored exactly");
+    CHECK(strcmp(option_value("armsx2_aspect_ratio"), "Auto 4:3/3:2") == 0 &&
+            strcmp(option_value("armsx2_widescreen_patches"), "disabled") == 0,
+            "ARMSX2 automatic aspect profile was not restored exactly");
+    lucent_retro_destroy(host);
+
+    /* Launch-time overrides: <system>/lucent-core-overrides.txt flips only the
+     * keys it names, only to tokens the core advertises, and disappears with
+     * the file. This is the channel the Java WidescreenHackPolicy writes. */
+    {
+        char override_path[4096];
+        FILE *override_file;
+        snprintf(override_path, sizeof(override_path),
+                "%s/lucent-core-overrides.txt", argv[3]);
+        override_file = fopen(override_path, "wb");
+        CHECK(override_file, "could not write the override file");
+        fputs("# generated by host_test\r\n"
+              "\r\n"
+              "mupen64plus-aspect = 16:9 adjusted\r\n"
+              "mupen64plus-169screensize=1920x1080\n"
+              "swanstation_GPU_WidescreenHack=true\n"
+              "swanstation_Display_AspectRatio=16:9\n"
+              "armsx2_aspect_ratio=21:9\n"
+              "dolphin_widescreen=disabled\n"
+              "dolphin_osd_enabled=enabled\n"
+              "dolphin_efb_scale=2\n"
+              "citra_resolution_factor=2\n"
+              "not a key=enabled\n"
+              "lucent_unknown_key=whatever\n"
+              "dolphin_cheats_enabled=disabled\n", override_file);
+        fclose(override_file);
+        host = lucent_retro_create_with_preferences(
+                argv[1], argv[2], argv[3], argv[4], NULL, true,
+                error, sizeof(error));
+        CHECK(host, "override host could not be created");
+        CHECK(strcmp(option_value("mupen64plus-aspect"), "16:9 adjusted") == 0 &&
+                strcmp(option_value("mupen64plus-169screensize"), "1920x1080") == 0,
+                "override file did not flip the Mupen widescreen keys");
+        CHECK(strcmp(option_value("swanstation_GPU_WidescreenHack"), "true") == 0 &&
+                strcmp(option_value("swanstation_Display_AspectRatio"), "16:9") == 0,
+                "override file did not flip the SwanStation widescreen keys");
+        CHECK(strcmp(option_value("armsx2_aspect_ratio"), "Auto 4:3/3:2") == 0,
+                "an override token the core does not advertise must be ignored");
+        CHECK(strcmp(option_value("dolphin_widescreen"), "disabled") == 0,
+                "override file must win over the preference-driven default");
+        CHECK(strcmp(option_value("dolphin_osd_enabled"), "enabled") == 0,
+                "explicit diagnostic OSD override must remain available");
+        CHECK(strcmp(option_value("citra_resolution_factor"), "2") == 0,
+                "explicit supported 3DS upscaling must remain available");
+        CHECK(strcmp(option_value("dolphin_efb_scale"), "2") == 0,
+                "explicit supported Dolphin upscaling must remain available");
+        CHECK(strcmp(option_value("dolphin_cheats_enabled"), "disabled") == 0,
+                "override file must be able to flip a Lucent default back");
+        CHECK(strcmp(option_value("reicast_widescreen_hack"), "disabled") == 0 &&
+                strcmp(option_value("armsx2_widescreen_patches"), "disabled") == 0,
+                "keys absent from the override file must keep their defaults");
+        CHECK(!option_value("lucent_unknown_key"),
+                "an override must never declare a variable the core lacks");
+        lucent_retro_destroy(host);
+        CHECK(remove(override_path) == 0, "could not remove the override file");
+        host = lucent_retro_create_with_preferences(
+                argv[1], argv[2], argv[3], argv[4], NULL, true,
+                error, sizeof(error));
+        CHECK(host, "post-override host could not be created");
+        CHECK(strcmp(option_value("mupen64plus-aspect"), "4:3") == 0 &&
+                strcmp(option_value("swanstation_GPU_WidescreenHack"), "false") == 0 &&
+                strcmp(option_value("citra_resolution_factor"), "1") == 0 &&
+                strcmp(option_value("dolphin_efb_scale"), "1") == 0 &&
+                strcmp(option_value("dolphin_cheats_enabled"), "enabled") == 0,
+                "removing the override file did not restore the defaults");
+        CHECK(strcmp(option_value("dolphin_osd_enabled"), "disabled") == 0,
+                "Dolphin OSD must return to disabled after diagnostic override removal");
+        lucent_retro_destroy(host);
+    }
     dlclose(mock_library);
     puts("libretro host lifecycle and state round-trip passed");
     return 0;

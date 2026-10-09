@@ -1,0 +1,39 @@
+diff --git a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKGSRender.cpp b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKGSRender.cpp
+index 458621c6..88505138 100644
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKGSRender.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKGSRender.cpp
+@@ -577,7 +577,7 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
+     {
+         // For Mali-G57 (Valhall), forcing a size larger than maxTexelBufferElements can cause VK_ERROR_DEVICE_LOST.
+         // Therefore, we still respect maxTexelBufferElements if the GPU is an ARM MALI G57.
+-        if (m_device->gpu().get_driver_vendor() == driver_vendor::ARM_MALI_G57)
++        if (vk::get_driver_vendor() == vk::driver_vendor::ARM_MALI)
+             m_texbuffer_view_size = std::min(limits.maxTexelBufferElements, VK_ATTRIB_RING_BUFFER_SIZE_M * 0x100000u);
+         else
+             m_texbuffer_view_size=VK_ATTRIB_RING_BUFFER_SIZE_M * 0x100000u;
+diff --git a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKPresent.cpp b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKPresent.cpp
+index e9e83ee4..ce053d88 100644
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -31,7 +31,7 @@ namespace
+             return use_bgra_fmt?VK_FORMAT_B8G8R8A8_UNORM:VK_FORMAT_R8G8B8A8_UNORM;
+             case CELL_VIDEO_OUT_BUFFER_COLOR_FORMAT_X8B8G8R8:
+                 // Force BGRA8 for Mali since RGBA8 causes gralloc crashes during presentation
+-                return (vk::get_current_renderer()->get_driver_vendor() == vk::driver_vendor::ARM_MALI_G57) ? VK_FORMAT_B8G8R8A8_UNORM : VK_FORMAT_R8G8B8A8_UNORM;
++                return (vk::get_driver_vendor() == vk::driver_vendor::ARM_MALI) ? VK_FORMAT_B8G8R8A8_UNORM : VK_FORMAT_R8G8B8A8_UNORM;
+             case CELL_VIDEO_OUT_BUFFER_COLOR_FORMAT_R16G16B16X16_FLOAT:
+ 			return VK_FORMAT_R16G16B16A16_SFLOAT;
+ 		}
+diff --git a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/vkutils/instance.cpp b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/vkutils/instance.cpp
+index c6cf064f..70acab9a 100644
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/vkutils/instance.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/VK/vkutils/instance.cpp
+@@ -322,7 +322,7 @@ namespace vk
+ 
+         // Android Mali hardware composers might reject format 0x38 (VK_FORMAT_R8G8B8A8_UNORM) with certain usages (like 0xb00)
+         // Check if the current device is Mali Valhall and force B8G8R8A8_UNORM, as R8G8B8A8 causes unrecognized format crashes.
+-        if (dev.get_driver_vendor() == driver_vendor::ARM_MALI_G57) {
++        if (dev.get_driver_vendor() == driver_vendor::ARM_MALI) {
+             surf_color_fmt = VK_FORMAT_B8G8R8A8_UNORM;
+         }
+ 

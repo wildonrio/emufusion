@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise Phase 1A cores inside Lucent's one display-0 emulation window.
+"""Exercise Phase 1A cores inside EmuFusion's one display-0 emulation window.
 
 The harness builds/installs an explicit qualification APK, defaults to Android
 emulators and requires an explicit hardware-safe opt-in for a verified AYN Thor,
-launches only redistributable fixtures directly into Lucent MainActivity, and
+launches only redistributable fixtures directly into EmuFusion MainActivity, and
 records identity, visible-frame, pause/resume/return, crash, and Quick Resume
 evidence. On a Thor, a same-process, excluded-from-recents PreviewActivity is
 allowed on display 4 only while its single-screen-game surface is verified black.
@@ -92,6 +92,8 @@ CASES = (
     Case("arcade", "MAME Romless Pong", "mame", "pong.cmd"),
     Case("neogeo", "MAME Open Neo Geo QA", "mame", "ngdevkit-open.cmd"),
     Case("dos", "Lucent DOS QA", "dosbox-pure", "lucent-dos-callback-test.zip"),
+    Case("windows", "EmuFusion Internal PC QA", "dosbox-pure",
+         "emufusion-internal-pc-callback-test.zip"),
     Case("pcengine", "Lucent PC Engine QA", "beetle-pce-fast", "lucent-pce-qa.pce"),
     Case("ngp", "Stargunner Neo Geo Pocket Color", "beetle-neopop", "stargunner.ngc"),
     Case("wonderswancolor", "Bug Witch WonderSwan Color", "beetle-cygne", "bug-witch.wsc"),
@@ -116,6 +118,8 @@ BLOCKED_CASES = (
     BlockedCase("n64", "mupen64plus-next", "physical-qa", "Pinned GLES3 build still requires a redistributable fixture and physical menu-path qualification."),
     BlockedCase("neogeocd", "mame", "firmware-content", "User BIOS and legal disc content are required."),
     BlockedCase("odyssey2", "o2em", "license", "Core remains license-blocked."),
+    BlockedCase("pcenginecd", "beetle-pce-fast", "fixture-inputs",
+                "Internal route imports a user-owned System Card 3; this redistributable-fixture runner has neither that BIOS nor a qualified CD fixture. Owned-game runtime evidence is tracked separately."),
     BlockedCase("sega32x", "picodrive", "license", "Core remains license-blocked."),
     BlockedCase("segacd", "picodrive", "license", "Core remains license-blocked."),
     BlockedCase("virtualboy", "beetle-vb", "license", "Core remains license-blocked."),
@@ -164,9 +168,14 @@ def validate_runner_coverage() -> None:
 def run(command: list[str], *, check: bool = True, binary: bool = False,
         env: dict[str, str] | None = None,
         timeout: float | None = None) -> subprocess.CompletedProcess:
+    # Emulator cores occasionally emit raw non-UTF-8 bytes into logcat; a
+    # strict decode then kills the whole harness mid-run (physically hit on
+    # 2026-08-15: 0xc0 at offset ~649k of a logcat dump). Replacement keeps
+    # every parseable line intact.
     return subprocess.run(
         command, cwd=ROOT, check=check, capture_output=True,
-        text=not binary, env=env, timeout=timeout,
+        text=not binary, errors=None if binary else "replace",
+        env=env, timeout=timeout,
     )
 
 
@@ -319,8 +328,8 @@ def package_recents_tasks(value: str) -> set[str]:
     # though they can never appear in the user's recents UI.  The identity gate
     # is concerned with user-visible app identities, so read only the explicit
     # "Visible recent tasks" projection when the platform provides it.  This
-    # permits Lucent's private display-4 PreviewActivity while still rejecting
-    # any second visible Lucent task.
+    # permits EmuFusion's private display-4 PreviewActivity while still rejecting
+    # any second visible EmuFusion task.
     visible_marker = "  Visible recent tasks (most recent first):"
     if visible_marker in value:
         value = value.split(visible_marker, 1)[1]
@@ -347,7 +356,7 @@ def strict_gameplay_identity(adb_path: Path, serial: str) -> dict[str, object] |
     recent_state = recents_dump(adb_path, serial)
     recent_components = package_recents_tasks(recent_state)
     # The unified component intentionally retains Pegasus's JNI-compatible
-    # MainActivity class name after Lucent's package slash.  Match the legacy
+    # MainActivity class name after EmuFusion's package slash.  Match the legacy
     # package only as an Android component/package prefix; a raw substring
     # check falsely classifies
     # com.thorium.preview/org.pegasus_frontend.android.MainActivity as the old
@@ -451,7 +460,8 @@ def main_activity_identity(adb_path: Path, serial: str) -> dict[str, str]:
 def ensure_library(adb_path: Path, serial: str) -> dict[str, str]:
     completed = adb(adb_path, serial, "shell", "am", "start", "--display", "0",
         "-W", "-n", MAIN_ACTIVITY, "-a", "android.intent.action.MAIN",
-        "--activity-single-top", "--activity-clear-top", check=False)
+        "-c", "android.intent.category.LAUNCHER", "-f", "0x10008000",
+        check=False)
     if completed.returncode != 0 or "Error:" in completed.stdout:
         raise RuntimeError("Lucent library launch failed: " + completed.stdout)
     wait_until(lambda: frontend_is_resumed(adb_path, serial),
@@ -505,7 +515,7 @@ def screenshot_metrics(adb_path: Path, serial: str, output: Path) -> dict[str, o
     image = Image.open(io.BytesIO(payload)).convert("RGB")
     width, height = image.size
     # Touch controls live near the edges. The central crop must contain a real
-    # presented core frame, not merely Lucent chrome over an empty surface.
+    # presented core frame, not merely EmuFusion chrome over an empty surface.
     crop = image.crop((width // 5, height // 10, width * 4 // 5, height * 9 // 10))
     pixels = list(crop.getdata())
     visible = sum(max(pixel) >= 18 for pixel in pixels)
@@ -692,10 +702,10 @@ def exercise_runtime_input(adb_path: Path, serial: str, case: Case,
 
 
 def app_crash_markers(log: str) -> list[str]:
-    """Return only crash evidence attributable to Lucent's process.
+    """Return only crash evidence attributable to EmuFusion's process.
 
     A physical device's global log can contain tombstones from system services
-    while Lucent is under test. Treating an unrelated ``mediaserver`` crash as
+    while EmuFusion is under test. Treating an unrelated ``mediaserver`` crash as
     an app failure hides the real result without improving safety. Java crash
     records name the app in their exception block; native records either name
     it on the signal line or bind the signalled PID to the subsequent tombstone.
@@ -1029,12 +1039,12 @@ def main() -> int:
     apk = args.apk.resolve() if args.apk else build_apk()
     args.output.mkdir(parents=True, exist_ok=True)
 
-    adb(adb_path, serial, "install", "-r", "-d", str(apk))
+    adb(adb_path, serial, "install", "--no-incremental", "-r", "-d", str(apk))
     if emulator_only:
         adb(adb_path, serial, "shell", "pm", "clear", PACKAGE)
     # Pegasus's recovery activity may otherwise put Android's notification
     # permission dialog above the second launch after the first Exit to Lucent.
-    # Pregranting this declared runtime permission keeps QA focused on Lucent's
+    # Pregranting this declared runtime permission keeps QA focused on EmuFusion's
     # own activity lifecycle rather than system onboarding chrome.
     for permission in (
         "android.permission.POST_NOTIFICATIONS",

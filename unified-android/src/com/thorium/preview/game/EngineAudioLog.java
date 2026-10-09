@@ -9,7 +9,7 @@ import android.util.Log;
  * One-shot diagnosis of the stream an engine session actually plays on.
  *
  * A silent game is almost never a dead AudioTrack; it is the hardware volume
- * keys having moved a different stream while the one Lucent plays on sits at
+ * keys having moved a different stream while the one EmuFusion plays on sits at
  * zero. Recording the resolved stream together with its current and maximum
  * level at session start makes that distinguishable from a logcat capture
  * alone, without asking the user to reproduce anything.

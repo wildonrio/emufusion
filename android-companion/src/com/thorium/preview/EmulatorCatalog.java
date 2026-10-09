@@ -1,7 +1,8 @@
 package com.thorium.preview;
 
 import android.content.Context;
-import android.content.pm.PackageManager;
+
+import com.thorium.lucent.emulators.ExternalEmulatorDelivery;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -26,16 +27,18 @@ import java.util.Set;
  * internal engine.
  *
  * Installation stays separate from discovery. Android only lets a regular app
- * silently install another APK when it is a device/profile owner, so Lucent can
+ * silently install another APK when it is a device/profile owner, so EmuFusion can
  * detect a missing emulator and open its official source, but a normal retail
  * device must still confirm Android's package installer.
  */
 final class EmulatorCatalog {
 
-    // ROM delivery mechanisms an emulator accepts.
-    static final String DELIVERY_FILE_PATH = "file-path";     // --es <key> "{file.path}"
-    static final String DELIVERY_ACTION_VIEW = "action-view"; // -a VIEW -d file://{file.path}
-    static final String DELIVERY_CONTENT_URI = "content-uri"; // via RomLaunchActivity trampoline
+    // ROM delivery mechanisms an emulator accepts. Aliased to the platform-
+    // neutral constants rather than re-spelled, so a custom entry validated by
+    // CustomEmulatorSpec can never be well-formed there and unrecognised here.
+    static final String DELIVERY_FILE_PATH = ExternalEmulatorDelivery.FILE_PATH;
+    static final String DELIVERY_ACTION_VIEW = ExternalEmulatorDelivery.ACTION_VIEW;
+    static final String DELIVERY_CONTENT_URI = ExternalEmulatorDelivery.CONTENT_URI;
     static final String DELIVERY_UNSUPPORTED = "unsupported";
 
     /** A single direct-launch option for a system. */
@@ -71,15 +74,14 @@ final class EmulatorCatalog {
 
         boolean supported() { return !DELIVERY_UNSUPPORTED.equals(delivery); }
 
+        /**
+         * The first of this option's package ids that is installed, or "".
+         * Routed through InstalledPackages because a bare getPackageInfo is
+         * silently wrong under Android 11+ package-visibility filtering — see
+         * that class for why, and for what the manifest must declare.
+         */
         String installedPackage(Context context) {
-            PackageManager manager = context.getPackageManager();
-            for (String name : packages) {
-                try {
-                    manager.getPackageInfo(name, 0);
-                    return name;
-                } catch (Exception ignored) {}
-            }
-            return "";
+            return InstalledPackages.firstInstalled(context, packages);
         }
     }
 
@@ -119,29 +121,24 @@ final class EmulatorCatalog {
         // catalog is looked up post-canonicalization, so GameCube is "gamecube"
         // (not "gc") and the 3DS is "3ds" (not "n3ds"). Keying on the raw alias
         // would leave those systems with no reachable external option.
-        put("gamecube", pathApp("dolphin", "Dolphin", "org.dolphinemu.dolphinemu",
+        put("gamecube", contentUri("dolphin", "Dolphin", "org.dolphinemu.dolphinemu",
                         "https://dolphin-emu.org/download/", "official-api",
-                        "org.dolphinemu.dolphinemu.ui.main.MainActivity", "AutoStartFile"));
-        put("wii", pathApp("dolphin", "Dolphin", "org.dolphinemu.dolphinemu",
+                        "org.dolphinemu.dolphinemu.ui.main.MainActivity"));
+        put("wii", contentUri("dolphin", "Dolphin", "org.dolphinemu.dolphinemu",
                         "https://dolphin-emu.org/download/", "official-api",
-                        "org.dolphinemu.dolphinemu.ui.main.MainActivity", "AutoStartFile"));
+                        "org.dolphinemu.dolphinemu.ui.main.MainActivity"));
         put("3ds", pathApp("azahar", "Azahar",
                         "org.azahar_emu.azahar io.github.lime3ds.android org.citra.emu",
                         "https://github.com/azahar-emu/azahar/releases", "github",
                         "org.citra.citra_emu.activities.EmulationActivity", "GamePath"),
                 retroArch("n3ds", ""));
         put("switch", contentUri("eden", "Eden",
-                        "dev.legacy.eden_emulator org.citron.citron_emu",
-                        "https://git.eden-emu.dev/eden-emu/eden", "external",
+                        "dev.eden.eden_emulator dev.legacy.eden_emulator org.citron.citron_emu",
+                        "https://eden-emu.dev/downloads/", "official",
                         "org.yuzu.yuzu_emu.activities.EmulationActivity"));
         put("wiiu", contentUri("cemu", "Cemu", "info.cemu.cemu",
                         "https://github.com/cemu-project/Cemu/releases", "github",
                         "info.cemu.cemu.emulation.EmulationActivity"));
-        // PS3: the user explicitly requires aPS3e to be represented (an RPCS3-
-        // derived Android port). It launches a decrypted user game directory.
-        put("ps3", pathApp("aps3e", "aPS3e", "aenu.aps3e",
-                        "https://github.com/aenu1/aps3e/releases", "github",
-                        "aenu.aps3e.Emulator_ui", "game_path"));
         put("virtualboy", retroArch("virtualboy", "mednafen_vb_libretro_android.so"));
 
         // ----- Sega -----
@@ -250,7 +247,7 @@ final class EmulatorCatalog {
                         "org.scummvm.scummvm.SplashActivity", "path"));
 
         // Systems with no maintained direct-launch Android emulator at all.
-        // These stay explicit so Lucent never pretends an abandoned or
+        // These stay explicit so EmuFusion never pretends an abandoned or
         // nonexistent build can be installed or launched: Xenia (xbox/xbox360)
         // has no Android port, and no maintained Apple II emulator ships an
         // Android launch surface. (PS3 now routes to aPS3e above.)
@@ -287,7 +284,7 @@ final class EmulatorCatalog {
 
     /**
      * RetroArch is a valid EXTERNAL option (the historical ban was only on
-     * building Lucent's own UI on top of RetroArch). It boots straight into the
+     * building EmuFusion's own UI on top of RetroArch). It boots straight into the
      * ROM when both ROM and LIBRETRO core path are supplied, so it is only
      * listed for a system with a known libretro core.
      */
@@ -337,12 +334,27 @@ final class EmulatorCatalog {
     }
 
     /**
+     * {@link #optionForId} plus the system's user-defined "Custom" target,
+     * which by definition is not compiled into the catalog and needs a Context
+     * to be read back and re-checked against the device.
+     *
+     * A custom id whose app has since been uninstalled resolves to null and so
+     * falls back to the catalog order rather than leaving the system
+     * unlaunchable; the picker separately reports it as needing setup again.
+     */
+    static Option resolvedOptionForId(Context context, String system, String id) {
+        if (CustomEmulatorStore.ID.equalsIgnoreCase(id == null ? "" : id.trim()))
+            return CustomEmulatorStore.option(context, system);
+        return optionForId(system, id);
+    }
+
+    /**
      * Chooses the effective external option for a launch: the user's choice when
      * it is still a valid catalog entry, otherwise the first installed option,
      * otherwise the first supported option (so the install flow can begin).
      */
     static Option effectiveOption(Context context, String system, String chosenId) {
-        Option chosen = optionForId(system, chosenId);
+        Option chosen = resolvedOptionForId(context, system, chosenId);
         if (chosen != null && chosen.supported()) return chosen;
         Option firstSupported = null;
         for (Option option : optionsForSystem(system)) {
@@ -371,14 +383,16 @@ final class EmulatorCatalog {
     /** The direct-into-gameplay recipe for an installed emulator. */
     static String directLaunchCommand(Option option, String installedPackage) {
         if (DELIVERY_CONTENT_URI.equals(option.delivery)) {
-            // Route through Lucent's own trampoline, which grants a one-time
+            // Route through EmuFusion's own trampoline, which grants a one-time
             // content URI to the scoped-storage target and forwards it.
             return "am start -a " + RomLaunchActivity.ACTION_LAUNCH_FILE +
                     " -n com.thorium.preview/com.thorium.preview.RomLaunchActivity" +
                     " --es path \"{file.path}\"" +
                     " --es target_package " + installedPackage +
                     " --es target_activity " + option.component +
-                    " --es target_action " + option.action;
+                    " --es target_action " + option.action +
+                    ("dolphin".equals(option.id)
+                            ? " --es launch_profile dolphin" : "");
         }
         StringBuilder command = new StringBuilder("am start");
         if (!option.action.isEmpty()) command.append(" -a ").append(option.action);

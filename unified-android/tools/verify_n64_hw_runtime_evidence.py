@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed audit for Lucent's N64 hardware-render runtime evidence.
+"""Fail-closed audit for EmuFusion's N64 hardware-render runtime evidence.
 
 Loading the Mupen shared object is not proof that the frontend accepted the
 libretro hardware-render contract.  This verifier requires every observable

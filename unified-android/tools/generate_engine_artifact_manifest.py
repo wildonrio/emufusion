@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the signed APK manifest for bundled Lucent core artifacts."""
+"""Generate the signed APK manifest for bundled EmuFusion core artifacts."""
 
 from __future__ import annotations
 
@@ -51,12 +51,24 @@ def generate(registry_path: Path, library_dir: Path,
         if row is None:
             continue
         source = row.get("source") or {}
-        artifacts.append({
+        artifact = {
             "engineId": row["id"],
             "fileName": library.name,
             "sha256": sha256(library),
             "sourceCommit": source.get("commit", ""),
-        })
+        }
+        if row["id"] == "armsx2":
+            variant = library_dir / "liblucent_core_armsx2_16k.so"
+            if not variant.is_file():
+                raise ValueError("PS2 APK requires its bundled 16 KiB host-page variant")
+            artifact["hostPageSize"] = 4096
+            artifact["pageSizeVariants"] = [{
+                "hostPageSize": 16384,
+                "fileName": variant.name,
+                "sha256": sha256(variant),
+                "sourceCommit": source.get("commit", ""),
+            }]
+        artifacts.append(artifact)
     return {"schemaVersion": 1, "artifacts": artifacts}
 
 

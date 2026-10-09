@@ -1,0 +1,17 @@
+--- a/Core/BaseCartridge.cpp
++++ b/Core/BaseCartridge.cpp
+@@ -495,6 +495,14 @@
+ 	if (!hle) {
+ 		_coprocessor.reset(NecDsp::InitCoprocessor(_coprocessorType, _console, _embeddedFirmware));
+ 		_necDsp = dynamic_cast<NecDsp*>(_coprocessor.get());
++		// A missing DSP ROM must not leave an otherwise loaded game waiting
++		// forever for an absent coprocessor. Reuse the core's existing HLE
++		// implementation only for the two types it supports. Valid external
++		// or embedded firmware retains the original low-level implementation.
++		if (!_coprocessor && (_coprocessorType == CoprocessorType::DSP1 ||
++			_coprocessorType == CoprocessorType::DSP1B)) {
++			_coprocessor.reset(NecDspHle::InitCoprocessor(_coprocessorType, _console));
++		}
+ 	}
+ 
+ 	if(_coprocessorType == CoprocessorType::SA1) {

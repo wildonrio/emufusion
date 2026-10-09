@@ -40,7 +40,7 @@ public final class SessionReturnRouter {
                 preferences.getString("token", ""));
     }
 
-    public static void finishToLucent(Activity activity, SessionReturnState state) {
+    public static void finishToEmuFusion(Activity activity, SessionReturnState state) {
         remember(activity, state);
         Intent returned = new Intent(ACTION_RETURNED).setPackage(activity.getPackageName());
         state.putInto(returned);

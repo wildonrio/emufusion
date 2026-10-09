@@ -88,11 +88,25 @@ def generate(registry: dict, lock: dict, artifacts: dict) -> dict:
             {"spdxElementId": app_id, "relationshipType": "CONTAINS",
              "relatedSpdxElement": artifact_id}
         )
+        for variant in artifact.get("pageSizeVariants", []):
+            variant_id = _spdx_id(f"{engine_id}-binary", variant["sha256"])
+            packages.append({
+                "SPDXID": variant_id, "name": variant["fileName"],
+                "versionInfo": source["commit"], "downloadLocation": "NOASSERTION",
+                "filesAnalyzed": False, "checksums": _checksum(variant["sha256"]),
+                "licenseConcluded": "NOASSERTION", "licenseDeclared": engine["license"]["spdx"],
+                "copyrightText": "NOASSERTION",
+                "comment": f"Bundled {variant['hostPageSize']}-byte host-page variant; qualification only.",
+            })
+            relationships.extend([
+                {"spdxElementId": app_id, "relationshipType": "CONTAINS", "relatedSpdxElement": variant_id},
+                {"spdxElementId": variant_id, "relationshipType": "GENERATED_FROM", "relatedSpdxElement": core_id},
+            ])
         release_artifact = locks.get(engine_id, {}).get("releaseArtifact")
         if release_artifact:
             # A checksum-locked upstream binary is not a locally reproduced
             # source build. Model the ZIP it was extracted from without
-            # claiming that Lucent proved its source-to-binary derivation.
+            # claiming that EmuFusion proved its source-to-binary derivation.
             release_id = _spdx_id(
                 f"{engine_id}-release-archive", release_artifact["archiveSha256"])
             packages.append({
@@ -122,20 +136,23 @@ def generate(registry: dict, lock: dict, artifacts: dict) -> dict:
             dependency_id = _spdx_id(
                 f"{engine_id}-dependency", dependency["path"]
             )
+            git_tree = dependency.get("gitTreeSha1")
             packages.append({
                 "SPDXID": dependency_id,
                 "name": dependency["path"],
                 "versionInfo": dependency["commit"],
-                "downloadLocation": (
+                "downloadLocation": (f"git+{dependency['repository']}@{dependency['commit']}" if git_tree else
                     f"{dependency['repository'].rstrip('/')}/archive/"
                     f"{dependency['commit']}.tar.gz"
                 ),
                 "filesAnalyzed": False,
-                "checksums": _checksum(dependency["archiveSha256"]),
+                "checksums": ([{"algorithm": "SHA1", "checksumValue": git_tree}] if git_tree else
+                              _checksum(dependency["archiveSha256"])),
                 "licenseConcluded": "NOASSERTION",
                 "licenseDeclared": dependency.get("licenseDeclared", "NOASSERTION"),
                 "copyrightText": "NOASSERTION",
-                "sourceInfo": f"Staged at {dependency['path']}",
+                "sourceInfo": (f"Staged at {dependency['path']}; checksum identifies the exact Git tree object, not a downloadable archive."
+                               if git_tree else f"Staged at {dependency['path']}"),
             })
             relationships.append({
                 "spdxElementId": core_id,

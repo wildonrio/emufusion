@@ -1,0 +1,29 @@
+--- a/src/core/core.cpp
++++ b/src/core/core.cpp
+@@ -303,12 +303,15 @@
+         auto process = Service::AM::CreateApplicationProcess(control, app_loader, load_result, system, file, params.program_id, params.program_index);
+         if (load_result != Loader::ResultStatus::Success) {
+             LOG_CRITICAL(Core, "Failed to load ROM (Error {})!", load_result);
++            process.reset();
+             ShutdownMainProcess();
+             return SystemResultStatus(u32(SystemResultStatus::ErrorLoader) + u32(load_result));
+         }
+ 
+         if (!app_loader) {
+             LOG_CRITICAL(Core, "Failed to obtain loader for {}!", filepath);
++            process.reset();
++            ShutdownMainProcess();
+             return SystemResultStatus::ErrorGetLoader;
+         }
+ 
+@@ -336,6 +339,10 @@
+         SystemResultStatus init_result{SetupForApplicationProcess(system, emu_window)};
+         if (init_result != SystemResultStatus::Success) {
+             LOG_CRITICAL(Core, "Failed to initialize system (Error {})!", int(init_result));
++            // This local owner has not been handed to the applet manager yet.
++            // Its finalizer touches KProcess; release it while the kernel and
++            // DeviceMemory still exist, not on return after their shutdown.
++            process.reset();
+             ShutdownMainProcess();
+             return init_result;
+         }

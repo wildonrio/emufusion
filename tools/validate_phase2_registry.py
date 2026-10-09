@@ -53,6 +53,7 @@ PPSSPP_SUBMODULES = {
     "ext/rapidjson": "73063f5002612c6bf64fe24f851cd5cc0d83eef9",
     "ext/rcheevos": "ebfe8ca1bf944358e27200d66964fcb4e00e2487",
     "ext/zstd": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+    "ffmpeg": "1e3b4965632f60b1d85360261d1b9dd45444bc71",
     "libretro/libretro-common": "76a3d54feb0ee0ce9d59b90aa24694f3782063d3",
 }
 PSPSDK_COMMIT = "314b2083f2e1eaf145fc5de342736336fe1f0148"
@@ -67,22 +68,33 @@ FLYCAST_DEPENDENCY_LOCK = "engines/flycast-source-lock.json"
 ARMSX2_COMMIT = "788a59d641c777cb7f70726ea573d420508e0931"
 ARMSX2_ARCHIVE_SHA = "bc2bb2f106ca499252e3bfe0a40366de5e9749fd84bebbbe80ed52c4b07abf63"
 ARMSX2_DEPENDENCY_LOCK = "engines/armsx2-source-lock.json"
-ARMSX2_DEPENDENCY_LOCK_SHA = "08e41728beb90119919ce8fd542c8c1c60ced3cf72554d75cdf9b4961939e536"
+ARMSX2_DEPENDENCY_LOCK_SHA = "987ff5aed12bfb029484d968a47d9b6a957e64434846357be3c0471090a5bf2a"
 ARMSX2_PATCH = "engines/patches/armsx2-libretro-android-build.patch"
 ARMSX2_PATCH_SHA = "f8d1f6c46125ab953c9333eb57400a8f4ff339ea91ebc3221ab8638514bded78"
+ARMSX2_CLOCK_PATCH = "engines/patches/armsx2-libretro-frame-clock.patch"
+ARMSX2_CLOCK_PATCH_SHA = "c94ef2e4fc1440fbbfceef124433343df8f1bbddd320307dc6719effd838d49f"
+ARMSX2_DESCRIPTOR_PATCH = "engines/patches/armsx2-libretro-descriptor-batch.patch"
+ARMSX2_DESCRIPTOR_PATCH_SHA = "d7e781701ad7c05494310aebcc1750cc9f816289048b00d85ffbc1db9a95ff61"
+ARMSX2_INPUT_ATTACHMENT_PATCH = "engines/patches/armsx2-libretro-input-attachment.patch"
+ARMSX2_INPUT_ATTACHMENT_PATCH_SHA = "0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4"
 AZAHAR_COMMIT = "b42d0916ba9799297ae0e27c07d56801da1b5de5"
 AZAHAR_ARCHIVE_SHA = "8da46436e9d4cd937af2dba5ed39a33c2102e4f833c9051a9bb6e2711831e065"
 AZAHAR_DEPENDENCY_LOCK = "engines/azahar-source-lock.json"
-AZAHAR_DEPENDENCY_LOCK_SHA = "8cd6a26620a32bf7cfca1d015865ffefc89abe88df6e4916f0c8d4eb1b1d3b49"
+AZAHAR_DEPENDENCY_LOCK_SHA = "b609bf954d6c21776bd0dbe26f1c6599f01bac0657ab37bbca66fcb3a1d47753"
+AZAHAR_SOURCE_MEMBER_SHA = "d7150458b86d5493f5a78d850df204fe04b854124d92d0d2040fb104b6f69c7d"
 AZAHAR_RELEASE_ARCHIVE_SHA = "4946db52ba9a559834cb3db075544480ac71fa4ae08b090a6708825a012a7b1b"
 AZAHAR_RELEASE_MEMBER_SHA = "d723066fa7c812618b5695d94b0fd85594e6c196e9e08ca9ba7134371a8da645"
 DOLPHIN_REPOSITORY = "https://github.com/libretro/dolphin"
 DOLPHIN_COMMIT = "0ff12a5a2835762e0665afe6a161a648b433f996"
 DOLPHIN_ARCHIVE_SHA = "3c6698d6da772065194be118871ce24620f0fdc76894bc568e34d48f93de7494"
 DOLPHIN_DEPENDENCY_LOCK = "engines/dolphin-source-lock.json"
-DOLPHIN_ARTIFACT_SHA = "c071d3810f74db7a38c499a9725021b62992417177c80a7b6074692b14864ced"
+DOLPHIN_ARTIFACT_SHA = "12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6"
 DOLPHIN_PATCH = "engines/patches/dolphin-libretro-submit-rendered-duplicate-xfb.patch"
 DOLPHIN_PATCH_SHA = "5dd844b8546eea62706a4dd84304077cddaf83c68987459a532f6055f2f5919b"
+DOLPHIN_STACK_PATCH = "engines/patches/dolphin-libretro-own-signal-stack.patch"
+DOLPHIN_STACK_PATCH_SHA = "68c853fa395b8c87c41729355c2149dbb83f024b9cb851123b21cfc575ac074b"
+DOLPHIN_DESCRIPTOR_PATCH = "engines/patches/dolphin-libretro-descriptor-errors.patch"
+DOLPHIN_DESCRIPTOR_PATCH_SHA = "d508e5c96869b925a8a1c01139c76ee2ae13abcd74a0475c4f5281aded85cbcd"
 SCUMMVM_COMMIT = "6aa8fa9b6f9e5a7ae670cc355af1b727ff75c995"
 SCUMMVM_ARCHIVE_SHA = "8e2080a442b4e78c045795714ac4b699023f631e2045fb133d496cd29419fa67"
 SCUMMVM_DEPENDENCY_LOCK = "engines/scummvm-source-lock.json"
@@ -353,6 +365,10 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                     locked = {row["path"]: (
                         row["repository"], row["commit"], row["archiveSha256"])
                               for row in lock.get("dependencies", [])}
+                    ffmpeg = lock["ffmpeg"]
+                    locked["ffmpeg"] = (
+                        ffmpeg["repository"], ffmpeg["commit"],
+                        ffmpeg["sparseClosureSha256"])
                 except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
                     errors.append(f"ppsspp: cannot read dependency lock: {exc}")
                 else:
@@ -472,17 +488,27 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                     if locked_patches != [{
                             "path": ARMSX2_PATCH,
                             "sha256": ARMSX2_PATCH_SHA,
+                    }, {
+                            "path": ARMSX2_CLOCK_PATCH,
+                            "sha256": ARMSX2_CLOCK_PATCH_SHA,
+                    }, {
+                            "path": ARMSX2_DESCRIPTOR_PATCH,
+                            "sha256": ARMSX2_DESCRIPTOR_PATCH_SHA,
+                    }, {
+                            "path": ARMSX2_INPUT_ATTACHMENT_PATCH,
+                            "sha256": ARMSX2_INPUT_ATTACHMENT_PATCH_SHA,
                     }]:
                         errors.append("armsx2: integration patch lock is inconsistent")
                     else:
-                        patch_path = ROOT / ARMSX2_PATCH
-                        try:
-                            patch_sha = _sha256(patch_path)
-                        except OSError as exc:
-                            errors.append(f"armsx2: cannot read integration patch: {exc}")
-                        else:
-                            if patch_sha != ARMSX2_PATCH_SHA:
-                                errors.append("armsx2: integration patch SHA-256 mismatch")
+                        for patch in locked_patches:
+                            patch_path = ROOT / patch["path"]
+                            try:
+                                patch_sha = _sha256(patch_path)
+                            except OSError as exc:
+                                errors.append(f"armsx2: cannot read integration patch: {exc}")
+                            else:
+                                if patch_sha != patch["sha256"]:
+                                    errors.append("armsx2: integration patch SHA-256 mismatch")
             if build.get("recipe") != "engines/build_core.sh armsx2":
                 errors.append("armsx2: build recipe must name the pinned source recipe")
             if proof_path is None or proof_sha is None:
@@ -492,33 +518,49 @@ def validate(path: Path, *, verify_artifacts: bool = False,
             if commit != AZAHAR_COMMIT or archive_sha != AZAHAR_ARCHIVE_SHA:
                 errors.append("azahar: source is not official stable 2125.1.3 identity")
             if source.get("dependencyLock") != AZAHAR_DEPENDENCY_LOCK:
-                errors.append("azahar: release artifact lock path is inconsistent")
+                errors.append("azahar: source build lock path is inconsistent")
             else:
                 try:
                     lock_path = ROOT / AZAHAR_DEPENDENCY_LOCK
                     if _sha256(lock_path) != AZAHAR_DEPENDENCY_LOCK_SHA:
-                        errors.append("azahar: release artifact lock SHA-256 mismatch")
+                        errors.append("azahar: source build lock SHA-256 mismatch")
                     lock = json.loads(lock_path.read_text(encoding="utf-8"))
                 except (OSError, json.JSONDecodeError) as exc:
-                    errors.append(f"azahar: cannot read release artifact lock: {exc}")
+                    errors.append(f"azahar: cannot read source build lock: {exc}")
                 else:
                     core = lock.get("core", {})
-                    release = lock.get("releaseArtifact", {})
+                    release = lock.get("referenceReleaseArtifact", {})
                     if (core.get("repository") != repository or
                             core.get("commit") != commit or
                             core.get("archiveSha256") != archive_sha or
                             core.get("tag") != "2125.1.3"):
-                        errors.append("azahar: core identity and release artifact lock disagree")
+                        errors.append("azahar: core identity and source build lock disagree")
                     if (release.get("archiveSha256") != AZAHAR_RELEASE_ARCHIVE_SHA or
                             release.get("member") != "azahar_libretro.so" or
                             release.get("memberSha256") != AZAHAR_RELEASE_MEMBER_SHA):
                         errors.append("azahar: official Android release artifact identity is inconsistent")
-                    if lock.get("dependencies") != [] or lock.get("patches") != []:
-                        errors.append("azahar: published artifact lock has unexpected staged inputs")
+                    profile = lock.get("sourceBuild", {})
+                    if profile != {
+                            "artifactSha256": AZAHAR_SOURCE_MEMBER_SHA,
+                            "androidAbi": "arm64-v8a", "androidApi": 23,
+                            "ndkVersion": "27.0.12077973", "linkAlignment": 16384,
+                            "builtinKeyblob": False}:
+                        errors.append("azahar: source build profile is inconsistent")
+                    if (len(lock.get("dependencies", [])) != 52 or
+                            lock.get("patches") != [{
+                                "path": "engines/patches/azahar-android-strerror.patch",
+                                "sha256": "49d1f108da6cb40dc8b862bd080708ace1c0e8595c376b1ecccb98f5cf1a4861"}]):
+                        errors.append("azahar: source build closure is inconsistent")
+                    for patch in lock.get("patches", []):
+                        try:
+                            if _sha256(ROOT / patch["path"]) != patch["sha256"]:
+                                errors.append("azahar: source build patch hash mismatch")
+                        except (KeyError, OSError) as exc:
+                            errors.append(f"azahar: cannot verify source build patch: {exc}")
             if build.get("recipe") != "engines/build_core.sh azahar":
-                errors.append("azahar: recipe must verify the official release artifact")
-            if proof_sha != AZAHAR_RELEASE_MEMBER_SHA or proof_path is None:
-                errors.append("azahar: official release proof path or hash is missing")
+                errors.append("azahar: recipe must build the pinned Android source")
+            if proof_sha != AZAHAR_SOURCE_MEMBER_SHA or proof_path is None:
+                errors.append("azahar: source build proof path or hash is missing")
 
         if engine_id == "dolphin":
             if commit != DOLPHIN_COMMIT or archive_sha != DOLPHIN_ARCHIVE_SHA:
@@ -572,7 +614,7 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                         "normalizedByRemovingSection": ".note.gnu.build-id",
                         "normalizedArtifactSha256": DOLPHIN_ARTIFACT_SHA,
                         "rawBuildIds": [
-                            "9c20eeb796f8d53149ffe216be7756c0330dd430",
+                            "e48dde89c6c5a1a07bcfa11ee1252c669ed420db",
                         ],
                     }
                     if lock.get("cmakeOptions") != expected_options:
@@ -585,12 +627,33 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                             "presentation instead of incorrectly reporting a null duplicate "
                             "frame to Lucent."
                         ),
+                    }, {
+                        "path": DOLPHIN_STACK_PATCH,
+                        "sha256": DOLPHIN_STACK_PATCH_SHA,
+                        "purpose": (
+                            "Do not free Android's existing alternate signal stack on aborted "
+                            "startup; release only Dolphin's allocation and restore the previous "
+                            "stack on normal unload."
+                        ),
+                    }, {
+                        "path": DOLPHIN_DESCRIPTOR_PATCH,
+                        "sha256": DOLPHIN_DESCRIPTOR_PATCH_SHA,
+                        "purpose": (
+                            "Reject non-null output handles on failed Vulkan descriptor allocation, "
+                            "retry exhausted pools and bound fresh-pool failure without recursion."
+                        ),
                     }]
                     if lock.get("patches") != expected_patches:
                         errors.append("dolphin: compiler proof patch identity is inconsistent")
                     patch_path = ROOT / DOLPHIN_PATCH
                     if not patch_path.is_file() or _sha256(patch_path) != DOLPHIN_PATCH_SHA:
                         errors.append("dolphin: locked frontend patch is missing or changed")
+                    stack_patch = ROOT / DOLPHIN_STACK_PATCH
+                    if not stack_patch.is_file() or _sha256(stack_patch) != DOLPHIN_STACK_PATCH_SHA:
+                        errors.append("dolphin: locked signal-stack patch is missing or changed")
+                    descriptor_patch = ROOT / DOLPHIN_DESCRIPTOR_PATCH
+                    if not descriptor_patch.is_file() or _sha256(descriptor_patch) != DOLPHIN_DESCRIPTOR_PATCH_SHA:
+                        errors.append("dolphin: locked descriptor-allocation patch is missing or changed")
             if build.get("recipe") != "engines/build_core.sh dolphin":
                 errors.append("dolphin: build recipe must name the pinned source recipe")
             if proof_path is None or proof_sha != DOLPHIN_ARTIFACT_SHA:

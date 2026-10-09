@@ -30,7 +30,7 @@ public final class UpdateFileProvider extends ContentProvider {
         File file = updateFile();
         MatrixCursor cursor = new MatrixCursor(new String[]{
                 OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE});
-        cursor.addRow(new Object[]{"Lucent.apk", file.length()});
+        cursor.addRow(new Object[]{"EmuFusion.apk", file.length()});
         return cursor;
     }
     @Override public ParcelFileDescriptor openFile(Uri uri, String mode)

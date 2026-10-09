@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import zipfile
 from pathlib import Path
 
@@ -17,6 +18,16 @@ SBOM = "assets/phase2-sbom.spdx.json"
 PLAY_LOCK = "assets/phase2-play-source-lock.json"
 FLYCAST_LOCK = "assets/phase2-flycast-source-lock.json"
 ARMSX2_LOCK = "assets/phase2-armsx2-source-lock.json"
+ARMSX2_PATCHES = [
+    {"path": "engines/patches/armsx2-libretro-android-build.patch",
+     "sha256": "f8d1f6c46125ab953c9333eb57400a8f4ff339ea91ebc3221ab8638514bded78"},
+    {"path": "engines/patches/armsx2-libretro-frame-clock.patch",
+     "sha256": "c94ef2e4fc1440fbbfceef124433343df8f1bbddd320307dc6719effd838d49f"},
+    {"path": "engines/patches/armsx2-libretro-descriptor-batch.patch",
+     "sha256": "d7e781701ad7c05494310aebcc1750cc9f816289048b00d85ffbc1db9a95ff61"},
+    {"path": "engines/patches/armsx2-libretro-input-attachment.patch",
+     "sha256": "0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4"},
+]
 AZAHAR_LOCK = "assets/phase2-azahar-source-lock.json"
 DOLPHIN_LOCK = "assets/phase2-dolphin-source-lock.json"
 APPLEWIN_LOCK = "assets/phase2-applewin-source-lock.json"
@@ -88,6 +99,25 @@ def _asset_tree_sha256(archive: zipfile.ZipFile, root: str) -> str:
         file_hash = hashlib.sha256(archive.read(name)).hexdigest().encode("ascii")
         digest.update(relative + b"\0" + file_hash + b"\0")
     return digest.hexdigest()
+
+
+def verify_ps2_page_variant(archive, artifact, commit, sbom_checksums):
+    """Both memory geometries must be in this APK, with exact identities."""
+    name = "liblucent_core_armsx2_16k.so"
+    variants = artifact.get("pageSizeVariants", [])
+    if artifact.get("hostPageSize") != 4096 or len(variants) != 1:
+        return ["PS2 requires exactly the 4 KiB base and one 16 KiB variant"]
+    variant = variants[0]
+    if (variant.get("hostPageSize") != 16384 or variant.get("fileName") != name or
+            variant.get("sourceCommit") != commit):
+        return ["PS2 host-page variant has an invalid page size, file name, or source"]
+    try:
+        actual = hashlib.sha256(archive.read("lib/arm64-v8a/" + name)).hexdigest()
+    except KeyError:
+        return ["PS2 16 KiB core is missing from the APK"]
+    if variant.get("sha256") != actual or actual not in sbom_checksums:
+        return ["PS2 16 KiB core hash differs from manifest or SBOM"]
+    return []
 
 
 def verify(path: Path) -> list[str]:
@@ -204,8 +234,8 @@ def verify(path: Path) -> list[str]:
                     f"SBOM does not identify locked ARMSX2 dependency {dependency.get('path')}"
                 )
         armsx2_patches = armsx2_lock.get("patches", [])
-        if len(armsx2_patches) != 1:
-            errors.append("ARMSX2 source lock does not identify its integration patch")
+        if armsx2_patches != ARMSX2_PATCHES:
+            errors.append("ARMSX2 source lock does not identify the exact integration and frame-clock patches")
         for patch in armsx2_patches:
             package = sbom_by_name.get(patch.get("path"))
             checksums = [] if package is None else package.get("checksums", [])
@@ -248,7 +278,34 @@ def verify(path: Path) -> list[str]:
                 azahar_core.get("archiveSha256") !=
                 azahar_source.get("archiveSha256")):
             errors.append("Azahar source lock core identity differs from registry")
-        if (azahar_release.get("member") != "azahar_libretro.so" or
+        azahar_source_build = azahar_lock.get("sourceBuild")
+        if azahar_source_build is not None:
+            expected_profile = {
+                "androidAbi": "arm64-v8a", "androidApi": 23,
+                "ndkVersion": "27.0.12077973", "linkAlignment": 16384,
+                "builtinKeyblob": False,
+            }
+            if (azahar_release or not isinstance(azahar_source_build, dict) or
+                    any(azahar_source_build.get(k) != v for k, v in expected_profile.items()) or
+                    azahar_source_build.get("artifactSha256") !=
+                    (azahar_row.get("build") or {}).get("proofArtifactSha256")):
+                errors.append("Azahar source-build artifact/profile is inconsistent")
+            dependencies = azahar_lock.get("dependencies", [])
+            paths = [item.get("path") for item in dependencies]
+            if (len(dependencies) != 52 or len(set(paths)) != len(paths) or
+                    any(not isinstance(item.get("path"), str) or
+                        ".." in item["path"].split("/") or item["path"].startswith("/") or
+                        not str(item.get("repository", "")).startswith("https://github.com/") or
+                        not re.fullmatch(r"[0-9a-f]{40}", str(item.get("commit", ""))) or
+                        not re.fullmatch(r"[0-9a-f]{40}", str(item.get("gitTreeSha1", "")))
+                        for item in dependencies)):
+                errors.append("Azahar source-build recursive gitlink closure is invalid")
+            patches = azahar_lock.get("patches", [])
+            if (len(patches) != 1 or
+                    patches[0].get("path") != "engines/patches/azahar-android-strerror.patch" or
+                    not re.fullmatch(r"[0-9a-f]{64}", str(patches[0].get("sha256", "")))):
+                errors.append("Azahar source-build Android patch identity is invalid")
+        elif (azahar_release.get("member") != "azahar_libretro.so" or
                 azahar_release.get("memberSha256") !=
                 (azahar_row.get("build") or {}).get("proofArtifactSha256") or
                 not str(azahar_release.get("url", "")).startswith(
@@ -256,7 +313,7 @@ def verify(path: Path) -> list[str]:
                 azahar_release.get("archiveSha256") !=
                 AZAHAR_RELEASE_ARCHIVE_SHA256):
             errors.append("Azahar official release artifact lock is inconsistent")
-        if azahar_lock.get("dependencies") != [] or azahar_lock.get("patches") != []:
+        if azahar_source_build is None and (azahar_lock.get("dependencies") != [] or azahar_lock.get("patches") != []):
             errors.append("Azahar published-artifact lock has an unexpected staged closure")
 
         dolphin_row = rows.get("dolphin", {})
@@ -462,7 +519,29 @@ def verify(path: Path) -> list[str]:
                    for checksum in package.get("checksums", []))
         ), None)
         azahar_binary_package = sbom_by_name.get("liblucent_core_azahar.so")
-        if azahar_archive_package is None or azahar_binary_package is None:
+        if azahar_source_build is not None:
+            source_package = sbom_by_name.get("Azahar source")
+            if (azahar_binary_package is None or source_package is None or not any(
+                    value.get("spdxElementId") == azahar_binary_package.get("SPDXID") and
+                    value.get("relationshipType") == "GENERATED_FROM" and
+                    value.get("relatedSpdxElement") == source_package.get("SPDXID")
+                    for value in relationships)):
+                errors.append("SBOM does not bind Azahar source-built core to its source")
+            for dependency in azahar_lock.get("dependencies", []):
+                package = sbom_by_name.get(dependency.get("path"), {})
+                if (source_package is None or package.get("versionInfo") != dependency.get("commit") or
+                        {"algorithm": "SHA1", "checksumValue": dependency.get("gitTreeSha1")} not in package.get("checksums", []) or
+                        not any(value.get("spdxElementId") == source_package.get("SPDXID") and
+                                value.get("relationshipType") == "DEPENDS_ON" and
+                                value.get("relatedSpdxElement") == package.get("SPDXID")
+                                for value in relationships)):
+                    errors.append("SBOM does not bind Azahar Git dependency: " + str(dependency.get("path")))
+            if azahar_binary_package is not None and any(
+                    value.get("spdxElementId") == azahar_binary_package.get("SPDXID") and
+                    value.get("relationshipType") == "EXTRACTED_FROM"
+                    for value in relationships):
+                errors.append("SBOM incorrectly describes source-built Azahar as an extracted release")
+        elif azahar_archive_package is None or azahar_binary_package is None:
             errors.append("SBOM does not identify Azahar release archive and extracted core")
         else:
             extracted = any(
@@ -507,6 +586,8 @@ def verify(path: Path) -> list[str]:
                 errors.append(f"{engine_id} registry unexpectedly marks the engine shipped")
             if not archive.read(LICENSES[engine_id]).strip():
                 errors.append(f"{engine_id} license payload is empty")
+            if engine_id == "armsx2":
+                errors.extend(verify_ps2_page_variant(archive, identity, commit, sbom_checksums))
 
         ppsspp_root = "assets/phase2-system/ppsspp/PPSSPP/"
         if enabled.get("ppsspp", {}).get("systemAssetRoot") != \

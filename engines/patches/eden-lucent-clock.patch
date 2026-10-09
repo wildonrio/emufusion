@@ -1,0 +1,788 @@
+diff --git a/src/core/hle/service/nvdrv/devices/nvdisp_disp0.cpp b/src/core/hle/service/nvdrv/devices/nvdisp_disp0.cpp
+index 6e9fe9ec0..8146f0f0f 100644
+--- a/src/core/hle/service/nvdrv/devices/nvdisp_disp0.cpp
++++ b/src/core/hle/service/nvdrv/devices/nvdisp_disp0.cpp
+@@ -77,6 +77,8 @@ void nvdisp_disp0::Composite(std::span<const Nvnflinger::HwcLayer> sorted_layers
+             .transform_flags = layer.transform,
+             .crop_rect = layer.crop_rect,
+             .blending = ConvertBlending(layer.blending),
++            .source_header = layer.source_header,
++            .source_layer = layer.source_layer,
+         });
+ 
+         for (size_t i = 0; i < layer.acquire_fence.num_fences; i++) {
+diff --git a/src/core/hle/service/nvnflinger/display.h b/src/core/hle/service/nvnflinger/display.h
+index ada302a79..d1dc2df2b 100644
+--- a/src/core/hle/service/nvnflinger/display.h
++++ b/src/core/hle/service/nvnflinger/display.h
+@@ -6,6 +6,8 @@
+ 
+ #pragma once
+ 
++#include "common/lucent_source_image.h"
++
+ #include "core/hle/service/nvnflinger/buffer_item_consumer.h"
+ #include "core/hle/service/nvnflinger/hwc_layer.h"
+ 
+@@ -26,6 +28,8 @@ struct Layer {
+     bool visible;
+     s32 z_index;
+     bool is_overlay;
++    // Queue lifetime, not its reusable binder/slot number. Metadata only.
++    const u64 lucent_queue_epoch{Lucent::NextSourceEpoch()};
+ };
+ 
+ struct LayerStack {
+diff --git a/src/core/hle/service/nvnflinger/hardware_composer.cpp b/src/core/hle/service/nvnflinger/hardware_composer.cpp
+index e491b24a8..67d187375 100644
+--- a/src/core/hle/service/nvnflinger/hardware_composer.cpp
++++ b/src/core/hle/service/nvnflinger/hardware_composer.cpp
+@@ -115,6 +115,30 @@ u32 HardwareComposer::ComposeLocked(f32* out_speed_scale, Display& display,
+                 .transform = static_cast<android::BufferTransformFlags>(item.transform),
+                 .crop_rect = item.crop,
+                 .acquire_fence = item.fence,
++                .source_layer = {
++                    .queue_epoch = layer->lucent_queue_epoch,
++                    .queue_frame_number = item.frame_number,
++                    .guest_requested_timestamp_ns = item.timestamp,
++                    .consumer_id = consumer_id,
++                    .buffer_slot = item.slot,
++                    .raw_swap_interval = item.swap_interval,
++                    .normalized_swap_interval = NormalizeSwapInterval(nullptr, item.swap_interval),
++                    .flags = (result == CacheStatus::BufferAcquired ?
++                            LUCENT_SOURCE_LAYER_ACQUIRED : LUCENT_SOURCE_LAYER_HELD) |
++                            (layer->is_overlay ? LUCENT_SOURCE_LAYER_OVERLAY : 0u) |
++                            (item.is_auto_timestamp ? LUCENT_SOURCE_LAYER_AUTO_TIMESTAMP : 0u),
++                    .width = igbp_buffer.Width(),
++                    .height = igbp_buffer.Height(),
++                    .stride = igbp_buffer.Stride(),
++                    .pixel_format = static_cast<u32>(igbp_buffer.ExternalFormat()),
++                    .z_index = layer->z_index,
++                    .transform = static_cast<u32>(item.transform),
++                    .blending = static_cast<u32>(layer->blending),
++                    .crop_left = item.crop.left,
++                    .crop_top = item.crop.top,
++                    .crop_right = item.crop.right,
++                    .crop_bottom = item.crop.bottom,
++                },
+             });
+         }
+ 
+@@ -144,6 +168,12 @@ u32 HardwareComposer::ComposeLocked(f32* out_speed_scale, Display& display,
+         std::stable_sort(composition_stack.begin(), composition_stack.end(),
+                          [&](const HwcLayer& l, const HwcLayer& r) { return l.z_index < r.z_index; });
+ 
++        // Value-owned provenance follows the exact visible composition. The
++        // guest's queue frame number is never replaced with a VI/present count.
++        const auto source_header = Lucent::g_source_images.Composition(
++                display.id, static_cast<u32>(composition_stack.size()), Lucent::SourceMonotonicNs());
++        for (auto& layer : composition_stack) layer.source_header = source_header;
++
+         // Composite.
+         nvdisp.Composite(composition_stack);
+     }
+diff --git a/src/core/hle/service/nvnflinger/hwc_layer.h b/src/core/hle/service/nvnflinger/hwc_layer.h
+index f71a5d822..720e142d4 100644
+--- a/src/core/hle/service/nvnflinger/hwc_layer.h
++++ b/src/core/hle/service/nvnflinger/hwc_layer.h
+@@ -3,6 +3,8 @@
+ 
+ #pragma once
+ 
++#include "common/lucent_source_image_types.h"
++
+ #include "common/math_util.h"
+ #include "core/hle/service/nvdrv/nvdata.h"
+ #include "core/hle/service/nvnflinger/buffer_transform_flags.h"
+@@ -35,6 +37,8 @@ struct HwcLayer {
+     android::BufferTransformFlags transform;
+     Common::Rectangle<int> crop_rect;
+     android::Fence acquire_fence;
++    lucent_source_composition_header_v1 source_header{};
++    lucent_source_layer_v1 source_layer{};
+ };
+ 
+ } // namespace Service::Nvnflinger
+diff --git a/src/core/hle/service/vi/conductor.cpp b/src/core/hle/service/vi/conductor.cpp
+index fd7233cf9..19a5fb451 100644
+--- a/src/core/hle/service/vi/conductor.cpp
++++ b/src/core/hle/service/vi/conductor.cpp
+@@ -4,9 +4,11 @@
+ // SPDX-FileCopyrightText: Copyright 2024 yuzu Emulator Project
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include "common/lucent_pacing.h"
+ #include <algorithm>
+ 
+ #include "common/adpf.h"
++#include "common/logging.h"
+ #include "common/settings.h"
+ #include "common/thread.h"
+ #include "core/core.h"
+@@ -81,6 +83,14 @@ void Conductor::ProcessVsync() {
+         m_container.ComposeOnDisplay(&m_swap_interval, &m_compose_speed_scale, display_id);
+         manager.SignalVsync(m_system.Kernel());
+     }
++    const auto period_ns = this->GetFramePeriodNs();
++    const auto sequence = Lucent::RecordViCallback(m_swap_interval, period_ns);
++    if (sequence == 1 || sequence % 240 == 0) {
++        LOG_INFO(Service_VI,
++                 "EmuFusion VI diagnostic callbacks={} baseHz={:.9f} swapInterval={} "
++                 "compositionPeriodNs={} kind=callback-not-retired-guest-image",
++                 sequence, Lucent::BaseVsyncHz(), m_swap_interval, period_ns);
++    }
+ }
+ 
+ void Conductor::VsyncThread(std::stop_token token) {
+@@ -101,12 +111,12 @@ void Conductor::VsyncThread(std::stop_token token) {
+ 
+ s64 Conductor::GetNextTicks() const {
+     const auto& settings = Settings::values;
+-    auto speed_scale = 1.f;
++    double speed_scale = 1.0;
+     if (settings.use_multi_core.GetValue()) {
+         if (settings.use_speed_limit.GetValue()) {
+             // Scales the speed based on speed_limit setting on MC. SC is handled by
+             // SpeedLimiter::DoSpeedLimiting.
+-            speed_scale = 100.f / Settings::SpeedLimit();
++            speed_scale = 100.0 / Settings::SpeedLimit();
+         } else {
+             // Run at unlocked framerate.
+             speed_scale = 0.01f;
+@@ -121,25 +131,31 @@ s64 Conductor::GetNextTicks() const {
+         speed_scale = 1.f;
+     }
+ 
+-    const f32 effective_fps = 60.f / static_cast<f32>(m_swap_interval);
+-    return static_cast<s64>(speed_scale * (1000000000.f / effective_fps));
++    // A bounded fractional base-clock correction preserves the game's own
++    // swap interval; a 30-image game on a 60-Hz base does not become a 30-Hz guest.
++    const double lucent_paced_hz = Lucent::PacedVsyncHz();
++    const double base_fps = lucent_paced_hz > 0.0 ? lucent_paced_hz : Lucent::kDeclaredVsyncHz;
++    const auto period = Lucent::CompositionPeriodNs(base_fps, m_swap_interval, speed_scale);
++    return period > 0 ? period : FrameNs.count();
+ }
+ 
+ s64 Conductor::GetFramePeriodNs() const {
+     const auto& settings = Settings::values;
+-    f32 speed_scale = 1.f;
++    double speed_scale = 1.0;
+     bool unlocked = false;
+     if (settings.use_multi_core.GetValue()) {
+         if (settings.use_speed_limit.GetValue()) {
+-            speed_scale = 100.f / Settings::SpeedLimit();
++            speed_scale = 100.0 / Settings::SpeedLimit();
+         } else {
+             unlocked = true;
+         }
+     }
+     speed_scale /= m_compose_speed_scale;
+ 
+-    const f32 effective_fps = 60.f / static_cast<f32>(m_swap_interval);
+-    s64 period = static_cast<s64>(speed_scale * (1000000000.f / effective_fps));
++    const double lucent_paced_hz = Lucent::PacedVsyncHz();
++    const double base_fps = lucent_paced_hz > 0.0 ? lucent_paced_hz : Lucent::kDeclaredVsyncHz;
++    s64 period = Lucent::CompositionPeriodNs(base_fps, m_swap_interval, speed_scale);
++    if (period <= 0) period = FrameNs.count();
+     if (unlocked) {
+         period /= UNLOCKED_TARGET_DIVISOR;
+     }
+diff --git a/src/video_core/framebuffer_config.h b/src/video_core/framebuffer_config.h
+index 8b2a49de5..83f943104 100644
+--- a/src/video_core/framebuffer_config.h
++++ b/src/video_core/framebuffer_config.h
+@@ -4,6 +4,7 @@
+ #pragma once
+ 
+ #include "common/common_types.h"
++#include "common/lucent_source_image_types.h"
+ #include "common/math_util.h"
+ #include "core/hle/service/nvnflinger/buffer_transform_flags.h"
+ #include "core/hle/service/nvnflinger/pixel_format.h"
+@@ -30,6 +31,8 @@ struct FramebufferConfig {
+     Service::android::BufferTransformFlags transform_flags{};
+     Common::Rectangle<int> crop_rect{};
+     BlendMode blending{};
++    lucent_source_composition_header_v1 source_header{};
++    lucent_source_layer_v1 source_layer{};
+ };
+ 
+ Common::Rectangle<f32> NormalizeCrop(const FramebufferConfig& framebuffer, u32 texture_width,
+diff --git a/src/video_core/gpu.cpp b/src/video_core/gpu.cpp
+index a44015c0d..e44a92e63 100644
+--- a/src/video_core/gpu.cpp
++++ b/src/video_core/gpu.cpp
+@@ -284,6 +284,18 @@ struct GPU::Impl {
+         WaitForSyncOperation(fence);
+     }
+ 
++    bool SetPresentationSuspended(bool suspended) {
++        bool success = false;
++        const u64 fence = RequestSyncOperation([this, suspended, &success] {
++            success = renderer->SetPresentationSuspended(suspended);
++        });
++        // Guest timing may already be paused. Explicitly wake the GPU owner;
++        // do not wait for another guest frame to run this lifecycle request.
++        gpu_thread.TickGPU(is_async);
++        WaitForSyncOperation(fence);
++        return success;
++    }
++
+     std::vector<u8> GetAppletCaptureBuffer() {
+         std::vector<u8> out;
+ 
+@@ -393,6 +405,10 @@ void GPU::WaitForSyncOperation(u64 fence) {
+     return impl->WaitForSyncOperation(fence);
+ }
+ 
++bool GPU::SetPresentationSuspended(bool suspended) {
++    return impl->SetPresentationSuspended(suspended);
++}
++
+ void GPU::TickWork() {
+     impl->TickWork();
+ }
+diff --git a/src/video_core/gpu.h b/src/video_core/gpu.h
+index 8d4a101fd..1935c4466 100644
+--- a/src/video_core/gpu.h
++++ b/src/video_core/gpu.h
+@@ -168,6 +168,9 @@ public:
+ 
+     void WaitForSyncOperation(u64 fence);
+ 
++    /// Lifecycle-only GPU-owner barrier. Caller must keep the session alive.
++    bool SetPresentationSuspended(bool suspended);
++
+     /// Tick pending requests within the GPU.
+     void TickWork();
+ 
+diff --git a/src/video_core/renderer_base.h b/src/video_core/renderer_base.h
+index 67427f937..e00f33f6b 100644
+--- a/src/video_core/renderer_base.h
++++ b/src/video_core/renderer_base.h
+@@ -40,6 +40,11 @@ public:
+     /// Finalize rendering the guest frame and draw into the presentation texture
+     virtual void Composite(std::span<const Tegra::FramebufferConfig> layers) = 0;
+ 
++    // Invoked on the GPU owner, never on a presenter or Java UI thread.
++    // Android surface detachment must wait for this barrier to complete.
++    virtual bool SetPresentationSuspended(bool suspended) { return true; }
++    virtual bool HasPresentationFailure() const { return false; }
++
+     /// Get the tiled applet layer capture buffer
+     virtual std::vector<u8> GetAppletCaptureBuffer() = 0;
+ 
+diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.cpp b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+index b0a7d0c57..9da3f9c84 100644
+--- a/src/video_core/renderer_vulkan/renderer_vulkan.cpp
++++ b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+@@ -15,6 +15,7 @@
+ #include <fmt/ranges.h>
+ 
+ #include "common/logging.h"
++#include "common/lucent_source_image.h"
+ #include <ranges>
+ #include "common/scope_exit.h"
+ #include "common/settings.h"
+@@ -178,6 +179,11 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
+         render_window.OnFrameDisplayed();
+     };
+ 
++    std::scoped_lock lifecycle_lock{presentation_lifecycle_mutex};
++    if (presentation_suspended || present_manager.HasPresentationFailure()) {
++        return;
++    }
++
+     RenderAppletCaptureLayer(framebuffers);
+ 
+     if (!render_window.IsShown()) {
+@@ -186,6 +192,13 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
+ 
+     RenderScreenshot(framebuffers);
+     Frame* frame = present_manager.GetRenderFrame();
++    if (frame == nullptr) {
++        return;
++    }
++    for (const auto& framebuffer : framebuffers) {
++        Lucent::AppendSourceLayer(frame->source_image, framebuffer.source_header,
++                                  framebuffer.source_layer);
++    }
+ 
+     scheduler.RequestOutsideRenderPassOperationContext();
+     blit_swapchain.DrawToFrame(device, rasterizer, frame, framebuffers,
+@@ -199,6 +212,38 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
+     rasterizer.TickFrame();
+ }
+ 
++bool RendererVulkan::SetPresentationSuspended(bool suspended) {
++    std::scoped_lock lifecycle_lock{presentation_lifecycle_mutex};
++    if (!suspended) {
++        if (present_manager.HasPresentationFailure()) {
++            return false; // A failed renderer requires a fresh session.
++        }
++        // SurfaceChanged has published the replacement window before resume.
++        present_manager.RequestSurfaceRecreation();
++        presentation_suspended = false;
++        return true;
++    }
++    presentation_suspended = true;
++    // This runs on the GPU owner, not an arbitrary lifecycle thread: touching
++    // Scheduler's current chunk concurrently with GPU rendering is unsafe.
++    // WaitWorker must precede WaitPresent so deferred enqueue records land.
++    // Neither wait runs under submit_mutex (the workers need that lock).
++    scheduler.WaitWorker();
++    present_manager.WaitPresent();
++    std::scoped_lock submit_lock{scheduler.submit_mutex};
++    const VkResult result = device.GetLogical().WaitIdle();
++    if (result != VK_SUCCESS) {
++        present_manager.RecordPresentationFailure(result);
++    }
++    LOG_INFO(Render_Vulkan, "Lucent presentation suspended: owner/worker/present/GPU drained; failed={}",
++             present_manager.HasPresentationFailure());
++    return !present_manager.HasPresentationFailure();
++}
++
++bool RendererVulkan::HasPresentationFailure() const {
++    return present_manager.HasPresentationFailure();
++}
++
+ void RendererVulkan::Report() const {
+     using namespace Common::Literals;
+     const std::string vendor_name{device.GetVendorName()};
+diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.h b/src/video_core/renderer_vulkan/renderer_vulkan.h
+index 4fb88b29d..6b31c8520 100644
+--- a/src/video_core/renderer_vulkan/renderer_vulkan.h
++++ b/src/video_core/renderer_vulkan/renderer_vulkan.h
+@@ -45,6 +45,8 @@ public:
+     ~RendererVulkan() override;
+ 
+     void Composite(std::span<const Tegra::FramebufferConfig> framebuffers) override;
++    bool SetPresentationSuspended(bool suspended) override;
++    bool HasPresentationFailure() const override;
+ 
+     std::vector<u8> GetAppletCaptureBuffer() override;
+ 
+@@ -60,6 +62,10 @@ public:
+     void InitializePlatformSpecific();
+ 
+ private:
++    // Composite can also arrive through a delayed guest-fence action. Protect
++    // the entire admission boundary, including allocation of a present frame.
++    std::mutex presentation_lifecycle_mutex;
++    bool presentation_suspended = false;
+     void InterpolateFrames(Frame* prev_frame, Frame* curr_frame);
+     Frame* previous_frame = nullptr;  // Store the previous frame for interpolation
+     VkCommandBuffer BeginSingleTimeCommands();
+diff --git a/src/video_core/renderer_vulkan/vk_present_manager.cpp b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+index 90ebb55d3..3182dc1ae 100644
+--- a/src/video_core/renderer_vulkan/vk_present_manager.cpp
++++ b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+@@ -154,6 +154,12 @@ Frame* PresentManager::GetRenderFrame() {
+     std::unique_lock lock{free_mutex};
+     free_cv.wait(lock, [this] { return !free_queue.empty(); });
+ 
++    // A failed copy may not have submitted its completion fence. Never reuse
++    // those frames or wait that unsignalled fence; fail the whole session.
++    if (HasPresentationFailure()) {
++        return nullptr;
++    }
++
+     // Take the frame from the queue
+     Frame* frame = free_queue.front();
+     free_queue.pop_front();
+@@ -161,6 +167,8 @@ Frame* PresentManager::GetRenderFrame() {
+     // Wait for the presentation to be finished so all frame resources are free
+     frame->present_done.Wait();
+     frame->present_done.Reset();
++    frame->source_image = {};
++    frame->copy_submitted = false;
+ 
+     return frame;
+ }
+@@ -293,6 +301,14 @@ void PresentManager::PresentThread(std::stop_token token) {
+ }
+ 
+ void PresentManager::RecreateSwapchain(Frame* frame) {
++    // Also covers resize/out-of-date/suboptimal without a surface replacement.
++    // Semaphores and the old swapchain cannot be destroyed while submitted
++    // copy/present operations still reference them.
++    std::scoped_lock submit_lock{scheduler.submit_mutex};
++    const VkResult result = device.GetLogical().WaitIdle();
++    if (result != VK_SUCCESS) {
++        throw vk::Exception(result);
++    }
+     swapchain.Create(*surface, frame->width, frame->height); // Pass raw pointer
+     SetImageCount();
+ }
+@@ -305,14 +321,39 @@ void PresentManager::SetImageCount() {
+ }
+ 
+ void PresentManager::CopyToSwapchain(Frame* frame) {
+-    bool requires_recreation = false;
++    if (HasPresentationFailure()) {
++        return;
++    }
++    bool requires_recreation = surface_recreation_requested.exchange(false);
++    bool attempted_recreation = false;
+ 
+     while (true) {
+         try {
+             // Recreate surface and swapchain if needed.
+             if (requires_recreation) {
++                attempted_recreation = true;
+ #ifdef __ANDROID__
++                {
++                // The Android loader's swapchain borrows its Surface object;
++                // that Surface owns the ANativeWindow strong reference. Move
++                // assignment used to destroy it BEFORE Swapchain::Create
++                // destroyed the old swapchain, causing a destroyed Surface
++                // mutex abort on sleep/wake. Retire in dependency order while
++                // the existing presentation owner excludes competing presents.
++                // Queue submissions share this mutex, so WaitIdle cannot race
++                // another scheduler submission during the retirement barrier.
++                std::scoped_lock submit_lock{scheduler.submit_mutex};
++                const VkResult idle_result = device.GetLogical().WaitIdle();
++                if (idle_result != VK_SUCCESS) {
++                    throw vk::Exception(idle_result);
++                }
++                swapchain.RetireBeforeSurfaceReplacement();
++                // Release the old producer connection before creating a new
++                // Surface for the SAME ANativeWindow (pause/resize may keep
++                // window identity). JNI still retains the current window.
++                surface.reset();
+                 surface = CreateSurface(instance, render_window.GetWindowInfo());
++                } // RecreateSwapchain takes submit_mutex for its own barrier.
+ #endif
+                 RecreateSwapchain(frame);
+             }
+@@ -320,8 +361,24 @@ void PresentManager::CopyToSwapchain(Frame* frame) {
+             // Draw to swapchain.
+             return CopyToSwapchainImpl(frame);
+         } catch (const vk::Exception& except) {
+-            if (except.GetResult() != VK_ERROR_SURFACE_LOST_KHR) {
+-                throw;
++            if (except.GetResult() == VK_ERROR_SURFACE_LOST_KHR && frame->copy_submitted) {
++                // QueueSubmit already consumed render_ready and owns the
++                // present_done fence. Retrying this same frame would wait a
++                // consumed binary semaphore / submit an in-use fence. Preserve
++                // the failed present, and recreate for the NEXT fresh frame.
++                if (attempted_recreation) {
++                    RecordPresentationFailure(except.GetResult());
++                } else {
++                    surface_recreation_requested.store(true);
++                }
++                return;
++            }
++            if (except.GetResult() != VK_ERROR_SURFACE_LOST_KHR || attempted_recreation) {
++                // Never unwind out of GPU/presenter threads. This is NOT a
++                // recovered frame: latch failure, abandon reuse of all frame
++                // fences, and report failure through adapter_run_frame.
++                RecordPresentationFailure(except.GetResult());
++                return;
+             }
+ 
+             requires_recreation = true;
+@@ -329,6 +386,14 @@ void PresentManager::CopyToSwapchain(Frame* frame) {
+     }
+ }
+ 
++void PresentManager::RecordPresentationFailure(VkResult result) {
++    VkResult expected = VK_SUCCESS;
++    if (result != VK_SUCCESS && presentation_failure.compare_exchange_strong(expected, result)) {
++        LOG_ERROR(Render_Vulkan, "Lucent presentation failed permanently: {}; restart required",
++                  static_cast<int>(result));
++    }
++}
++
+ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+ 
+     // If the size of the incoming frames has changed, recreate the swapchain
+@@ -340,7 +405,12 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+         RecreateSwapchain(frame);
+     }
+ 
+-    while (swapchain.AcquireNextImage()) {
++    for (unsigned acquire_retry = 0; swapchain.AcquireNextImage(); ++acquire_retry) {
++        if (acquire_retry >= 1) {
++            // An abandoned/continually out-of-date target cannot hold the GPU
++            // owner (and a lifecycle barrier) in an unbounded recreate loop.
++            throw vk::Exception(VK_ERROR_OUT_OF_DATE_KHR);
++        }
+         RecreateSwapchain(frame);
+     }
+ 
+@@ -488,7 +558,8 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+     }
+ 
+     // Present
+-    swapchain.Present(render_semaphore);
++    frame->copy_submitted = true;
++    swapchain.Present(render_semaphore, &frame->source_image);
+ }
+ 
+ } // namespace Vulkan
+diff --git a/src/video_core/renderer_vulkan/vk_present_manager.h b/src/video_core/renderer_vulkan/vk_present_manager.h
+index c51f8ed77..c96c50f60 100644
+--- a/src/video_core/renderer_vulkan/vk_present_manager.h
++++ b/src/video_core/renderer_vulkan/vk_present_manager.h
+@@ -7,10 +7,12 @@
+ #pragma once
+ 
+ #include <condition_variable>
++#include <atomic>
+ #include <mutex>
+ #include <boost/container/deque.hpp>
+ 
+ #include "common/common_types.h"
++#include "common/lucent_source_image_types.h"
+ #include "common/polyfill_thread.h"
+ #include "video_core/vulkan_common/vulkan_memory_allocator.h"
+ #include "video_core/vulkan_common/vulkan_wrapper.h"
+@@ -34,6 +36,8 @@ struct Frame {
+     vk::CommandBuffer cmdbuf;
+     vk::Semaphore render_ready;
+     vk::Fence present_done;
++    lucent_source_composition_v1 source_image{};
++    bool copy_submitted = false;
+ };
+ 
+ class PresentManager {
+@@ -60,6 +64,10 @@ public:
+     /// Waits for the present thread to finish presenting all queued frames.
+     void WaitPresent();
+ 
++    void RequestSurfaceRecreation() { surface_recreation_requested.store(true); }
++    bool HasPresentationFailure() const { return presentation_failure.load() != VK_SUCCESS; }
++    void RecordPresentationFailure(VkResult result);
++
+ private:
+     void PresentThread(std::stop_token token);
+ 
+@@ -92,6 +100,8 @@ private:
+     bool blit_supported;
+     bool use_present_thread;
+     std::size_t image_count{};
++    std::atomic<bool> surface_recreation_requested{false};
++    std::atomic<VkResult> presentation_failure{VK_SUCCESS};
+ };
+ 
+ } // namespace Vulkan
+diff --git a/src/video_core/renderer_vulkan/vk_swapchain.cpp b/src/video_core/renderer_vulkan/vk_swapchain.cpp
+index fdbad1672..19736b24f 100644
+--- a/src/video_core/renderer_vulkan/vk_swapchain.cpp
++++ b/src/video_core/renderer_vulkan/vk_swapchain.cpp
+@@ -4,7 +4,11 @@
+ // SPDX-FileCopyrightText: Copyright 2019 yuzu Emulator Project
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include "common/lucent_pacing.h"
++#include "common/lucent_source_image.h"
+ #include <algorithm>
++#include <chrono>
++#include <cmath>
+ #include <array>
+ #include <limits>
+ #include <vector>
+@@ -143,7 +147,9 @@ void Swapchain::Create(
+     const auto physical_device = device.GetPhysical();
+     const auto capabilities{physical_device.GetSurfaceCapabilitiesKHR(VkSurfaceKHR(surface))};
+     if (capabilities.maxImageExtent.width == 0 || capabilities.maxImageExtent.height == 0) {
+-        return;
++        // In particular, surface replacement may already have retired the old
++        // swapchain. Returning would let acquisition index empty semaphores.
++        throw vk::Exception(VK_ERROR_OUT_OF_DATE_KHR);
+     }
+ 
+     Destroy();
+@@ -151,6 +157,9 @@ void Swapchain::Create(
+     CreateSwapchain(capabilities);
+     CreateSemaphores();
+ 
++    // This epoch changes only after an actual swapchain has been recreated.
++    Lucent::g_source_images.NewSwapchain();
++
+     resource_ticks.clear();
+     resource_ticks.resize(image_count);
+ }
+@@ -167,12 +176,13 @@ bool Swapchain::AcquireNextImage() {
+         break;
+     case VK_ERROR_OUT_OF_DATE_KHR:
+         is_outdated = true;
+-        break;
++        return true; // No image/semaphore was acquired; image_index is not valid.
+     case VK_ERROR_SURFACE_LOST_KHR:
+         vk::Check(result);
+         break;
+     default:
+         LOG_ERROR(Render_Vulkan, "vkAcquireNextImageKHR returned {}", string_VkResult(result));
++        vk::Check(result);
+         break;
+     }
+ 
+@@ -208,14 +218,51 @@ bool Swapchain::AcquireNextImage() {
+ 
+     resource_ticks[image_index] = scheduler.CurrentTick();
+ 
+-    return is_suboptimal || is_outdated;
++    // SUBOPTIMAL still acquires an image and signals its semaphore: consume
++    // that image normally, then NeedsRecreation rebuilds on the next frame.
++    return false;
+ }
+ 
+-void Swapchain::Present(VkSemaphore render_semaphore) {
++void Swapchain::Present(VkSemaphore render_semaphore,
++                        const lucent_source_composition_v1* source_image) {
+     const auto present_queue{device.GetPresentQueue()};
++    const void* present_next = nullptr;
++    uint64_t source_record_token = 0;
++#ifdef __ANDROID__
++    // This is a monotonic submission-time diagnostic, NOT a guest frame clock
++    // or image identity. Quantizing wall time onto 60-Hz slots manufactures
++    // cadence when rendering stalls; preserve the actual submission time.
++    const auto submission_sequence = Lucent::RecordSubmissionAttempt();
++    const auto now_ns = Lucent::SourceMonotonicNs();
++    VkPresentTimesInfoGOOGLE lucent_present_times{};
++    VkPresentTimeGOOGLE lucent_present_time{};
++    if (device.HasLucentDisplayTiming() && Lucent::UsesFgPresentation()) {
++        lucent_present_time.presentID = static_cast<u32>(submission_sequence);
++        lucent_present_time.desiredPresentTime = static_cast<u64>(now_ns);
++        lucent_present_times.sType = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE;
++        lucent_present_times.pNext = nullptr;
++        lucent_present_times.swapchainCount = 1;
++        lucent_present_times.pTimes = &lucent_present_time;
++        present_next = &lucent_present_times;
++    }
++    if (source_image && Lucent::UsesFgPresentation()) {
++        source_record_token = Lucent::g_source_images.BeginPresent(
++                *source_image, now_ns, static_cast<u32>(submission_sequence),
++                static_cast<u32>(image_index), device.HasLucentDisplayTiming());
++    }
++    if (submission_sequence == 1 || submission_sequence % 240 == 0) {
++        LOG_INFO(Render_Vulkan,
++                 "EmuFusion Vulkan timing submissionAttempt={} monotonicSubmitNs={} "
++                 "displayTiming={} baseHz={:.9f} sampledViCallbacks={} "
++                 "sampledSwapInterval={} sourceIdentity=unjoined physicalPresent=unverified",
++                 submission_sequence, now_ns, device.HasLucentDisplayTiming(),
++                 Lucent::BaseVsyncHz(), Lucent::g_vi_callbacks.load(std::memory_order_relaxed),
++                 Lucent::g_last_swap_interval.load(std::memory_order_relaxed));
++    }
++#endif
+     const VkPresentInfoKHR present_info{
+         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+-        .pNext = nullptr,
++        .pNext = present_next,
+         .waitSemaphoreCount = render_semaphore ? 1U : 0U,
+         .pWaitSemaphores = &render_semaphore,
+         .swapchainCount = 1,
+@@ -224,7 +271,10 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
+         .pResults = nullptr,
+     };
+     std::scoped_lock lock{scheduler.submit_mutex};
+-    switch (const VkResult result = present_queue.Present(present_info)) {
++    const VkResult result = present_queue.Present(present_info);
++    Lucent::g_source_images.FinishPresent(source_record_token, static_cast<int32_t>(result),
++                                        result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR);
++    switch (result) {
+     case VK_SUCCESS:
+         break;
+     case VK_SUBOPTIMAL_KHR:
+@@ -238,6 +288,9 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
+         break;
+     default:
+         LOG_CRITICAL(Render_Vulkan, "Failed to present with error {}", string_VkResult(result));
++        // Surface lifecycle handling owns the failure boundary; do not leave
++        // the adapter reporting a live/successful renderer after a failed present.
++        vk::Check(result);
+         break;
+     }
+     ++frame_index;
+@@ -362,6 +415,13 @@ void Swapchain::Destroy() {
+     swapchain.reset();
+ }
+ 
++void Swapchain::RetireBeforeSurfaceReplacement() {
++    Destroy();
++    surface = nullptr;
++    resource_ticks.clear();
++    image_count = 0;
++}
++
+ bool Swapchain::NeedsPresentModeUpdate() const {
+     const auto requested_mode = ChooseSwapPresentMode(has_imm, has_mailbox, has_fifo_relaxed);
+     return present_mode != requested_mode;
+diff --git a/src/video_core/renderer_vulkan/vk_swapchain.h b/src/video_core/renderer_vulkan/vk_swapchain.h
+index d926cc118..bb451ec8b 100644
+--- a/src/video_core/renderer_vulkan/vk_swapchain.h
++++ b/src/video_core/renderer_vulkan/vk_swapchain.h
+@@ -6,6 +6,8 @@
+ 
+ #pragma once
+ 
++#include "common/lucent_source_image_types.h"
++
+ #include <vector>
+ 
+ #include "common/common_types.h"
+@@ -36,11 +38,16 @@ public:
+         u32 width,
+         u32 height);
+ 
++    /// After queue/device quiescence, retire before destroying the owning
++    /// VkSurfaceKHR. Android swapchains borrow the loader Surface object.
++    void RetireBeforeSurfaceReplacement();
++
+     /// Acquires the next image in the swapchain, waits as needed.
+     bool AcquireNextImage();
+ 
+     /// Presents the rendered image to the swapchain.
+-    void Present(VkSemaphore render_semaphore);
++    void Present(VkSemaphore render_semaphore,
++                 const lucent_source_composition_v1* source_image = nullptr);
+ 
+     /// Returns true when the swapchain needs to be recreated.
+     bool NeedsRecreation() const {
+diff --git a/src/video_core/vulkan_common/vulkan_device.cpp b/src/video_core/vulkan_common/vulkan_device.cpp
+index 8c41a7eb6..c13c26887 100644
+--- a/src/video_core/vulkan_common/vulkan_device.cpp
++++ b/src/video_core/vulkan_common/vulkan_device.cpp
+@@ -989,6 +989,16 @@ bool Device::GetSuitability(bool requires_swapchain) {
+ #undef FEATURE_EXTENSION
+ #undef EXTENSION
+ 
++#ifdef __ANDROID__
++    // Lucent (2026-09-01): VK_GOOGLE_display_timing lets the Android loader
++    // stamp each presented buffer with desiredPresentTime, which the host's
++    // frame generator reads as an immutable source timeline.
++    if (supported_extensions.contains(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME)) {
++        loaded_extensions.insert(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
++        lucent_display_timing = true;
++    }
++#endif
++
+ // Some extensions are mandatory. Check those.
+ #define CHECK_EXTENSION(extension_name)                                                            \
+     if (!loaded_extensions.contains(extension_name)) {                                             \
+diff --git a/src/video_core/vulkan_common/vulkan_device.h b/src/video_core/vulkan_common/vulkan_device.h
+index 270828129..727e93ad7 100644
+--- a/src/video_core/vulkan_common/vulkan_device.h
++++ b/src/video_core/vulkan_common/vulkan_device.h
+@@ -274,6 +274,11 @@ public:
+     }
+ 
+     /// Returns the main present queue.
++    /// Lucent: true when VK_GOOGLE_display_timing was loaded (Android).
++    bool HasLucentDisplayTiming() const {
++        return lucent_display_timing;
++    }
++
+     vk::Queue GetPresentQueue() const {
+         return present_queue;
+     }
+@@ -1189,6 +1194,7 @@ private:
+     // Telemetry parameters
+     std::set<std::string, std::less<>> supported_extensions; ///< Reported Vulkan extensions.
+     std::set<std::string, std::less<>> loaded_extensions;    ///< Loaded Vulkan extensions.
++    bool lucent_display_timing{};                            ///< VK_GOOGLE_display_timing loaded (Lucent).
+     std::vector<size_t> valid_heap_memory;                   ///< Heaps used.
+ 
+     /// Format properties dictionary.

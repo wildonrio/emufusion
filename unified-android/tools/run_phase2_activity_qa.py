@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Qualify Lucent's runnable Phase 2 engines on an authorized AYN Thor.
+"""Qualify EmuFusion's runnable Phase 2 engines on an authorized AYN Thor.
 
 This harness deliberately requires user-supplied game images. It verifies that
-Lucent's one MainActivity/Window owns both library and in-process gameplay,
+EmuFusion's one MainActivity/Window owns both library and in-process gameplay,
 injects an A-button through the Thor's real Odin Controller input node, observes
-live video/audio health, commits Quick Resume, kills Lucent, and proves a live
+live video/audio health, commits Quick Resume, kills EmuFusion, and proves a live
 restore in a new process.
 """
 
@@ -475,7 +475,7 @@ def image_metrics(path: Path) -> dict[str, int | float | bool]:
         "edgeCorruptionDetected": corrupted_edge,
         "visualIntegrity": visual_integrity,
         # Phase 2's real PSP/PS2 titles are content-heavy. A lower threshold
-        # would let Lucent's small "Preparing …" label masquerade as a restored
+        # would let EmuFusion's small "Preparing …" label masquerade as a restored
         # game frame.
         "visible": (visible >= 50_000 and distinct >= 8 and
                     dominant_fraction < 0.98 and visual_integrity),
@@ -541,7 +541,7 @@ def exit_to_lucent(adb_path: Path, serial: str, case: Case,
     marker = f"Exit to Lucent invoked engine={case.engine} system={case.system}"
     # Exercise the Thor's user-facing Stop/Select contract itself: a short
     # press remains PSP Select, while a physical hold over one second saves and
-    # returns to Lucent without relying on pause-menu state.
+    # returns to EmuFusion without relying on pause-menu state.
     phase1_qa_module().send_linux_key(
         adb_path, serial, event_node, 314, hold_seconds=1.15
     )
@@ -910,7 +910,7 @@ def main() -> int:
 
     args.output.mkdir(parents=True, exist_ok=True)
     apk = args.apk.resolve()
-    adb(args.adb, args.serial, "install", "-r", "-d", str(apk))
+    adb(args.adb, args.serial, "install", "--no-incremental", "-r", "-d", str(apk))
     adb(args.adb, args.serial, "shell", "pm", "grant", PACKAGE,
         "android.permission.POST_NOTIFICATIONS", check=False)
     adb(args.adb, args.serial, "shell", "appops", "set", "--uid", PACKAGE,

@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-06",
+  "included": [
+    {
+      "id": "libretro-database",
+      "source": "https://github.com/libretro/libretro-database",
+      "distribution": "https://buildbot.libretro.com/assets/frontend/cheats.zip",
+      "license": "CC-BY-SA-4.0",
+      "snapshotSha256": "13bcd12479d0c2fb81ab30379261ef5c9019b9eb19b1c1e4284d06ec998bebfd",
+      "snapshotBytes": 37144264,
+      "cheatFiles": 28301,
+      "nonemptyCodeRows": 1197383,
+      "usableCodeRowsAfterPlaceholderFilter": 1190125,
+      "rejectedPlaceholderRows": 7258,
+      "delivery": "downloaded during the normal update session and retained compressed"
+    },
+    {
+      "id": "dolphin-game-settings",
+      "source": "https://github.com/dolphin-emu/dolphin",
+      "commit": "0ff12a5a2835762e0665afe6a161a648b433f996",
+      "license": "GPL-2.0-or-later",
+      "gameIds": 261,
+      "cheats": 4071,
+      "delivery": "deterministically generated and bundled for exact disc Game-ID lookup"
+    }
+  ],
+  "reviewedButExcluded": [
+    {
+      "id": "wiird-code-database",
+      "reason": "Dolphin can query this third-party service, but no redistributable database license was established; the bundled Dolphin GameSettings codes are used instead. Not bundled or redistributed; as of 2026-09-06 the device may fetch it on the owner's request (see deviceFetched)."
+    },
+    {
+      "id": "pcsx2-patches",
+      "source": "https://github.com/PCSX2/pcsx2_patches",
+      "reason": "The repository does not declare a database license and patches are not a live cheat ABI for the packaged PS2 cores. Not bundled or redistributed; as of 2026-09-06 the device may fetch it on the owner's request (see deviceFetched)."
+    },
+    {
+      "id": "cemu-graphic-packs",
+      "source": "https://github.com/cemu-project/cemu_graphic_packs",
+      "license": "CC0-1.0",
+      "reason": "Graphic packs are not a generic per-code cheat database, and the current Cemu adapter exposes no live cheat toggle API. Not bundled or redistributed; as of 2026-09-06 the device may fetch it on the owner's request (see deviceFetched)."
+    },
+    {
+      "id": "community-ppsspp-and-switch-dumps",
+      "reason": "The prolific repositories reviewed did not declare a license permitting EmuFusion to aggregate and redistribute their code collections. Not bundled or redistributed; as of 2026-09-06 the device may fetch it on the owner's request (see deviceFetched)."
+    }
+  ],
+  "deviceFetchedPolicy": "Every entry below is fetched by the owner's device, on the owner's request, from the upstream URL during the per-game metadata update (GameCheatDownloader), cached for seven days, sliced per game, and stored only in files/cheats/downloaded/. Nothing here is copied into the APK or this repository; bundled=false and redistribution=false on every row. Each source can be switched off in files/cheats/sources.json. The Java table is unified-android/src/com/thorium/preview/cheats/sources/CheatSourceRegistry.java and tools/tests/test_cheat_sources.py pins both in sync.",
+  "deviceFetched": [
+    {
+      "id": "mupen64plus-cheats",
+      "url": "https://raw.githubusercontent.com/mupen64plus/mupen64plus-core/master/data/mupencheat.txt",
+      "source": "https://github.com/mupen64plus/mupen64plus-core",
+      "license": "GPL-2.0",
+      "keyedBy": "n64-crc",
+      "format": "mupencheat",
+      "systems": [
+        "n64"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "project64-cheats",
+      "url": "https://raw.githubusercontent.com/project64/project64/develop/Config/Cheats/<FILE>",
+      "source": "https://github.com/project64/project64",
+      "license": "GPL-2.0",
+      "keyedBy": "n64-crc",
+      "format": "project64-cht",
+      "systems": [
+        "n64"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "duckstation-chtdb",
+      "url": "https://github.com/duckstation/chtdb/releases/download/latest/cheats.zip",
+      "source": "https://github.com/duckstation/chtdb",
+      "license": "per-author (repository scripts MIT)",
+      "keyedBy": "serial",
+      "format": "duckstation-cht",
+      "systems": [
+        "psx"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "pcsx2-patches",
+      "url": "https://github.com/PCSX2/pcsx2_patches/releases/download/latest/patches.zip",
+      "source": "https://github.com/PCSX2/pcsx2_patches",
+      "license": "undeclared",
+      "keyedBy": "serial-crc",
+      "format": "pnach",
+      "systems": [
+        "ps2"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "pcsx2-cheats-collection",
+      "url": "https://api.github.com/repos/xs1l3n7x/pcsx2_cheats_collection/zipball",
+      "source": "https://github.com/xs1l3n7x/pcsx2_cheats_collection",
+      "license": "undeclared",
+      "keyedBy": "crc",
+      "format": "pnach",
+      "systems": [
+        "ps2"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "cwcheat-database-plus",
+      "url": "https://raw.githubusercontent.com/Saramagrean/CWCheat-Database-Plus-/master/cheat.db",
+      "source": "https://github.com/Saramagrean/CWCheat-Database-Plus-",
+      "license": "undeclared",
+      "keyedBy": "serial",
+      "format": "cwcheat",
+      "systems": [
+        "psp"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "rc24-gecko-codes",
+      "url": "https://codes.rc24.xyz/txt.php?txt=<GAMEID>",
+      "source": "https://codes.rc24.xyz/",
+      "license": "per-author (GameHacking.org)",
+      "keyedBy": "game-id",
+      "format": "gecko-txt",
+      "systems": [
+        "gamecube",
+        "wii"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "cemu-graphic-packs",
+      "url": "https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest",
+      "source": "https://github.com/cemu-project/cemu_graphic_packs",
+      "license": "CC0-1.0",
+      "keyedBy": "title-id",
+      "format": "cemu-graphic-pack",
+      "systems": [
+        "wiiu"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "sharkive-3ds",
+      "url": "https://github.com/FlagBrew/Sharkive/releases/latest/download/3ds.json",
+      "source": "https://github.com/FlagBrew/Sharkive",
+      "license": "GPL-3.0",
+      "keyedBy": "title-id",
+      "format": "gateway",
+      "systems": [
+        "3ds"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "switch-cheats-db",
+      "url": "https://github.com/HamletDuFromage/switch-cheats-db/releases/latest/download/contents_complete.zip",
+      "source": "https://github.com/HamletDuFromage/switch-cheats-db",
+      "license": "undeclared",
+      "keyedBy": "title-id+build-id",
+      "format": "dmnt",
+      "systems": [
+        "switch"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "sharkive-switch",
+      "url": "https://github.com/FlagBrew/Sharkive/releases/latest/download/switch.json",
+      "source": "https://github.com/FlagBrew/Sharkive",
+      "license": "GPL-3.0",
+      "keyedBy": "title-id+build-id",
+      "format": "dmnt",
+      "systems": [
+        "switch"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "rpcs3-patches",
+      "url": "https://rpcs3.net/compatibility?patch&api=v1&v=1.2",
+      "source": "https://github.com/RPCS3/rpcs3-patches",
+      "license": "GPL-2.0",
+      "keyedBy": "serial",
+      "format": "rpcs3-patch-yaml",
+      "systems": [
+        "ps3"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "artemis-rpcs3-patches",
+      "url": "https://api.github.com/repos/chidreams/Artemis-Patch-Collection-RPCS3/contents/imported_patch.yml",
+      "source": "https://github.com/chidreams/Artemis-Patch-Collection-RPCS3",
+      "license": "MIT",
+      "keyedBy": "serial",
+      "format": "rpcs3-patch-yaml",
+      "systems": [
+        "ps3"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "bucanero-dreamcast-cheats",
+      "url": "https://api.github.com/repos/bucanero/dreamcast-cheats/zipball",
+      "source": "https://github.com/bucanero/dreamcast-cheats",
+      "license": "GPL-3.0",
+      "keyedBy": "title",
+      "format": "dreamcast-markdown",
+      "systems": [
+        "dreamcast"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "fbneo-cheats",
+      "url": "https://api.github.com/repos/finalburnneo/FBNeo-cheats/zipball",
+      "source": "https://github.com/finalburnneo/FBNeo-cheats",
+      "license": "undeclared",
+      "keyedBy": "romset",
+      "format": "fbneo-ini",
+      "systems": [
+        "arcade",
+        "neogeo"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    },
+    {
+      "id": "mame-cheats-spludlow",
+      "url": "https://mame.spludlow.co.uk/data/mame-cheats/<VERSION>.zip",
+      "source": "https://www.mamecheat.co.uk/",
+      "license": "freeware (Pugsy's MAME cheat collection)",
+      "keyedBy": "romset",
+      "format": "mame-xml",
+      "systems": [
+        "arcade",
+        "neogeo"
+      ],
+      "bundled": false,
+      "redistribution": false,
+      "enabledByDefault": true,
+      "cache": "7 days under <cacheRoot>/cheats/"
+    }
+  ]
+}

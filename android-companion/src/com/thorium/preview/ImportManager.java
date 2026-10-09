@@ -10,7 +10,9 @@ import android.os.Environment;
 import android.os.SystemClock;
 import android.util.Log;
 
+import com.thorium.lucent.metadata.TitleMatcher;
 import com.thorium.lucent.metadata.WallpaperAccent;
+import com.thorium.preview.game.NativeAdapterPrerequisites;
 
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
 import org.apache.commons.compress.archivers.sevenz.SevenZFile;
@@ -102,6 +104,23 @@ final class ImportManager {
             "99-thorium-auto-import.metadata.pegasus.txt");
     private static final long RESCAN_THROTTLE_MS = 45_000L;
     private static final long MISS_RETRY_MS = 7L * 24L * 60L * 60L * 1000L;
+    /** Where every artwork-driven library removal is written down. */
+    private static final String ARTLESS_LEDGER = "removed-without-artwork.json";
+    /**
+     * The owner's answer for each game whose artwork could not be found.
+     * It lives beside the media rather than in app storage so it survives a
+     * reinstall, and it is keyed by system and normalized title so it also
+     * survives the ROM moving between volumes.
+     */
+    private static final String ARTWORK_DECISIONS = "artwork-decisions.json";
+    /** Games still waiting for an answer, as rendered by the frontend. */
+    private static final String ARTWORK_REVIEW_QUEUE = "artwork-review-pending.json";
+    /** Keep the game exactly as it is, with no box art. */
+    private static final String CHOICE_KEEP = "leave";
+    /** Take it out of the menus; the ROM file stays on disk. */
+    private static final String CHOICE_HIDE = "hide";
+    /** Delete the ROM file itself. The only choice that destroys data. */
+    private static final String CHOICE_DELETE = "delete-rom";
     private static final Pattern HREF = Pattern.compile("href=\"([^\"]+\\.(?:png|jpg|jpeg))\"",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern NINTENDO_TITLE = Pattern.compile(
@@ -126,6 +145,17 @@ final class ImportManager {
 
     private final Context context;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicBoolean initialScanStarted = new AtomicBoolean(false);
+    private final android.os.Handler mediaHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private volatile boolean closed;
+    private volatile Thread scanWorker;
+    private final Runnable resumeMedia = new Runnable() {
+        @Override public void run() {
+            if (closed) return;
+            if (!running.get() && networkAvailable() && hasPendingMedia()) startScan(false, true);
+            mediaHandler.postDelayed(this, 120_000L);
+        }
+    };
     private final Object statusLock = new Object();
     private volatile long lastScanStarted;
     private volatile String lastDownloadFingerprint = "";
@@ -135,6 +165,12 @@ final class ImportManager {
     private volatile Map<String, MobyGamesRecord> mobygamesIndex;
     private volatile Map<String, MobyGamesRecord> mobygamesAliasIndex;
     private volatile Map<String, BundledGameRecord> bundledGameIndex;
+    /**
+     * Sibling titles per system folder, for the artwork subtitle guard. Built
+     * once per scan and dropped at the start of the next one, so a game added
+     * during this scan is still seen by the games processed after it.
+     */
+    private final Map<String, Set<String>> claimedTitleCache = new ConcurrentHashMap<>();
 
     ImportManager(Context context) {
         this.context = context.getApplicationContext();
@@ -151,10 +187,115 @@ final class ImportManager {
                     Collections.emptyList(), 0, false);
             return;
         }
-        // App launch is deliberately lightweight: only Downloads are checked.
-        // A full-library artwork/score audit belongs on the desktop maintenance
-        // workflow, not in the handheld's startup path.
-        startScan(false, false);
+        if (!initialScanStarted.compareAndSet(false, true)) return;
+        if (!running.compareAndSet(false, true)) {
+            initialScanStarted.set(false);
+            return;
+        }
+        Thread worker = new Thread(() -> {
+            boolean changed = false;
+            try {
+                changed = bootstrapLocalLibrary();
+            } catch (Exception error) {
+                initialScanStarted.set(false);
+                Log.e(TAG, "Local library discovery failed", error);
+                setStatus("error", 1.0, "Could not scan games: " + shortError(error),
+                        Collections.emptyList(), 0, false);
+            } finally {
+                running.set(false);
+                Context app = context.getApplicationContext();
+                if (app instanceof LucentApplication)
+                    ((LucentApplication) app).onInitialLibraryScanFinished(changed);
+                // Do not wait for QML, window focus or a legal/permission
+                // dialog to be dismissed. Checkpoints survive Qt retirement.
+                scheduleMediaResume();
+            }
+        }, "emufusion-local-library");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /** Local-only bootstrap: never copy/delete ROMs or wait for online catalogs. */
+    private boolean bootstrapLocalLibrary() throws Exception {
+        boolean hadLibrary = hasUsableFrontendLibrary();
+        List<File> roots = libraryRoots();
+        StringBuilder storage = new StringBuilder("local-discovery-v2");
+        for (File root : roots) storage.append('\n').append(canonical(root.getAbsolutePath()));
+        String storageKey = storage.toString();
+        android.content.SharedPreferences preferences =
+                context.getSharedPreferences("library-discovery", Context.MODE_PRIVATE);
+        // A mounted volume is not a library-contents fingerprint. Games can
+        // be added anywhere below the same root between launches (including
+        // by USB/MTP while EmuFusion is closed). Reconcile locally on each
+        // process start; this worker never blocks the menu on network/media.
+        // Existing metadata/source identities prevent duplicate entries, and
+        // unchanged libraries below cause no rewrite or frontend restart.
+        setStatus("discovering", 0.05, "Finding games on internal and removable storage…",
+                Collections.emptyList(), 0, false);
+        JSONArray registry = readRegistry();
+        Set<String> registered = registeredSources(registry);
+        List<Candidate> candidates = discoverExistingCandidates();
+        List<String> titles = new ArrayList<>();
+        int added = 0;
+        for (Candidate candidate : candidates) {
+            if (!registered.add(candidate.identity)) continue;
+            // Do not call importCandidate here: its title canonicalization
+            // consults online box-art catalogs even for an in-place game.
+            ImportedGame game = new ImportedGame(candidate, candidate.source);
+            enrichBundledMetadata(game);
+            JSONObject row = game.toJson();
+            // Index immediately; the independent, resumable media queue fills
+            // artwork and metadata after the frontend can show the library.
+            row.put("localDiscovery", true);
+            registry.put(row);
+            titles.add(game.title);
+            added++;
+            setStatus("indexing", 0.10 + 0.80 * added / Math.max(1, candidates.size()),
+                    "Adding " + game.title + "…", Collections.emptyList(), added, false);
+            // Checkpoint large libraries without rewriting every collection
+            // for every game (quadratic work on a full SD card).
+            if (added % 64 == 0) writeJsonAtomic(REGISTRY, registry);
+        }
+        if (added > 0 || !hadLibrary) {
+            writeJsonAtomic(REGISTRY, registry);
+        }
+        // Existing registry rows can disappear/reappear when removable storage
+        // changes. Reconcile those too, but publish/restart only for a changed
+        // library; an unchanged scan must not rewrite every metadata file.
+        boolean metadataChanged = writeMetadata(registry);
+        boolean usable = hasUsableFrontendLibrary();
+        // A cancelled/empty/inaccessible scan must be retried next launch.
+        if (usable) preferences.edit().putString("storage", storageKey).commit();
+        else initialScanStarted.set(false);
+        boolean changed = metadataChanged || (usable && (!hadLibrary || added > 0));
+        Log.i(TAG, "Local discovery complete: added=" + added + " usable=" + usable +
+                " metadataChanged=" + metadataChanged);
+        setStatus("complete", 1.0, usable ? "Game library ready" :
+                "No supported games found. Check storage access and your ROM folders.",
+                titles, added, false);
+        return changed;
+    }
+
+    private static boolean hasUsableFrontendLibrary() {
+        for (File metadata : metadataFiles()) {
+            // Another app's metadata cannot make our empty frontend ready.
+            if (!metadata.getParentFile().equals(PEGASUS) &&
+                    !metadata.getParentFile().equals(new File(LUCENT_CONFIG, "metafiles"))) continue;
+            try {
+                for (String stanza : splitStanzas(readText(metadata))) {
+                    String path = field(stanza, "file");
+                    if (!field(stanza, "game").isEmpty() && !path.isEmpty() &&
+                            readableMetadataRom(metadata, path).isFile() &&
+                            readableMetadataRom(metadata, path).canRead()) return true;
+                }
+            } catch (Exception ignored) {}
+        }
+        return false;
+    }
+
+    private static File readableMetadataRom(File metadata, String path) {
+        File rom = new File(path);
+        return rom.isAbsolute() ? rom : new File(metadata.getParentFile(), path);
     }
 
     /** User-requested maintenance pass. Unlike the background scan, this is a
@@ -162,7 +303,53 @@ final class ImportManager {
      * throttle. The running guard still prevents two destructive writers from
      * touching the registry at the same time. */
     void startManualScan() {
+        context.getSharedPreferences("library-discovery", Context.MODE_PRIVATE).edit()
+                .putLong("mediaRefreshAfter", System.currentTimeMillis()).commit();
         startScan(true, true);
+    }
+
+    void close() {
+        closed = true;
+        mediaHandler.removeCallbacks(resumeMedia);
+        Thread worker = scanWorker;
+        if (worker != null) worker.interrupt();
+    }
+
+    private void scheduleMediaResume() {
+        if (closed) return;
+        mediaHandler.removeCallbacks(resumeMedia);
+        mediaHandler.postDelayed(resumeMedia, 1500L);
+    }
+
+    private long mediaRefreshAfter() {
+        return context.getSharedPreferences("library-discovery", Context.MODE_PRIVATE)
+                .getLong("mediaRefreshAfter", 0L);
+    }
+
+    private static boolean mediaPending(JSONObject row, long refreshAfter) {
+        if (row == null || !new File(row.optString("file")).isFile()) return false;
+        if (row.optLong("mediaRefreshCompletedAt", 0L) < refreshAfter) return true;
+        if (row.optInt("mediaVersion", 0) < 1) return true;
+        // Completion is not permanent proof that files still exist: removable
+        // media can disappear or be cleaned after a successful download. Only
+        // reopen previously complete rows here; failed providers retain their
+        // scheduled backoff instead of being retried on every queue poll.
+        if (row.optInt("enrichmentVersion", 0) >= 2 && !mediaComplete(row)) return true;
+        return row.optLong("mediaNextRetryAt", Long.MAX_VALUE) <= System.currentTimeMillis();
+    }
+
+    private boolean hasPendingMedia() {
+        JSONArray rows = readRegistry();
+        long refresh = mediaRefreshAfter();
+        for (int i = 0; i < rows.length(); i++) if (mediaPending(rows.optJSONObject(i), refresh)) return true;
+        return false;
+    }
+
+    private boolean networkAvailable() {
+        android.net.ConnectivityManager manager = (android.net.ConnectivityManager)
+                context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        android.net.NetworkInfo network = manager == null ? null : manager.getActiveNetworkInfo();
+        return network != null && network.isConnected();
     }
 
     private void startScan(boolean fullDiscovery, boolean force) {
@@ -184,9 +371,12 @@ final class ImportManager {
                         Collections.emptyList(), 0, false);
             } finally {
                 running.set(false);
+                scanWorker = null;
+                scheduleMediaResume();
             }
         }, "thor-library-import");
         worker.setDaemon(true);
+        scanWorker = worker;
         worker.start();
     }
 
@@ -204,7 +394,7 @@ final class ImportManager {
             if (!status.optBoolean("needsReload", false)) return false;
             try {
                 status.put("needsReload", false);
-                status.put("message", "New games indexed • refreshing Lucent library…");
+                status.put("message", "New games indexed • refreshing EmuFusion library…");
                 status.put("updatedAt", System.currentTimeMillis());
             } catch (Exception ignored) {}
             return true;
@@ -220,6 +410,29 @@ final class ImportManager {
                     !row.optBoolean("forceInclude", false)) continue;
             String folder = row.optString("system");
             if (GameSystems.byFolder(folder) != null) systems.add(folder);
+        }
+        // The import registry was added after owner-authored and earlier
+        // Lucent metadata already existed.  Treating only registry rows as the
+        // settings inventory hides real, indexed games from the route picker
+        // forever (PS3 directory dumps are a common example because their
+        // launch target is EBOOT.BIN rather than an extension that discovery
+        // can identify on its own).  Reconcile every readable metadata game
+        // with the live file it names.  Stale metadata never reveals a system:
+        // the path must still exist, and the /Games/<system>/ identity must be
+        // one of GameSystems' exact folders.
+        for (File metadata : metadataFiles()) {
+            try {
+                for (String stanza : splitStanzas(readText(metadata))) {
+                    String title = field(stanza, "game");
+                    String path = field(stanza, "file");
+                    if (title.isEmpty() || path.isEmpty() || !new File(path).exists())
+                        continue;
+                    GameSystems.SystemDef system = systemFromRomPath(path);
+                    if (system != null) systems.add(system.folder);
+                }
+            } catch (Exception ignored) {
+                // A malformed or unreadable metadata file reveals nothing.
+            }
         }
         return systems;
     }
@@ -382,7 +595,10 @@ final class ImportManager {
 
     private void runScan(boolean fullDiscovery) throws Exception {
         PEGASUS.mkdirs();
-        // Thorium's retired combined metafile can coexist with Lucent's
+        // Sibling titles are a snapshot of the library. Take a fresh one per
+        // scan so games added by the previous run take part in the guard.
+        claimedTitleCache.clear();
+        // Thorium's retired combined metafile can coexist with EmuFusion's
         // per-system files after an in-place upgrade. Pegasus then exposes a
         // second, stale copy of every imported game; most of those old rows do
         // not contain video paths. Remove only our generated legacy files.
@@ -390,12 +606,17 @@ final class ImportManager {
         THORIUM_LEGACY_CONFIG_METADATA.delete();
         File metadataParent = AUTO_METADATA.getParentFile();
         if (metadataParent != null) metadataParent.mkdirs();
-        File lucentMetadataParent = LUCENT_AUTO_METADATA.getParentFile();
-        if (lucentMetadataParent != null) lucentMetadataParent.mkdirs();
+        File emuFusionMetadataParent = LUCENT_AUTO_METADATA.getParentFile();
+        if (emuFusionMetadataParent != null) emuFusionMetadataParent.mkdirs();
         GAMES.mkdirs();
         File mediaRoot = mediaRoot();
         File cacheRoot = new File(PEGASUS, ".thorium-import-cache");
         cacheRoot.mkdirs();
+
+        // Read-only, bounded readiness discovery belongs to the explicit
+        // update/import lifecycle, never app startup or UI routing. Persisted
+        // state contains only READY/NOT_READY; no source names or paths.
+        boolean prerequisiteRoutesChanged = NativeAdapterPrerequisites.refresh(context);
 
         setStatus("scanning", 0.03, "Scanning internal and SD Downloads for verified games…",
                 Collections.emptyList(), 0, false);
@@ -406,6 +627,11 @@ final class ImportManager {
                     Collections.emptyList(), 0, false);
             candidates.addAll(discoverExistingCandidates());
         }
+        // A full discovery also walks the Download roots scanned above. Keep
+        // the first occurrence of each durable source identity so an in-place
+        // PS3 folder dump (or any overlapping storage root) is never imported
+        // twice during the same pass.
+        candidates = uniqueCandidates(candidates);
         List<String> titles = new ArrayList<>();
         for (Candidate candidate : candidates) titles.add(candidate.title);
 
@@ -419,6 +645,7 @@ final class ImportManager {
         JSONArray registry = readRegistry();
         Set<String> registeredSources = registeredSources(registry);
         List<ImportedGame> imported = new ArrayList<>();
+        boolean localIndexChanged = false;
         Map<File, Integer> archiveTotals = new HashMap<>();
         Map<File, Integer> archiveSuccesses = new HashMap<>();
         for (Candidate candidate : candidates) {
@@ -437,7 +664,7 @@ final class ImportManager {
                 // registry write but before media enrichment and metadata
                 // generation. Resume that exact ROM instead of permanently
                 // treating the half-finished row as complete.
-                if (saved != null && saved.optInt("enrichmentVersion", 0) < 2) {
+                if (mediaPending(saved, mediaRefreshAfter())) {
                     ImportedGame pending = ImportedGame.fromJson(saved);
                     if (pending != null) {
                         enrichBundledMetadata(pending);
@@ -451,7 +678,7 @@ final class ImportManager {
             }
             ImportedGame game = importCandidate(candidate, mediaRoot, cacheRoot);
             if (game != null) {
-                // Text metadata is packaged with Lucent and becomes visible in
+                // Text metadata is packaged with EmuFusion and becomes visible in
                 // Pegasus before any slower media or network work begins.
                 enrichBundledMetadata(game);
                 imported.add(game);
@@ -461,6 +688,7 @@ final class ImportManager {
                 // long artwork/video pass is interrupted. Publish the ROM
                 // record immediately, then enrich it in place below.
                 writeMetadata(registry);
+                localIndexChanged = true;
                 // Only now that the registry row and metadata are durable is
                 // the plain-file Downloads source safe to remove. In-place
                 // games are their own source and must never be deleted.
@@ -486,7 +714,7 @@ final class ImportManager {
             JSONObject row = registry.optJSONObject(rowIndex);
             if (row == null || queuedIdentities.contains(row.optString("sourceIdentity"))) continue;
             ImportedGame pending = ImportedGame.fromJson(row);
-            if (pending != null && row.optInt("enrichmentVersion", 0) < 2) {
+            if (pending != null && mediaPending(row, mediaRefreshAfter())) {
                 enrichBundledMetadata(pending);
                 imported.add(pending);
                 queuedIdentities.add(pending.sourceIdentity);
@@ -496,65 +724,183 @@ final class ImportManager {
         // Rebuild from the durable registry on every scan. This is the
         // recovery path for versions that could save registry rows without
         // ever regenerating 99-thorium-auto-import.metadata.pegasus.txt.
-        writeMetadata(registry);
-
-        if (!imported.isEmpty()) {
-            setStatus("artwork", 0.55, "Downloading exact box art…", titles,
-                    imported.size(), false);
-            for (ImportedGame game : imported) {
-                enrichBoxArt(game, cacheRoot, mediaRoot);
-                enrichBackground(game, cacheRoot, mediaRoot);
-            }
-
-            setStatus("video", 0.68, "Finding video previews…", titles,
-                    imported.size(), false);
-            for (ImportedGame game : imported) enrichVideo(game, cacheRoot, mediaRoot);
-
-            setStatus("scores", 0.80,
-                    "Matching ratings, releases, developers, and publishers…", titles,
-                    imported.size(), false);
-            for (ImportedGame game : imported) {
-                // Packaged metadata is authoritative and instant. Online
-                // lookup remains a fallback only for titles not present in the
-                // bundled catalog, never a startup-wide scraping pass.
-                if (!hasCompleteBundledMetadata(game)) enrichMetacritic(game, cacheRoot);
-                enrichGameRankings(game);
-                enrichMobyGames(game);
-                calculateCriticComposite(game);
-                // A verified ROM is always a game. Media can continue filling
-                // in later; it must never make a discovered title disappear.
-                game.archived = false;
-                game.enriched = true;
-
-                // Commit every completed game independently. If Android
-                // stops the service, the next run resumes only unfinished
-                // entries and Pegasus retains everything completed so far.
-                registry = mergeRegistry(readRegistry(), Collections.singletonList(game));
-                writeJsonAtomic(REGISTRY, registry);
-                writeMetadata(registry);
-            }
-
-            // Replace provisional registry rows with enriched records.
-            registry = mergeRegistry(readRegistry(), imported);
-            writeJsonAtomic(REGISTRY, registry);
-            setStatus("writing", 0.90, "Updating Lucent library…", titles,
-                    imported.size(), false);
-            writeMetadata(registry);
+        localIndexChanged |= writeMetadata(registry);
+        if (prerequisiteRoutesChanged) {
+            // Also normalize hand-authored/on-disk collections so a newly
+            // ready (or no-longer-ready) internal route is applied everywhere.
+            LaunchMetadataRouter.normalize(context);
         }
+
+        // The frontend reads metadata into its own model. Publishing files
+        // alone does not reveal a newly copied ROM in an already-open menu.
+        // Request the guarded Qt refresh BEFORE the optional media queue:
+        // that queue can wait indefinitely for network access. Pending media
+        // rows alone must not request another restart on every process start.
+        if (localIndexChanged || prerequisiteRoutesChanged) {
+            Context app = context.getApplicationContext();
+            if (app instanceof LucentApplication)
+                ((LucentApplication) app).onLibraryIndexChanged();
+        }
+
+        if (!imported.isEmpty() && !enrichMediaQueue(imported, registry, cacheRoot, mediaRoot)) return;
 
         // Keep provenance current for the games processed in this scan. This
         // is a local manifest write; it does not search or download old media.
         writeBackgroundProvenanceManifest(readRegistry(), mediaRoot);
 
+        // Searching every catalog is slow, so it belongs to the user-requested
+        // maintenance pass. It only ever builds a list; nothing is removed
+        // here, and nothing is removed anywhere until the owner answers.
+        int waiting = 0;
+        if (fullDiscovery) {
+            setStatus("artless", 0.95, "Checking every catalog for missing box art…",
+                    titles, imported.size(), false);
+            try (LibraryHttp.Scope audit = LibraryHttp.begin(30_000L, 0L, null)) {
+                waiting = Math.max(0, reviewArtlessGames(cacheRoot, mediaRoot));
+            }
+
+            // Games already in the library never go through the per-game
+            // download above (that only runs for newly imported/resumed
+            // rows), so the full-discovery maintenance pass is the only
+            // opportunity to backfill cheats for the existing library.
+            setStatus("cheats-refresh", 0.97, "Refreshing cheats for the library…",
+                    titles, imported.size(), false);
+            try {
+                GameCheatDownloader.refreshLibrary(context, cacheRoot);
+            } catch (Throwable failed) {
+                Log.w(TAG, "Library cheat refresh unavailable: " + failed);
+            }
+        }
+
         String message;
-        boolean reload = !imported.isEmpty();
+        boolean reload = !imported.isEmpty() || prerequisiteRoutesChanged;
         if (!imported.isEmpty()) {
-            message = imported.size() + (imported.size() == 1 ? " game added" : " games added");
-            message += " • reload Lucent when convenient";
+            int incomplete = 0;
+            for (ImportedGame game : imported)
+                if (!mediaComplete(registeredGame(registry, game.sourceIdentity))) incomplete++;
+            message = imported.size() + " games checked • " + incomplete +
+                    " with unavailable media/ratings; retries scheduled";
+        } else if (prerequisiteRoutesChanged) {
+            message = "Library scan complete • emulator readiness updated";
         } else {
             message = "Library scan complete • no new games";
         }
+        if (waiting > 0)
+            message += " • " + waiting + (waiting == 1 ? " game has" : " games have") +
+                    " no box art • choose what to do in Settings";
         setStatus("complete", 1.0, message, titles, imported.size(), reload);
+    }
+
+    private static boolean mediaComplete(JSONObject row) {
+        return row != null && readableMedia(row.optString("boxArt")) &&
+                readableMedia(row.optString("background")) && readableMedia(row.optString("video")) &&
+                (row.optDouble("critic", 0) > 0 || row.optDouble("user", 0) > 0);
+    }
+
+    private static boolean readableMedia(String path) {
+        File file = new File(path);
+        return file.isFile() && file.canRead() && file.length() > 512;
+    }
+
+    private static void mergeObject(JSONObject target, JSONObject source) throws Exception {
+        java.util.Iterator<String> keys = source.keys();
+        while (keys.hasNext()) { String key = keys.next(); target.put(key, source.get(key)); }
+    }
+
+    /** Durable, small per-game checkpoints avoid rewriting a huge library per download. */
+    private boolean enrichMediaQueue(List<ImportedGame> games, JSONArray registry,
+                                     File cacheRoot, File mediaRoot) throws Exception {
+        long refresh = mediaRefreshAfter();
+        long lastPublished = SystemClock.elapsedRealtime();
+        String[] stages = {"Ratings", "Box art", "Wallpaper", "Video", "Cheats"};
+        long[] budgets = {30_000L, 40_000L, 60_000L, 150_000L, 30_000L};
+        for (int index = 0; index < games.size(); index++) {
+            ImportedGame queued = games.get(index);
+            JSONObject row = registeredGame(registry, queued.sourceIdentity);
+            if (row == null) { row = queued.toJson(); registry.put(row); }
+            File checkpoint = new File(cacheRoot, "media-queue/" + sha1(queued.sourceIdentity) + ".json");
+            if (checkpoint.isFile()) {
+                try {
+                    JSONObject saved = new JSONObject(readText(checkpoint));
+                    if (saved.optLong("mediaUpdatedAt", 0) > row.optLong("mediaUpdatedAt", 0))
+                        mergeObject(row, saved);
+                } catch (Exception ignored) {} // A bad checkpoint retries this game, not the library.
+            }
+            ImportedGame game = ImportedGame.fromJson(row);
+            if (game == null) continue;
+            if (row.optLong("mediaRefreshEpoch", 0) < refresh ||
+                    row.optInt("mediaVersion", 0) >= 1 && mediaPending(row, refresh)) {
+                row.put("mediaStage", 0).put("mediaVersion", 0).put("mediaLastError", "");
+            }
+            row.put("mediaRefreshEpoch", refresh);
+            final int current = index + 1;
+            for (int stage = row.optInt("mediaStage", 0); stage < stages.length; stage++) {
+                if (closed || Thread.currentThread().isInterrupted() || !networkAvailable()) {
+                    writeJsonAtomic(REGISTRY, registry);
+                    writeMetadata(registry);
+                    setDetailedStatus("waiting", index / (double) games.size(),
+                            "Downloads paused • waiting for network", "Progress saved; resumes automatically",
+                            current, games.size(), Collections.singletonList(game.title), index, false);
+                    return false;
+                }
+                final String title = game.title;
+                final String label = stages[stage];
+                final double progress = (index + stage / (double) stages.length) / games.size();
+                setDetailedStatus("media", progress, current + "/" + games.size() + " • " + title,
+                        label, current, games.size(), Collections.singletonList(title), index, false);
+                android.os.PowerManager manager = (android.os.PowerManager)
+                        context.getSystemService(Context.POWER_SERVICE);
+                android.os.PowerManager.WakeLock wake = manager.newWakeLock(
+                        android.os.PowerManager.PARTIAL_WAKE_LOCK, "EmuFusion:LibraryDownload");
+                wake.acquire(budgets[stage] + 10_000L);
+                LibraryHttp.Scope transfer = LibraryHttp.begin(budgets[stage], refresh,
+                        (host, bytes, total) -> setDetailedStatus("media", progress,
+                                current + "/" + games.size() + " • " + title,
+                                label + " • " + host + " • " + bytes / 1024 + " KB" +
+                                        (total > 0 ? " / " + total / 1024 + " KB" : ""),
+                                current, games.size(), Collections.singletonList(title), current - 1, false));
+                try {
+                    if (stage == 0) {
+                        enrichBundledMetadata(game);
+                        if (refresh > 0 || !hasCompleteBundledMetadata(game)) enrichMetacritic(game, cacheRoot);
+                        enrichGameRankings(game);
+                        enrichMobyGames(game);
+                        calculateCriticComposite(game);
+                    } else if (stage == 1) enrichBoxArt(game, cacheRoot, mediaRoot);
+                    else if (stage == 2) enrichBackground(game, cacheRoot, mediaRoot);
+                    else if (stage == 3) enrichVideo(game, cacheRoot, mediaRoot);
+                    else game.cheats = GameCheatDownloader.fetch(context, game.system.folder,
+                            game.title, game.rom, game.sourceIdentity, cacheRoot,
+                            SystemClock.elapsedRealtime() + 15_000L);
+                } finally {
+                    transfer.close();
+                    if (wake.isHeld()) wake.release();
+                }
+                mergeObject(row, game.toJson());
+                row.put("mediaStage", stage + 1).put("mediaUpdatedAt", System.currentTimeMillis());
+                if (!transfer.error.isEmpty()) row.put("mediaLastError", transfer.error);
+                writeTextAtomic(checkpoint, row.toString(2));
+                Log.i(TAG, "Media checkpoint " + current + "/" + games.size() + " " + title +
+                        " stage=" + label + " error=" + transfer.error);
+            }
+            boolean complete = mediaComplete(row);
+            row.put("mediaVersion", 1).put("enrichmentVersion", complete ? 2 : 0)
+                    .put("mediaRefreshCompletedAt", refresh)
+                    .put("mediaUpdatedAt", System.currentTimeMillis())
+                    .put("mediaNextRetryAt", complete ? Long.MAX_VALUE : System.currentTimeMillis() +
+                            (row.optString("mediaLastError").isEmpty() ? 86_400_000L : 900_000L));
+            writeTextAtomic(checkpoint, row.toString(2));
+            // Small checkpoint after every stage, full publication periodically
+            // and at completion. No quadratic full-library rewrite per asset.
+            if (current % 10 == 0 || SystemClock.elapsedRealtime() - lastPublished > 20_000L) {
+                writeJsonAtomic(REGISTRY, registry);
+                writeMetadata(registry);
+                lastPublished = SystemClock.elapsedRealtime();
+            }
+        }
+        writeJsonAtomic(REGISTRY, registry);
+        writeMetadata(registry);
+        return true;
     }
 
     private List<Candidate> discoverCandidates(File cacheRoot) throws Exception {
@@ -567,6 +913,22 @@ final class ImportManager {
         }
         files.sort(Comparator.comparing(File::getAbsolutePath, String.CASE_INSENSITIVE_ORDER));
         for (File file : files) {
+            if (file.isDirectory()) {
+                // aPS3e boots a decrypted title root, but Pegasus needs one
+                // concrete launch file. Recognize only the verified standard
+                // shape and index its EBOOT.BIN in place; never copy or delete
+                // one executable out of the title directory that owns it.
+                File eboot = new File(file, "PS3_GAME/USRDIR/EBOOT.BIN");
+                File titleRoot = ps3TitleRoot(eboot);
+                if (titleRoot != null && canonical(titleRoot.getAbsolutePath())
+                        .equals(canonical(file.getAbsolutePath()))) {
+                    GameSystems.SystemDef ps3 = GameSystems.byFolder("ps3");
+                    found.add(new Candidate(eboot, null, ps3,
+                            cleanTitle(titleRoot.getName()),
+                            canonical(eboot.getAbsolutePath()) + ":" + eboot.length(), true));
+                }
+                continue;
+            }
             if (!file.isFile() || file.getName().startsWith(".") || isPartial(file.getName())) continue;
             String extension = extension(file.getName());
             if ("zip".equals(extension) || "7z".equals(extension)) {
@@ -586,6 +948,15 @@ final class ImportManager {
         return found;
     }
 
+    private static List<Candidate> uniqueCandidates(List<Candidate> candidates) {
+        LinkedHashMap<String, Candidate> unique = new LinkedHashMap<>();
+        for (Candidate candidate : candidates) {
+            if (!unique.containsKey(candidate.identity))
+                unique.put(candidate.identity, candidate);
+        }
+        return new ArrayList<>(unique.values());
+    }
+
     private List<Candidate> discoverExistingCandidates() {
         List<Candidate> found = new ArrayList<>();
         Set<String> referenced = existingMetadataPaths();
@@ -595,6 +966,7 @@ final class ImportManager {
                 knownGames.size() + " system/title identities");
         Set<String> visited = new HashSet<>();
         List<File> roots = libraryRoots();
+        roots.addAll(downloadRoots());
         int[] inspected = new int[]{0};
         for (File root : roots)
             scanLibraryRoot(root, 0, found, referenced, knownGames, visited, inspected);
@@ -606,7 +978,8 @@ final class ImportManager {
                                  Set<String> visited, int[] inspected) {
         if (directory == null || depth > 12 || inspected[0] > 250000) return;
         String canonical = canonical(directory.getAbsolutePath());
-        if (!visited.add(canonical) || shouldSkipLibraryDirectory(directory)) return;
+        if (shouldSkipLibraryDirectory(directory) && depth > 0) return;
+        if (!visited.add(canonical)) return;
         File[] entries = directory.listFiles();
         if (entries == null) return;
         Arrays.sort(entries, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
@@ -623,11 +996,14 @@ final class ImportManager {
             String ext = extension(entry.getName());
             if (isSwitchExtension(ext) && isSwitchSupplementalName(entry.getAbsolutePath()))
                 continue;
-            GameSystems.SystemDef system = GameSystems.byPath(entry);
+            File ps3Root = ps3TitleRoot(entry);
+            GameSystems.SystemDef system = ps3Root == null ? null :
+                    GameSystems.byFolder("ps3");
             if (system == null) system = identify(entry, ext);
             if (system == null) system = GameSystems.unambiguousByExtension(ext);
             if (system == null) continue;
-            String title = cleanTitle(stem(entry.getName()));
+            String title = cleanTitle(ps3Root == null
+                    ? stem(entry.getName()) : ps3Root.getName());
             // Storage migrations and backups frequently change an absolute
             // path without changing the actual game. Pegasus already owns the
             // canonical system/title identity, so do not generate a second
@@ -645,10 +1021,34 @@ final class ImportManager {
         }
     }
 
-    private static List<File> libraryRoots() {
+    /** Returns the decrypted title root for the one executable aPS3e can boot. */
+    private static File ps3TitleRoot(File file) {
+        if (file == null || !file.isFile() ||
+                !"EBOOT.BIN".equalsIgnoreCase(file.getName())) return null;
+        File usrdir = file.getParentFile();
+        File ps3Game = usrdir == null ? null : usrdir.getParentFile();
+        File titleRoot = ps3Game == null ? null : ps3Game.getParentFile();
+        if (usrdir == null || ps3Game == null || titleRoot == null ||
+                !"USRDIR".equalsIgnoreCase(usrdir.getName()) ||
+                !"PS3_GAME".equalsIgnoreCase(ps3Game.getName()) ||
+                !new File(ps3Game, "PARAM.SFO").isFile()) return null;
+        return titleRoot;
+    }
+
+    private List<File> libraryRoots() {
         LinkedHashMap<String, File> roots = new LinkedHashMap<>();
         List<File> volumes = new ArrayList<>();
         volumes.add(Environment.getExternalStorageDirectory());
+        // Some Android builds prohibit listing /storage itself. Public volume
+        // directories remain discoverable through the platform storage API.
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            android.os.storage.StorageManager manager =
+                    context.getSystemService(android.os.storage.StorageManager.class);
+            if (manager != null) for (android.os.storage.StorageVolume volume : manager.getStorageVolumes()) {
+                File directory = volume.getDirectory();
+                if (directory != null) volumes.add(directory);
+            }
+        }
         File[] storage = new File("/storage").listFiles();
         if (storage != null) {
             for (File candidate : storage) {
@@ -661,8 +1061,13 @@ final class ImportManager {
             // First-run discovery must not depend on user folder naming. Scan
             // each readable storage volume itself; the recursive scanner only
             // accepts verified ROM formats and skips Android/app/media trees.
-            if (volume.isDirectory() && volume.canRead())
+            if (volume.isDirectory() && volume.canRead() && volume.listFiles() != null) {
                 roots.put(canonical(volume.getAbsolutePath()), volume);
+                // Walk real directory entries once. On Android's case-folded
+                // storage ROMs/Roms/roms can all resolve to the SAME folder,
+                // despite File.getCanonicalPath retaining each spelling.
+                continue;
+            }
             for (String common : new String[]{"Games", "games", "ROMs", "Roms", "roms",
                     "Emulation", "emulation", "RetroArch", "retropie", "recalbox", "batocera"}) {
                 File root = new File(volume, common);
@@ -705,7 +1110,10 @@ final class ImportManager {
             try {
                 for (String stanza : splitStanzas(readText(file))) {
                     String path = field(stanza, "file");
-                    if (!path.isEmpty()) paths.add(canonical(path));
+                    if (!path.isEmpty()) {
+                        File rom = readableMetadataRom(file, path);
+                        if (rom.isFile() && rom.canRead()) paths.add(canonical(rom.getAbsolutePath()));
+                    }
                 }
             } catch (Exception ignored) {}
         }
@@ -720,6 +1128,9 @@ final class ImportManager {
                     String title = field(stanza, "game");
                     String path = field(stanza, "file");
                     if (title.isEmpty() || path.isEmpty()) continue;
+                    File readable = readableMetadataRom(file, path);
+                    if (!readable.isFile() || !readable.canRead()) continue;
+                    path = readable.getAbsolutePath();
                     GameSystems.SystemDef system = systemFromRomPath(path);
                     if (system != null) {
                         addGameIdentities(identities, system.folder, title);
@@ -745,9 +1156,14 @@ final class ImportManager {
 
     private static List<File> metadataFiles() {
         LinkedHashMap<String, File> files = new LinkedHashMap<>();
+        // Pegasus loads the first three; the native library index also reads
+        // the `metadata` directories. A pass that edited only one side would
+        // leave the frontend and the index disagreeing about what exists.
         List<File> roots = Arrays.asList(PEGASUS,
                 new File(PEGASUS_CONFIG, "metafiles"),
-                new File(LUCENT_CONFIG, "metafiles"));
+                new File(LUCENT_CONFIG, "metafiles"),
+                new File(PEGASUS_CONFIG, "metadata"),
+                new File(LUCENT_CONFIG, "metadata"));
         for (File root : roots) {
             File[] metadata = root.listFiles((dir, name) ->
                     name.endsWith(".metadata.pegasus.txt") ||
@@ -793,7 +1209,7 @@ final class ImportManager {
     }
 
     /** Inspect every plausible payload in a 7z archive rather than trusting
-     * the archive filename. This mirrors ZIP handling: Lucent only accepts an
+     * the archive filename. This mirrors ZIP handling: EmuFusion only accepts an
      * entry after its extracted bytes validate as a ROM for a known system. */
     private List<Candidate> inspectSevenZip(File archive, File cacheRoot) {
         List<Candidate> found = new ArrayList<>();
@@ -1025,7 +1441,7 @@ final class ImportManager {
                         name.startsWith(digestPrefix) && name.toLowerCase(Locale.US).endsWith(".jpg"));
                 if (longerDigest != null && longerDigest.length == 1) pipeline = longerDigest[0];
             }
-            if (pipeline.isFile() && pipeline.length() > 512 && wallpaperCanvasIsValid(pipeline)) {
+            if (LibraryHttp.reusable(pipeline) && wallpaperCanvasIsValid(pipeline)) {
                 game.background = pipeline.getAbsolutePath();
                 if (game.backgroundSource.isEmpty())
                     game.backgroundSource = BACKGROUND_SOURCE_WALLPAPER;
@@ -1036,7 +1452,9 @@ final class ImportManager {
             // result page is matched by both normalized title and platform;
             // only the dedicated fanart class is accepted (never box fronts,
             // banners, or a fuzzy title result).
-            CatalogMatch launchBox = launchBoxFanartMatch(game.system, game.title, cacheRoot);
+            CatalogMatch launchBox = null;
+            try { launchBox = launchBoxFanartMatch(game.system, game.title, cacheRoot); }
+            catch (Exception unavailable) { Log.w(TAG, "Fanart source unavailable; trying fallback"); }
             if (launchBox != null) {
                 File folder = new File(mediaRoot,
                         "game-wallpapers-launchbox-fanart/" + game.system.folder);
@@ -1092,10 +1510,12 @@ final class ImportManager {
 
             // An empty field is intentional: the theme shows a neutral system
             // backdrop rather than retaining the previous game's wallpaper.
-            game.background = "";
-            game.backgroundSource = "";
-            game.backgroundSourceUrl = "";
-            game.backgroundTransform = "";
+            if (!readableMedia(game.background)) {
+                game.background = "";
+                game.backgroundSource = "";
+                game.backgroundSourceUrl = "";
+                game.backgroundTransform = "";
+            }
             return;
         } catch (Exception error) {
             Log.w(TAG, "Wallpaper unavailable for " + game.title, error);
@@ -1115,7 +1535,7 @@ final class ImportManager {
 
     private static boolean downloadAndCrop16x9(String url, File target, File cacheRoot,
                                                 long maxBytes) throws Exception {
-        if (isExact1080p(target)) return true;
+        if (LibraryHttp.reusable(target) && isExact1080p(target)) return true;
         File source = new File(cacheRoot, "background-sources/" + sha1(url) + ".image");
         if (!download(url, source, maxBytes)) return false;
 
@@ -1151,8 +1571,10 @@ final class ImportManager {
                 if (!output.compress(Bitmap.CompressFormat.JPEG, 92, stream)) return false;
                 stream.getFD().sync();
             }
-            if (target.exists() && !target.delete()) return false;
-            return part.renameTo(target) && isExact1080p(target);
+            if (!wallpaperCanvasIsValid(part)) return false;
+            java.nio.file.Files.move(part.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return isExact1080p(target);
         } finally {
             if (output != null) output.recycle();
             input.recycle();
@@ -1302,7 +1724,7 @@ final class ImportManager {
     private void enrichVideo(ImportedGame game, File cacheRoot, File mediaRoot) {
         try {
             File existing = existingVideo(mediaRoot, game.system, game.title);
-            if (existing != null) {
+            if (existing != null && LibraryHttp.reusable(existing)) {
                 game.video = existing.getAbsolutePath();
                 return;
             }
@@ -1310,8 +1732,10 @@ final class ImportManager {
             NintendoMedia official = nintendoMedia(game.system, game.title, cacheRoot);
             if (official != null && !official.video.isEmpty())
                 match = new VideoMatch(official.video);
-            if (match == null && !game.system.videoArchive.isEmpty())
-                match = videoMatch(game.system, game.title, cacheRoot);
+            if (match == null && !game.system.videoArchive.isEmpty()) {
+                try { match = videoMatch(game.system, game.title, cacheRoot); }
+                catch (Exception unavailable) { Log.w(TAG, "Video catalog unavailable; trying fallback"); }
+            }
             if (match == null)
                 match = archiveSearchVideo(game.system, game.title, cacheRoot);
             if (match == null) return;
@@ -1351,11 +1775,11 @@ final class ImportManager {
         if (!record.criticSources.isEmpty()) game.criticSources = record.criticSources;
         if (!record.userSources.isEmpty()) game.userSources = record.userSources;
         if (game.critic > 0 || game.user > 0)
-            game.scoreSource = "Lucent bundled catalog";
+            game.scoreSource = "EmuFusion bundled catalog";
     }
 
     private static boolean hasCompleteBundledMetadata(ImportedGame game) {
-        return "Lucent bundled catalog".equals(game.scoreSource) && game.critic > 0 &&
+        return "EmuFusion bundled catalog".equals(game.scoreSource) && game.critic > 0 &&
                 game.user > 0 && !game.release.isEmpty();
     }
 
@@ -1537,7 +1961,7 @@ final class ImportManager {
             weighted += game.mobygamesScore * 5;
             weight += 5;
         }
-        // Preserve Lucent's bundled composite when no external component was
+        // Preserve EmuFusion's bundled composite when no external component was
         // available. This keeps offline imports from losing known scores.
         if (weight == 0) return;
         game.critic = (int)Math.round(weighted / weight);
@@ -1754,23 +2178,7 @@ final class ImportManager {
     }
 
     private static String scoreAlias(String normalized) {
-        String[] tokens = normalized.split(" ");
-        StringBuilder compact = new StringBuilder();
-        for (String token : tokens) {
-            switch (token) {
-                case "ii": compact.append('2'); break;
-                case "iii": compact.append('3'); break;
-                case "iv": compact.append('4'); break;
-                case "v": compact.append('5'); break;
-                case "vi": compact.append('6'); break;
-                case "vii": compact.append('7'); break;
-                case "viii": compact.append('8'); break;
-                case "ix": compact.append('9'); break;
-                case "x": compact.append("10"); break;
-                default: compact.append(token);
-            }
-        }
-        return compact.toString();
+        return TitleMatcher.compact(normalized);
     }
 
     private static Set<String> mediaAliases(String title) {
@@ -1854,7 +2262,9 @@ final class ImportManager {
         if (lower.contains("disaster")) return -1000;
         if (lower.matches(".*\\bin\\s+\\d{1,3}:\\d{2}.*")) return -1000;
         int score = 0;
-        for (String alias : mediaAliases(requested)) {
+        // A series prefix is not this game. In particular, dropping the
+        // subtitle from Mario Kart: Super Circuit matched Mario Kart Tour.
+        for (String alias : TitleMatcher.fullTitleForms(requested)) {
             if (alias.isEmpty()) continue;
             if (candidate.equals(alias)) score = Math.max(score, 140);
             else if (candidate.contains(alias)) score = Math.max(score, 115);
@@ -2011,7 +2421,11 @@ final class ImportManager {
                 Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         Matcher cards = card.matcher(results);
         String gameId = "";
-        Set<String> requestedAliases = mediaAliases(title);
+        // Full-title spellings only. The pooled alias set also contained the
+        // title with its subtitle removed, which is the same thing that put
+        // the base game's box on a subtitled edition — here it would have
+        // fetched the base game's fanart as this game's wallpaper.
+        Set<String> requestedAliases = TitleMatcher.fullTitleForms(title);
         while (cards.find()) {
             String candidateTitle = htmlText(cards.group(2));
             String platform = htmlText(cards.group(3));
@@ -2077,47 +2491,661 @@ final class ImportManager {
                 .replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
     }
 
+    /**
+     * The catalog entry that belongs to one title, or null.
+     *
+     * <p>Ranking lives in {@link TitleMatcher}: a full-title match always
+     * beats a subtitle-stripped one, and a subtitle-stripped one is refused
+     * when another game in the same collection already carries that shorter
+     * name. Pooling those aliases and ordering the pool by region tag is what
+     * put "Bass Masters Classic"'s box on "Bass Masters Classic: Pro Edition"
+     * and plain "Jurassic Park"'s on "Jurassic Park: Rampage Edition".
+     */
     private CatalogMatch catalogMatch(GameSystems.SystemDef system, String title, File cacheRoot,
                                       String category) throws Exception {
-        if (system.libretro.isEmpty()) return null;
+        List<String> candidates = catalogEntries(system, cacheRoot, category);
+        if (candidates.isEmpty()) return null;
+        TitleMatcher.Match match = TitleMatcher.select(title, candidates,
+                claimedTitles(system));
+        if (match == null) return null;
+        // An exact-title hit is the normal case and says nothing useful. The
+        // weaker tiers are the ones that used to attach the wrong box, so
+        // every one of them leaves a line naming both sides of the pairing.
+        if (match.tier != TitleMatcher.TIER_EXACT)
+            Log.i(TAG, "Artwork match (" + match.reason() + ") " + system.folder + " • \"" +
+                    title + "\" -> " + decode(match.name) + " [" + category + "]");
+        String base = "https://thumbnails.libretro.com/" + encodePath(system.libretro) +
+                "/" + category + "/";
+        return new CatalogMatch(base + encodeHref(match.name),
+                cleanTitle(stem(decode(match.name))));
+    }
+
+    /** Every thumbnail file name one catalog publishes, in listing order. */
+    private List<String> catalogEntries(GameSystems.SystemDef system, File cacheRoot,
+                                        String category) throws Exception {
+        List<String> hrefs = new ArrayList<>();
+        if (system == null || system.libretro.isEmpty()) return hrefs;
         File cache = new File(cacheRoot, "libretro-" + system.folder + "-" + category + ".html");
         String html = cachedText(cache,
                 "https://thumbnails.libretro.com/" + encodePath(system.libretro) + "/" + category + "/",
                 7L * 24L * 60L * 60L * 1000L, 32L * 1024L * 1024L);
-        Set<String> keys = mediaAliases(title);
-        List<String> exact = new ArrayList<>();
-        String requestedVariantText = decode(title).toLowerCase(Locale.US);
         Matcher matcher = HREF.matcher(html);
-        while (matcher.find()) {
-            String href = matcher.group(1);
-            String decodedCandidate = decode(href);
-            String candidateVariantText = decodedCandidate.toLowerCase(Locale.US);
-            // Parenthetical stripping makes retail and demo/kiosk/prototype
-            // releases normalize to the same key. Never let a special build
-            // rename a normal retail ROM unless the source title explicitly
-            // requested that same variant.
-            boolean unwantedVariant = false;
-            for (String variant : new String[]{"demo", "kiosk", "prototype", "proto", "beta", "sample"}) {
-                if (candidateVariantText.matches(".*\\b" + variant + "\\b.*") &&
-                        !requestedVariantText.matches(".*\\b" + variant + "\\b.*")) {
-                    unwantedVariant = true;
+        while (matcher.find()) hrefs.add(matcher.group(1));
+        return hrefs;
+    }
+
+    /**
+     * The normalized titles of every other game already known on one system.
+     *
+     * <p>The subtitle guard needs this: when the library already contains a
+     * game literally called "Bass Masters Classic", that name's artwork is
+     * that game's, and "Bass Masters Classic: Pro Edition" may not borrow it.
+     * Built once per scan from the Pegasus metafiles plus the import registry.
+     */
+    private Set<String> claimedTitles(GameSystems.SystemDef system) {
+        if (system == null) return Collections.emptySet();
+        if (claimedTitleCache.isEmpty()) buildClaimedTitles();
+        Set<String> claimed = claimedTitleCache.get(system.folder);
+        return claimed == null ? Collections.emptySet() : claimed;
+    }
+
+    /**
+     * Reads every metafile once and indexes the titles by system. Doing this
+     * per system instead would re-read several megabytes of metadata for each
+     * of the fifty-odd platforms.
+     */
+    private synchronized void buildClaimedTitles() {
+        if (!claimedTitleCache.isEmpty()) return;
+        Map<String, List<String>> byFolder = new LinkedHashMap<>();
+        try {
+            for (File metadata : metadataFiles()) {
+                String collection = "";
+                for (String stanza : splitStanzas(readText(metadata))) {
+                    String declared = field(stanza, "collection");
+                    if (!declared.isEmpty()) collection = declared;
+                    String title = field(stanza, "game");
+                    if (title.isEmpty()) continue;
+                    GameSystems.SystemDef owner = systemFromRomPath(field(stanza, "file"));
+                    if (owner == null) owner = GameSystems.byAlias(collection);
+                    if (owner == null) continue;
+                    byFolder.computeIfAbsent(owner.folder, key -> new ArrayList<>()).add(title);
+                }
+            }
+            JSONArray registry = readRegistry();
+            for (int index = 0; index < registry.length(); index++) {
+                JSONObject row = registry.optJSONObject(index);
+                if (row == null) continue;
+                String folder = row.optString("system");
+                if (GameSystems.byFolder(folder) == null) continue;
+                byFolder.computeIfAbsent(folder, key -> new ArrayList<>())
+                        .add(row.optString("title"));
+            }
+        } catch (Exception error) {
+            Log.w(TAG, "Unable to index sibling titles for the artwork guard", error);
+        }
+        for (GameSystems.SystemDef system : GameSystems.all()) {
+            List<String> titles = byFolder.get(system.folder);
+            claimedTitleCache.put(system.folder, TitleMatcher.claimedTitles(
+                    titles == null ? Collections.<String>emptyList() : titles));
+        }
+    }
+
+    /**
+     * Finds every library entry whose game has no box art anywhere and puts it
+     * in front of the owner, rather than acting on it.
+     *
+     * <p>Nothing here removes anything. The pass answers one question per
+     * entry — "does artwork for this game exist in any platform catalog?" —
+     * and turns a "no" into a row the owner can answer once. Their answer is
+     * remembered forever, so an entry is only ever presented a single time.
+     *
+     * <p>The detection stays deliberately generous. A false "no artwork
+     * exists" now surfaces as an offer to delete somebody's ROM, which is
+     * worse than a silent skip, so the probe is
+     * {@link TitleMatcher#hasAnyCandidate} with every matcher guard switched
+     * off, the game's own platform is asked first and every other platform
+     * after it, and a mostly-unreachable thumbnail server abandons the pass
+     * outright.
+     *
+     * @return the number of entries now waiting for an answer, or -1 when the
+     *         catalogs could not be read and no conclusion was reached
+     */
+    private int reviewArtlessGames(File cacheRoot, File mediaRoot) {
+        Map<String, List<String>> catalogs = readArtworkCatalogs(cacheRoot);
+        if (catalogs == null) return -1;
+
+        JSONObject decisions = readDecisions(mediaRoot);
+        JSONArray ledger = readLedger(mediaRoot);
+        JSONArray pending = new JSONArray();
+        Set<String> seen = new LinkedHashSet<>();
+        Set<String> regained = new LinkedHashSet<>();
+        boolean ledgerChanged = false;
+        boolean decisionsChanged = false;
+
+        for (File metadata : metadataFiles()) {
+            try {
+                List<String> stanzas = splitStanzas(readText(metadata));
+                List<String> keep = new ArrayList<>();
+                List<String> droppedPaths = new ArrayList<>();
+                boolean changed = false;
+                for (String stanza : stanzas) {
+                    if (!stanza.startsWith("game:")) { keep.add(stanza); continue; }
+                    String title = field(stanza, "game");
+                    String romPath = field(stanza, "file");
+                    GameSystems.SystemDef system = systemFromRomPath(romPath);
+                    if (system == null || title.isEmpty()) { keep.add(stanza); continue; }
+                    String key = decisionKey(system, title);
+                    JSONObject decision = decisions.optJSONObject(key);
+
+                    if (!missingMediaFile(field(stanza, "assets.boxFront"))) {
+                        // The reason for the question has gone away. Forget the
+                        // answer too, so a game that gains artwork is never
+                        // held hostage by a choice made when it had none.
+                        if (decision != null && !"delete-rom".equals(decision.optString("choice"))) {
+                            decisions.remove(key);
+                            decisionsChanged = true;
+                            regained.add(title);
+                        }
+                        keep.add(stanza);
+                        continue;
+                    }
+
+                    // A platform with no catalog offers no evidence either way.
+                    List<String> own = catalogs.get(system.folder);
+                    if (own == null) { keep.add(stanza); continue; }
+                    if (TitleMatcher.hasAnyCandidate(title, own)) {
+                        // Artwork exists and simply is not attached yet. That is
+                        // a matcher gap, and it is never the owner's problem.
+                        if (decision != null &&
+                                !"delete-rom".equals(decision.optString("choice"))) {
+                            decisions.remove(key);
+                            decisionsChanged = true;
+                        }
+                        keep.add(stanza);
+                        continue;
+                    }
+
+                    if (decision == null) {
+                        if (seen.add(key))
+                            pending.put(pendingEntry(key, system, title, romPath, stanza,
+                                    metadata, artworkExistsIn(title, catalogs)));
+                        keep.add(stanza);
+                        continue;
+                    }
+
+                    String choice = decision.optString("choice");
+                    if (CHOICE_KEEP.equals(choice)) { keep.add(stanza); continue; }
+                    // Hidden and deleted entries lose their row. A hidden game
+                    // keeps its ROM and its stanza text, both recorded, so the
+                    // restore below can put it back the moment artwork turns up.
+                    rememberStanza(decision, stanza, metadata, romPath);
+                    decisionsChanged = true;
+                    droppedPaths.add(romPath);
+                    changed = true;
+                    ledger.put(ledgerRecord(system, title, romPath, stanza, catalogs.size(),
+                            choice, metadata, decision.optString("similarEntryOn")));
+                    ledgerChanged = true;
+                    Log.i(TAG, "Applying the owner's remembered choice for \"" + title +
+                            "\" (" + system.folder + "): " + choice);
+                }
+                if (!changed) continue;
+                for (int index = 0; index < keep.size(); index++)
+                    keep.set(index, removeFileEntries(keep.get(index), droppedPaths));
+                writeTextAtomic(metadata, joinStanzas(keep));
+            } catch (Exception error) {
+                Log.w(TAG, "Artwork review skipped " + metadata, error);
+            }
+        }
+
+        if (restoreGamesThatGainedArtwork(decisions, catalogs, cacheRoot, mediaRoot, regained))
+            decisionsChanged = true;
+        if (decisionsChanged) writeDecisions(mediaRoot, decisions);
+        if (ledgerChanged) {
+            try { writeJsonAtomic(new File(mediaRoot, ARTLESS_LEDGER), ledger); }
+            catch (Exception error) { Log.w(TAG, "Unable to write the artwork ledger", error); }
+            try { writeMetadata(readRegistry()); }
+            catch (Exception error) { Log.w(TAG, "Unable to rebuild metadata", error); }
+        }
+        writeReviewQueue(mediaRoot, pending);
+        for (String title : regained)
+            Log.i(TAG, "\"" + title + "\" has artwork again; its missing-artwork choice " +
+                    "has been forgotten and it is visible");
+        Log.i(TAG, "Artwork review: " + pending.length() + " entries are waiting for an answer");
+        return pending.length();
+    }
+
+    /**
+     * Puts back a hidden game once its artwork can be found again.
+     *
+     * <p>The owner hid it <em>because</em> nothing could be found for it, so
+     * the choice is conditional on that being true. A better matcher or a new
+     * catalog entry retires the choice and restores the stanza verbatim.
+     * A deleted ROM is not revisited: there is nothing left to restore.
+     */
+    private boolean restoreGamesThatGainedArtwork(JSONObject decisions,
+            Map<String, List<String>> catalogs, File cacheRoot, File mediaRoot,
+            Set<String> regained) {
+        boolean changed = false;
+        for (String key : new ArrayList<>(jsonKeys(decisions))) {
+            JSONObject decision = decisions.optJSONObject(key);
+            if (decision == null || !CHOICE_HIDE.equals(decision.optString("choice"))) continue;
+            String stanza = decision.optString("stanza");
+            String title = decision.optString("title");
+            GameSystems.SystemDef system = GameSystems.byFolder(decision.optString("system"));
+            if (stanza.isEmpty() || system == null) continue;
+            List<String> own = catalogs.get(system.folder);
+            if (own == null || !TitleMatcher.hasAnyCandidate(title, own)) continue;
+            File metadata = new File(decision.optString("metadataFile"));
+            if (restoreStanza(metadata, stanza, decision.optString("romPath"))) {
+                unarchiveRegistryRow(decision.optString("romPath"));
+                decisions.remove(key);
+                regained.add(title);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** Appends a stored stanza and its ROM path back into a metafile. */
+    private static boolean restoreStanza(File metadata, String stanza, String romPath) {
+        try {
+            if (!metadata.isFile()) return false;
+            List<String> stanzas = splitStanzas(readText(metadata));
+            for (String existing : stanzas)
+                if (romPath.equals(field(existing, "file"))) return true;
+            if (!romPath.isEmpty()) {
+                for (int index = 0; index < stanzas.size(); index++) {
+                    String value = stanzas.get(index);
+                    if (!value.startsWith("collection:") || !value.contains("\nfiles:")) continue;
+                    stanzas.set(index, value + "\n  " + romPath);
                     break;
                 }
             }
-            if (unwantedVariant) continue;
-            String candidate = normalize(stem(decodedCandidate));
-            String candidateArticleless = candidate.replaceAll("\\b(?:the|a|an)\\b", " ")
-                    .replaceAll("\\s+", " ").trim();
-            if (keys.contains(candidate) || keys.contains(scoreAlias(candidate)) ||
-                    keys.contains(candidateArticleless) || keys.contains(scoreAlias(candidateArticleless)))
-                exact.add(href);
+            stanzas.add(stanza);
+            writeTextAtomic(metadata, joinStanzas(stanzas));
+            return true;
+        } catch (Exception error) {
+            Log.w(TAG, "Unable to restore " + romPath + " to " + metadata, error);
+            return false;
         }
-        if (exact.isEmpty()) return null;
-        exact.sort((left, right) -> Integer.compare(regionRank(left), regionRank(right)));
-        String href = exact.get(0);
-        String base = "https://thumbnails.libretro.com/" + encodePath(system.libretro) +
-                "/" + category + "/";
-        return new CatalogMatch(base + encodeHref(href), cleanTitle(stem(decode(href))));
+    }
+
+    /**
+     * Every platform's thumbnail listing, or null when too few were readable.
+     *
+     * <p>Offering to delete somebody's games because a network fetch failed
+     * would be inexcusable, so half the shelf missing abandons the pass.
+     */
+    private Map<String, List<String>> readArtworkCatalogs(File cacheRoot) {
+        Map<String, List<String>> catalogs = new LinkedHashMap<>();
+        int attempted = 0;
+        for (GameSystems.SystemDef system : GameSystems.all()) {
+            if (system.libretro.isEmpty()) continue;
+            attempted++;
+            try {
+                List<String> entries = catalogEntries(system, cacheRoot, "Named_Boxarts");
+                if (entries.isEmpty()) {
+                    Log.w(TAG, "Artwork review: the " + system.folder +
+                            " catalog listed nothing and is being skipped");
+                    continue;
+                }
+                catalogs.put(system.folder, entries);
+            } catch (Exception error) {
+                Log.w(TAG, "Artwork review: the " + system.folder +
+                        " catalog could not be read and is being skipped", error);
+            }
+        }
+        Log.i(TAG, "Artwork review read " + catalogs.size() + " of " + attempted +
+                " platform catalogs");
+        if (catalogs.isEmpty() || catalogs.size() * 2 < attempted) {
+            Log.w(TAG, "Artwork review abandoned: too few catalogs were reachable");
+            return null;
+        }
+        return catalogs;
+    }
+
+    /** One row of the review list, annotated so the choice is an easy one. */
+    private JSONObject pendingEntry(String key, GameSystems.SystemDef system, String title,
+                                    String romPath, String stanza, File metadata,
+                                    String similarOn) {
+        JSONObject entry = new JSONObject();
+        put(entry, "key", key);
+        put(entry, "title", title);
+        put(entry, "system", system.folder);
+        put(entry, "collection", system.collection);
+        put(entry, "romPath", romPath);
+        put(entry, "romName", new File(romPath).getName());
+        put(entry, "metadataFile", metadata.getAbsolutePath());
+        put(entry, "stanza", stanza);
+        boolean romPresent = !romPath.isEmpty() && new File(romPath).isFile();
+        try { entry.put("romPresent", romPresent); } catch (Exception ignored) {}
+        put(entry, "note", artlessNote(title, romPath, romPresent, similarOn));
+        if (similarOn != null) put(entry, "similarEntryOn", similarOn);
+        return entry;
+    }
+
+    /**
+     * A one-line hint about what the entry actually is. These used to be the
+     * removal's corroborating evidence; now that the owner decides, they are
+     * kept as annotations, because "the ROM file is already missing" or "this
+     * is a cheat cartridge" is exactly what makes the choice obvious.
+     */
+    private static String artlessNote(String title, String romPath, boolean romPresent,
+                                      String similarOn) {
+        if (!romPresent) return "The ROM file is already gone from storage";
+        if (TitleMatcher.isUtilityTitle(title))
+            return "Not a game — a cheat cartridge, BIOS, or service cart";
+        if (TitleMatcher.isBootlegDump(new File(romPath).getName()))
+            return "Dump tagged unlicensed, pirate, or hacked";
+        if (similarOn != null)
+            return "Nothing on this platform; a similar name exists under " + similarOn;
+        return "No catalog on any platform lists this title";
+    }
+
+    /** The remembered answer for one game, stable across rescans and reinstalls. */
+    private static String decisionKey(GameSystems.SystemDef system, String title) {
+        return system.folder + "|" + normalize(title);
+    }
+
+    /**
+     * Records the owner's answer for one game and carries it out at once.
+     *
+     * @param choice one of {@code leave}, {@code hide}, {@code delete-rom}
+     */
+    synchronized String decideArtwork(String key, String choice) {
+        if (key == null || key.isEmpty()) return "";
+        if (!CHOICE_KEEP.equals(choice) && !CHOICE_HIDE.equals(choice) &&
+                !CHOICE_DELETE.equals(choice)) return "";
+        File mediaRoot = mediaRoot();
+        JSONArray queue = readReviewQueue(mediaRoot);
+        JSONObject entry = null;
+        JSONArray remaining = new JSONArray();
+        for (int index = 0; index < queue.length(); index++) {
+            JSONObject row = queue.optJSONObject(index);
+            if (row == null) continue;
+            if (key.equals(row.optString("key")) && entry == null) entry = row;
+            else remaining.put(row);
+        }
+        if (entry == null) return "";
+
+        String title = entry.optString("title");
+        String romPath = entry.optString("romPath");
+        GameSystems.SystemDef system = GameSystems.byFolder(entry.optString("system"));
+        if (system == null) return "";
+
+        if (CHOICE_DELETE.equals(choice) && !deleteRomFile(romPath)) {
+            Log.e(TAG, "Refused to record a delete for \"" + title +
+                    "\": the ROM file could not be removed");
+            return "";
+        }
+
+        JSONObject decisions = readDecisions(mediaRoot);
+        JSONObject decision = new JSONObject();
+        put(decision, "choice", choice);
+        put(decision, "title", title);
+        put(decision, "system", system.folder);
+        put(decision, "romPath", romPath);
+        put(decision, "romName", entry.optString("romName"));
+        put(decision, "metadataFile", entry.optString("metadataFile"));
+        put(decision, "decidedAt", String.valueOf(System.currentTimeMillis()));
+        if (!CHOICE_KEEP.equals(choice)) put(decision, "stanza", entry.optString("stanza"));
+        try { decisions.put(key, decision); } catch (Exception ignored) {}
+        writeDecisions(mediaRoot, decisions);
+        writeReviewQueue(mediaRoot, remaining);
+
+        if (!CHOICE_KEEP.equals(choice)) {
+            removeLibraryRows(romPath);
+            archiveRegistryRow(romPath);
+            JSONArray ledger = readLedger(mediaRoot);
+            ledger.put(ledgerRecord(system, title, romPath, entry.optString("stanza"), 0,
+                    choice, new File(entry.optString("metadataFile")),
+                    entry.optString("similarEntryOn")));
+            try { writeJsonAtomic(new File(mediaRoot, ARTLESS_LEDGER), ledger); }
+            catch (Exception error) { Log.w(TAG, "Unable to write the artwork ledger", error); }
+            try { writeMetadata(readRegistry()); }
+            catch (Exception error) { Log.w(TAG, "Unable to rebuild metadata", error); }
+            // Pegasus has to re-read the metafiles before the row disappears.
+            synchronized (statusLock) {
+                try { status.put("needsReload", true); } catch (Exception ignored) {}
+            }
+        }
+        Log.i(TAG, "Missing artwork for \"" + title + "\" (" + system.folder + "): the owner " +
+                "chose " + choice + (CHOICE_DELETE.equals(choice) ?
+                " and the ROM was deleted from " + romPath :
+                " and the ROM is untouched at " + romPath));
+        return choice;
+    }
+
+    /** The review list the frontend renders, newest scan first. */
+    String artworkReviewJson() {
+        JSONObject response = new JSONObject();
+        try {
+            JSONArray queue = readReviewQueue(mediaRoot());
+            JSONArray games = new JSONArray();
+            for (int index = 0; index < queue.length(); index++) {
+                JSONObject row = queue.optJSONObject(index);
+                if (row == null) continue;
+                JSONObject item = new JSONObject();
+                item.put("key", row.optString("key"));
+                item.put("title", row.optString("title"));
+                item.put("system", row.optString("system"));
+                item.put("collection", row.optString("collection"));
+                item.put("romName", row.optString("romName"));
+                item.put("romPresent", row.optBoolean("romPresent", true));
+                item.put("note", row.optString("note"));
+                games.put(item);
+            }
+            response.put("count", games.length());
+            response.put("games", games);
+        } catch (Exception ignored) {}
+        return response.toString();
+    }
+
+    /** Drops every metafile row that points at one ROM. */
+    private void removeLibraryRows(String romPath) {
+        if (romPath == null || romPath.isEmpty()) return;
+        List<String> dropped = Collections.singletonList(romPath);
+        for (File metadata : metadataFiles()) {
+            try {
+                List<String> stanzas = splitStanzas(readText(metadata));
+                List<String> keep = new ArrayList<>();
+                boolean changed = false;
+                for (String stanza : stanzas) {
+                    if (stanza.startsWith("game:") && romPath.equals(field(stanza, "file"))) {
+                        changed = true;
+                        continue;
+                    }
+                    keep.add(stanza);
+                }
+                if (!changed) continue;
+                for (int index = 0; index < keep.size(); index++)
+                    keep.set(index, removeFileEntries(keep.get(index), dropped));
+                writeTextAtomic(metadata, joinStanzas(keep));
+            } catch (Exception error) {
+                Log.w(TAG, "Unable to drop " + romPath + " from " + metadata, error);
+            }
+        }
+    }
+
+    /**
+     * Permanently removes one ROM, staging it on the same volume first so a
+     * refusal cannot leave the library pointing at a half-deleted file.
+     */
+    private boolean deleteRomFile(String romPath) {
+        if (romPath == null || romPath.isEmpty()) return false;
+        File rom = new File(romPath);
+        // Already gone is the outcome the owner asked for.
+        if (!rom.isFile()) return true;
+        File trash = new File(storageVolumeRoot(rom), ".LucentTrash");
+        if (!trash.mkdirs() && !trash.isDirectory()) return rom.delete();
+        File staged = uniqueTrashTarget(trash, rom.getName());
+        if (!rom.renameTo(staged)) return rom.delete();
+        if (staged.delete()) return true;
+        staged.renameTo(rom);
+        return false;
+    }
+
+    private boolean unarchiveRegistryRow(String romPath) {
+        if (romPath == null || romPath.isEmpty()) return false;
+        JSONArray registry = readRegistry();
+        boolean changed = false;
+        for (int index = 0; index < registry.length(); index++) {
+            JSONObject row = registry.optJSONObject(index);
+            if (row == null || !romPath.equals(row.optString("file"))) continue;
+            if (!row.optBoolean("archived", false)) return false;
+            try {
+                row.put("archived", false);
+                row.put("archiveReason", "");
+                changed = true;
+            } catch (Exception ignored) {}
+            break;
+        }
+        if (!changed) return false;
+        try {
+            writeJsonAtomic(REGISTRY, registry);
+            writeMetadata(registry);
+            return true;
+        } catch (Exception error) {
+            Log.w(TAG, "Unable to restore the registry row for " + romPath, error);
+            return false;
+        }
+    }
+
+    private static void rememberStanza(JSONObject decision, String stanza, File metadata,
+                                       String romPath) {
+        if (decision.optString("stanza").isEmpty()) put(decision, "stanza", stanza);
+        if (decision.optString("metadataFile").isEmpty())
+            put(decision, "metadataFile", metadata.getAbsolutePath());
+        if (decision.optString("romPath").isEmpty()) put(decision, "romPath", romPath);
+    }
+
+    private static List<String> jsonKeys(JSONObject value) {
+        List<String> keys = new ArrayList<>();
+        java.util.Iterator<String> iterator = value.keys();
+        while (iterator.hasNext()) keys.add(iterator.next());
+        return keys;
+    }
+
+    private static JSONObject readDecisions(File mediaRoot) {
+        try {
+            File file = new File(mediaRoot, ARTWORK_DECISIONS);
+            return file.isFile() ? new JSONObject(readText(file)) : new JSONObject();
+        } catch (Exception ignored) {
+            return new JSONObject();
+        }
+    }
+
+    private static void writeDecisions(File mediaRoot, JSONObject decisions) {
+        try {
+            writeTextAtomic(new File(mediaRoot, ARTWORK_DECISIONS),
+                    decisions.toString(2) + "\n");
+        } catch (Exception error) {
+            Log.w(TAG, "Unable to save the missing-artwork choices", error);
+        }
+    }
+
+    private static JSONArray readReviewQueue(File mediaRoot) {
+        try {
+            File file = new File(mediaRoot, ARTWORK_REVIEW_QUEUE);
+            return file.isFile() ? new JSONArray(readText(file)) : new JSONArray();
+        } catch (Exception ignored) {
+            return new JSONArray();
+        }
+    }
+
+    private static void writeReviewQueue(File mediaRoot, JSONArray queue) {
+        try {
+            writeJsonAtomic(new File(mediaRoot, ARTWORK_REVIEW_QUEUE), queue);
+        } catch (Exception error) {
+            Log.w(TAG, "Unable to save the missing-artwork review list", error);
+        }
+    }
+
+    /**
+     * The first platform whose catalog carries something resembling a title,
+     * or null when none of them does. The platform is named in the review row
+     * so a surprising entry can be traced to the catalog that vouched.
+     */
+    private static String artworkExistsIn(String title, Map<String, List<String>> catalogs) {
+        for (Map.Entry<String, List<String>> entry : catalogs.entrySet())
+            if (TitleMatcher.hasAnyCandidate(title, entry.getValue())) return entry.getKey();
+        return null;
+    }
+
+    private JSONObject ledgerRecord(GameSystems.SystemDef system, String title, String romPath,
+                                    String stanza, int catalogsSearched, String choice,
+                                    File metadata, String similarOn) {
+        JSONObject record = new JSONObject();
+        put(record, "removedAt", String.valueOf(System.currentTimeMillis()));
+        put(record, "title", title);
+        put(record, "system", system.folder);
+        put(record, "collection", system.collection);
+        put(record, "romPath", romPath);
+        put(record, "reason", "no box art in any catalog");
+        put(record, "choice", choice);
+        put(record, "romDeleted", String.valueOf(CHOICE_DELETE.equals(choice)));
+        if (catalogsSearched > 0)
+            put(record, "catalogsSearched", String.valueOf(catalogsSearched));
+        if (similarOn != null && !similarOn.isEmpty()) put(record, "similarEntryOn", similarOn);
+        if (metadata != null) put(record, "metadataFile", metadata.getAbsolutePath());
+        // Verbatim, so a removal can be pasted straight back into the metafile.
+        put(record, "stanza", stanza);
+        return record;
+    }
+
+    private static void put(JSONObject target, String key, String value) {
+        try { target.put(key, value); } catch (Exception ignored) {}
+    }
+
+    private static JSONArray readLedger(File mediaRoot) {
+        try {
+            File file = new File(mediaRoot, ARTLESS_LEDGER);
+            return file.isFile() ? new JSONArray(readText(file)) : new JSONArray();
+        } catch (Exception ignored) {
+            return new JSONArray();
+        }
+    }
+
+    /**
+     * Archives the registry row owning one ROM, if there is one. Archived rows
+     * stay in the registry, are excluded from generated metadata, and the
+     * frontend's archive list can put them back.
+     */
+    private boolean archiveRegistryRow(String romPath) {
+        if (romPath == null || romPath.isEmpty()) return false;
+        JSONArray registry = readRegistry();
+        boolean changed = false;
+        for (int index = 0; index < registry.length(); index++) {
+            JSONObject row = registry.optJSONObject(index);
+            if (row == null || !romPath.equals(row.optString("file"))) continue;
+            try {
+                row.put("archived", true);
+                row.put("archiveReason", "no-box-art-in-any-catalog");
+                row.put("forceInclude", false);
+                changed = true;
+            } catch (Exception ignored) {}
+            break;
+        }
+        if (!changed) return false;
+        try {
+            writeJsonAtomic(REGISTRY, registry);
+            return true;
+        } catch (Exception error) {
+            Log.w(TAG, "Unable to archive the registry row for " + romPath, error);
+            return false;
+        }
+    }
+
+    /** Drops removed ROM paths from a collection stanza's {@code files:} list. */
+    private static String removeFileEntries(String stanza, List<String> romPaths) {
+        if (romPaths.isEmpty() || !stanza.startsWith("collection:")) return stanza;
+        StringBuilder out = new StringBuilder();
+        for (String line : stanza.split("\\n")) {
+            if (romPaths.contains(line.trim())) continue;
+            if (out.length() > 0) out.append('\n');
+            out.append(line);
+        }
+        return out.toString();
     }
 
     private String canonicalTitle(GameSystems.SystemDef system, String title, File cacheRoot) {
@@ -2238,20 +3266,12 @@ final class ImportManager {
 
     private VideoMatch archiveSearchVideo(GameSystems.SystemDef system, String title, File cacheRoot) {
         try {
-            String queryTitle = cleanTitle(title)
-                    .replaceAll("\\([^)]*\\)|\\[[^]]*]", " ")
-                    .replaceAll("\\s+", " ").trim();
-            int queryColon = queryTitle.indexOf(':');
-            if (queryColon > 3) {
-                String shortQuery = queryTitle.substring(0, queryColon)
-                        .replaceAll(",\\s*(The|A|An)$", "");
-                if (normalize(shortQuery).contains(" ")) queryTitle = shortQuery;
-            }
+            String queryTitle = normalize(title);
             String query = "title:(\"" + queryTitle + "\") AND mediatype:(movies)";
             String url = "https://archive.org/advancedsearch.php?q=" +
                     URLEncoder.encode(query, "UTF-8") +
                     "&fl%5B%5D=identifier&fl%5B%5D=title&rows=75&page=1&output=json";
-            File cache = new File(cacheRoot, "archive-search-v3/" + system.folder + "/" +
+            File cache = new File(cacheRoot, "archive-search-v4/" + system.folder + "/" +
                     sha1(normalize(title)) + ".json");
             JSONObject root = new JSONObject(cachedText(cache, url,
                     14L * 24L * 60L * 60L * 1000L, 4L * 1024L * 1024L));
@@ -2275,7 +3295,8 @@ final class ImportManager {
                 int score = archiveCandidateScore(title, system,
                         candidate.optString("title") + " " + candidate.optString("identifier"));
                 if (score < 90) break;
-                VideoMatch match = archiveItemVideo(candidate.optString("identifier"), cacheRoot);
+                VideoMatch match = archiveItemVideo(candidate.optString("identifier"),
+                        title, system, cacheRoot);
                 if (match != null) return match;
             }
             return null;
@@ -2285,7 +3306,8 @@ final class ImportManager {
         }
     }
 
-    private VideoMatch archiveItemVideo(String identifier, File cacheRoot) throws Exception {
+    private VideoMatch archiveItemVideo(String identifier, String title,
+                                       GameSystems.SystemDef system, File cacheRoot) throws Exception {
         if (identifier == null || identifier.isEmpty()) return null;
         File metadataCache = new File(cacheRoot, "archive-items/" + sha1(identifier) + ".json");
         JSONObject metadata = new JSONObject(cachedText(metadataCache,
@@ -2301,6 +3323,10 @@ final class ImportManager {
             String lower = name.toLowerCase(Locale.US);
             if (!lower.endsWith(".mp4") || lower.contains("sample") ||
                     lower.contains("thumb") || lower.contains("spectrogram")) continue;
+            // An Archive item can bundle trailers for several unrelated
+            // games, even when the item title matches perfectly. Validate
+            // the actual file before preferring its resolution or size.
+            if (archiveCandidateScore(title, system, name) < 90) continue;
             long size = parseLong(file.optString("size"));
             if (size > 0 && (size < 256L * 1024L || size > 192L * 1024L * 1024L)) continue;
             String format = file.optString("format").toLowerCase(Locale.US);
@@ -2317,7 +3343,7 @@ final class ImportManager {
                 encodeHref(selected));
     }
 
-    private void writeMetadata(JSONArray registry) throws Exception {
+    private boolean writeMetadata(JSONArray registry) throws Exception {
         // Generated metadata is rebuilt frequently (startup, media repair, and
         // imports). Older builds treated the registry as the only source of
         // truth and silently discarded exact historical enrichment that had
@@ -2352,6 +3378,7 @@ final class ImportManager {
             if (previous == null || metadataQuality(row) > metadataQuality(previous))
                 games.put(identity, row);
         }
+        boolean metadataChanged = false;
         Set<String> activeGeneratedFiles = new HashSet<>();
         for (Map.Entry<String, LinkedHashMap<String, JSONObject>> group : groups.entrySet()) {
             GameSystems.SystemDef system = GameSystems.byFolder(group.getKey());
@@ -2461,6 +3488,8 @@ final class ImportManager {
                 if (!row.optString("metacriticSlug").isEmpty())
                     out.append("x-metacritic-url: https://www.metacritic.com/game/")
                             .append(row.optString("metacriticSlug")).append("/\n");
+                if (row.optInt("cheats", 0) > 0)
+                    out.append("x-lucent-cheats: ").append(row.optInt("cheats", 0)).append('\n');
                 if (!row.optString("boxArt").isEmpty())
                     out.append("assets.boxFront: ").append(metadataSafe(row.optString("boxArt"))).append('\n');
                 if (!row.optString("background").isEmpty())
@@ -2487,26 +3516,36 @@ final class ImportManager {
             String generatedName = "99-lucent-auto-" + system.folder +
                     ".metadata.pegasus.txt";
             activeGeneratedFiles.add(generatedName);
-            writeTextAtomic(new File(LUCENT_AUTO_METADATA.getParentFile(), generatedName),
+            metadataChanged |= writeGeneratedMetadataIfChanged(
+                    new File(LUCENT_AUTO_METADATA.getParentFile(), generatedName),
                     out.toString());
             writeCompatibilityMirror(new File(AUTO_METADATA.getParentFile(), generatedName),
                     out.toString());
         }
         cleanupGeneratedMetadata(AUTO_METADATA.getParentFile(), activeGeneratedFiles);
-        cleanupGeneratedMetadata(LUCENT_AUTO_METADATA.getParentFile(), activeGeneratedFiles);
+        metadataChanged |= cleanupGeneratedMetadata(
+                LUCENT_AUTO_METADATA.getParentFile(), activeGeneratedFiles);
         // Both Android package variants have their own canonical `metafiles`
         // directory. Early builds also mirrored the same generated files into
         // the shared Pegasus root, so each ROM was parsed twice and the second
         // pass emitted ownership conflicts. Remove those redundant mirrors.
-        cleanupGeneratedMetadata(PEGASUS, Collections.emptySet());
-        // A Pegasus metafile represents one collection. Older Lucent builds
+        metadataChanged |= cleanupGeneratedMetadata(PEGASUS, Collections.emptySet());
+        // A Pegasus metafile represents one collection. Older EmuFusion builds
         // placed several collection headers in this combined file, causing
         // every imported game to appear in every system. Leave a harmless
         // marker at the old path while the per-system files above own games.
         String retired = "# Retired combined Lucent metadata; per-system files are authoritative.\n";
-        writeTextAtomic(LUCENT_AUTO_METADATA, retired);
+        metadataChanged |= writeGeneratedMetadataIfChanged(LUCENT_AUTO_METADATA, retired);
         writeCompatibilityMirror(AUTO_METADATA, retired);
-        writeTextAtomic(LEGACY_AUTO_METADATA, retired);
+        metadataChanged |= writeGeneratedMetadataIfChanged(LEGACY_AUTO_METADATA, retired);
+        return metadataChanged;
+    }
+
+    private static boolean writeGeneratedMetadataIfChanged(File target, String value)
+            throws Exception {
+        if (target.isFile() && value.equals(readText(target))) return false;
+        writeTextAtomic(target, value);
+        return true;
     }
 
     /**
@@ -2563,7 +3602,7 @@ final class ImportManager {
             } catch (Exception ignored) {}
         }
         // A verified ROM may predate the registry while still having a valid
-        // per-system Lucent metafile. Never delete that game merely because a
+        // per-system EmuFusion metafile. Never delete that game merely because a
         // newer scan rebuilds generated files from the registry. Reconcile
         // only Lucent-owned auto metafiles; hand-authored/core collections are
         // intentionally not duplicated into the importer registry.
@@ -2712,14 +3751,16 @@ final class ImportManager {
         return score;
     }
 
-    private static void cleanupGeneratedMetadata(File directory, Set<String> keep) {
+    private static boolean cleanupGeneratedMetadata(File directory, Set<String> keep) {
         File[] files = directory.listFiles((dir, name) ->
                 name.startsWith("99-lucent-auto-") &&
                         name.endsWith(".metadata.pegasus.txt") &&
                         !name.equals(AUTO_METADATA.getName()));
-        if (files == null) return;
+        if (files == null) return false;
+        boolean changed = false;
         for (File file : files)
-            if (!keep.contains(file.getName())) file.delete();
+            if (!keep.contains(file.getName())) changed |= file.delete();
+        return changed;
     }
 
     private static int metadataQuality(JSONObject value) {
@@ -2772,12 +3813,12 @@ final class ImportManager {
         }
     }
 
-    /** Flags the current status so the next /import/reload refreshes Lucent. */
+    /** Flags the current status so the next /import/reload refreshes EmuFusion. */
     private void requestLibraryReload() {
         synchronized (statusLock) {
             try {
                 status.put("needsReload", true);
-                status.put("message", "Launch route updated • refreshing Lucent library…");
+                status.put("message", "Launch route updated • refreshing EmuFusion library…");
                 status.put("updatedAt", System.currentTimeMillis());
             } catch (Exception ignored) {}
         }
@@ -2837,7 +3878,6 @@ final class ImportManager {
             if ("vpk".equals(ext) && validVitaPackage(file)) return GameSystems.byFolder("psvita");
             if ("pbp".equals(ext) && starts(head, new byte[]{0x00,0x50,0x42,0x50})) return GameSystems.byFolder("psp");
             if ("cso".equals(ext) && starts(head, "CISO".getBytes())) return GameSystems.byFolder("psp");
-            if ("pkg".equals(ext) && (starts(head, new byte[]{0x7f,0x50,0x4b,0x47}) || starts(head, "PKG".getBytes()))) return GameSystems.byFolder("ps3");
             if ("wbfs".equals(ext) && starts(head, "WBFS".getBytes())) return GameSystems.byFolder("wii");
             if ("rvz".equals(ext) && starts(head, "RVZ".getBytes())) {
                 byte[] id = readRange(file, 88, 6);
@@ -2991,7 +4031,12 @@ final class ImportManager {
             JSONObject row = registry.optJSONObject(i);
             if (row != null) byIdentity.put(row.optString("sourceIdentity"), row);
         }
-        for (ImportedGame game : games) byIdentity.put(game.sourceIdentity, game.toJson());
+        for (ImportedGame game : games) {
+            JSONObject row = byIdentity.get(game.sourceIdentity);
+            if (row == null) row = game.toJson();
+            else try { mergeObject(row, game.toJson()); } catch (Exception ignored) {}
+            byIdentity.put(game.sourceIdentity, row);
+        }
         JSONArray result = new JSONArray();
         for (JSONObject row : byIdentity.values()) result.put(row);
         return result;
@@ -3084,6 +4129,7 @@ final class ImportManager {
         int critic;
         int metacriticCritic;
         int metacriticReviews;
+        int cheats;
         int gamerankingsReviews;
         boolean archived;
         boolean enriched;
@@ -3135,6 +4181,7 @@ final class ImportManager {
             game.critic = value.optInt("critic", 0);
             game.metacriticCritic = value.optInt("metacriticCritic", 0);
             game.metacriticReviews = value.optInt("metacriticReviews", 0);
+            game.cheats = value.optInt("cheats", 0);
             game.gamerankingsReviews = value.optInt("gamerankingsReviews", 0);
             game.archived = value.optBoolean("archived", false);
             game.addedAt = value.optLong("addedAt", game.addedAt);
@@ -3174,6 +4221,7 @@ final class ImportManager {
                 value.put("criticSources", criticSources);
                 value.put("metacriticCritic", metacriticCritic);
                 value.put("metacriticReviews", metacriticReviews);
+                value.put("cheats", cheats);
                 value.put("gamerankingsScore", gamerankingsScore);
                 value.put("gamerankingsReviews", gamerankingsReviews);
                 value.put("gamerankingsUrl", gamerankingsUrl);
@@ -3408,40 +4456,11 @@ final class ImportManager {
             key = key.replaceAll("\\s+(incorporated|inc|corporation|corp|company|co|limited|ltd|pty|sa)$", "");
         return key;
     }
-    private static String normalize(String value) {
-        String title = decode(value);
-        int slash = Math.max(title.lastIndexOf('/'), title.lastIndexOf(File.separatorChar));
-        if (slash >= 0) title = title.substring(slash + 1);
-        String lower = title.toLowerCase(Locale.US);
-        String[] knownExtensions = new String[]{
-                ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".zip", ".7z",
-                ".nes", ".unf", ".unif", ".fds", ".sfc", ".smc", ".fig",
-                ".n64", ".z64", ".v64", ".gb", ".gbc", ".gba", ".nds",
-                ".gg", ".gen", ".md", ".bin", ".cue", ".gdi", ".chd",
-                ".iso", ".cso", ".rvz", ".wbfs", ".xci", ".nsp", ".wua",
-                ".wux", ".3ds", ".3dsx", ".cia", ".cci", ".vpk", ".pbp"
-        };
-        for (String extension : knownExtensions) {
-            if (lower.endsWith(extension)) {
-                title = title.substring(0, title.length() - extension.length());
-                break;
-            }
-        }
-        String previous;
-        do { previous = title; title = title.replaceAll("\\([^()]*\\)|\\[[^\\[\\]]*]", " "); }
-        while (!title.equals(previous));
-        title = Normalizer.normalize(title, Normalizer.Form.NFKD).replaceAll("\\p{M}+", "");
-        title = title.toLowerCase(Locale.US).replace("&", " and ");
-        return title.replaceAll("[^a-z0-9]+", " ").trim().replaceAll("\\s+", " ");
-    }
-    private static int regionRank(String value) {
-        String lower = decode(value).toLowerCase(Locale.US);
-        if (lower.contains("(usa") || lower.contains("(us)")) return 0;
-        if (lower.contains("(world")) return 1;
-        if (lower.contains("(europe")) return 2;
-        if (lower.contains("(japan")) return 4;
-        return 3;
-    }
+    // Title normalization and region preference are shared with the artwork
+    // matcher. They live in TitleMatcher so the host tests exercise the same
+    // code the device runs, rather than a copy that can drift away from it.
+    private static String normalize(String value) { return TitleMatcher.normalize(value); }
+    private static int regionRank(String value) { return TitleMatcher.regionRank(value); }
     private static String safeFilename(String value) {
         String clean = value.replaceAll("[\\x00-\\x1f/:*?\"<>|]", " ").replaceAll("\\s+", " ").trim();
         return clean.length() > 180 ? clean.substring(0, 180).trim() : clean;
@@ -3597,20 +4616,19 @@ final class ImportManager {
     private static String joinStanzas(List<String> values) { StringBuilder out=new StringBuilder(); for(String value:values){if(out.length()>0)out.append("\n\n");out.append(value.trim());}return out.append('\n').toString(); }
     private static String field(String stanza, String key) { String prefix=key+":"; for(String line:stanza.split("\\n"))if(line.startsWith(prefix))return line.substring(prefix.length()).trim(); return ""; }
     private static String removeField(String stanza, String key) { String prefix=key+":"; StringBuilder out=new StringBuilder(); for(String line:stanza.split("\\n")){if(line.startsWith(prefix))continue;if(out.length()>0)out.append('\n');out.append(line);}return out.toString(); }
-    private static GameSystems.SystemDef systemFromRomPath(String path) { String marker="/Games/"; int at=path.indexOf(marker); if(at<0)return null; String rest=path.substring(at+marker.length()); int slash=rest.indexOf('/'); return GameSystems.byFolder(slash<0?rest:rest.substring(0,slash)); }
+    private static GameSystems.SystemDef systemFromRomPath(String path) {
+        return GameSystems.byPath(new File(path));
+    }
 
     private static String cachedText(File cache, String url, long maxAge, long maxBytes) throws Exception {
-        if (cache.isFile() && System.currentTimeMillis() - cache.lastModified() < maxAge) return readText(cache);
+        if (LibraryHttp.reusable(cache) && System.currentTimeMillis() - cache.lastModified() < maxAge) return readText(cache);
         byte[] bytes = fetchBytes(url, maxBytes); String value = new String(bytes, StandardCharsets.UTF_8); writeTextAtomic(cache, value); return value;
     }
     private static byte[] fetchBytes(String url, long maxBytes) throws Exception {
-        HttpURLConnection connection=(HttpURLConnection)new URL(url).openConnection(); connection.setConnectTimeout(15000);connection.setReadTimeout(45000);connection.setRequestProperty("User-Agent",USER_AGENT);connection.setInstanceFollowRedirects(true);
-        if (url.contains("metacritic.com")) { connection.setRequestProperty("Origin", "https://www.metacritic.com"); connection.setRequestProperty("Referer", "https://www.metacritic.com/"); }
-        int status=connection.getResponseCode();if(status<200||status>=300)throw new java.io.IOException("HTTP "+status);
-        try(InputStream in=new BufferedInputStream(connection.getInputStream());ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buffer=new byte[65536];int count;long total=0;while((count=in.read(buffer))>=0){total+=count;if(total>maxBytes)throw new java.io.IOException("response too large");out.write(buffer,0,count);}return out.toByteArray();}finally{connection.disconnect();}
+        return LibraryHttp.fetch(url, maxBytes);
     }
     private static boolean download(String url, File target, long maxBytes) throws Exception {
-        if(target.isFile()&&target.length()>512)return true; target.getParentFile().mkdirs(); File part=new File(target.getAbsolutePath()+".part"); HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(15000);c.setReadTimeout(60000);c.setRequestProperty("User-Agent",USER_AGENT);c.setInstanceFollowRedirects(true);int code=c.getResponseCode();if(code<200||code>=300){c.disconnect();return false;}long total=0;try(InputStream in=new BufferedInputStream(c.getInputStream());OutputStream out=new BufferedOutputStream(new FileOutputStream(part))){byte[] b=new byte[1024*1024];int n;while((n=in.read(b))>=0){total+=n;if(total>maxBytes)throw new java.io.IOException("download too large");out.write(b,0,n);}}finally{c.disconnect();}if(total<512){part.delete();return false;}if(target.exists())target.delete();return part.renameTo(target);
+        return LibraryHttp.download(url, target, maxBytes);
     }
     private static boolean hasPlatform(JSONArray platforms, String expected) { if(platforms==null)return false; for(int i=0;i<platforms.length();i++){JSONObject p=platforms.optJSONObject(i);if(p!=null&&p.optString("name").equalsIgnoreCase(expected))return true;}return false; }
     private static boolean writable(File directory) {

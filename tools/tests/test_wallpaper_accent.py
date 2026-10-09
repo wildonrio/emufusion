@@ -179,7 +179,7 @@ class ImporterPrecomputesTheAccentTest(unittest.TestCase):
         self.assertIn("row.put(WallpaperAccent.REGISTRY_SOURCE_FIELD, key);", block)
 
     def test_the_accent_is_written_into_the_generated_metadata(self):
-        block = IMPORTER.split("private void writeMetadata(", 1)[1]
+        block = IMPORTER.split("private boolean writeMetadata(", 1)[1]
         block = block.split("private static boolean refreshWallpaperAccents(", 1)[0]
         self.assertIn("String accent = WallpaperAccent.sanitize(", block)
         self.assertIn('out.append(WallpaperAccent.METADATA_FIELD).append(": ")', block)

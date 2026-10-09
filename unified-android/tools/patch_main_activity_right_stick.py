@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add Lucent in-window gameplay hooks to the inherited Qt activity class."""
+"""Add EmuFusion in-window gameplay hooks to the inherited Qt activity class."""
 
 from __future__ import annotations
 
@@ -9,9 +9,36 @@ from pathlib import Path
 
 METHODS = r'''
 
-# Lucent keeps the inherited Qt activity class because Qt binds its delegate to
+# EmuFusion keeps the inherited Qt activity class because Qt binds its delegate to
 # the exact Java class. These hooks keep emulation inside that same Activity and
 # Window while delegating the implementation to ordinary Java.
+.method protected onCreateHook(Landroid/os/Bundle;)V
+    .locals 1
+
+    invoke-static {p0, p1}, Lcom/thorium/preview/game/InWindowGameHost;->onCreate(Landroid/app/Activity;Landroid/os/Bundle;)V
+
+    invoke-static {p0}, Lcom/thorium/preview/game/InWindowGameHost;->shouldSkipQtDelegate(Landroid/app/Activity;)Z
+
+    move-result v0
+
+    if-nez v0, :lucent_skip_retiring_qt_bootstrap
+
+    invoke-super {p0, p1}, Lorg/qtproject/qt5/android/bindings/QtActivity;->onCreateHook(Landroid/os/Bundle;)V
+
+    :lucent_skip_retiring_qt_bootstrap
+    return-void
+.end method
+
+.method protected onSaveInstanceState(Landroid/os/Bundle;)V
+    .locals 0
+
+    invoke-super {p0, p1}, Lorg/qtproject/qt5/android/bindings/QtActivity;->onSaveInstanceState(Landroid/os/Bundle;)V
+
+    invoke-static {p0, p1}, Lcom/thorium/preview/game/InWindowGameHost;->onSaveInstanceState(Landroid/app/Activity;Landroid/os/Bundle;)V
+
+    return-void
+.end method
+
 .method protected onNewIntent(Landroid/content/Intent;)V
     .locals 0
 
@@ -130,21 +157,32 @@ def main() -> int:
     for signature in (
             ".method public dispatchGenericMotionEvent(Landroid/view/MotionEvent;)Z",
             ".method public dispatchKeyEvent(Landroid/view/KeyEvent;)Z",
+            ".method protected onCreateHook(Landroid/os/Bundle;)V",
+            ".method protected onSaveInstanceState(Landroid/os/Bundle;)V",
             ".method protected onNewIntent(Landroid/content/Intent;)V"):
         if signature in source:
-            raise SystemExit(f"refusing duplicate Lucent activity hook: {args.smali}")
+            raise SystemExit(f"refusing duplicate EmuFusion activity hook: {args.smali}")
     start_tail = '''    sput v0, Lorg/pegasus_frontend/android/MainActivity;->m_icon_density:I
 
     return-void
 .end method'''
     replacement = '''    sput v0, Lorg/pegasus_frontend/android/MainActivity;->m_icon_density:I
 
-    invoke-virtual {p0}, Lorg/pegasus_frontend/android/MainActivity;->getIntent()Landroid/content/Intent;
+    invoke-static {}, Lcom/thorium/preview/game/InWindowGameHost;->isQtTerminalShutdownPending()Z
 
-    move-result-object v0
+    move-result v0
 
-    invoke-static {p0, v0}, Lcom/thorium/preview/game/InWindowGameHost;->handleIntent(Landroid/app/Activity;Landroid/content/Intent;)Z
+    if-nez v0, :lucent_skip_retiring_qt_start
 
+    invoke-static {p0}, Lcom/thorium/preview/game/InWindowGameHost;->onStart(Landroid/app/Activity;)V
+
+    invoke-static {p0}, Lcom/thorium/preview/FullDisplayWindow;->apply(Landroid/app/Activity;)V
+
+    invoke-static {p0}, Lcom/thorium/preview/BootVideoOverlay;->begin(Landroid/app/Activity;)V
+
+    invoke-static {p0}, Lcom/thorium/preview/LegalNoticeOverlay;->begin(Landroid/app/Activity;)V
+
+    :lucent_skip_retiring_qt_start
     return-void
 .end method'''
     if source.count(start_tail) != 1:

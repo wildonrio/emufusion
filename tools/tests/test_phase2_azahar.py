@@ -18,16 +18,19 @@ class PhaseTwoAzaharTest(unittest.TestCase):
         self.recipe = (ROOT / "engines" / "build_core.sh").read_text(
             encoding="utf-8")
 
-    def test_official_source_and_release_artifact_are_exactly_locked(self):
+    def test_source_build_and_historical_release_are_exactly_locked(self):
         self.assertEqual("2125.1.3", self.lock["core"]["tag"])
         self.assertEqual("b42d0916ba9799297ae0e27c07d56801da1b5de5",
                          self.lock["core"]["commit"])
         self.assertEqual("4946db52ba9a559834cb3db075544480ac71fa4ae08b090a6708825a012a7b1b",
-                         self.lock["releaseArtifact"]["archiveSha256"])
+                         self.lock["referenceReleaseArtifact"]["archiveSha256"])
         self.assertEqual("d723066fa7c812618b5695d94b0fd85594e6c196e9e08ca9ba7134371a8da645",
-                         self.lock["releaseArtifact"]["memberSha256"])
-        self.assertEqual([], self.lock["dependencies"])
-        self.assertEqual([], self.lock["patches"])
+                         self.lock["referenceReleaseArtifact"]["memberSha256"])
+        self.assertNotIn("releaseArtifact", self.lock)
+        self.assertEqual(52, len(self.lock["dependencies"]))
+        self.assertEqual(1, len(self.lock["patches"]))
+        self.assertEqual(16384, self.lock["sourceBuild"]["linkAlignment"])
+        self.assertFalse(self.lock["sourceBuild"]["builtinKeyblob"])
 
     def test_registry_recipe_and_proof_are_bound(self):
         self.assertEqual(self.lock["core"]["commit"],
@@ -36,20 +39,21 @@ class PhaseTwoAzaharTest(unittest.TestCase):
                          self.row["source"]["archiveSha256"])
         self.assertEqual("engines/azahar-source-lock.json",
                          self.row["source"]["dependencyLock"])
-        self.assertEqual(self.lock["releaseArtifact"]["memberSha256"],
+        self.assertEqual(self.lock["sourceBuild"]["artifactSha256"],
                          self.row["build"]["proofArtifactSha256"])
         proof = ROOT / self.row["build"]["proofArtifactPath"]
         self.assertEqual(self.row["build"]["proofArtifactSha256"],
                          hashlib.sha256(proof.read_bytes()).hexdigest())
         self.assertIn("    azahar)", self.recipe)
-        self.assertIn(self.lock["releaseArtifact"]["archiveSha256"], self.recipe)
-        self.assertIn(self.lock["releaseArtifact"]["memberSha256"], self.recipe)
+        recipe = self.recipe.split("    azahar)", 1)[1].split("    play)", 1)[0]
+        self.assertIn("engines/tools/build_azahar.py", recipe)
+        self.assertNotIn("unzip", recipe)
 
-    def test_unreproduced_upstream_binary_remains_fail_closed(self):
-        self.assertEqual("build-published",
+    def test_local_source_build_does_not_open_release_gates(self):
+        self.assertEqual("build-reproduced",
                          self.row["android"]["integrationEvidence"])
         self.assertFalse(self.row["build"]["reproducible"])
-        self.assertFalse(self.row["gates"]["androidArm64"])
+        self.assertTrue(self.row["gates"]["androidArm64"])
         self.assertFalse(self.row["shipped"])
 
     def test_decrypted_cci_scope_does_not_require_external_keys(self):
@@ -76,8 +80,15 @@ class PhaseTwoAzaharTest(unittest.TestCase):
         self.assertIn("lucent_android_vulkan_attach_secondary", backend)
         self.assertIn("present.swapchainCount = present_count", backend)
         self.assertIn("nativeAttachSecondarySurfaceVulkan", jni)
+        self.assertIn("nativeSetSecondaryPresentationRotationVulkan", jni)
         self.assertIn("SecondaryGameplaySurfaceRouter.Listener", session)
+        self.assertIn("loop.setSecondaryPresentationRotation(90);", session)
         self.assertIn("DualScreenLayout.lowerScreenPointerY", session)
+        host = (ROOT / "unified-android" / "native" /
+                "lucent_libretro_host.c").read_text(encoding="utf-8")
+        azahar = host.split('strstr(host->core_path, "lucent_core_azahar")', 1)[1]
+        azahar = azahar.split("} else if", 1)[0]
+        self.assertIn('options, "side_by_side", &value_size', azahar)
         self.assertIn("active.detachSecondarySurfaceAndWait()", session)
         stop = session.split("@Override public void stop", 1)[1].split(
             "@Override public void release", 1)[0]
@@ -85,6 +96,35 @@ class PhaseTwoAzaharTest(unittest.TestCase):
                         stop.index("detachSecondaryBeforeBlank(active)"))
         self.assertIn("PreviewActivity.class", router)
         self.assertIn("setLaunchDisplayId", router)
+
+    def test_side_by_side_crop_is_bound_to_azahars_exact_upstream_geometry(self):
+        source_root = (ROOT / "engines" / "build" / "sources" /
+                       f"azahar-{self.lock['core']['commit']}")
+        libretro_window = (source_root / "src" / "citra_libretro" /
+                           "emu_window" / "libretro_window.cpp").read_text(
+                                   encoding="utf-8")
+        side = libretro_window.split(
+                "case Settings::LayoutOption::SideScreen:", 1)[1].split(
+                        "break;", 1)[0]
+        self.assertIn(
+                "baseX = Core::kScreenBottomWidth + Core::kScreenTopWidth;",
+                side)
+        self.assertIn("baseY = Core::kScreenTopHeight;", side)
+        frontend = (source_root / "src" / "core" / "frontend" /
+                    "emu_window.cpp").read_text(encoding="utf-8")
+        side_layout = frontend.split(
+                "case Settings::LayoutOption::SideScreen:", 1)[1].split(
+                        "break;", 1)[0]
+        self.assertIn("Settings::SmallScreenPosition::MiddleRight", side_layout)
+        # Native 3DS dimensions make that contract 400+320 by 240. Keeping
+        # the source proof here prevents a core update from silently moving
+        # the lower viewport while Lucent continues cropping the old columns.
+        core_header = (source_root / "src" / "core" / "3ds.h").read_text(
+                encoding="utf-8")
+        self.assertIn("kScreenTopWidth = 400", core_header)
+        self.assertIn("kScreenBottomWidth = 320", core_header)
+        self.assertIn("kScreenTopHeight = 240", core_header)
+        self.assertIn("kScreenBottomHeight = 240", core_header)
 
 
 if __name__ == "__main__":

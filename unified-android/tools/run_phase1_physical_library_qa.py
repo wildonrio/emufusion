@@ -134,7 +134,7 @@ def valid_content(adb_path: Path, serial: str, system: str, path: str) -> bool:
         if system == "megadrive":
             # Raw Genesis/Mega Drive dumps carry the SEGA hardware string in
             # the standard cartridge header. Interleaved SMD content is not
-            # selected automatically: it must first be normalized by Lucent's
+            # selected automatically: it must first be normalized by EmuFusion's
             # importer so this evidence path never trusts an extension alone.
             return (Path(path).suffix.casefold() != ".smd" and
                     read_range(adb_path, serial, path, 0x100, 4) == b"SEGA")
@@ -280,7 +280,7 @@ def main() -> int:
     os.chmod(args.output, stat.S_IRWXU)
 
     # One install and one hash own the complete matrix. Never clear app or user data.
-    qa.adb(adb_path, serial, "install", "-r", "-d", str(apk))
+    qa.adb(adb_path, serial, "install", "--no-incremental", "-r", "-d", str(apk))
     for permission in (
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.READ_EXTERNAL_STORAGE",

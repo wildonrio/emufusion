@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "systems": [
+    {
+      "folder": "n64",
+      "aliases": ["n64"],
+      "engines": ["mupen64plus-next"],
+      "phase": 1,
+      "requiredTitles": ["F-Zero X"],
+      "requiredSourceTiers": [60]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -1841,6 +1841,10 @@ static void context_destroy(void)
+ {
+     if(current_rdp_type == RDP_PLUGIN_GLIDEN64)
+     {
+        glsm_ctl(GLSM_CTL_STATE_CONTEXT_DESTROY, NULL);
++       // GLSM clears window_first during destroy, so its next RESET does not
++       // run STATE_SETUP. Invalidate our setup latch too: cached bindings and
++       // enables belong to the destroyed GL context, not the replacement.
++       context_setup_first_init = false;
+     }
+ #ifdef HAVE_PARALLEL_RDP

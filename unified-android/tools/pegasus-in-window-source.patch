@@ -1,0 +1,35 @@
+--- a/src/backend/Backend.cpp
++++ b/src/backend/Backend.cpp
+@@ -267,9 +267,17 @@
+ }
+ 
+ void Backend::onProcessLaunched()
+ {
++#ifdef Q_OS_ANDROID
++    // Same lifecycle as EmuFusion's pinned ARM64 launch-subscriber patch:
++    // complete provider/launcher bookkeeping without destroying the QML scene
++    // or stopping gamepad input for the in-window engine.
++    m_api_public->onGameProcessFinished();
++    m_launcher->completeInWindowLaunch();
++#else
+     m_frontend->teardown();
+     m_api_private->gamepad().stop();
++#endif
+ }
+ 
+ void Backend::onProcessFinished()
+--- a/src/backend/ProcessLauncher.h
++++ b/src/backend/ProcessLauncher.h
+@@ -40,6 +40,12 @@
+ public:
+     explicit ProcessLauncher(QObject* parent = nullptr);
+ 
++#ifdef Q_OS_ANDROID
++    // Finish launch bookkeeping without emitting processFinished, which would
++    // rebuild the frontend while the embedded engine still owns its surface.
++    void completeInWindowLaunch() { afterRun(); }
++#endif
++
+ signals:
+     void processLaunchOk();
+     void processLaunchError(QString);

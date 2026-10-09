@@ -3,16 +3,20 @@ package com.thorium.preview.game;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.PixelCopy;
 import android.view.Surface;
 
 import com.thorium.lucent.input.CanonicalControl;
@@ -25,12 +29,15 @@ import com.thorium.lucent.input.android.AndroidDeviceScanner;
 import com.thorium.lucent.input.android.AndroidGamingDeviceDetector;
 import com.thorium.lucent.audio.PcmAudioQueue;
 import com.thorium.lucent.emulators.NativeAdapterStopPolicy;
+import com.thorium.lucent.timing.DisplaySyncPolicy;
 import com.thorium.lucent.state.DurableBlobStore;
+import com.thorium.lucent.video.NativeSourceImageProvider;
 import com.thorium.preview.NativeAdapterHost;
 import com.thorium.preview.AppVolumeController;
 import com.thorium.preview.SecondaryGameplaySurfaceRouter;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -69,7 +76,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code dual_screen=false}, so it never requests the secondary display.
  */
 final class NativeAdapterEngineSession implements EngineSession,
-        SecondaryGameplaySurfaceRouter.Listener {
+        SecondaryGameplaySurfaceRouter.Listener,
+        com.thorium.lucent.netplay.NativeAdapterCapableSession {
     private static final String TAG = "LucentPhase3Engine";
     private static final int OUTPUT_SAMPLE_RATE = 48_000;
     // JNI byte arrays are signed-int sized.  A compressed RPCS3 state is much
@@ -147,6 +155,10 @@ final class NativeAdapterEngineSession implements EngineSession,
     private static final int PAD_START = 12, PAD_SELECT = 13, PAD_HOME = 14;
     private static final int PAD_LSTICK_X = 15, PAD_LSTICK_Y = 16;
     private static final int PAD_RSTICK_X = 17, PAD_RSTICK_Y = 18;
+    private static final int PAD_L3 = 23, PAD_R3 = 24;
+    /** controller_index for this device's own local input; remote netplay
+     * players are driven at 1..N-1 by {@link #applyRemoteControl}. */
+    private static final int LOCAL_PLAYER = 0;
 
     private final Context context;
     private final Context appContext;
@@ -158,7 +170,17 @@ final class NativeAdapterEngineSession implements EngineSession,
     });
     private final AtomicBoolean stopping = new AtomicBoolean(false);
     private final AtomicBoolean released = new AtomicBoolean(false);
+    private final Object retirementLock = new Object();
+    private final List<Completion> stopCompletions = new ArrayList<>();
+    private final List<Completion> releaseCompletions = new ArrayList<>();
+    private boolean stopCompleted;
+    private boolean releaseCompleted;
+    // Lifecycle-worker only: defer join interruption until save/native cleanup
+    // has returned, rather than interrupting a downstream teardown operation.
+    private boolean retirementInterrupted;
     private final AtomicBoolean audioFailureReported = new AtomicBoolean(false);
+    private final AtomicBoolean firstFrameProbeInFlight = new AtomicBoolean(false);
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     /**
      * Adapter calls that arrive on another thread and have to be handed to the
      * render owner. The ABI is explicit that "all calls for one engine instance
@@ -170,12 +192,15 @@ final class NativeAdapterEngineSession implements EngineSession,
      */
     private final BlockingQueue<RenderTask> renderTasks = new LinkedBlockingQueue<>();
 
+    private volatile com.thorium.lucent.netplay.NativeAdapterInputRelay netplayRelay;
     private volatile Listener listener;
     private volatile NativeAdapterHost host;
     private volatile NativeAdapterHost.Capabilities capabilities;
     private volatile Surface surface;
     private volatile Surface secondarySurface;
     private volatile String secondarySurfaceSize = "";
+    private final WiiUPhoneTouch phoneTouch = new WiiUPhoneTouch();
+    private boolean gamepadOnPrimary;
     private volatile boolean secondaryDisplayRequested;
     /**
      * Uptime at which the render owner first became able to start, or 0 before
@@ -237,8 +262,19 @@ final class NativeAdapterEngineSession implements EngineSession,
                     throw new IllegalStateException("Phase 3 adapter does not support " +
                             request.systemId);
                 if (stopping.get() || released.get()) return;
+                if (!request.qualificationSession.isEmpty() &&
+                        !com.thorium.lucent.emulators.NativeQualificationStorage.supports(
+                                entry.id, request.systemId))
+                    throw new IllegalArgumentException(
+                            "Isolated native qualification is unavailable for this engine");
+                // Reserve before any native initialization or writable save
+                // directory access. A failed load must not release this claim.
+                com.thorium.lucent.emulators.NativeQualificationStorage.claimProcessRoot(
+                        entry.id, request.qualificationSession);
                 requestPinnedWiiUSecondaryDisplay(request);
                 File game = resolveGameFile(request.contentUri);
+                if ("cemu".equals(entry.id))
+                    DiscImagePreflight.validate(request.systemId, game);
                 File trusted = new File(appContext.getApplicationInfo().nativeLibraryDir)
                         .getCanonicalFile();
                 // Fail closed: the adapter .so must be present and hash-verified.
@@ -259,7 +295,8 @@ final class NativeAdapterEngineSession implements EngineSession,
                 String saveIdentity = "aps3e".equals(entry.id)
                         ? contentSha256Short(game) : gameIdentity;
                 saveDirectory = new File(appContext.getFilesDir(),
-                        "engine-saves/" + entry.id + "/" + saveIdentity);
+                        NativeAdapterSystemDirectory.saveDirectoryName(request.qualificationSession)
+                                + "/" + entry.id + "/" + saveIdentity);
                 if (!saveDirectory.isDirectory() && !saveDirectory.mkdirs())
                     throw new IllegalStateException("Cannot create adapter save directory");
                 saveRamFile = new File(saveDirectory, "adapter-save.bin");
@@ -267,11 +304,13 @@ final class NativeAdapterEngineSession implements EngineSession,
                 long phaseStarted = SystemClock.uptimeMillis();
                 if ("aps3e".equals(entry.id)) {
                     NativeAdapterSystemDirectory.prepareForOpen(appContext,
-                            entry.id, request.systemId);
+                            entry.id, request.systemId, request.qualificationSession);
                     logLaunchPhase("adapter-preopen-environment", phaseStarted);
                     phaseStarted = SystemClock.uptimeMillis();
                 }
                 NativeAdapterHost created = new NativeAdapterHost(entry.coreFile, trusted);
+                // Keep ownership visible even if describe/create/load throws.
+                host = created;
                 logLaunchPhase("adapter-open", phaseStarted);
                 capabilities = created.describe();
                 if (isPinnedWiiUDualScreenRoute(request) && !capabilities.dualScreen)
@@ -285,7 +324,13 @@ final class NativeAdapterEngineSession implements EngineSession,
                 // per-engine root, exactly like LibretroEngineSpec.installSystem.
                 phaseStarted = SystemClock.uptimeMillis();
                 File system = NativeAdapterSystemDirectory.resolve(appContext,
-                        entry.id, request.systemId, capabilities.requiredFirmware);
+                        entry.id, request.systemId, capabilities.requiredFirmware,
+                        request.qualificationSession, game);
+                if (!request.qualificationSession.isEmpty())
+                    Log.i(TAG, "Isolated native qualification engine=" + entry.id
+                            + " namespace=" + request.qualificationSession
+                            + " system=" + system.getCanonicalPath()
+                            + " saves=" + saveDirectory.getCanonicalPath());
                 logLaunchPhase("system-directory", phaseStarted);
                 phaseStarted = SystemClock.uptimeMillis();
                 created.create();
@@ -293,7 +338,6 @@ final class NativeAdapterEngineSession implements EngineSession,
                 phaseStarted = SystemClock.uptimeMillis();
                 created.loadContent(system, saveDirectory, game.getPath());
                 logLaunchPhase("content-load", phaseStarted);
-                host = created;
 
                 inputRouter = new InputRouter(DeviceCatalog.standard(),
                         new FileRemapStore(new File(appContext.getFilesDir(),
@@ -317,14 +361,29 @@ final class NativeAdapterEngineSession implements EngineSession,
                         capabilities.dualScreen + " elapsedMs=" +
                         (SystemClock.uptimeMillis() - prepareStartedUptimeMs));
             } catch (Throwable failure) {
-                releaseSecondaryDisplay();
-                closeHost();
+                try { releaseSecondaryDisplay(); }
+                catch (Throwable secondaryFailure) { failure.addSuppressed(secondaryFailure); }
+                try {
+                    runRetirementTask(() -> {
+                        joinRenderThread();
+                        closeHost();
+                    });
+                } catch (Throwable closeFailure) {
+                    failure.addSuppressed(closeFailure);
+                    Log.e(TAG, "Adapter failed-preparation teardown is incomplete; retaining owner",
+                            closeFailure);
+                }
                 // A session that never started must not keep the focus its
                 // aborted preparation took, or every other app stays ducked.
-                audioFocus.abandon();
+                try { audioFocus.abandon(); }
+                catch (Throwable focusFailure) { failure.addSuppressed(focusFailure); }
                 Log.e(TAG, "Unable to prepare adapter engine=" + entry.id +
                         " system=" + request.systemId, failure);
-                callback.onSessionError("EmuFusion could not start " + entry.id + ".", failure);
+                String setupHelp = NativeAdapterSystemDirectory.prerequisiteHelp(
+                        entry.id, request.systemId, failure);
+                callback.onSessionError(!setupHelp.isEmpty() ? setupHelp :
+                        failure instanceof DiscImagePreflight.InvalidImageException
+                        ? failure.getMessage() : "EmuFusion could not start " + entry.id + ".", failure);
             }
         });
     }
@@ -360,8 +419,148 @@ final class NativeAdapterEngineSession implements EngineSession,
      * still-attached Qt library. Nothing else in Lucent needs this, so it stays
      * off {@link EngineSession.Listener}.
      */
-    void setFirstFrameCallback(Runnable callback) {
+    // Optional adapter clock hooks. A known declared clock is required for
+    // any positive correction. Missing hooks remain unsupported (aPS3e);
+    // delivered FPS is never used as the guest's declared clock.
+    private volatile double pacedVideoHz;
+    private volatile double producerTimelineHz;
+    private int reportedTimingCapabilities = -1;
+    private PinnedSourceImageProvider nativeSourceImageProvider;
+
+    /** One immutable host binding; never follows this session's mutable host. */
+    private static final class PinnedSourceImageProvider implements NativeSourceImageProvider {
+        final NativeAdapterHost boundHost;
+
+        PinnedSourceImageProvider(NativeAdapterHost host) { boundHost = host; }
+
+        @Override public int sourceImageBinding(ByteBuffer output) {
+            return boundHost.sourceImageBinding(output);
+        }
+
+        @Override public int querySourceImage(long sessionEpoch, long surfaceEpoch,
+                                              long rawTimestampNs, ByteBuffer output) {
+            return boundHost.querySourceImage(sessionEpoch, surfaceEpoch, rawTimestampNs, output);
+        }
+    }
+
+    /** Attachment is setup/rebind work, not a per-frame query or allocation. */
+    private void attachNativeSourceImageProvider(NativeAdapterHost active, Surface input) {
+        if (active == null || active != host || input == null || input != surface) return;
+        FrameGenerationRenderer generator = FrameGenerationRendererRegistry.find(input);
+        // Strict Off hands the engine the display Surface, which has no
+        // registered renderer. Do not allocate an observer for that route.
+        if (generator == null) return;
+        PinnedSourceImageProvider provider = nativeSourceImageProvider;
+        if (provider == null || provider.boundHost != active) {
+            provider = new PinnedSourceImageProvider(active);
+            nativeSourceImageProvider = provider;
+        }
+        generator.setNativeSourceImageProvider(provider);
+    }
+
+    /** Zero until an adapter explicitly supplies image-linked source timing. */
+    double authoritativeProducerTimelineHz() { return producerTimelineHz; }
+
+    /** Diagnostic exact-image sideband, safe for the renderer's nonblocking
+     * query path. NativeAdapterHost holds a try-read lifetime lease; a closing
+     * or old adapter returns a status instead of inventing image authority. */
+    int sourceImageBinding(ByteBuffer output) {
+        NativeAdapterHost active = host;
+        return active == null ? NativeAdapterHost.SOURCE_CLOSED : active.sourceImageBinding(output);
+    }
+
+    int querySourceImage(long sessionEpoch, long surfaceEpoch, long timestampNs, ByteBuffer output) {
+        NativeAdapterHost active = host;
+        return active == null ? NativeAdapterHost.SOURCE_CLOSED :
+                active.querySourceImage(sessionEpoch, surfaceEpoch, timestampNs, output);
+    }
+
+    private void publishProducerTiming(NativeAdapterHost active) {
+        int flags = active.timingCapabilities();
+        double hz = active.producerTimelineHz();
+        boolean changed = flags != reportedTimingCapabilities ||
+                Double.compare(hz, producerTimelineHz) != 0;
+        reportedTimingCapabilities = flags;
+        producerTimelineHz = hz;
+        Surface primary = surface;
+        FrameGenerationRenderer generator = primary == null ? null :
+                FrameGenerationRendererRegistry.find(primary);
+        if (generator != null) {
+            attachNativeSourceImageProvider(active, primary);
+            generator.setSlotLatticeProducer(hz > 0.0);
+            generator.setProducerTimelineHz(hz);
+        }
+        publishLowerSourceCadence();
+        if (changed) Log.i(TAG, "Adapter timing capabilities engine=" + entry.id +
+                " flags=" + flags + " authoritativeProducerTimelineHz=" + hz +
+                " submissionTimestampsAreGuestIdentity=false");
+    }
+
+    @Override public double declaredVideoHz() {
+        NativeAdapterHost active = host;
+        if (active == null || !started) return 0.0;
+        try { return active.declaredVideoHz(); } catch (Throwable ignored) { return 0.0; }
+    }
+
+    @Override public boolean setPacedVideoHz(double hz) {
+        NativeAdapterHost active = host;
+        if (active == null || !started) return false;
+        if (hz != 0.0 && !DisplaySyncPolicy.permitsCoreClockCorrection(declaredVideoHz(), hz))
+            return false;
+        double target = hz;
+        boolean accepted;
+        try { accepted = active.setPacedVideoHz(target); } catch (Throwable ignored) { return false; }
+        if (!accepted) return false;
+        pacedVideoHz = target;
+        publishProducerTiming(active);
+        publishLowerSourceCadence();
+        Log.i(TAG, "Clock correction adapter engine=" + entry.id + " pacedHz=" + target);
+        return true;
+    }
+
+    @Override public double pacedVideoHz() { return pacedVideoHz; }
+
+    @Override public void setFirstFrameCallback(Runnable callback) {
         firstFrameCallback = callback;
+    }
+
+    /**
+     * Uses Android's buffer-queue contract to prove aPS3e actually submitted
+     * a frame before removing the launch curtain.
+     *
+     * <p>aPS3e owns its RPCS3 render threads, so {@code run_frame} is only a
+     * liveness poll and its adapter exports no guest-FPS counter. PixelCopy is
+     * intentionally used only during this one launch boundary: Android
+     * returns {@link PixelCopy#ERROR_SOURCE_NO_DATA} when no buffer has ever
+     * been queued to the Surface, and success means the most recently queued
+     * native buffer was copied. A one-pixel destination avoids retaining a
+     * gameplay-sized screenshot and no pixel value is used as evidence—black
+     * is a valid first guest frame.
+     */
+    private void probeAps3eFirstSubmittedFrame(Surface current) {
+        if (!"aps3e".equals(entry.id) || firstFrameCallback == null ||
+                current == null || !current.isValid() ||
+                Build.VERSION.SDK_INT < 24 ||
+                !firstFrameProbeInFlight.compareAndSet(false, true)) return;
+        final Bitmap sample = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+        try {
+            PixelCopy.request(current, sample, result -> {
+                firstFrameProbeInFlight.set(false);
+                sample.recycle();
+                if (result != PixelCopy.SUCCESS || current != surface ||
+                        released.get() || stopping.get()) return;
+                Runnable callback = firstFrameCallback;
+                firstFrameCallback = null;
+                Log.i(TAG, "First native buffer engine=aps3e system=" +
+                        (request == null ? "?" : request.systemId) + " totalMs=" +
+                        (SystemClock.uptimeMillis() - prepareStartedUptimeMs));
+                if (callback != null) runQuietly(callback);
+            }, mainHandler);
+        } catch (Throwable failure) {
+            firstFrameProbeInFlight.set(false);
+            sample.recycle();
+            Log.d(TAG, "aPS3e first-buffer probe deferred", failure);
+        }
     }
 
     /**
@@ -446,9 +645,11 @@ final class NativeAdapterEngineSession implements EngineSession,
                     }
                     Surface lower = secondarySurface;
                     long startPhase = SystemClock.uptimeMillis();
+                    configureNativePresentation(active, current);
                     active.start(current, lower);
                     logLaunchPhase("engine-start", startPhase);
                     started = true;
+                    publishProducerTiming(active);
                     restoreQuickResume(active);
                     ensureAudioTrack();
                     // start() is the only call that opens the engine's second
@@ -465,10 +666,32 @@ final class NativeAdapterEngineSession implements EngineSession,
                     if (latest != lower && current.isValid()) {
                         Log.i(TAG, "Secondary surface arrived during start; rebinding engine=" +
                                 entry.id + " secondary=" + describeSecondary(latest));
-                        active.surfaceRecreated(current, latest);
+                        rebindNativeSurface(active, current, latest);
+                    }
+                    // pause()/quiesceForExit() can arrive inside the blocking
+                    // native start. They cannot pause an unstarted engine, but
+                    // start() has now launched its independent guest threads.
+                    // Reconcile before pumping or parking: otherwise the host
+                    // stops draining PCM while the guest continues to produce
+                    // it behind a paused menu (and while backgrounded).
+                    // started is already published, so a concurrent resume
+                    // queues behind this pause on the same render owner.
+                    if (!resumeRequested) {
+                        active.pause();
+                        continue;
                     }
                 }
                 active.runFrame();
+                // Cemu exposes no guest-FPS hook. Its start() call owns title
+                // boot and swapchain creation, so the first successful frame
+                // pump after start is the earliest truthful completion signal
+                // available to the host. Eden/aPS3e retain measured-FPS proof.
+                if ("cemu".equals(entry.id) && firstFrameCallback != null) {
+                    Runnable callback = firstFrameCallback;
+                    firstFrameCallback = null;
+                    if (callback != null) runQuietly(callback);
+                }
+                probeAps3eFirstSubmittedFrame(current);
                 drainAudioToTrack(active);
                 reportEngineSpeed(active);
                 sleepQuietly(RENDER_TICK_MS);
@@ -484,12 +707,22 @@ final class NativeAdapterEngineSession implements EngineSession,
             releaseSecondaryDisplay();
             Log.e(TAG, "Adapter render loop stopped engine=" + entry.id, failure);
             if (callback != null)
-                callback.onSessionError("The native adapter stopped.", failure);
+                callback.onSessionError(sessionFailureMessage(failure), failure);
         } finally {
             // Nothing else will ever run this queue, so release its waiters
             // rather than leaving a lifecycle callback on its full bound.
             abandonRenderTasks();
         }
+    }
+
+    private String sessionFailureMessage(Throwable failure) {
+        if (started) return "The native adapter stopped.";
+        String detail = failure == null ? null : failure.getMessage();
+        // JNI carries the adapter's actual startup failure (for example a
+        // Vulkan initialization error). Do not replace it with a generic
+        // runtime-stop message while the user is still waiting for launch.
+        return detail == null || detail.trim().isEmpty()
+                ? "EmuFusion could not start " + entry.id + "." : detail;
     }
 
     /**
@@ -529,12 +762,27 @@ final class NativeAdapterEngineSession implements EngineSession,
         return size.isEmpty() ? "attached" : size;
     }
 
+    private void configureNativePresentation(NativeAdapterHost active, Surface primary) {
+        boolean tagged = primary != null && FrameGenerationRendererRegistry.find(primary) != null;
+        boolean supported = active.setFgPresentation(tagged);
+        Log.i(TAG, "Native presentation engine=" + entry.id + " fgTimestampTagging=" +
+                tagged + " adapterConfigured=" + supported);
+    }
+
+    private void rebindNativeSurface(NativeAdapterHost active, Surface primary, Surface lower) {
+        configureNativePresentation(active, primary);
+        active.surfaceRecreated(primary, lower);
+    }
+
     @Override public void attachSurface(Surface value, int width, int height) {
         voidDimensions(width, height);
         surface = value;
         NativeAdapterHost active = host;
         if (prepared && started && active != null && value != null && value.isValid())
-            runOnRenderThread(() -> active.surfaceRecreated(value, secondarySurface));
+            runOnRenderThread(() -> {
+                rebindNativeSurface(active, value, secondarySurface);
+                attachNativeSourceImageProvider(active, value);
+            });
     }
 
     @Override public void resizeSurface(int width, int height) {
@@ -542,7 +790,7 @@ final class NativeAdapterEngineSession implements EngineSession,
         Surface current = surface;
         NativeAdapterHost active = host;
         if (prepared && started && active != null && current != null && current.isValid())
-            runOnRenderThread(() -> active.surfaceRecreated(current, secondarySurface));
+            runOnRenderThread(() -> rebindNativeSurface(active, current, secondarySurface));
     }
 
     @Override public void detachSurface() {
@@ -551,6 +799,8 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     @Override public void onSecondarySurfaceAvailable(Surface value, int width, int height) {
         voidDimensions(width, height);
+        releasePhoneTouch();
+        gamepadOnPrimary = false;
         secondarySurface = value;
         secondarySurfaceSize = width + "x" + height;
         NativeAdapterHost active = host;
@@ -560,7 +810,19 @@ final class NativeAdapterEngineSession implements EngineSession,
         Log.i(TAG, "Secondary gameplay surface available engine=" + entry.id +
                 " size=" + width + "x" + height + " started=" + started +
                 " delivery=" + (live ? "rebind" : "start"));
-        if (live) runOnRenderThread(() -> active.surfaceRecreated(current, value));
+        if (live) runOnRenderThread(() -> rebindNativeSurface(active, current, value));
+        publishLowerSourceCadence();
+    }
+
+    /** Both panels require explicit image-linked timing, never a base-VI guess. */
+    private void publishLowerSourceCadence() {
+        Surface lower = secondarySurface;
+        if (lower == null) return;
+        FrameGenerationRenderer generator = FrameGenerationRendererRegistry.find(lower);
+        if (generator == null) return;
+        generator.setAuthoritativeSourceHz(0.0);
+        generator.setSlotLatticeProducer(producerTimelineHz > 0.0);
+        generator.setProducerTimelineHz(producerTimelineHz);
     }
 
     @Override public void onSecondarySurfaceDestroyed() {
@@ -568,16 +830,62 @@ final class NativeAdapterEngineSession implements EngineSession,
         NativeAdapterHost active = host;
         Surface current = surface;
         if (prepared && started && active != null && current != null && current.isValid())
-            runOnRenderThread(() -> active.surfaceRecreated(current, null));
+            runOnRenderThread(() -> rebindNativeSurface(active, current, null));
+    }
+
+    @Override public void onSecondarySurfaceError(Throwable failure) {
+        secondarySurface = null;
+        Listener callback = listener;
+        if (callback != null) callback.onSessionError(
+                "The lower-screen renderer could not release the display. Close and reopen this game.",
+                failure);
     }
 
     @Override public void onSecondaryTouch(float normalizedX, float normalizedY,
                                            boolean pressed) {
         NativeAdapterHost active = host;
         if (active == null || !started) return;
-        active.setControl(19, normalizedX);       // LUCENT_PAD_TOUCH_X
-        active.setControl(20, normalizedY);       // LUCENT_PAD_TOUCH_Y
-        active.setControl(21, pressed ? 1f : 0f); // LUCENT_PAD_TOUCH_PRESSED
+        setLocalControl(active, 19, normalizedX);       // LUCENT_PAD_TOUCH_X
+        setLocalControl(active, 20, normalizedY);       // LUCENT_PAD_TOUCH_Y
+        setLocalControl(active, 21, pressed ? 1f : 0f); // LUCENT_PAD_TOUCH_PRESSED
+    }
+
+    @Override public boolean canSwitchPrimaryScreen() {
+        Surface lower = secondarySurface;
+        return "cemu".equals(entry.id) && started && host != null &&
+                !stopping.get() && !released.get() && (lower == null || !lower.isValid());
+    }
+
+    @Override public boolean isGamepadOnPrimary() { return gamepadOnPrimary; }
+
+    @Override public boolean switchPrimaryScreen() {
+        synchronized (phoneTouch) {
+            if (!canSwitchPrimaryScreen()) return false;
+            releasePhoneTouch();
+            boolean next = !gamepadOnPrimary;
+            // Host-only view control: deliberately bypass the netplay relay.
+            host.setControl(LOCAL_PLAYER, 22, next ? 1f : 0f);
+            gamepadOnPrimary = next;
+            return true;
+        }
+    }
+
+    @Override public void onPrimaryTouch(MotionEvent event, int width, int height) {
+        synchronized (phoneTouch) {
+            if (!canSwitchPrimaryScreen() || !gamepadOnPrimary) return;
+            WiiUPhoneTouch.State point = prepared && resumeRequested
+                    ? phoneTouch.update(event, width, height) : phoneTouch.release();
+            onSecondaryTouch(point.x, point.y, point.pressed);
+        }
+    }
+
+    private void releasePhoneTouch() {
+        synchronized (phoneTouch) {
+            WiiUPhoneTouch.State point = phoneTouch.release();
+            // Do not release a stylus owned by a real secondary display.
+            if (canSwitchPrimaryScreen() && gamepadOnPrimary)
+                onSecondaryTouch(point.x, point.y, false);
+        }
     }
 
     @Override public void resume() {
@@ -603,6 +911,7 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     @Override public void pause(PauseReason reason) {
         resumeRequested = false;
+        releasePhoneTouch();
         NativeAdapterHost active = host;
         if (started && active != null) runOnRenderThread(active::pause);
         AudioTrack audio = audioTrack;
@@ -632,6 +941,7 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     @Override public void quiesceForExit() {
         resumeRequested = false;
+        releasePhoneTouch();
         NativeAdapterHost active = host;
         if (started && active != null) runOnRenderThread(active::pause);
         AudioTrack audio = audioTrack;
@@ -640,12 +950,48 @@ final class NativeAdapterEngineSession implements EngineSession,
                 " system=" + (request == null ? "" : request.systemId));
     }
 
+    @Override public boolean quiesceForPresentationRecovery() {
+        resumeRequested = false;
+        AudioTrack audio = audioTrack;
+        if (audio != null) try { audio.pause(); } catch (IllegalStateException ignored) {}
+        NativeAdapterHost active = host;
+        Thread owner = renderThread;
+        if (!prepared || !started || active == null || stopping.get() || released.get() ||
+                owner == null || !owner.isAlive() || owner == Thread.currentThread()) return false;
+        RenderTask task = new RenderTask(() -> {
+            active.pause();
+            surface = null;
+        });
+        renderTasks.add(task);
+        return task.await(RENDER_TASK_TIMEOUT_MS) && task.completedSuccessfully();
+    }
+
+    @Override public boolean quiesceForSurfaceRetirement() {
+        resumeRequested = false;
+        surface = null;
+        AudioTrack audio = audioTrack;
+        if (audio != null) try { audio.pause(); } catch (IllegalStateException ignored) {}
+        NativeAdapterHost active = host;
+        Thread owner = renderThread;
+        if (!prepared || active == null || stopping.get() || released.get() ||
+                owner == null || !owner.isAlive() || owner == Thread.currentThread()) return false;
+        // Unlike the short lifecycle wait, this worker-only barrier must also
+        // cover start(), which may take seconds before connecting its Surface.
+        // A timeout is failure, never permission to release the input queue.
+        RenderTask task = new RenderTask(() -> {
+            if (started) active.pause();
+            surface = null;
+        });
+        renderTasks.add(task);
+        return task.await(30_000L) && task.completedSuccessfully();
+    }
+
     @Override public boolean openControls() {
         if (!(context instanceof Activity) || inputRouter == null) return false;
         Activity activity = (Activity) context;
         activity.runOnUiThread(() -> new AlertDialog.Builder(context)
                 .setTitle("Controls")
-                .setMessage("Controller mapping for " + entry.id + " uses Lucent's shared layout.")
+                .setMessage("Controller mapping for " + entry.id + " uses EmuFusion's shared layout.")
                 .setPositiveButton("Done", null).show());
         return true;
     }
@@ -666,6 +1012,8 @@ final class NativeAdapterEngineSession implements EngineSession,
         if (!started || active == null || inputRouter == null || event == null ||
                 (event.getAction() != KeyEvent.ACTION_DOWN &&
                  event.getAction() != KeyEvent.ACTION_UP)) return false;
+        if (event.getAction() == KeyEvent.ACTION_DOWN &&
+                event.getRepeatCount() != 0) return true;
         GamepadDescriptor pad = device(event.getDeviceId());
         if (pad == null) { refreshDevices(); pad = device(event.getDeviceId()); }
         if (pad == null) return false;
@@ -675,7 +1023,7 @@ final class NativeAdapterEngineSession implements EngineSession,
             int ordinal = controlOrdinal(control);
             if (ordinal < 0) return false;
             boolean pressed = event.getAction() == KeyEvent.ACTION_DOWN;
-            active.setControl(ordinal, pressed ? 1f : 0f);
+            setLocalControl(active, ordinal, pressed ? 1f : 0f);
             if (pressed && event.getRepeatCount() == 0) {
                 Log.i(TAG, "Adapter input engine=" + entry.id + " control=" +
                         control + " ordinal=" + ordinal + " deviceId=" +
@@ -690,24 +1038,24 @@ final class NativeAdapterEngineSession implements EngineSession,
         InputDevice inputDevice = event == null ? null : event.getDevice();
         if (!started || active == null || event.getAction() != MotionEvent.ACTION_MOVE ||
                 inputRouter == null || inputDevice == null) return false;
-        active.setControl(PAD_LSTICK_X, normalizeAxis(event, MotionEvent.AXIS_X));
-        active.setControl(PAD_LSTICK_Y, normalizeAxis(event, MotionEvent.AXIS_Y));
+        setLocalControl(active, PAD_LSTICK_X, normalizeAxis(event, MotionEvent.AXIS_X));
+        setLocalControl(active, PAD_LSTICK_Y, normalizeAxis(event, MotionEvent.AXIS_Y));
         int rightX = inputDevice.getMotionRange(MotionEvent.AXIS_Z, event.getSource()) != null
                 ? MotionEvent.AXIS_Z : MotionEvent.AXIS_RX;
         int rightY = inputDevice.getMotionRange(MotionEvent.AXIS_RZ, event.getSource()) != null
                 ? MotionEvent.AXIS_RZ : MotionEvent.AXIS_RY;
-        active.setControl(PAD_RSTICK_X, normalizeAxis(event, rightX));
-        active.setControl(PAD_RSTICK_Y, normalizeAxis(event, rightY));
+        setLocalControl(active, PAD_RSTICK_X, normalizeAxis(event, rightX));
+        setLocalControl(active, PAD_RSTICK_Y, normalizeAxis(event, rightY));
         // The Thor's physical d-pad reports AXIS_HAT_X/Y, not DPAD key
         // events. Only sticks were forwarded here, so the d-pad was dead in
         // every native-adapter game (physically confirmed against Cemu's
         // focusless Miiverse dialog, 2026-08-16).
         float hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X);
         float hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y);
-        active.setControl(PAD_DPAD_LEFT, hatX <= -0.5f ? 1f : 0f);
-        active.setControl(PAD_DPAD_RIGHT, hatX >= 0.5f ? 1f : 0f);
-        active.setControl(PAD_DPAD_UP, hatY <= -0.5f ? 1f : 0f);
-        active.setControl(PAD_DPAD_DOWN, hatY >= 0.5f ? 1f : 0f);
+        setLocalControl(active, PAD_DPAD_LEFT, hatX <= -0.5f ? 1f : 0f);
+        setLocalControl(active, PAD_DPAD_RIGHT, hatX >= 0.5f ? 1f : 0f);
+        setLocalControl(active, PAD_DPAD_UP, hatY <= -0.5f ? 1f : 0f);
+        setLocalControl(active, PAD_DPAD_DOWN, hatY >= 0.5f ? 1f : 0f);
         int hatDirections = (hatX <= -0.5f ? 1 : 0) | (hatX >= 0.5f ? 2 : 0) |
                 (hatY <= -0.5f ? 4 : 0) | (hatY >= 0.5f ? 8 : 0);
         if (hatDirections != lastHatDirections) {
@@ -727,72 +1075,113 @@ final class NativeAdapterEngineSession implements EngineSession,
         return inputRouter != null && inputRouter.shouldShowOnScreenControls();
     }
 
+    @Override public int virtualAnalogStickCount() { return 2; }
+
+    @Override public boolean dispatchVirtualAnalog(int stick, float x, float y) {
+        NativeAdapterHost active = host;
+        if (!started || active == null || stopping.get() || stick < 0 || stick > 1 ||
+                !Float.isFinite(x) || !Float.isFinite(y) ||
+                (!shouldShowOnScreenControls() && (x != 0f || y != 0f))) return false;
+        setLocalControl(active, stick == 0 ? PAD_LSTICK_X : PAD_RSTICK_X,
+                Math.max(-1f, Math.min(1f, x)));
+        setLocalControl(active, stick == 0 ? PAD_LSTICK_Y : PAD_RSTICK_Y,
+                Math.max(-1f, Math.min(1f, y)));
+        return true;
+    }
+
     @Override public boolean dispatchVirtualControl(CanonicalControl control, boolean pressed) {
         NativeAdapterHost active = host;
         int ordinal = controlOrdinal(control);
-        if (!started || active == null || ordinal < 0 || !shouldShowOnScreenControls())
+        if (!started || active == null || ordinal < 0 ||
+                (pressed && !shouldShowOnScreenControls()))
             return false;
-        active.setControl(ordinal, pressed ? 1f : 0f);
+        setLocalControl(active, ordinal, pressed ? 1f : 0f);
         return true;
     }
 
     @Override public void stop(StopReason reason, Completion completion) {
         if (completion == null) throw new IllegalArgumentException("completion required");
-        if (!stopping.compareAndSet(false, true)) {
-            completion.complete();
+        boolean joinRelease;
+        synchronized (retirementLock) {
+            joinRelease = released.get();
+            if (!joinRelease && !stopCompleted) {
+                stopCompletions.add(completion);
+                if (!stopping.compareAndSet(false, true)) return;
+                resumeRequested = false;
+                try { lifecycle.execute(() -> runRetirementTask(this::stopOnLifecycle)); }
+                catch (Throwable failure) {
+                    Log.e(TAG, "Adapter stop could not be scheduled; retaining owner", failure);
+                }
+                return;
+            }
+        }
+        if (joinRelease) releaseWhenComplete(completion);
+        else completeRetirementCallback(completion);
+    }
+
+    private void stopOnLifecycle() {
+        boolean saveSucceeded = false;
+        try {
+            NativeAdapterHost active = host;
+            byte[] state = null;
+            if (active != null && capabilities != null &&
+                    NativeAdapterStopPolicy.reportsQuickResume(
+                            entry.id, capabilities.hasQuickResume)) {
+                state = serializeQuickResumeOnRenderThread(active);
+            }
+            joinRenderThread();
+            if (state != null) {
+                DurableBlobStore.write(saveRamFile, state, MAX_QUICK_RESUME_BYTES);
+                Log.i(TAG, "Adapter Quick Resume committed engine=" + entry.id +
+                        " bytes=" + state.length + " marker=quick-resume-committed");
+            }
+            // start() may still have been in flight when Stop was requested.
+            // Only its joined owner can establish whether a guest ever ran.
+            // A failed/unstarted guest has no current save to flush; don't
+            // turn a renderer/setup failure into a false save-loss warning.
+            if (started && active != null && capabilities != null && capabilities.hasPersistentSave &&
+                    !runFlushSave(active))
+                throw new IllegalStateException("Adapter durable save flush failed");
+            saveSucceeded = started;
+            if (!started) Log.i(TAG, "Adapter stopped before game start engine=" +
+                    entry.id + " marker=unstarted-no-save");
+        } catch (Throwable failure) {
+            Log.e(TAG, "Adapter stop save failed engine=" + entry.id +
+                    " marker=save-failure", failure);
+            Listener callback = listener;
+            if (callback != null) try {
+                callback.onSessionStopRejected(
+                        "The current game save or Quick Resume point could not be saved. " +
+                                "Your previous checkpoint was preserved.", failure);
+            } catch (Throwable callbackFailure) {
+                Log.w(TAG, "Adapter stop rejection callback failed", callbackFailure);
+            }
+        }
+        // Keep the established final-stop save policy, but never mistake a
+        // timeout/error for an acknowledgement of the still-running owner.
+        try { retireSessionOwner(); }
+        catch (Throwable failure) {
+            Log.e(TAG, "Adapter stop teardown is incomplete; retaining owner engine=" +
+                    entry.id, failure);
             return;
         }
-        resumeRequested = false;
-        lifecycle.execute(() -> {
-            try {
-                NativeAdapterHost active = host;
-                byte[] state = null;
-                if (active != null && capabilities != null &&
-                        NativeAdapterStopPolicy.reportsQuickResume(
-                                entry.id, capabilities.hasQuickResume)) {
-                    state = serializeQuickResumeOnRenderThread(active);
-                    if (state == null || state.length == 0)
-                        throw new IllegalStateException(
-                                "Adapter returned no Quick Resume state");
-                }
-                joinRenderThread();
-                if (state != null) {
-                    DurableBlobStore.write(saveRamFile, state,
-                            MAX_QUICK_RESUME_BYTES);
-                    Log.i(TAG, "Adapter Quick Resume committed engine=" + entry.id +
-                            " bytes=" + state.length + " marker=quick-resume-committed");
-                }
-                if (active != null && capabilities != null &&
-                        capabilities.hasPersistentSave) {
-                    runFlushSave(active);
-                }
-                detachSecondaryBeforeBlank();
-                releaseAudio();
-                retireHost(entry.id);
-                prepared = false;
-                Listener callback = listener;
-                if (callback != null) callback.onRestoreAvailabilityChanged(false);
-                Log.i(TAG, "Adapter save flushed and session stopped engine=" +
-                        entry.id + " system=" +
-                        (request == null ? "" : request.systemId));
-                completion.complete();
-            } catch (Throwable failure) {
-                Log.e(TAG, "Adapter stop teardown failed engine=" + entry.id +
-                        " marker=save-failure", failure);
-                Listener callback = listener;
-                if (callback != null) callback.onSessionStopRejected(
-                        "The current Quick Resume point could not be saved. " +
-                                "Your previous checkpoint was preserved.", failure);
-                // A failed or timed-out final render task must still retire its
-                // owner before native stop/destroy touches the same engine.
-                prepared = false;
-                joinRenderThread();
-                try { releaseAudio(); } catch (Throwable ignored) {}
-                try { retireHost(entry.id); } catch (Throwable ignored) {}
-                prepared = false;
-                completion.complete();
-            }
-        });
+        Listener callback = listener;
+        if (callback != null) try { callback.onRestoreAvailabilityChanged(false); }
+        catch (Throwable failure) { Log.w(TAG, "Adapter restore callback failed", failure); }
+        if (saveSucceeded) Log.i(TAG, "Adapter save flushed and session stopped engine=" +
+                entry.id + " system=" + (request == null ? "" : request.systemId));
+        completeStop();
+    }
+
+    private void completeStop() {
+        List<Completion> callbacks;
+        synchronized (retirementLock) {
+            if (stopCompleted) return;
+            stopCompleted = true;
+            callbacks = new ArrayList<>(stopCompletions);
+            stopCompletions.clear();
+        }
+        for (Completion callback : callbacks) completeRetirementCallback(callback);
     }
 
     /**
@@ -801,12 +1190,23 @@ final class NativeAdapterEngineSession implements EngineSession,
      */
     private byte[] serializeQuickResumeOnRenderThread(NativeAdapterHost active)
             throws Exception {
-        if (active == null || !prepared || renderThread == null)
+        if (active == null || !prepared || renderThread == null) {
+            if (!started) return null;
             throw new IllegalStateException("Adapter render owner is unavailable");
+        }
         AtomicReference<byte[]> result = new AtomicReference<>();
         AtomicReference<Throwable> failure = new AtomicReference<>();
         RenderTask task = new RenderTask(() -> {
-            try { result.set(active.serialize()); }
+            try {
+                // Runs behind any in-flight start on the same owner. A stop
+                // before launch or a failed start must not overwrite an old
+                // checkpoint with a fabricated/empty state.
+                if (!started) return;
+                byte[] state = active.serialize();
+                if (state == null || state.length == 0)
+                    throw new IllegalStateException("Adapter returned no Quick Resume state");
+                result.set(state);
+            }
             catch (Throwable problem) { failure.set(problem); }
         });
         renderTasks.offer(task);
@@ -816,32 +1216,102 @@ final class NativeAdapterEngineSession implements EngineSession,
         if (problem instanceof Exception) throw (Exception) problem;
         if (problem != null) throw new IllegalStateException(
                 "Adapter Quick Resume failed", problem);
-        return result.get();
+        byte[] state = result.get();
+        if (started && (state == null || state.length == 0))
+            throw new IllegalStateException("Adapter returned no Quick Resume state");
+        return state;
     }
 
     @Override public void release() {
-        if (!released.compareAndSet(false, true)) return;
-        resumeRequested = false;
-        // Before any teardown that can block or throw: focus held past the end
-        // of a session mutes every other app.
-        audioFocus.abandon();
-        lifecycle.execute(() -> {
-            joinRenderThread();
-            detachSecondaryBeforeBlank();
-            releaseAudio();
-            closeHost();
-            prepared = false;
-        });
-        lifecycle.shutdown();
+        releaseWhenComplete(() -> {});
     }
 
-    private void runFlushSave(NativeAdapterHost active) {
+    /** Acknowledges actual owner retirement, not merely queued cleanup. */
+    public void releaseWhenComplete(Completion completion) {
+        if (completion == null) throw new IllegalArgumentException("completion required");
+        boolean alreadyComplete;
+        synchronized (retirementLock) {
+            alreadyComplete = releaseCompleted;
+            if (!alreadyComplete) {
+                releaseCompletions.add(completion);
+                if (!released.compareAndSet(false, true)) return;
+                resumeRequested = false;
+                try {
+                    lifecycle.execute(() -> runRetirementTask(this::releaseOnLifecycle));
+                    lifecycle.shutdown();
+                } catch (Throwable failure) {
+                    Log.e(TAG, "Adapter release could not be scheduled; retaining owner", failure);
+                }
+            }
+        }
+        if (alreadyComplete) completeRetirementCallback(completion);
+        else {
+            // Give focus back promptly even when prepare/save is still ahead
+            // of release in the lifecycle queue. Repeat after late prepare too.
+            try { audioFocus.abandon(); }
+            catch (Throwable failure) { Log.w(TAG, "Adapter audio focus release failed", failure); }
+        }
+    }
+
+    private void releaseOnLifecycle() {
+        try { audioFocus.abandon(); }
+        catch (Throwable failure) { Log.w(TAG, "Adapter audio focus release failed", failure); }
+        try { retireSessionOwner(); }
+        catch (Throwable failure) {
+            Log.e(TAG, "Adapter release is incomplete; retaining owner engine=" + entry.id, failure);
+            return;
+        }
+        // A release queued after a failed stop can establish the same actual
+        // retirement boundary; pending stop observers must join that result.
+        if (stopping.get()) completeStop();
+        List<Completion> callbacks;
+        synchronized (retirementLock) {
+            releaseCompleted = true;
+            callbacks = new ArrayList<>(releaseCompletions);
+            releaseCompletions.clear();
+        }
+        Log.i(TAG, "Adapter release acknowledged engine=" + entry.id +
+                " renderOwnerJoined=true nativeHost=" +
+                (NativeAdapterStopPolicy.destroyNativeHostOnStop(entry.id)
+                        ? "closed-or-absent" : "retained-for-process-exit"));
+        for (Completion callback : callbacks) completeRetirementCallback(callback);
+    }
+
+    private void runRetirementTask(Runnable task) {
+        retirementInterrupted = Thread.interrupted();
+        try { task.run(); }
+        finally {
+            if (retirementInterrupted) Thread.currentThread().interrupt();
+            retirementInterrupted = false;
+        }
+    }
+
+    private void retireSessionOwner() {
+        joinRenderThread();
+        try { detachSecondaryBeforeBlank(); }
+        catch (Throwable failure) { Log.w(TAG, "Adapter secondary release failed", failure); }
+        try { releaseAudio(); }
+        catch (Throwable failure) { Log.w(TAG, "Adapter audio release failed", failure); }
+        // aPS3e intentionally retains native resources until the required
+        // process restart. This is not a native-close acknowledgement for it.
+        retireHost(entry.id);
+        prepared = false;
+    }
+
+    private static void completeRetirementCallback(Completion callback) {
+        try { callback.complete(); }
+        catch (Throwable failure) { Log.w(TAG, "Adapter retirement callback failed", failure); }
+    }
+
+    private boolean runFlushSave(NativeAdapterHost active) {
         try {
             active.flushSave();
             Log.i(TAG, "Adapter durable save committed engine=" + entry.id);
+            return true;
         } catch (Throwable failure) {
             Log.w(TAG, "Adapter save was not updated for " + entry.id +
                     " marker=save-failure", failure);
+            return false;
         }
     }
 
@@ -1043,20 +1513,26 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     private void closeHost() {
         NativeAdapterHost active = host;
-        host = null;
         started = false;
         if (active == null) return;
-        try { active.stop(); } catch (Throwable ignored) {}
-        try { active.close(); } catch (Throwable ignored) {}
+        active.stop();
+        active.close();
+        // Failure keeps the owned host reachable and the completion gate shut.
+        if (host == active) host = null;
     }
 
     private void joinRenderThread() {
         prepared = false;
+        retirementInterrupted |= Thread.interrupted();
         Thread thread = renderThread;
-        renderThread = null;
         if (thread == null) return;
-        try { thread.join(2_000L); }
-        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+        if (thread == Thread.currentThread())
+            throw new IllegalStateException("Render owner cannot join itself");
+        while (thread.isAlive()) {
+            try { thread.join(); }
+            catch (InterruptedException waiting) { retirementInterrupted = true; }
+        }
+        if (renderThread == thread) renderThread = null;
     }
 
     /**
@@ -1077,9 +1553,12 @@ final class NativeAdapterEngineSession implements EngineSession,
     private void runOnRenderThread(Runnable action) {
         if (action == null) return;
         if (Thread.currentThread() == renderThread) { runQuietly(action); return; }
+        // A lifecycle flag is not proof the render owner has finished. Do not
+        // fall back to a caller-thread native call while teardown is joining it.
+        if (stopping.get() || released.get()) return;
         Thread owner = renderThread;
-        if (owner == null || !owner.isAlive() || !prepared ||
-                stopping.get() || released.get()) {
+        if (owner != null && owner.isAlive() && !prepared) return;
+        if (owner == null || !owner.isAlive()) {
             // There is no render owner left to hand this to. Teardown has
             // already quiesced the loop by this point, so the caller is now the
             // only thread that can reach the adapter at all.
@@ -1113,11 +1592,12 @@ final class NativeAdapterEngineSession implements EngineSession,
     private static final class RenderTask {
         private final Runnable action;
         private final CountDownLatch finished = new CountDownLatch(1);
+        private volatile boolean succeeded;
 
         RenderTask(Runnable action) { this.action = action; }
 
         void run() {
-            try { action.run(); }
+            try { action.run(); succeeded = true; }
             catch (Throwable failure) {
                 Log.w(TAG, "Adapter call failed on the render owner", failure);
             } finally { finished.countDown(); }
@@ -1125,6 +1605,8 @@ final class NativeAdapterEngineSession implements EngineSession,
 
         /** The render owner is gone; wake the caller instead of stranding it. */
         void abandon() { finished.countDown(); }
+
+        boolean completedSuccessfully() { return succeeded; }
 
         boolean await(long millis) {
             try { return finished.await(millis, TimeUnit.MILLISECONDS); }
@@ -1191,6 +1673,33 @@ final class NativeAdapterEngineSession implements EngineSession,
                 "cemu".equals(launch.engineId) && isWiiUSystem(launch.systemId);
     }
 
+    /** Drives this device's own local input (controller_index 0) and, when a
+     * netplay match is active, forwards the same value to every connected
+     * peer -- the native-adapter-family analogue of LibretroEngineSession's
+     * joypadSink also calling relay.onLocalJoypadButton. */
+    private void setLocalControl(NativeAdapterHost active, int control, float value) {
+        active.setControl(LOCAL_PLAYER, control, value);
+        com.thorium.lucent.netplay.NativeAdapterInputRelay relay = netplayRelay;
+        if (relay != null) relay.onLocalControl(control, value);
+    }
+
+    /** {@link com.thorium.lucent.netplay.NativeControlSink}: applies a remote
+     * player's control value at their assigned controller_index. */
+    public void applyRemoteControl(int controllerIndex, int control, float value) {
+        NativeAdapterHost active = host;
+        if (active == null || !started || controllerIndex <= 0) return;
+        active.setControl(controllerIndex, control, value);
+    }
+
+    /** {@link com.thorium.lucent.netplay.NativeAdapterCapableSession}. */
+    public void attachNetplayRelay(com.thorium.lucent.netplay.NativeAdapterInputRelay relay) {
+        netplayRelay = relay;
+    }
+
+    public void detachNetplayRelay() {
+        netplayRelay = null;
+    }
+
     private int controlOrdinal(CanonicalControl control) {
         if (control == null) return -1;
         /*
@@ -1213,6 +1722,8 @@ final class NativeAdapterEngineSession implements EngineSession,
             case R1: return PAD_R;
             case L2: return PAD_ZL;
             case R2: return PAD_ZR;
+            case L3: return PAD_L3;
+            case R3: return PAD_R3;
             case DPAD_UP: return PAD_DPAD_UP;
             case DPAD_DOWN: return PAD_DPAD_DOWN;
             case DPAD_LEFT: return PAD_DPAD_LEFT;

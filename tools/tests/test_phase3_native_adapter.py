@@ -3,8 +3,8 @@
 Structural, source-scanning coverage in the established tools/tests house style
 that locks the fail-closed native-adapter foundation a compiled Cemu adapter
 plugs into: the pinned registry identity, the NativeAdapterCatalog present+hash
-gate, honest capability reporting, and the routing that stays EXTERNAL until the
-in-process adapter is real.
+gate, honest capability reporting, and internal-default routing without an
+automatic external fallback when an adapter is unavailable.
 """
 
 import json
@@ -58,6 +58,8 @@ CEMU_PPC_RECOMPILER_H = _read(CEMU_TREE / "src" / "Cafe" / "HW" /
 CEMU_AARCH64_BACKEND = _read(CEMU_TREE / "src" / "Cafe" / "HW" /
                              "Espresso" / "Recompiler" /
                              "BackendAArch64" / "BackendAArch64.cpp")
+CEMU_ANDROID_WINDOW = _read(CEMU_TREE / "src" / "gui" / "androidgui" /
+                            "AndroidWindowSystem.cpp")
 
 
 class Phase3RegistryCemuTest(unittest.TestCase):
@@ -127,6 +129,27 @@ class Phase3RegistryCemuTest(unittest.TestCase):
         self.assertEqual(artifact["sizeBytes"], len(payload))
         self.assertEqual(artifact["sha256"], hashlib.sha256(payload).hexdigest())
 
+    def test_cemu_exports_its_engine_owned_guest_fps(self):
+        self.assertIn("lucent_native_adapter_average_game_fps",
+                      CEMU_ANDROID_WINDOW)
+        self.assertIn("g_lucent_average_game_fps.store", CEMU_ANDROID_WINDOW)
+        self.assertIn("lucent_native_adapter_average_game_fps", HOST_C)
+        self.assertIn("lucent_eden_average_game_fps", HOST_C)
+
+    def test_cemu_exports_tier_pacing_hooks(self):
+        # Frame-generation protocol 2026-09-01: the host paces a hardware
+        # core at the tier below its sustained delivery.  Cemu's pace is its
+        # emulated vsync frequency, which the present stamps must follow.
+        adapter = _read(ROOT / "engines" / "patches" / "cemu-lucent-adapter.cpp")
+        self.assertIn("lucent_native_adapter_set_paced_video_hz", adapter)
+        self.assertIn("lucent_native_adapter_declared_video_hz", adapter)
+        self.assertIn("LatteTiming_setCustomVsyncFrequency", adapter)
+        self.assertIn("lucent_native_adapter_set_paced_video_hz", HOST_C)
+        self.assertIn("lucent_native_adapter_declared_video_hz", HOST_C)
+        renderer = _read(CEMU_TREE / "src" / "Cafe" / "HW" / "Latte" /
+                         "Renderer" / "Vulkan" / "VulkanRenderer.cpp")
+        self.assertIn("LatteTiming_getCustomVsyncFrequency(lucentVsyncHz)", renderer)
+
 
 class NativeAdapterCatalogGateTest(unittest.TestCase):
     def test_catalog_is_present_plus_hash_verified_and_fail_closed(self):
@@ -175,25 +198,19 @@ class NativeAdapterRoutingTest(unittest.TestCase):
         block = ROUTER[ROUTER.index("private static String engineIdForSystem"):]
         self.assertIn("InternalEngineCatalog.availableForSystem", block)
         self.assertIn("Phase2QualificationCatalog.libraryEngineIdForSystem", block)
-        # Native adapter is the LAST fallback, so a system with no bundled
-        # adapter resolves empty and EngineRouteStore emits its external route.
+        # Native adapter is the LAST internal candidate. A system with no
+        # bundled adapter resolves empty, never to an automatic external route.
         self.assertIn("NativeAdapterCatalog.libraryEngineIdForSystem(context, normalized)",
                       block)
         phase2_at = block.index("Phase2QualificationCatalog.libraryEngineIdForSystem")
         adapter_at = block.index("NativeAdapterCatalog.libraryEngineIdForSystem")
         self.assertLess(phase2_at, adapter_at)
 
-    def test_wiiu_prefers_external_until_the_adapter_is_present(self):
-        # EngineRouteStore.resolve returns EXTERNAL when no internal engine
-        # supports the system; supportsSystem is empty until the catalog gates
-        # a bundled+hashed adapter in. That is the FAIL-CLOSED path, not the
-        # intended one: a build made with LUCENT_INCLUDE_PHASE3_CEMU=1 bundles
-        # the Cemu adapter and Wii U runs INTERNALLY. Only a build that omits
-        # the flag drops Wii U onto external Cemu.
-        self.assertIn("return internalAvailable ? INTERNAL : EXTERNAL;", ROUTE_STORE)
-        self.assertIn("GameLaunchRouter.supportsSystem(context,", ROUTE_STORE)
-        self.assertIn("libraryEngineIdForSystem", CATALOG)
-        self.assertIn("NativeAdapterPrerequisites.isReady(context, normalized)", ROUTER)
+    def test_fresh_install_routes_require_explicit_external_choice(self):
+        # Execute production routing for all systems, with and without a
+        # verified bundled engine, absent readiness and explicit preferences.
+        from tools.tests.test_portable_internal_routing import PortableInternalRoutingTest
+        PortableInternalRoutingTest().test_fresh_install_and_explicit_external_routes()
 
     def test_session_reports_capabilities_honestly(self):
         # No fake Quick Resume: stop() flushes persistent saves and reports no
@@ -369,7 +386,10 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
         self.assertEqual(measured_fault, stale_instance + direct_jump_offset)
 
     def test_abi_version_is_pinned(self):
-        self.assertIn("#define LUCENT_NATIVE_ADAPTER_ABI_VERSION 1u", ABI_HEADER)
+        # v2 adds max_controllers and controller_index; v1 is not compatible.
+        self.assertIn("#define LUCENT_NATIVE_ADAPTER_ABI_VERSION 2u", ABI_HEADER)
+        self.assertIn("uint32_t max_controllers;", ABI_HEADER)
+        self.assertIn("uint32_t controller_index", ABI_HEADER)
         self.assertIn('#define LUCENT_NATIVE_ADAPTER_ENTRY_SYMBOL '
                       '"lucent_native_adapter_entry"', ABI_HEADER)
 
@@ -446,11 +466,15 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
         build = host.split("private void buildUi()", 1)[1].split(
             "private FrameLayout.LayoutParams match()", 1)[0]
         self.assertIn("session instanceof NativeAdapterEngineSession", build)
-        self.assertIn("new GameSurfaceView(activity)", build)
-        # Frame generation owns opaque output for every engine. Keeping all
-        # gameplay on a distinct layer makes cadence evidence identify the
-        # actual game rather than the Qt/HWUI parent window.
-        self.assertNotIn("new GameSurface(activity)", build)
+        self.assertIn("GameSurfaceView layer = new GameSurfaceView(", build)
+        # Native adapters and software engines both use an independently
+        # latched layer. OFF is still a mechanical direct-Surface bypass in
+        # GameSurfaceView and never constructs a frame-generation renderer.
+        self.assertIn("if (strictOff)", build)
+        self.assertGreaterEqual(
+            build.count("GameSurfaceView layer = new GameSurfaceView("), 2
+        )
+        self.assertNotIn("GameSurface layer = new GameSurface(", build)
         # The session must be built before the views, or the host cannot know
         # which surface this game needs.
         attach = host.split("private void attach()", 1)[1].split(
@@ -469,8 +493,7 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
         # Cemu exports no FPS hook, so the shared presentation layer must also
         # drop the curtain on its first consumed producer buffer. A timer is
         # not evidence: it exposed an empty Surface while large titles booted.
-        self.assertIn("layer.setFirstSubmittedFrameListener("
-                      "this::dismissLaunchCurtain);", host)
+        self.assertIn("setFirstSubmittedFrameListener(this::dismissLaunchCurtain);", host)
         self.assertNotIn("LAUNCH_CURTAIN_MAX_MS", host)
         self.assertIn("void setFirstFrameCallback(Runnable callback)", SESSION)
         # Fired on the first measured non-zero frame rate, and deliberately not
@@ -478,6 +501,19 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
         speed = SESSION.split("private void reportEngineSpeed", 1)[1].split(
             "private void renderLoop", 1)[0]
         self.assertIn("awaitingFirstFrame && fps > 0.0", speed)
+        # aPS3e has no FPS export and its runFrame() call is only a liveness
+        # poll. PixelCopy SUCCESS is Android's proof that its Surface has a
+        # queued native buffer; ERROR_SOURCE_NO_DATA keeps the curtain up.
+        aps3e_probe = SESSION.split(
+            "private void probeAps3eFirstSubmittedFrame", 1
+        )[1].split("private void reportEngineSpeed", 1)[0]
+        self.assertIn('"aps3e".equals(entry.id)', aps3e_probe)
+        self.assertIn("PixelCopy.request(current, sample", aps3e_probe)
+        self.assertIn("result != PixelCopy.SUCCESS", aps3e_probe)
+        self.assertIn("current != surface", aps3e_probe)
+        self.assertIn("firstFrameCallback = null", aps3e_probe)
+        render = SESSION.split("private void renderLoop", 1)[1]
+        self.assertIn("probeAps3eFirstSubmittedFrame(current);", render)
 
     def test_phase3_launch_identity_never_streams_the_whole_game_image(self):
         self.assertIn("String gameIdentity = launchIdentity(request, game);", SESSION)
@@ -503,6 +539,19 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
         stop = SESSION.split("public void stop(StopReason reason", 1)[1].split(
             "private byte[] serializeQuickResumeOnRenderThread", 1)[0]
         self.assertNotIn("closeHost();", stop)
+
+    def test_aps3e_return_crosses_a_clean_frontend_process_boundary(self):
+        policy = _read(ROOT / "unified-android" / "src" / "com" / "thorium" /
+                       "lucent" / "emulators" / "NativeAdapterStopPolicy.java")
+        host = _read(ROOT / "unified-android" / "src" / "com" / "thorium" /
+                     "preview" / "game" / "InWindowGameHost.java")
+        bridge = _read(ROOT / "android-companion" / "src" / "com" / "thorium" /
+                       "preview" / "FrontendRestartActivity.java")
+        self.assertIn("requiresCleanFrontendRestart", policy)
+        self.assertIn("cleanFrontendRestartPending", host)
+        self.assertIn("FrontendRestartActivity.createIntent(activity, nextLaunch)", host)
+        self.assertIn("marker=aps3e-clean-process-boundary", host)
+        self.assertIn("android.os.Process.killProcess(oldPid)", bridge)
 
     def test_phase3_surface_detach_waits_for_the_render_owner(self):
         # A SurfaceView disconnects its Surface as soon as surfaceDestroyed

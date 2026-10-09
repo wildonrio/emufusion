@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Runtime-neutral identity consumed by Lucent's single software-core session. */
+/** Runtime-neutral identity consumed by EmuFusion's single software-core session. */
 final class LibretroEngineSpec {
     interface Verifier { boolean isInstalled(Context context, LibretroEngineSpec spec); }
     interface SystemInstaller {
@@ -109,6 +109,8 @@ final class LibretroEngineSpec {
         File system = new File(root, id);
         if (!system.isDirectory() && !system.mkdirs())
             throw new IllegalStateException("Cannot create engine system directory");
-        return new SystemInstallation(system, "firmware:none");
+        String firmware = "beetle-pce-fast".equals(id) && "pcenginecd".equals(systemId)
+                ? PcEngineCdFirmware.install(system) : "firmware:none";
+        return new SystemInstallation(system, firmware);
     }
 }

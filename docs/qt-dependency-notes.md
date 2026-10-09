@@ -1,6 +1,130 @@
 # Qt dependency notes
 
-Evidence-backed record of which Qt libraries the Lucent APK actually ships,
+## October 5: preserve the no-action-bar theme through the Qt loader
+
+The October 3 resource-only correction was insufficient. The unchanged baseline
+`6d7bf279...08d62` reproduces the Android16 `WindowDecorActionBar.doHide` null
+`ActionBarContainer` crash at15:35:58. The packaged Qt5 `QtActivityLoader.onCreate`
+recognizes only framework style IDs, replaces the app's custom `PegasusMain` with
+its fallback, and then requests `FEATURE_ACTION_BAR`. Its actual window hierarchy
+therefore contains a framework action bar despite the corrected manifest/style.
+
+`patch_frontend_window_theme.py` now also omits those two pinned loader calls.
+It validates loader shape before any resource writes, rejects drift, supports
+idempotent checks, and preserves delegate startup and style extraction. The normal
+packager checks it again before APK assembly. Signed-DEX inspection independently
+confirms the calls are absent in complete `f39419d9...f1e07`; all88native libraries
+and application `classes2.dex` remain byte-identical to baseline.
+
+Three new tests fail against the old implementation;54focused checks pass after
+the fix and two stale recreation-harness corrections. Headless landscape Android16
+4KiB verifies three fresh-process library starts, internal PS2 boot/menu input and
+normal exit. An8s cold screenshot is only black startup decor, not a successful
+library observation; a separate cold boot shows the library by45s. Both original
+profile identities and all302checked saves survive the preserving nonincremental
+update, smoke test and cold boots. Simulator sessions stopped; Thor untouched.
+
+This is bounded startup verification, not a measured startup-speed improvement,
+all-crash guarantee, new gameplay/performance pass, 16KiB runtime pass or release.
+Evidence: `qa/android-portability-2026-10-05-qt-runtime-theme/outcome.json`.
+
+## October 5: first-run storage permission no longer terminates the frontend
+
+`pegasus-android-storage-startup.patch` fixes the native frontend's early return
+while Android's all-files Settings screen is pending. The frontend stays alive;
+the existing Java lifecycle refreshes discovery after the real permission grant.
+Android 11+ now uses the actual all-files result without also requesting obsolete
+WRITE_EXTERNAL_STORAGE. Permission denial is not bypassed. Older Android retains
+its existing legacy-permission path.
+
+The normal source recipe, artifact lock and generated source kit include the
+repair. Old kit is backed up. Complete normal qualification APK `6ede42ba...60225`
+differs from `9672d342...c974` in only the frontend native library (the other 48
+cohort libraries and all emulator binaries are unchanged). In an empty secondary
+Android user on the headless landscape 16 KiB AVD, Settings grant/Back triggers
+automatic setup and library return; the discovered owned GBA ROM launches
+internally. This is not a second newly created AVD or universal acceptance.
+First-install failure was reproduced in the original fresh AVD/user before repair.
+Executable C++ permission regressions fail before and pass after. Release remains
+unqualified; black library icons and six extra-core alignment errors in this APK
+are still recorded. Five extra aligned cores have since entered normal staging,
+but that change requires a new APK build. MAME is still unresolved.
+
+## October 4: complete build uses the reviewed source kit
+
+`build-portable.sh` now selects `build/source-frontend` and the checked-in
+`source-frontend-artifact-lock.json` unless explicit paired inputs are supplied.
+Install the already-built, reviewed flattened kit with
+`python3 unified-android/tools/install_source_frontend.py --source <kit>`.
+It verifies all 49 hashes and alignments, preserves unknown existing kits, and
+is idempotent for identical inputs. This is staging, not a new source build.
+The upstream build helpers/source lock described below remain the source recipe.
+
+Complete normal build `9672d342...c974` passes package/one-app checks with all
+19 required systems and LSFG retained. Its frontend is byte-identical to the
+previous source-kit runtime candidate. Release signing remains blocked. Six
+extra core libraries remain unaligned in this normal build (including five
+repairs still isolated in QA); a new 16 KiB simulator visibly warns about page
+compatibility on first launch. Do not describe this as whole-APK qualification.
+See `docs/qa/android-portability-2026-10-04-portable-integration/`.
+
+## October 4: normal packager accepts an explicit source-built kit
+
+`unified-android/build.sh` now accepts the paired qualification inputs
+`LUCENT_SOURCE_FRONTEND_DIR` and `LUCENT_SOURCE_FRONTEND_LOCK`. The first is a
+flattened directory containing the complete 49-library source-built cohort; the
+second is its reviewed hash/alignment lock. Both are required together. Release
+signing rejects this opt-in until release qualification is complete.
+
+`stage_source_frontend.py` validates every input and the complete decoded cohort
+before copying, preserves emulator libraries, then verifies all copied bytes.
+The final one-app verifier receives the same explicit lock; manifest, DEX,
+all-system packaging and other existing checks remain enabled. Without this
+opt-in, the legacy native patch path remains unchanged.
+
+Actual 49-library staging and 12 staging/preflight regression tests pass in
+`docs/qa/android-portability-2026-10-04-software-pages/`. This establishes staging
+and preflight behavior, not a completed full normal-build or fresh-install test.
+The earlier source-kit APK runtime results below remain separate evidence.
+
+## October 4, 2026: isolated source migration now builds
+
+The historical "does not compile Qt" and toolchain-blocked statements below
+describe the normal pinned-APK packaging path, not the new isolated candidate.
+`unified-android/qt-source-lock.json` and the `build_qt_*`, `build_apng_android.sh`
+and `build_pegasus_source_android.sh` helpers now build matching Qt 5.15.10,
+OpenSSL 1.1.1t and Pegasus `6b322063` from pinned archives with NDK 27/API 23.
+They do not replace production staging. All 45 required Qt libraries/plugins,
+the frontend, OpenSSL pair and libc++ are 16 KiB aligned. A standalone strict
+Android 16/16 KiB loader accepts the full cohort; the old QtCore is rejected.
+The source patches preserve the late-gamepad null guard and in-window launch
+bookkeeping. APNG remains enabled; its pinned libpng decoder is linked explicitly.
+
+Isolated signed candidate `227e34f2...5263b` replaces only those 49 libraries in
+the complete `a1949290...deb586` APK. Retained Java/DEX, manifest, QML resource
+bundle, product theme and emulator payloads are byte-identical. Old JNI exports
+remain present. All-19 packaging and explicit source-cohort one-app checks pass;
+57 focused host tests pass. The regular verifier's legacy native checks remain
+the default; `--source-frontend-lock` requires an explicit host-side identity
+lock for all 49 libraries and does not waive the other one-app checks.
+
+Bounded runtime checks now cover the same APK on both offline headless landscape
+Android16 page-size configurations. 16KiB PSX restores into a fight and exits;
+PS2 reaches an actual match and exits but still has audio underruns. 4KiB DS
+restores gameplay and exits twice; second restore logs success but then shows a
+boot logo after a low-health session, so that restoration remains inconclusive.
+Both AVDs are shut down; Thor was untouched. These are preserving updates of
+existing QA fixtures, not fresh empty-data installations. Normal build staging
+is unchanged and source-kit integration is still pending.
+
+This is not a release. Whole-APK strict 16 KiB still fails for 19 other core
+libraries. No new Qt version, emulator removal, audio or universal compatibility
+acceptance is implied. See
+`docs/qa/android-portability-2026-10-04-qt-source/` for exact hashes and evidence.
+
+## Historical shipped dependency audit
+
+Evidence-backed record of which Qt libraries the EmuFusion APK actually ships,
 which of them can be dropped, and what the shipped versions are. Written while
 auditing whether `libQt5Gamepad_arm64-v8a.so` could be removed from the package.
 
@@ -9,7 +133,7 @@ Every measurement below was taken from the decoded upstream base under
 from the checksum-pinned upstream Pegasus APK
 (`pegasus-fe_alpha16-105-g6b322063_android64.apk`,
 SHA-256 `e595be198bfd21c1855eaf563d5af0deae9c9601e6efb195ed299f2065287c67`).
-Lucent does not compile Qt; it repacks the Qt that upstream Pegasus's CI linked.
+EmuFusion does not compile Qt; it repacks the Qt that upstream Pegasus's CI linked.
 
 ## Conclusion: libQt5Gamepad cannot be removed
 
@@ -26,7 +150,7 @@ That is a link-time dependency of the frontend binary itself, not an optional
 plugin. `dlopen()` of `libpegasus-fe` resolves `DT_NEEDED` eagerly, so deleting
 the `.so` makes the very first `System.loadLibrary()` in the Qt bootstrap fail
 with `dlopen failed: library "libQt5Gamepad_arm64-v8a.so" not found`, before any
-Lucent code runs.
+EmuFusion code runs.
 
 The dependency is real, not a stale `--no-as-needed` artifact. The frontend
 binary carries 186 gamepad-related dynamic symbols, of which the `QGamepad*`
@@ -57,6 +181,41 @@ The only sound way to drop Qt Gamepad is to rebuild Pegasus from source with
 Android toolchain that is currently blocked, so it belongs to the Qt migration
 work, not to packaging.
 
+## Late Android gamepad event null guard
+
+The independent main-thread crash recorded on 2026-08-09 at 15:38:31 is now
+root-caused. The tombstone reported a null `x0` in `QObject::thread()` and a
+return address at relative offset `0x852c`. Mapping the loaded-library ranges,
+dynamic relocation for `QObject::thread()`, and that return address identifies
+`QAndroidGamepadBackend::handleKeyEvent()` in
+`libplugins_gamepads_androidgamepad_arm64-v8a.so`, specifically its second
+`FunctionEvent::runOnQtThread()` branch.
+
+Qt Gamepad 5.15 implements that helper as:
+
+```cpp
+if (qApp->thread() == QThread::currentThread())
+    func();
+else
+    qApp->postEvent(receiver, new FunctionEvent(func));
+```
+
+Android can deliver a final controller key event after Qt has cleared `qApp`.
+The helper then calls `QObject::thread()` with a null receiver. The correct
+behavior at that point is to discard the late event because there is no Qt
+application or event queue to receive it.
+
+`unified-android/tools/patch_qt_android_gamepad_null_guard.py` applies the
+equivalent `if (!qApp) return` guard to both key-event branches in the exact
+checksum-pinned ARM64 plugin. Each branch uses `cbz x0` to the function's
+existing successful cleanup path; the original `adrp`+`add` vtable address is
+folded into an equivalent `adr` so the guard fits without a trampoline. The
+patcher locks the complete input SHA-256, both offsets, and all input/output
+bytes, and rejects drift or repeat application. `verify_one_app_apk.py` rejects
+an APK missing either guard. This is source- and disassembly-verified but still
+requires a serialized physical-controller regression after the next immutable
+APK is built.
+
 ## The licensing premise behind the removal request was wrong
 
 The removal was proposed on the belief that Qt Gamepad is GPL-3.0/commercial
@@ -67,7 +226,7 @@ is not the case.
 its sources carry the `$QT_BEGIN_LICENSE:LGPL3$` header — commercial, **LGPLv3**,
 or GPLv2-or-later at the recipient's option. Qt Gamepad is therefore on exactly
 the same LGPL-3.0 footing as the other Qt modules in the package, and removing it
-would not have changed Lucent's licensing position at all.
+would not have changed EmuFusion's licensing position at all.
 
 ### The GPL-only Qt module in the package is Qt Quick Timeline
 
@@ -77,12 +236,12 @@ and `LICENSE.GPL3` — there is no LGPL option. Its sources carry
 `$QT_BEGIN_LICENSE:GPL$` and grant "version 3 or (at your option) any later
 version approved by the KDE Free Qt Foundation".
 
-This has no practical consequence today: Lucent is already a modified Pegasus
+This has no practical consequence today: EmuFusion is already a modified Pegasus
 distribution conveyed under GPLv3, and GPL-3.0-or-later material may be conveyed
 under GPL-3.0. It is recorded in `THIRD_PARTY_NOTICES.md` rather than removed,
 because:
 
-- the Lucent theme never imports `QtQuick.Timeline` (`theme/theme.qml` imports
+- the EmuFusion theme never imports `QtQuick.Timeline` (`theme/theme.qml` imports
   only `QtQuick`, `QtMultimedia`, `QtGraphicalEffects` and `SortFilterProxyModel`),
   so it is a genuine removal candidate on size grounds; but
 - QML plugin resolution goes through the compiled `assets/android_rcc_bundle.rcc`
@@ -164,17 +323,12 @@ qualification payload already includes GPL-3.0-only cores (ARMSX2, Virtual
 Jaguar). Upstream Pegasus is GPL-3.0-or-later, which may be conveyed under
 GPL-3.0, so narrowing is permitted.
 
-### 2. Release repository slug is split three ways
+### 2. Release repository slug is wildonrio
 
-- `release-manifest.json` asset URLs point at `github.com/tyler-bam-ai/pegasus-lucent`
-- `android-companion/src/com/thorium/preview/UpdateManager.java:31` fetches the
-  manifest from `raw.githubusercontent.com/wildonrio/pegasus-lucent/main/release-manifest.json`
-- `README.md` links releases at `github.com/wildonrio/pegasus-lucent`
-
-The updater therefore reads a manifest from one account and downloads assets from
-another. Pick one canonical slug and make all three agree. `UpdateManager.java`
-and `release-manifest.json` are owned by other workstreams and were not changed
-here.
+All three surfaces now agree on `github.com/wildonrio/pegasus-lucent`:
+`release-manifest.json` asset URLs, `UpdateManager`'s latest-release API and
+download prefixes, and `README.md`. The former `tyler-bam-ai/pegasus-lucent`
+publish fork is no longer a release channel.
 
 ### 3. `release-manifest.json` version is stale
 

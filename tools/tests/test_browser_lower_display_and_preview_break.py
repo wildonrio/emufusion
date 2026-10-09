@@ -1,4 +1,4 @@
-"""Lucent's in-app browser lives on the Thor's lower display.
+"""EmuFusion's in-app browser lives on the Thor's lower display.
 
 Three behaviours are pinned here, all of them reported from the device:
 
@@ -24,6 +24,8 @@ COMPANION = ROOT / "android-companion" / "src" / "com" / "thorium" / "preview"
 BROWSER = COMPANION / "BrowserActivity.java"
 PREVIEW_ACTIVITY = COMPANION / "PreviewActivity.java"
 PREVIEW_SERVICE = COMPANION / "PreviewService.java"
+FRONTEND_RESTART = COMPANION / "FrontendRestartActivity.java"
+LUCENT_APPLICATION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "LucentApplication.java"
 ROUTER = COMPANION / "SecondaryGameplaySurfaceRouter.java"
 MANIFEST = ROOT / "android-companion" / "AndroidManifest.xml"
 BUILD = ROOT / "unified-android" / "build.sh"
@@ -127,6 +129,7 @@ class BrowserDisplayRoutingTest(unittest.TestCase):
         # the primary-display reject path also reaches leaveGameplaySurface.
         self.assertLess(leave.index("SurfaceView existing = gameplaySurface;"),
                         leave.index("gameplaySurfaceActive = false;"))
+        self.assertIn("if (heldGameplaySurface) gameplaySurfaceActive = false;", leave)
         self.assertIn("gameplaySurfaceActive = false;",
                       body(self.preview, "if (ownsVisibilityFlags) {", "}"))
 
@@ -300,7 +303,7 @@ class PreviewBreakTest(unittest.TestCase):
 
     def test_closing_the_browser_resumes_the_previous_selection(self):
         end = body(self.service, "private synchronized void endBrowserBreak() {",
-                   "private void reloadLucentFrontend()")
+                   "private void reloadEmuFusionFrontend()")
         self.assertIn("browserActive = false;", end)
         self.assertIn("sendBroadcast(new Intent(ACTION_RESUME)", end)
         self.assertIn("showLastPlayer();", end)
@@ -310,18 +313,67 @@ class PreviewBreakTest(unittest.TestCase):
                         end.index("showLastPlayer();"))
         # A game or an explicit blank that happened during the break wins.
         self.assertIn(
-            "boolean resume = resumePreviewAfterBrowser && !gameplayActive && !placementBlank;",
+            "boolean resume = resumePreviewAfterBrowser && !gameplayActive &&\n"
+            "                !placementBlank && !screensaverActive;",
             end)
 
     def test_closing_the_browser_never_exposes_the_android_launcher(self):
         end = body(self.service, "private synchronized void endBrowserBreak() {",
-                   "private void reloadLucentFrontend()")
+                   "private void reloadEmuFusionFrontend()")
         fallback = body(end, "} else if (!PreviewActivity.isGameplaySurfaceActive()) {",
                         "Log.i(BROWSER_TAG")
         self.assertIn("launchPlayerOnSecondary(", fallback)
         self.assertIn("setAction(ACTION_BLANK)", fallback)
         # ...except when a dual-screen game already owns that display.
         self.assertIn("!PreviewActivity.isGameplaySurfaceActive()", end)
+
+    def test_import_reload_restarts_the_whole_qt_process(self):
+        reload_frontend = body(
+            self.service,
+            "private void reloadEmuFusionFrontend() {",
+            "private static long parseLong",
+        )
+        # Recreating only Qt's Activity leaves QtThread rendering into the old,
+        # abandoned SurfaceView and produces an input-focus ANR. Android 13 also
+        # blocks an alarm-delivered relaunch once the app has no visible window,
+        # so a separate foreground bridge must own the complete transition.
+        self.assertIn("new Intent(frontendOwner, FrontendRestartActivity.class)",
+                      reload_frontend)
+        self.assertIn("FrontendRestartActivity.EXTRA_OLD_PROCESS_PID",
+                      reload_frontend)
+        self.assertIn("Intent.FLAG_ACTIVITY_NO_ANIMATION", reload_frontend)
+        self.assertIn("LucentApplication.currentMainActivity()", reload_frontend)
+        self.assertIn("frontendOwner.hasWindowFocus()", reload_frontend)
+        self.assertIn("frontendOwner.startActivity(restart)", reload_frontend)
+        self.assertNotIn("startActivity(frontend)", code(reload_frontend))
+
+        bridge = FRONTEND_RESTART.read_text(encoding="utf-8")
+        self.assertIn("android.os.Process.killProcess(oldPid)", bridge)
+        self.assertIn("firstFrameDrawn", bridge)
+        self.assertIn("onWindowFocusChanged(boolean hasFocus)", bridge)
+        self.assertIn("processNameForPid(oldPid)", bridge)
+        self.assertIn("handler.post(this::waitForOldProcessExit)", bridge)
+        self.assertIn("OLD_PROCESS_EXIT_TIMEOUT_MS", bridge)
+        launch = body(bridge, "private void launchFreshFrontend() {",
+                      "private void showFatal(String message)")
+        self.assertIn("Intent.FLAG_ACTIVITY_CLEAR_TASK", launch)
+        self.assertIn("startActivity(frontend)", launch)
+        self.assertIn("launchAttempts < MAX_LAUNCH_ATTEMPTS", launch)
+
+        application = LUCENT_APPLICATION.read_text(encoding="utf-8")
+        on_create = body(application, "public void onCreate() {",
+                         "private boolean isFrontendRestartProcess()")
+        self.assertLess(on_create.index("if (isFrontendRestartProcess())"),
+                        on_create.index("InternalEngineBootstrap.register(this)"))
+
+        root = ElementTree.parse(MANIFEST).getroot()
+        restart = next(activity for activity in root.findall(".//activity")
+                       if activity.get(f"{{{ANDROID}}}name") ==
+                       ".FrontendRestartActivity")
+        self.assertEqual(":frontend_restart",
+                         restart.get(f"{{{ANDROID}}}process"))
+        self.assertEqual("false", restart.get(f"{{{ANDROID}}}exported"))
+        self.assertEqual("true", restart.get(f"{{{ANDROID}}}noHistory"))
 
     def test_a_game_or_a_blank_during_the_break_cancels_the_resume(self):
         for anchor, terminator in (
@@ -390,8 +442,9 @@ class PreviewBreakTest(unittest.TestCase):
         volumes = body(self.preview, "private void applyPlayerVolumes() {",
                        "private void blankScreen()")
         self.assertIn(
-            "float volume = soundEnabled && !playersPaused && index == activeSlot ? 1f : 0f;",
+            "float volume = soundEnabled && !playersPaused && index == activeSlot",
             volumes)
+        self.assertIn("? appVolumeGain : 0f;", volumes)
         prepared = body(self.preview, "player.setOnPreparedListener(", "});")
         self.assertIn("if (!playersPaused) mediaPlayer.start();", prepared)
 
@@ -418,7 +471,7 @@ class PreviewBreakTest(unittest.TestCase):
                      "/** Ends the break")
         self.assertIn(".putBoolean(EXTRA_BROWSER_ACTIVE, true)", begin)
         end = body(self.service, "private synchronized void endBrowserBreak() {",
-                   "private void reloadLucentFrontend()")
+                   "private void reloadEmuFusionFrontend()")
         self.assertIn(".putBoolean(EXTRA_BROWSER_ACTIVE, false)", end)
         # A restarted service is never mid-break: no browser window of ours
         # can already be open.
@@ -433,7 +486,7 @@ class PreviewBreakTest(unittest.TestCase):
                      "/** Ends the break")
         self.assertIn("if (browserActive) return;", begin)
         end = body(self.service, "private synchronized void endBrowserBreak() {",
-                   "private void reloadLucentFrontend()")
+                   "private void reloadEmuFusionFrontend()")
         self.assertIn("if (!browserActive) return;", end)
         pause = body(self.preview, "private void pausePlayers() {",
                      "private void resumePlayers() {")

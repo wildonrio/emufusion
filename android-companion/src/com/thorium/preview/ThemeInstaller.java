@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.Manifest;
 import android.os.Build;
 import android.os.Environment;
+import android.system.Os;
 import android.util.Log;
 
 import java.io.BufferedInputStream;
@@ -23,11 +24,13 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-/** Installs the bundled or downloaded Pegasus Lucent theme without touching ROMs. */
+/** Installs the bundled or downloaded Pegasus EmuFusion theme without touching ROMs. */
 final class ThemeInstaller {
     private static final String TAG = "LucentThemeInstaller";
     private static final String ASSET_ZIP = "pegasus-lucent-theme.zip";
     private static final String ASSET_VERSION = "pegasus-lucent-version.txt";
+    private static final String ASSET_BUNDLED_FINGERPRINT =
+            "pegasus-lucent-theme.sha256";
     private static final File PEGASUS = new File(Environment.getExternalStorageDirectory(),
             "pegasus-frontend");
     private static final File PEGASUS_CONFIG = new File(Environment.getExternalStorageDirectory(),
@@ -36,6 +39,12 @@ final class ThemeInstaller {
             "Android/data/com.thorium.preview/files/pegasus-frontend");
     private static final File THEME = new File(PEGASUS, "themes/lucent");
     private static final File VERSION = new File(THEME, ".lucent-version");
+    // Deliberately outside THEME: installing a newer downloaded theme replaces
+    // that directory, but must not erase the record of which APK-bundled theme
+    // was already considered. A later APK with different bundled bytes then
+    // installs once; repeated starts of the same APK leave the theme alone.
+    private static final File BUNDLED_FINGERPRINT = new File(PEGASUS,
+            ".lucent-bundled-theme.sha256");
     private static final File CONFIG_MIGRATION = new File(LUCENT_CONFIG,
             ".lucent-config-migrated");
 
@@ -52,33 +61,47 @@ final class ThemeInstaller {
     }
 
     static void installBundledIfNeeded(Context context, Runnable completion) {
-        installBundled(context, false, completion);
+        installBundled(context, false, completion, null);
+    }
+
+    /**
+     * Installs a changed bundled theme and reports that exact event separately
+     * from ordinary completion. Callers use {@code installedCompletion} to
+     * refresh a frontend that may already have loaded the previous QML while
+     * asynchronous extraction was in progress.
+     */
+    static void installBundledIfNeeded(Context context, Runnable completion,
+                                       Runnable installedCompletion) {
+        installBundled(context, false, completion, installedCompletion);
     }
 
     static void forceInstallBundled(Context context, Runnable completion) {
-        installBundled(context, true, completion);
+        installBundled(context, true, completion, null);
     }
 
-    /** Installs Lucent before the embedded Pegasus activity draws its first frame. */
-    static void installBundledNow(Context context) {
+    /** Installs EmuFusion before the embedded Pegasus activity draws its first frame. */
+    static boolean installBundledNow(Context context) {
         try {
             installBundledBlocking(context, false);
-        } catch (java.io.FileNotFoundException missingOptionalAsset) {
-            // Development builds may intentionally omit the large theme bundle.
+            return isFrontendConfigured();
         } catch (Exception error) {
             Log.e(TAG, "Unable to install bundled theme before startup", error);
+            return false;
         }
     }
 
-    private static void installBundled(Context context, boolean force, Runnable completion) {
+    private static void installBundled(Context context, boolean force,
+                                       Runnable completion,
+                                       Runnable installedCompletion) {
         Thread worker = new Thread(() -> {
+            boolean installed = false;
             try {
-                installBundledBlocking(context, force);
-            } catch (java.io.FileNotFoundException missingOptionalAsset) {
-                // Development builds may intentionally omit the large theme bundle.
+                installed = installBundledBlocking(context, force);
             } catch (Exception error) {
                 Log.e(TAG, "Unable to install bundled theme", error);
             } finally {
+                if (installed && installedCompletion != null)
+                    installedCompletion.run();
                 if (completion != null) completion.run();
             }
         }, "lucent-theme-install");
@@ -86,20 +109,41 @@ final class ThemeInstaller {
         worker.start();
     }
 
-    private static void installBundledBlocking(Context context, boolean force) throws Exception {
-        if (!hasStorageAccess(context)) return;
+    // The Application's synchronous cold-start install and PreviewService's
+    // asynchronous maintenance install can begin together after an APK update.
+    // Serialize the fingerprint decision with the directory swap; otherwise
+    // both can decide the bundle is new and the second swap may delete theme.qml
+    // exactly while Pegasus is opening it.
+    private static synchronized boolean installBundledBlocking(
+            Context context, boolean force) throws Exception {
+        if (!hasStorageAccess(context)) return false;
+        // Ask Android to create this package's own external-files directory.
+        // MANAGE_EXTERNAL_STORAGE does not grant access to another app's
+        // Android/data directory, even when that app is not installed.
+        if (context.getExternalFilesDir(null) == null)
+            throw new java.io.IOException("EmuFusion external storage is unavailable");
+        boolean configurationMissing = !isFrontendConfigured();
         migratePegasusConfig();
         String bundled = readAssetText(context, ASSET_VERSION).trim();
-        boolean firstLucentInstall = !VERSION.isFile();
-        if (!bundled.isEmpty() && (force || !bundled.equals(readText(VERSION).trim()))) {
+        String bundledFingerprint = readAssetText(
+                context, ASSET_BUNDLED_FINGERPRINT).trim();
+        boolean firstEmuFusionInstall = !VERSION.isFile();
+        boolean bundledChanged = !bundledFingerprint.isEmpty() &&
+                !bundledFingerprint.equals(readText(BUNDLED_FINGERPRINT).trim());
+        boolean installed = !bundled.isEmpty() &&
+                (force || firstEmuFusionInstall || bundledChanged);
+        if (installed) {
             try (InputStream input = context.getAssets().open(ASSET_ZIP)) {
                 installZip(input, bundled);
             }
+            if (!bundledFingerprint.isEmpty())
+                writeText(BUNDLED_FINGERPRINT, bundledFingerprint + "\n");
         }
-        // Lucent is the default, not a lock-in. Select it on first setup, but
+        // EmuFusion is the default, not a lock-in. Select it on first setup, but
         // preserve any other Pegasus theme the user chooses afterward. The
         // ROM-only provider rule remains enforced on every launch.
-        updatePegasusSettings(firstLucentInstall);
+        updatePegasusSettings(firstEmuFusionInstall);
+        return installed || configurationMissing;
     }
 
     /**
@@ -163,28 +207,108 @@ final class ThemeInstaller {
             deleteTree(staging);
             throw new java.io.IOException("Theme archive is incomplete");
         }
-        deleteTree(THEME);
-        if (!staging.renameTo(THEME)) {
-            copyTree(staging, THEME);
-            deleteTree(staging);
-        }
+        publishStagedTheme(staging);
         writeText(VERSION, version == null ? "unknown" : version.trim());
+    }
+
+    /**
+     * Publishes a fully validated theme without ever removing the live
+     * theme.qml path.
+     *
+     * <p>Pegasus and the installer run concurrently after an APK update. A
+     * directory-level delete/swap therefore leaves a real interval in which
+     * Pegasus can open neither the old nor the new theme.qml. Every staged
+     * regular file is already on the same external-storage filesystem, so a
+     * POSIX rename replaces its live counterpart atomically. Assets and
+     * theme.cfg are committed first; theme.qml is the final publication point.
+     * Old files not referenced by the new theme are deliberately retained so
+     * an already-loaded old QML document cannot lose an asset mid-session.
+     */
+    private static void publishStagedTheme(File staging) throws Exception {
+        if (!THEME.mkdirs() && !THEME.isDirectory())
+            throw new java.io.IOException("Unable to create the live theme directory");
+        publishStagedChildren(staging, staging);
+        publishStagedFile(staging, "theme.cfg");
+        publishStagedFile(staging, "theme.qml");
+        deleteTree(staging);
+    }
+
+    private static void publishStagedChildren(
+            File stagingRoot, File directory) throws Exception {
+        File[] children = directory.listFiles();
+        if (children == null)
+            throw new java.io.IOException("Unable to enumerate staged theme files");
+        String rootPath = stagingRoot.getCanonicalPath() + File.separator;
+        for (File child : children) {
+            String canonical = child.getCanonicalPath();
+            if (!canonical.startsWith(rootPath))
+                throw new java.io.IOException("Unsafe staged theme path");
+            String relative = canonical.substring(rootPath.length());
+            if (directory.equals(stagingRoot) && ("theme.qml".equals(relative) ||
+                    "theme.cfg".equals(relative))) continue;
+            if (child.isDirectory()) {
+                File target = new File(THEME, relative);
+                if (!target.mkdirs() && !target.isDirectory())
+                    throw new java.io.IOException("Unable to create theme directory " + relative);
+                publishStagedChildren(stagingRoot, child);
+            } else {
+                publishStagedFile(stagingRoot, relative);
+            }
+        }
+    }
+
+    private static void publishStagedFile(File stagingRoot, String relative) throws Exception {
+        File source = new File(stagingRoot, relative);
+        if (!source.isFile())
+            throw new java.io.IOException("Missing staged theme file " + relative);
+        File target = new File(THEME, relative);
+        long replacedTimestamp = target.isFile() ? target.lastModified() : 0L;
+        File parent = target.getParentFile();
+        if (parent != null && !parent.mkdirs() && !parent.isDirectory())
+            throw new java.io.IOException("Unable to create theme file parent " + relative);
+        Os.rename(source.getAbsolutePath(), target.getAbsolutePath());
+        if ("theme.qml".equals(relative)) {
+            // Qt's QML disk cache keys external documents partly by path,
+            // size, and modification time. A ZIP/file rename can preserve a
+            // timestamp even when theme.qml's bytes changed, which leaves the
+            // previous menu text visible after an APK update. Advance the live
+            // document beyond both wall time and the file it replaced so the
+            // next frontend process must compile the newly published source.
+            long successor = replacedTimestamp >= Long.MAX_VALUE - 1L
+                    ? replacedTimestamp : replacedTimestamp + 1L;
+            long cacheBuster = Math.max(System.currentTimeMillis(), successor);
+            if (!target.setLastModified(cacheBuster))
+                throw new java.io.IOException("Unable to invalidate the EmuFusion theme cache");
+        }
     }
 
     static String installedVersion() {
         return readText(VERSION).trim();
     }
 
-    private static void updatePegasusSettings(boolean selectLucent) throws Exception {
-        // Modern Pegasus Android builds keep runtime settings under their
-        // app-specific external directory. Disable the Android Apps provider:
-        // Lucent is deliberately a ROM library, never an application launcher.
-        updateSettings(new File(PEGASUS_CONFIG, "settings.txt"), selectLucent);
-        updateSettings(new File(LUCENT_CONFIG, "settings.txt"), selectLucent);
-        updateSettings(new File(PEGASUS, "settings.txt"), selectLucent);
+    /** A version marker alone does not prove that first-run setup completed. */
+    static boolean isFrontendConfigured() {
+        if (installedVersion().isEmpty() || !new File(THEME, "theme.qml").isFile()
+                || !new File(THEME, "theme.cfg").isFile()) return false;
+        for (String line : readText(new File(LUCENT_CONFIG, "settings.txt")).split("\n")) {
+            if (line.startsWith("general.theme:") &&
+                    !line.substring("general.theme:".length()).trim().isEmpty()) return true;
+        }
+        return false;
     }
 
-    private static void updateSettings(File settings, boolean selectLucent) throws Exception {
+    private static void updatePegasusSettings(boolean selectEmuFusion) throws Exception {
+        // Modern Pegasus Android builds keep runtime settings under their
+        // app-specific external directory. Disable the Android Apps provider:
+        // EmuFusion is deliberately a ROM library, never an application launcher.
+        // The old Pegasus directory is a read-only migration source, not a
+        // required write target. On a clean Android phone its creation fails
+        // before either of our own settings files can be written.
+        updateSettings(new File(LUCENT_CONFIG, "settings.txt"), selectEmuFusion);
+        updateSettings(new File(PEGASUS, "settings.txt"), selectEmuFusion);
+    }
+
+    private static void updateSettings(File settings, boolean selectEmuFusion) throws Exception {
         List<String> lines = new ArrayList<>();
         boolean themeReplaced = false;
         boolean appsReplaced = false;
@@ -193,10 +317,14 @@ final class ThemeInstaller {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (line.startsWith("general.theme:")) {
-                        if (selectLucent && !themeReplaced) {
+                        if (selectEmuFusion && !themeReplaced) {
                             lines.add("general.theme: " + THEME.getAbsolutePath() + "/");
                             themeReplaced = true;
-                        } else if (!selectLucent) lines.add(line);
+                        } else if (!selectEmuFusion &&
+                                !line.substring("general.theme:".length()).trim().isEmpty()) {
+                            lines.add(line);
+                            themeReplaced = true;
+                        }
                     } else if (line.startsWith("providers.androidapps.enabled:")) {
                         if (!appsReplaced) {
                             lines.add("providers.androidapps.enabled: false");
@@ -206,7 +334,9 @@ final class ThemeInstaller {
                 }
             }
         }
-        if (selectLucent && !themeReplaced)
+        // Repair an interrupted first install even if .lucent-version already
+        // exists. A deliberately selected nonempty custom theme stays intact.
+        if (!themeReplaced)
             lines.add(0, "general.theme: " + THEME.getAbsolutePath() + "/");
         if (!appsReplaced) lines.add("providers.androidapps.enabled: false");
         File parent = settings.getParentFile();
@@ -216,9 +346,9 @@ final class ThemeInstaller {
             for (String line : lines) writer.write(line + "\n");
         }
         if (settings.isFile() && !settings.delete())
-            throw new java.io.IOException("Unable to replace Lucent settings");
+            throw new java.io.IOException("Unable to replace EmuFusion settings");
         if (!temporary.renameTo(settings))
-            throw new java.io.IOException("Unable to commit Lucent settings");
+            throw new java.io.IOException("Unable to commit EmuFusion settings");
     }
 
     private static String readAssetText(Context context, String name) throws Exception {

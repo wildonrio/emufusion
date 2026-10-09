@@ -1,10 +1,15 @@
 {
   "product": "Lucent",
   "themeVersion": "3.2.0",
-  "themeZipUrl": "https://github.com/tyler-bam-ai/pegasus-lucent/releases/download/v3.2.0/lucent-theme-3.2.0.zip",
+  "themeZipUrl": "https://github.com/wildonrio/pegasus-lucent/releases/download/v3.2.0/lucent-theme-3.2.0.zip",
   "themeSha256": "d7e0a568aaaa54523979065412ff955991bf5d1bb2ea862c27e555f649da0f06",
-  "companionVersionCode": 74,
-  "companionVersionName": "3.2.0",
-  "companionApkUrl": "https://github.com/tyler-bam-ai/pegasus-lucent/releases/download/v3.2.0/lucent-3.2.0.apk",
-  "companionSha256": "7ba8d787f58e2698f1c3d056e13f0c1eb415be5d063c6e1a3f8e5b1ee37c6591"
+  "cheatCatalogVersion": "libretro-buildbot-2026-08-08",
+  "cheatCatalogUrl": "https://buildbot.libretro.com/assets/frontend/cheats.zip",
+  "cheatCatalogSha256": "13bcd12479d0c2fb81ab30379261ef5c9019b9eb19b1c1e4284d06ec998bebfd",
+  "cheatCatalogLicense": "CC-BY-SA-4.0",
+  "cheatCatalogSource": "https://github.com/libretro/libretro-database",
+  "companionVersionCode": 91,
+  "companionVersionName": "3.2.17",
+  "companionApkUrl": "https://github.com/wildonrio/pegasus-lucent/releases/download/v3.2.17/lucent-3.2.17.apk",
+  "companionSha256": "9dd272e8310922b4cdd1ac9d4c6596b261a25032a53d9f4e200964e6687a910b"
 }

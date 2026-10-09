@@ -1,0 +1,292 @@
+import com.thorium.lucent.video.*;
+import java.util.ArrayList;
+
+public class SlotReservationFixture {
+    // Immutable aa09 request values copied from app.log:2355. No physical
+    // timestamp or successful display is manufactured from this fixture.
+    static final long AA09_TARGET=306285378827390L;
+    static final long AA09_EXPECTED=306285378796020L;
+    static final long AA09_DEADLINE=306285368462687L;
+    static final long TOKEN_104=366852878L,TOKEN_105=366852899L;
+    static final long PANEL=8333333L;
+    static final String TAG="fixture";
+    static class System {static long now;static long nanoTime(){return now;}}
+    static class Log {static void i(String t,String m){}static void w(String t,String m){}static void e(String t,String m){}}
+    static class AdaptiveFrameRateController {static final int PRESENT_REAL=1,PRESENT_SYNTHETIC=2;}
+    static class ExternalFrameGenerationTransport {
+        enum EnqueueResult {SUBMITTED,NOT_READY,DEFERRED}
+        EnqueueResult result=EnqueueResult.SUBMITTED;
+        boolean throwOnEnqueue,timeline=true;int calls,releases,pending;long interruptions;
+        final ArrayList<FrameGenerationPresentationRequest> accepted=new ArrayList<>();
+        boolean hasAdjacentPair(long l,long r){return r==l+1;}
+        int endpointWidth(){return 320;}int endpointHeight(){return 240;}
+        boolean requiresCompositorFrameTimeline(){return timeline;}
+        int pendingPhysicalPresentationCount(){return pending;}
+        void releaseBefore(long sequence){releases++;}
+        long consumePresentationDiscontinuities(){long result=interruptions;interruptions=0;return result;}
+        void setGeneratedRatePathActive(boolean active){assert !active;}
+        EnqueueResult enqueue(FrameGenerationPresentationRequest request){
+            calls++;
+            if(throwOnEnqueue)throw new IllegalStateException("controlled transport failure");
+            if(result==EnqueueResult.SUBMITTED){pending++;accepted.add(request);}
+            return result;
+        }
+    }
+    static class Rate {
+        int commits,drops,defers,credits=100;long period=PANEL;
+        int panelScansPerOutput(){return 2;}
+        int bufferedEndpointAdvanceAfterPresentation(){return 1;}
+        int bufferedOutputCredits(){return credits;}
+        long panelPeriodNs(){return period;}
+        void commitBufferedPresentation(boolean ok){assert ok;commits++;credits--;}
+        void dropBufferedPresentationSlot(){drops++;}
+        void deferBufferedPresentationSlot(){defers++;}
+        void resetPresentation(){}
+        void setGenerationAvailable(boolean available){assert !available;}
+    }
+    static class Bootstrap {
+        boolean complete(){return true;}
+        boolean ready(boolean clock,int javaPending,int nativePending){return true;}
+        void commit(boolean clock,int javaPending,int nativePending){assert javaPending==nativePending;}
+        int calibrationPresents(){return 1;}
+    }
+    static class Clock {
+        long period=PANEL;boolean rejectNextRecord;
+        long planningPeriodNs(){return period;}boolean available(){return true;}
+        void reset(){}long anchorNs(){return AA09_TARGET;}
+        boolean record(long actual,long refresh,long expected){
+            if(rejectNextRecord){rejectNextRecord=false;return false;}return true;
+        }
+    }
+    static class Budget {int admits;boolean admit(FrameGenerationPresentationRequest r){admits++;return true;}}
+    static class Evidence {long epoch=14;void beginEpoch(int scans,long refresh,long next,int pipeline){epoch=next;}}
+    static class ContentEvidence {long epoch;void beginEpoch(long next){epoch=next;}}
+    static class Cadence {int records;void reset(){}boolean recordPresented(long actual,int scans,long refresh){records++;return true;}}
+    static class Row {long presentId;Row(long id){presentId=id;}}
+    final ExternalFrameGenerationTransport externalTransport=new ExternalFrameGenerationTransport();
+    final Rate frameRate=new Rate();final Bootstrap externalPhysicalClockBootstrap=new Bootstrap();
+    final Clock externalPhysicalClock=new Clock();final Budget midpointPairBudget=new Budget();
+    final ExternalPresentationLedger externalPresentationLedger=new ExternalPresentationLedger();
+    final Evidence externalPresentationEvidence=new Evidence();
+    final ContentEvidence externalGeneratedContentEvidence=new ContentEvidence();
+    final Cadence externalPhysicalCadence=new Cadence();
+    boolean externalRatePathActive,activePairSyntheticCommitted,outputFrameRateReassertedAfterSwap;
+    boolean externalRatePathPriming,externalRatePathOutputPriming,externalAppOwnedActivationFirstSwapPending;
+    boolean externalPhysicalClockBoundaryCommittedThisCallback;
+    long activeLeftSequence=108,activeRightSequence=109,generatorId=1,epoch=15;
+    long externalPrequeueDeferredCount,bufferedSyntheticNotReadyCount,compositorFrameTimelineCommitted;
+    long externalLastPlannedPhysicalNs,externalDirectOutputPhaseAnchorNs,bufferedSyntheticSelectedCount;
+    long externalLastSubmittedCompositorExpectedNs,externalPhysicalSlotRejectedCount,observedBufferedPresentationEpoch;
+    long bufferedLastSelectedSyntheticPair,phaseDiagSpanSumNs,presents,externalPhysicalRefreshDurationNs;
+    int externalPhysicalAnchorTailRows,externalPhysicalScansPerOutput,advances,resets,refreshes,realPairPreparations;
+    double phaseDiagSum;float phaseDiagMin=1,phaseDiagMax;int phaseDiagCount;
+    long schedulerPresentationEpoch(){return epoch;}
+    void commitBufferedEndpointAdvance(int presentation,int count){advances++;activeLeftSequence+=count;activeRightSequence+=count;}
+    void refreshProofEvidencePresentationEpoch(){refreshes++;}
+    void resetHealthWindowAfterStreamChange(){resets++;}
+    void requestOutputFrameRate(String reason){}
+    void markExternalTimingRejected(){}
+    void resetEndpointTimelineForSchedulerEpoch(){}
+    // Controlled preparation leaf; production provider/lease work has its own
+    // tests. Enforce its ordering after successful ownership and all commits.
+    void prepareExternalRealPairIfPossible(){
+        same(realPairPreparations+1,frameRate.commits,"preparation follows success only");
+        same(frameRate.commits,externalPresentationLedger.submittedCount(),"preparation follows ledger commit");
+        same(frameRate.commits,advances,"preparation follows endpoint advance");
+        same(advances,externalTransport.releases,"preparation follows release request");
+        assert externalLastPlannedPhysicalNs>0;
+        realPairPreparations++;
+    }
+
+    @SUBMISSION@
+    @HELPERS@
+
+    void anchor(ExternalPresentationLedger.Commit commit,Row row){
+        // Execute the production branch in its loop context. The controlled
+        // row is solely test input; cadence leaves do not certify scanout.
+        for(int once=0;once<1;once++){
+            boolean physicalEpochChanged=true;
+            @ANCHOR@
+        }
+    }
+    void stale(ExternalPresentationLedger.Commit commit){
+        @STALE@
+    }
+    void bootstrap(){
+        int pending=externalPresentationLedger.pendingCount();
+        ExternalFrameGenerationTransport transport=externalTransport;
+        @BOOTSTRAP@
+    }
+    FrameGenerationPresentationRequest request(long target,long expected,long token){
+        return request(target,expected,token,false);
+    }
+    FrameGenerationPresentationRequest request(long target,long expected,long token,boolean generated){
+        long left=activeLeftSequence*100000000L,right=left+33333334L;
+        long deadline=target-PhysicalPresentationDeadline.THOR_DRIVER_LEAD_NS;
+        FrameGenerationPresentationRequest result=FrameGenerationPresentationRequest.between(
+                generatorId,epoch,activeLeftSequence,left,activeRightSequence,right,
+                generated?left+(right-left)/2:left,target,deadline,deadline,0,320,240,1);
+        return token==0?result:result.withTargetCompositorFrameTimeline(
+                token,expected,expected-frameRate.period-2000000L);
+    }
+    void submit(FrameGenerationPresentationRequest request){
+        presentExternalBuffered(request,request.isGenerated()?2:1);
+    }
+    static void same(long expected,long actual,String label){
+        if(expected!=actual)throw new AssertionError(label+" expected="+expected+" actual="+actual);
+    }
+    static void anchorTest(){
+        for(long period:new long[]{8333333L,16666667L})for(long shift:new long[]{-250000L,-33344L,33344L,250000L}){
+            SlotReservationFixture f=new SlotReservationFixture();
+            f.frameRate.period=period;f.externalPhysicalClock.period=period;
+            long target=AA09_TARGET,firstTarget=target-4*period;
+            System.now=firstTarget-100000000L;
+            FrameGenerationPresentationRequest first=f.request(firstTarget,firstTarget,TOKEN_104-1);
+            f.submit(first);
+            FrameGenerationPresentationRequest tail=f.request(target,target,TOKEN_104);
+            f.submit(tail);
+            same(2,f.externalPresentationLedger.pendingCount(),"two owned requests");
+            long actual=firstTarget+shift;
+            ExternalPresentationLedger.Commit commit=f.externalPresentationLedger.physicallyPresented(
+                    first,1,first.driverDesiredPresentTimeNs(),actual,actual-1000000L,
+                    actual-first.driverDesiredPresentTimeNs(),period,1000,1000);
+            f.externalTransport.pending--;
+            f.anchor(commit,new Row(1));
+            same(1,f.externalPhysicalAnchorTailRows,"pending pre-anchor tail");
+            same(target,f.externalLastPlannedPhysicalNs,"submitted high-water survives epoch anchor");
+            same(target,f.externalLastSubmittedCompositorExpectedNs,"compositor high-water survives epoch anchor");
+            same(actual,f.externalDirectOutputPhaseAnchorNs,"phase still updates");
+            same(1,f.presents,"anchor counted once");
+            // The earliest meetable target after this phase retune would be
+            // the old reserved scan without the lifetime high-water mark.
+            long now=target-PhysicalPresentationDeadline.THOR_OUTPUT_SUBMISSION_LEAD_NS-period-500000L;
+            PhysicalPresentationDeadline unsafe=PhysicalPresentationDeadline.nextAlignedOutput(
+                    now-1000000L,actual,period,1,now,0);
+            assert unsafe.valid() && Math.abs(unsafe.contentPresentationTimeNs()-target)<period/2;
+            PhysicalPresentationDeadline safe=PhysicalPresentationDeadline.nextAlignedOutput(
+                    now-1000000L,actual,period,1,now,f.externalLastPlannedPhysicalNs);
+            assert safe.valid();
+            assert safe.contentPresentationTimeNs()-target>=period/2;
+            long safeTarget=safe.contentPresentationTimeNs();
+            System.now=now;f.submit(f.request(safeTarget,safeTarget,TOKEN_105));
+            same(3,f.externalPresentationLedger.submittedCount(),"new distinct scan submitted");
+            same(safeTarget,f.externalLastPlannedPhysicalNs,"new reservation committed");
+        }
+    }
+    static void duplicateTest(){
+        for(long shift:new long[]{-33344L,0L,33344L}){
+            SlotReservationFixture f=new SlotReservationFixture();System.now=AA09_TARGET-100000000L;
+            FrameGenerationPresentationRequest first=f.request(AA09_TARGET,AA09_EXPECTED,TOKEN_104);
+            same(AA09_DEADLINE,first.hardCompletionDeadlineNs(),"recorded immutable deadline");
+            f.submit(first);
+            FrameGenerationPresentationRequest duplicate=f.request(AA09_TARGET+shift,AA09_EXPECTED,TOKEN_105);
+            assert first.compositorFrameTimelineVsyncId()!=duplicate.compositorFrameTimelineVsyncId();
+            same(first.compositorExpectedPresentationTimeNs(),duplicate.compositorExpectedPresentationTimeNs(),"same physical scan");
+            long credits=f.frameRate.credits;
+            try {f.submit(duplicate);}catch(IllegalStateException expected){}
+            same(1,f.externalTransport.calls,"duplicate rejected before transport ownership");
+            same(1,f.externalPresentationLedger.submittedCount(),"no duplicate ledger row");
+            same(AA09_TARGET,f.externalLastPlannedPhysicalNs,"reservation not rewound");
+            same(AA09_EXPECTED,f.externalLastSubmittedCompositorExpectedNs,"expected scan not relabeled");
+            same(credits,f.frameRate.credits,"no duplicate credit spent");
+            same(1,f.externalPhysicalSlotRejectedCount,"explicit duplicate rejection counted");
+            same(1,f.realPairPreparations,"duplicate cannot prepare another private pair");
+            same(0,f.midpointPairBudget.admits,"Direct does not spend midpoint budget");
+            long next=AA09_TARGET+PANEL;f.submit(f.request(next,AA09_EXPECTED+PANEL,TOKEN_105+1));
+            same(2,f.externalTransport.calls,"next scan remains available");
+            same(next,f.externalLastPlannedPhysicalNs,"next scan reserved");
+            same(2,f.realPairPreparations,"successful next scan prepares once");
+        }
+    }
+    static void failureTest(){
+        for(int failure=0;failure<4;failure++)for(boolean generated:new boolean[]{false,true}){
+            SlotReservationFixture f=new SlotReservationFixture();f.externalRatePathActive=generated;
+            System.now=AA09_TARGET-100000000L;
+            f.submit(f.request(AA09_TARGET,AA09_EXPECTED,TOKEN_104,generated));
+            long next=AA09_TARGET+PANEL;
+            FrameGenerationPresentationRequest candidate=f.request(next,AA09_EXPECTED+PANEL,TOKEN_105,generated);
+            if(failure==0)System.now=candidate.hardCompletionDeadlineNs();
+            if(failure==1)f.externalTransport.result=ExternalFrameGenerationTransport.EnqueueResult.NOT_READY;
+            if(failure==2)f.externalTransport.result=ExternalFrameGenerationTransport.EnqueueResult.DEFERRED;
+            if(failure==3)f.externalTransport.throwOnEnqueue=true;
+            long credits=f.frameRate.credits;int admits=f.midpointPairBudget.admits;
+            int preparations=f.realPairPreparations;
+            try {f.submit(candidate);}catch(IllegalStateException expected){assert failure==3;}
+            same(AA09_TARGET,f.externalLastPlannedPhysicalNs,"failed proposal cannot reserve");
+            same(AA09_EXPECTED,f.externalLastSubmittedCompositorExpectedNs,"failed proposal cannot reserve expected scan");
+            same(1,f.externalPresentationLedger.submittedCount(),"failed proposal has no ledger ownership");
+            same(credits,f.frameRate.credits,"failed proposal spends no credit");
+            same(admits,f.midpointPairBudget.admits,"failed proposal spends no pair generation");
+            same(preparations,f.realPairPreparations,"failed or expired proposal starts no preparation");
+            same(failure==0?1:2,f.externalTransport.calls,"expiry bypasses transport");
+            f.externalTransport.result=ExternalFrameGenerationTransport.EnqueueResult.SUBMITTED;
+            f.externalTransport.throwOnEnqueue=false;
+            // No clock rewind or retry of the missed immutable proposal: a
+            // genuinely later scan remains available for the retained pair.
+            System.now=candidate.hardCompletionDeadlineNs()+1;
+            long later=next+PANEL;
+            f.submit(f.request(later,AA09_EXPECTED+2*PANEL,TOKEN_105+1,generated));
+            same(2,f.externalPresentationLedger.submittedCount(),"later new scan can submit");
+            same(later,f.externalLastPlannedPhysicalNs,"successful submission alone commits reservation");
+            same(preparations+1,f.realPairPreparations,"successful later scan prepares exactly once");
+        }
+    }
+    static void resetTest(){
+        for(int reset=0;reset<3;reset++){
+            SlotReservationFixture f=new SlotReservationFixture();System.now=AA09_TARGET-100000000L;
+            FrameGenerationPresentationRequest first=f.request(AA09_TARGET-PANEL,AA09_EXPECTED-PANEL,TOKEN_104-1);
+            f.submit(first);f.submit(f.request(AA09_TARGET,AA09_EXPECTED,TOKEN_104));
+            ExternalPresentationLedger.Commit row=f.externalPresentationLedger.physicallyPresented(
+                    first,1,first.driverDesiredPresentTimeNs(),first.desiredPhysicalPresentTimeNs(),
+                    first.desiredPhysicalPresentTimeNs()-1000000L,2000000L,PANEL,1000,1000);
+            f.externalTransport.pending--;
+            if(reset==0){f.externalTransport.interruptions=1;f.consumeExternalPresentationDiscontinuities();}
+            if(reset==1){f.epoch=16;f.externalPhysicalClock.rejectNextRecord=true;f.stale(row);}
+            if(reset==2)f.bootstrap();
+            same(AA09_TARGET,f.externalLastPlannedPhysicalNs,"reset preserves owned physical reservation "+reset);
+            same(AA09_EXPECTED,f.externalLastSubmittedCompositorExpectedNs,"reset preserves compositor reservation "+reset);
+            same(1,f.externalPresentationLedger.pendingCount(),"reset does not retire physical ownership");
+        }
+    }
+    static void domainTest(){
+        SlotReservationFixture f=new SlotReservationFixture();System.now=AA09_TARGET-100000000L;
+        long error=CompositorFrameTimeline.MAX_TARGET_ERROR_NS;
+        f.submit(f.request(AA09_TARGET,AA09_TARGET+error,TOKEN_104));
+        // Physical targets alone differ by half a scan, but opposite allowed
+        // phase offsets leave compositor targets less than half a scan apart.
+        // The independent expected-scan high-water must still reject this.
+        long target=AA09_TARGET+PANEL/2;
+        FrameGenerationPresentationRequest overlapping=f.request(target,target-error,TOKEN_105);
+        assert !f.externalPhysicalSlotAvailable(overlapping,PANEL);
+        same(1,f.externalTransport.calls,"availability check owns no transport");
+        same(AA09_TARGET,f.externalLastPlannedPhysicalNs,"availability check is read-only");
+        same(AA09_TARGET+error,f.externalLastSubmittedCompositorExpectedNs,"expected check is read-only");
+        long next=AA09_TARGET+PANEL;
+        FrameGenerationPresentationRequest distinct=f.request(next,next,TOKEN_105+1);
+        assert f.externalPhysicalSlotAvailable(distinct,PANEL);
+        f.submit(distinct);same(2,f.externalTransport.calls,"next unambiguous compositor scan submitted");
+
+        SlotReservationFixture direct=new SlotReservationFixture();direct.externalTransport.timeline=false;
+        direct.submit(direct.request(AA09_TARGET,0,0));
+        direct.submit(direct.request(AA09_TARGET+33344,0,0));
+        same(1,direct.externalTransport.calls,"timeline-less duplicate blocked by physical target");
+        same(0,direct.externalLastSubmittedCompositorExpectedNs,"timeline-less path invents no token scan");
+        direct.submit(direct.request(next,0,0));
+        same(2,direct.externalTransport.calls,"timeline-less later physical scan remains valid");
+
+        // A fresh renderer/output owner has fresh reservation state. Off has
+        // no renderer at all and is covered by the existing factory-route tests.
+        SlotReservationFixture fresh=new SlotReservationFixture();
+        fresh.submit(fresh.request(AA09_TARGET,AA09_EXPECTED,TOKEN_104));
+        same(1,fresh.externalTransport.calls,"fresh output owner starts unreserved");
+    }
+    public static void main(String[] args){
+        if(args[0].equals("anchor"))anchorTest();
+        else if(args[0].equals("duplicate"))duplicateTest();
+        else if(args[0].equals("failure"))failureTest();
+        else if(args[0].equals("resets"))resetTest();
+        else if(args[0].equals("domains"))domainTest();
+        else throw new AssertionError("unknown case");
+        java.lang.System.out.println("PASS "+args[0]);
+    }
+}

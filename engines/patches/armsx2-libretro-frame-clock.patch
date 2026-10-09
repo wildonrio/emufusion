@@ -1,0 +1,128 @@
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -218,5 +218,9 @@
+ 		s_base_settings->SetIntValue("EmuCore/GS", "Renderer",
+ 			static_cast<int>(GSRendererType::VK));
++		// Every guest vblank must reach PublishFrame: its handoff to retro_run
++		// is the frontend clock, including repeated images in 30 Hz games.
++		s_base_settings->SetBoolValue("EmuCore/GS", "SkipDuplicateFrames", false);
++		s_base_settings->SetBoolValue("EmuCore/GS", "VsyncEnable", false);
+ 		s_base_settings->SetBoolValue("InputSources", "SDL", false);
+ 		// Audio goes out through retro_run pulling the stream ring; the Null
+ 		// backend keeps SPU2 mixing into the ring with no device thread.
+--- a/pcsx2/GS/Renderers/Vulkan/VKLibretro.h
++++ b/pcsx2/GS/Renderers/Vulkan/VKLibretro.h
+@@ -77,6 +77,7 @@
+ 	// the emulation's vsync. Abort before shutdown so the GS thread can't be
+ 	// left parked.
+ 	void SetPacing(bool enabled);
++	bool IsPacing();
+ 	void AbortPacing();
+ 
+ 	void Shutdown();
+--- a/pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp
++++ b/pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp
+@@ -185,6 +185,12 @@
+ 			s_frame_consumed_cv.notify_all();
+ 	}
+ 
++	bool IsPacing()
++	{
++		std::lock_guard<std::mutex> lock(s_frame_mutex);
++		return s_pacing;
++	}
++
+ 	void AbortPacing()
+ 	{
+ 		SetPacing(false);
+--- a/pcsx2/VMManager.cpp
++++ b/pcsx2/VMManager.cpp
+@@ -65,6 +65,10 @@
+ #include <mutex>
+ #include <sstream>
+ #include <common/RedtapeWilCom.h>
++
++#ifdef ENABLE_VULKAN
++#include "GS/Renderers/Vulkan/VKLibretro.h"
++#endif
+ 
+ #ifdef _WIN32
+ #include "common/RedtapeWindows.h"
+@@ -2452,6 +2456,19 @@
+ 
+ void VMManager::Internal::Throttle()
+ {
++#ifdef ENABLE_VULKAN
++	if (VKLibretro::Active && VKLibretro::IsPacing())
++	{
++		// The GS already waits for the frontend once per guest vblank. A
++		// second nominal-rate clock defeats frontend 59.94 -> 60 reclocking
++		// and slowly starves its audio device. Keep nominal speed semantics
++		// (not Unlimited), and resume the local limiter if pacing is aborted.
++		ResetFrameLimiter();
++		PerformanceMetrics::AdpfPauseFrameWork();
++		return;
++	}
++#endif
++
+ 	if (s_target_speed == 0.0f || s_use_vsync_for_timing)
+ 	{
+ 		// Not frame-limiting this frame (unlimited / host-vsync pacing): invalidate the ADPF work
+--- a/pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp
++++ b/pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp
+@@ -4,6 +4,7 @@
+ #include "VKLibretro.h"
+ 
+ #include "common/Console.h"
+ 
++#include <chrono>
+ #include <condition_variable>
+ #include <cstring>
+@@ -150,6 +151,7 @@
+ 	static std::mutex s_frame_mutex;
+ 	static std::condition_variable s_frame_consumed_cv;
++	static std::condition_variable s_frame_available_cv;
+ 	static Frame s_frame;
+ 	static u64 s_frame_serial = 0;
+ 	static u64 s_frame_consumed = 0;
+ 	static bool s_pacing = false;
+@@ -160,6 +162,7 @@
+ 		std::unique_lock<std::mutex> lock(s_frame_mutex);
+ 		s_frame = frame;
+ 		s_frame_serial++;
++		s_frame_available_cv.notify_all();
+ 		// Block the GS thread until retro_run picks the frame up (or pacing
+ 		// gets aborted for shutdown): one presented frame per retro_run.
+ 		s_frame_consumed_cv.wait(
+@@ -170,6 +173,14 @@
+ 	bool ConsumeFrame(Frame* out_frame)
+ 	{
+-		std::lock_guard<std::mutex> lock(s_frame_mutex);
++		std::unique_lock<std::mutex> lock(s_frame_mutex);
++		// A frontend deadline can precede the GS publication. Preserve the
++		// one-vblank handoff instead of treating that race as a completed step.
++		// Bound startup/renderer-failure waits; AbortPacing wakes both sides.
++		if (s_pacing)
++			s_frame_available_cv.wait_for(lock, std::chrono::milliseconds(100), []() {
++				return !s_pacing ||
++					(s_frame_serial != s_frame_consumed && s_frame.image != VK_NULL_HANDLE);
++			});
+ 		if (s_frame_serial == s_frame_consumed || s_frame.image == VK_NULL_HANDLE)
+ 			return false;
+ 		s_frame_consumed = s_frame_serial;
+@@ -184,6 +197,9 @@
+ 		s_pacing = enabled;
+ 		if (!enabled)
++		{
+ 			s_frame_consumed_cv.notify_all();
++			s_frame_available_cv.notify_all();
++		}
+ 	}
+ 
+ 	bool IsPacing()
+@@ -207,4 +223,5 @@
+ 		s_pacing = false;
+ 		s_frame_consumed_cv.notify_all();
++		s_frame_available_cv.notify_all();
+ 	}
+ } // namespace VKLibretro

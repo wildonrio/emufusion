@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-07",
-  "buildProfile": "official-android-arm64-libretro-vulkan-release-artifact",
-  "closureScope": "exact-official-source-archive-and-official-release-core-artifact; transitive-source audit remains open",
+  "verifiedAt": "2026-10-04",
+  "buildProfile": "pinned-source-android-arm64-libretro-16k",
+  "closureScope": "52 exact recursive Git links, including unused upstream dependencies; two clean different-path builds on this host match the runtime-tested core, not release qualification",
   "sourceDateEpoch": 1782740760,
   "core": {
     "repository": "https://github.com/azahar-emu/azahar",
@@ -10,12 +10,338 @@
     "commit": "b42d0916ba9799297ae0e27c07d56801da1b5de5",
     "archiveSha256": "8da46436e9d4cd937af2dba5ed39a33c2102e4f833c9051a9bb6e2711831e065"
   },
-  "releaseArtifact": {
+  "patches": [
+    {
+      "path": "engines/patches/azahar-android-strerror.patch",
+      "sha256": "49d1f108da6cb40dc8b862bd080708ace1c0e8595c376b1ecccb98f5cf1a4861"
+    }
+  ],
+  "dependencies": [
+    {
+      "commit": "d9f1126e42b606d02ecc89b10cb9a336a3b2f5a3",
+      "path": "dist/compatibility_list",
+      "repository": "https://github.com/azahar-emu/compatibility-list",
+      "gitTreeSha1": "2550fb04902ee055e3a078bac9e102d1bc6caf23"
+    },
+    {
+      "commit": "6a85c3100499e886e11c87a5c2109eedacea0a61",
+      "path": "externals/boost",
+      "repository": "https://github.com/azahar-emu/ext-boost.git",
+      "gitTreeSha1": "e5f8f20691d6903c91a59b70622abf9ee6764a1c"
+    },
+    {
+      "commit": "914aeecfe23b1e16af6ea675a4fb5dbd5a5b8d0a",
+      "path": "externals/catch2",
+      "repository": "https://github.com/catchorg/Catch2",
+      "gitTreeSha1": "1395cc6b7da5cc1b2b0eb63d48cdd7d4f6ec0ae3"
+    },
+    {
+      "commit": "4a970bc302d671476122cbc6b43cc89fbf4a96ec",
+      "path": "externals/cpp-jwt",
+      "repository": "https://github.com/arun11299/cpp-jwt.git",
+      "gitTreeSha1": "497827c25bed257e2d87b8aa32b2a0fc16c9642a"
+    },
+    {
+      "commit": "60f81a77e0c9a0e7ffc1ca1bc438ddfa2e43b78e",
+      "path": "externals/cryptopp",
+      "repository": "https://github.com/weidai11/cryptopp.git",
+      "gitTreeSha1": "34b2367d3df93ca422f273ecbc2ddea0e935344b"
+    },
+    {
+      "commit": "00a151f8489daaa32434ab1f340e6750793ddf0c",
+      "path": "externals/cryptopp-cmake",
+      "repository": "https://github.com/abdes/cryptopp-cmake.git",
+      "gitTreeSha1": "5680b29c1908ba020768e67ad6209bfce475186a"
+    },
+    {
+      "commit": "832fcf38e600bf80b4b728a3e0227403088d992c",
+      "path": "externals/cubeb",
+      "repository": "https://github.com/mozilla/cubeb",
+      "gitTreeSha1": "e086c81f45e272c7d471814424b0c97c95ef32bc"
+    },
+    {
+      "commit": "aab6948fa863bc1cbe5d0850bc46b9ef02ed4c1a",
+      "path": "externals/cubeb/cmake/sanitizers-cmake",
+      "repository": "https://github.com/arsenm/sanitizers-cmake",
+      "gitTreeSha1": "3816c1ee4a62493f88cb66b221649981515eb938"
+    },
+    {
+      "commit": "40412d85124f7c6f3d88454583c4633e5e10fc8c",
+      "path": "externals/cubeb/googletest",
+      "repository": "https://github.com/google/googletest",
+      "gitTreeSha1": "b3eccdd551219da247b4e72a889c39deac4ec85e"
+    },
+    {
+      "commit": "8f39e9fc3ad4868e6ff7188c52575087a1a02777",
+      "path": "externals/cubeb/src/cubeb-coreaudio-rs",
+      "repository": "https://github.com/mozilla/cubeb-coreaudio-rs",
+      "gitTreeSha1": "1c6e47e22acffea5fdeae54de52bc3923eb22675"
+    },
+    {
+      "commit": "6bac666467e4a37cf057f0e17e8c9e8a024b060b",
+      "path": "externals/cubeb/src/cubeb-pulse-rs",
+      "repository": "https://github.com/mozilla/cubeb-pulse-rs",
+      "gitTreeSha1": "f8bc4ce96f21539a5d8c724e29bce5c82e5dfde1"
+    },
+    {
+      "commit": "c3ca8febc2457ab5c581604f3236a8a511fc2e45",
+      "path": "externals/dds-ktx",
+      "repository": "https://github.com/septag/dds-ktx",
+      "gitTreeSha1": "2e6fad33dcae03427c58a10a50d7e7bef1856f88"
+    },
+    {
+      "commit": "049826c3f42875c2f9599552f425e76435789cc7",
+      "path": "externals/discord-rpc",
+      "repository": "https://github.com/azahar-emu/discord-rpc.git",
+      "gitTreeSha1": "4ca903b59f2af9259b46e6168730cb1d1cf2b5a1"
+    },
+    {
+      "commit": "e77b1ba0b7da7cbe93021b01a663acfe7c4dd516",
+      "path": "externals/dynarmic",
+      "repository": "https://github.com/azahar-emu/dynarmic.git",
+      "gitTreeSha1": "45c8446a178d3ee1bd9850e2151b10d908c2438c"
+    },
+    {
+      "commit": "8bd0f7538b9ed7bedf90e789ffbd9eaeb484b28d",
+      "path": "externals/dynarmic/externals/biscuit",
+      "repository": "https://github.com/lioncash/biscuit.git",
+      "gitTreeSha1": "2178098232c07c1bf3e91c1582ec275e65a34fee"
+    },
+    {
+      "commit": "76f70b1403dbc0781216f49e20e45b71f7eccdd8",
+      "path": "externals/dynarmic/externals/catch",
+      "repository": "https://github.com/catchorg/Catch2.git",
+      "gitTreeSha1": "98a80eb02c3c43aeeb868d9952768950fb58df47"
+    },
+    {
+      "commit": "7b273fbb541c7c9058800bc613f4291274b2d26e",
+      "path": "externals/dynarmic/externals/fmt",
+      "repository": "https://github.com/fmtlib/fmt.git",
+      "gitTreeSha1": "25a96221d2c2df4f4bf87d491cac0e32f45a14c4"
+    },
+    {
+      "commit": "5fc4beaf331037649b10625736b41365defb4f50",
+      "path": "externals/dynarmic/externals/mcl",
+      "repository": "https://github.com/azahar-emu/mcl.git",
+      "gitTreeSha1": "9b29d2ad9f9b19a671c139d1f116052389272db9"
+    },
+    {
+      "commit": "94c726ce0338b054eb8cb5ea91de8fe6c19f4392",
+      "path": "externals/dynarmic/externals/oaknut",
+      "repository": "https://github.com/merryhime/oaknut.git",
+      "gitTreeSha1": "d2d354ecdc53b324fab5593b9c9a677a575465a6"
+    },
+    {
+      "commit": "054ec5ad67440fcd65e0497e5a27ef31f53fcc7f",
+      "path": "externals/dynarmic/externals/robin-map",
+      "repository": "https://github.com/Tessil/robin-map.git",
+      "gitTreeSha1": "a68adced62fe580b6313d62ab7a4b2cc634e4d18"
+    },
+    {
+      "commit": "8c0098b69f95d02dea47efcdd42ab5aa2d03c72d",
+      "path": "externals/dynarmic/externals/xbyak",
+      "repository": "https://github.com/herumi/xbyak.git",
+      "gitTreeSha1": "af555753b808bef456c4acd49051ea2507f5a833"
+    },
+    {
+      "commit": "0b2432ced0884fd152b471d97ecf0258ff4d859f",
+      "path": "externals/dynarmic/externals/zycore",
+      "repository": "https://github.com/zyantific/zycore-c.git",
+      "gitTreeSha1": "c50335ff3b62de66ccc37efe6ea371b7aaff8879"
+    },
+    {
+      "commit": "bffbb610cfea643b98e87658b9058382f7522807",
+      "path": "externals/dynarmic/externals/zydis",
+      "repository": "https://github.com/zyantific/zydis.git",
+      "gitTreeSha1": "fd5cd1b124885d24890b21bb09898241962f7b8a"
+    },
+    {
+      "commit": "38d4f0285e6157ee840ea82a9b90aba71c8a705d",
+      "path": "externals/dynarmic/externals/zydis/dependencies/zycore",
+      "repository": "https://github.com/zyantific/zycore-c",
+      "gitTreeSha1": "645c317fccc0bcd5d789e3b1ebd0aea6152cba93"
+    },
+    {
+      "commit": "2662c0de09e36f2a2030ccc2c528a3e4c9e8138a",
+      "path": "externals/enet",
+      "repository": "https://github.com/lsalzman/enet.git",
+      "gitTreeSha1": "5096e683758d14404d4c9eaaa7f3d9df0eefe1ce"
+    },
+    {
+      "commit": "216f00e8ddba6f2c64caf481a04f1ddd78b93e78",
+      "path": "externals/faad2/faad2",
+      "repository": "https://github.com/knik0/faad2",
+      "gitTreeSha1": "6b5726f8ad24120f20b0620043a3239e06bfd960"
+    },
+    {
+      "commit": "e424e3f2e607da02742f73db84873b8084fc714c",
+      "path": "externals/fmt",
+      "repository": "https://github.com/fmtlib/fmt.git",
+      "gitTreeSha1": "cc409a93cfb86f3c466b37341f53e205d87717f5"
+    },
+    {
+      "commit": "fc9889c889561c5882e83819dcaffef5ed45529b",
+      "path": "externals/glslang",
+      "repository": "https://github.com/KhronosGroup/glslang",
+      "gitTreeSha1": "51cfb22ae8f7b19a3ece8a354c153f3661e6d235"
+    },
+    {
+      "commit": "5cc5e2c24642513aaa5b19126aad42d0e4e0923e",
+      "path": "externals/inih/inih",
+      "repository": "https://github.com/benhoyt/inih.git",
+      "gitTreeSha1": "1acac53ebd5834fa51189e13d68faeed315d6fbd"
+    },
+    {
+      "commit": "8fae8ce254dfc1344527e05301e43f37dea2df80",
+      "path": "externals/libadrenotools",
+      "repository": "https://github.com/bylaws/libadrenotools",
+      "gitTreeSha1": "be9ea825da63c65c0ff1e412df1ee6cb155a17c6"
+    },
+    {
+      "commit": "aa3975893d83ef1bc84c321ec60c65fbf1287887",
+      "path": "externals/libadrenotools/lib/linkernsbypass",
+      "repository": "https://github.com/bylaws/liblinkernsbypass/",
+      "gitTreeSha1": "29d66e90dac2a2df5f49c838cd3297d419ed9deb"
+    },
+    {
+      "commit": "3b3e28dbe6d033395ce2967fa8030825e7b89de7",
+      "path": "externals/library-headers",
+      "repository": "https://github.com/azahar-emu/ext-library-headers.git",
+      "gitTreeSha1": "4bf6541ed4541b09125cc6ebc78341c563e703ba"
+    },
+    {
+      "commit": "88b8e41b71099fabc57813bc06d8bc1aba050a19",
+      "path": "externals/libressl",
+      "repository": "https://github.com/azahar-emu/ext-libressl-portable.git",
+      "gitTreeSha1": "aaa894eb9859fbc1b9788ff5b37114f4b86b40ed"
+    },
+    {
+      "commit": "7fc7feeddca391be65c94e6541381467684b814d",
+      "path": "externals/libretro-common/libretro-common",
+      "repository": "https://github.com/libretro/libretro-common.git",
+      "gitTreeSha1": "848b3d647ecb364e02031a9577b1548e8488ae86"
+    },
+    {
+      "commit": "d52e355daa09f17ce64819122cb067b8a2ee0d4b",
+      "path": "externals/libusb/libusb",
+      "repository": "https://github.com/libusb/libusb.git",
+      "gitTreeSha1": "b8b07f5722b11a1cc82e3aca71efe19f2948d593"
+    },
+    {
+      "commit": "6f729fbe658a40dfd993fa8b22bd612bb17cde5c",
+      "path": "externals/libyuv",
+      "repository": "https://github.com/lemenkov/libyuv.git",
+      "gitTreeSha1": "a4cbf2b29c1cbbc00c231aeef1e73c89bc76a44b"
+    },
+    {
+      "commit": "0b1d9ccfc2093e5d6620cd9a11d03ee6ff6705f5",
+      "path": "externals/lodepng/lodepng",
+      "repository": "https://github.com/lvandeve/lodepng.git",
+      "gitTreeSha1": "6f8af93aad2a7b009937afd4e14df8e7f5c5702d"
+    },
+    {
+      "commit": "f4d8659decbfe5d234f04134b5002b82dc515a44",
+      "path": "externals/nihstro",
+      "repository": "https://github.com/neobrain/nihstro.git",
+      "gitTreeSha1": "b2e97b03a0569cb593fb49cf4a08c02aeec2ee73"
+    },
+    {
+      "commit": "6b1d57ea7ed4882d32a91eeaa6557b0ecb4da152",
+      "path": "externals/oaknut",
+      "repository": "https://github.com/merryhime/oaknut.git",
+      "gitTreeSha1": "bfd0ee848b1e792dd6dca46808ab18065589380d"
+    },
+    {
+      "commit": "90191edd20bb877c5cbddfdac7ec0fe49ad93727",
+      "path": "externals/openal-soft",
+      "repository": "https://github.com/kcat/openal-soft",
+      "gitTreeSha1": "3d8136ab7083a5a475a833f0ef8ab03deddf2948"
+    },
+    {
+      "commit": "5d249570393f7a37e037abf22cd6012a4cc56a71",
+      "path": "externals/sdl2/SDL",
+      "repository": "https://github.com/libsdl-org/SDL",
+      "gitTreeSha1": "c2fd07672476c3945f498479938743c616ff44e5"
+    },
+    {
+      "commit": "37d49d2aa4c0a62f872720d6e5f2eaf90b2c95fa",
+      "path": "externals/sirit/sirit",
+      "repository": "https://github.com/azahar-emu/sirit",
+      "gitTreeSha1": "8ae0313478d766a4a4a4ff44b2730980a6b37f8d"
+    },
+    {
+      "commit": "3f17b2af6784bfa2c5aa5dbb8e0e74a607dd8b3b",
+      "path": "externals/sirit/sirit/externals/SPIRV-Headers",
+      "repository": "https://github.com/KhronosGroup/SPIRV-Headers",
+      "gitTreeSha1": "0898640ea14814a270ab0f9b27c0337512d08b9d"
+    },
+    {
+      "commit": "9ef8458d8561d9471dd20e9619e3be4cfe564796",
+      "path": "externals/soundtouch",
+      "repository": "https://github.com/azahar-emu/soundtouch.git",
+      "gitTreeSha1": "4a4422697172164c081c41301bb14499f3661803"
+    },
+    {
+      "commit": "aa6cef192b8e693916eb713e7a9ccadf06062ceb",
+      "path": "externals/spirv-headers",
+      "repository": "https://github.com/KhronosGroup/SPIRV-Headers",
+      "gitTreeSha1": "57d98bf0ffe03aeda686fbf7d461b671395c3465"
+    },
+    {
+      "commit": "a62abcb402009b9ca5975e6167c09f237f630e0e",
+      "path": "externals/spirv-tools",
+      "repository": "https://github.com/KhronosGroup/SPIRV-Tools",
+      "gitTreeSha1": "9063aa602968757c16c6b9a146f340dabe02b71c"
+    },
+    {
+      "commit": "3d697a18df504f4677b65129d9ab14c7c597e3eb",
+      "path": "externals/teakra",
+      "repository": "https://github.com/wwylele/teakra.git",
+      "gitTreeSha1": "2cb32e8deda4483e72091241874697101c7f7407"
+    },
+    {
+      "commit": "c788c52156f3ef7bc7ab769cb03c110a53ac8fcb",
+      "path": "externals/vma",
+      "repository": "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator",
+      "gitTreeSha1": "4b14549c2263bf116eff1665f24fc661db47c61a"
+    },
+    {
+      "commit": "409c16be502e39fe70dd6fe2d9ad4842ef2c9a53",
+      "path": "externals/vulkan-headers",
+      "repository": "https://github.com/KhronosGroup/Vulkan-Headers",
+      "gitTreeSha1": "ea25474b5013970f5d1a3c1d1a657a20a4d4d2e0"
+    },
+    {
+      "commit": "0d67fd1530016b7c56f3cd74b3fca920f4c3e2b4",
+      "path": "externals/xbyak",
+      "repository": "https://github.com/herumi/xbyak.git",
+      "gitTreeSha1": "d34febb11c1d9e3fc8cef5b92f597185ad6dd79e"
+    },
+    {
+      "commit": "e626a72bc2321cd320e953a0ccf1584cad60f363",
+      "path": "externals/xxHash",
+      "repository": "https://github.com/Cyan4973/xxHash.git",
+      "gitTreeSha1": "9d4f447c856962a98e22f144bd9b0315ab4d18f8"
+    },
+    {
+      "commit": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+      "path": "externals/zstd",
+      "repository": "https://github.com/facebook/zstd.git",
+      "gitTreeSha1": "1a3cb277e9b9b37b01811a3c65f6c25d46a8f241"
+    }
+  ],
+  "referenceReleaseArtifact": {
     "url": "https://github.com/azahar-emu/azahar/releases/download/2125.1.3/azahar-libretro-android-arm64-v8a-2125.1.3.zip",
     "archiveSha256": "4946db52ba9a559834cb3db075544480ac71fa4ae08b090a6708825a012a7b1b",
     "member": "azahar_libretro.so",
     "memberSha256": "d723066fa7c812618b5695d94b0fd85594e6c196e9e08ca9ba7134371a8da645"
   },
-  "patches": [],
-  "dependencies": []
+  "sourceBuild": {
+    "artifactSha256": "d7150458b86d5493f5a78d850df204fe04b854124d92d0d2040fb104b6f69c7d",
+    "androidAbi": "arm64-v8a",
+    "androidApi": 23,
+    "ndkVersion": "27.0.12077973",
+    "linkAlignment": 16384,
+    "builtinKeyblob": false
+  }
 }

@@ -14,7 +14,7 @@ import java.util.Locale;
  *
  * The stock firmware exposes its privileged LED writer through PServerBinder.
  * The four segment nodes are also used by the GPLv3 Bifrost project
- * (https://github.com/Pollux-MoonBench/Bifrost). Lucent uses the exact static
+ * (https://github.com/Pollux-MoonBench/Bifrost). EmuFusion uses the exact static
  * value format shipped in the device's OdinSettings.apk and periodically
  * reasserts it; it does not capture the screen or run an animation loop.
  */

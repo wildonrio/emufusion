@@ -1,0 +1,89 @@
+Subject: [CANDIDATE] ARM PPU interpreter: dispatch RawSPU MMIO explicitly
+Source: aenu1/aps3e b5ae1af50d5e2f3b705506e7380a4504e086840b
+Status: Collection startup verified on Android16/4KiB simulator; not an ICO repair.
+Evidence: docs/qa/android-portability-2026-10-06-ps3-ppu-mmio/
+Default LLVM decoder and normal staged artifact remain unchanged.
+
+diff --git a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/PPUInterpreter.cpp b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/PPUInterpreter.cpp
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/PPUInterpreter.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/PPUInterpreter.cpp
+@@ -4,6 +4,8 @@
+ #include "Emu/Memory/vm_reservation.h"
+ #include "Emu/system_config.h"
+ #include "PPUThread.h"
++#include "SPUThread.h"
++#include "ppu_interpreter_mmio.h"
+ #include "Emu/Cell/Common.h"
+ #include "Emu/Cell/PPUFunction.h"
+ #include "Emu/Cell/PPUAnalyser.h"
+@@ -41,13 +43,13 @@
+ #define PPU_WRITE(type, addr, value) vm::write<type>(addr, value, &ppu);
+ #define PPU_WRITE_8(addr, value) vm::write8(addr, value, &ppu);
+ #define PPU_WRITE_16(addr, value) vm::write16(addr, value, &ppu);
+-#define PPU_WRITE_32(addr, value) vm::write32(addr, value, &ppu);
++#define PPU_WRITE_32(addr, value) ppu_interpreter_write32(ppu, addr, value);
+ #define PPU_WRITE_64(addr, value) vm::write64(addr, value, &ppu);
+ #else
+ #define PPU_WRITE(type, addr, value) vm::write<type>(addr, value);
+ #define PPU_WRITE_8(addr, value) vm::write8(addr, value);
+ #define PPU_WRITE_16(addr, value) vm::write16(addr, value);
+-#define PPU_WRITE_32(addr, value) vm::write32(addr, value);
++#define PPU_WRITE_32(addr, value) ppu_interpreter_write32(ppu, addr, value);
+ #define PPU_WRITE_64(addr, value) vm::write64(addr, value);
+ #endif
+ 
+@@ -451,7 +453,7 @@
+ {
+ 	static_assert(sizeof(T) <= 128, "Incompatible type-size, break down into smaller loads");
+ 
+-	auto value = vm::_ref<T>(vm::cast(addr));
++	auto value = ppu_interpreter_read_value<T>(addr);
+ 
+ #ifdef RPCS3_HAS_MEMORY_BREAKPOINTS
+ 	if (g_breakpoint_handler.HasBreakpoint(addr, breakpoint_types::bp_read))
+diff --git a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/ppu_interpreter_mmio.h b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/ppu_interpreter_mmio.h
+new file mode 100644
+--- /dev/null
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/ppu_interpreter_mmio.h
+@@ -0,0 +1,41 @@
++#pragma once
++#include <bit>
++#include <type_traits>
++
++// Existing LLVM helpers accept/return memory-order bytes, not guest-order u32.
++u32 ppu_read_mmio_aware_u32(u8* vm_base, u32 eal);
++void ppu_write_mmio_aware_u32(u8* vm_base, u32 eal, u32 value);
++
++template <typename T>
++auto ppu_interpreter_read_value(u64 address)
++{
++    const u32 addr = vm::cast(address);
++    using value_type = std::remove_cvref_t<decltype(vm::_ref<T>(addr))>;
++#if defined(ARCH_ARM64)
++    if constexpr (sizeof(T) == sizeof(u32))
++    {
++        if (addr >= RAW_SPU_BASE_ADDR)
++        {
++            // ARM has no x86 fault-instruction MMIO emulation. Reuse LLVM's
++            // register validation and RawSPU local-store fallback explicitly.
++            return std::bit_cast<value_type>(ppu_read_mmio_aware_u32(vm::g_base_addr, addr));
++        }
++    }
++#endif
++    return value_type{vm::_ref<T>(addr)};
++}
++
++inline void ppu_interpreter_write32(ppu_thread& ppu, u32 addr, be_t<u32> value)
++{
++#if defined(ARCH_ARM64)
++    if (addr >= RAW_SPU_BASE_ADDR)
++    {
++        ppu_write_mmio_aware_u32(vm::g_base_addr, addr, std::bit_cast<u32>(value));
++        // Preserve the existing post-write memory-breakpoint check without
++        // performing a second store through the unmapped register address.
++        vm::write<void>(addr, value, &ppu);
++        return;
++    }
++#endif
++    vm::write32(addr, value, &ppu);
++}

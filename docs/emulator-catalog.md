@@ -1,4 +1,4 @@
-# Lucent Android emulator catalog
+# EmuFusion Android emulator catalog
 
 The long-term plan for replacing visible standalone emulator launches with a
 Lucent-owned libretro/native runtime is documented in
@@ -6,7 +6,7 @@ Lucent-owned libretro/native runtime is documented in
 describes the current standalone fallback catalog, not completed in-process
 integration.
 
-Lucent uses standalone Android emulators and does not require RetroArch. The
+EmuFusion uses standalone Android emulators and does not require RetroArch. The
 catalog is keyed by systems that actually contain games. A missing emulator is
 never removed automatically, even after the final game for its system is
 deleted.
@@ -39,18 +39,18 @@ deleted.
 | PlayStation Vita | Vita3K | <https://github.com/Vita3K/Vita3K-Android/releases> |
 | Wii U | Cemu | <https://github.com/cemu-project/Cemu/releases> |
 | Nintendo Switch | Eden | <https://eden-emu.dev/downloads/> |
-| Windows | Winlator | <https://github.com/brunodev85/winlator/releases> |
+| Windows / PC | **Internal DOSBox Pure by default** (DOS and user-supplied Windows 3.x/9x images); optional external Winlator | <https://github.com/schellingb/dosbox-pure>, <https://github.com/brunodev85/winlator/releases> |
 | DOS | Magic DOSBox | <https://magicbox.imejl.sk/> |
 | ScummVM | ScummVM | <https://www.scummvm.org/downloads/> |
 
 ## Android installation boundary
 
 A normal Android application cannot silently install a new third-party APK.
-Lucent can identify the required emulator, fetch from a trusted official
+EmuFusion can identify the required emulator, fetch from a trusted official
 source, and stage the package, but Android displays a package-installer
-confirmation unless Lucent is provisioned as the device/profile owner. This is
+confirmation unless EmuFusion is provisioned as the device/profile owner. This is
 an Android security boundary, not a theme limitation.
 
 Systems without a maintained standalone Android emulator remain visible when
-games are detected, but Lucent marks the emulator state as unsupported rather
+games are detected, but EmuFusion marks the emulator state as unsupported rather
 than silently installing an abandoned or untrusted build.

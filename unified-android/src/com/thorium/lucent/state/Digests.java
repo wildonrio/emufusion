@@ -31,7 +31,7 @@ final class Digests {
         return hex(digest.digest());
     }
 
-    private static MessageDigest newDigest() {
+    static MessageDigest newDigest() {
         try {
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException impossible) {
@@ -39,7 +39,7 @@ final class Digests {
         }
     }
 
-    private static String hex(byte[] bytes) {
+    static String hex(byte[] bytes) {
         StringBuilder result = new StringBuilder(bytes.length * 2);
         for (byte value : bytes) result.append(String.format("%02x", value & 0xff));
         return result.toString();

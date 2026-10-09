@@ -1,0 +1,49 @@
+--- a/src/Cafe/Filesystem/FST/KeyCache.h
++++ b/src/Cafe/Filesystem/FST/KeyCache.h
+@@ -1,4 +1,7 @@
+ #pragma once
+ 
+ void KeyCache_Prepare();
++
++// Reload only between titles, when no disc-reader worker holds cached key pointers.
++void KeyCache_Reload();
+ 
+@@ -5,1 +8,1 @@
+-uint8* KeyCache_GetAES128(sint32 index);
+\ No newline at end of file
++uint8* KeyCache_GetAES128(sint32 index);
+--- a/src/Cafe/Filesystem/FST/KeyCache.cpp
++++ b/src/Cafe/Filesystem/FST/KeyCache.cpp
+@@ -52,9 +52,5 @@
+-void KeyCache_Prepare()
++static void KeyCache_PrepareLocked(bool reload)
+ {
+-	mtxKeyCache.lock();
+-	if (sKeyCachePrepared)
+-	{
+-		mtxKeyCache.unlock();
++	if (sKeyCachePrepared && !reload)
+ 		return;
+-	}
+ 	sKeyCachePrepared = true;
+@@ -80,2 +76,1 @@
+-		mtxKeyCache.unlock();
+ 		return;
+@@ -128,2 +123,14 @@
+-	mtxKeyCache.unlock();
++
++}
++
++void KeyCache_Prepare()
++{
++	std::lock_guard<std::mutex> lock(mtxKeyCache);
++	KeyCache_PrepareLocked(false);
++}
++
++void KeyCache_Reload()
++{
++	std::lock_guard<std::mutex> lock(mtxKeyCache);
++	KeyCache_PrepareLocked(true);
+-}
+\ No newline at end of file
++}

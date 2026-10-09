@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-07",
+  "verifiedAt": "2026-10-05",
   "buildProfile": "android-arm64-libretro-software-interpreter",
   "closureScope": "exact-pinned-source-with-configuration-specific-vendored-object-inventory",
   "sourceDateEpoch": 1786118400,
@@ -48,9 +48,10 @@
   "artifact": {
     "path": "engines/build/arm64-v8a/puae_libretro.so",
     "size": 23464192,
-    "sha256": "562db09fef04f1fe4460e99938e58b3435dd2d3b6b03e25660786f6d47e20d2f",
-    "firstCleanBuildSha256": "562db09fef04f1fe4460e99938e58b3435dd2d3b6b03e25660786f6d47e20d2f",
-    "secondCleanBuildSha256": "562db09fef04f1fe4460e99938e58b3435dd2d3b6b03e25660786f6d47e20d2f",
+    "sha256": "29d03ec1b442431243fd6e7fbc902a811d130a693c274b673dd3a1c61d0aeadf",
+    "firstCleanBuildSha256": "29d03ec1b442431243fd6e7fbc902a811d130a693c274b673dd3a1c61d0aeadf",
+    "secondCleanBuildSha256": "29d03ec1b442431243fd6e7fbc902a811d130a693c274b673dd3a1c61d0aeadf",
+    "proofScope": "Two consecutive clean builds at the same isolated path; not path-independent. Recipe firmware checks pass in both logs.",
     "embeddedArosCompressedMatches": 1,
     "reproducible": true
   },

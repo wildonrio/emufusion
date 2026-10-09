@@ -70,6 +70,8 @@ CASES = (
     TestCase("neogeo", "Neo Geo", "mame", "ngdevkit-open.cmd", state_cycles=100),
     TestCase("dos", "DOS", "dosbox-pure", "lucent-dos-callback-test.zip",
              state_cycles=100),
+    TestCase("windows", "Windows / PC", "dosbox-pure",
+             "emufusion-internal-pc-callback-test.zip", state_cycles=100),
     TestCase("pcengine", "PC Engine", "beetle-pce-fast", "lucent-pce-qa.pce",
              require_input_effect=True),
     TestCase("ngp", "Neo Geo Pocket Color", "beetle-neopop", "stargunner.ngc",

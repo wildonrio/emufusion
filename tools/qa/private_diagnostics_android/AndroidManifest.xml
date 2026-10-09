@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.emufusion.qa.privatetls20261006" android:versionCode="1" android:versionName="fixture">
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:debuggable="true" android:allowBackup="false"
+        android:networkSecurityConfig="@xml/fixture_trust" android:label="EmuFusion private report QA">
+        <activity android:name="com.thorium.preview.ProbeActivity" android:exported="true"
+            android:launchMode="singleTask" android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+    </application>
+</manifest>

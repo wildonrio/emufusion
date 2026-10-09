@@ -9,10 +9,12 @@ import android.util.Log;
 import android.view.KeyEvent;
 
 import java.util.EnumMap;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Map;
 
 /**
- * Lucent's menu blips: four very short, quiet cues for library navigation.
+ * EmuFusion's menu blips: four very short, quiet cues for library navigation.
  *
  * SoundPool rather than MediaPlayer because these have to fire on the same key
  * press the user is making, and it keeps the decoded samples resident instead
@@ -44,11 +46,20 @@ public final class MenuSoundPlayer {
     // for about this long; beyond it the press is stale and silence is right.
     private static final long PENDING_CUE_MILLIS = 400L;
     private static final int MAX_STREAMS = 3;
+    private static final int RECENT_STREAM_LIMIT = 16;
 
     private static final Object LOCK = new Object();
     private static SoundPool pool;
     private static final Map<Cue, Integer> SAMPLE_IDS = new EnumMap<>(Cue.class);
     private static final Map<Cue, Boolean> SAMPLE_READY = new EnumMap<>(Cue.class);
+    // SoundPool has no playback-complete callback. Keep a small bounded set of
+    // recent stream IDs: setVolume is harmless after a stream has completed,
+    // while retaining the IDs guarantees that a cue already in flight is
+    // silenced on the same quick volume tap as every AudioTrack/MediaPlayer.
+    private static final Deque<Integer> RECENT_STREAM_IDS = new ArrayDeque<>();
+    private static final AppVolumeController.Listener VOLUME_LISTENER =
+            MenuSoundPlayer::applyActiveStreamGain;
+    private static boolean volumeListenerRegistered;
     private static Cue pendingCue;
     private static long pendingCueAtMillis;
     private static long lastPlayedAtMillis;
@@ -144,7 +155,8 @@ public final class MenuSoundPlayer {
                 return;
             }
             lastPlayedAtMillis = now;
-            pool.play(sampleId, 1.0f, 1.0f, 1, 0, 1.0f);
+            float gain = AppVolumeController.gain(context);
+            playLocked(pool, sampleId, gain);
         }
     }
 
@@ -162,6 +174,7 @@ public final class MenuSoundPlayer {
             pool = null;
             SAMPLE_IDS.clear();
             SAMPLE_READY.clear();
+            RECENT_STREAM_IDS.clear();
             pendingCue = null;
         }
     }
@@ -195,7 +208,8 @@ public final class MenuSoundPlayer {
                         now - pendingCueAtMillis <= PENDING_CUE_MILLIS) {
                     pendingCue = null;
                     lastPlayedAtMillis = now;
-                    soundPool.play(sampleId, 1.0f, 1.0f, 1, 0, 1.0f);
+                    float gain = AppVolumeController.gain(app);
+                    playLocked(soundPool, sampleId, gain);
                 }
             }
         });
@@ -216,6 +230,37 @@ public final class MenuSoundPlayer {
             return false;
         }
         pool = created;
+        if (!volumeListenerRegistered) {
+            // The listener is a process-lifetime singleton and captures no
+            // Context, so keeping it registered cannot leak an Activity.
+            volumeListenerRegistered = true;
+            AppVolumeController.registerListener(app, VOLUME_LISTENER);
+        }
         return true;
+    }
+
+    private static void playLocked(SoundPool soundPool, int sampleId, float gain) {
+        int streamId = soundPool.play(sampleId, gain, gain, 1, 0, 1.0f);
+        if (streamId == 0) return;
+        RECENT_STREAM_IDS.addLast(streamId);
+        while (RECENT_STREAM_IDS.size() > RECENT_STREAM_LIMIT)
+            RECENT_STREAM_IDS.removeFirst();
+        Log.i(TAG, "SoundPool sink started stream=" + streamId + " gain=" + gain);
+    }
+
+    private static void applyActiveStreamGain(float gain) {
+        synchronized (LOCK) {
+            SoundPool soundPool = pool;
+            if (soundPool == null) return;
+            for (Integer streamId : RECENT_STREAM_IDS) {
+                if (streamId != null && streamId != 0) {
+                    soundPool.setVolume(streamId, gain, gain);
+                    Log.i(TAG, "SoundPool sink gain stream=" + streamId +
+                            " gain=" + gain);
+                }
+            }
+            Log.i(TAG, "SoundPool active sinks gain=" + gain +
+                    " trackedStreams=" + RECENT_STREAM_IDS.size());
+        }
     }
 }

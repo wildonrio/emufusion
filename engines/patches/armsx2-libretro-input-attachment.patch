@@ -1,0 +1,44 @@
+--- a/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.h
++++ b/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.h
+@@ -72,1 +72,8 @@
+-	// Helpers for getting constants
++	// Match the subpassInput shader path on all standard drivers, not only Mali.
++	// Preserve the existing Qualcomm-specific workaround until hardware requalification.
++	__fi bool UseInputAttachmentDescriptors() const
++	{
++		return m_features.texture_barrier && !UseFeedbackLoopLayout() && !IsDeviceAdreno();
++	}
++
++	// Helpers for getting constants
+--- a/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.cpp
++++ b/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.cpp
+@@ -5368,10 +5368,5 @@
+-		// Mali needs real input-attachment descriptors for the subpass feedback path; its shader reads
+-	// Cd/Zd via subpassLoad. Adreno mishandles input-attachment descriptors here and produces
+-	// alternating stale destination colour (flicker) in accurate-blending draws, so keep Qualcomm on
+-	// the long-standing sampled-image descriptor — subpassLoad still reads the render-pass input
+-	// attachment (not vendor-scoped). Keep this condition identical to the writes in ApplyTFXState.
+-	// Vendor-scoped per sashkinbro/EmuCoreX 30b09c8 (Fix Adreno Vulkan accurate blending flicker).
+-	const VkDescriptorType feedback_descriptor_type =
+-		(m_features.texture_barrier && !UseFeedbackLoopLayout() && m_device_properties.vendorID == 0x13B5u) ?
+-			VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT :
+-			VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
++	// subpassInput requires INPUT_ATTACHMENT descriptors independently of vendor.
++	// The prior Mali-only gate mismatched shaders on the Android simulator and
++	// other non-Qualcomm drivers. Keep layout and writes on one shared predicate.
++	const VkDescriptorType feedback_descriptor_type = UseInputAttachmentDescriptors() ?
++		VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+@@ -7342,3 +7342,3 @@
+-		if (flags & DIRTY_FLAG_TFX_TEXTURE_RT)
+-		{
+-			if (m_features.texture_barrier && !UseFeedbackLoopLayout() && m_device_properties.vendorID == 0x13B5u)
++		if (flags & DIRTY_FLAG_TFX_TEXTURE_RT)
++		{
++			if (UseInputAttachmentDescriptors())
+@@ -7360,3 +7360,3 @@
+-		if (flags & DIRTY_FLAG_TFX_TEXTURE_DEPTH)
+-		{
+-			if (m_features.texture_barrier && !UseFeedbackLoopLayout() && m_device_properties.vendorID == 0x13B5u)
++		if (flags & DIRTY_FLAG_TFX_TEXTURE_DEPTH)
++		{
++			if (UseInputAttachmentDescriptors())

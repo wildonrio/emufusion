@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove that a real Thor A press launches library metadata in one Lucent task."""
+"""Prove that a real Thor A press launches library metadata in one EmuFusion task."""
 
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ def launch_selected(adb_path: Path, serial: str, event_node: str,
 
 
 def library_frame_similarity(before_path: Path, after_path: Path) -> dict[str, object]:
-    """Reject the black Lucent/Pegasus reload splash using actual display pixels.
+    """Reject the black EmuFusion/Pegasus reload splash using actual display pixels.
 
     Wallpaper/video content can advance while gameplay runs, so this is not a
     byte comparison. The downsampled mean absolute difference still separates
@@ -224,7 +224,7 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     os.chmod(output, stat.S_IRWXU)
 
-    qa.adb(adb_path, serial, "install", "-r", "-d", str(apk))
+    qa.adb(adb_path, serial, "install", "--no-incremental", "-r", "-d", str(apk))
     qa.adb(adb_path, serial, "shell", "am", "force-stop", qa.PACKAGE)
     qa.adb(adb_path, serial, "logcat", "-c")
     qa.ensure_library(adb_path, serial)

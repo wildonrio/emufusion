@@ -1,0 +1,45 @@
+--- a/src/app/main.cpp
++++ b/src/app/main.cpp
+@@ -23,6 +23,7 @@
+ #include <QGuiApplication>
+ #include <QIcon>
+ #include <QSettings>
++#include <QDebug>
+ #include <QtPlugin>
+ 
+ #ifdef Q_OS_ANDROID
+@@ -66,8 +67,17 @@
+     app.setOrganizationDomain(QStringLiteral("pegasus-frontend.org"));
+     app.setWindowIcon(QIcon(QStringLiteral(":/icon.png")));
+ 
+-    if (!request_runtime_permissions())
++    if (!request_runtime_permissions()) {
++#ifdef Q_OS_ANDROID
++        // getAllStorageAccess opens Settings asynchronously. Keep the frontend
++        // alive while access is pending/denied; EmuFusion's Java lifecycle owns
++        // discovery and the first-setup refresh after an actual grant. Android
++        // continues enforcing access; private UI does not require this grant.
++        qWarning("External storage access pending; keeping frontend available");
++#else
+         return 1;
++#endif
++    }
+ 
+     backend::CliArgs cli_args = handle_cli_args(app);
+     cli_args.portable |= portable_txt_present();
+--- a/src/backend/platform/AndroidHelpers.cpp
++++ b/src/backend/platform/AndroidHelpers.cpp
+@@ -110,9 +110,10 @@
+     // Android 11
+     if (androidSdkVersion() >= 30) {
+         static constexpr auto JNI_METHOD = "getAllStorageAccess";
+-        const auto has_permission = QAndroidJniObject::callStaticMethod<jboolean>(jni_classname(), JNI_METHOD);
+-        if (!has_permission)
+-            return false;
++        // The all-files grant is authoritative on scoped-storage Android.
++        // WRITE_EXTERNAL_STORAGE cannot grant this access, and asking Qt for
++        // it after returning from Settings can incorrectly fail startup.
++        return QAndroidJniObject::callStaticMethod<jboolean>(jni_classname(), JNI_METHOD);
+     }
+ 
+ 

@@ -1,6 +1,7 @@
 package com.thorium.preview;
 
 import android.view.Surface;
+import com.thorium.preview.game.FrameGenerationRendererRegistry;
 
 import java.io.Closeable;
 import java.io.File;
@@ -9,7 +10,7 @@ import java.io.IOException;
 /**
  * Explicitly experimental Phase 2 GLES bridge.
  *
- * <p>This class is not selected by Lucent's production engine catalog. A
+ * <p>This class is not selected by EmuFusion's production engine catalog. A
  * qualification caller must keep attach, run/present, recreate, detach, and
  * close on one dedicated render thread. The ordinary {@link LibretroHost}
  * remains software-only and cannot accidentally enable this path.</p>
@@ -18,19 +19,57 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
     interface Bindings {
         long create(String core, String root, String system, String save,
                     int presentationPolicy);
+        default long create(String core, String root, String system, String save,
+                            int presentationPolicy, int sourceTimelinePolicy) {
+            if (sourceTimelinePolicy != SOURCE_TIMELINE_DEFAULT)
+                throw new UnsupportedOperationException(
+                        "source timeline policy is not supported by this binding");
+            return create(core, root, system, save, presentationPolicy);
+        }
+        default long create(String core, String root, String system, String save,
+                            int presentationPolicy, int sourceTimelinePolicy,
+                            boolean widescreenEnhancementsEnabled) {
+            if (!widescreenEnhancementsEnabled)
+                throw new UnsupportedOperationException(
+                        "widescreen preference is not supported by this binding");
+            return create(core, root, system, save, presentationPolicy,
+                    sourceTimelinePolicy);
+        }
         void loadGame(long handle, String game);
         void setControllerPortDevice(long handle, int port, int device);
         void reset(long handle);
+        void cheatReset(long handle);
+        void cheatSet(long handle, int index, boolean enabled, String code);
+        void setPresentationAspect(long handle, float aspect);
         void attach(long handle, Surface surface);
         void recreate(long handle, Surface surface);
+        default void setFgTimestamp(long handle, boolean enabled) {
+            if (enabled) throw new UnsupportedOperationException(
+                    "FG timestamp ownership is unsupported by this binding");
+        }
+        void resize(long handle);
         boolean runAndPresent(long handle);
+        default int runAndPresentStatus(long handle) {
+            return runAndPresent(handle) ? 2 : 1;
+        }
+        default int runWithoutPresentStatus(long handle) {
+            throw new UnsupportedOperationException("offscreen guest step unavailable");
+        }
         void detach(long handle);
         void setPaused(long handle, boolean paused);
         void setJoypadButton(long handle, int port, int button, boolean pressed);
         void setAnalogAxis(long handle, int port, int index, int id, int value);
+        void setPointer(long handle, int port, int x, int y, boolean pressed);
         int[] hardwareInfo(long handle);
         short[] drainAudio(long handle, int maxFrames);
+        default long lastRunAudioDurationNanos(long handle) { return 0L; }
         double[] avInfo(long handle);
+        default void setSynchronizedVideoRate(long handle, double declaredHz,
+                                              double synchronizedHz) {
+            if (Math.abs(declaredHz - synchronizedHz) > 1.0e-9)
+                throw new UnsupportedOperationException(
+                        "synchronized video rate is unsupported by this binding");
+        }
         boolean stateReady(long handle);
         byte[] serialize(long handle);
         void unserialize(long handle, byte[] state);
@@ -44,7 +83,19 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         static final JniBindings INSTANCE = new JniBindings();
         @Override public long create(String core, String root, String system, String save,
                                      int presentationPolicy) {
-            return nativeCreateGles(core, root, system, save, presentationPolicy);
+            return create(core, root, system, save, presentationPolicy,
+                    SOURCE_TIMELINE_DEFAULT);
+        }
+        @Override public long create(String core, String root, String system, String save,
+                                     int presentationPolicy, int sourceTimelinePolicy) {
+            return create(core, root, system, save, presentationPolicy,
+                    sourceTimelinePolicy, true);
+        }
+        @Override public long create(String core, String root, String system, String save,
+                                     int presentationPolicy, int sourceTimelinePolicy,
+                                     boolean widescreenEnhancementsEnabled) {
+            return nativeCreateGles(core, root, system, save, presentationPolicy,
+                    sourceTimelinePolicy, widescreenEnhancementsEnabled);
         }
         @Override public void loadGame(long handle, String game) {
             nativeLoadGameGles(handle, game);
@@ -53,14 +104,33 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
             nativeSetControllerPortDeviceGles(handle, port, device);
         }
         @Override public void reset(long handle) { nativeResetGles(handle); }
+        @Override public void cheatReset(long handle) { nativeCheatResetGles(handle); }
+        @Override public void cheatSet(long handle, int index, boolean enabled, String code) {
+            nativeCheatSetGles(handle, index, enabled, code);
+        }
+        @Override public void setPresentationAspect(long handle, float aspect) {
+            nativeSetPresentationAspectGles(handle, aspect);
+        }
         @Override public void attach(long handle, Surface surface) {
             nativeAttachSurfaceGles(handle, surface);
         }
         @Override public void recreate(long handle, Surface surface) {
             nativeRecreateSurfaceGles(handle, surface);
         }
+        @Override public void setFgTimestamp(long handle, boolean enabled) {
+            nativeSetFgTimestampGles(handle, enabled);
+        }
+        @Override public void resize(long handle) {
+            nativeResizeSurfaceGles(handle);
+        }
         @Override public boolean runAndPresent(long handle) {
-            return nativeRunAndPresentGles(handle);
+            return runAndPresentStatus(handle) == 2;
+        }
+        @Override public int runAndPresentStatus(long handle) {
+            return nativeRunAndPresentStatusGles(handle);
+        }
+        @Override public int runWithoutPresentStatus(long handle) {
+            return nativeRunWithoutPresentStatusGles(handle);
         }
         @Override public void detach(long handle) { nativeDetachSurfaceGles(handle); }
         @Override public void setPaused(long handle, boolean paused) {
@@ -74,6 +144,10 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
                                             int id, int value) {
             nativeSetAnalogAxisGles(handle, port, index, id, value);
         }
+        @Override public void setPointer(long handle, int port, int x, int y,
+                                         boolean pressed) {
+            nativeSetPointerGles(handle, port, x, y, pressed);
+        }
         @Override public int[] hardwareInfo(long handle) {
             return nativeHardwareInfoGles(handle);
         }
@@ -81,6 +155,15 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
             return nativeDrainAudioGles(handle, maxFrames);
         }
         @Override public double[] avInfo(long handle) { return nativeAvInfoGles(handle); }
+        @Override public long lastRunAudioDurationNanos(long handle) {
+            return nativeLastRunAudioDurationNanosGles(handle);
+        }
+        @Override public void setSynchronizedVideoRate(long handle,
+                                                       double declaredHz,
+                                                       double synchronizedHz) {
+            nativeSetSynchronizedVideoRateGles(
+                    handle, declaredHz, synchronizedHz);
+        }
         @Override public boolean stateReady(long handle) { return nativeStateReadyGles(handle); }
         @Override public byte[] serialize(long handle) { return nativeSerializeGles(handle); }
         @Override public void unserialize(long handle, byte[] state) {
@@ -133,16 +216,23 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
 
     private final Bindings bindings;
     private long handle;
+    private boolean lastFrameExecuted;
 
     public static final int PRESENT_AUTO = 0;
     public static final int PRESENT_FRONTEND_FBO = 1;
     public static final int PRESENT_DIRECT_WINDOW = 2;
+    public static final int SOURCE_TIMELINE_DEFAULT = 0;
+    public static final int SOURCE_TIMELINE_MUPEN_VI_ORIGIN = 1;
+    // Independent bit: crops a frontend-FBO GLideN64 target's sentinel
+    // padding regardless of frame-generation mode. See the native
+    // lucent_retro_source_timeline_policy enum for the full rationale.
+    public static final int SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS = 2;
 
     public ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,
                                         File systemDirectory, File saveDirectory)
             throws IOException {
         this(core, trustedCoreDirectory, systemDirectory, saveDirectory,
-                PRESENT_AUTO, JniBindings.INSTANCE);
+                PRESENT_AUTO, SOURCE_TIMELINE_DEFAULT, JniBindings.INSTANCE);
     }
 
     public ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,
@@ -150,19 +240,55 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
                                         int presentationPolicy)
             throws IOException {
         this(core, trustedCoreDirectory, systemDirectory, saveDirectory,
-                presentationPolicy, JniBindings.INSTANCE);
+                presentationPolicy, SOURCE_TIMELINE_DEFAULT, JniBindings.INSTANCE);
+    }
+
+    public ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,
+                                        File systemDirectory, File saveDirectory,
+                                        int presentationPolicy, int sourceTimelinePolicy)
+            throws IOException {
+        this(core, trustedCoreDirectory, systemDirectory, saveDirectory,
+                presentationPolicy, sourceTimelinePolicy, true,
+                JniBindings.INSTANCE);
+    }
+
+    public ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,
+                                        File systemDirectory, File saveDirectory,
+                                        int presentationPolicy, int sourceTimelinePolicy,
+                                        boolean widescreenEnhancementsEnabled)
+            throws IOException {
+        this(core, trustedCoreDirectory, systemDirectory, saveDirectory,
+                presentationPolicy, sourceTimelinePolicy,
+                widescreenEnhancementsEnabled, JniBindings.INSTANCE);
     }
 
     ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,
                                  File systemDirectory, File saveDirectory,
                                  Bindings bindings) throws IOException {
         this(core, trustedCoreDirectory, systemDirectory, saveDirectory,
-                PRESENT_AUTO, bindings);
+                PRESENT_AUTO, SOURCE_TIMELINE_DEFAULT, bindings);
     }
 
     ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,
                                  File systemDirectory, File saveDirectory,
                                  int presentationPolicy,
+                                 Bindings bindings) throws IOException {
+        this(core, trustedCoreDirectory, systemDirectory, saveDirectory,
+                presentationPolicy, SOURCE_TIMELINE_DEFAULT, bindings);
+    }
+
+    ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,
+                                 File systemDirectory, File saveDirectory,
+                                 int presentationPolicy, int sourceTimelinePolicy,
+                                 Bindings bindings) throws IOException {
+        this(core, trustedCoreDirectory, systemDirectory, saveDirectory,
+                presentationPolicy, sourceTimelinePolicy, true, bindings);
+    }
+
+    ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,
+                                 File systemDirectory, File saveDirectory,
+                                 int presentationPolicy, int sourceTimelinePolicy,
+                                 boolean widescreenEnhancementsEnabled,
                                  Bindings bindings) throws IOException {
         if (core == null || trustedCoreDirectory == null || systemDirectory == null ||
                 saveDirectory == null) throw new IllegalArgumentException("all paths are required");
@@ -170,18 +296,23 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         if (presentationPolicy < PRESENT_AUTO ||
                 presentationPolicy > PRESENT_DIRECT_WINDOW)
             throw new IllegalArgumentException("unknown presentation policy");
+        if (sourceTimelinePolicy < SOURCE_TIMELINE_DEFAULT ||
+                (sourceTimelinePolicy & ~(SOURCE_TIMELINE_MUPEN_VI_ORIGIN |
+                        SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS)) != 0)
+            throw new IllegalArgumentException("unknown source timeline policy");
         this.bindings = bindings;
         File canonicalCore = core.getCanonicalFile();
         File canonicalRoot = trustedCoreDirectory.getCanonicalFile();
         if (!canonicalCore.getPath().startsWith(canonicalRoot.getPath() + File.separator))
-            throw new SecurityException("core must be in Lucent's app-private trusted directory");
+            throw new SecurityException("core must be in EmuFusion's app-private trusted directory");
         if (!systemDirectory.isDirectory() && !systemDirectory.mkdirs())
             throw new IOException("cannot create system directory");
         if (!saveDirectory.isDirectory() && !saveDirectory.mkdirs())
             throw new IOException("cannot create save directory");
         handle = bindings.create(canonicalCore.getPath(), canonicalRoot.getPath(),
                 systemDirectory.getCanonicalPath(), saveDirectory.getCanonicalPath(),
-                presentationPolicy);
+                presentationPolicy, sourceTimelinePolicy,
+                widescreenEnhancementsEnabled);
         if (handle == 0) throw new IllegalStateException("native GLES session was not created");
     }
 
@@ -214,11 +345,33 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         bindings.reset(handle);
     }
 
+    /** Replaces the live core's complete cheat slot set without restarting content. */
+    public synchronized void applyCheats(java.util.List<String> codes) {
+        checkOpen();
+        bindings.cheatReset(handle);
+        if (codes == null) return;
+        int slot = 0;
+        for (String code : codes) {
+            if (code == null || code.trim().isEmpty()) continue;
+            bindings.cheatSet(handle, slot++, true, code.trim());
+        }
+    }
+
+    /** Sets the frontend-resolved display aspect before attaching a Surface. */
+    public synchronized void setPresentationAspect(float aspect) {
+        checkOpen();
+        if (!Float.isFinite(aspect) || aspect <= 0.1f || aspect >= 10f)
+            throw new IllegalArgumentException("a plausible presentation aspect is required");
+        bindings.setPresentationAspect(handle, aspect);
+    }
+
     public synchronized void attachSurface(Surface surface) {
         checkOpen();
         if (surface == null || !surface.isValid())
             throw new IllegalArgumentException("valid Android Surface is required");
         bindings.attach(handle, surface);
+        bindings.setFgTimestamp(handle,
+                FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }
 
     /** Rebuilds EGL after surface replacement or EGL_CONTEXT_LOST. */
@@ -227,12 +380,49 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         if (surface == null || !surface.isValid())
             throw new IllegalArgumentException("valid Android Surface is required");
         bindings.recreate(handle, surface);
+        // Native recreation detaches first, clearing the previous ownership.
+        bindings.setFgTimestamp(handle,
+                FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }
 
-    /** Runs one core frame and returns true only when a new GPU frame swapped. */
+    /**
+     * Non-destructive presentation refresh after the same live Surface's
+     * buffer geometry changed. Never rebuilds EGL and never invokes the
+     * core's context_destroy/context_reset callbacks: duplicate or resize
+     * notifications of one live Surface must not force hardware cores
+     * through the ordered destroy/recreate transition.
+     */
+    public synchronized void surfaceResized() {
+        checkOpen();
+        bindings.resize(handle);
+    }
+
+    /** A resume warmup may skip execution; true only when a game image swapped. */
     public synchronized boolean runFrameAndPresent() {
         checkOpen();
-        return bindings.runAndPresent(handle);
+        lastFrameExecuted = false;
+        int status = bindings.runAndPresentStatus(handle);
+        if (status < 0 || status > 2)
+            throw new IllegalStateException("invalid GLES execution status: " + status);
+        lastFrameExecuted = status != 0;
+        return status == 2;
+    }
+
+    public synchronized boolean didRunFrame() { return lastFrameExecuted; }
+
+    /** Executes a guest step into its frontend FBO without enqueueing a stale display. */
+    public synchronized void runFrameWithoutPresent() {
+        checkOpen();
+        lastFrameExecuted = false;
+        int status = bindings.runWithoutPresentStatus(handle);
+        if (status < 0 || status > 1)
+            throw new IllegalStateException("invalid offscreen execution status: " + status);
+        lastFrameExecuted = status == 1;
+    }
+
+    public synchronized long lastRunAudioDurationNanos() {
+        checkOpen();
+        return lastFrameExecuted ? bindings.lastRunAudioDurationNanos(handle) : 0L;
     }
 
     public synchronized void detachSurface() {
@@ -257,6 +447,12 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         bindings.setAnalogAxis(handle, port, index, id, signed);
     }
 
+    /** Sets one exact libretro pointer coordinate and contact state. */
+    public synchronized void setPointer(int port, short x, short y, boolean pressed) {
+        checkOpen();
+        bindings.setPointer(handle, port, x, y, pressed);
+    }
+
     public synchronized HardwareInfo hardwareInfo() {
         checkOpen();
         int[] values = bindings.hardwareInfo(handle);
@@ -278,6 +474,12 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         if (values == null || values.length != 5)
             throw new IllegalStateException("AV timing is unavailable before loading a game");
         return new AvInfo(values);
+    }
+
+    public synchronized void setSynchronizedVideoRate(
+            double declaredHz, double synchronizedHz) {
+        checkOpen();
+        bindings.setSynchronizedVideoRate(handle, declaredHz, synchronizedHz);
     }
 
     public synchronized byte[] serialize() {
@@ -323,23 +525,37 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
 
     private static native long nativeCreateGles(String corePath, String trustedRoot,
                                                  String systemDirectory, String saveDirectory,
-                                                 int presentationPolicy);
+                                                 int presentationPolicy,
+                                                 int sourceTimelinePolicy,
+                                                 boolean widescreenEnhancementsEnabled);
     private static native void nativeLoadGameGles(long handle, String gamePath);
     private static native void nativeSetControllerPortDeviceGles(long handle, int port,
                                                                  int device);
     private static native void nativeResetGles(long handle);
+    private static native void nativeCheatResetGles(long handle);
+    private static native void nativeCheatSetGles(long handle, int index,
+                                                  boolean enabled, String code);
+    private static native void nativeSetPresentationAspectGles(long handle, float aspect);
+    private static native void nativeSetFgTimestampGles(long handle, boolean enabled);
     private static native void nativeAttachSurfaceGles(long handle, Surface surface);
     private static native void nativeRecreateSurfaceGles(long handle, Surface surface);
-    private static native boolean nativeRunAndPresentGles(long handle);
+    private static native void nativeResizeSurfaceGles(long handle);
+    private static native int nativeRunAndPresentStatusGles(long handle);
+    private static native int nativeRunWithoutPresentStatusGles(long handle);
     private static native void nativeDetachSurfaceGles(long handle);
     private static native void nativeSetPausedGles(long handle, boolean paused);
     private static native void nativeSetJoypadButtonGles(long handle, int port, int button,
                                                          boolean pressed);
     private static native void nativeSetAnalogAxisGles(long handle, int port, int index,
                                                        int id, int value);
+    private static native void nativeSetPointerGles(long handle, int port, int x, int y,
+                                                    boolean pressed);
     private static native int[] nativeHardwareInfoGles(long handle);
     private static native short[] nativeDrainAudioGles(long handle, int maxFrames);
     private static native double[] nativeAvInfoGles(long handle);
+    private static native long nativeLastRunAudioDurationNanosGles(long handle);
+    private static native void nativeSetSynchronizedVideoRateGles(
+            long handle, double declaredHz, double synchronizedHz);
     private static native boolean nativeStateReadyGles(long handle);
     private static native byte[] nativeSerializeGles(long handle);
     private static native void nativeUnserializeGles(long handle, byte[] state);

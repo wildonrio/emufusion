@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "qualificationOnly": true,
   "autoSelect": false,
-  "note": "Phase 3 native-adapter opt-in. This asset is packaged ONLY by an explicit LUCENT_INCLUDE_PHASE3_EDEN=1 build; a default/release APK has no phase3-qualification-opt-in.json asset at all, and NativeAdapterCatalog returns an empty catalog when it is absent, so every Phase 3 system keeps its external route. Listing an engine here is necessary but not sufficient: the pinned phase3 registry row must still declare route=native-adapter at this exact commit with shipped=false, the phase3 artifact manifest must record the adapter's SHA-256, and the adapter .so must be physically bundled and hash to that value.",
+  "note": "Phase 3 native-adapter opt-in. This asset is packaged ONLY by at least one explicit LUCENT_INCLUDE_PHASE3_EDEN=1, LUCENT_INCLUDE_PHASE3_CEMU=1, or LUCENT_INCLUDE_PHASE3_APS3E=1 build flag (each flag stages only its own adapter and all share this asset and the phase3 artifact manifest, so a build that wants multiple Phase 3 systems internally must pass every corresponding flag); a default/release APK has no phase3-qualification-opt-in.json asset at all, and NativeAdapterCatalog returns an empty catalog when it is absent, so every Phase 3 system keeps its external route. Listing an engine here is necessary but not sufficient: the pinned phase3 registry row must still declare route=native-adapter at this exact commit with shipped=false, the phase3 artifact manifest must record the adapter's SHA-256, and the adapter .so must be physically bundled and hash to that value.",
   "engines": [
     {
       "id": "eden",
@@ -16,6 +16,34 @@
         "firmware": "required",
         "bundledInApk": false,
         "note": "Console keys and the system firmware archive are user-supplied at runtime and are NEVER packaged. NativeAdapterSystemDirectory resolves them from external storage into the app-private engine-system/eden root and fails closed when they are missing."
+      }
+    },
+    {
+      "id": "cemu",
+      "commit": "5897c6d3092612ef410137ba2f7c35043b9b3061",
+      "libraryName": "liblucent_native_adapter_cemu.so",
+      "runtime": "native-adapter",
+      "libraryRouteSystems": ["wiiu"],
+      "sourceLock": "engines/cemu-source-lock.json",
+      "userSuppliedRuntimeInputs": {
+        "keys": "required",
+        "firmware": "not-required",
+        "bundledInApk": false,
+        "note": "CORRECTED. Cemu needs no console firmware dump at all, and decrypted content (RPX/ELF, extracted, WUA) needs no key either -- but encrypted .wud/.wux disc images, which is what a real Wii U library is made of, cannot be opened without one. The adapter therefore reports required_firmware = 1 and names a single user-supplied file: keys.txt, one 32-hex-character AES-128 disc key per line. NativeAdapterSystemDirectory's Wii U layout copies the user's copy (reference location Games/wiiu/Keys/keys.txt) into the app-private engine-system/cemu root as keys.txt, which is exactly where Cemu's KeyCache_Prepare reads it from, and fails closed naming the file when it is absent. A disc the supplied keys do not fit still surfaces Cemu's own NO_DISC_KEY / NO_TITLE_TIK as an ordinary load error rather than being silently mis-decoded. Nothing is ever packaged."
+      }
+    },
+    {
+      "id": "aps3e",
+      "commit": "b5ae1af50d5e2f3b705506e7380a4504e086840b",
+      "libraryName": "liblucent_native_adapter_aps3e.so",
+      "runtime": "native-adapter",
+      "libraryRouteSystems": ["ps3"],
+      "sourceLock": "engines/aps3e-source-lock.json",
+      "userSuppliedRuntimeInputs": {
+        "keys": "not-required",
+        "firmware": "required",
+        "bundledInApk": false,
+        "note": "The owner supplies Sony's PS3UPDAT.PUP. Lucent validates the SCE container shape, copies it into the app-private engine-system/aps3e root, and the pinned RPCS3-derived parser cryptographically validates and installs it before first boot. Neither firmware nor game content is bundled or downloaded."
       }
     }
   ]

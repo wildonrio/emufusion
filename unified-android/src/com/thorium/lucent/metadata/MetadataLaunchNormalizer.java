@@ -12,9 +12,10 @@ public final class MetadataLaunchNormalizer {
     private MetadataLaunchNormalizer() {}
 
     /**
-     * Replaces, removes, or restores the one collection-level launch command.
-     * Aggregate files are handled one collection at a time. A launch field
-     * inside a game's own metadata is deliberately left untouched.
+     * Replaces, removes, or restores the one authoritative collection route.
+     * Aggregate files are handled one collection at a time. Stale per-game
+     * launch overrides are removed so an old standalone-emulator recipe cannot
+     * bypass the current per-system route for individual titles.
      */
     public static String rewrite(String text, Resolver resolver) {
         if (text == null || text.isEmpty() || resolver == null) return text;
@@ -49,7 +50,8 @@ public final class MetadataLaunchNormalizer {
                 shortnameIndex = index;
                 system = lines[index].substring("shortname:".length()).trim()
                         .toLowerCase(java.util.Locale.US);
-            } else if (lines[index].startsWith("launch:") && firstLaunchIndex < 0) {
+            } else if (index < headerEnd && lines[index].startsWith("launch:") &&
+                    firstLaunchIndex < 0) {
                 firstLaunchIndex = index;
             }
         }
@@ -58,12 +60,17 @@ public final class MetadataLaunchNormalizer {
                 "launch: " + command.trim();
         boolean wroteLaunch = false;
         for (int index = start; index < end; index++) {
-            boolean collectionLaunch = index < headerEnd &&
-                    lines[index].startsWith("launch:");
-            if (collectionLaunch) {
+            boolean launch = lines[index].startsWith("launch:");
+            if (launch) {
+                boolean collectionLaunch = index < headerEnd;
                 if (!desired.isEmpty() && !wroteLaunch) {
-                    output.add(desired);
-                    wroteLaunch = true;
+                    // Preserve the collection-level position when it exists.
+                    // Per-game routes are only removed; they never become the
+                    // authority for the collection.
+                    if (collectionLaunch) {
+                        output.add(desired);
+                        wroteLaunch = true;
+                    }
                 }
                 continue;
             }

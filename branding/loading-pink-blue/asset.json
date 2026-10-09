@@ -1,0 +1,26 @@
+{
+  "description": "Matching split pink/white and blue/white loading scene: ribbon bows, white flowers, and cars.",
+  "artworkGeneration": "Built-in image_gen tool, 2026-09-30",
+  "prompt": "prompt.txt",
+  "artwork": "scene.png",
+  "artworkSha256": "41cf990450a0d88a1feb63f62b90be0c23b078f29d4cf8ac23db6894e91c862a",
+  "renderScript": "render.sh",
+  "animation": "Gentle periodic camera zoom, 1.005x to 1.03x; the objects are not individually animated.",
+  "output": "../../loading.mp4",
+  "videoSha256": "5d54f134d6a373b2d623b6ffc33c3cdf9ce0c4e468aeb7705147a75e291e0ccc",
+  "video": {
+    "codec": "h264",
+    "pixelFormat": "yuv420p",
+    "width": 1920,
+    "height": 1080,
+    "sampleAspectRatio": "1:1",
+    "framesPerSecond": 60,
+    "frameCount": 360,
+    "durationSeconds": 6,
+    "bytes": 2971792,
+    "audioStreams": 0
+  },
+  "previousVideoBackup": "previous-loading.mp4",
+  "previousVideoSha256": "fb6fb0887dc4e99818d1ca577ee16dbae1460fc1bcae28352bf974d6272a5b36",
+  "runtimeBehavior": "Existing content-addressed boot asset extraction and aspect-preserving fit unchanged. No minimum playback delay: ends when the library is ready."
+}

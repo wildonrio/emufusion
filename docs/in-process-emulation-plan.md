@@ -1,4 +1,4 @@
-# Lucent in-process emulation plan
+# EmuFusion in-process emulation plan
 
 Status: Phase 1 has structural and AYN Thor activity evidence for 13 runnable
 paths but remains release-gated; Phase 2 has fail-closed in-process candidates
@@ -6,7 +6,7 @@ for PSP, PS2, Dreamcast/Naomi/Atomiswave, 3DS, and Jaguar, with multiple
 platform, compliance, lifecycle, performance, and device gates still open  
 Last reviewed: 2026-08-07
 
-Implementation snapshot (2026-08-07): Lucent now hosts gameplay inside its
+Implementation snapshot (2026-08-07): EmuFusion now hosts gameplay inside its
 existing single-task `MainActivity`, with an independent libretro API host,
 software video/audio path, canonical
 digital and analog input, touch fallback, Quick Resume, rolling checkpoint
@@ -15,7 +15,7 @@ platform definitions. Fourteen license-compatible core artifacts compile for
 Android ARM64 from SHA-256-pinned source inputs. The fail-closed Activity
 harness covers 17 runnable system paths after adding the previously omitted
 DOS path; thirteen paths have the previously recorded native callback/state
-and real Lucent Android Activity evidence on the AYN Thor;
+and real EmuFusion Android Activity evidence on the AYN Thor;
 three firmware/provenance-dependent paths remain explicitly blocked. All remain
 experimental and unshipped until the physical-device and release requirements
 in this document pass. Phase 2 has begun with a fail-closed hardware-render
@@ -24,18 +24,18 @@ RetroArch frontend code, assets, configuration, or application dependency is
 used.
 
 This document is the durable product and engineering specification for making
-games run inside Lucent. It is intentionally independent of conversation
+games run inside EmuFusion. It is intentionally independent of conversation
 history. If implementation details conflict with this document, this document
 wins until it is deliberately amended.
 
 ## 1. Product contract
 
-Lucent will become an emulator frontend as well as a game-library frontend.
+EmuFusion will become an emulator frontend as well as a game-library frontend.
 For supported systems, selecting a game opens a Lucent-owned game surface in
-the Lucent Android package. It must not expose another emulator's library,
+the EmuFusion Android package. It must not expose another emulator's library,
 window, menus, configuration screen, branding, or launcher.
 
-Lucent may implement the MIT-licensed **libretro API** and load compatible
+EmuFusion may implement the MIT-licensed **libretro API** and load compatible
 emulator cores. It must not include or reuse the RetroArch frontend, its menus,
 configuration system, assets, controller UI, or terminology. Libretro is an
 API; RetroArch is only one implementation of a frontend for that API.
@@ -46,7 +46,7 @@ user-facing emulation controls are:
 1. Resume.
 2. Controls: inspect or remap the automatically selected controller profile.
 3. Restore earlier point: open the automatic checkpoint history.
-4. Exit to Lucent: save and return to the exact library location.
+4. Exit to EmuFusion: save and return to the exact library location.
 
 There are no on-screen controls when a built-in, USB, or Bluetooth gamepad is
 available. On-screen controls appear automatically only on a phone/tablet with
@@ -57,24 +57,24 @@ disconnected.
 
 - No RetroArch application, frontend code, menus, configuration files, assets,
   or visible behavior.
-- No core-options screen. Curated settings live in tested Lucent profiles.
+- No core-options screen. Curated settings live in tested EmuFusion profiles.
 - No emulator APK is silently installed. Android does not generally permit it.
 - No firmware, BIOS, encryption keys, copyrighted console OS files, or games
-  are bundled. Lucent may detect and validate files supplied by the user.
+  are bundled. EmuFusion may detect and validate files supplied by the user.
 - No game may run faster or slower because the display refresh rate differs
   from the game's native timing.
 - No core is shipped until its complete dependency/license graph is approved
-  for distribution with Lucent's GPL-3.0-only application.
+  for distribution with EmuFusion's GPL-3.0-only application.
 - A buildbot binary proves technical availability, not redistribution approval.
 - GPLv2-only and non-commercial cores are license gates, not automatic choices.
-- If an engine cannot safely serialize and restore state, Lucent must say so
+- If an engine cannot safely serialize and restore state, EmuFusion must say so
   internally and must not pretend that Quick Resume is protected.
 
 ## 3. Runtime architecture
 
-### 3.1 One Lucent identity and one display-0 emulation window
+### 3.1 One EmuFusion identity and one display-0 emulation window
 
-The library and every emulation engine must remain in Lucent's existing
+The library and every emulation engine must remain in EmuFusion's existing
 `MainActivity`. `InWindowGameHost` temporarily covers the library views with a
 game surface and restores those same views on exit. A game launch must never
 start another Activity on display 0, another Android task, another package, or
@@ -85,7 +85,7 @@ appear in the unified APK manifest or DEX payload.
 The in-window host owns these subsystems:
 
 - `EngineRegistry`: maps normalized system IDs to exactly one approved engine.
-- `LibretroHost`: Lucent's own minimal implementation of `libretro.h`.
+- `LibretroHost`: EmuFusion's own minimal implementation of `libretro.h`.
 - `NativeEngineAdapter`: common JNI contract for engines that are not suitable
   libretro cores.
 - `GameSurface`: Vulkan first, OpenGL ES fallback, software upload fallback.
@@ -98,7 +98,7 @@ The in-window host owns these subsystems:
   downloading or bundling it.
 - `FramePacer`: preserves guest timing and matches presentation to the best
   supported Android display mode.
-- `SessionRouter`: returns within the same `MainActivity` to the exact Lucent
+- `SessionRouter`: returns within the same `MainActivity` to the exact EmuFusion
   system, sort, view, and game.
 
 Release qualification must record, for every tested game, one package
@@ -109,7 +109,7 @@ compatibility class name), and one display-0 application window from launch
 through gameplay and return. Any external emulator observation is an automatic
 failure, even if rendering, input, audio, and saving otherwise work.
 
-On a Thor, Lucent may keep one private, non-focusable `PreviewActivity` on the
+On a Thor, EmuFusion may keep one private, non-focusable `PreviewActivity` on the
 secondary display solely for preview playback or a black gameplay surface. It
 must be in the same package and PID, excluded from recents, non-exported,
 rejected on display 0, and must never load or host an emulation engine. This
@@ -134,14 +134,14 @@ stop()
 capabilities() -> screens, touch, motion, microphone, state support
 ```
 
-Native adapters must behave exactly like the libretro host at the Lucent UI
+Native adapters must behave exactly like the libretro host at the EmuFusion UI
 boundary. An engine is an implementation detail and never a navigation target.
 
 ### 3.3 Core supply chain
 
 Create a checked-in `engines/registry.json` containing, for every engine:
 
-- Lucent engine ID and systems.
+- EmuFusion engine ID and systems.
 - Upstream repository and homepage.
 - Exact source commit/tag.
 - Full SPDX license expression and dependency-license report.
@@ -153,9 +153,9 @@ Create a checked-in `engines/registry.json` containing, for every engine:
 - Renderer and controller capabilities.
 - Current state: `approved`, `license-blocked`, `experimental`, or `external`.
 
-Approved engines are built from source in Lucent CI. Lucent must not download
+Approved engines are built from source in EmuFusion CI. EmuFusion must not download
 unversioned executable cores from arbitrary mirrors at runtime. Engine updates
-ship as signed Lucent APK updates so one tested engine/profile set stays intact.
+ship as signed EmuFusion APK updates so one tested engine/profile set stays intact.
 
 ## 4. Unified saving behavior
 
@@ -163,7 +163,7 @@ ship as signed Lucent APK updates so one tested engine/profile set stays intact.
 
 Each game has exactly one user-invisible Quick Resume state:
 
-- Save it when the user exits through Lucent.
+- Save it when the user exits through EmuFusion.
 - Save it when the Thor Stop button is held for one second.
 - Save it before an engine is stopped, updated, or evicted for memory pressure.
 - Attempt an asynchronous save when Android backgrounds the game activity.
@@ -187,7 +187,7 @@ Each game has exactly one user-invisible Quick Resume state:
   72 checkpoints or 512 MiB, whichever is reached first.
 - Never delete the newest valid Quick Resume state while pruning history.
 
-`Restore earlier point` is deliberately one level inside Lucent's pause menu.
+`Restore earlier point` is deliberately one level inside EmuFusion's pause menu.
 It shows a horizontal timeline of screenshots and timestamps. Restoring an old
 checkpoint first preserves the current state as a new recovery checkpoint.
 
@@ -232,7 +232,7 @@ stored by descriptor plus vendor/product ID, never by display name alone.
 
 ### 5.2 Canonical controls
 
-Lucent normalizes physical inputs to:
+EmuFusion normalizes physical inputs to:
 
 ```text
 D-pad; South/East/West/North; L1/R1; L2/R2; L3/R3;
@@ -282,13 +282,13 @@ never exposes core input-device terminology.
 - On a Thor, DS/3DS/Wii U layouts may use both displays; single-screen systems
   render gameplay on the top display and stop the lower preview when play starts.
 
-## 7. Phase 1 — Lucent libretro host and low-complexity cores
+## 7. Phase 1 — EmuFusion libretro host and low-complexity cores
 
 Goal: prove the internal runtime and ship the largest reliable group with one
 UI, one controller system, and qualified automatic state history.
 
 The official libretro Android ARM64 build catalog currently publishes cores for
-every entry below. Lucent will build approved cores from upstream source rather
+every entry below. EmuFusion will build approved cores from upstream source rather
 than importing RetroArch or copying its configuration.
 
 ### 7.1 Phase 1A: license-compatible first shipment
@@ -310,7 +310,7 @@ than importing RetroArch or copying its configuration.
 ### 7.2 Phase 1B: technically easy, license-gated
 
 These cores already exist for Android ARM64 and mostly expose serialization,
-but Lucent must not bundle them until a GPL-3.0-only compatibility decision,
+but EmuFusion must not bundle them until a GPL-3.0-only compatibility decision,
 replacement, or explicit permission is documented.
 
 | Systems | Candidate core | Gate |
@@ -344,12 +344,12 @@ partially working swap.
 - Automatic controller profiles and hidden on-screen controls on handhelds.
 - Quick Resume plus 10-minute history working after process death.
 - No visible core settings or core names.
-- Direct launch and return preserve the exact Lucent navigation state.
+- Direct launch and return preserve the exact EmuFusion navigation state.
 - Cold launch, input latency, audio underrun, frame pacing, and state tests pass.
 
 ## 8. Phase 2 — heavy libretro cores and native adapters
 
-Goal: preserve the identical Lucent UX while integrating systems whose cores
+Goal: preserve the identical EmuFusion UX while integrating systems whose cores
 need hardware rendering, multi-screen behavior, computer peripherals, large
 states, or deeper native adaptation.
 
@@ -386,11 +386,11 @@ best integration. Each system gets a benchmark between the libretro core and a
 thin adapter around upstream's native engine. The user-facing contract remains
 identical either way.
 
-PPSSPP is the first Phase 2 heavy-engine build candidate. Lucent pins official
+PPSSPP is the first Phase 2 heavy-engine build candidate. EmuFusion pins official
 PPSSPP `v1.20.4` at peeled commit
 `fa50bb1976065c4f8b1b47af227d367fe9771555` and has an off-device Android ARM64
 compiler/linker proof using PPSSPP's own libretro adapter. The exact hardened
-APK now passes Lucent's one-window Thor checkpoint in the existing
+APK now passes EmuFusion's one-window Thor checkpoint in the existing
 `MainActivity`: visible output, live audio, physical A input, held-Stop return,
 Quick Resume commit, process death, live restore, one visible recents identity,
 and a black lower display all have machine-readable evidence. This does not
@@ -407,7 +407,7 @@ counted. Jaguar may move forward into Phase 1 if its compatibility gate passes.
 
 Goal: link every credible upstream project and bring engines in-process only
 when Android, licensing, performance, firmware, and lifecycle requirements are
-genuinely satisfied. There is no external-emulator fallback in unified Lucent.
+genuinely satisfied. There is no external-emulator fallback in unified EmuFusion.
 
 The machine-readable authority is
 [`engines/phase3-registry.json`](../engines/phase3-registry.json). It pins the
@@ -426,21 +426,21 @@ evidence must be added before the corresponding source/runtime gates may open.
 | PlayStation 3 | **aPS3e** | Add official project link now; experimental Android RPCS3-derived engine; GPLv2 compatibility, firmware, performance, and state API are gates |
 | Original Xbox | xemu | Track upstream; ARM64 Android/Vulkan port, BIOS/HDD setup, and license architecture required |
 | Xbox 360 | Xenia | Track upstream Android work; ARM64 JIT/Vulkan and production compatibility required |
-| Windows | Winlator/Wine/Box64 or QEMU core | Treat as a managed container engine, not a conventional ROM core |
+| Windows / PC | DOSBox Pure now; Wine/Box64 container adapter next | DOS and user-supplied Windows 3.x/9x disk images run in-process now. Modern Win32/Win64 remains a managed Phase 3 container engine, not a conventional ROM core. |
 
 aPS3e is real and must be represented in the source registry:
 
 - Repository: <https://github.com/aenu1/aps3e>
 - Project page: <https://aenu.cc/aps3e/>
 - Current description: experimental native Android PS3 emulator based on RPCS3.
-- License claim: GPLv2, requiring architectural/legal resolution with Lucent's
+- License claim: GPLv2, requiring architectural/legal resolution with EmuFusion's
   GPL-3.0-only combined application.
-- Firmware: user-provided official PS3 firmware; never bundled by Lucent.
+- Firmware: user-provided official PS3 firmware; never bundled by EmuFusion.
 
-Phase 3 does not mean "impossible." It means Lucent will not promise transparent
+Phase 3 does not mean "impossible." It means EmuFusion will not promise transparent
 in-process play, automatic history, or broad compatibility before the relevant
 engine exposes and passes those capabilities. Until then, the system remains
-unavailable in Lucent; an official project link may be shown only as provenance.
+unavailable in EmuFusion; an official project link may be shown only as provenance.
 
 ## 10. Catalog expansion beyond the current 56 systems
 
@@ -473,9 +473,9 @@ buildbot must not make a system visible unless all those pieces exist.
 
 ## 11. Upstream engine source registry
 
-Lucent keeps official-source links for provenance, credit, license review, and
+EmuFusion keeps official-source links for provenance, credit, license review, and
 corresponding-source access. These links are not executable routes and do not
-authorize Lucent to open or install standalone emulator applications. The
+authorize EmuFusion to open or install standalone emulator applications. The
 initial registry includes:
 
 - MAME/MAME4droid: <https://github.com/mamedev/mame>,
@@ -572,7 +572,7 @@ list records candidates, not blanket approval to redistribute them:
 
 A system is not "integrated" until all of the following are true:
 
-- A game launches inside Lucent's existing MainActivity without another
+- A game launches inside EmuFusion's existing MainActivity without another
   package, task, Activity, or display-0 application window.
 - Exiting returns to the same collection, filter, sort, view, and selection.
 - A complete physical controller works with no on-screen controls.

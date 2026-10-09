@@ -24,7 +24,7 @@ Exact SHA-256:
   `InProcessGameLaunchCommand.tryLaunch` before the inherited parser and
   returns null when it consumes the internal command. The inherited
   `startActivity` path is reached only when interception returns false.
-- The exact command bridge validates `start`, the Lucent internal action, and
+- The exact command bridge validates `start`, the EmuFusion internal action, and
   the exact MainActivity component, obtains the live MainActivity, and calls
   `InWindowGameHost.handleIntent` on its UI thread.
 - The exact metadata command uses Pegasus-compatible `am start` syntax. The

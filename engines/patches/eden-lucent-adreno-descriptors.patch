@@ -1,0 +1,21 @@
+diff --git a/src/video_core/vulkan_common/vulkan_device.cpp b/src/video_core/vulkan_common/vulkan_device.cpp
+--- a/src/video_core/vulkan_common/vulkan_device.cpp
++++ b/src/video_core/vulkan_common/vulkan_device.cpp
+@@ -504,6 +504,17 @@
+     CollectToolingInfo();
+ 
++    // EmuFusion: begin observed Adreno push-descriptor workaround
++    if (is_qualcomm &&
++        properties.properties.driverVersion == VK_MAKE_VERSION(512, 676, 53)) {
++        // Thor watchpoint: this driver's push-template path writes freed scratch
++        // storage. Use existing descriptor sets; other driver versions are unchanged.
++        RemoveExtension(extensions.push_descriptor, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
++        LOG_WARNING(Render_Vulkan,
++                    "EmuFusion: Adreno 512.676.53 uses descriptor sets after observed push-template UAF");
++    }
++    // EmuFusion: end observed Adreno push-descriptor workaround
++
+     if (is_qualcomm) {
+         must_emulate_scaled_formats = true;
+         LOG_WARNING(Render_Vulkan, "Qualcomm drivers require scaled vertex format emulation.");
+         has_broken_descriptor_aliasing = true;

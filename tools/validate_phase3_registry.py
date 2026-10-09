@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed policy validation for Lucent's one-app Phase 3 research set."""
+"""Fail-closed policy validation for EmuFusion's one-app Phase 3 research set."""
 import json, re, sys
 from pathlib import Path
 

@@ -20,6 +20,16 @@ typedef struct lucent_android_vulkan_info {
 
 lucent_android_vulkan_backend *lucent_android_vulkan_create(
         char *error, size_t error_size);
+/* Render-owner configuration. Defaults Off; rebinds start a fresh FG timeline. */
+bool lucent_android_vulkan_set_fg_timestamp(
+        lucent_android_vulkan_backend *backend, bool secondary, bool enabled,
+        char *error, size_t error_size);
+bool lucent_android_vulkan_set_presentation_aspect(
+        lucent_android_vulkan_backend *backend, float aspect,
+        char *error, size_t error_size);
+bool lucent_android_vulkan_set_secondary_rotation(
+        lucent_android_vulkan_backend *backend, unsigned clockwise_degrees,
+        char *error, size_t error_size);
 bool lucent_android_vulkan_get_host_options(
         lucent_android_vulkan_backend *backend,
         lucent_retro_hw_options *options,

@@ -12,6 +12,10 @@ final class NativeAdapterStopPolicyTest {
             throw new AssertionError("cemu must still destroy its host");
         if (NativeAdapterStopPolicy.destroyNativeHostOnStop("aps3e"))
             throw new AssertionError("aps3e must not Kill/join on Stop");
+        if (!NativeAdapterStopPolicy.requiresCleanFrontendRestart("aps3e"))
+            throw new AssertionError("aps3e must cross a clean process boundary");
+        if (NativeAdapterStopPolicy.requiresCleanFrontendRestart("cemu"))
+            throw new AssertionError("cemu does not use the aps3e restart policy");
         System.out.println("NativeAdapterStopPolicyTest passed");
     }
 }

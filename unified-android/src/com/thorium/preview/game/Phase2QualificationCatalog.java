@@ -5,6 +5,7 @@ import android.content.res.AssetManager;
 import android.os.Environment;
 import android.os.Build;
 import android.system.Os;
+import android.system.OsConstants;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -37,6 +38,11 @@ public final class Phase2QualificationCatalog {
     private static volatile Map<String, Entry> cached;
     private static volatile Thread bootstrapThread;
     private static final CountDownLatch BOOTSTRAP_GATE = new CountDownLatch(1);
+
+    /** Fixed setup instructions that may be shown instead of a generic core failure. */
+    static final class MissingFirmwareException extends IllegalStateException {
+        MissingFirmwareException(String message) { super(message); }
+    }
 
     static final class FirmwareFile {
         final String destination;
@@ -250,19 +256,24 @@ public final class Phase2QualificationCatalog {
             File[] installed = destination.listFiles();
             if (installed != null) for (File candidate : installed)
                 if (validPs2Bios(candidate)) return;
-            File storage = Environment.getExternalStorageDirectory();
-            File[] roots = {
-                new File(storage, "Games/ps2/BIOS"),
-                new File(storage, "ROMs/ps2/BIOS"),
-                new File(storage, "BIOS/ps2")
-            };
+            // The portable library often lives entirely on a removable card.
+            // Use the same readable-volume enumeration as other native setup;
+            // searching only the internal volume worked on Thor but failed on
+            // a new device with its BIOS beside the ROMs on SD/USB storage.
+            List<File> roots = new ArrayList<>();
+            for (File volume : NativeAdapterPrerequisites.permittedVolumeRoots()) {
+                roots.add(new File(volume, "Games/ps2/BIOS"));
+                roots.add(new File(volume, "ROMs/ps2/BIOS"));
+                roots.add(new File(volume, "BIOS/ps2"));
+            }
             File source = null;
             for (File root : roots) {
                 source = findPs2Bios(root, 0);
                 if (source != null) break;
             }
             if (source == null)
-                throw new IllegalStateException("A user-dumped PS2 BIOS is required");
+                throw new MissingFirmwareException("A user-dumped PS2 BIOS is required. " +
+                        "Place it in ROMs/ps2/BIOS on internal or removable storage, then try again.");
             if (!destination.isDirectory() && !destination.mkdirs())
                 throw new IllegalStateException("Cannot create private PS2 BIOS directory");
             copyFile(source, new File(destination, source.getName()));
@@ -304,7 +315,7 @@ public final class Phase2QualificationCatalog {
 
     /**
      * Returns the one explicitly approved qualification engine for a normal
-     * Lucent library launch. Merely packaging a Phase 2 candidate is not
+     * EmuFusion library launch. Merely packaging a Phase 2 candidate is not
      * enough: the opt-in must name the system in libraryRouteSystems, and the
      * catalog has already verified the registry commit and bundled ELF hash.
      * Ambiguous routes fail closed.
@@ -466,6 +477,9 @@ public final class Phase2QualificationCatalog {
         JSONObject artifact = find(manifest.optJSONArray("artifacts"), id, "engineId");
         if (artifact == null || !libraryName.equals(artifact.optString("fileName")) ||
                 !commit.equals(artifact.optString("sourceCommit"))) return null;
+        artifact = selectPageSizeArtifact(id, artifact, Os.sysconf(OsConstants._SC_PAGESIZE));
+        if (artifact == null) return null;
+        libraryName = artifact.optString("fileName");
         String expectedHash = artifact.optString("sha256").toLowerCase(Locale.US);
         if (!expectedHash.matches("[0-9a-f]{64}")) return null;
 
@@ -486,6 +500,23 @@ public final class Phase2QualificationCatalog {
                 Math.max(1, state.optInt("compatibilityVersion", 1)), core,
                 runtime, assetRoot, assetDestination, assetProbe, assetRevision,
                 assetRequiredFiles, firmwareProfiles, libraryRouteSystems);
+    }
+
+    // ARMSX2's page geometry is compiled into its memory manager. Both cores
+    // are bundled; selecting the wrong one is not a recoverable renderer choice.
+    // Keep the upstream exact-page check intact and verify the selected binary
+    // with the same manifest hash/path checks as every other core.
+    static JSONObject selectPageSizeArtifact(String id, JSONObject base, long pageSize) {
+        if (!"armsx2".equals(id)) return base;
+        if (pageSize == 4096 && base.optInt("hostPageSize", 4096) == 4096) return base;
+        if (pageSize != 16384) return null;
+        JSONObject variant = find(base.optJSONArray("pageSizeVariants"), "16384", "hostPageSize");
+        if (variant == null ||
+                !"liblucent_core_armsx2_16k.so".equals(variant.optString("fileName")) ||
+                !base.optString("sourceCommit").equals(variant.optString("sourceCommit"))) return null;
+        Log.i(TAG, "Selected PS2 host-page variant bytes=" + pageSize +
+                " library=" + variant.optString("fileName"));
+        return variant;
     }
 
     private static Map<String, FirmwareProfile> firmwareProfiles(JSONArray rows) {

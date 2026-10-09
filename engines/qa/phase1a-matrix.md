@@ -22,7 +22,7 @@ because it contains locally built artifacts and an emulator serial.
 | ZX Spectrum | Fuse | PASS | video 183 (all nonzero); audio 161,195; input 183; state 131,072 B equal over 100 consecutive cycles | Fixture exposes no save RAM; original visible 48K SNA checkerboard snapshot |
 | Arcade | MAME | PASS | video 183 (180 nonzero); audio 145,248 frames; input polls 183; 6,199,374 B state equal over 100 consecutive cycles after first-cycle metadata canonicalization | Fixture exposes no save RAM; legal `pong.cmd` selects MAME's ROMless Pong driver and contains no ROM data |
 | Neo Geo | MAME | PASS | video 183 (182 nonzero); audio 149,216 frames; input polls 183; 963,493 B state equal over 100 consecutive cycles after first-cycle metadata canonicalization | Fixture exposes no save RAM; pinned LGPL ngdevkit nullbios plus GPL homebrew cartridge, with every support file SHA-256 checked |
-| PC Engine | Beetle PCE Fast | PASS | video 366 (all nonzero); audio 269,752 frames; input 366 plus divergent button-held replay; 80,586 B state equal over 100 cycles | 2,048 B save RAM, writable; original cc65-built Lucent fixture |
+| PC Engine | Beetle PCE Fast | PASS | video 366 (all nonzero); audio 269,752 frames; input 366 plus divergent button-held replay; 80,586 B state equal over 100 cycles | 2,048 B save RAM, writable; original cc65-built EmuFusion fixture |
 | Neo Geo Pocket Color | Beetle NeoPop | PASS | video 366 (362 nonzero); audio 269,057 frames; input 366 plus divergent button-held replay; 31,743 B state equal over 100 cycles | MIT Stargunner fixture; no save RAM exposed |
 | WonderSwan Color | Beetle Cygne | PASS | video 366 (362 nonzero); audio 213,810 frames; input 366 plus divergent button-held replay; 86,923 B state equal over 100 cycles | MIT Bug Witch fixture; no save RAM exposed; monochrome WonderSwan remains unadvertised pending its own fixture |
 | Neo Geo CD | MAME | BLOCKED | Not run | Open `000-lo.lo` and open content exist, but no explicitly licensed compatible replacement for the required CD/CDZ main BIOS was found |
@@ -41,9 +41,9 @@ counts alone could not pass the gate. The emulator confirmed:
 
 - direct launch into the Lucent-owned activity with no emulator window;
 - non-black core video presented at the correct aspect ratio;
-- the Lucent touch fallback composited above video on a device with no gamepad;
+- the EmuFusion touch fallback composited above video on a device with no gamepad;
 - gamepad-focus pause, Resume, and Exit interaction plus return to Pegasus;
-- an atomically committed Quick Resume state after Exit to Lucent;
+- an atomically committed Quick Resume state after Exit to EmuFusion;
 - automatic Quick Resume restore on a second launch for every runnable system;
 - no Java fatal exception, native signal, ANR, or `LucentEngine` error.
 
@@ -67,7 +67,7 @@ required before device qualification.
   header; the patched core completed 100 byte-stable state cycles.
 - FreeIntv returns load success without both firmware images and then halts.
   The jzIntv mini binaries technically boot 4-Tris, but absent corresponding
-  source and specific licensing keep them out of Lucent and FreeIntv blocked.
+  source and specific licensing keep them out of EmuFusion and FreeIntv blocked.
 - SwanStation rewrites 20 bytes of descriptive save-container metadata on the
   first load/save cycle. The emulated payload then remains byte-stable over a
   second cycle; the probe records this explicitly as `stateCanonicalized`.
@@ -88,11 +88,11 @@ required before device qualification.
   checkerboard display, so all 183 sampled frames contain visible output.
 - The first qualification APK synchronously extracted the bundled theme in
   `Application.onCreate`, producing an avoidable startup ANR. Theme installation
-  now runs through Lucent's background bootstrap service.
+  now runs through EmuFusion's background bootstrap service.
 - The real host registered video/audio/input callbacks before `retro_init` and
   crashed in Mesen's callback setter. Host and probe now share the compatible
   environment → init → callback sequence, enforced by a mock-core regression.
 - `SurfaceView` could miss its creation callback and its separate composition
-  layer obscured Lucent overlays. The engine-neutral surface now uses a
+  layer obscured EmuFusion overlays. The engine-neutral surface now uses a
   lifecycle-safe `TextureView`, which passed the visible-frame and pause-overlay
   smoke test.

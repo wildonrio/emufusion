@@ -4,7 +4,7 @@ set -eu
 # Reproduce the exact Git metadata visible in the locked Dolphin checkout and
 # its mGBA submodule while building from checksum-verified source archives.
 # This prevents CMake from walking into an unrelated parent checkout without
-# carrying a source patch in Lucent's compiler proof.
+# carrying a source patch in EmuFusion's compiler proof.
 case "$*" in
     "--version")
         printf '%s\n' "git version 2.50.1 (Apple Git-155)"

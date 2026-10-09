@@ -1,6 +1,6 @@
 package com.thorium.lucent.input;
 
-/** Lucent's only public controller vocabulary; engines translate from this. */
+/** EmuFusion's only public controller vocabulary; engines translate from this. */
 public enum CanonicalControl {
     DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
     SOUTH, EAST, WEST, NORTH,

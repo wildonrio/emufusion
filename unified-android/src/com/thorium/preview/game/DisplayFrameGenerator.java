@@ -19,16 +19,36 @@ import android.view.Choreographer;
 import android.view.Surface;
 
 import com.thorium.lucent.video.AdaptiveFrameRateController;
-import com.thorium.lucent.video.EndpointFrameSelector;
+import com.thorium.lucent.video.AppOwnedExternalPresentationEvidence;
+import com.thorium.lucent.video.CompositorFrameTimeline;
+import com.thorium.lucent.video.CompositorPredictionLattice;
+import com.thorium.lucent.video.DenseFlowTrajectoryDiagnostics;
 import com.thorium.lucent.video.FrameGenerationCadence;
+import com.thorium.lucent.video.FrameGenerationPreparationRequest;
+import com.thorium.lucent.video.FrameGenerationPresentationRequest;
+import com.thorium.lucent.video.MidpointPairBudget;
+import com.thorium.lucent.video.NativeSourceImageObserver;
+import com.thorium.lucent.video.NativeSourceImageLedger;
+import com.thorium.lucent.video.NativeSourceImageProvider;
+import com.thorium.lucent.video.GpuPairTimingLedger;
+import com.thorium.lucent.video.GpuPhysicalHeadroomLedger;
+import com.thorium.lucent.video.SubmissionTimingHistory;
+import com.thorium.lucent.video.GpuWorkAdaptationPolicy;
+import com.thorium.lucent.video.ExternalGeneratedContentEvidence;
+import com.thorium.lucent.video.ExternalPresentationEvidence;
+import com.thorium.lucent.video.ExternalPresentationLedger;
+import com.thorium.lucent.video.ExternalPhysicalClockBootstrap;
+import com.thorium.lucent.video.PhysicalPresentationDeadline;
+import com.thorium.lucent.video.PhysicalPresentationCadence;
+import com.thorium.lucent.video.PhysicalPresentationClock;
+import com.thorium.lucent.video.PresentationClockDiagnostics;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.lang.ref.WeakReference;
-import java.util.IdentityHashMap;
-import java.util.Map;
+import java.util.ArrayDeque;
+import java.util.Locale;
 import java.util.zip.CRC32;
 
 /**
@@ -49,7 +69,7 @@ import java.util.zip.CRC32;
  * display rates the latest frame is passed through, avoiding interpolation
  * latency. A long producer pause settles on the newest real frame.
  */
-public final class DisplayFrameGenerator implements AutoCloseable,
+public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         SurfaceTexture.OnFrameAvailableListener, Choreographer.FrameCallback {
     public interface QualificationProofSwitch {
         boolean enabled();
@@ -63,8 +83,26 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     public interface DenseV28ReducedAnalysisSwitch {
         boolean enabled();
     }
-    public interface StatsListener {
-        void onFrameRate(int lockedSourceFps, int outputFps);
+    /** Keeps API-31 frame-timeline types out of the min-21 outer class. */
+    private static final class Api33VsyncCallback
+            implements Choreographer.VsyncCallback {
+        private final DisplayFrameGenerator owner;
+
+        Api33VsyncCallback(DisplayFrameGenerator owner) {
+            this.owner = owner;
+        }
+
+        @Override public void onVsync(Choreographer.FrameData frameData) {
+            owner.onVsyncFrame(frameData);
+        }
+
+        static Object create(DisplayFrameGenerator owner) {
+            return new Api33VsyncCallback(owner);
+        }
+
+        static void post(Choreographer choreographer, Object callback) {
+            choreographer.postVsyncCallback((Api33VsyncCallback) callback);
+        }
     }
     private static final String TAG = "EmuFusionFrameGen";
     // Evidence is deliberately schema-versioned. Qualification artifacts are
@@ -80,8 +118,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             "dense-fragment-192x108-v27-qualification-x2-presented";
     private static final int DENSE_V27_PROOF_SCHEMA_VERSION = 27;
     private static final String DENSE_V28_PROOF_CONTRACT =
-            "dense-fragment-128x72-v39-present-timed-vector-trajectory-qualification-x2-presented";
-    private static final int DENSE_V28_PROOF_SCHEMA_VERSION = 39;
+            "dense-v63-exact-midpoint-max2x-pair-owned-gpu-presented";
+    private static final int DENSE_V28_PROOF_SCHEMA_VERSION = 63;
     private static final String PRESENTATION_TIMING_MODE =
             "egl-android-next-vsync";
     private static final int DENSE_CADENCE_REJECT_CONSECUTIVE_WINDOWS = 3;
@@ -93,10 +131,65 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private static final int DENSE_V28_ANALYSIS_MAX_HEIGHT = 72;
     private static final int DENSE_LEVELS = 3;
     private static final int[] DENSE_LEVEL_ITERATIONS = {4, 4, 8};
-    private static final int DENSE_PASSES_PER_PROMOTION = 38;
+    private static final int DENSE_BASE_PASSES_PER_PROMOTION = 38;
+    private static final int DENSE_RECIPROCAL_REFINEMENT_PASSES = 2;
+    private static final int DENSE_GLOBAL_SEED_PASSES = 8;
     private static final float DENSE_MAX_FLOW_PIXELS = 47f;
+    // Tier-scaled reach (2026-09-02, wiiu-b64 flow dumps): 47px was tuned for
+    // 60-fps sources.  A 40-fps pace makes the same scene speed 1.5x the
+    // per-frame displacement, and the dumps showed 8-13 percent of cells
+    // saturating at 47px with the raw solver's 90th-percentile vector at
+    // 46-56px; every saturated or inconsistent cell was rejected and the
+    // presentation held the exact endpoint, i.e. duplicated frames.  The
+    // reach, the coarsest search step and the reciprocal tolerance now scale
+    // with the source period (60/fps), capped by the Q8.8 range and by the
+    // harness's motion-bounds contract through flowLimitPixels().
+    private static final float DENSE_MAX_FLOW_PIXELS_CAP = 120f;
+
+    private float denseTierScale() {
+        int fps = frameRate.lockedSourceFps();
+        if (fps <= 0) return 1f;
+        return Math.max(1f, Math.min(3f, 60f / Math.max(20, fps)));
+    }
+
+    private float denseMaxFlowPixels() {
+        // wiiu-b65 dumps (2026-09-02): the scene pans ~50px per frame even at
+        // 60 fps (raw solver median 44-54px, 90th percentile 63-69px), so the
+        // per-tier scaling of 47px still starved the solver.  The reach is
+        // now the motion-bounds contract limit itself (flowLimitPixels: ten
+        // percent of the shorter side, capped), and the coarse search step
+        // is derived from it so the search actually covers the reach.
+        return Math.min(DENSE_MAX_FLOW_PIXELS_CAP,
+                Math.max(DENSE_MAX_FLOW_PIXELS * denseTierScale(),
+                        flowLimitPixels(historyWidth, historyHeight)));
+    }
+
+    /** Coarsest-level search step that reaches the active limit in 8 steps plus the 4*2 + 3*1 fine reach. */
+    private float denseCoarsestStep() {
+        return Math.max(4.5f, (activeFlowLimitPixels() - 11f) / 8f);
+    }
     private static final long DENSE_GPU_BUDGET_US = 7333L;
-    private static final int DENSE_PERFORMANCE_MIN_SAMPLES = 30;
+    private static final long DENSE_GPU_BUDGET_WARP_RESERVE_US = 1000L;
+
+    /**
+     * Shader-only per-pair budget scaled to the qualified output lattice.
+     * The existing conservative limit is retained, but now checks all five
+     * estimator stages plus the pair's actual midpoint warp. The 1-ms reserve
+     * remains spare margin; it is not substituted for a measured warp cost.
+     * Neither this budget nor a fast shader sample proves emulator/compositor
+     * physical headroom or permits quality recovery on its own.
+     */
+    private long denseGpuBudgetUs() {
+        // Use the actual number of panel holds per output: on a 120-Hz panel,
+        // 30 -> 60 uses two holds; 20 -> 40 uses three. No x3 generation.
+        if (frameRate == null) return DENSE_GPU_BUDGET_US;
+        int scans = frameRate.panelScansPerOutput();
+        long panelPeriodUs = frameRate.panelPeriodNs() / 1000L;
+        if (scans < 2 || panelPeriodUs <= 0L) return DENSE_GPU_BUDGET_US;
+        long periodUs = panelPeriodUs * scans;
+        return Math.max(DENSE_GPU_BUDGET_US,
+                periodUs * 4L / 5L - DENSE_GPU_BUDGET_WARP_RESERVE_US);
+    }
     private static final int DENSE_WALL_PROMOTION = 0;
     private static final int DENSE_WALL_SIGNATURE = 1;
     private static final int DENSE_WALL_PROOF = 2;
@@ -110,6 +203,11 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             DenseGpuTimer.SIGNATURE_CAP_READY | DENSE_SIGNATURE_CAP_RGBA8;
     private static final long START_TIMEOUT_MS = 2500L;
     private static final long STOP_TIMEOUT_MS = 1500L;
+    // The shell-only external qualification performs bounded Vulkan setup,
+    // physical phase calibration, and a 240-present SurfaceControl soak before
+    // exposing its input Surface. Default and built-in startup remain unchanged.
+    private static final long EXTERNAL_START_TIMEOUT_MS = 15000L;
+    private static final long EXTERNAL_STOP_TIMEOUT_MS = 15000L;
     private static final int EGL_OPENGL_ES2_BIT = 4;
     private static final int EGL_OPENGL_ES3_BIT_KHR = 0x40;
     private static final int GL_MAJOR_VERSION = 0x821B;
@@ -130,14 +228,14 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private static final int LOW_RES_FINE_FLOW_DIVISOR = 16;
     private static final int HIGH_RES_FINE_FLOW_DIVISOR = 36;
     private static final int HIGH_RES_FLOW_THRESHOLD = 720;
-    private static final float MAX_FLOW_PIXELS = 80f;
+    private static final float MAX_FLOW_PIXELS = 216f;
     // A fixed 80-pixel search is appropriate for a 1080p source, but it is
     // almost half the height of one 256x192 DS screen.  At that scale an
     // ambiguous match can pull a character or background across the whole
     // picture and turn interpolation into a visibly melted frame.  Preserve
     // the reviewed full-resolution bound while limiting low-resolution cores
     // to ten percent of their shorter source dimension.
-    private static final float MAX_FLOW_SOURCE_FRACTION = 0.10f;
+    private static final float MAX_FLOW_SOURCE_FRACTION = 0.20f;
     private static final float MIN_FLOW_PIXELS = 4f;
     private static final int PROOF_WIDTH = 48;
     private static final int PROOF_HEIGHT = 27;
@@ -152,7 +250,11 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private static final int PROOF_ATLAS_LAYOUT_VERSION = 5;
     private static final int DENSE_DIAGNOSTIC_TILES_X = 6;
     private static final int DENSE_DIAGNOSTIC_TILES_Y = 3;
-    private static final int HEALTH_LOG_MAX_UTF8_BYTES = 3900;
+    // Android's per-entry log payload is 4068 bytes including priority/tag
+    // overhead. Keep the UTF-8 message at or below 4000 bytes: this leaves a
+    // bounded margin for EmuFusionFrameGen while accommodating the physically
+    // observed schema-47 extension (3925 bytes late in a qualification run).
+    private static final int HEALTH_LOG_MAX_UTF8_BYTES = 4000;
     private static final int DENSE_DIAG_ACTIVE = 1;
     private static final int DENSE_DIAG_IN_BOUNDS = 2;
     private static final int DENSE_DIAG_CYCLE_VALID = 4;
@@ -177,26 +279,46 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     // both duplicates and missing endpoints. Two additional ready textures
     // provide the active scheduler with a bounded one-frame lookahead while a
     // third coalesces producer bursts without touching either active endpoint.
-    private static final int SIGNATURE_CANDIDATE_SLOTS = 4;
+    // Four native queries may be pending.  A fifth texture keeps the just-
+    // completed classified image immutable while the current callback is
+    // retained into a different slot; reusing the completed slot before the
+    // caller copies it into the endpoint FIFO breaks query/image ownership.
+    private static final int SIGNATURE_CANDIDATE_SLOTS = 5;
     // Two textures own the active interpolation pair. Four additional queued
     // endpoints absorb bounded producer jitter without adding deliberate
     // latency: presentation consumes the head as soon as its source position
     // advances. Overflow rebases to the newest endpoint and waits for its
     // exact successor instead of ever interpolating across a dropped frame.
-    private static final int ENDPOINT_FIFO_CAPACITY = 4;
+    // 6 (was 4): slot-lattice producers prime three endpoints deeper than
+    // the libretro path (see requiredPrimeDepth); the external path keeps
+    // its four-endpoint prime and every other user keeps its depth.
+    private static final int ENDPOINT_FIFO_CAPACITY = 6;
     // The active left/right pair consumes two retained images. Keep one exact
     // successor behind it before starting the presentation clock so a REAL
     // right endpoint can rotate immediately into the next ready pair. Starting
     // from only two images made 50-to-100 repeatedly reach a selected panel
     // slot before its next right endpoint existed, despite a healthy producer.
-    private static final int ENDPOINT_FIFO_PRIME_DEPTH = ENDPOINT_FIFO_CAPACITY;
-    // Keep a tiny future-endpoint reserve for a proven 60-Hz source. Android
-    // may deliver several SurfaceTexture callbacks close together after a
-    // short producer scheduling delay. The fixed selector intentionally never
-    // catches up, but discarding all of those callbacks left the next 120-Hz
-    // slots empty. At most two otherwise-unscheduled callbacks may refill this
-    // queue; output remains controller-paced and never exceeds 2x.
-    private static final int ENDPOINT_FIFO_JITTER_RESERVE = 2;
+    // Two adjacent endpoints bracket one generated timestamp, but a generated
+    // presentation timeline also needs their exact successor retained before
+    // it starts. Signature classification is asynchronous: priming from only
+    // left/right lets the first midpoint rotate right->left before sequence+2
+    // has completed classification, so the following uniform output slot is
+    // lost. On a 20->40 path that deterministic miss repeats every interval and
+    // collapses actual output back toward 20. Three retained endpoints add one
+    // explicitly bounded source-frame of causal look-ahead; direct fallback
+    // still presents a lone independently classified REAL without that delay.
+    private static final int ENDPOINT_FIFO_PRIME_DEPTH = 3;
+    // The private RIFE path needs one additional retained endpoint at prime.
+    // Physical r124/r125 proved that a three-endpoint prime occasionally
+    // reaches the next REAL with no queued successor: private output for that
+    // new interval can then begin only after its midpoint slot has passed and
+    // is discarded one pair stale.  Four retained endpoints consume two into
+    // the active pair and leave two immutable successors, keeping the native
+    // one-slot preparation pipeline a complete source interval ahead.  This
+    // extra frame is qualification-backend latency only; the built-in path
+    // retains its existing three-endpoint prime and Direct still shows a lone
+    // classified endpoint immediately.
+    private static final int ENDPOINT_FIFO_EXTERNAL_PRIME_DEPTH = 4;
     // A screen-wide translation failed closed on perspective/parallax scenes:
     // no one vector improved enough of the image. These overlapping regional
     // controls retain bounded fixed work while allowing a coherent spatially
@@ -232,8 +354,6 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     // One second at 120 Hz fits in SurfaceFlinger's 128-entry latency history,
     // letting QA join this exact monotonic window to the exact gameplay layer.
     private static final int HEALTH_INTERVAL = 120;
-    private static final Map<Surface, WeakReference<DisplayFrameGenerator>> INPUTS =
-            new IdentityHashMap<>();
     private static final AtomicInteger NEXT_GENERATOR_ID = new AtomicInteger(1);
 
     private static final float[] QUAD = {
@@ -261,11 +381,25 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     // Exact sampler2D copy used for source signatures and latest-frame
     // presentation. It is intentionally separate from both the external-OES
     // producer copy and the transformed effective-flow proof shader.
+    // Match highp UV arithmetic in both copies: mediump rounding of 1-y in
+    // the Vulkan-origin path can shift sampling relative to a real endpoint
+    // even when both textures contain the same stationary image.
     private static final String TEXTURE_COPY_SHADER =
-            "precision mediump float;\n" +
+            "precision highp float;\n" +
             "uniform sampler2D uTexture;\n" +
             "varying vec2 vTexCoord;\n" +
             "void main(){ gl_FragColor=texture2D(uTexture,vTexCoord); }\n";
+
+    // Vulkan image coordinates and GLES texture coordinates use opposite Y
+    // origins for the app-owned AHardwareBuffer handoff.  Real endpoints are
+    // ordinary GLES textures and must keep TEXTURE_COPY_SHADER unchanged;
+    // only the imported generated image needs this presentation-time flip.
+    private static final String EXTERNAL_GENERATED_TEXTURE_COPY_SHADER =
+            "precision highp float;\n" +
+            "uniform sampler2D uTexture;\n" +
+            "varying vec2 vTexCoord;\n" +
+            "void main(){ gl_FragColor=texture2D(uTexture," +
+            "vec2(vTexCoord.x,1.0-vTexCoord.y)); }\n";
 
     // The Adreno driver accepted a client-memory glTexSubImage2D header upload
     // but produced an all-zero atlas row. Render the immutable 104-byte tag
@@ -316,7 +450,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             "uniform vec2 uFlowRange;\n" +
             "uniform float uDenseEncoding;\n" +
             "varying vec2 vTexCoord;\n" +
-            "vec2 decodeFlow(vec4 field){vec2 legacy=field.rg*2.0-1.0;vec2 dense=(field.rg*255.0-128.0)/127.0;return mix(legacy,dense,uDenseEncoding)*uFlowRange;}\n" +
+            "vec2 decodeFlow(vec4 field){vec2 legacy=field.rg*2.0-1.0;vec2 dc=(field.rg*255.0-128.0)/127.0;vec2 dense=sign(dc)*dc*dc;return mix(legacy,dense,uDenseEncoding)*uFlowRange;}\n" +
             "void main(){\n" +
             " vec4 backwardField=texture2D(uBackwardMotion,vTexCoord);\n" +
             " vec4 forwardField=texture2D(uForwardMotion,vTexCoord);\n" +
@@ -345,17 +479,70 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     // agreement and photometric validation.
     private static final String DENSE_PYRAMID_SHADER =
             "precision highp float;\n" +
-            "uniform sampler2D uTexture; uniform vec2 uInputTexel;\n" +
+            "uniform sampler2D uTexture; uniform vec2 uInputTexel; uniform float uTapScale;\n" +
             "varying vec2 vTexCoord;\n" +
-            "void main(){vec2 h=uInputTexel*0.5;vec4 v=texture2D(uTexture,clamp(vTexCoord-h,0.0,1.0));\n" +
+            // uTapScale 0.5: four bilinear taps at +-0.5 input texel = an exact 2x2
+            // box for a /2 stage.  uTapScale 1.0 on a /4 stage: taps at +-1 texel
+            // straddle texel pairs, so each bilinear tap averages two texels and
+            // the four taps cover the 4x4 block exactly (FSR 3 builds its
+            // luminance pyramid with a proper box downsampler; the former direct
+            // 1080p -> 64x36 draw kept only 2x2 of every 30x30 pixels and aliased
+            // the coarse search).
+            "void main(){vec2 h=uInputTexel*uTapScale;vec4 v=texture2D(uTexture,clamp(vTexCoord-h,0.0,1.0));\n" +
             "v+=texture2D(uTexture,clamp(vTexCoord+vec2(h.x,-h.y),0.0,1.0));\n" +
             "v+=texture2D(uTexture,clamp(vTexCoord+vec2(-h.x,h.y),0.0,1.0));\n" +
             "v+=texture2D(uTexture,clamp(vTexCoord+h,0.0,1.0));gl_FragColor=v*0.25;}\n";
 
+    // Direction-specific global translation candidates are evaluated in
+    // parallel: one output fragment owns one candidate over the fixed 12x8
+    // robust sample grid. A tiny reduction pass then selects the best cost.
+    // This preserves the schema60 proposal semantics without its physically
+    // failed one-fragment serial search. The final seed is still only a basin
+    // hint and must improve each dense cell's unchanged current-image objective.
+    private static final String DENSE_GLOBAL_COST_SHADER =
+            "precision highp float; uniform sampler2D uReference,uTarget,uCenterSeed;\n" +
+            "uniform vec2 uSourceSize,uGridSize,uStep,uFlowLimit;uniform float uUseCenter; varying vec2 vTexCoord;\n" +
+            "float lum(vec3 c){return dot(c,vec3(.299,.587,.114));}\n" +
+            "vec2 chr(vec3 c){return vec2(.5*(c.r-c.b),.5*c.g-.25*(c.r+c.b));}\n" +
+            "float rb(float x){return min(abs(x),.18);}\n" +
+            "float sampleCost(vec2 uv,vec2 f){vec2 q=uv+f/uSourceSize;if(any(lessThan(q,vec2(0.0)))||any(greaterThan(q,vec2(1.0))))return .42;vec3 a=texture2D(uTarget,uv).rgb,b=texture2D(uReference,q).rgb;vec2 d=abs(chr(a)-chr(b));return rb(lum(a)-lum(b))+.22*(rb(d.x)+rb(d.y));}\n" +
+            "float totalCost(vec2 f){float z=0.0;for(int y=0;y<8;y++){for(int x=0;x<12;x++){vec2 uv=vec2((float(x)+.5)/12.0,(float(y)+.5)/8.0);z+=sampleCost(uv,f);}}return z/96.0;}\n" +
+            "float unp(vec2 p){float r=floor(p.x*255.0+.5)*256.0+floor(p.y*255.0+.5);return r>=32768.0?r-65536.0:r;}\n" +
+            "vec2 dec(vec4 f){return vec2(unp(f.rg),unp(f.ba))/256.0;}\n" +
+            "vec2 cost16(float v){float q=floor(clamp(v/.5,0.0,1.0)*65535.0+.5);return vec2(floor(q/256.0),mod(q,256.0))/255.0;}\n" +
+            "void main(){vec2 cell=floor(vTexCoord*uGridSize),offset=cell-floor(uGridSize*.5);vec2 center=mix(vec2(0.0),dec(texture2D(uCenterSeed,vec2(.5))),uUseCenter);vec2 f=clamp(center+offset*uStep,-uFlowLimit,uFlowLimit);gl_FragColor=vec4(cost16(totalCost(f)),0.0,0.0);}\n";
+
+    // Hard-cut signal (2026-09-03, gc-b90m title flash): with no physical
+    // intermediate across a cut, weak/photometric matches between a black
+    // frame and a logo frame still warped pieces of the logo into the
+    // synthetic.  This 1x1 pass measures, at the zero shift and at the
+    // global seed, the fraction of the same 12x8 sample grid whose luminance
+    // differs by more than 0.12; the smaller fraction is the cut evidence the
+    // presentation reads (see uDenseCutTex in the interpolate shader).
+    private static final String DENSE_GLOBAL_CUT_SHADER =
+            "precision highp float; uniform sampler2D uReference,uTarget,uCenterSeed; uniform vec2 uSourceSize; varying vec2 vTexCoord;\n" +
+            "float lum(vec3 c){return dot(c,vec3(.299,.587,.114));}\n" +
+            "float unp(vec2 p){float r=floor(p.x*255.0+.5)*256.0+floor(p.y*255.0+.5);return r>=32768.0?r-65536.0:r;}\n" +
+            "vec2 dec(vec4 f){return vec2(unp(f.rg),unp(f.ba))/256.0;}\n" +
+            "float mismatch(vec2 f){float n=0.0;for(int y=0;y<8;y++){for(int x=0;x<12;x++){vec2 uv=vec2((float(x)+.5)/12.0,(float(y)+.5)/8.0);vec2 q=uv+f/uSourceSize;if(any(lessThan(q,vec2(0.0)))||any(greaterThan(q,vec2(1.0)))){continue;}n+=step(.12,abs(lum(texture2D(uTarget,uv).rgb)-lum(texture2D(uReference,q).rgb)));}}return n/96.0;}\n" +
+            "void main(){vec2 seed=dec(texture2D(uCenterSeed,vec2(.5)));float m=min(mismatch(vec2(0.0)),mismatch(seed));gl_FragColor=vec4(m,0.0,0.0,1.0);}\n";
+
+    private static final String DENSE_GLOBAL_REDUCE_SHADER =
+            "precision highp float;uniform sampler2D uCosts,uZeroCosts,uCenterSeed;\n" +
+            "uniform vec2 uGridSize,uStep,uFlowLimit;uniform float uUseCenter;varying vec2 vTexCoord;\n" +
+            "float unp(vec2 p){float r=floor(p.x*255.0+.5)*256.0+floor(p.y*255.0+.5);return r>=32768.0?r-65536.0:r;}\n" +
+            "vec2 dec(vec4 f){return vec2(unp(f.rg),unp(f.ba))/256.0;}\n" +
+            "float costOf(vec2 uv){vec2 v=floor(texture2D(uCosts,uv).rg*255.0+.5);return (v.x*256.0+v.y)/65535.0*.5;}\n" +
+            "vec2 p16(float v){float r=mod(floor(v*256.0+.5)+65536.0,65536.0);return vec2(floor(r/256.0),mod(r,256.0))/255.0;}\n" +
+            "vec4 enc(vec2 v){return vec4(p16(v.x),p16(v.y));}\n" +
+            "void main(){vec2 center=mix(vec2(0.0),dec(texture2D(uCenterSeed,vec2(.5))),uUseCenter);vec2 middle=(floor(uGridSize*.5)+.5)/uGridSize;float bc=costOf(middle),zeroCost=costOf((vec2(4.0)+.5)/vec2(9.0));vec2 best=center;\n" +
+            "for(int y=0;y<9;y++){for(int x=0;x<9;x++){if(float(x)<uGridSize.x&&float(y)<uGridSize.y){vec2 uv=(vec2(float(x),float(y))+.5)/uGridSize;float z=costOf(uv);if(z<bc){bc=z;best=clamp(center+(vec2(float(x),float(y))-floor(uGridSize*.5))*uStep,-uFlowLimit,uFlowLimit);}}}}\n" +
+            "vec2 zv=floor(texture2D(uZeroCosts,(vec2(4.0)+.5)/vec2(9.0)).rg*255.0+.5);zeroCost=(zv.x*256.0+zv.y)/65535.0*.5;float gain=(zeroCost-bc)/max(zeroCost,.0001);if(gain<.008||length(best)<.25)best=vec2(0.0);gl_FragColor=enc(best);}\n";
+
     private static final String DENSE_SOLVE_SHADER =
             "precision highp float;\n" +
-            "uniform sampler2D uReference,uTarget,uPriorFlow,uGuideFlow; uniform float uHasPrior,uUseReciprocalGuide,uGuideLimit,uUseWidePatch,uFinalConsensus,uBypassSearch;\n" +
-            "uniform vec2 uAnalysisTexel,uPriorTexel,uGuideTexel,uSourceSize,uUpdateStep; varying vec2 vTexCoord;\n" +
+            "uniform sampler2D uReference,uTarget,uPriorFlow,uTemporalFlow,uReciprocalFlow,uGlobalSeed; uniform float uHasPrior,uUseTemporalGuide,uUseReciprocalGuide,uUseGlobalSeed,uUseNeighborProposal,uReciprocalMargin,uNeighborMargin,uCycleObjectiveWeight,uTemporalLimit,uUseWidePatch,uFinalConsensus,uBypassSearch;\n" +
+            "uniform vec2 uAnalysisTexel,uPriorTexel,uReciprocalTexel,uSourceSize,uUpdateStep; uniform float uExhaustiveRadius; varying vec2 vTexCoord;\n" +
             "float lum(vec3 c){return dot(c,vec3(.299,.587,.114));}\n" +
             "vec2 chroma(vec3 c){return vec2(.5*(c.r-c.b),.5*c.g-.25*(c.r+c.b));}\n" +
             "float unp(vec2 p){float r=floor(p.x*255.0+.5)*256.0+floor(p.y*255.0+.5);return r>=32768.0?r-65536.0:r;}\n" +
@@ -368,11 +555,16 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             "vec2 v00=dec(texture2D(uPriorFlow,clamp(a,0.0,1.0))),v10=dec(texture2D(uPriorFlow,clamp(a+x,0.0,1.0)));\n" +
             "vec2 v01=dec(texture2D(uPriorFlow,clamp(a+y,0.0,1.0))),v11=dec(texture2D(uPriorFlow,clamp(a+x+y,0.0,1.0)));\n" +
             "return mix(mix(v00,v10,f.x),mix(v01,v11,f.x),f.y);}\n" +
-            "vec2 decGuideLinear(vec2 uv){vec2 p=uv/uGuideTexel-.5;vec2 b=floor(p);vec2 f=fract(p);\n" +
-            "vec2 a=(b+.5)*uGuideTexel;vec2 x=vec2(uGuideTexel.x,0.0),y=vec2(0.0,uGuideTexel.y);\n" +
-            "vec2 v00=dec(texture2D(uGuideFlow,clamp(a,0.0,1.0))),v10=dec(texture2D(uGuideFlow,clamp(a+x,0.0,1.0)));\n" +
-            "vec2 v01=dec(texture2D(uGuideFlow,clamp(a+y,0.0,1.0))),v11=dec(texture2D(uGuideFlow,clamp(a+x+y,0.0,1.0)));\n" +
+            "vec2 decReciprocalLinear(vec2 uv){vec2 p=uv/uReciprocalTexel-.5;vec2 b=floor(p);vec2 f=fract(p);\n" +
+            "vec2 a=(b+.5)*uReciprocalTexel;vec2 x=vec2(uReciprocalTexel.x,0.0),y=vec2(0.0,uReciprocalTexel.y);\n" +
+            "vec2 v00=dec(texture2D(uReciprocalFlow,clamp(a,0.0,1.0))),v10=dec(texture2D(uReciprocalFlow,clamp(a+x,0.0,1.0)));\n" +
+            "vec2 v01=dec(texture2D(uReciprocalFlow,clamp(a+y,0.0,1.0))),v11=dec(texture2D(uReciprocalFlow,clamp(a+x+y,0.0,1.0)));\n" +
             "return mix(mix(v00,v10,f.x),mix(v01,v11,f.x),f.y);}\n" +
+            // A validated temporal field is ordinary signed RGBA8 flow, not
+            // the Q8.8 raw-solver packing above.  It is allocated LINEAR, so
+            // decode after the hardware interpolation.  Its B channel is the
+            // previous pair's independently validated confidence.
+            "vec2 decTemporal(vec4 f){vec2 c=(f.rg*255.0-128.0)/127.0;return sign(c)*c*c*uTemporalLimit;}\n" +
             "vec2 p16(float v){float r=mod(floor(v*256.0+.5)+65536.0,65536.0);return vec2(floor(r/256.0),mod(r,256.0))/255.0;}\n" +
             "vec4 enc(vec2 v){return vec4(p16(v.x),p16(v.y));}\n" +
             "float med4(float a,float b,float c,float d){float lo=min(min(a,b),min(c,d)),hi=max(max(a,b),max(c,d));return .5*(a+b+c+d-lo-hi);}\n" +
@@ -399,22 +591,41 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             "float cs=abs(step(t,txp)-step(r,rxp))+abs(step(t,txm)-step(r,rxm))+abs(step(t,typ)-step(r,ryp))+abs(step(t,tym)-step(r,rym));\n" +
             "cs+=abs(step(t,td1)-step(r,rd1))+abs(step(t,td2)-step(r,rd2))+abs(step(t,td3)-step(r,rd3))+abs(step(t,td4)-step(r,rd4));\n" +
             "z+=.22*(rb(td1-rd1)+rb(td2-rd2)+rb(td3-rd3)+rb(td4-rd4))+.025*cs;}return z;}\n" +
-            "void main(){vec2 c=mix(vec2(0.0),decLinear(vTexCoord),uHasPrior);if(uBypassSearch>.5&&uUseReciprocalGuide<.5){gl_FragColor=enc(c);return;}vec2 b=c;float bc=cost(c);\n" +
-            // Inverting a spatially varying field requires solving
-            // q=p-f(q), not merely negating f at p. Three bounded fixed-point
-            // steps materially improve the reciprocal proposal on camera
-            // parallax while the reversed image cost remains authoritative.
-            "if(uUseReciprocalGuide>.5){vec2 first=decGuideLinear(vTexCoord);vec2 q1=clamp(vTexCoord-first/uSourceSize,0.0,1.0);vec2 second=decGuideLinear(q1);\n" +
-            "vec2 q2=clamp(vTexCoord-second/uSourceSize,0.0,1.0);vec2 third=decGuideLinear(q2);\n" +
-            "vec2 q3=clamp(vTexCoord-third/uSourceSize,0.0,1.0);vec2 g=-decGuideLinear(q3);\n" +
-            "g=clamp(g,vec2(-uGuideLimit),vec2(uGuideLimit));float gc=cost(g);if(gc<bc){bc=gc;c=g;b=g;}}\n" +
-            // The expansion pass normally just preserves the upsampled local
-            // result. For reverse flow it may instead preserve the reciprocal
-            // proposal when that proposal independently wins the reverse
-            // image cost. The three subsequent 1px searches still own local
-            // convergence; this adds no pass and no forced inverse field.
-            "if(uBypassSearch>.5){gl_FragColor=enc(c);return;}\n" +
-            "for(int y=-1;y<=1;y++){for(int x=-1;x<=1;x++){if(x!=0||y!=0){vec2 f=c+vec2(float(x),float(y))*uUpdateStep;float z=cost(f);if(z<bc){bc=z;b=f;}}}}\n" +
+            // Only the existing full-resolution reciprocal-refinement draws
+            // enable this term. It resolves photometrically ambiguous local
+            // candidates with a small symmetric consistency cost; it cannot
+            // overcome a clearly better directional image match, and the
+            // unchanged cycle/photo/spatial gates remain authoritative.
+            "float objective(vec2 f){float z=cost(f);if(uCycleObjectiveWeight>.0){vec2 q=vTexCoord+f/uSourceSize;if(all(greaterThanEqual(q,vec2(0.0)))&&all(lessThanEqual(q,vec2(1.0))))z+=uCycleObjectiveWeight*min(length(f+decReciprocalLinear(q)),4.0);else z+=4.0*uCycleObjectiveWeight;}return z;}\n" +
+            "float reg(vec2 f,vec2 m){return .0025*min(length(f-m),12.0);}\n" +
+            // A copy-only expansion is safe only when no proposal is requested.
+            // The first fine reverse pass supplies reciprocal guidance; the
+            // former temporal-only check silently discarded that evidence.
+            "void main(){vec2 c=mix(vec2(0.0),decLinear(vTexCoord),uHasPrior);if(uBypassSearch>.5&&uUseTemporalGuide<.5&&uUseReciprocalGuide<.5&&uUseGlobalSeed<.5&&uUseNeighborProposal<.5){gl_FragColor=enc(c);return;}vec2 b=c;float bc=objective(c);\n" +
+            // A direction-specific global seed is only a search-basin hint.
+            // The current cell's unchanged full objective must improve by a
+            // strict margin before the proposal replaces zero/prior.
+            "if(uUseGlobalSeed>.5){vec2 g=clamp(dec(texture2D(uGlobalSeed,vec2(.5))),vec2(-uTemporalLimit),vec2(uTemporalLimit));float gc=objective(g);if(length(g)>.25&&gc+.002<bc){bc=gc;c=g;b=g;}}\n" +
+            // Successive emulator frames form one continuous video stream.
+            // Compare the previous pair's independently validated flow under
+            // the CURRENT pair's image cost before using it as a basin hint.
+            // A temporal hint must beat the current pair's zero/prior basin
+            // by a real margin.  Accepting a tie lets yesterday's camera
+            // motion survive into a stopped craft or scene cut, which the
+            // physical F-Zero r22 capture exposed as a doubled car and track.
+            // This proposal never bypasses the current pair's local search
+            // or later F/B checks.
+            "if(uUseTemporalGuide>.5){vec4 tf=texture2D(uTemporalFlow,vTexCoord);vec2 t=clamp(decTemporal(tf),vec2(-uTemporalLimit),vec2(uTemporalLimit));float tc=objective(t);if(tf.b>=48.0/255.0&&tc+.002<bc){bc=tc;c=t;b=t;}}\n" +
+            // The first reverse solve at each pyramid level receives the
+            // finalized forward field at that same level only as an
+            // inverse-basin proposal. Approximate the inverse with two
+            // fixed-point corrections, then make the reversed image pair
+            // beat its own prior/temporal seed by a strict margin. Every subsequent
+            // local search remains directional, and unchanged cycle,
+            // photometric, texture, and spatial gates remain authoritative.
+            "if(uUseReciprocalGuide>.5){vec2 f=decReciprocalLinear(vTexCoord);vec2 q=vTexCoord-f/uSourceSize;\n" +
+            "if(all(greaterThanEqual(q,vec2(0.0)))&&all(lessThanEqual(q,vec2(1.0)))){q=vTexCoord-decReciprocalLinear(q)/uSourceSize;\n" +
+            "if(all(greaterThanEqual(q,vec2(0.0)))&&all(lessThanEqual(q,vec2(1.0)))){vec2 g=clamp(-decReciprocalLinear(q),vec2(-uTemporalLimit),vec2(uTemporalLimit));float gc=objective(g);if(gc+uReciprocalMargin<bc){bc=gc;c=g;b=g;}}}}\n" +
             "vec2 l=decLinear(clamp(vTexCoord-vec2(uAnalysisTexel.x,0.0),0.0,1.0));\n" +
             "vec2 r=decLinear(clamp(vTexCoord+vec2(uAnalysisTexel.x,0.0),0.0,1.0));\n" +
             "vec2 d=decLinear(clamp(vTexCoord-vec2(0.0,uAnalysisTexel.y),0.0,1.0));\n" +
@@ -424,14 +635,53 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             "e+=exp(-18.0*abs(lc-lum(texture2D(uTarget,clamp(vTexCoord+vec2(uAnalysisTexel.x,0.0),0.0,1.0)).rgb)));\n" +
             "e+=exp(-18.0*abs(lc-lum(texture2D(uTarget,clamp(vTexCoord-vec2(0.0,uAnalysisTexel.y),0.0,1.0)).rgb)));\n" +
             "e+=exp(-18.0*abs(lc-lum(texture2D(uTarget,clamp(vTexCoord+vec2(0.0,uAnalysisTexel.y),0.0,1.0)).rgb)));\n" +
-            "float edge=clamp(e*.25,0.0,1.0),w=.18*edge;vec2 smooth=(l+r+d+u)*.25;\n" +
+            "float edge=clamp(e*.25,0.0,1.0);vec2 m=vec2(med4(l.x,r.x,d.x,u.x),med4(l.y,r.y,d.y,u.y));\n" +
+            "float support=step(distance(l,m),2.5)+step(distance(r,m),2.5)+step(distance(d,m),2.5)+step(distance(u,m),2.5);\n" +
+            // Sparse changed-pixel ownership in physical F-Zero evidence is a
+            // search-basin problem, not authority to fill or relax validity.
+            // During the two existing full-resolution reciprocal refinements,
+            // test one robust neighbouring basin. Three agreeing neighbours
+            // and target-appearance continuity prevent crossing a hard edge;
+            // the proposal still has to improve this pixel's current joint
+            // image/cycle objective by a strict margin. All later independent
+            // cycle, photo, texture, and spatial rejection remains unchanged.
+            "if(uUseNeighborProposal>.5&&support>=3.0&&edge>=.55){float mc=objective(m);if(mc+uNeighborMargin<bc){bc=mc;c=m;b=m;}}\n" +
+            // The first full-resolution pass is expansion-only. Both
+            // directions then execute the same three local searches from
+            // their own image pyramids. Reciprocal proposals are current-cost
+            // tested above; cycle agreement remains a later rejection signal
+            // rather than an asserted inverse constraint.
+            "if(uBypassSearch>.5){gl_FragColor=enc(c);return;}\n" +
+            // Aperture tie-break (2026-09-04, snes-q1 dumps): a horizontal
+            // yard line matches itself under any horizontal shift, so the
+            // scan-ordered exhaustive search and the greedy walk chose the
+            // first of many equal-cost candidates (the most negative x),
+            // shredding the field into differently displaced segments.  Add
+            // a small penalty on the distance from the neighbourhood median
+            // (zero at the coarsest level, FSR 3 keeps the centre candidate
+            // on ties the same way).  0.0025/px capped at 12 px is far
+            // below a real textured match's photometric gain, so it only
+            // decides otherwise indistinguishable candidates.
+            "bc+=reg(c,m);\n" +
+            // Exhaustive coarse search (2026-09-03, FSR 3 style): at the
+            // coarsest level's first iteration evaluate every candidate of a
+            // 9x9 grid at the coarse step (+-4 steps, +-48 px at 1080p) before
+            // the greedy walk, so a 60-px texel cannot stall on a plateau of
+            // the aliased cost (sim_solve.py showed non-monotone cost along
+            // the ray to the true displacement).  81 objective evaluations
+            // on 576 texels per direction.
+            "if(uExhaustiveRadius>.5){for(int y=-4;y<=4;y++){for(int x=-4;x<=4;x++){if(abs(float(x))>uExhaustiveRadius||abs(float(y))>uExhaustiveRadius)continue;vec2 f=c+vec2(float(x),float(y))*uUpdateStep;float z=objective(f)+reg(f,m);if(z<bc){bc=z;b=f;}}}c=b;}\n" +
+            "for(int y=-1;y<=1;y++){for(int x=-1;x<=1;x++){if(x!=0||y!=0){vec2 f=c+vec2(float(x),float(y))*uUpdateStep;float z=objective(f)+reg(f,m);if(z<bc){bc=z;b=f;}}}}\n" +
+            "float w=.18*edge;vec2 smooth=(l+r+d+u)*.25;\n" +
             // On the final 128x72 iteration, replace an isolated vector
             // with the robust median of three or more mutually agreeing
             // neighbours. Each direction remains independent and the
             // unchanged cycle/photometric gates stay authoritative.
-            "if(uFinalConsensus>.5){vec2 m=vec2(med4(l.x,r.x,d.x,u.x),med4(l.y,r.y,d.y,u.y));\n" +
-            "float s=step(distance(l,m),2.5)+step(distance(r,m),2.5)+step(distance(d,m),2.5)+step(distance(u,m),2.5);\n" +
-            "float g=step(2.5,s)*edge;smooth=m;w=max(w,.65*g);}b=mix(b,smooth,w);gl_FragColor=enc(b);}\n";
+            // Smoothing is only a proposal, not permission to corrupt a better
+            // image match. Thor regression: exact4px became3.445/2.004px with
+            // neighboring wrong basins. Test the packed candidate's objective;
+            // preserve the selected motion on ties and failed comparisons.
+            "if(uFinalConsensus>.5){float g=step(2.5,support)*edge;smooth=m;w=max(w,.65*g);}vec2 proposed=floor(mix(b,smooth,w)*256.0+.5)/256.0;if(objective(proposed)+.000001<objective(b))b=proposed;gl_FragColor=enc(b);}\n";
 
     private static final String DENSE_CYCLE_SHADER =
             "precision highp float; uniform sampler2D uFlow,uReverseFlow,uReference,uTarget;\n" +
@@ -452,6 +702,10 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             // uValidityBase carries the calibrated base per mode (2.0 or
             // 4.0). The 0.75 inner edge, 4% magnitude slope, and every
             // downstream validity/photometric gate are unchanged.
+            // 2026-09-03: a .10 magnitude slope here and in the spatial gate
+            // (build 91) was tried against a "dashing sprite holds" reading
+            // that turned out to be a tracker artefact; it produced no
+            // measurable change and was reverted to the calibrated values.
             "float cg=1.0-smoothstep(.75,uValidityBase+.04*length(f),ce);\n" +
             "float pe=abs(lum(texture2D(uTarget,vTexCoord).rgb)-lum(texture2D(uReference,clamp(q,0.0,1.0)).rgb));\n" +
             // Flat pillar/letterbox regions have no identifiable motion and
@@ -471,11 +725,19 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             "vec2 fl=dec(texture2D(uFlow,clamp(vTexCoord-dx,0.0,1.0))),fr=dec(texture2D(uFlow,clamp(vTexCoord+dx,0.0,1.0)));\n" +
             "vec2 fd=dec(texture2D(uFlow,clamp(vTexCoord-dy,0.0,1.0))),fu=dec(texture2D(uFlow,clamp(vTexCoord+dy,0.0,1.0)));\n" +
             "vec2 fm=vec2(med4(fl.x,fr.x,fd.x,fu.x),med4(fl.y,fr.y,fd.y,fu.y));\n" +
-            "float ns=step(distance(fl,fm),2.0)+step(distance(fr,fm),2.0)+step(distance(fd,fm),2.0)+step(distance(fu,fm),2.0);\n" +
-            "float coherentFlat=step(2.5,ns)*step(distance(f,fm),1.5)*(1.0-smoothstep(.018,.045,textureEnergy));\n" +
+            "float st=2.0+.04*length(fm);float ns=step(distance(fl,fm),st)+step(distance(fr,fm),st)+step(distance(fd,fm),st)+step(distance(fu,fm),st);\n" +
+            "float coherentFlat=step(2.5,ns)*step(distance(f,fm),1.5+.03*length(fm))*(1.0-smoothstep(.018,.045,textureEnergy));\n" +
             "float activeGate=step(uActiveRect.x+uAnalysisTexel.x,vTexCoord.x)*step(vTexCoord.x,uActiveRect.z-uAnalysisTexel.x)*step(uActiveRect.y+uAnalysisTexel.y,vTexCoord.y)*step(vTexCoord.y,uActiveRect.w-uAnalysisTexel.y);\n" +
+            // A reciprocal, photometrically plausible match is still unsafe
+            // in repetitive N64 textures when its local field folds or
+            // ripples. Require three neighbours to agree around their robust
+            // median and require the center to belong to that same basin.
+            // This is evaluated independently in each direction and only
+            // removes confidence; it never manufactures or fills motion.
+            "float spatialSupport=step(2.5,ns);float spatialAgreement=1.0-smoothstep(1.0+.03*length(fm),2.5+.06*length(fm),distance(f,fm));\n" +
+            "float spatialGate=spatialSupport*spatialAgreement;\n" +
             "float photoGate=1.0-smoothstep(.10,.22,pe),textureGate=max(smoothstep(.008,.030,textureEnergy),coherentFlat);\n" +
-            "float conf=activeGate*inb*cg*photoGate*textureGate;\n" +
+            "float conf=activeGate*inb*cg*photoGate*textureGate*spatialGate;\n" +
             // Alpha is not consumed by synthesis. Schema35 transports it in
             // a separate nearest-sampled tile without changing linear RG flow
             // or B confidence: active, in-bounds, cycle, photometric,
@@ -487,8 +749,72 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             // every returned B>=48 cell is a subset of each prerequisite bit;
             // the bits are necessary coverage, not duplicate validity flags.
             "float prerequisiteThreshold=47.0/255.0;float mask=activeGate+2.0*inb+4.0*step(prerequisiteThreshold,cg)+8.0*step(prerequisiteThreshold,photoGate)+16.0*step(prerequisiteThreshold,textureGate)+32.0*saturated+64.0*(1.0-inb);\n" +
-            "vec2 outv=clamp((f/uSourceSize)/max(uFlowRange,vec2(.00001))*127.0/255.0+128.0/255.0,0.0,1.0);\n" +
+            // Hardware LINEAR filtering interpolates RG independently of B.
+            // A rejected cell must therefore carry exact zero motion; leaving
+            // its arbitrary raw vector in RG lets it contaminate an adjacent
+            // accepted sample despite zero confidence.
+            "vec2 outn=(f/uSourceSize)/max(uFlowRange,vec2(.00001));vec2 outv=clamp(sign(outn)*sqrt(abs(outn))*127.0/255.0+128.0/255.0,0.0,1.0);\n" +
+            // Weak tier (2026-09-02, wiiu-b69 dumps): a match that is active,
+            // in bounds, textured and photometrically plausible but failed the
+            // reciprocal or spatial check is kept at 40/255 -- below the
+            // 48/255 validation threshold the proof counts, so it is never
+            // claimed as validated, but the presentation may warp with it
+            // one-sided (see the weak floor in the interpolate shader)
+            // instead of holding an exact endpoint.  75 percent of a 75-px
+            // moment's moving cells were photometrically plausible matches
+            // whose reverse solve sat in another basin.
+            "float weak=activeGate*inb*step(prerequisiteThreshold,photoGate)*step(prerequisiteThreshold,textureGate)*(1.0-step(48.0/255.0,conf));\n" +
+            "conf=max(conf,weak*40.0/255.0);\n" +
+            "outv=mix(vec2(128.0/255.0),outv,step(40.0/255.0,conf));\n" +
             "gl_FragColor=vec4(outv,conf,mask/255.0);}\n";
+
+    // Neighbour fill (2026-09-02, wiiu-b67 dumps): a rejected cell whose
+    // validated neighbours agree is given their mean vector at the minimum
+    // supported confidence, so an isolated cycle/spatial rejection inside a
+    // coherent moving region is warped with its surroundings instead of
+    // degrading the presentation to an exact endpoint copy.  It requires at
+    // least four agreeing validated neighbours (a tolerance that scales with
+    // the vector), so it cannot spread motion across an edge into a region
+    // that has no validated support of its own; a rejected cell whose
+    // neighbours are all rejected stays rejected.  Filled cells carry the
+    // prerequisite bits their neighbours already proved.
+    private static final String DENSE_FILL_SHADER =
+            // uRelaxed=1 (passes 3-4): a cell that failed ONLY the texture gate
+            // (active, in bounds, photometrically plausible, but a flat 15x15
+            // patch: water, sky, gradients) takes the mean of at least three
+            // usable neighbours (validated or weak) at the weak confidence, so
+            // motion diffuses into low-contrast regions instead of leaving
+            // them as endpoint copies next to moving texture (b75 dumps:
+            // 44 percent of moving cells failed the texture gate).
+            "precision highp float; uniform sampler2D uField; uniform vec2 uTexel; uniform float uRelaxed; varying vec2 vTexCoord;\n" +
+            "vec2 dec(vec4 f){vec2 c=(f.rg*255.0-128.0)/127.0;return sign(c)*c*c;}\n" +
+            "vec2 encn(vec2 n){return clamp(sign(n)*sqrt(abs(n))*127.0/255.0+128.0/255.0,0.0,1.0);}\n" +
+            // uRelaxed=2 (passes 5-6): occlusion inpainting.  A rejected cell
+            // with no support in either direction (the leading edge of a fast
+            // sprite, where the busiest pixels of every proof window sit) takes
+            // the dominant motion of its 7x7 neighbourhood when at least eight
+            // usable cells agree with their median, at the weak confidence.
+            // This is the standard motion inpainting every interpolator does
+            // for disocclusions; it can produce a boundary artefact, never a
+            // duplicated frame.
+            "void main(){vec4 c=texture2D(uField,vTexCoord);float relaxed=min(uRelaxed,1.0);float wide=step(1.5,uRelaxed);float thr=mix(48.0/255.0,40.0/255.0,relaxed);if(c.b>=thr){gl_FragColor=c;return;}\n" +
+            "float bits=floor(c.a*255.0+.5);float flatOnly=step(.5,relaxed)*step(.5,mod(bits,2.0))*step(.5,mod(floor(bits/2.0),2.0))*step(.5,mod(floor(bits/8.0),2.0))*(1.0-step(.5,mod(floor(bits/16.0),2.0)));\n" +
+            "if(wide>.5){vec2 wsum=vec2(0.0);float wn=0.0;vec2 wv[48];float wok[48];int wk=0;\n" +
+            " for(int y=-3;y<=3;y++){for(int x=-3;x<=3;x++){if(x==0&&y==0)continue;vec2 uv=vTexCoord+vec2(float(x),float(y))*uTexel;vec4 q=texture2D(uField,clamp(uv,0.0,1.0));\n" +
+            "  float v=step(thr,q.b)*step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0);vec2 d=dec(q);wv[wk]=d;wok[wk]=v;wsum+=d*v;wn+=v;wk++;}}\n" +
+            " if(wn<8.0){gl_FragColor=c;return;}vec2 wmean=wsum/wn;float wtol=(2.5+.05*length(wmean)*127.0)/127.0;float wagree=0.0;vec2 asum=vec2(0.0);\n" +
+            " for(int i=0;i<48;i++){float a=wok[i]*step(distance(wv[i],wmean),wtol);wagree+=a;asum+=wv[i]*a;}\n" +
+            " if(wagree<8.0){gl_FragColor=c;return;}vec2 dom=asum/wagree;gl_FragColor=vec4(encn(dom),40.0/255.0,c.a);return;}\n" +
+            "if(uRelaxed>.5&&flatOnly<.5){gl_FragColor=c;return;}\n" +
+            "vec2 sum=vec2(0.0);float n=0.0;vec2 vs[8];float ok[8];int k=0;\n" +
+            "for(int y=-1;y<=1;y++){for(int x=-1;x<=1;x++){if(x==0&&y==0)continue;vec2 uv=vTexCoord+vec2(float(x),float(y))*uTexel;\n" +
+            " vec4 q=texture2D(uField,clamp(uv,0.0,1.0));float v=step(thr,q.b)*step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0);\n" +
+            " vec2 d=dec(q);vs[k]=d;ok[k]=v;sum+=d*v;n+=v;k++;}}\n" +
+            "float need=mix(4.0,3.0,uRelaxed);if(n<need){gl_FragColor=c;return;}vec2 mean=sum/n;float tol=(2.0+.04*length(mean)*127.0)/127.0;float agree=0.0;\n" +
+            "for(int i=0;i<8;i++){agree+=ok[i]*step(distance(vs[i],mean),tol);}\n" +
+            "if(agree<need){gl_FragColor=c;return;}\n" +
+            "float outConf=mix(48.0/255.0,40.0/255.0,uRelaxed);float outMask=mix(31.0,bits,uRelaxed);\n" +
+            "gl_FragColor=vec4(encn(mean),outConf,outMask/255.0);}\n";
 
     private static final String DENSE_Q8_PROBE_SHADER =
             "precision highp float; varying vec2 vTexCoord;\n" +
@@ -826,10 +1152,15 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             "uniform sampler2D uGlobalBackwardMotion;\n" +
             "uniform sampler2D uGlobalForwardMotion;\n" +
             "uniform vec2 uFlowRange;\n" +
+            "uniform sampler2D uDenseSeedBackwardTex,uDenseSeedForwardTex;\n" +
+            "uniform vec2 uDenseSeedSourceSize;uniform float uDenseSeedEnabled;\n" +
+            "uniform sampler2D uDenseCutTex;uniform float uDenseCutEnabled;\n" +
+            "float seedUnp(vec2 p){float r=floor(p.x*255.0+.5)*256.0+floor(p.y*255.0+.5);return r>=32768.0?r-65536.0:r;}\n" +
+            "vec2 seedDec(vec4 f){return vec2(seedUnp(f.rg),seedUnp(f.ba))/256.0;}\n" +
             "uniform float uPhase;\n" +
             "uniform float uDenseEncoding;\n" +
             "varying vec2 vTexCoord;\n" +
-            "vec2 decodeFlow(vec4 field){vec2 legacy=field.rg*2.0-1.0;vec2 dense=(field.rg*255.0-128.0)/127.0;return mix(legacy,dense,uDenseEncoding)*uFlowRange;}\n" +
+            "vec2 decodeFlow(vec4 field){vec2 legacy=field.rg*2.0-1.0;vec2 dc=(field.rg*255.0-128.0)/127.0;vec2 dense=sign(dc)*dc*dc;return mix(legacy,dense,uDenseEncoding)*uFlowRange;}\n" +
             "void main(){\n" +
             // Backward maps current -> previous; forward maps previous ->
             // current. A single backward field cannot identify disocclusion
@@ -858,6 +1189,11 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             // Use regional camera flow only where local source-backed flow is
             // weak. Each direction follows its displacement into the other
             // independently measured field; disagreement has zero influence.
+            // Dense mode never runs the legacy regional/global pass and the
+            // global textures hold the clear colour there, so the four taps
+            // and their arithmetic are skipped on that path (wave-uniform
+            // branch; the samplers stay bound for the non-dense path).
+            " if(uDenseEncoding<0.5){\n" +
             " vec4 globalBackwardField=texture2D(uGlobalBackwardMotion,vTexCoord);\n" +
             " vec4 globalForwardField=texture2D(uGlobalForwardMotion,vTexCoord);\n" +
             " vec2 globalBackward=decodeFlow(globalBackwardField);\n" +
@@ -874,6 +1210,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             " backward=mix(backward,globalBackward,currentGlobalUse);\n" +
             " previousReliability=max(previousReliability,previousGlobalReliability*previousGlobalUse);\n" +
             " currentReliability=max(currentReliability,currentGlobalReliability*currentGlobalUse);\n" +
+            " }\n" +
             // The vector itself is no longer shortened merely because the
             // photometric match is imperfect (motion blur makes that common).
             // Cycle consistency gates the full measured displacement instead.
@@ -881,6 +1218,52 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             // not shorten a source-pixel displacement after that decision.
             // Partial vectors systematically under-warped moderate-confidence
             // motion and then failed the independent full-resolution check.
+            // Dense mode never runs the legacy regional/global pass, so the
+            // global fallback above is empty there and every unsupported cell
+            // used to degrade to the exact nearest endpoint: the two synthetic
+            // slots of a 40->120 pan were copies of A and B (wiiu-b61 frame
+            // proof, 2026-09-02).  Fall back to the dense global seed (camera
+            // motion) instead, so an unmatched cell is still warped along the
+            // dominant motion rather than duplicated.  It is admitted at the
+            // lowest supported reliability so a validated local vector always
+            // wins and ownership stays with the phase.
+            // Weak-tier floor: a cell the validation kept at 40/255 (photometric
+            // one-sided match) is admitted at the lowest supported reliability
+            // so ownership picks that direction instead of an endpoint hold.
+            " float currentWeak=uDenseEncoding*step(39.5/255.0,backwardField.b)*(1.0-step(47.5/255.0,backwardField.b));\n" +
+            " float previousWeak=uDenseEncoding*step(39.5/255.0,forwardField.b)*(1.0-step(47.5/255.0,forwardField.b));\n" +
+            " currentReliability=max(currentReliability,0.04*currentWeak);\n" +
+            " previousReliability=max(previousReliability,0.04*previousWeak);\n" +
+            // Mirror (2026-09-02, wiiu-b70q frame proof): the first synthetic
+            // slot still sat on A while the second warped, because the
+            // reverse solve often lands in another basin and the forward
+            // field is weak or empty where the backward field is validated.
+            // A validated direction lends its negated vector to the other
+            // side, so both endpoint samples are warped along the same
+            // motion instead of one of them collapsing to an endpoint copy.
+            // Any usable direction (validated OR weak) lends its vector: the
+            // b75 recording still held one of the two synthetic slots in a
+            // strict every-other-window pattern because weak-only cells did
+            // not mirror and the empty side collapsed to an endpoint copy.
+            " float currentStrong=uDenseEncoding*step(39.5/255.0,backwardField.b);\n" +
+            " float previousStrong=uDenseEncoding*step(39.5/255.0,forwardField.b);\n" +
+            " vec2 backward0=backward;vec2 forward0=forward;\n" +
+            " float mirrorForward=currentStrong*(1.0-previousStrong);\n" +
+            " float mirrorBackward=previousStrong*(1.0-currentStrong);\n" +
+            " forward=mix(forward0,-backward0,mirrorForward);\n" +
+            " backward=mix(backward0,-forward0,mirrorBackward);\n" +
+            " previousReliability=max(previousReliability,mirrorForward*max(0.04,0.5*currentReliability));\n" +
+            " currentReliability=max(currentReliability,mirrorBackward*max(0.04,0.5*previousReliability));\n" +
+            " vec2 seedBackwardPx=seedDec(texture2D(uDenseSeedBackwardTex,vec2(0.5)));\n" +
+            " vec2 seedForwardPx=seedDec(texture2D(uDenseSeedForwardTex,vec2(0.5)));\n" +
+            " vec2 uDenseSeedBackward=seedBackwardPx/uDenseSeedSourceSize;vec2 uDenseSeedForward=seedForwardPx/uDenseSeedSourceSize;\n" +
+            " vec2 uDenseSeedActive=uDenseSeedEnabled*vec2(step(0.25,length(seedBackwardPx)),step(0.25,length(seedForwardPx)));\n" +
+            " float backwardFallback=(1.0-step(0.02,currentReliability))*uDenseSeedActive.x;\n" +
+            " float forwardFallback=(1.0-step(0.02,previousReliability))*uDenseSeedActive.y;\n" +
+            " backward=mix(backward,uDenseSeedBackward,backwardFallback);\n" +
+            " forward=mix(forward,uDenseSeedForward,forwardFallback);\n" +
+            " currentReliability=max(currentReliability,0.03*backwardFallback);\n" +
+            " previousReliability=max(previousReliability,0.03*forwardFallback);\n" +
             " float previousGate=step(0.02,previousReliability);\n" +
             " float currentGate=step(0.02,currentReliability);\n" +
             " vec2 previousUv=clamp(vTexCoord-forward*uPhase*previousGate," +
@@ -932,8 +1315,58 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     "abs(rawPrevious.g-rawCurrent.g))," +
                     "abs(rawPrevious.b-rawCurrent.b));\n" +
             " float staticHud=1.0-smoothstep(6.0/255.0,20.0/255.0,endpointDelta);\n" +
-            " gl_FragColor=vec4(mix(exactEndpoint,selectedPrediction," +
-                    "predictionAdmission*(1.0-staticHud)),1.0);\n" +
+            // A low-contrast region that the motion field says is moving is
+            // not a static HUD (the "Select a character" header slid by a
+            // few pixels at ~6/255 mean change and was held on both synthetic
+            // slots, wiiu-b74q); only a region with no supported motion may
+            // be held as chrome.
+            " float movingHere=anySupported*step(0.75,max(length(backward*uDenseSeedSourceSize),length(forward*uDenseSeedSourceSize)));\n" +
+            // A screen-space glyph over a panning background is static between
+            // the endpoints yet sits on moving flow; warping it replaced the
+            // glyph with background (the "A Start" prompt in wiiu-p102b was
+            // bent in every generated frame).  Keep the hold wherever the warp
+            // would swap a static pixel for clearly different content; a
+            // low-contrast element that really slid (b74q) still warps because
+            // its warped sample looks like the pixel it replaces.
+            " float replaceDelta=max(max(abs(rawPrevious.r-a.r),abs(rawPrevious.g-a.g)),abs(rawPrevious.b-a.b));\n" +
+            " replaceDelta=max(replaceDelta,max(max(abs(rawCurrent.r-b.r),abs(rawCurrent.g-b.g)),abs(rawCurrent.b-b.b)));\n" +
+            " float hudReplace=smoothstep(12.0/255.0,40.0/255.0,replaceDelta);\n" +
+            " staticHud*=max(1.0-movingHere,hudReplace);\n" +
+            // Equal unwarped pixels alone do not establish a static overlay:
+            // an object can cross an empty pixel between the two endpoints.
+            // Admit that crossing only when BOTH aligned samples agree and
+            // strong reciprocal flow also explains the unwarped endpoints.
+            // The latter check keeps a stationary glyph whose camera vector
+            // would instead land on background. Weak/filled flow cannot use
+            // this exception to defeat HUD protection.
+            " vec3 rawPreviousPeer=texture2D(uCurrent,clamp(vTexCoord+forward,vec2(0.0),vec2(1.0))).rgb;\n" +
+            " vec3 rawCurrentPeer=texture2D(uPrevious,clamp(vTexCoord+backward,vec2(0.0),vec2(1.0))).rgb;\n" +
+            " vec3 rawCycleError=max(abs(rawPrevious-rawPreviousPeer),abs(rawCurrent-rawCurrentPeer));\n" +
+            " float rawCorrespondenceError=max(max(rawCycleError.r,rawCycleError.g),rawCycleError.b);\n" +
+            " float confirmedCrossing=uDenseEncoding*movingHere*step(48.0/255.0,min(previousReliability,currentReliability))*(1.0-step(6.0/255.0,max(alignmentError,rawCorrespondenceError)));\n" +
+            " staticHud*=1.0-confirmedCrossing;\n" +
+            // Pop-in guard (2026-09-04, gbc-q1 blinking PRESS START, gb-q1):
+            // content that appears or disappears between the endpoints has
+            // no physical intermediate; when only weak/filled vectors
+            // (reliability at the 0.04 floor) support such a cell, the
+            // photometric one-sided match is a fragment of unrelated text
+            // and warping it produced garbage.  Hold the exact nearest
+            // endpoint there instead; validated (strong) vectors still warp.
+            " float popIn=smoothstep(0.30,0.45,endpointDelta);\n" +
+            " float weakOnly=anySupported*step(previousReliability,0.06)*step(currentReliability,0.06);\n" +
+            " predictionAdmission*=1.0-popIn*weakOnly;\n" +
+            " vec3 finalColor=mix(exactEndpoint,selectedPrediction," +
+                    "predictionAdmission*(1.0-staticHud));\n" +
+            // A hard cut has no intermediate: hold the exact left endpoint
+            // for the whole synthetic (the documented contract), never a
+            // warp of whatever photometric matches survived across the cut.
+            " float cutFraction=texture2D(uDenseCutTex,vec2(0.5)).r;\n" +
+            // 0.25, not 0.35: a logo-on-black flash changes only ~30 % of the
+            // sample grid (gc-p102b) and its second synthetic slot was a
+            // warped logo again; a real pan explained by the seed sits far
+            // below either threshold.
+            " float hardCut=uDenseCutEnabled*step(0.25,cutFraction);\n" +
+            " gl_FragColor=vec4(mix(finalColor,rawPrevious,hardCut),1.0);\n" +
             "}\n";
 
     // Independent qualification reference. This intentionally does not call
@@ -953,7 +1386,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             "uniform float uInvert;\n" +
             "uniform float uDenseEncoding;\n" +
             "varying vec2 vTexCoord;\n" +
-            "vec2 decodeFlow(vec4 field){vec2 legacy=field.rg*2.0-1.0;vec2 dense=(field.rg*255.0-128.0)/127.0;return mix(legacy,dense,uDenseEncoding)*uFlowRange*uInvert;}\n" +
+            "vec2 decodeFlow(vec4 field){vec2 legacy=field.rg*2.0-1.0;vec2 dc=(field.rg*255.0-128.0)/127.0;vec2 dense=sign(dc)*dc*dc;return mix(legacy,dense,uDenseEncoding)*uFlowRange*uInvert;}\n" +
             "void main(){\n" +
             " vec4 backwardField=texture2D(uBackwardMotion,vTexCoord);\n" +
             " vec4 forwardField=texture2D(uForwardMotion,vTexCoord);\n" +
@@ -1022,6 +1455,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private final DensePyramidSwitch densePyramidSwitch;
     private final DenseV27ReducedAnalysisSwitch denseV27ReducedAnalysisSwitch;
     private final DenseV28ReducedAnalysisSwitch denseV28ReducedAnalysisSwitch;
+    private final ExternalFrameGenerationTransport.Factory externalTransportFactory;
     private boolean qualificationProofEnabled;
     private boolean densePyramidEnabled;
     private boolean denseV27ReducedAnalysisRequested;
@@ -1032,8 +1466,20 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private final Handler handler;
     private final CountDownLatch started = new CountDownLatch(1);
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final SurfaceRetirement surfaceRetirement = new SurfaceRetirement();
     private final AdaptiveFrameRateController frameRate;
-    private volatile StatsListener statsListener;
+    private volatile FrameGenerationRenderer.StatsListener statsListener;
+    private volatile int reportedMeasuredTier;
+    private volatile boolean reportedStreamIrregular;
+    private volatile long reportedAdmissionAcceptedEndpoints;
+    private volatile double reportedPanelClockRatio = 1.0;
+    private volatile double qualifiedPhysicalPanelHz;
+    private volatile long qualifiedPhysicalPanelObservedNs;
+    private long qualifiedPhysicalPanelRefinedNs;
+    private final long[] builtinCompositorTiming = new long[3];
+    private int builtinCompositorTimingSamples;
+    private volatile double reportedEndpointDriftUsPerS;
+    private volatile long reportedEndpointOffsetNs;
     private final java.util.concurrent.atomic.AtomicReference<Runnable>
             firstSubmittedFrameListener = new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -1049,9 +1495,172 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private EGLDisplay eglDisplay = EGL14.EGL_NO_DISPLAY;
     private EGLContext eglContext = EGL14.EGL_NO_CONTEXT;
     private EGLSurface eglSurface = EGL14.EGL_NO_SURFACE;
+    private EGLSurface eglEndpointSurface = EGL14.EGL_NO_SURFACE;
+    private EGLConfig endpointEglConfig;
+    private ExternalFrameGenerationTransport externalTransport;
+    private FrameGenerationPreparationRequest externalRealPairPreparation;
+    /** True only after the shared authority selects a backend-certified path. */
+    private volatile boolean externalRatePathActive;
+    /**
+     * The qualified transport is paying its first live HardwareBuffer private
+     * execution while visible output remains endpoint-only Direct.
+     */
+    private boolean externalRatePathPriming;
+    /**
+     * The controller has published the generated-rate epoch, but no output is
+     * selectable until the first exact midpoint for that epoch is READY.
+     */
+    private boolean externalRatePathOutputPriming;
+    /** First resumed app-owned swap needs a complete predecessor scan. */
+    private boolean externalAppOwnedActivationFirstSwapPending;
+    private boolean externalPresentationFailed;
+    private final com.thorium.lucent.video.RuntimePresentationFailure runtimeFailure =
+            new com.thorium.lucent.video.RuntimePresentationFailure();
+    private boolean externalTimingRejected;
+    private long externalTimingRejectedAtNs;
+    private int externalTimingRearms;
+    /** A physical-slot miss quarantines generation for this long, then a fresh epoch may re-prime. */
+    private static final long EXTERNAL_TIMING_REARM_COOLDOWN_NS = 2_000_000_000L;
+    /** Bounded per session; a persistently late backend converges to Direct. */
+    private static final int EXTERNAL_TIMING_REARM_LIMIT = 20;
+
+    private void markExternalTimingRejected() {
+        externalTimingRejected = true;
+        externalTimingRejectedAtNs = System.nanoTime();
+    }
+
+    /**
+     * Bounded recovery for compositor-timeline external transports (LSFG):
+     * the permanent quarantine after one late slot turned a demonstration
+     * session Direct for good (lsfg10, 2026-09-03: one slot 2 ms late after
+     * fifteen seconds at 40).  After a cooldown with the rate path idle, a
+     * fresh scheduler epoch re-primes exactly as at start-up, so no stale
+     * endpoint or phase crosses the boundary; the count is bounded so a
+     * backend that keeps missing still converges to Direct.
+     */
+    private void maybeRearmExternalTimingAfterCooldown() {
+        if (!externalTimingRejected || externalRatePathActive ||
+                externalRatePathPriming || externalRatePathOutputPriming ||
+                externalTransport == null ||
+                externalTransport.usesAppOwnedPresentation())
+            return;
+        if (System.nanoTime() - externalTimingRejectedAtNs <
+                EXTERNAL_TIMING_REARM_COOLDOWN_NS)
+            return;
+        if (externalTimingRearms >= EXTERNAL_TIMING_REARM_LIMIT) {
+            if (externalTimingRearms == EXTERNAL_TIMING_REARM_LIMIT) {
+                ++externalTimingRearms;
+                Log.e(TAG, "External generation stays Direct: re-arm limit reached" +
+                        " generator=" + generatorId +
+                        " limit=" + EXTERNAL_TIMING_REARM_LIMIT);
+            }
+            return;
+        }
+        ++externalTimingRearms;
+        externalTimingRejected = false;
+        frameRate.resetPresentation();
+        observedBufferedPresentationEpoch = schedulerPresentationEpoch();
+        resetEndpointTimelineForSchedulerEpoch();
+        refreshProofEvidencePresentationEpoch();
+        resetHealthWindowAfterStreamChange();
+        Log.w(TAG, "External generation re-armed after slot miss generator=" +
+                generatorId + " rearm=" + externalTimingRearms + "/" +
+                EXTERNAL_TIMING_REARM_LIMIT);
+    }
+    private long externalLastUnsafePairRightSequence;
+    private long externalUnsafePairCount;
+    private DenseGpuTimer externalSignatureTimer;
+    private final PhysicalPresentationCadence externalPhysicalCadence =
+            new PhysicalPresentationCadence();
+    private final ExternalPresentationLedger externalPresentationLedger =
+            new ExternalPresentationLedger();
+    private final ExternalPresentationEvidence externalPresentationEvidence =
+            new ExternalPresentationEvidence();
+    private final AppOwnedExternalPresentationEvidence
+            appOwnedExternalPresentationEvidence =
+                    new AppOwnedExternalPresentationEvidence();
+    private final ExternalGeneratedContentEvidence externalGeneratedContentEvidence =
+            new ExternalGeneratedContentEvidence();
+    private int externalPhysicalScansPerOutput;
+    private long externalPhysicalRefreshDurationNs;
+    private final PhysicalPresentationClock externalPhysicalClock =
+            new PhysicalPresentationClock();
+    private final PhysicalPresentationClock builtInPhysicalClock =
+            new PhysicalPresentationClock();
+    private long builtInLastCommittedTargetNs;
+    private final ExternalPhysicalClockBootstrap externalPhysicalClockBootstrap =
+            new ExternalPhysicalClockBootstrap();
+    private long externalPhysicalAccountingEpoch;
+    private long appOwnedExternalSubmittedCount;
+    private long externalClockBoundaryWaits;
+    private long externalLookaheadReadinessWaits;
+    private long externalBootstrapCapacityWaits;
+    private long appOwnedExternalPhysicalEndpointCount;
+    private long appOwnedExternalPhysicalGeneratedCount;
+    /** Monotonic clean timing-window identity within scheduler epochs. */
+    private long appOwnedExternalTimingWindow;
+    /** Lifetime physical-outcome baselines captured at timing-window start. */
+    private long appOwnedExternalTimingDroppedBaseline;
+    private long appOwnedExternalTimingUnavailableBaseline;
+    /** Rows already planned before the current epoch's first actual scan. */
+    private int externalPhysicalAnchorTailRows;
+    private boolean externalPhysicalClockBoundaryCommittedThisCallback;
+    /**
+     * Submitted physical-slot high-water for this renderer/surface lifetime.
+     * Timing epochs may reanchor while an earlier submission is still pending;
+     * they must not erase its reservation or reuse that physical scan.
+     */
+    private long externalLastPlannedPhysicalNs;
+    private long externalLastSubmittedCompositorExpectedNs;
+    private long externalPhysicalSlotRejectedCount;
+    /**
+     * First successfully submitted Direct output after a rate-path boundary.
+     *
+     * <p>A 40-Hz output has three equally valid phases on Thor's measured
+     * 120-Hz scan lattice. Basing that divisor lattice directly on an
+     * arbitrary completed calibration row can put every selection callback
+     * about one millisecond before the preceding request's immutable release
+     * gate (physical r127). Bootstrap the rate path on the first safely
+     * prequeueable panel scan, then keep every later target an exact output
+     * period from that committed phase.</p>
+     */
+    private long externalDirectOutputPhaseAnchorNs;
     private SurfaceTexture inputTexture;
     private Choreographer choreographer;
+    private Object compositorVsyncCallback;
+    private static final int MAX_COMPOSITOR_FRAME_TIMELINES = 16;
+    private static final int MAX_COMPOSITOR_TIMELINE_DIAGNOSTIC_LOGS = 12;
+    private final long[] compositorFrameTimelineVsyncIds =
+            new long[MAX_COMPOSITOR_FRAME_TIMELINES];
+    private final long[] compositorExpectedPresentationTimesNs =
+            new long[MAX_COMPOSITOR_FRAME_TIMELINES];
+    private final long[] compositorFrameTimelineDeadlinesNs =
+            new long[MAX_COMPOSITOR_FRAME_TIMELINES];
+    private final long[] compositorFrameTimelineSourceMetadata = new long[2];
+    private int compositorFrameTimelineCount;
+    private int compositorFrameTimelineSuppliedCount;
+    private long compositorFrameTimelineNativeCallbackSequence;
+    private long compositorFrameTimelineNativeFrameTimeNs;
+    private long compositorFrameTimelineCallbacks;
+    private long compositorFrameTimelineSelected;
+    private long compositorFrameTimelineUnavailable;
+    private long compositorFrameTimelineCommitted;
+    private long compositorFrameTimelineErrorMaxNs;
+    private int compositorFrameTimelineDiagnosticLogs;
+    private final PresentationClockDiagnostics presentationClockDiagnostics =
+            new PresentationClockDiagnostics();
+    private final CompositorPredictionLattice compositorPredictionLattice =
+            new CompositorPredictionLattice();
+    private long compositorFrameTimelineProbeLive;
+    private long compositorFrameTimelineProbeNoLive;
+    private long compositorFrameTimelineProbeErrorSignedMinNs;
+    private long compositorFrameTimelineProbeErrorSignedMaxNs;
+    private long compositorFrameTimelineProbeErrorSignedLastNs;
     private int externalTexture;
+    /** Private RGBA8 image imported from an app-owned external generator. */
+    private int externalGeneratedTexture;
+    private final ArrayDeque<AppOwnedPhysicalPending>
+            appOwnedPhysicalPending = new ArrayDeque<>();
     private final int[] historyTextures = new int[2];
     private int latestTexture;
     private final int[] signatureCandidateTextures =
@@ -1065,35 +1674,66 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private final int[] endpointFifoTextures = new int[ENDPOINT_FIFO_CAPACITY];
     private final long[] endpointFifoSequence = new long[ENDPOINT_FIFO_CAPACITY];
     private final long[] endpointFifoTimestampNs = new long[ENDPOINT_FIFO_CAPACITY];
+    private final long[] endpointFifoUniqueSequence = new long[ENDPOINT_FIFO_CAPACITY];
+    private final int[] endpointFifoSubmission = new int[ENDPOINT_FIFO_CAPACITY];
+    private final long[] endpointFifoCandidateLoss = new long[ENDPOINT_FIFO_CAPACITY];
     private int endpointFifoHead;
     private int endpointFifoCount;
     private long endpointSequence;
     private long endpointFifoCoalesced;
     private long endpointCandidateUnavailable;
+    private long externalEndpointAdmissionRejected;
+    private boolean externalEndpointAdmissionBlocked;
     private long endpointTimestampCorrections;
     private long lastProducerTimestampNs;
     private long lastPresentationEndpointTimestampNs;
-    private final EndpointFrameSelector presentationEndpointSelector =
-            new EndpointFrameSelector();
+    private int lastPresentationEndpointSubmission;
     private long uniqueFrameCount;
+    // A signature verdict and a temporal endpoint are related but distinct.
+    // Pixel uniqueness alone advances the measured source clock; every
+    // classified emulator callback may fund the presentation endpoint clock.
+    // This is what lets a repeated 20-FPS image occupy its real 50-ms slot
+    // instead of turning the next changed image into a false 100-ms gap.
+    private boolean classifiedFrameReady;
+    // Diagnostic only: a blind first frame/authority bypass is not a pixel verdict.
+    private boolean classifiedPixelVerdictKnown;
+    private NativeSourceImageObserver nativeSourceImageObserver;
+    // Diagnostic owners mirror six FIFO textures, two physical history
+    // textures and one classified candidate. Never select cadence/FG here.
+    private static final int NATIVE_HISTORY_BASE = ENDPOINT_FIFO_CAPACITY;
+    private static final int NATIVE_ADMISSION_SLOT = NATIVE_HISTORY_BASE + 2;
+    private NativeSourceImageLedger nativeEndpointProvenance;
+    private long nativeProvenanceTransfers, nativeProvenanceMissing, nativeProvenanceFailures;
     private int classifiedUniqueTexture;
     private long classifiedUniqueTimestampNs;
+    private int classifiedUniqueSubmission;
     private long activeLeftSequence;
     private long activeRightSequence;
     private long activeLeftTimestampNs;
     private long activeRightTimestampNs;
+    private long activeLeftUniqueSequence;
+    private long activeRightUniqueSequence;
+    private int activeLeftSubmission;
+    private int activeRightSubmission;
+    private long activeLeftCandidateLoss;
+    private long activeRightCandidateLoss;
     private boolean activePairReady;
     private boolean activePairSyntheticCommitted;
+    // Endpoint sequence is lifetime-monotonic; never reset this at a scheduler epoch.
+    private final MidpointPairBudget midpointPairBudget = new MidpointPairBudget();
     private long lastPromotedEndpointSequence;
     private long bufferedPairCreatedCount;
     private long bufferedSyntheticSelectedCount;
     private long bufferedSyntheticQuotaSkippedCount;
     private long bufferedSyntheticNotReadyCount;
+    private long externalPrequeueDeferredCount;
     private long bufferedPresentationCallbackCount;
     private long bufferedLastSelectedSyntheticPair;
+    private long observedBufferedPresentationEpoch;
     private int frameBuffer;
     private int copyProgram;
     private int textureCopyProgram;
+    private int externalGeneratedTextureCopyProgram;
     private int signatureCompareProgram;
     private int interpolateProgram;
     private int predictionProofProgram;
@@ -1106,6 +1746,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private int regionalCandidateWinnerProgram;
     private int globalMotionProgram;
     private int densePyramidProgram;
+    private int denseGlobalCostProgram;
+    private int denseGlobalReduceProgram;
+    private int denseGlobalCutProgram;
     private int denseSolveProgram;
     private int denseCycleProgram;
     private int denseQ8ProbeProgram;
@@ -1120,13 +1763,26 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private final int[] globalFlowTextures = new int[2];
     private final int[][][] denseFlowTextures = new int[2][DENSE_LEVELS][2];
     private final int[][] densePyramidTextures = new int[2][2];
+    // Box-filter ladder per endpoint: /4 and /16 of the history (e.g. 480x270, 120x68).
+    private final int[][] denseBoxTextures = new int[2][2];
+    private final int[] denseBoxWidths = new int[2];
+    private final int[] denseBoxHeights = new int[2];
+    private final int[] denseGlobalCoarseCostTextures = new int[2];
+    private final int[] denseGlobalFineCostTextures = new int[2];
+    private final int[] denseGlobalCoarseSeedTextures = new int[2];
+    private final int[] denseGlobalSeedTextures = new int[2];
+    private final int[] denseGlobalCutTextures = new int[2];
+    private int maxFragmentTextureUnits;
     private final int[] denseFinalTextures = new int[2];
     private final int[] denseValidatedTextures = new int[2];
+    private final int[] denseFillTextures = new int[2];
+    private int denseFillProgram;
     private final int[] denseLevelWidths = new int[DENSE_LEVELS];
     private final int[] denseLevelHeights = new int[DENSE_LEVELS];
     private int denseAnalysisWidth;
     private int denseAnalysisHeight;
     private boolean denseResourcesReady;
+    private boolean denseTemporalGuideReady;
     private long densePromotions;
     private long densePasses;
     private long denseCpuSubmitTotalUs;
@@ -1135,7 +1791,22 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private long denseGpuCompleteTotalUs;
     private long denseGpuCompleteMaxUs;
     private long denseGpuCompleteLastUs;
+    private long denseGpuCompletePairs;
+    private long denseGpuCompletionSequence;
+    private final GpuPairTimingLedger denseGpuPairLedger = new GpuPairTimingLedger(128);
+    private final GpuWorkAdaptationPolicy denseGpuAdaptation = new GpuWorkAdaptationPolicy();
+    private final GpuPhysicalHeadroomLedger denseGpuHeadroom = new GpuPhysicalHeadroomLedger(128);
+    private final long[] denseGpuFailedPairSequences = new long[128];
+    private long denseGpuHeadroomPresentationEpoch;
+    private long denseGpuPhysicalVerifiedPairs, denseGpuPhysicalUnknownPairs;
+    private long denseGpuPhysicalMarginalPairs, denseGpuPhysicalDeadlineMisses;
+    private long denseGpuPhysicalUnboundEvents;
+    private long denseGpuPhysicalLastAppMarginNs, denseGpuPhysicalLastCompositorMarginNs;
+    private int denseGpuReadyTimestampSupportedMask;
+    private String pendingDenseGpuHeadroomReject;
     private DenseGpuTimer denseGpuTimer;
+    private PhysicalPresentationTracker physicalPresentationTracker;
+    private boolean physicalPresentationUnavailableLogged;
     private final long[] denseStageTotalUs = new long[7];
     private final long[] denseStageMaxUs = new long[7];
     private final long[] denseStageSamples = new long[7];
@@ -1169,6 +1840,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private long denseSignatureSequence;
     private long denseSignatureReady;
     private long denseSignatureUnavailable;
+
     private long denseSignatureMaxQueueAge;
     private int actualEglContextMajor;
     private int actualEglContextMinor;
@@ -1198,6 +1870,21 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private long denseDiagnosticLastPreviousEndpoint;
     private long denseDiagnosticLastCurrentEndpoint;
     private long denseDiagnosticLastTargetSourceNs;
+    private long denseTrajectorySamples;
+    private long denseTrajectoryCells;
+    private long denseTrajectoryChangedCells;
+    private long denseTrajectoryChangedAnyValidCells;
+    private long denseTrajectoryChangedAnyMovingValidCells;
+    private long denseTrajectoryChangedBothMovingValidCells;
+    private long denseTrajectoryChangedTiles;
+    private long denseTrajectoryChangedMovingOwnedTiles;
+    private long denseTrajectoryErrors;
+    private final long[] denseTrajectoryValidCells = new long[2];
+    private final long[] denseTrajectoryMovingValidCells = new long[2];
+    private final long[] denseTrajectoryStrongMovingValidCells = new long[2];
+    private final long[] denseTrajectoryChangedValidCells = new long[2];
+    private final long[] denseTrajectoryChangedMovingValidCells = new long[2];
+    private final long[] denseTrajectoryUnchangedMovingValidCells = new long[2];
     private float densePairMeanDifference;
     private java.nio.ByteBuffer denseProofPixels;
     private int coarseFlowWidth;
@@ -1212,6 +1899,11 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private int signaturePreviousTexture;
     private int signatureQueryTexture;
     private boolean denseSignatureBaselineReady;
+    // Adreno's glReadPixels in latestImageIsUnique has SIGSEGV'd the Thor
+    // (Eden/Odyssey). Uniqueness then trusts each producer arrival instead
+    // of a CPU readback — a 30 fps submit stays 30→60, and we never take
+    // the crashing path.
+    private boolean signatureReadbackSafe = true;
     private java.nio.ByteBuffer proofPixels;
     private java.nio.ByteBuffer signaturePixels;
     private java.nio.ByteBuffer regionalFlowPixels;
@@ -1357,17 +2049,34 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private long lastHealthPresentationEpoch;
     private boolean pendingDenseCadenceReject;
     private int denseCadenceFailureWindows;
+    private int generationTargetFailureWindows;
     private long pendingDenseHealthPresents;
     private long pendingDenseHealthGenerated;
     private long pendingDenseHealthPromoted;
     private boolean generationLogged;
     private boolean outputFrameRateReassertedAfterSwap;
-    private int reportedSourceFps = -1;
-    private int reportedOutputFps = -1;
-    private int statsTargetSourceFps = -1;
-    private int statsTargetOutputFps = -1;
+    private int reportedSourceTenths = -1;
+    private int reportedOutputTenths = -1;
+    private int reportedTargetTenths = -1;
+    private boolean reportedCadenceQualified;
+    private String reportedBackendLabel;
     private long statsWindowStartNanos;
     private long statsWindowStartPresents;
+    // Source admission is intentionally reported on its own fixed one-second
+    // window. The ordinary stats window follows the selected target and is
+    // therefore rebased whenever an unqualified Direct source fluctuates.
+    // Reusing it hid the exact submission/unique-image loss that determines
+    // whether a stream can ever fund interpolation.
+    private long sourceDiagWindowStartNanos;
+    private long sourceDiagStartHardwareSubmits;
+    private long sourceDiagStartSoftwareSubmits;
+    private long sourceDiagStartUniqueVerdicts;
+    private long sourceDiagStartDuplicateVerdicts;
+    private long sourceDiagStartUniqueFrames;
+    private long sourceDiagStartEndpoints;
+    private long sourceDiagStartCandidateUnavailable;
+    private long sourceDiagStartTimestampCorrections;
+    private long sourceDiagStartFifoCoalesced;
     // Midpoint-undershoot diagnostic (2026-08-15): decoded recordings showed
     // generated frames advancing only 9-28% of the source motion step. These
     // accumulators publish the scheduler-selected synthetic phase and the
@@ -1441,6 +2150,21 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                                  DensePyramidSwitch densePyramidSwitch,
                                  DenseV27ReducedAnalysisSwitch denseV27ReducedAnalysisSwitch,
                                  DenseV28ReducedAnalysisSwitch denseV28ReducedAnalysisSwitch) {
+        this(output, inputWidth, inputHeight, outputWidth, outputHeight, refreshHz,
+                displayRole, displayId, qualificationProofSwitch,
+                densePyramidSwitch, denseV27ReducedAnalysisSwitch,
+                denseV28ReducedAnalysisSwitch, null);
+    }
+
+    DisplayFrameGenerator(Surface output, int inputWidth, int inputHeight,
+                                 int outputWidth, int outputHeight, float refreshHz,
+                                 String displayRole, int displayId,
+                                 QualificationProofSwitch qualificationProofSwitch,
+                                 DensePyramidSwitch densePyramidSwitch,
+                                 DenseV27ReducedAnalysisSwitch denseV27ReducedAnalysisSwitch,
+                                 DenseV28ReducedAnalysisSwitch denseV28ReducedAnalysisSwitch,
+                                 ExternalFrameGenerationTransport.Factory
+                                         externalTransportFactory) {
         if (output == null || !output.isValid())
             throw new IllegalArgumentException("a valid output Surface is required");
         this.outputSurface = output;
@@ -1455,6 +2179,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 ? () -> false : denseV27ReducedAnalysisSwitch;
         this.denseV28ReducedAnalysisSwitch = denseV28ReducedAnalysisSwitch == null
                 ? () -> false : denseV28ReducedAnalysisSwitch;
+        this.externalTransportFactory = externalTransportFactory;
         // Analysis dimensions allocate once with the EGL resources. Capture
         // this shell-only experiment before startup; a live settings toggle
         // must not reinterpret an existing v26 allocation as v27 evidence.
@@ -1473,7 +2198,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         // The immutable raw dense+v28 preselection is the only path allowed to
         // request this context; default/v22 and every older experiment remain
         // byte-for-byte on the established ES2 context path.
-        this.requestedEglContextMajor = denseV28ReducedAnalysisRequested ? 3 : 2;
+        this.requestedEglContextMajor = denseV28ReducedAnalysisRequested ||
+                externalTransportFactory != null ? 3 : 2;
         this.qualificationProofEnabled = false;
         this.inputWidth = positive(inputWidth);
         this.inputHeight = positive(inputHeight);
@@ -1481,50 +2207,235 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         this.outputHeight = positive(outputHeight);
         this.refreshHz = sanitizeRefresh(refreshHz);
         frameRate = new AdaptiveFrameRateController(this.refreshHz);
+        if (externalTransportFactory == null) frameRate.setGenerationAvailable(false);
+        // Both Built-in and LSFG must sample the same exact one-midpoint lattice.
+        frameRate.setExactDoubleEndpointLatticeRequired(true);
         thread = new HandlerThread("emufusion-frame-generator");
         thread.start();
         handler = new Handler(thread.getLooper());
         handler.post(this::initialize);
         try {
-            if (!started.await(START_TIMEOUT_MS, TimeUnit.MILLISECONDS))
-                throw new IllegalStateException("frame generator startup timed out");
+            long timeoutMs = externalTransportFactory == null ?
+                    START_TIMEOUT_MS : EXTERNAL_START_TIMEOUT_MS;
+            if (!started.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+                RuntimeException failure = new IllegalStateException(
+                        "frame generator startup timed out");
+                closeAfterStartupFailure(failure);
+                throw failure;
+            }
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            close();
-            throw new IllegalStateException("interrupted starting frame generator", interrupted);
+            RuntimeException failure = new IllegalStateException(
+                    "interrupted starting frame generator", interrupted);
+            // Retire on the owner even if the caller was interrupted. Restore
+            // its interrupt only after the bounded ownership wait has run.
+            try { closeAfterStartupFailure(failure); }
+            finally { Thread.currentThread().interrupt(); }
+            throw failure;
         }
         if (startupFailure != null) {
-            close();
-            throw new IllegalStateException("frame generator startup failed", startupFailure);
+            RuntimeException failure = new IllegalStateException(
+                    "frame generator startup failed", startupFailure);
+            closeAfterStartupFailure(failure);
+            throw failure;
         }
         if (inputSurface == null || !inputSurface.isValid()) {
-            close();
-            throw new IllegalStateException("frame generator produced no input Surface");
+            RuntimeException failure = new IllegalStateException(
+                    "frame generator produced no input Surface");
+            closeAfterStartupFailure(failure);
+            throw failure;
         }
-        synchronized (INPUTS) {
-            INPUTS.put(inputSurface, new WeakReference<>(this));
-        }
+        FrameGenerationRendererRegistry.register(this);
     }
 
     /** The only Surface an emulator receives. The actual display Surface remains private. */
-    public Surface inputSurface() { return inputSurface; }
+    @Override public Surface inputSurface() { return inputSurface; }
 
-    public void setStatsListener(StatsListener value) {
+    @Override public void setNativeSourceImageProvider(NativeSourceImageProvider provider) {
+        if (closed.get()) return;
+        handler.post(() -> {
+            if (closed.get()) return;
+            if (nativeSourceImageObserver == null && provider != null)
+                nativeSourceImageObserver = new NativeSourceImageObserver(
+                        SIGNATURE_CANDIDATE_SLOTS);
+            if (nativeEndpointProvenance == null && provider != null)
+                nativeEndpointProvenance = new NativeSourceImageLedger(NATIVE_ADMISSION_SLOT + 1);
+            if (nativeSourceImageObserver != null)
+                nativeSourceImageObserver.setProvider(provider);
+        });
+    }
+
+    private void clearNativeClassifiedObservation() {
+        classifiedPixelVerdictKnown = false;
+        if (nativeSourceImageObserver != null)
+            nativeSourceImageObserver.clearClassified();
+    }
+
+    private void classifyLatestNativeObservation() {
+        if (nativeSourceImageObserver != null)
+            nativeSourceImageObserver.classifyLatest();
+    }
+
+    private void finishNativeClassifiedObservation(boolean unique) {
+        releaseNativeEndpointProvenance(NATIVE_ADMISSION_SLOT);
+        if (nativeEndpointProvenance != null && nativeSourceImageObserver != null &&
+                classifiedFrameReady && classifiedUniqueTexture != 0 && classifiedUniqueSubmission > 0) {
+            if (nativeSourceImageObserver.copyClassifiedTo(nativeEndpointProvenance,
+                    NATIVE_ADMISSION_SLOT, classifiedUniqueTimestampNs, unique,
+                    classifiedPixelVerdictKnown) != NativeSourceImageLedger.Result.SUCCESS)
+                ++nativeProvenanceFailures;
+        }
+        if (nativeSourceImageObserver != null)
+            nativeSourceImageObserver.finishClassified(
+                    classifiedFrameReady && classifiedUniqueTexture != 0 &&
+                            classifiedUniqueSubmission > 0,
+                    classifiedUniqueTimestampNs, unique, classifiedPixelVerdictKnown);
+    }
+
+    /** Metadata release follows loss/retirement of this exact texture owner. */
+    private void releaseNativeEndpointProvenance(int slot) {
+        if (nativeEndpointProvenance == null) return;
+        long lease = nativeEndpointProvenance.lease(slot);
+        if (lease != 0L) nativeEndpointProvenance.release(slot, lease);
+    }
+
+    /** Call only after the destination texture copy succeeded; source remains retained. */
+    private void copyNativeEndpointProvenance(int source, int destination) {
+        if (nativeEndpointProvenance == null) return;
+        releaseNativeEndpointProvenance(destination);
+        long lease = nativeEndpointProvenance.lease(source);
+        if (lease == 0L) { ++nativeProvenanceMissing; return; }
+        if (nativeEndpointProvenance.copy(source, lease, destination) ==
+                NativeSourceImageLedger.Result.SUCCESS) ++nativeProvenanceTransfers;
+        else ++nativeProvenanceFailures;
+    }
+
+    /** Timeline reset preserves the classified candidate currently being admitted. */
+    private void clearNativeEndpointTimeline(boolean fifo) {
+        if (nativeEndpointProvenance == null) return;
+        for (int slot = fifo ? 0 : NATIVE_HISTORY_BASE; slot < NATIVE_ADMISSION_SLOT; ++slot)
+            releaseNativeEndpointProvenance(slot);
+    }
+
+    private String nativeEndpointProvenanceDiagnostic() {
+        if (nativeEndpointProvenance == null) return "disabled authority=false";
+        int left = NATIVE_HISTORY_BASE + previousIndex, right = NATIVE_HISTORY_BASE + currentIndex;
+        long a = nativeEndpointProvenance.lease(left), b = nativeEndpointProvenance.lease(right);
+        return "authority=false transfers=" + nativeProvenanceTransfers +
+                " missing=" + nativeProvenanceMissing + " failures=" + nativeProvenanceFailures +
+                " leftEndpoint=" + activeLeftSequence + " rightEndpoint=" + activeRightSequence +
+                " leftStatus=" + nativeEndpointProvenance.observation(left, a) +
+                " rightStatus=" + nativeEndpointProvenance.observation(right, b) +
+                " leftPixels=" + nativeEndpointProvenance.pixelVerdict(left, a) +
+                " rightPixels=" + nativeEndpointProvenance.pixelVerdict(right, b) +
+                " leftProvider=" + nativeEndpointProvenance.providerGeneration(left, a) +
+                " rightProvider=" + nativeEndpointProvenance.providerGeneration(right, b) +
+                " leftRawPts=" + nativeEndpointProvenance.rawTimestampNs(left, a) +
+                " rightRawPts=" + nativeEndpointProvenance.rawTimestampNs(right, b) +
+                " leftClassifiedJoin=" + nativeEndpointProvenance.classifiedJoin(left, a) +
+                " rightClassifiedJoin=" + nativeEndpointProvenance.classifiedJoin(right, b) +
+                " leftQueueFrame=" + nativeEndpointProvenance.queueFrameNumber(left, a, 0) +
+                " rightQueueFrame=" + nativeEndpointProvenance.queueFrameNumber(right, b, 0) +
+                " pair=" + nativeEndpointProvenance.compare(left, a, right, b);
+    }
+
+    private void closeNativeSourceImageObserver() {
+        clearNativeEndpointTimeline(true);
+        releaseNativeEndpointProvenance(NATIVE_ADMISSION_SLOT);
+        nativeEndpointProvenance = null;
+        if (nativeSourceImageObserver != null) {
+            nativeSourceImageObserver.close();
+            nativeSourceImageObserver = null;
+        }
+    }
+
+    @Override public String activeBackendLabel() {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport != null)
+            return externalRatePathActive ? transport.backendLabel() : "Direct";
+        return frameRate.generationAvailable() ? "Built-in" : "Direct";
+    }
+
+    @Override public int measuredSourceTier() { return reportedMeasuredTier; }
+    private volatile boolean reportedStreamLightlyHeld;
+    @Override public boolean sourceStreamLightlyHeld() { return reportedStreamLightlyHeld; }
+    private volatile double reportedUniqueHz;
+    @Override public double sourceUniqueHz() { return reportedUniqueHz; }
+    @Override public boolean sourceStreamIrregular() { return reportedStreamIrregular; }
+    private volatile boolean reportedClockAcquisitionInProgress;
+    @Override public boolean clockAcquisitionInProgress() {
+        return reportedClockAcquisitionInProgress;
+    }
+
+    // Mirrors the controller flag for the generator's own pair checks: a
+    // doubled lattice span whose submission advanced by one is a dropped
+    // adapter frame and is bridged (wiiu-b38 logged ~5 "Buffered endpoint
+    // discontinuity" cuts per second on exactly two-period spans).
+    private volatile boolean slotLatticeProducer;
+
+    @Override public void setSlotLatticeProducer(boolean value) {
+        if (closed.get()) return;
+        slotLatticeProducer = value;
+        handler.post(() -> {
+            if (closed.get()) return;
+            frameRate.setSlotLatticeProducer(value);
+            Log.i(TAG, "Slot-lattice producer mode generator=" + generatorId +
+                    " enabled=" + value);
+        });
+    }
+
+    @Override public void onCoreClockLocked() {
+        if (closed.get()) return;
+        handler.post(() -> {
+            if (closed.get()) return;
+            long previousEpoch = frameRate.bufferedPresentationEpoch();
+            frameRate.resetPresentation();
+            Log.i(TAG, "Core clock locked to panel; presentation re-primed" +
+                    " generator=" + generatorId + " role=" + displayRole +
+                    " previousEpoch=" + previousEpoch +
+                    " epoch=" + frameRate.bufferedPresentationEpoch());
+        });
+    }
+    @Override public double panelClockRatio() { return reportedPanelClockRatio; }
+    @Override public double physicalPanelHz() {
+        long observed = qualifiedPhysicalPanelObservedNs;
+        long now = System.nanoTime();
+        return !closed.get() && observed > 0 && now >= observed &&
+                now - observed <= 250_000_000L ? qualifiedPhysicalPanelHz : 0.0;
+    }
+    @Override public double endpointDriftUsPerSecond() { return reportedEndpointDriftUsPerS; }
+    @Override public long endpointOffsetNs() { return reportedEndpointOffsetNs; }
+
+    @Override public void setStatsListener(FrameGenerationRenderer.StatsListener value) {
         statsListener = value;
         if (value != null) handler.post(() -> {
             if (statsListener != value) return;
             // A newly attached overlay has not observed any of this Surface's
             // prior swaps. Start from an explicit unknown output instead of
             // replaying a target or a stale listener's last value.
-            reportedSourceFps = -1;
-            reportedOutputFps = -1;
-            publishReportedFrameRate(frameRate.lockedSourceFps(), 0,
-                    frameRate.outputFps());
+            reportedSourceTenths = -1;
+            reportedOutputTenths = -1;
+            reportedTargetTenths = -1;
+            reportedCadenceQualified = false;
+            reportedBackendLabel = null;
+            publishReportedFrameRate(frameRate.sustainedMeasuredSourceHz(), 0.0,
+                    frameRate.targetOutputHz(), false);
+        });
+    }
+
+    @Override public void setRuntimeErrorListener(
+            com.thorium.lucent.video.RuntimePresentationFailure.Listener value) {
+        if (closed.get()) return;
+        handler.post(() -> {
+            if (closed.get()) return;
+            try { runtimeFailure.setListener(value); }
+            catch (RuntimeException callbackFailure) {
+                Log.e(TAG, "Runtime display error listener failed", callbackFailure);
+            }
         });
     }
 
     /** Uses the fixed cadence declared by a deterministic legacy core. */
-    public void setAuthoritativeSourceHz(double sourceHz) {
+    @Override public void setAuthoritativeSourceHz(double sourceHz) {
         if (closed.get()) return;
         handler.post(() -> {
             // A live source-mode change invalidates any delayed uniqueness
@@ -1537,6 +2448,16 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 teardownDenseEpoch("authoritative-source-change");
             }
             frameRate.setAuthoritativeSourceHz(sourceHz);
+            if (displayId > 0) {
+                // The lower panel is direct-only (the same rule
+                // refreshQualificationProofState applies after HEALTH_INTERVAL
+                // presents); apply it when the clock arrives so every
+                // software submit is a presentation endpoint and a lone
+                // endpoint is shown at once instead of waiting for a unique
+                // frame to survive an epoch resync.  (Dense was already torn
+                // down above; refreshQualificationProofState keeps it off.)
+                frameRate.setGenerationAvailable(false);
+            }
             resetEndpointFifo();
             sourceSignatureReady = false;
             generationLogged = false;
@@ -1547,25 +2468,38 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         });
     }
 
+    /**
+     * Supplies the hardware producer's stamped core-tick clock.
+     *
+     * <p>This is transport provenance only. Pixel-classified immutable
+     * endpoints remain the sole source-rate authority.</p>
+     */
+    @Override public void setProducerTimelineHz(double timelineHz) {
+        if (closed.get()) return;
+        handler.post(() -> {
+            if (densePyramidEnabled || denseGpuTimer != null) {
+                densePyramidEnabled = false;
+                teardownDenseEpoch("producer-timeline-change");
+            }
+            frameRate.setProducerTimelineHz(timelineHz);
+            resetEndpointFifo();
+            sourceSignatureReady = false;
+            generationLogged = false;
+            resetHealthWindowAfterStreamChange();
+            Log.i(TAG, "Producer timeline generator=" + generatorId +
+                    " timelineHz=" + timelineHz +
+                    " sourceAuthority=pixel-unique");
+        });
+    }
+
     /** Runs once after the producer's first complete buffer is consumed. */
-    public void setFirstSubmittedFrameListener(Runnable value) {
+    @Override public void setFirstSubmittedFrameListener(Runnable value) {
         firstSubmittedFrameListener.set(value);
     }
 
     private void notifyFirstSubmittedFrame() {
         Runnable callback = firstSubmittedFrameListener.getAndSet(null);
         if (callback != null) callback.run();
-    }
-
-    /** Returns the generator owning an engine Surface, or null for a direct Surface. */
-    public static DisplayFrameGenerator forInputSurface(Surface surface) {
-        if (surface == null) return null;
-        synchronized (INPUTS) {
-            WeakReference<DisplayFrameGenerator> reference = INPUTS.get(surface);
-            DisplayFrameGenerator value = reference == null ? null : reference.get();
-            if (value == null && reference != null) INPUTS.remove(surface);
-            return value;
-        }
     }
 
     /**
@@ -1576,14 +2510,27 @@ public final class DisplayFrameGenerator implements AutoCloseable,
      * compositor can read it back. The immutable copy is intentional: the
      * emulation render thread immediately reuses its decode array.
      */
-    public boolean submitSoftwareFrame(int[] colors, int frameWidth, int frameHeight,
+    @Override public boolean submitSoftwareFrame(int[] colors, int frameWidth, int frameHeight,
                                        int left, int top, int right, int bottom,
                                        float contentAspect) {
+        return submitSoftwareFrame(colors, frameWidth, frameHeight, left, top,
+                right, bottom, contentAspect, 0L);
+    }
+
+    @Override public boolean submitSoftwareFrame(int[] colors, int frameWidth, int frameHeight,
+                                       int left, int top, int right, int bottom,
+                                       float contentAspect, long scheduledTimestampNs) {
         if (closed.get() || colors == null || frameWidth < 1 || frameHeight < 1 ||
                 left < 0 || top < 0 || right <= left || bottom <= top ||
                 right > frameWidth || bottom > frameHeight ||
                 colors.length < (long) frameWidth * frameHeight) return false;
-        final long producerTimestampNs = System.nanoTime();
+        // Software cores used to be stamped with this thread's arrival time,
+        // which carries mailbox hand-off and upload jitter: melonDS's exact
+        // 2:1 (30 unique of 60) stream never proved its clock and fell to
+        // the 20 tier with generation off (run nds-b51, 2026-09-02).  The
+        // producer's scheduled due time is the immutable lattice stamp.
+        final long producerTimestampNs = scheduledTimestampNs > 0L ?
+                scheduledTimestampNs : System.nanoTime();
         final int width = right - left;
         final int height = bottom - top;
         final int[] snapshot = new int[width * height];
@@ -1597,13 +2544,49 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     snapshot, row * width, width);
         final float aspect = Float.isFinite(contentAspect) && contentAspect > 0f
                 ? contentAspect : (float) width / height;
-        handler.post(() -> uploadSoftwareFrame(snapshot, width, height, aspect,
+        handler.post(() -> uploadSoftwareFrameSafely(snapshot, width, height, aspect,
                 producerTimestampNs));
         return true;
     }
 
+    private void uploadSoftwareFrameSafely(int[] colors, int width, int height,
+                                           float aspect, long producerTimestampNs) {
+        // This immutable CPU copy owns no producer Image/Surface queue slot.
+        // Drop copies already queued when the first fatal failure was reported.
+        if (closed.get() || externalPresentationFailed) return;
+        try {
+            uploadSoftwareFrame(colors, width, height, aspect, producerTimestampNs);
+        } catch (RuntimeException failure) {
+            failRuntimePresentation("Unable to consume software emulator frame", failure);
+        }
+    }
+
+    @Override public void setPanelRefreshHz(float newRefreshHz) {
+        if (closed.get()) return;
+        final float hz = sanitizeRefresh(newRefreshHz);
+        handler.post(() -> {
+            if (Math.abs(hz - refreshHz) < 0.5f) return;
+            float previous = refreshHz;
+            qualifiedPhysicalPanelHz = 0.0;
+            qualifiedPhysicalPanelObservedNs = 0L;
+            builtInPhysicalClock.reset();
+            refreshHz = hz;
+            frameRate.setDisplayRefreshHz(hz);
+            outputFrameRateReassertedAfterSwap = false;
+            requestOutputFrameRate("panel-mode");
+            frameRate.resetPresentation();
+            resetHealthWindowAfterStreamChange();
+            Log.i(TAG, "Frame generator panel mode changed generator=" +
+                    generatorId + " role=" + displayRole +
+                    " displayId=" + displayId +
+                    " previousHz=" + previous + " refreshHz=" + hz +
+                    " protocolTiers=" + java.util.Arrays.toString(
+                            frameRate.protocolTiers()));
+        });
+    }
+
     /** Resizes without replacing the producer Surface or restarting an emulator. */
-    public void resize(int newInputWidth, int newInputHeight,
+    @Override public void resize(int newInputWidth, int newInputHeight,
                        int newOutputWidth, int newOutputHeight, float newRefreshHz) {
         if (closed.get()) return;
         final int iw = positive(newInputWidth);
@@ -1617,6 +2600,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 teardownDenseEpoch("stream-resize");
             }
             inputWidth = iw;
+            qualifiedPhysicalPanelHz = 0.0;
+            qualifiedPhysicalPanelObservedNs = 0L;
+            builtInPhysicalClock.reset();
             inputHeight = ih;
             outputWidth = ow;
             outputHeight = oh;
@@ -1643,45 +2629,152 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     @Override public void onFrameAvailable(SurfaceTexture ignored) {
+        android.os.Trace.beginSection("EmuFusion.consumeFrame");
+        try {
+            consumeAvailableFrame(ignored);
+        } finally {
+            android.os.Trace.endSection();
+        }
+    }
+
+    private void consumeAvailableFrame(SurfaceTexture ignored) {
         // Listener is registered on our Handler, so this already owns EGL.
         if (closed.get() || inputTexture == null) return;
+        if (externalPresentationFailed) {
+            // Drain the producer queue after a fatal consumption/presentation failure
+            // so the emulator is not deadlocked behind an abandoned Surface.
+            // No failed endpoint may re-enter classification or presentation.
+            try { inputTexture.updateTexImage(); }
+            catch (RuntimeException ignoredFailure) {}
+            return;
+        }
         try {
-            // Presentation throughput is a wall-clock property. SurfaceTexture
-            // timestamps are media/emulation timestamps and may lag, jump or
-            // be repeated when Android coalesces queued producer buffers. Using
-            // them to pace the endpoint FIFO made a healthy 60-callback stream
-            // look like 45-50 endpoints/second during r67 even though the GL
-            // handler received every callback. Capture one monotonic arrival
-            // time before consuming this exact buffer and use it consistently
-            // for signature evidence, tier measurement and FIFO scheduling.
+            // Capture the callback arrival for diagnostics/fallback, then bind
+            // the retained image to SurfaceTexture's immutable producer PTS.
+            // Arrival time describes Handler scheduling, not when the image
+            // exists on the emulator timeline; substituting it makes temporal
+            // phase depend on Android callback jitter. A missing PTS is
+            // explicitly counted as an unqualified fallback below.
             long producerArrivalNs = System.nanoTime();
             inputTexture.updateTexImage();
+            long producerBufferTimestampNs = inputTexture.getTimestamp();
+            long producerTimestampNs = producerBufferTimestampNs > 0L ?
+                    producerBufferTimestampNs : producerArrivalNs;
+            if (producerBufferTimestampNs <= 0L)
+                ++endpointTimestampCorrections;
             inputTexture.getTransformMatrix(textureTransform);
             copyExternalTo(latestTexture);
+            // Observe the exact consumed buffer, never the arrival-time fallback.
+            // This sideband stays diagnostic until the complete image/guest-clock
+            // and physical-presentation joins are independently established.
+            if (nativeSourceImageObserver != null)
+                nativeSourceImageObserver.observeLatest(producerBufferTimestampNs);
             ++submittedFrameCount;
+            ++diagHardwareSubmits;
             notifyFirstSubmittedFrame();
+            boolean classifiedUnique;
+            clearNativeClassifiedObservation();
             if (frameRate.usesAuthoritativeSourceRate()) {
-                observeUniqueFrame(producerArrivalNs, submittedFrameCount);
-            } else if (latestImageIsUnique(producerArrivalNs)) {
-                observeUniqueFrame(classifiedUniqueTimestampNs,
-                        submittedFrameCount);
+                classifiedFrameReady = true;
+                classifiedUniqueTexture = latestTexture;
+                classifiedUniqueTimestampNs = producerTimestampNs;
+                classifiedUniqueSubmission = submittedFrameCount;
+                classifyLatestNativeObservation();
+                classifiedUnique = true;
+            } else {
+                classifiedUnique = latestImageIsUnique(producerTimestampNs);
             }
-            if (selectPresentationEndpoint(producerArrivalNs))
-                acceptPresentationEndpoint(latestTexture,
-                        presentationEndpointSelector.selectedTimestampNs());
+            finishNativeClassifiedObservation(classifiedUnique);
+            consumeClassifiedFrame(classifiedUnique);
         } catch (RuntimeException failure) {
-            Log.e(TAG, "Unable to consume emulator frame", failure);
+            clearNativeClassifiedObservation();
+            failRuntimePresentation("Unable to consume emulator frame", failure);
         }
     }
 
     @Override public void doFrame(long frameTimeNanos) {
-        if (closed.get()) return;
+        compositorFrameTimelineCount = 0;
+        compositorFrameTimelineSuppliedCount = 0;
+        renderFrame(frameTimeNanos);
+    }
+
+    private void onVsyncFrame(Choreographer.FrameData frameData) {
+        compositorFrameTimelineCount = 0;
+        compositorFrameTimelineSuppliedCount = 0;
+        ++compositorFrameTimelineCallbacks;
+        if (frameData != null && externalTransport == null) {
+            Choreographer.FrameTimeline[] timelines =
+                    frameData.getFrameTimelines();
+            compositorFrameTimelineSuppliedCount = timelines == null ? 0 :
+                    timelines.length;
+            if (timelines != null &&
+                    timelines.length <= MAX_COMPOSITOR_FRAME_TIMELINES) {
+                for (Choreographer.FrameTimeline timeline : timelines) {
+                    if (timeline == null) continue;
+                    int index = compositorFrameTimelineCount++;
+                    compositorFrameTimelineVsyncIds[index] =
+                            timeline.getVsyncId();
+                    compositorExpectedPresentationTimesNs[index] =
+                            timeline.getExpectedPresentationTimeNanos();
+                    compositorFrameTimelineDeadlinesNs[index] =
+                            timeline.getDeadlineNanos();
+                }
+            }
+        }
+        renderFrame(frameData == null ? System.nanoTime() :
+                frameData.getFrameTimeNanos());
+        compositorFrameTimelineCount = 0;
+        compositorFrameTimelineSuppliedCount = 0;
+    }
+
+    private void postNextFrameCallback() {
+        if (choreographer == null) return;
+        if (externalTransport != null && Build.VERSION.SDK_INT >= 33) {
+            if (compositorVsyncCallback == null)
+                compositorVsyncCallback = Api33VsyncCallback.create(this);
+            Api33VsyncCallback.post(choreographer, compositorVsyncCallback);
+        } else {
+            choreographer.postFrameCallback(this);
+        }
+    }
+
+    private void recordCompositorFrameTimelineProbe(
+            CompositorFrameTimeline.Probe probe) {
+        if (probe == null || !probe.hasLiveTimeline()) {
+            ++compositorFrameTimelineProbeNoLive;
+            return;
+        }
+        long errorNs = probe.signedTargetErrorNs();
+        if (compositorFrameTimelineProbeLive == 0L) {
+            compositorFrameTimelineProbeErrorSignedMinNs = errorNs;
+            compositorFrameTimelineProbeErrorSignedMaxNs = errorNs;
+        } else {
+            compositorFrameTimelineProbeErrorSignedMinNs = Math.min(
+                    compositorFrameTimelineProbeErrorSignedMinNs, errorNs);
+            compositorFrameTimelineProbeErrorSignedMaxNs = Math.max(
+                    compositorFrameTimelineProbeErrorSignedMaxNs, errorNs);
+        }
+        compositorFrameTimelineProbeErrorSignedLastNs = errorNs;
+        ++compositorFrameTimelineProbeLive;
+    }
+
+    private void renderFrame(long frameTimeNanos) {
+        android.os.Trace.beginSection("EmuFusion.renderFrame");
+        try {
+            renderTracedFrame(frameTimeNanos);
+        } finally {
+            android.os.Trace.endSection();
+        }
+    }
+
+    private void renderTracedFrame(long frameTimeNanos) {
+        if (closed.get() || externalPresentationFailed) return;
         // Register the following physical-vsync callback before any rendering
         // or eglSwapBuffers work.  Some Android EGL drivers block swap until
         // the next scan. Registering only after that wait loses the callback
         // that just occurred and deterministically halves a 120-Hz generated
         // stream even though the GPU work itself is within budget.
-        if (choreographer != null) choreographer.postFrameCallback(this);
+        postNextFrameCallback();
         try {
             if (lastCallbackFrameTimeNs != 0L) {
                 long deltaUs = Math.max(1L,
@@ -1692,6 +2785,35 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 if (deltaUs > 12500L) ++callbackLateCount;
             }
             lastCallbackFrameTimeNs = frameTimeNanos;
+            if (frameRate.observeDisplayFrameTime(frameTimeNanos)) {
+                Log.i(TAG, "Physical panel clock committed" +
+                        " generator=" + generatorId +
+                        " role=" + displayRole +
+                        " displayId=" + displayId +
+                        " declaredHz=" + String.format(
+                                java.util.Locale.US, "%.6f",
+                                frameRate.declaredPanelHz()) +
+                        " measuredHz=" + String.format(
+                                java.util.Locale.US, "%.6f",
+                                frameRate.panelHz()) +
+                        " samples=" +
+                                frameRate.panelClockSamplesForDiagnostics());
+            }
+            consumeExternalPresentationDiscontinuities();
+            consumeExternalEndpointDiscontinuities();
+            pollPhysicalPresentations();
+            if (externalTransport == null) {
+                frameRate.setGenerationAvailable(builtinClockAdmissionReady(
+                        densePyramidEnabled, densePyramidUnavailable, displayId,
+                        physicalPanelHz()));
+            }
+            if (externalTransport != null) {
+                if (externalPhysicalClockBoundaryCommittedThisCallback) {
+                    externalPhysicalClockBoundaryCommittedThisCallback = false;
+                    ++externalClockBoundaryWaits;
+                    return;
+                }
+            }
             if (densePyramidEnabled) {
                 try {
                     refreshProofEvidencePresentationEpoch();
@@ -1703,18 +2825,560 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             }
             reportStats();
             reportPresentationStall(frameTimeNanos);
-            // Choreographer follows the physical panel. The callback-slot
-            // accumulator selects the exact panel-capped x2 content target:
-            // divisors use invariant slots, while 80/100 use explicit 2:3/5:6
-            // physical-slot patterns. Timestamp interpolation remains tied to
-            // retained producer endpoints and only successful swaps are counted.
+            // Choreographer follows the physical panel. Every selected output
+            // is an exact divisor of that callback stream, so successful swaps
+            // have invariant scan spacing. Timestamp interpolation remains
+            // tied to adjacent retained producer endpoints; there are no
+            // alternating scan intervals or catch-up submissions.
+            synchronizeBufferedPresentationEpoch();
+            if (retryPendingAppOwnedPresentation()) return;
+            long presentationEpochBeforePrepare = schedulerPresentationEpoch();
             prepareBufferedPairIfPossible();
+            prepareExternalRealPairIfPossible();
+            if (schedulerPresentationEpoch() != presentationEpochBeforePrepare) {
+                logBufferedEpochBoundary("pair-prepare",
+                        presentationEpochBeforePrepare);
+                // Pair preparation already replaced the unsafe interval with
+                // its safe new REAL endpoint. Adopt that controller epoch in
+                // place; clearing the freshly prepared endpoint here hid it
+                // and left a selected decision pending into the next callback.
+                observedBufferedPresentationEpoch =
+                        schedulerPresentationEpoch();
+                // Pair preparation can reject a real source discontinuity
+                // before presentBuffered() takes its post-swap epoch snapshot.
+                // Rebase proof and HEALTH at that exact boundary; otherwise a
+                // later record mixes counts from the ended timeline with the
+                // replacement epoch identity.
+                refreshProofEvidencePresentationEpoch();
+                resetHealthWindowAfterStreamChange();
+            }
             ++bufferedPresentationCallbackCount;
+            // External Vulkan presentation returns through
+            // presentExternalBuffered() and therefore never reaches the
+            // built-in EGL path's 120-present proof refresh below.  Poll the
+            // shell-only qualification switch from this shared callback path
+            // at most once per 120 physical callbacks.  r75 otherwise stayed
+            // Direct forever after the gameplay owner armed proof.  The
+            // bounded cadence avoids Settings.Global I/O on every vsync while
+            // activating or disabling the qualification arm within one
+            // measured-panel second.
+            if (externalTransport != null &&
+                    bufferedPresentationCallbackCount % HEALTH_INTERVAL == 0L) {
+                refreshQualificationProofState();
+                maybeRearmExternalTimingAfterCooldown();
+            }
+            // Backend certification is rate-path specific. In particular, an
+            // Ocarina 20->40 qualification arm must remain dormant during the
+            // game's 60-Hz startup/menu transient; success or package presence
+            // at 20->40 cannot authorize a cold 60->120 inference deadline.
+            // Refusal remains endpoint-only Direct presentation.
+            if (externalTransport != null) {
+                int candidateSource = frameRate.candidateGeneratedSourceFps();
+                int candidateOutput = frameRate.candidateGeneratedOutputFps();
+                int candidateScans =
+                        frameRate.candidateGeneratedPanelScansPerOutput();
+                boolean appOwnedPresentation =
+                        externalTransport.usesAppOwnedPresentation();
+                boolean physicalAuthorityReady = appOwnedPresentation ?
+                        physicalPresentationTracker != null &&
+                                physicalPresentationTracker.available() :
+                        externalPhysicalClockBootstrap.complete();
+                boolean supported = frameRate.panelClockMeasured() &&
+                        physicalAuthorityReady &&
+                        // Every currently constructible external transport is
+                        // an explicit shell-only qualification arm.  Keep it
+                        // endpoint-only until the moving-game proof owner arms
+                        // this generator.  r74 otherwise generated over the
+                        // Ocarina title/intro, suffered one genuine slot miss,
+                        // and correctly quarantined itself before the HUD was
+                        // ever reached; the later proof could then never test
+                        // the gameplay rate path.  This does not weaken the
+                        // miss quarantine: once proof is armed, any slot miss
+                        // remains permanent for the session.
+                        qualificationProofEnabled &&
+                        !externalTimingRejected &&
+                        candidateScans > 0 &&
+                        externalTransport.supportsRatePath(
+                                candidateSource, candidateOutput);
+                boolean privatePipelineWarm = supported &&
+                        externalTransport.privateGenerationPipelineWarm();
+                boolean beginPriming = supported &&
+                        !externalRatePathActive &&
+                        !externalRatePathPriming;
+                boolean beginOutputPriming = supported &&
+                        !externalRatePathActive &&
+                        externalRatePathPriming &&
+                        !externalRatePathOutputPriming &&
+                        privatePipelineWarm;
+                boolean disablePath = !supported &&
+                        (externalRatePathActive || externalRatePathPriming);
+                if (beginPriming || beginOutputPriming || disablePath) {
+                    Log.i(TAG, "External rate-path transition" +
+                            " generator=" + generatorId +
+                            " lockedSourceFps=" + frameRate.lockedSourceFps() +
+                            " candidateSource=" + candidateSource +
+                            " presentationSourceHz=" + String.format(
+                                    java.util.Locale.US, "%.9f",
+                                    frameRate.presentationSourceHz()) +
+                            " candidateOutput=" + candidateOutput +
+                            " candidateScans=" + candidateScans +
+                            " panelMeasured=" +
+                                    (frameRate.panelClockMeasured() ? 1 : 0) +
+                            " supported=" + (supported ? 1 : 0) +
+                            " previousActive=" +
+                                    (externalRatePathActive ? 1 : 0) +
+                            " previousPriming=" +
+                                    (externalRatePathPriming ? 1 : 0) +
+                            " previousOutputPriming=" +
+                                    (externalRatePathOutputPriming ? 1 : 0) +
+                            " privatePipelineWarm=" +
+                                    (privatePipelineWarm ? 1 : 0) +
+                            " generationAvailable=" +
+                                    (frameRate.generationAvailable() ? 1 : 0) +
+                            " retentionProof=" +
+                                    frameRate.canonicalRetentionProofSummaryForDiagnostics() +
+                            " rejectedQualifiedClockHz=" + String.format(
+                                    java.util.Locale.US, "%.3f",
+                                    frameRate.lastRejectedQualifiedTimestampSourceHzForDiagnostics()) +
+                            " rejectedQualifiedProof=" +
+                                    frameRate.lastRejectedQualifiedTimestampProofForDiagnostics());
+                    // A rate-path boundary is a presentation-session boundary.
+                    // Never carry FIFO endpoints, native Images, interpolation
+                    // readiness, or controller credit from an unauthorized
+                    // startup/menu rate into the newly certified path.
+                    // Publish the rate-path identity before resetting the
+                    // transport timeline. Qualification backends may pipeline
+                    // only already-prepared future-pair evidence while this
+                    // exact path is active; startup Direct retains its smaller
+                    // endpoint-only deadline workload.
+                    if (beginPriming) {
+                        // Warm the model and prove a complete endpoint-import
+                        // cache rotation while visible output remains Direct.
+                        // No generated target is published in this stage.
+                        externalTransport.setGeneratedRatePathActive(true);
+                        externalRatePathPriming = true;
+                        return;
+                    }
+                    if (beginOutputPriming) {
+                        // Publish exactly one fresh generated scheduler epoch,
+                        // discard the warm-up pair, and hold its first new
+                        // three-endpoint window without presenting. The exact
+                        // first midpoint is computed below before 120 becomes
+                        // active; this avoids exposing an 8.33-ms slot to a
+                        // 13-ms cold/current-pair preparation.
+                        frameRate.setGenerationAvailable(true);
+                        observedBufferedPresentationEpoch =
+                                schedulerPresentationEpoch();
+                        invalidateBufferedPairForReprime(false);
+                        refreshProofEvidencePresentationEpoch();
+                        externalRatePathOutputPriming = true;
+                        externalDirectOutputPhaseAnchorNs = 0L;
+                        resetHealthWindowAfterStreamChange();
+                        return;
+                    }
+                    externalTransport.setGeneratedRatePathActive(false);
+                    externalRatePathPriming = false;
+                    externalRatePathOutputPriming = false;
+                    externalRatePathActive = false;
+                    externalAppOwnedActivationFirstSwapPending = false;
+                    externalDirectOutputPhaseAnchorNs = 0L;
+                    frameRate.setGenerationAvailable(false);
+                    invalidateBufferedPairForReprime(false);
+                    resetHealthWindowAfterStreamChange();
+                    return;
+                }
+            }
+            // Endpoint buffers reach an external ImageReader asynchronously.
+            // The renderer-side FIFO may already own an exact adjacent pair
+            // while the external backend does not yet own the corresponding
+            // HardwareBuffers.  Do not let the controller select (and commit)
+            // a REAL or SYNTHETIC presentation until that ownership transfer
+            // is complete.  Skipping this callback cannot create a catch-up
+            // burst: no controller slot is selected, and the next successful
+            // selection is paced from that later physical callback.  The
+            // immutable endpoint pair remains retained for the next attempt.
+            if (externalTransport != null &&
+                    (activeLeftSequence <= 0L ||
+                            activeRightSequence != activeLeftSequence + 1L ||
+                            !externalTransport.hasAdjacentPair(
+                                    activeLeftSequence,
+                                    activeRightSequence))) {
+                return;
+            }
+            if (externalRatePathOutputPriming) {
+                if (!primeFirstExternalGeneratedOutput()) return;
+                // Output priming deliberately pauses visible swaps. Use that
+                // bounded pause to retire every Direct-era physical request
+                // before publishing the generated epoch. Otherwise an old
+                // compositor-pending Direct row can resolve after activation
+                // and incorrectly quarantine a newly proven 60->120 path.
+                // The tracker remains strictly fail-closed: a genuine drop or
+                // unavailable Direct row is consumed above and rejects the
+                // arm before this clean-boundary gate can pass.
+                if (externalTransport.usesAppOwnedPresentation() &&
+                        (!appOwnedPhysicalPending.isEmpty() ||
+                                physicalPresentationTracker == null ||
+                                physicalPresentationTracker.pendingCount() != 0))
+                    return;
+                // The first output is READY for this exact held pair. Expose
+                // the generated rate without another controller/timeline
+                // reset, then let the ordinary selector present REAL-left.
+                externalRatePathOutputPriming = false;
+                externalRatePathPriming = false;
+                externalRatePathActive = true;
+                externalAppOwnedActivationFirstSwapPending =
+                        externalTransport.usesAppOwnedPresentation();
+                motionEstimateReady = true;
+                activePairReady = true;
+                resetHealthWindowAfterStreamChange();
+                Log.i(TAG, "External rate-path first output ready" +
+                        " generator=" + generatorId +
+                        " epoch=" + schedulerPresentationEpoch() +
+                        " pair=" + activeLeftSequence + "/" +
+                                activeRightSequence +
+                        " source=" + frameRate.lockedSourceFps() +
+                        " output=" + frameRate.outputFps());
+            }
+            // A newly activated generated path has no pair assessment yet.
+            // Hold its first retained pair until the already-buffered third
+            // endpoint is backend-prepared; the first exact REAL can then
+            // pipeline the next pair's proof without cold-importing on its
+            // visible deadline. Once this pair itself is READY, ordinary
+            // generated scheduling no longer depends on look-ahead ownership.
+            if (externalTransport != null && externalRatePathActive &&
+                    !activePairReady &&
+                    externalTransport.generationReadiness(
+                            activeLeftSequence, activeRightSequence) ==
+                            ExternalFrameGenerationTransport.GenerationReadiness.PENDING &&
+                    !externalTransport.hasPreparedLookahead(activeRightSequence)) {
+                ++externalLookaheadReadinessWaits;
+                return;
+            }
+            // Before VK_GOOGLE display timing has calibrated the physical
+            // clock, the generic external planner may retain one endpoint in
+            // the transport across several panel callbacks. Do not select or
+            // consume another controller slot while that exact zero-wait
+            // submission capacity is unavailable. Once bootstrap completes,
+            // the proven Direct/generated planners and their explicit
+            // DEFERRED handling remain authoritative.
+            if (externalTransport != null &&
+                    !externalPhysicalClockBootstrap.complete() &&
+                    !externalTransport.visibleSubmissionReady()) {
+                ++externalBootstrapCapacityWaits;
+                return;
+            }
             long underrunsBefore = frameRate.bufferedUnderrunCount();
+            long presentationEpochBeforeSelection = schedulerPresentationEpoch();
+            long deadlineNowNs = System.nanoTime();
+            boolean appOwnedExternal = externalTransport != null &&
+                    externalTransport.usesAppOwnedPresentation();
+            boolean appOwnedClockAvailable = appOwnedExternal &&
+                    externalPhysicalClock.available();
+            boolean externalClockAvailable = externalTransport != null &&
+                    !appOwnedExternal &&
+                    externalPhysicalClock.available();
+            PhysicalPresentationDeadline deadline = appOwnedExternal ?
+                    (appOwnedClockAvailable ?
+                            (externalRatePathActive ?
+                                    PhysicalPresentationDeadline.
+                                            nextAlignedAppOwnedGenerated(
+                                            frameTimeNanos,
+                                            externalPhysicalClock.trackedPlanningAnchorNs(),
+                                            externalPhysicalClock.planningPeriodNs(),
+                                            frameRate.panelScansPerOutput(),
+                                            deadlineNowNs,
+                                            externalLastPlannedPhysicalNs) :
+                                    PhysicalPresentationDeadline.nextAlignedOutputDirect(
+                                            frameTimeNanos,
+                                            externalPhysicalClock.trackedPlanningAnchorNs(),
+                                            externalPhysicalClock.planningPeriodNs(),
+                                            externalRatePathActive ?
+                                                    frameRate.panelScansPerOutput() :
+                                                    appOwnedPhysicalScansPerOutput(),
+                                            deadlineNowNs,
+                                            externalLastPlannedPhysicalNs)) :
+                            PhysicalPresentationDeadline.next(
+                                    frameTimeNanos,
+                                    frameRate.panelPeriodNs(),
+                                    deadlineNowNs)) : externalClockAvailable ?
+                    (externalRatePathActive ?
+                            (externalTransport.requiresCompositorFrameTimeline() ?
+                                    PhysicalPresentationDeadline.nextAlignedOutput(
+                                            frameTimeNanos,
+                                            externalPhysicalClock.anchorNs(),
+                                            externalPhysicalClock.planningPeriodNs(),
+                                            frameRate.panelScansPerOutput(),
+                                            deadlineNowNs,
+                                            externalLastPlannedPhysicalNs) :
+                                    (modeAlignedSixtyHertzOneScanOutput() ?
+                                            PhysicalPresentationDeadline.
+                                                    nextAlignedOneScanOutputDirectAfterPredecessor(
+                                                    frameTimeNanos,
+                                                    externalDirectOutputPhaseAnchorNs > 0L ?
+                                                            externalDirectOutputPhaseAnchorNs :
+                                                            externalPhysicalClock.anchorNs(),
+                                                    externalPhysicalClock.planningPeriodNs(),
+                                                    deadlineNowNs,
+                                                    externalLastPlannedPhysicalNs) :
+                                            PhysicalPresentationDeadline.
+                                                    nextAlignedOutputDirect(
+                                                    frameTimeNanos,
+                                                    externalDirectOutputPhaseAnchorNs > 0L ?
+                                                            externalDirectOutputPhaseAnchorNs :
+                                                            externalPhysicalClock.anchorNs(),
+                                                    externalPhysicalClock.planningPeriodNs(),
+                                                    externalDirectOutputPhaseAnchorNs > 0L ?
+                                                            frameRate.panelScansPerOutput() : 1,
+                                                    deadlineNowNs,
+                                                    externalLastPlannedPhysicalNs))) :
+                            // Endpoint-only Direct has no private inference or
+                            // compositor predecessor token to prepare.  Do not
+                            // retain its single native WSI slot for a complete
+                            // refresh-derived preparation window: physical
+                            // r170 proved that a 30-Hz request held about
+                            // 44 ms early remains nativePending when the next
+                            // source endpoint arrives and collapses delivered
+                            // cadence to about 17 FPS.  Use the same bounded
+                            // direct admission on the next safe panel scan as
+                            // the generated-path bootstrap.  A divisor of one
+                            // here does not relabel Direct as panel-rate output;
+                            // the controller still submits only independently
+                            // classified source endpoints, while the immutable
+                            // content timestamp and physical ledger remain the
+                            // cadence authority.
+                            (externalTransport.requiresCompositorFrameTimeline() ?
+                                    PhysicalPresentationDeadline.nextAlignedOutput(
+                                            frameTimeNanos,
+                                            externalPhysicalClock.anchorNs(),
+                                            externalPhysicalClock.planningPeriodNs(),
+                                            1,
+                                            deadlineNowNs,
+                                            externalLastPlannedPhysicalNs) :
+                                    PhysicalPresentationDeadline.nextAlignedOutputDirect(
+                                            frameTimeNanos,
+                                            externalPhysicalClock.anchorNs(),
+                                            externalPhysicalClock.planningPeriodNs(),
+                                            1,
+                                            deadlineNowNs,
+                                            externalLastPlannedPhysicalNs))) :
+                    (externalTransport != null ?
+                            PhysicalPresentationDeadline.nextExternal(
+                                    frameTimeNanos,
+                                    frameRate.panelPeriodNs(),
+                                    deadlineNowNs) :
+                            nextBuiltInDeadline(frameTimeNanos, deadlineNowNs));
+            if (!deadline.valid()) {
+                Log.e(TAG, "No future physical presentation deadline" +
+                        " generator=" + generatorId +
+                        " callbackNs=" + frameTimeNanos +
+                        " panelPeriodNs=" + frameRate.panelPeriodNs());
+                return;
+            }
+            // Startup may deliver queued source frames faster than real time.
+            // Monotonic target selection alone turns that burst into permanent
+            // future-slot debt. Keep the retained endpoint unconsumed until its
+            // Direct submission window opens; do not retime a committed frame.
+            // Generated activation has its own predecessor/ready-output gates.
+            if (appOwnedExternal && !externalRatePathActive &&
+                    !directExternalSubmissionWindowOpen(
+                            deadline.contentPresentationTimeNs(), deadlineNowNs,
+                            frameRate.panelPeriodNs(), appOwnedPhysicalScansPerOutput()))
+                return;
+            CompositorFrameTimeline.Selection compositorTimeline = null;
+            if (externalTransport != null &&
+                    externalTransport.requiresCompositorFrameTimeline()) {
+                java.util.Arrays.fill(
+                        compositorFrameTimelineSourceMetadata, 0L);
+                compositorFrameTimelineCount =
+                        externalTransport.copyCompositorFrameTimelines(
+                                compositorFrameTimelineVsyncIds,
+                                compositorExpectedPresentationTimesNs,
+                                compositorFrameTimelineDeadlinesNs,
+                                compositorFrameTimelineSourceMetadata);
+                if (compositorFrameTimelineCount < 0 ||
+                        compositorFrameTimelineCount >
+                                MAX_COMPOSITOR_FRAME_TIMELINES)
+                    throw new IllegalStateException(
+                            "native compositor frame-timeline count is invalid");
+                compositorFrameTimelineSuppliedCount =
+                        compositorFrameTimelineCount;
+                compositorFrameTimelineNativeCallbackSequence =
+                        compositorFrameTimelineSourceMetadata[0];
+                compositorFrameTimelineNativeFrameTimeNs =
+                        compositorFrameTimelineSourceMetadata[1];
+                if (compositorFrameTimelineCount > 0 &&
+                        (compositorFrameTimelineNativeCallbackSequence <= 0L ||
+                                compositorFrameTimelineNativeFrameTimeNs <= 0L))
+                    throw new IllegalStateException(
+                            "native compositor frame-timeline identity is invalid");
+                if (!compositorPredictionLattice.observe(
+                        compositorFrameTimelineNativeFrameTimeNs,
+                        compositorExpectedPresentationTimesNs,
+                        compositorFrameTimelineCount)) {
+                    ++compositorFrameTimelineUnavailable;
+                    // A lost scan identity ends the stream, not permission to
+                    // shift a divisor phase or repair already-minted requests.
+                    if (compositorPredictionLattice.available()) {
+                        compositorPredictionLattice.reset();
+                        long previousEpoch = schedulerPresentationEpoch();
+                        frameRate.resetPresentation();
+                        resetEndpointTimelineForSchedulerEpoch();
+                        refreshProofEvidencePresentationEpoch();
+                        resetHealthWindowAfterStreamChange();
+                        Log.w(TAG, "Compositor prediction discontinuity" +
+                                " generator=" + generatorId +
+                                " previousEpoch=" + previousEpoch +
+                                " epoch=" + schedulerPresentationEpoch());
+                    }
+                    return;
+                }
+                if (!externalClockAvailable) {
+                    // Before the first actual-present timestamp there is no
+                    // measured physical phase to match. Adopt Android's
+                    // earliest still-meetable timeline as the bootstrap scan;
+                    // never widen the strict selector for calibrated output.
+                    compositorTimeline =
+                            CompositorFrameTimeline.selectEarliestRefreshSafeTarget(
+                                    frameRate.panelPeriodNs(), deadlineNowNs,
+                                    compositorFrameTimelineVsyncIds,
+                                    compositorExpectedPresentationTimesNs,
+                                    compositorFrameTimelineDeadlinesNs,
+                                    compositorFrameTimelineCount);
+                    if (compositorTimeline != null) {
+                        deadline = PhysicalPresentationDeadline.
+                                fromCompositorTimeline(
+                                        compositorTimeline.
+                                                expectedPresentationTimeNs(),
+                                        compositorTimeline.targetDeadlineNs(),
+                                        deadlineNowNs);
+                        if (!deadline.valid()) compositorTimeline = null;
+                    }
+                } else {
+                    // The current Android prediction owns a NEW request's
+                    // planning phase. Fences independently measure cadence;
+                    // they must not supply a stale prediction's slope.
+                    int predictionScans = externalRatePathActive ?
+                            frameRate.panelScansPerOutput() : 1;
+                    deadline = PhysicalPresentationDeadline.nextAlignedOutput(
+                            frameTimeNanos,
+                            compositorPredictionLattice.anchorNs(predictionScans),
+                            compositorPredictionLattice.periodNs(),
+                            predictionScans, deadlineNowNs,
+                            externalLastPlannedPhysicalNs);
+                    if (!deadline.valid()) return;
+                    compositorTimeline =
+                            CompositorFrameTimeline.selectRefreshSafeTarget(
+                            deadline.contentPresentationTimeNs(),
+                            externalPhysicalClock.planningPeriodNs(),
+                            deadlineNowNs,
+                            compositorFrameTimelineVsyncIds,
+                            compositorExpectedPresentationTimesNs,
+                            compositorFrameTimelineDeadlinesNs,
+                            compositorFrameTimelineCount);
+                }
+                if (compositorTimeline == null) {
+                    ++compositorFrameTimelineUnavailable;
+                    CompositorFrameTimeline.Probe probe =
+                            CompositorFrameTimeline.probe(
+                                    deadline.contentPresentationTimeNs(),
+                                    deadlineNowNs,
+                                    compositorFrameTimelineVsyncIds,
+                                    compositorExpectedPresentationTimesNs,
+                                    compositorFrameTimelineDeadlinesNs,
+                                    compositorFrameTimelineCount);
+                    recordCompositorFrameTimelineProbe(probe);
+                    if (compositorFrameTimelineDiagnosticLogs <
+                            MAX_COMPOSITOR_TIMELINE_DIAGNOSTIC_LOGS) {
+                        ++compositorFrameTimelineDiagnosticLogs;
+                        Log.w(TAG, "Compositor frame-timeline miss" +
+                                " generator=" + generatorId +
+                                " sample=" +
+                                compositorFrameTimelineDiagnosticLogs +
+                                " callbackNs=" + frameTimeNanos +
+                                " nowNs=" + deadlineNowNs +
+                                " targetNs=" +
+                                deadline.contentPresentationTimeNs() +
+                                " targetFromCallbackNs=" +
+                                (deadline.contentPresentationTimeNs() -
+                                        frameTimeNanos) +
+                                " targetFromNowNs=" +
+                                (deadline.contentPresentationTimeNs() -
+                                        deadlineNowNs) +
+                                " nativeCallbackSequence=" +
+                                compositorFrameTimelineNativeCallbackSequence +
+                                " nativeFrameTimeNs=" +
+                                compositorFrameTimelineNativeFrameTimeNs +
+                                " supplied=" +
+                                compositorFrameTimelineSuppliedCount +
+                                " copied=" + probe.suppliedCount() +
+                                " live=" + probe.liveCount() +
+                                " nearestVsyncId=" + probe.vsyncId() +
+                                " nearestExpectedNs=" +
+                                probe.expectedPresentationTimeNs() +
+                                " nearestDeadlineNs=" + probe.deadlineNs() +
+                                " nearestErrorNs=" +
+                                probe.signedTargetErrorNs());
+                        // These are predictions and previously observed values,
+                        // not a repaired target or a new cadence-proof baseline.
+                        Log.w(TAG, "Compositor clock snapshot" +
+                                " generator=" + generatorId +
+                                " sample=" + compositorFrameTimelineDiagnosticLogs +
+                                " epoch=" + schedulerPresentationEpoch() +
+                                " anchorNs=" + externalPhysicalClock.anchorNs() +
+                                " lastActualNs=" + externalPhysicalClock.lastActualNs() +
+                                " periodNs=" + externalPhysicalClock.planningPeriodNs() +
+                                " nominalNs=" + externalPhysicalClock.nominalPeriodNs() +
+                                " epochScans=" + externalPhysicalClock.observedScans() +
+                                " frequencyScans=" + externalPhysicalClock.frequencyObservedScans() +
+                                " frequencyBreaks=" + externalPhysicalClock.frequencyDiscontinuities() +
+                                " lastPlannedNs=" + externalLastPlannedPhysicalNs +
+                                " predictionPeriodNs=" + compositorPredictionLattice.periodNs() +
+                                " predictionOrdinal=" + compositorPredictionLattice.headOrdinal() +
+                                " realRows=" + presentationClockDiagnostics.size() +
+                                " count=" + compositorFrameTimelineCount +
+                                " ids=" + java.util.Arrays.toString(compositorFrameTimelineVsyncIds) +
+                                " expected=" + java.util.Arrays.toString(compositorExpectedPresentationTimesNs) +
+                                " deadlines=" + java.util.Arrays.toString(compositorFrameTimelineDeadlinesNs));
+                        for (int diagnosticRow = 0;
+                                diagnosticRow < presentationClockDiagnostics.size(); ++diagnosticRow)
+                            Log.w(TAG, "Compositor clock observation" +
+                                    " generator=" + generatorId +
+                                    " sample=" + compositorFrameTimelineDiagnosticLogs +
+                                    " row=" + diagnosticRow + " " +
+                                    presentationClockDiagnostics.describe(diagnosticRow));
+                    }
+                    // Do not consume the controller's divisor-lattice slot.
+                    // A desired-present timestamp without the matching API-33
+                    // frame-timeline token is exactly the best-effort path that
+                    // produced r79's isolated one-scan SurfaceFlinger miss.
+                    return;
+                }
+                ++compositorFrameTimelineSelected;
+                compositorFrameTimelineErrorMaxNs = Math.max(
+                        compositorFrameTimelineErrorMaxNs,
+                        Math.abs(compositorTimeline.signedTargetErrorNs()));
+            }
             int presentation = frameRate.selectBufferedPresentation(
-                    frameTimeNanos, activeLeftSequence, activeLeftTimestampNs,
+                    frameTimeNanos, deadline.contentPresentationTimeNs(),
+                    activeLeftSequence, activeLeftTimestampNs,
+                    activeLeftUniqueSequence, activeLeftSubmission,
+                    activeLeftCandidateLoss,
                     activeRightSequence, activeRightTimestampNs,
+                    activeRightUniqueSequence, activeRightSubmission,
+                    activeRightCandidateLoss,
                     activePairReady && motionEstimateReady);
+            if (schedulerPresentationEpoch() != presentationEpochBeforeSelection)
+                logBufferedEpochBoundary("selection",
+                        presentationEpochBeforeSelection);
+            if (schedulerPresentationEpoch() !=
+                    presentationEpochBeforeSelection) {
+                // Selection can fail closed and publish a fresh epoch before it
+                // has a present to commit. Atomically discard the renderer's
+                // matching old pair here; otherwise that pair can remain held
+                // forever while the controller correctly refuses to re-prime it.
+                synchronizeBufferedPresentationEpoch();
+                presentation = AdaptiveFrameRateController.PRESENT_NONE;
+            }
             if (frameRate.bufferedUnderrunCount() != underrunsBefore) {
                 ++bufferedSyntheticNotReadyCount;
                 // The controller deliberately advances its output lattice on
@@ -1726,9 +3390,24 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             if (presentation != AdaptiveFrameRateController.PRESENT_NONE) {
                 long denseWallStart = densePyramidEnabled ? System.nanoTime() : 0L;
                 long presentStarted = densePyramidEnabled ? System.nanoTime() : 0L;
+                FrameGenerationPreparationRequest externalPreparation =
+                        buildExternalGeneratedPreparation(
+                                presentation, deadline);
+                long bufferedPresentsBefore =
+                        frameRate.bufferedPresentationCount();
                 try {
-                    presentBuffered(frameTimeNanos, presentation,
+                    presentBuffered(deadline, compositorTimeline,
+                            presentation,
                             frameRate.bufferedSelectedPhase());
+                    // Queue the visible REAL first. Private inference is then
+                    // ordered behind its WSI submission and cannot consume the
+                    // endpoint's physical deadline. A dropped/failed visible
+                    // request must not authorize speculative private work.
+                    if (externalPreparation != null &&
+                            frameRate.bufferedPresentationCount() ==
+                                    bufferedPresentsBefore + 1L)
+                        submitExternalGeneratedPreparation(
+                                externalPreparation);
                 } catch (RuntimeException failure) {
                     frameRate.abortBufferedPresentation();
                     invalidateBufferedPairForReprime(false);
@@ -1745,39 +3424,180 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     finalizeDenseCadenceReject();
             }
         } catch (RuntimeException failure) {
-            Log.e(TAG, "Display-vsync presentation failed", failure);
+            failRuntimePresentation(externalTransport != null
+                    ? "External presentation session failed closed"
+                    : "Display-vsync presentation failed", failure);
         }
     }
 
-    @Override public void close() {
-        if (!closed.compareAndSet(false, true)) return;
-        Surface registered = inputSurface;
-        synchronized (INPUTS) {
-            if (registered != null) INPUTS.remove(registered);
+    /** Renderer-owner only; consume and present failures share the same terminal state. */
+    private void failRuntimePresentation(String diagnostic, RuntimeException failure) {
+        if (closed.get() || externalPresentationFailed) return;
+        // An endpoint export can fail before the transport sets its own fatal
+        // state. End classification/submission here regardless of which stage
+        // failed. Already-posted vsync callbacks observe this latch and stop.
+        // Keep onFrameAvailable's producer drain until the host pauses/stops;
+        // closing or rebinding from this thread would violate owner lifetime.
+        externalPresentationFailed = true;
+        Log.e(TAG, diagnostic, failure);
+        try {
+            runtimeFailure.report(
+                    "The game display stopped. Return to EmuFusion and reopen the game.", failure);
+        } catch (RuntimeException callbackFailure) {
+            Log.e(TAG, "Runtime display error listener failed", callbackFailure);
         }
-        CountDownLatch finished = new CountDownLatch(1);
-        handler.post(() -> {
-            try { releaseGl(); }
-            finally { finished.countDown(); }
-        });
-        try { finished.await(STOP_TIMEOUT_MS, TimeUnit.MILLISECONDS); }
-        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
-        thread.quitSafely();
+    }
+
+    private void consumeExternalEndpointDiscontinuities() {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null) return;
+        long skipped = transport.consumeEndpointDiscontinuities();
+        if (skipped <= 0L) return;
+        endpointCandidateUnavailable += skipped;
+        long previousEpoch = schedulerPresentationEpoch();
+        frameRate.resetPresentation();
+        resetEndpointTimelineForSchedulerEpoch();
+        refreshProofEvidencePresentationEpoch();
+        resetHealthWindowAfterStreamChange();
+        Log.w(TAG, "External endpoint carrier discontinuity" +
+                " generator=" + generatorId +
+                " skipped=" + skipped +
+                " previousEpoch=" + previousEpoch +
+                " epoch=" + schedulerPresentationEpoch());
+    }
+
+    private void consumeExternalPresentationDiscontinuities() {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null) return;
+        long interruptions = transport.consumePresentationDiscontinuities();
+        if (interruptions <= 0L) return;
+
+        // Physical output capacity disappeared long enough that the current
+        // cadence/proof epoch cannot be certified. Keep polling the same WSI
+        // transport so exact Direct output can recover, but generation is
+        // permanently quarantined for this process. No missed slot is counted,
+        // retried, or carried across the new scheduler epoch.
+        long previousEpoch = schedulerPresentationEpoch();
+        markExternalTimingRejected();
+        externalRatePathActive = false;
+        externalRatePathPriming = false;
+        externalRatePathOutputPriming = false;
+        externalAppOwnedActivationFirstSwapPending = false;
+        externalDirectOutputPhaseAnchorNs = 0L;
+        transport.setGeneratedRatePathActive(false);
+        long epochBeforeDisable = schedulerPresentationEpoch();
+        frameRate.setGenerationAvailable(false);
+        // setGenerationAvailable(false) publishes its own epoch only when it
+        // actually changes state. Direct startup can encounter the same WSI
+        // interruption while generation is already false, so publish exactly
+        // one explicit epoch in that case—never two boundaries for one event.
+        if (schedulerPresentationEpoch() == epochBeforeDisable)
+            frameRate.resetPresentation();
+        resetEndpointTimelineForSchedulerEpoch();
+        refreshProofEvidencePresentationEpoch();
+        resetHealthWindowAfterStreamChange();
+        Log.e(TAG, "External presentation transport interrupted" +
+                " generator=" + generatorId +
+                " interruptions=" + interruptions +
+                " previousEpoch=" + previousEpoch +
+                " epoch=" + schedulerPresentationEpoch() +
+                " generatedQuarantined=1");
+    }
+
+    @Override public void close() {
+        closeAfterStartupFailure(null);
+    }
+
+    private void closeAfterStartupFailure(Throwable originalFailure) {
+        if (closed.compareAndSet(false, true)) {
+            runtimeFailure.close();
+            Surface registered = inputSurface;
+            FrameGenerationRendererRegistry.unregister(registered, this);
+            // Serialized behind initialize(): a timed-out native open cannot
+            // still own output when retirement is acknowledged. Cancellation
+            // prevents it from starting the EGL/render path when it returns.
+            if (!handler.post(() -> {
+                Throwable cleanupFailure = null;
+                try { releaseGl(); }
+                catch (Throwable failure) { cleanupFailure = failure; }
+                finally {
+                    surfaceRetirement.complete(cleanupFailure);
+                    thread.quitSafely();
+                }
+            })) surfaceRetirement.complete(new IllegalStateException(
+                    "Renderer owner rejected display retirement"));
+        }
+        long timeoutMs = externalTransportFactory == null ?
+                STOP_TIMEOUT_MS : EXTERNAL_STOP_TIMEOUT_MS;
+        surfaceRetirement.await(timeoutMs, originalFailure);
     }
 
     private void initialize() {
         try {
+            throwIfStartupCancelled();
+            if (externalTransportFactory != null) {
+                externalTransport = externalTransportFactory.open(
+                        outputSurface, handler, inputWidth, inputHeight);
+                throwIfStartupCancelled();
+                if (externalTransport == null ||
+                        externalTransport.endpointWidth() < 1 ||
+                        externalTransport.endpointHeight() < 1 ||
+                        !externalTransport.supportsEndpointOnlyPresentation())
+                    throw new IllegalStateException(
+                            "external transport lacks mandatory Direct passthrough");
+                // A fixed-midpoint backend can only fill x2 targets; plan
+                // 20->40 / 30->60 / 60->120 for it instead of the built-in
+                // x3 tiers (which its supportsRatePath would refuse forever,
+                // leaving the session Direct: lsfg4, 2026-09-03).
+                frameRate.setMaxGenerationFactor(externalTransport.maxGenerationFactor());
+                registerExternalPreparationCapacityListener();
+                Log.i(TAG, "External transport generation ceiling generator=" + generatorId +
+                        " backend=" + externalTransport.backendLabel() +
+                        " maxGenerationFactor=" + externalTransport.maxGenerationFactor());
+            }
             initializeEgl();
+            throwIfStartupCancelled();
+            physicalPresentationTracker = appOwnsVisiblePresentation() ?
+                    PhysicalPresentationTracker.create() : null;
+            if (physicalPresentationTracker == null &&
+                    appOwnsVisiblePresentation()) {
+                physicalPresentationUnavailableLogged = true;
+                Log.w(TAG, "Physical scanout timestamps unavailable" +
+                        " generator=" + generatorId +
+                        " extension=EGL_ANDROID_get_frame_timestamps");
+            } else {
+                Log.i(TAG, "Physical scanout timestamp tracker active" +
+                        " generator=" + generatorId +
+                        " timestamp=EGL_DISPLAY_PRESENT_TIME_ANDROID");
+            }
             initializeGl();
+            throwIfStartupCancelled();
+            if (externalTransport != null) {
+                initializeExternalSignatureClassifier();
+                // External backend certification is per exact rate path.
+                // Start endpoint-only so an unsupported/preflight rate stays
+                // visible Direct instead of claiming generated output.
+                frameRate.setExactDoubleEndpointLatticeRequired(true);
+                frameRate.setGenerationAvailable(false);
+            }
+            // NOTE (2026-08-17 audit): a previous session disabled the
+            // uniqueness readback for EVERY Adreno GPU here because of one
+            // glReadPixels SIGSEGV. That made every producer arrival count
+            // as a unique frame — a duplicate-submitting 30 fps source
+            // (ARMSX2/KH physically does this) would measure 60 and violate
+            // the unique-endpoint contract. The crash mitigation is the
+            // glFinish barrier plus the error-triggered degrade in
+            // latestImageIsUnique below, never a blanket disable.
             inputTexture = new SurfaceTexture(externalTexture);
             inputTexture.setDefaultBufferSize(inputWidth, inputHeight);
             inputTexture.setOnFrameAvailableListener(this, handler);
             inputSurface = new Surface(inputTexture);
+            throwIfStartupCancelled();
             requestOutputFrameRate("initialize");
             choreographer = Choreographer.getInstance();
             healthWindowStartNanos = System.nanoTime();
             updateSchedulerHealthBaseline();
-            choreographer.postFrameCallback(this);
+            postNextFrameCallback();
             Log.i(TAG, "Frame generator attached generator=" + generatorId +
                     " role=" + displayRole + " displayId=" + displayId +
                     " proofContract=" + activeProofContract() +
@@ -1787,15 +3607,40 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     " requestedGles=" + requestedEglContextMajor +
                     " actualGles=" + actualEglContextMajor + "." +
                     actualEglContextMinor +
+                    " externalTransport=" +
+                            (externalTransport == null ? 0 : 1) +
                     " displayHz=" + refreshHz +
                     " qualificationProof=" + qualificationProofEnabled);
         } catch (Throwable failure) {
             startupFailure = failure;
             Log.e(TAG, "Frame generator initialization failed", failure);
-            releaseGl();
+            // Constructor cancellation queues the single release on this same
+            // owner, preserving both the startup error and cleanup evidence.
         } finally {
             started.countDown();
         }
+    }
+
+    private void throwIfStartupCancelled() {
+        if (closed.get()) throw new IllegalStateException(
+                "Frame generator startup was cancelled");
+    }
+
+    /** True when this EGL context owns the only visible output Surface. */
+    private boolean appOwnsVisiblePresentation() {
+        return externalTransport == null ||
+                externalTransport.usesAppOwnedPresentation();
+    }
+
+    /**
+     * External-owned presentation only needs the endpoint window current: all
+     * analysis and history copies render to explicit FBOs. Keep that binding for
+     * the handler lifetime instead of switching to a 1x1 pbuffer after every
+     * export. App-owned presentation still needs its separate visible surface.
+     * The surface objects remain distinct and retain their original owners.
+     */
+    private EGLSurface workingEglSurface() {
+        return appOwnsVisiblePresentation() ? eglSurface : eglEndpointSurface;
     }
 
     /**
@@ -1830,6 +3675,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     private void initializeEgl() {
+        boolean appOwnedPresentation = appOwnsVisiblePresentation();
         eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
         if (eglDisplay == EGL14.EGL_NO_DISPLAY) fail("eglGetDisplay");
         int[] version = new int[2];
@@ -1837,7 +3683,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         int[] attributes = {
                 EGL14.EGL_RENDERABLE_TYPE, requestedEglContextMajor >= 3 ?
                         EGL_OPENGL_ES3_BIT_KHR : EGL_OPENGL_ES2_BIT,
-                EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT,
+                EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT |
+                        (externalTransport != null && !appOwnedPresentation ?
+                                EGL14.EGL_PBUFFER_BIT : 0),
                 EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8,
                 EGL14.EGL_BLUE_SIZE, 8, EGL14.EGL_ALPHA_SIZE, 8,
                 EGL14.EGL_NONE
@@ -1848,28 +3696,103 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 count[0] < 1) fail("eglChooseConfig");
         int[] contextAttributes = {EGL14.EGL_CONTEXT_CLIENT_VERSION,
                 requestedEglContextMajor, EGL14.EGL_NONE};
+        String contextExtensions = EGL14.eglQueryString(eglDisplay, EGL14.EGL_EXTENSIONS);
+        boolean prioritizeExternalPresentation = externalTransport != null &&
+                appOwnedPresentation && contextExtensions != null &&
+                (" " + contextExtensions + " ").contains(" EGL_IMG_context_priority ");
+        if (prioritizeExternalPresentation) {
+            // Driver hint only. Never require privileges or change device policy.
+            contextAttributes = new int[]{EGL14.EGL_CONTEXT_CLIENT_VERSION,
+                    requestedEglContextMajor, 0x3100 /* PRIORITY_LEVEL_IMG */,
+                    0x3101 /* HIGH_IMG */, EGL14.EGL_NONE};
+        }
         eglContext = EGL14.eglCreateContext(eglDisplay, configs[0], EGL14.EGL_NO_CONTEXT,
                 contextAttributes, 0);
+        if (eglContext == EGL14.EGL_NO_CONTEXT && prioritizeExternalPresentation) {
+            int priorityError = EGL14.eglGetError();
+            Log.w(TAG, "External presentation priority hint refused error=" + priorityError);
+            eglContext = EGL14.eglCreateContext(eglDisplay, configs[0], EGL14.EGL_NO_CONTEXT,
+                    new int[]{EGL14.EGL_CONTEXT_CLIENT_VERSION,
+                            requestedEglContextMajor, EGL14.EGL_NONE}, 0);
+        }
         if (eglContext == EGL14.EGL_NO_CONTEXT) fail("eglCreateContext");
+        if (prioritizeExternalPresentation) {
+            int[] grantedPriority = new int[1];
+            boolean queried = EGL14.eglQueryContext(eglDisplay, eglContext,
+                    0x3100 /* PRIORITY_LEVEL_IMG */, grantedPriority, 0);
+            if (!queried) EGL14.eglGetError();
+            Log.i(TAG, "External presentation GPU priority requested=high queried=" +
+                    queried + " granted=" + (queried ? grantedPriority[0] : 0));
+        }
         int[] surfaceAttributes = {EGL14.EGL_NONE};
-        eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, configs[0], outputSurface,
-                surfaceAttributes, 0);
-        if (eglSurface == EGL14.EGL_NO_SURFACE) fail("eglCreateWindowSurface");
-        if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext))
+        if (appOwnedPresentation) {
+            eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, configs[0],
+                    outputSurface, surfaceAttributes, 0);
+            if (eglSurface == EGL14.EGL_NO_SURFACE)
+                fail("eglCreateWindowSurface");
+        } else {
+            int[] pbufferAttributes = {
+                    EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE};
+            eglSurface = EGL14.eglCreatePbufferSurface(
+                    eglDisplay, configs[0], pbufferAttributes, 0);
+            if (eglSurface == EGL14.EGL_NO_SURFACE)
+                fail("eglCreatePbufferSurface");
+        }
+        // Every external transport still consumes exact classified endpoints
+        // through its ImageReader Surface. App-owned presentation changes only
+        // who owns the visible output Surface; it does not remove this second
+        // producer surface. Creating it only in the legacy pbuffer branch made
+        // app-owned RIFE call eglMakeCurrent(EGL_NO_SURFACE) at cold startup.
+        if (externalTransport != null) {
+            endpointEglConfig = configs[0];
+            int[] minimumSwapInterval = new int[1];
+            int[] maximumSwapInterval = new int[1];
+            boolean intervalRangeKnown = EGL14.eglGetConfigAttrib(eglDisplay,
+                    endpointEglConfig, EGL14.EGL_MIN_SWAP_INTERVAL, minimumSwapInterval, 0) &&
+                    EGL14.eglGetConfigAttrib(eglDisplay, endpointEglConfig,
+                            EGL14.EGL_MAX_SWAP_INTERVAL, maximumSwapInterval, 0);
+            Log.i(TAG, "External endpoint swap policy requested=" +
+                    externalTransportFactory.endpointSwapInterval() +
+                    " rangeKnown=" + intervalRangeKnown +
+                    " minimum=" + minimumSwapInterval[0] +
+                    " maximum=" + maximumSwapInterval[0]);
+            eglEndpointSurface = EGL14.eglCreateWindowSurface(
+                    eglDisplay, configs[0], externalTransport.endpointSurface(),
+                    surfaceAttributes, 0);
+            if (eglEndpointSurface == EGL14.EGL_NO_SURFACE)
+                fail("eglCreateWindowSurface(endpoint)");
+        }
+        EGLSurface workingSurface = workingEglSurface();
+        if (!EGL14.eglMakeCurrent(eglDisplay, workingSurface, workingSurface, eglContext))
             fail("eglMakeCurrent");
-        // The qualification compositor is already paced by Choreographer.
+        if (externalTransport != null) {
+            if (appOwnedPresentation &&
+                    !EGL14.eglMakeCurrent(eglDisplay, eglEndpointSurface,
+                    eglEndpointSurface, eglContext))
+                fail("eglMakeCurrent(endpoint)");
+            if (!EGL14.eglSwapInterval(eglDisplay, externalTransportFactory.endpointSwapInterval()))
+                fail("eglSwapInterval(endpoint)");
+            if (appOwnedPresentation &&
+                    !EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface,
+                    eglContext))
+                fail("eglMakeCurrent(output)");
+        }
+        // The Built-in compositor is already paced by Choreographer.
         // A second implicit EGL-vsync wait makes endpoint swap plus the
         // emulator's own GL context serialize on Adreno: the physical r1 run
         // measured 9.4-ms swap p95 and received only ~76 of 120 callbacks/s
         // even though the isolated motion pair was 4.2 ms. Interval zero does
         // not tear an Android SurfaceFlinger layer; it removes only the
         // producer-side duplicate wait while the buffer queue and compositor
-        // remain vsync-owned. Default/non-qualified generators retain EGL's
-        // normal interval.
-        if (denseV28ReducedAnalysisRequested &&
+        // remain vsync-owned. Apply the same single pacing authority to normal
+        // Built-in output, not only the reduced-analysis qualification path.
+        // Actual desired-to-present checks still reject missed/early slots.
+        if ((requiresNonblockingBuiltinSwap(externalTransport != null) ||
+                denseV28ReducedAnalysisRequested ||
+                (externalTransport != null && appOwnedPresentation)) &&
                 !EGL14.eglSwapInterval(eglDisplay, 0))
             throw new IllegalStateException(
-                    "qualified dense compositor requires nonblocking EGL swap");
+                    "app compositor requires nonblocking EGL swap");
         if (requestedEglContextMajor >= 3) {
             int[] actual = new int[1];
             GLES20.glGetIntegerv(GL_MAJOR_VERSION, actual, 0);
@@ -1891,6 +3814,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         quad.put(QUAD).position(0);
         copyProgram = createProgram(VERTEX_SHADER, COPY_SHADER);
         textureCopyProgram = createProgram(VERTEX_SHADER, TEXTURE_COPY_SHADER);
+        externalGeneratedTextureCopyProgram = createProgram(
+                VERTEX_SHADER, EXTERNAL_GENERATED_TEXTURE_COPY_SHADER);
         signatureCompareProgram = createProgram(VERTEX_SHADER, SIGNATURE_COMPARE_SHADER);
         coarseMotionProgram = createProgram(VERTEX_SHADER, COARSE_MOTION_SHADER);
         refineMotionProgram = createProgram(VERTEX_SHADER, REFINE_MOTION_SHADER);
@@ -1911,6 +3836,14 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         externalTexture = id[0];
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, externalTexture);
         textureParameters(GLES11Ext.GL_TEXTURE_EXTERNAL_OES);
+        if (externalTransport != null &&
+                externalTransport.usesAppOwnedPresentation()) {
+            GLES20.glGenTextures(1, id, 0);
+            externalGeneratedTexture = id[0];
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D,
+                    externalGeneratedTexture);
+            textureParameters(GLES20.GL_TEXTURE_2D);
+        }
         GLES20.glGenTextures(2, historyTextures, 0);
         GLES20.glGenTextures(SIGNATURE_CANDIDATE_SLOTS,
                 signatureCandidateTextures, 0);
@@ -1939,6 +3872,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     private void allocateHistoryTextures(int width, int height) {
+        if (nativeSourceImageObserver != null)
+            nativeSourceImageObserver.resetImages();
         historyWidth = width;
         historyHeight = height;
         float flowLimit = flowLimitPixels(width, height);
@@ -2077,7 +4012,13 @@ public final class DisplayFrameGenerator implements AutoCloseable,
 
     private void uploadSoftwareFrame(int[] colors, int width, int height, float aspect,
                                      long producerTimestampNs) {
-        if (closed.get()) return;
+        if (closed.get() || externalPresentationFailed) return;
+        if (submittedFrameCount == 0 && externalTransportFactory != null &&
+                externalTransportFactory.nativeSoftwareGeometry() &&
+                externalTransport != null &&
+                (externalTransport.endpointWidth() != width ||
+                        externalTransport.endpointHeight() != height))
+            reopenUnusedSoftwareTransport(width, height);
         if (historyWidth != width || historyHeight != height) {
             if (densePyramidEnabled || denseGpuTimer != null)
                 teardownDenseEpoch("software-stream-resize");
@@ -2096,14 +4037,102 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         }
         softwareUploadBitmap.setPixels(colors, 0, width, 0, 0, width, height);
         uploadBitmap(latestTexture);
+        // A software upload has no consumed native buffer timestamp. Never
+        // join it to the previous hardware image or a callback-time substitute.
+        if (nativeSourceImageObserver != null)
+            nativeSourceImageObserver.observeLatest(0L);
         presentationAspect = aspect;
         ++submittedFrameCount;
-        if (frameRate.usesAuthoritativeSourceRate() ||
-                softwareImageIsUnique(colors, width, height))
-            observeUniqueFrame(producerTimestampNs, submittedFrameCount);
-        if (selectPresentationEndpoint(producerTimestampNs))
-            acceptPresentationEndpoint(latestTexture,
-                    presentationEndpointSelector.selectedTimestampNs());
+        ++diagSoftwareSubmits;
+        // The launch curtain lifts on the first submitted frame.  Only the
+        // SurfaceTexture path notified it, so every software-fed stream
+        // (melonDS: hwSubmits=0, swSubmits=60) ran behind a black curtain
+        // for the whole session (run nds-b51, 2026-09-02).
+        notifyFirstSubmittedFrame();
+        clearNativeClassifiedObservation();
+        boolean classifiedUnique;
+        if (frameRate.usesAuthoritativeSourceRate()) {
+            classifiedFrameReady = true;
+            classifiedUniqueTexture = latestTexture;
+            classifiedUniqueTimestampNs = producerTimestampNs;
+            classifiedUniqueSubmission = submittedFrameCount;
+            classifyLatestNativeObservation();
+            classifiedUnique = true;
+        } else if (densePyramidEnabled &&
+                (denseV28ReducedAnalysisRequested || externalSignatureTimer != null)) {
+            // Explicit GPU-query qualification retains its GPU classifier.
+            // Normal Built-in software frames already own CPU pixels; do not
+            // upload then synchronously read them back merely for a signature.
+            // CPU verdicts must never be counted as GPU-query proof.
+            classifiedUnique = latestImageIsUnique(producerTimestampNs);
+        } else {
+            // Both Direct and ordinary Built-in use the same CPU signature
+            // on the exact submitted image. This changes no solver resolution,
+            // endpoint timestamp, interpolation ratio or presentation deadline.
+            classifiedPixelVerdictKnown = sourceSignatureReady;
+            classifiedUnique = softwareImageIsUnique(colors, width, height);
+            classifiedFrameReady = true;
+            classifiedUniqueTexture = latestTexture;
+            classifiedUniqueTimestampNs = producerTimestampNs;
+            classifiedUniqueSubmission = submittedFrameCount;
+            classifyLatestNativeObservation();
+        }
+        finishNativeClassifiedObservation(classifiedUnique);
+        consumeClassifiedFrame(classifiedUnique);
+    }
+
+    /**
+     * Admits the exact classified image into both source-rate evidence and the
+     * presentation FIFO.
+     *
+     * <p>Adaptive systems must not use a second callback-clock sampler to
+     * acquire a source rate. Distinct images alone establish that authority.
+     * After the clock is independently proven, however, a classified callback
+     * whose immutable timestamp occupies its exact next source slot is a real
+     * endpoint even when its pixels repeat. Retaining that callback's exact
+     * full-resolution candidate is not a fake duplicate: it preserves a frame
+     * the emulator actually delivered and prevents a held image from tearing
+     * a safe source timeline apart. Fractional host callbacks, late callbacks,
+     * and any unproven clock remain excluded.</p>
+     */
+    private void consumeClassifiedFrame(boolean unique) {
+        try {
+            if (!classifiedFrameReady) return;
+            if (classifiedUniqueTexture == 0 || classifiedUniqueTimestampNs <= 0L ||
+                    classifiedUniqueSubmission <= 0) {
+                ++endpointCandidateUnavailable;
+                return;
+            }
+            if (!unique) {
+                // A scheduler epoch can discard the only retained image while
+                // this panel stays static (e.g. the native DS top title screen).
+                // Re-seed Direct presentation from this actual submitted image,
+                // without counting a new unique frame or qualifying its clock.
+                if (lastPresentationEndpointTimestampNs == 0L &&
+                        !frameRate.hasSustainableGenerationRate()) {
+                    acceptPresentationEndpoint(classifiedUniqueTexture,
+                            classifiedUniqueTimestampNs, classifiedUniqueSubmission);
+                    return;
+                }
+                if (!frameRate.hasSustainableGenerationRate() ||
+                        !AdaptiveFrameRateController.duplicateOccupiesNextSourceSlot(
+                                lastPresentationEndpointTimestampNs,
+                                classifiedUniqueTimestampNs,
+                                frameRate.presentationSourceHz(),
+                                lastPresentationEndpointSubmission,
+                                classifiedUniqueSubmission)) return;
+                acceptPresentationEndpoint(classifiedUniqueTexture,
+                        classifiedUniqueTimestampNs, classifiedUniqueSubmission);
+                return;
+            }
+            if (!observeUniqueFrame(classifiedUniqueTimestampNs,
+                    classifiedUniqueSubmission)) return;
+            acceptPresentationEndpoint(classifiedUniqueTexture,
+                    classifiedUniqueTimestampNs, classifiedUniqueSubmission);
+        } finally {
+            // Rejected/held/not-ready candidates cannot annotate a later image.
+            releaseNativeEndpointProvenance(NATIVE_ADMISSION_SLOT);
+        }
     }
 
     private void uploadBitmap(int texture) {
@@ -2120,8 +4149,19 @@ public final class DisplayFrameGenerator implements AutoCloseable,
      * without reading the full framebuffer back to the CPU.
      */
     private boolean latestImageIsUnique(long currentTimestampNs) {
+        clearNativeClassifiedObservation();
+        classifiedFrameReady = false;
         classifiedUniqueTexture = 0;
         classifiedUniqueTimestampNs = 0L;
+        classifiedUniqueSubmission = 0;
+        if (!signatureReadbackSafe) {
+            classifiedFrameReady = true;
+            classifiedUniqueTexture = latestTexture;
+            classifiedUniqueTimestampNs = currentTimestampNs;
+            classifiedUniqueSubmission = submittedFrameCount;
+            classifyLatestNativeObservation();
+            return true;
+        }
         long denseWallStart = densePyramidEnabled ? System.nanoTime() : 0L;
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer);
         GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER,
@@ -2132,29 +4172,38 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             fail("source signature framebuffer incomplete");
         GLES20.glViewport(0, 0, SIGNATURE_WIDTH, SIGNATURE_HEIGHT);
         drawTexture2d(latestTexture);
-        if (densePyramidEnabled && denseV28ReducedAnalysisRequested) {
+        DenseGpuTimer signatureTimer = externalSignatureTimer != null ?
+                externalSignatureTimer :
+                (densePyramidEnabled && denseV28ReducedAnalysisRequested ?
+                        denseGpuTimer : null);
+        if (signatureTimer != null) {
             try {
-                int capability = denseSignatureCapability();
-                if (denseGpuTimer == null || !denseGpuTimer.signatureSupported() ||
+                int capability = signatureCapability(signatureTimer);
+                if (!signatureTimer.signatureSupported() ||
                         capability != DENSE_SIGNATURE_CAP_READY)
                     throw new IllegalStateException("asynchronous signature unavailable" +
                             " capability=0x" + Integer.toHexString(capability));
                 if (!denseSignatureBaselineReady) {
                     copyCurrentSignatureToPrevious();
                     denseSignatureBaselineReady = true;
+                    classifiedFrameReady = true;
                     classifiedUniqueTexture = latestTexture;
                     classifiedUniqueTimestampNs = currentTimestampNs;
+                    classifiedUniqueSubmission = submittedFrameCount;
+                    classifyLatestNativeObservation();
                     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
                     GLES20.glViewport(0, 0, outputWidth, outputHeight);
                     return true;
                 }
-                long[] row = denseGpuTimer.pollSignature(denseSignatureSequence);
+                long[] row = signatureTimer.pollSignature(denseSignatureSequence);
                 if (row.length != 0 && row.length != DenseGpuTimer.SIGNATURE_RESULT_FIELDS)
                     throw new IllegalStateException("malformed asynchronous signature row");
                 boolean unique = false;
+                int completedCandidate = -1;
                 if (row.length != 0) {
                     if (row[0] != DenseGpuTimer.STATUS_OK || row[7] != 1L ||
-                            row[6] < 0L || row[6] > 4L)
+                            row[6] < 0L || row[6] > 4L ||
+                            (row[2] != 0L && row[2] != 1L))
                         throw new IllegalStateException("invalid asynchronous signature" +
                                 " status=" + row[0] + " slot=" + row[3] +
                                 " query=" + row[4] + " age=" + row[6]);
@@ -2165,20 +4214,31 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                             denseSignatureSequence - readySequence);
                     ++denseSignatureReady;
                     unique = row[2] == 1L;
-                    int candidate = findSignatureCandidate(readySequence);
-                    if (candidate < 0)
+                    completedCandidate = findSignatureCandidate(readySequence);
+                    if (completedCandidate < 0)
                         throw new IllegalStateException(
                                 "signature result has no retained endpoint sequence=" +
                                         readySequence);
-                    if (unique)
-                        observeUniqueFrame(signatureCandidateTimestampNs[candidate],
-                                signatureCandidateSubmission[candidate]);
-                    signatureCandidateSequence[candidate] = 0L;
-                    signatureCandidateTimestampNs[candidate] = 0L;
-                    signatureCandidateSubmission[candidate] = 0;
+                    // Preserve the exact classified candidate for both UNIQUE
+                    // and DUPLICATE results.  The latter is a timing endpoint,
+                    // not source-rate evidence.  Keep its texture slot reserved
+                    // until the current query has retained a different slot;
+                    // otherwise the current image overwrites the result before
+                    // consumeClassifiedFrame can copy it into the FIFO.
+                    classifiedFrameReady = true;
+                    classifiedUniqueTexture =
+                            signatureCandidateTextures[completedCandidate];
+                    classifiedUniqueTimestampNs =
+                            signatureCandidateTimestampNs[completedCandidate];
+                    classifiedUniqueSubmission =
+                            signatureCandidateSubmission[completedCandidate];
+                    classifiedPixelVerdictKnown = true;
+                    if (nativeSourceImageObserver != null)
+                        nativeSourceImageObserver.classifyCandidate(completedCandidate);
                 }
                 long sequence = ++denseSignatureSequence;
-                retainSignatureCandidate(sequence, currentTimestampNs);
+                retainSignatureCandidate(sequence, currentTimestampNs,
+                        completedCandidate);
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer);
                 GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER,
                         GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_TEXTURE_2D,
@@ -2187,8 +4247,15 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                         GLES20.GL_FRAMEBUFFER_COMPLETE)
                     throw new IllegalStateException("signature query framebuffer incomplete");
                 GLES20.glViewport(0, 0, SIGNATURE_WIDTH, SIGNATURE_HEIGHT);
-                drawSignatureDifferenceQuery(sequence);
+                drawSignatureDifferenceQuery(signatureTimer, sequence);
                 copyCurrentSignatureToPrevious();
+                if (completedCandidate >= 0) {
+                    signatureCandidateSequence[completedCandidate] = 0L;
+                    signatureCandidateTimestampNs[completedCandidate] = 0L;
+                    signatureCandidateSubmission[completedCandidate] = 0;
+                    if (nativeSourceImageObserver != null)
+                        nativeSourceImageObserver.releaseCandidate(completedCandidate);
+                }
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
                 GLES20.glViewport(0, 0, outputWidth, outputHeight);
                 checkGl("asynchronous source signature");
@@ -2198,11 +4265,15 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 // A delayed unique result was committed above while its exact
                 // retained texture was still intact. The current image is only
                 // a query candidate and must never be accepted by that old bit.
-                return false;
+                return unique;
             } catch (RuntimeException failure) {
                 ++denseSignatureUnavailable;
+                if (externalSignatureTimer != null)
+                    throw new IllegalStateException(
+                            "external asynchronous signature failed closed", failure);
                 rejectDense("async-signature-failure", failure);
                 clearSignatureCandidates();
+                clearNativeClassifiedObservation();
                 // Fall through to the exact synchronous v22 signature for
                 // this same producer image. A failed qualification arm may
                 // never invent or discard a real source frame.
@@ -2218,8 +4289,38 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             }
         }
         signaturePixels.position(0);
+        int beforeRead = GLES20.glGetError();
+        if (beforeRead != GLES20.GL_NO_ERROR) {
+            signatureReadbackSafe = false;
+            Log.e(TAG, "Uniqueness readback degraded before read; error=0x" +
+                    Integer.toHexString(beforeRead) + " generator=" +
+                    generatorId);
+            classifiedFrameReady = true;
+            classifiedUniqueTexture = latestTexture;
+            classifiedUniqueTimestampNs = currentTimestampNs;
+            classifiedUniqueSubmission = submittedFrameCount;
+            classifyLatestNativeObservation();
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            return true;
+        }
+        GLES20.glFinish();
         GLES20.glReadPixels(0, 0, SIGNATURE_WIDTH, SIGNATURE_HEIGHT,
                 GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, signaturePixels);
+        if (GLES20.glGetError() != GLES20.GL_NO_ERROR) {
+            signatureReadbackSafe = false;
+            Log.e(TAG, "Uniqueness readback degraded after a GL error;" +
+                    " every arrival now counts as unique for this session" +
+                    " generator=" + generatorId);
+            classifiedFrameReady = true;
+            classifiedUniqueTexture = latestTexture;
+            classifiedUniqueTimestampNs = currentTimestampNs;
+            classifiedUniqueSubmission = submittedFrameCount;
+            classifyLatestNativeObservation();
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            return true;
+        }
         for (int index = 0; index < currentSourceSignature.length; ++index)
             currentSourceSignature[index] = signaturePixels.get(index);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
@@ -2228,11 +4329,14 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         if (denseWallStart != 0L)
             recordDenseWall(DENSE_WALL_SIGNATURE,
                     System.nanoTime() - denseWallStart);
+        // Bootstrap admits a first endpoint without a prior pixel comparison.
+        classifiedPixelVerdictKnown = sourceSignatureReady;
         boolean unique = sourceSignatureIsUnique();
-        if (unique) {
-            classifiedUniqueTexture = latestTexture;
-            classifiedUniqueTimestampNs = currentTimestampNs;
-        }
+        classifiedFrameReady = true;
+        classifiedUniqueTexture = latestTexture;
+        classifiedUniqueTimestampNs = currentTimestampNs;
+        classifiedUniqueSubmission = submittedFrameCount;
+        classifyLatestNativeObservation();
         return unique;
     }
 
@@ -2248,7 +4352,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         drawTexture2d(signatureTexture);
     }
 
-    private void drawSignatureDifferenceQuery(long sequence) {
+    private void drawSignatureDifferenceQuery(
+            DenseGpuTimer signatureTimer, long sequence) {
         boolean scissor = GLES20.glIsEnabled(GLES20.GL_SCISSOR_TEST);
         boolean depth = GLES20.glIsEnabled(GLES20.GL_DEPTH_TEST);
         boolean stencil = GLES20.glIsEnabled(GLES20.GL_STENCIL_TEST);
@@ -2259,8 +4364,12 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         GLES20.glDisable(GLES20.GL_CULL_FACE);
         boolean begun = false;
         try {
-            if (!denseGpuTimer.beginSignature(sequence))
-                throw new IllegalStateException("asynchronous signature ring full");
+            if (signatureTimer == null || !signatureTimer.beginSignature(sequence))
+                throw new IllegalStateException("asynchronous signature begin failed" +
+                        " sequence=" + sequence +
+                        " pending=" + (signatureTimer == null ? -1 :
+                                signatureTimer.pendingSignatures()) +
+                        " capability=" + signatureCapability(signatureTimer));
             begun = true;
             GLES20.glUseProgram(signatureCompareProgram);
             bindQuad(signatureCompareProgram);
@@ -2269,7 +4378,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         } finally {
             try {
-                if (begun) denseGpuTimer.endSignature();
+                if (begun) signatureTimer.endSignature();
             } finally {
                 if (scissor) GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
                 if (depth) GLES20.glEnable(GLES20.GL_DEPTH_TEST);
@@ -2300,23 +4409,40 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private boolean sourceSignatureIsUnique() {
         int changedPixels = 0;
         int totalDifference = 0;
+        int byteSum = 0;
         for (int offset = 0; offset < currentSourceSignature.length; offset += 4) {
             int difference = 0;
-            for (int channel = 0; channel < 3; ++channel)
+            for (int channel = 0; channel < 3; ++channel) {
                 difference += Math.abs((currentSourceSignature[offset + channel] & 0xff) -
                         (lastSourceSignature[offset + channel] & 0xff));
+                byteSum += currentSourceSignature[offset + channel] & 0xff;
+            }
             totalDifference += difference;
             if (difference >= 3) ++changedPixels;
         }
+        diagLastSignatureByteSum = byteSum;
+        diagLastChangedPixels = changedPixels;
         boolean unique = !sourceSignatureReady || changedPixels >= 1 ||
                 totalDifference >= 16;
         if (unique) {
+            ++diagUniqueVerdicts;
             System.arraycopy(currentSourceSignature, 0, lastSourceSignature, 0,
                     currentSourceSignature.length);
             sourceSignatureReady = true;
+        } else {
+            ++diagDuplicateVerdicts;
         }
         return unique;
     }
+
+    // Acquisition-starvation diagnostics only (runs nds1-4, 2026-08-17):
+    // which ingest path feeds this generator and what the signature sees.
+    private long diagSoftwareSubmits;
+    private long diagHardwareSubmits;
+    private long diagUniqueVerdicts;
+    private long diagDuplicateVerdicts;
+    private int diagLastSignatureByteSum;
+    private int diagLastChangedPixels;
 
     private int findSignatureCandidate(long sequence) {
         for (int slot = 0; slot < SIGNATURE_CANDIDATE_SLOTS; ++slot)
@@ -2324,10 +4450,11 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         return -1;
     }
 
-    private void retainSignatureCandidate(long sequence, long timestampNs) {
+    private void retainSignatureCandidate(long sequence, long timestampNs,
+                                          int reservedSlot) {
         int slot = -1;
         for (int index = 0; index < SIGNATURE_CANDIDATE_SLOTS; ++index) {
-            if (signatureCandidateSequence[index] == 0L) {
+            if (index != reservedSlot && signatureCandidateSequence[index] == 0L) {
                 slot = index;
                 break;
             }
@@ -2337,70 +4464,144 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             throw new IllegalStateException("signature endpoint texture ring full");
         }
         copyTexture(latestTexture, signatureCandidateTextures[slot]);
+        if (nativeSourceImageObserver != null)
+            nativeSourceImageObserver.retainCandidate(slot);
         signatureCandidateSequence[slot] = sequence;
         signatureCandidateTimestampNs[slot] = timestampNs;
         signatureCandidateSubmission[slot] = submittedFrameCount;
     }
 
     private void clearSignatureCandidates() {
+        if (nativeSourceImageObserver != null)
+            nativeSourceImageObserver.clearCandidates();
         java.util.Arrays.fill(signatureCandidateSequence, 0L);
         java.util.Arrays.fill(signatureCandidateTimestampNs, 0L);
         java.util.Arrays.fill(signatureCandidateSubmission, 0);
     }
 
-    /** Records a pixel-distinct image solely as source-rate evidence. */
-    private void observeUniqueFrame(long timestampNs, int submissionOrdinal) {
-        long normalizedTimestamp = timestampNs;
-        if (normalizedTimestamp <= lastProducerTimestampNs) {
-            // Arrival timestamps are captured from System.nanoTime on the
-            // owning Handler. Retain a fail-closed correction in case a future
-            // producer path supplies a broken/non-monotonic value.
-            normalizedTimestamp = Math.max(lastProducerTimestampNs + 1L,
-                    System.nanoTime());
+    /** Records one pixel-distinct image with its immutable producer timestamp. */
+    private boolean observeUniqueFrame(long timestampNs, int submissionOrdinal) {
+        if (timestampNs <= 0L || timestampNs <= lastProducerTimestampNs) {
+            // Never manufacture monotonicity by replacing a broken producer
+            // timestamp with System.nanoTime.  The affected interval has no
+            // trustworthy phase: discard it, publish a presentation boundary,
+            // and require two later timestamped endpoints to re-prime.
             ++endpointCandidateUnavailable;
             ++endpointTimestampCorrections;
+            // Signature query IDs and retained candidate textures are one
+            // ownership epoch.  A timestamp discontinuity invalidates both;
+            // cancel the native ring before resetEndpointFifo clears the Java
+            // candidate slots, otherwise a delayed result can later bind to
+            // no texture or to a reused sequence number.
+            if (densePyramidEnabled || denseGpuTimer != null) {
+                densePyramidEnabled = false;
+                teardownDenseEpoch("producer-timestamp-discontinuity");
+            }
+            resetEndpointFifo();
+            frameRate.resetPresentation();
+            resetHealthWindowAfterStreamChange();
+            lastProducerTimestampNs = Math.max(0L, timestampNs);
+            return false;
         }
-        lastProducerTimestampNs = normalizedTimestamp;
+        lastProducerTimestampNs = timestampNs;
         ++uniqueFrameCount;
         lastUniqueSubmissionCount = Math.max(lastUniqueSubmissionCount,
                 submissionOrdinal);
-        frameRate.onProducerFrame(normalizedTimestamp, submissionOrdinal);
-    }
-
-    /**
-     * Samples the emulator callback clock at the measured source tier. Exact
-     * repeated pixels are valid timing endpoints once the tier has been
-     * measured: retaining them keeps a static or lightly animated scene from
-     * destroying the FIFO, while observeUniqueFrame remains the only input to
-     * source-tier decisions. The scheduled deadline never catches up after a
-     * pause; at most one endpoint is retained per producer callback.
-     */
-    private boolean selectPresentationEndpoint(long timestampNs) {
-        int sourceFps = frameRate.presentationSourceFps();
-        boolean scheduled = presentationEndpointSelector.select(timestampNs,
-                sourceFps);
-        if (scheduled) return true;
-        // Only a proven top-tier callback stream can refill from an otherwise
-        // discarded callback. Lower tiers deliberately decimate a 60-Hz core
-        // interface to their measured unique cadence and must not be promoted
-        // by this jitter buffer.
-        return sourceFps == 60 &&
-                endpointFifoCount < ENDPOINT_FIFO_JITTER_RESERVE;
+        if (!frameRate.onProducerFrame(timestampNs, submissionOrdinal)) {
+            // The producer PTS proved that SurfaceTexture coalesced one or
+            // more core buffers. Preserve the measured unique-image clock,
+            // but make this image the first endpoint of a fresh temporal
+            // chain. The completed candidate and every still-pending signature
+            // query remain exactly sequence-bound to their retained textures;
+            // do NOT clear either side or tear down/re-arm qualification. Only
+            // the interpolation interval that crosses the missing carrier
+            // buffer is unsafe. The controller already published a new
+            // presentation epoch, so synchronizing it here drops the visible
+            // endpoint chain, excludes any old-epoch proof atlas on completion,
+            // and lets this exact image become the first endpoint afterward.
+            ++endpointCandidateUnavailable;
+            if (!synchronizeBufferedPresentationEpoch()) {
+                // onProducerFrame() is the authority for this boundary and
+                // must always advance the scheduler epoch on a transport loss.
+                throw new IllegalStateException(
+                        "producer transport loss did not publish an epoch");
+            }
+            lastProducerTimestampNs = timestampNs;
+            lastUniqueSubmissionCount = submissionOrdinal;
+            Log.w(TAG, "Producer buffer discontinuity generator=" +
+                    generatorId + " timestampNs=" + timestampNs +
+                    " submission=" + submissionOrdinal +
+                    " timelineHz=" +
+                    frameRate.producerTimelineHzForDiagnostics() +
+                    " discontinuities=" +
+                    frameRate.producerTimelineDiscontinuityCountForDiagnostics());
+        }
+        return true;
     }
 
     /** Enqueues one selected temporal endpoint for visible presentation. */
-    private void acceptPresentationEndpoint(int sourceTexture, long timestampNs) {
+    private void acceptPresentationEndpoint(int sourceTexture, long timestampNs,
+                                            int submissionOrdinal) {
         if (sourceTexture == 0) return;
-        long normalizedTimestamp = timestampNs;
-        if (normalizedTimestamp <= lastPresentationEndpointTimestampNs) {
-            normalizedTimestamp = Math.max(
-                    lastPresentationEndpointTimestampNs + 1L,
-                    System.nanoTime());
+        if (timestampNs <= 0L ||
+                timestampNs <= lastPresentationEndpointTimestampNs) {
             ++endpointCandidateUnavailable;
             ++endpointTimestampCorrections;
+            frameRate.resetPresentation();
+            resetEndpointTimelineForSchedulerEpoch();
+            resetHealthWindowAfterStreamChange();
+            return;
         }
-        lastPresentationEndpointTimestampNs = normalizedTimestamp;
-        ++endpointSequence;
+        if (lastPresentationEndpointTimestampNs > 0L &&
+                !AdaptiveFrameRateController.endpointSpanContinuous(
+                        lastPresentationEndpointTimestampNs, timestampNs,
+                        frameRate.presentationSourceHz())) {
+            // A loading screen, static hold, save-state transition, or lost
+            // carrier interval ends the old presentation timeline before the
+            // resumed endpoint can be submitted.  Detecting this only while
+            // preparing its later successor is too late for Direct: the lone
+            // resumed REAL may already own an old-epoch physical request, and
+            // its eventual actual-present row then appears off the old scan
+            // lattice (physical TWINE r147: an 8.9-second loading gap).
+            //
+            // Already-submitted transport rows remain reportable by contract.
+            // The first request containing this exact endpoint instead owns a
+            // new scheduler epoch, which makes pollPhysicalPresentations()
+            // re-anchor the physical clock on that exact REAL.  No synthetic
+            // image is allowed across the gap and no timestamp is fabricated.
+            long previousTimestampNs = lastPresentationEndpointTimestampNs;
+            long previousEpoch = schedulerPresentationEpoch();
+            frameRate.resetPresentation();
+            observedBufferedPresentationEpoch = schedulerPresentationEpoch();
+            resetEndpointTimelineForSchedulerEpoch();
+            refreshProofEvidencePresentationEpoch();
+            resetHealthWindowAfterStreamChange();
+            Log.w(TAG, "Presentation endpoint timestamp discontinuity" +
+                    " generator=" + generatorId +
+                    " previousTimestampNs=" + previousTimestampNs +
+                    " timestampNs=" + timestampNs +
+                    " spanNs=" + (timestampNs - previousTimestampNs) +
+                    " previousEpoch=" + previousEpoch +
+                    " epoch=" + schedulerPresentationEpoch());
+        }
+        if (externalTransport != null &&
+                endpointFifoCount >= ENDPOINT_FIFO_CAPACITY) {
+            ++endpointFifoCoalesced;
+            frameRate.resetPresentation();
+            resetEndpointTimelineForSchedulerEpoch();
+            resetHealthWindowAfterStreamChange();
+        }
+        if (!admitExternalEndpointCandidate()) return;
+        // The overflow reset above deliberately clears the old timeline. This
+        // exact candidate is the first endpoint of the new one, so publish its
+        // immutable timestamp/submission only after that reset; otherwise the
+        // next real held callback cannot prove its immediate source slot.
+        lastPresentationEndpointTimestampNs = timestampNs;
+        lastPresentationEndpointSubmission = submissionOrdinal;
+        long acceptedSequence = endpointSequence + 1L;
+        if (externalTransport != null)
+            publishExternalEndpoint(sourceTexture, acceptedSequence, timestampNs);
+        endpointSequence = acceptedSequence;
         ++realFrameCount;
 
         int slot;
@@ -2420,22 +4621,137 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             endpointFifoCount = 1;
             java.util.Arrays.fill(endpointFifoSequence, 0L);
             java.util.Arrays.fill(endpointFifoTimestampNs, 0L);
+            java.util.Arrays.fill(endpointFifoUniqueSequence, 0L);
+            java.util.Arrays.fill(endpointFifoSubmission, 0);
+            java.util.Arrays.fill(endpointFifoCandidateLoss, 0L);
+            for (int retired = 0; retired < ENDPOINT_FIFO_CAPACITY; ++retired)
+                releaseNativeEndpointProvenance(retired);
             slot = 0;
         }
         copyTexture(sourceTexture, endpointFifoTextures[slot]);
+        copyNativeEndpointProvenance(NATIVE_ADMISSION_SLOT, slot);
         endpointFifoSequence[slot] = endpointSequence;
-        endpointFifoTimestampNs[slot] = normalizedTimestamp;
+        endpointFifoTimestampNs[slot] = timestampNs;
+        // This provenance is the accepted source-slot ordinal, not the count
+        // of pixel-distinct images. A positively classified repeated callback
+        // can occupy one exact proven source slot; using its accepted ordinal
+        // keeps that real endpoint adjacent without relabeling it as unique.
+        endpointFifoUniqueSequence[slot] = endpointSequence;
+        endpointFifoSubmission[slot] = submissionOrdinal;
+        endpointFifoCandidateLoss[slot] = endpointCandidateUnavailable;
+    }
+
+    /** Reject capacity pressure before identity publication or any EGL export. */
+    private boolean admitExternalEndpointCandidate() {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null || transport.canAcceptEndpoint()) {
+            externalEndpointAdmissionBlocked = false;
+            return true;
+        }
+        ++endpointCandidateUnavailable;
+        ++externalEndpointAdmissionRejected;
+        // One interruption ends the chain once, not on every callback while old
+        // work retires. Submitted physical rows keep their original identities;
+        // no future midpoint may bridge the unexported source image.
+        if (!externalEndpointAdmissionBlocked) {
+            frameRate.resetPresentation();
+            observedBufferedPresentationEpoch = schedulerPresentationEpoch();
+            resetEndpointTimelineForSchedulerEpoch();
+            refreshProofEvidencePresentationEpoch();
+            resetHealthWindowAfterStreamChange();
+            externalEndpointAdmissionBlocked = true;
+            Log.w(TAG, "External endpoint admission pressure generator=" + generatorId +
+                    " rejectedTotal=" + externalEndpointAdmissionRejected +
+                    " candidateUnavailableTotal=" + endpointCandidateUnavailable);
+        }
+        return false;
+    }
+
+    /**
+     * Copies one already-classified immutable endpoint into the external
+     * ImageReader without ever giving the backend source-rate authority.
+     */
+    private void publishExternalEndpoint(
+            int sourceTexture, long sequence, long timestampNs) {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null) return;
+        if (eglEndpointSurface == EGL14.EGL_NO_SURFACE || sourceTexture == 0 ||
+                sequence <= 0L || timestampNs <= 0L)
+            throw new IllegalStateException("external endpoint export is invalid");
+        transport.expectEndpoint(sequence, timestampNs, nativeEndpointProvenance,
+                NATIVE_ADMISSION_SLOT, nativeEndpointProvenance == null ? 0L :
+                        nativeEndpointProvenance.lease(NATIVE_ADMISSION_SLOT));
+        boolean switchSurface = transport.usesAppOwnedPresentation();
+        boolean submitted = false;
+        try {
+            if (switchSurface &&
+                    !EGL14.eglMakeCurrent(eglDisplay, eglEndpointSurface,
+                    eglEndpointSurface, eglContext))
+                fail("eglMakeCurrent(endpoint-export)");
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            int width = transport.endpointWidth();
+            int height = transport.endpointHeight();
+            GLES20.glViewport(0, 0, width, height);
+            GLES20.glClearColor(0f, 0f, 0f, 1f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+            // Native-sized inference consumes raw pixel geometry, not display
+            // aspect. NES/SNES pixels are not square: applying their display
+            // aspect here crops source columns and applies correction twice.
+            boolean nativePixels = externalTransportFactory != null &&
+                    externalTransportFactory.nativeSoftwareGeometry() &&
+                    width == historyWidth && height == historyHeight;
+            if (!nativePixels) {
+                float aspect = presentationAspect > 0f ? presentationAspect :
+                        (float) historyWidth / Math.max(1, historyHeight);
+                int contentWidth = Math.max(1, Math.round(height * aspect));
+                GLES20.glViewport((width - contentWidth) / 2, 0,
+                        contentWidth, height);
+            }
+            drawTexture2d(sourceTexture);
+            if (Build.VERSION.SDK_INT < 18 ||
+                    !EGLExt.eglPresentationTimeANDROID(
+                            eglDisplay, eglEndpointSurface, timestampNs))
+                fail("eglPresentationTimeANDROID(endpoint)");
+            checkGl("render external endpoint");
+            if (!EGL14.eglSwapBuffers(eglDisplay, eglEndpointSurface))
+                fail("eglSwapBuffers(endpoint)");
+            submitted = true;
+        } finally {
+            boolean restored = !switchSurface || EGL14.eglMakeCurrent(
+                    eglDisplay, eglSurface, eglSurface, eglContext);
+            if (!submitted) transport.cancelExpectedEndpoint(sequence);
+            if (!restored) fail("eglMakeCurrent(offscreen-restore)");
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        }
     }
 
     private void resetEndpointFifo() {
+        clearNativeEndpointTimeline(true);
+        if (externalSignatureTimer != null) {
+            externalSignatureTimer.discardPending();
+            denseSignatureSequence = 0L;
+            denseSignatureBaselineReady = false;
+        }
+        if (externalTransport != null) externalTransport.resetEndpointTimeline();
         endpointFifoHead = 0;
         endpointFifoCount = 0;
         activeLeftSequence = 0L;
         activeRightSequence = 0L;
         activeLeftTimestampNs = 0L;
         activeRightTimestampNs = 0L;
+        activeLeftUniqueSequence = 0L;
+        activeRightUniqueSequence = 0L;
+        activeLeftSubmission = 0;
+        activeRightSubmission = 0;
+        activeLeftCandidateLoss = 0L;
+        activeRightCandidateLoss = 0L;
         activePairReady = false;
         activePairSyntheticCommitted = false;
+        // A temporal guide belongs to one uninterrupted adjacent endpoint
+        // chain. Source-mode changes, resizes and explicit FIFO resets must
+        // never carry a validated vector field into a newly primed chain.
+        denseTemporalGuideReady = false;
         lastPromotedEndpointSequence = 0L;
         bufferedPairCreatedCount = 0L;
         bufferedSyntheticSelectedCount = 0L;
@@ -2444,9 +4760,13 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         bufferedPresentationCallbackCount = 0L;
         bufferedLastSelectedSyntheticPair = 0L;
         lastPresentationEndpointTimestampNs = 0L;
-        presentationEndpointSelector.reset();
+        lastPresentationEndpointSubmission = 0;
+        lastProducerTimestampNs = 0L;
         java.util.Arrays.fill(endpointFifoSequence, 0L);
         java.util.Arrays.fill(endpointFifoTimestampNs, 0L);
+        java.util.Arrays.fill(endpointFifoUniqueSequence, 0L);
+        java.util.Arrays.fill(endpointFifoSubmission, 0);
+        java.util.Arrays.fill(endpointFifoCandidateLoss, 0L);
         clearSignatureCandidates();
     }
 
@@ -2457,8 +4777,12 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     private void discardEndpointFifoHead() {
         if (endpointFifoCount <= 0) return;
         int slot = endpointFifoHead;
+        releaseNativeEndpointProvenance(slot);
         endpointFifoSequence[slot] = 0L;
         endpointFifoTimestampNs[slot] = 0L;
+        endpointFifoUniqueSequence[slot] = 0L;
+        endpointFifoSubmission[slot] = 0;
+        endpointFifoCandidateLoss[slot] = 0L;
         endpointFifoHead = (endpointFifoHead + 1) % ENDPOINT_FIFO_CAPACITY;
         --endpointFifoCount;
     }
@@ -2469,21 +4793,35 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         int slot = endpointFifoHead;
         long sequence = endpointFifoSequence[slot];
         long timestampNs = endpointFifoTimestampNs[slot];
+        long uniqueSequence = endpointFifoUniqueSequence[slot];
+        int submissionOrdinal = endpointFifoSubmission[slot];
+        long candidateLoss = endpointFifoCandidateLoss[slot];
         if (sequence <= 0L)
             throw new IllegalStateException("endpoint FIFO sequence missing");
         if (timestampNs <= 0L)
             throw new IllegalStateException("endpoint FIFO timestamp missing");
         copyTexture(endpointFifoTextures[slot], historyTextures[historyIndex]);
+        copyNativeEndpointProvenance(slot, NATIVE_HISTORY_BASE + historyIndex);
+        releaseNativeEndpointProvenance(slot);
         endpointFifoSequence[slot] = 0L;
         endpointFifoTimestampNs[slot] = 0L;
+        endpointFifoUniqueSequence[slot] = 0L;
+        endpointFifoSubmission[slot] = 0;
+        endpointFifoCandidateLoss[slot] = 0L;
         endpointFifoHead = (endpointFifoHead + 1) % ENDPOINT_FIFO_CAPACITY;
         --endpointFifoCount;
         if (left) {
             activeLeftSequence = sequence;
             activeLeftTimestampNs = timestampNs;
+            activeLeftUniqueSequence = uniqueSequence;
+            activeLeftSubmission = submissionOrdinal;
+            activeLeftCandidateLoss = candidateLoss;
         } else {
             activeRightSequence = sequence;
             activeRightTimestampNs = timestampNs;
+            activeRightUniqueSequence = uniqueSequence;
+            activeRightSubmission = submissionOrdinal;
+            activeRightCandidateLoss = candidateLoss;
         }
     }
 
@@ -2493,10 +4831,66 @@ public final class DisplayFrameGenerator implements AutoCloseable,
      * overwrite either history texture while it owns a visible timeline.
      */
     private void prepareBufferedPairIfPossible() {
+        if (externalTransport != null && !activePairReady &&
+                activeLeftSequence > 0L &&
+                activeRightSequence == activeLeftSequence + 1L &&
+                externalTransport.hasAdjacentPair(
+                        activeLeftSequence, activeRightSequence)) {
+            // A look-ahead preparation attempt can legitimately lose a race
+            // with the asynchronous import of its newest endpoint.  Do not
+            // make that one NOT_READY result permanent for this pair.  Retry
+            // the exact immutable midpoint while the pair is active, before
+            // selection can consume its midpoint as an unavailable slot and
+            // advance to the following REAL endpoint.  An already-prepared
+            // successor matches this same identity and is merely polled.
+            if (externalRatePathActive) {
+                long midpointNs =
+                        AdaptiveFrameRateController.exactMidpointTimestampNs(
+                                activeLeftTimestampNs,
+                                activeRightTimestampNs);
+                if (midpointNs > activeLeftTimestampNs &&
+                        midpointNs < activeRightTimestampNs) {
+                    FrameGenerationPreparationRequest preparation =
+                            FrameGenerationPreparationRequest.between(
+                                    generatorId,
+                                    schedulerPresentationEpoch(),
+                                    activeLeftSequence,
+                                    activeLeftTimestampNs,
+                                    activeRightSequence,
+                                    activeRightTimestampNs,
+                                    midpointNs,
+                                    externalTransport.endpointWidth(),
+                                    externalTransport.endpointHeight(),
+                                    FrameGenerationPresentationRequest.
+                                            FORMAT_RGBA8_UNORM);
+                    submitExternalGeneratedPreparation(preparation);
+                    externalTransport.preparationReadiness(preparation);
+                }
+            }
+            ExternalFrameGenerationTransport.GenerationReadiness readiness =
+                    externalTransport.generationReadiness(
+                            activeLeftSequence, activeRightSequence);
+            motionEstimateReady = readiness ==
+                    ExternalFrameGenerationTransport.GenerationReadiness.READY;
+            activePairReady = motionEstimateReady;
+            if (readiness ==
+                    ExternalFrameGenerationTransport.GenerationReadiness.UNSAFE &&
+                    externalLastUnsafePairRightSequence != activeRightSequence) {
+                externalLastUnsafePairRightSequence = activeRightSequence;
+                ++externalUnsafePairCount;
+                Log.w(TAG, "External interpolation pair rejected" +
+                        " generator=" + generatorId +
+                        " left=" + activeLeftSequence +
+                        " right=" + activeRightSequence);
+            }
+        }
         if (activeLeftSequence == 0L) {
-            // A prior overflow or source discontinuity may leave one orphan at
-            // the head. Drop only endpoints that provably cannot form an exact
-            // adjacent pair with their successor; never estimate across them.
+            // A prior hold or source discontinuity may leave one endpoint that
+            // cannot form an interpolation pair with its successor.  Preserve
+            // that independently classified REAL instead of dropping it: only
+            // the interval is unsafe.  The controller will present the lone
+            // endpoint directly and interpolation can re-prime from a later
+            // exact adjacent pair.
             while (endpointFifoCount >= 2) {
                 int leftSlot = endpointFifoSlot(0);
                 int rightSlot = endpointFifoSlot(1);
@@ -2506,16 +4900,46 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                         AdaptiveFrameRateController.endpointSpanContinuous(
                                 endpointFifoTimestampNs[leftSlot],
                                 endpointFifoTimestampNs[rightSlot],
-                                frameRate.lockedSourceFps())) break;
-                discardEndpointFifoHead();
+                                frameRate.presentationSourceHz(),
+                                endpointFifoUniqueSequence[leftSlot],
+                                endpointFifoUniqueSequence[rightSlot],
+                                endpointFifoSubmission[leftSlot],
+                                endpointFifoSubmission[rightSlot],
+                                endpointFifoCandidateLoss[leftSlot],
+                                endpointFifoCandidateLoss[rightSlot],
+                                slotLatticeProducer)) break;
+                previousIndex = 0;
+                currentIndex = 1;
+                consumeEndpointIntoHistory(previousIndex, true);
+                return;
             }
-            // Prime only after three complete source intervals are retained.
-            // Presentation endpoints are sampled from the emulator callback
-            // clock, not only pixel changes, so a static/menu image still
-            // supplies these timestamped endpoints. Two queued successors
-            // absorb one full interval of delayed asynchronous classification
-            // without exposing a scheduled REAL or SYNTHETIC slot.
-            if (endpointFifoCount < ENDPOINT_FIFO_PRIME_DEPTH) return;
+            boolean generatedTimeline = frameRate.generatesIntermediateFrames();
+            if (!generatedTimeline && endpointFifoCount == 1) {
+                // Direct presentation does not need a future interpolation
+                // interval. Show this exact REAL promptly while its successor
+                // is still being classified.
+                previousIndex = 0;
+                currentIndex = 1;
+                consumeEndpointIntoHistory(previousIndex, true);
+                return;
+            }
+            // (2026-09-02, wiiu-b42) Slot-lattice producers deliver through
+            // their own swapchain with a few milliseconds of arrival jitter;
+            // priming one source period deeper keeps the successor endpoint
+            // already retained when a pair rotates, so an interior 120-Hz
+            // slot is never left empty (4-8 missed scans per second were the
+            // remaining physical-cadence rejections).  Costs one source
+            // period of latency on those systems only.
+            int requiredPrimeDepth = generatedTimeline ?
+                    (externalTransport != null ?
+                            Math.min(ENDPOINT_FIFO_CAPACITY,
+                                    Math.max(ENDPOINT_FIFO_EXTERNAL_PRIME_DEPTH,
+                                            externalLookaheadPairCount() + 2)) :
+                            (slotLatticeProducer ?
+                                    Math.min(ENDPOINT_FIFO_CAPACITY,
+                                            ENDPOINT_FIFO_PRIME_DEPTH + 3) :
+                                    ENDPOINT_FIFO_PRIME_DEPTH)) : 2;
+            if (endpointFifoCount < requiredPrimeDepth) return;
             previousIndex = 0;
             currentIndex = 1;
             copyBufferedEndpoints(true);
@@ -2524,10 +4948,38 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         if (activeRightSequence == 0L && endpointFifoCount > 0) {
             long next = endpointFifoSequence[endpointFifoHead];
             long nextTimestampNs = endpointFifoTimestampNs[endpointFifoHead];
-            if (next != activeLeftSequence + 1L ||
-                    !AdaptiveFrameRateController.endpointSpanContinuous(
+            long nextUniqueSequence =
+                    endpointFifoUniqueSequence[endpointFifoHead];
+            int nextSubmission = endpointFifoSubmission[endpointFifoHead];
+            long nextCandidateLoss = endpointFifoCandidateLoss[endpointFifoHead];
+            boolean sequenceContinuous = next == activeLeftSequence + 1L;
+            boolean timestampContinuous =
+                    AdaptiveFrameRateController.endpointSpanContinuous(
                             activeLeftTimestampNs, nextTimestampNs,
-                            frameRate.lockedSourceFps())) {
+                            frameRate.presentationSourceHz(),
+                            activeLeftUniqueSequence, nextUniqueSequence,
+                            activeLeftSubmission, nextSubmission,
+                            activeLeftCandidateLoss, nextCandidateLoss,
+                            slotLatticeProducer);
+            if (!sequenceContinuous || !timestampContinuous) {
+                Log.w(TAG, "Buffered endpoint discontinuity" +
+                        " generator=" + generatorId +
+                        " source=" + frameRate.lockedSourceFps() +
+                        " left=" + activeLeftSequence +
+                        " next=" + next +
+                        " leftTs=" + activeLeftTimestampNs +
+                        " nextTs=" + nextTimestampNs +
+                        " spanNs=" + (nextTimestampNs - activeLeftTimestampNs) +
+                        " leftUnique=" + activeLeftUniqueSequence +
+                        " nextUnique=" + nextUniqueSequence +
+                        " leftSubmission=" + activeLeftSubmission +
+                        " nextSubmission=" + nextSubmission +
+                        " leftCandidateLoss=" + activeLeftCandidateLoss +
+                        " nextCandidateLoss=" + nextCandidateLoss +
+                        " sequenceContinuous=" + sequenceContinuous +
+                        " timestampContinuous=" + timestampContinuous +
+                        " fifoCount=" + endpointFifoCount +
+                        " coalesced=" + endpointFifoCoalesced);
                 // The queued timeline skipped at least one accepted source
                 // image. Keep those newer textures intact, abandon the old
                 // active endpoint, and re-prime from the first adjacent pair.
@@ -2540,10 +4992,59 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         }
     }
 
+    /**
+     * Drops only the visible endpoint timeline when the controller publishes a
+     * new presentation epoch. Signature-query ownership and lifetime telemetry
+     * remain intact; newly arriving producer frames are selected afresh under
+     * the new source tier and can form the next exact adjacent pair.
+     */
+    private void resetEndpointTimelineForSchedulerEpoch() {
+        clearNativeEndpointTimeline(true);
+        if (externalTransport != null) externalTransport.resetEndpointTimeline();
+        if (activePairReady && !activePairSyntheticCommitted)
+            ++bufferedSyntheticQuotaSkippedCount;
+        endpointFifoHead = 0;
+        endpointFifoCount = 0;
+        java.util.Arrays.fill(endpointFifoSequence, 0L);
+        java.util.Arrays.fill(endpointFifoTimestampNs, 0L);
+        java.util.Arrays.fill(endpointFifoUniqueSequence, 0L);
+        java.util.Arrays.fill(endpointFifoSubmission, 0);
+        java.util.Arrays.fill(endpointFifoCandidateLoss, 0L);
+        activeLeftSequence = 0L;
+        activeRightSequence = 0L;
+        activeLeftTimestampNs = 0L;
+        activeRightTimestampNs = 0L;
+        activeLeftUniqueSequence = 0L;
+        activeRightUniqueSequence = 0L;
+        activeLeftSubmission = 0;
+        activeRightSubmission = 0;
+        activeLeftCandidateLoss = 0L;
+        activeRightCandidateLoss = 0L;
+        activePairReady = false;
+        activePairSyntheticCommitted = false;
+        motionEstimateReady = false;
+        denseTemporalGuideReady = false;
+        lastPresentationEndpointTimestampNs = 0L;
+        lastPresentationEndpointSubmission = 0;
+    }
+
+    private boolean synchronizeBufferedPresentationEpoch() {
+        long epoch = schedulerPresentationEpoch();
+        if (epoch == observedBufferedPresentationEpoch) return false;
+        observedBufferedPresentationEpoch = epoch;
+        resetEndpointTimelineForSchedulerEpoch();
+        refreshProofEvidencePresentationEpoch();
+        resetHealthWindowAfterStreamChange();
+        return true;
+    }
+
     private void copyBufferedEndpoints(boolean initialPair) {
         motionEstimateReady = false;
         activePairReady = false;
-        boolean dense = densePyramidEnabled;
+        // Endpoint continuity is needed even when no exact doubled cadence
+        // exists. Do not time/solve a pair that cannot fund a midpoint.
+        boolean builtinCadenceReady = frameRate.generatesIntermediateFrames();
+        boolean dense = densePyramidEnabled && builtinCadenceReady;
         boolean denseCopyStageOpen = false;
         try {
             if (dense) {
@@ -2566,7 +5067,11 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             if (activeLeftTimestampNs <= 0L ||
                     !AdaptiveFrameRateController.endpointSpanContinuous(
                             activeLeftTimestampNs, activeRightTimestampNs,
-                            frameRate.lockedSourceFps()))
+                            frameRate.presentationSourceHz(),
+                            activeLeftUniqueSequence, activeRightUniqueSequence,
+                            activeLeftSubmission, activeRightSubmission,
+                            activeLeftCandidateLoss, activeRightCandidateLoss,
+                            slotLatticeProducer))
                 throw new IllegalStateException(
                         "endpoint FIFO lost timestamp continuity");
         } catch (RuntimeException copyFailure) {
@@ -2581,18 +5086,31 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             throw copyFailure;
         }
         try {
-            if (dense) {
+            if (externalTransport != null) {
+                ExternalFrameGenerationTransport.GenerationReadiness readiness =
+                        externalTransport.generationReadiness(
+                                activeLeftSequence, activeRightSequence);
+                motionEstimateReady = readiness ==
+                        ExternalFrameGenerationTransport.GenerationReadiness.READY;
+                if (readiness ==
+                        ExternalFrameGenerationTransport.GenerationReadiness.UNSAFE &&
+                        externalLastUnsafePairRightSequence != activeRightSequence) {
+                    externalLastUnsafePairRightSequence = activeRightSequence;
+                    ++externalUnsafePairCount;
+                }
+            } else if (dense) {
                 try {
                     estimateDenseMotion();
                 } catch (RuntimeException denseFailure) {
                     rejectDense("buffered-pair-estimator-failure", denseFailure);
                     motionEstimateReady = false;
                 }
-            } else if (!frameRate.generationAvailable()) {
+            } else if (!builtinCadenceReady) {
                 // A qualified dense failure has no authorized legacy visual
                 // fallback. Keep the exact endpoints available for direct
                 // presentation without computing or exposing old motion.
                 motionEstimateReady = false;
+                denseTemporalGuideReady = false;
             } else {
                 estimateMotion();
             }
@@ -2603,6 +5121,42 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         activePairReady = motionEstimateReady;
         activePairSyntheticCommitted = false;
         ++bufferedPairCreatedCount;
+        // Copy/proof may start as soon as this exact pair exists, including a
+        // successor promoted during the preceding successful presentation.
+        prepareExternalRealPairIfPossible();
+    }
+
+    private void prepareExternalRealPairIfPossible() {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null || !transport.supportsPrivateRealPairPreparation() ||
+                externalPresentationFailed || activeLeftSequence <= 0L ||
+                activeLeftSequence == Long.MAX_VALUE ||
+                activeRightSequence != activeLeftSequence + 1L ||
+                activeLeftTimestampNs <= 0L || activeRightTimestampNs <= activeLeftTimestampNs)
+            return;
+        long epoch = schedulerPresentationEpoch();
+        if (epoch <= 0L) return;
+        FrameGenerationPreparationRequest cached = externalRealPairPreparation;
+        if (cached == null || cached.sessionEpoch() != generatorId ||
+                cached.presentationEpoch() != epoch ||
+                cached.leftSequence() != activeLeftSequence ||
+                cached.leftTimestampNs() != activeLeftTimestampNs ||
+                cached.rightSequence() != activeRightSequence ||
+                cached.rightTimestampNs() != activeRightTimestampNs ||
+                cached.outputWidth() != transport.endpointWidth() ||
+                cached.outputHeight() != transport.endpointHeight()) {
+            cached = FrameGenerationPreparationRequest.between(
+                    generatorId, epoch, activeLeftSequence, activeLeftTimestampNs,
+                    activeRightSequence, activeRightTimestampNs, activeLeftTimestampNs,
+                    transport.endpointWidth(), transport.endpointHeight(),
+                    FrameGenerationPresentationRequest.FORMAT_RGBA8_UNORM);
+            externalRealPairPreparation = cached;
+        }
+        // Phase zero is a canonical pair announcement, NOT a predicted next
+        // output. The immutable request may later select either exact endpoint.
+        // Announcement before imports finish lets their completion retry this
+        // same identity without adding another vsync of preparation latency.
+        transport.prepareRealPair(cached);
     }
 
     private void invalidateBufferedPairForReprime() {
@@ -2610,15 +5164,36 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     private void invalidateBufferedPairForReprime(boolean resetController) {
+        deferredExternalPreparation = null;
+        pendingAppOwnedRequest = null;
+        pendingAppOwnedPreparation = null;
+        clearNativeEndpointTimeline(externalTransport != null);
+        if (externalTransport != null) {
+            externalTransport.resetEndpointTimeline();
+            endpointFifoHead = 0;
+            endpointFifoCount = 0;
+            java.util.Arrays.fill(endpointFifoSequence, 0L);
+            java.util.Arrays.fill(endpointFifoTimestampNs, 0L);
+            java.util.Arrays.fill(endpointFifoUniqueSequence, 0L);
+            java.util.Arrays.fill(endpointFifoSubmission, 0);
+            java.util.Arrays.fill(endpointFifoCandidateLoss, 0L);
+        }
         if (activePairReady && !activePairSyntheticCommitted)
             ++bufferedSyntheticQuotaSkippedCount;
         activeLeftSequence = 0L;
         activeRightSequence = 0L;
         activeLeftTimestampNs = 0L;
         activeRightTimestampNs = 0L;
+        activeLeftUniqueSequence = 0L;
+        activeRightUniqueSequence = 0L;
+        activeLeftSubmission = 0;
+        activeRightSubmission = 0;
+        activeLeftCandidateLoss = 0L;
+        activeRightCandidateLoss = 0L;
         activePairReady = false;
         activePairSyntheticCommitted = false;
         motionEstimateReady = false;
+        denseTemporalGuideReady = false;
         if (resetController) frameRate.resetPresentation();
     }
 
@@ -2646,10 +5221,18 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         int reuse = previousIndex;
         previousIndex = currentIndex;
         currentIndex = reuse;
+        // Right keeps its texture-indexed metadata; retire only the old left.
+        releaseNativeEndpointProvenance(NATIVE_HISTORY_BASE + currentIndex);
         activeLeftSequence = activeRightSequence;
         activeLeftTimestampNs = activeRightTimestampNs;
+        activeLeftUniqueSequence = activeRightUniqueSequence;
+        activeLeftSubmission = activeRightSubmission;
+        activeLeftCandidateLoss = activeRightCandidateLoss;
         activeRightSequence = 0L;
         activeRightTimestampNs = 0L;
+        activeRightUniqueSequence = 0L;
+        activeRightSubmission = 0;
+        activeRightCandidateLoss = 0L;
         activePairReady = false;
         activePairSyntheticCommitted = false;
         motionEstimateReady = false;
@@ -2764,8 +5347,15 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             allocateSignatureQualificationTexture(signaturePreviousTexture);
             allocateSignatureQualificationTexture(signatureQueryTexture);
             densePyramidProgram = createProgram(VERTEX_SHADER, DENSE_PYRAMID_SHADER);
+            denseGlobalCostProgram = createProgram(
+                    VERTEX_SHADER, DENSE_GLOBAL_COST_SHADER);
+            denseGlobalReduceProgram = createProgram(
+                    VERTEX_SHADER, DENSE_GLOBAL_REDUCE_SHADER);
+            denseGlobalCutProgram = createProgram(
+                    VERTEX_SHADER, DENSE_GLOBAL_CUT_SHADER);
             denseSolveProgram = createProgram(VERTEX_SHADER, DENSE_SOLVE_SHADER);
             denseCycleProgram = createProgram(VERTEX_SHADER, DENSE_CYCLE_SHADER);
+            denseFillProgram = createProgram(VERTEX_SHADER, DENSE_FILL_SHADER);
             denseQ8ProbeProgram = createProgram(VERTEX_SHADER, DENSE_Q8_PROBE_SHADER);
             proofAtlasHeaderProgram = createProgram(VERTEX_SHADER,
                     PROOF_ATLAS_HEADER_SHADER);
@@ -2775,8 +5365,15 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 for (int level = 0; level < DENSE_LEVELS; ++level)
                     GLES20.glGenTextures(2, denseFlowTextures[direction][level], 0);
                 GLES20.glGenTextures(2, densePyramidTextures[direction], 0);
+                GLES20.glGenTextures(2, denseBoxTextures[direction], 0);
             }
+            GLES20.glGenTextures(2, denseGlobalCoarseCostTextures, 0);
+            GLES20.glGenTextures(2, denseGlobalFineCostTextures, 0);
+            GLES20.glGenTextures(2, denseGlobalCoarseSeedTextures, 0);
+            GLES20.glGenTextures(2, denseGlobalSeedTextures, 0);
+            GLES20.glGenTextures(2, denseGlobalCutTextures, 0);
             GLES20.glGenTextures(2, denseValidatedTextures, 0);
+            GLES20.glGenTextures(2, denseFillTextures, 0);
             allocateDenseResources();
             validateDenseByteContract();
             validateDenseQ8ShaderContract();
@@ -2793,7 +5390,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             Log.i(TAG, "Dense pyramid resources ready generator=" + generatorId +
                     " variant=" + denseVariant() +
                     " analysis=" + denseAnalysisWidth + "x" + denseAnalysisHeight +
-                    " passesPerPromotion=" + DENSE_PASSES_PER_PROMOTION +
+                    " passesPerPromotion=" + densePassesPerPromotion() +
                     " solveTexelsPerPromotion=" + denseSolveTexelsPerPromotion() +
                     " totalTexelsPerPromotion=" + denseTotalTexelsPerPromotion() +
                     " maxFlowPixels=" + DENSE_MAX_FLOW_PIXELS +
@@ -2845,8 +5442,26 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     denseLevelWidths[1], denseLevelHeights[1], false);
             allocateDenseTexture(densePyramidTextures[direction][1],
                     denseLevelWidths[2], denseLevelHeights[2], false);
+            denseBoxWidths[0] = Math.max(1, historyWidth / 4);
+            denseBoxHeights[0] = Math.max(1, historyHeight / 4);
+            denseBoxWidths[1] = Math.max(1, denseBoxWidths[0] / 4);
+            denseBoxHeights[1] = Math.max(1, denseBoxHeights[0] / 4);
+            allocateDenseTexture(denseBoxTextures[direction][0],
+                    denseBoxWidths[0], denseBoxHeights[0], false);
+            allocateDenseTexture(denseBoxTextures[direction][1],
+                    denseBoxWidths[1], denseBoxHeights[1], false);
             allocateDenseTexture(denseValidatedTextures[direction],
                     denseAnalysisWidth, denseAnalysisHeight, false);
+            allocateDenseTexture(denseFillTextures[direction],
+                    denseAnalysisWidth, denseAnalysisHeight, false);
+            allocateDenseTexture(denseGlobalCoarseCostTextures[direction],
+                    9, 9, true);
+            allocateDenseTexture(denseGlobalFineCostTextures[direction],
+                    5, 5, true);
+            allocateDenseTexture(denseGlobalCoarseSeedTextures[direction],
+                    1, 1, true);
+            allocateDenseTexture(denseGlobalSeedTextures[direction], 1, 1, true);
+            allocateDenseTexture(denseGlobalCutTextures[direction], 1, 1, true);
         }
         clearDenseFields();
     }
@@ -2867,10 +5482,43 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         checkGl("allocate RGBA8 signature qualification texture");
     }
 
+    private void initializeExternalSignatureClassifier() {
+        if (externalTransport == null) return;
+        if (requestedEglContextMajor < 3 || actualEglContextMajor < 3)
+            throw new IllegalStateException(
+                    "external endpoint classification requires GLES3");
+        String extensions = GLES20.glGetString(GLES20.GL_EXTENSIONS);
+        int[] range = new int[2];
+        int[] precision = new int[1];
+        GLES20.glGetShaderPrecisionFormat(GLES20.GL_FRAGMENT_SHADER,
+                GLES20.GL_HIGH_FLOAT, range, 0, precision, 0);
+        if (extensions == null || !extensions.contains("GL_OES_rgb8_rgba8") ||
+                precision[0] < 16)
+            throw new IllegalStateException(
+                    "external signature requires RGBA8 and fragment highp");
+        allocateSignatureQualificationTexture(signatureTexture);
+        allocateSignatureQualificationTexture(signaturePreviousTexture);
+        allocateSignatureQualificationTexture(signatureQueryTexture);
+        externalSignatureTimer = DenseGpuTimer.create();
+        if (!externalSignatureTimer.signatureSupported() ||
+                signatureCapability(externalSignatureTimer) !=
+                        DENSE_SIGNATURE_CAP_READY)
+            throw new IllegalStateException(
+                    "external asynchronous signature self-test failed");
+        denseSignatureBaselineReady = false;
+        denseSignatureSequence = 0L;
+        clearSignatureCandidates();
+    }
+
+    private int signatureCapability(DenseGpuTimer timer) {
+        int nativeCapability = timer == null ? 0 : timer.signatureCapability();
+        boolean rgba8Ready = timer == externalSignatureTimer || denseResourcesReady;
+        return nativeCapability |
+                (rgba8Ready ? DENSE_SIGNATURE_CAP_RGBA8 : 0);
+    }
+
     private int denseSignatureCapability() {
-        int nativeCapability = denseGpuTimer == null ? 0 :
-                denseGpuTimer.signatureCapability();
-        return nativeCapability | (denseResourcesReady ? DENSE_SIGNATURE_CAP_RGBA8 : 0);
+        return signatureCapability(denseGpuTimer);
     }
 
     private void allocateDenseTexture(int texture, int width, int height, boolean nearest) {
@@ -2894,6 +5542,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     private void clearDenseFields() {
+        denseTemporalGuideReady = false;
         boolean dither = GLES20.glIsEnabled(GLES20.GL_DITHER);
         GLES20.glDisable(GLES20.GL_DITHER);
         try {
@@ -2904,6 +5553,18 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                                 denseLevelWidths[level], denseLevelHeights[level], 0f, 0f, 0f, 0f);
                 clearTexture(denseValidatedTextures[direction], denseAnalysisWidth,
                         denseAnalysisHeight, 128f / 255f, 128f / 255f, 0f, 0f);
+                clearTexture(denseFillTextures[direction], denseAnalysisWidth,
+                        denseAnalysisHeight, 128f / 255f, 128f / 255f, 0f, 0f);
+                clearTexture(denseGlobalCoarseCostTextures[direction], 9, 9,
+                        0f, 0f, 0f, 0f);
+                clearTexture(denseGlobalFineCostTextures[direction], 5, 5,
+                        0f, 0f, 0f, 0f);
+                clearTexture(denseGlobalCoarseSeedTextures[direction], 1, 1,
+                        0f, 0f, 0f, 0f);
+                clearTexture(denseGlobalSeedTextures[direction], 1, 1,
+                        0f, 0f, 0f, 0f);
+                clearTexture(denseGlobalCutTextures[direction], 1, 1,
+                        0f, 0f, 0f, 1f);
             }
         } finally {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
@@ -2993,6 +5654,11 @@ public final class DisplayFrameGenerator implements AutoCloseable,
 
     private void estimateDenseMotion() {
         long start = System.nanoTime();
+        // The validated textures still contain the preceding pair until the
+        // final validation draws below.  Preserve that ownership explicitly;
+        // motionEstimateReady is cleared while copying every new endpoint and
+        // therefore cannot represent temporal-guide availability.
+        boolean temporalGuide = denseTemporalGuideReady;
         boolean dither = GLES20.glIsEnabled(GLES20.GL_DITHER);
         boolean blend = GLES20.glIsEnabled(GLES20.GL_BLEND);
         boolean scissor = GLES20.glIsEnabled(GLES20.GL_SCISSOR_TEST);
@@ -3009,29 +5675,43 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             beginDenseStage(DenseGpuTimer.PYRAMID);
             buildDensePyramid(historyTextures[previousIndex], 0);
             buildDensePyramid(historyTextures[currentIndex], 1);
+            if (denseV28ReducedAnalysisRequested) {
+                buildDenseGlobalSeed(0, historyTextures[previousIndex],
+                        historyTextures[currentIndex]);
+                buildDenseGlobalSeed(1, historyTextures[currentIndex],
+                        historyTextures[previousIndex]);
+            }
             endDenseStage();
             beginDenseStage(DenseGpuTimer.FORWARD_SOLVE);
             solveDenseDirection(0, historyTextures[previousIndex],
-                    historyTextures[currentIndex]);
+                    historyTextures[currentIndex], temporalGuide);
             endDenseStage();
             beginDenseStage(DenseGpuTimer.REVERSE_SOLVE);
             solveDenseDirection(1, historyTextures[currentIndex],
-                    historyTextures[previousIndex]);
-            // Reuse direction zero's former copy-only fine expansion draw as
-            // a post-reverse closure proposal. The reverse field was solved in
-            // its own image domain; this draw merely lets the forward field
-            // retain a lower-cost reciprocal candidate. Pass count, search
-            // reach and the independent cycle validation remain unchanged.
-            refineDenseForwardFromReverse(historyTextures[previousIndex],
-                    historyTextures[currentIndex]);
+                    historyTextures[previousIndex], temporalGuide);
             endDenseStage();
             beginDenseStage(DenseGpuTimer.VALIDATION);
+            // The independently searched fields may still occupy different
+            // repeated-texture basins. Give each finalized full-resolution
+            // field one reciprocal proposal under ITS OWN image objective
+            // before validation. A stricter gain margin prevents a merely
+            // tied inverse from manufacturing cycle agreement.
+            if (denseV28ReducedAnalysisRequested && denseWorkLevel < 2) {
+                refineDenseReciprocalDirection(0, historyTextures[previousIndex],
+                        historyTextures[currentIndex]);
+                refineDenseReciprocalDirection(1, historyTextures[currentIndex],
+                        historyTextures[previousIndex]);
+            }
             validateDenseDirection(0, historyTextures[previousIndex],
                     historyTextures[currentIndex]);
             validateDenseDirection(1, historyTextures[currentIndex],
                     historyTextures[previousIndex]);
+            fillDenseDirection(0);
+            fillDenseDirection(1);
             endDenseStage();
             checkGl("estimate dense bidirectional motion");
+            maybeDumpDenseFlow(previousIndex, currentIndex);
+            denseTemporalGuideReady = true;
             motionEstimateReady = true;
         } finally {
             if (dither) GLES20.glEnable(GLES20.GL_DITHER);
@@ -3041,7 +5721,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         long submitted = System.nanoTime();
         long submitUs = Math.max(0L, (submitted - start) / 1000L);
         ++densePromotions;
-        densePasses += DENSE_PASSES_PER_PROMOTION;
+        densePasses += densePassesPerPromotion();
         denseCpuSubmitLastUs = submitUs;
         denseCpuSubmitTotalUs += submitUs;
         denseCpuSubmitMaxUs = Math.max(denseCpuSubmitMaxUs, submitUs);
@@ -3049,8 +5729,15 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     private void beginDenseStage(int stage) {
+        if (physicalPresentationTracker != null)
+            physicalPresentationTracker.setReadyTimingEnabled(true);
         long sequence = stage == DenseGpuTimer.VISIBLE_WARP ?
                 denseWarpSequence + 1L : densePromotions + 1L;
+        if (stage == DenseGpuTimer.VISIBLE_WARP &&
+                !denseGpuPairLedger.expectWarp(sequence, densePromotions)) {
+            ++denseTimerUnavailable;
+            throw new IllegalStateException("dense GPU warp has no unique pair owner");
+        }
         if (denseGpuTimer == null || !denseGpuTimer.begin(stage, sequence)) {
             ++denseTimerUnavailable;
             throw new IllegalStateException("dense GPU timer ring unavailable");
@@ -3088,6 +5775,10 @@ public final class DisplayFrameGenerator implements AutoCloseable,
 
     private void pollDenseTimers() {
         if (denseGpuTimer == null) return;
+        if (pendingDenseGpuHeadroomReject != null) {
+            rejectDense(pendingDenseGpuHeadroomReject, null);
+            return;
+        }
         int disjointBefore = denseGpuTimer.takeDisjointCount();
         denseTimerDisjoint += disjointBefore;
         if (disjointBefore > 0) {
@@ -3139,30 +5830,38 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             denseTimerMaxQueueAge = Math.max(denseTimerMaxQueueAge, queueAge);
             if (queueAge > 64L) {
                 ++denseTimerStale;
+                // Expired work is missing evidence, not a zero-cost sample.
+                // End ownership rather than leaving a hole that later pairs
+                // could silently skip while earning healthy credit.
                 rejectDense("stale-timer-result", null);
+                return;
+            }
+            long pairSequence = stage == DenseGpuTimer.VISIBLE_WARP ?
+                    denseGpuPairLedger.ownerOfWarp(sequence) : sequence;
+            boolean recorded = stage == DenseGpuTimer.VISIBLE_WARP ?
+                    denseGpuPairLedger.recordWarp(sequence, elapsedUs) :
+                    denseGpuPairLedger.recordEstimatorStage(sequence, stage, elapsedUs);
+            if (!recorded) {
+                ++denseTimerStale;
+                rejectDense("invalid-timer-pair-ownership", null);
                 return;
             }
             denseStageTotalUs[stage] += elapsedUs;
             denseStageMaxUs[stage] = Math.max(denseStageMaxUs[stage], elapsedUs);
             int sample = (int) (denseStageSamples[stage]++ & 255L);
             denseStageObservedUs[stage][sample] = elapsedUs;
-            if (elapsedUs > DENSE_GPU_BUDGET_US) {
-                rejectDense("async-gpu-stage-over-budget", null);
-                return;
+            if (elapsedUs > denseGpuBudgetUs()) {
+                failDenseGpuPairOnce(pairSequence, "async-gpu-stage-over-budget");
+                if (denseGpuTimer == null) return;
             }
-            // Visible presentation is not part of one endpoint estimator. It
-            // has an independent monotonic sequence because zero, one, or
-            // multiple generated warps can consume the same endpoint pair.
+            // Warp query IDs are independent of endpoint IDs; the ledger
+            // binds the actual midpoint warp to its immutable endpoint owner.
             if (stage == DenseGpuTimer.VISIBLE_WARP) {
                 int warpSlot = (int) (sequence & 127L);
-                if (denseWarpCompletedSequence[warpSlot] == sequence) {
-                    ++denseTimerStale;
-                    rejectDense("duplicate-warp-timer", null);
-                    return;
-                }
                 denseWarpCompletedSequence[warpSlot] = sequence;
                 denseWarpMaxCompletedSequence = Math.max(
                         denseWarpMaxCompletedSequence, sequence);
+                if (!consumeCompletedDenseGpuPairs()) return;
                 continue;
             }
             int pair = (int) (sequence & 127L);
@@ -3172,9 +5871,10 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 return;
             }
             densePairSequence[pair] = sequence;
-            if ((densePairMask[pair] & (1 << stage)) != 0) {
+            if ((densePairMask[pair] & (1 << stage)) != 0 ||
+                    densePairTotalUs[pair] > Long.MAX_VALUE - elapsedUs) {
                 ++denseTimerStale;
-                rejectDense("duplicate-timer-stage", null);
+                rejectDense("invalid-timer-result", null);
                 return;
             }
             densePairTotalUs[pair] += elapsedUs;
@@ -3189,32 +5889,155 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 ++denseTimedPairs;
                 denseTimedPairTotalUs += total;
                 denseTimedPairMaxUs = Math.max(denseTimedPairMaxUs, total);
-                denseGpuCompleteLastUs = total;
-                denseGpuCompleteTotalUs = denseTimedPairTotalUs;
-                denseGpuCompleteMaxUs = denseTimedPairMaxUs;
                 densePairSequence[pair] = 0L;
                 densePairTotalUs[pair] = 0L;
                 densePairMask[pair] = 0;
-                if (total > DENSE_GPU_BUDGET_US) {
-                    rejectDense("async-gpu-pair-over-budget", null);
-                    return;
+                if (total > denseGpuBudgetUs()) {
+                    failDenseGpuPairOnce(sequence, "async-gpu-pair-over-budget");
+                    if (denseGpuTimer == null) return;
                 }
             }
-            if (denseTimedPairs >= DENSE_PERFORMANCE_MIN_SAMPLES &&
-                    denseStageSamples[DenseGpuTimer.VISIBLE_WARP] >=
-                            DENSE_PERFORMANCE_MIN_SAMPLES &&
-                    denseTimedPairMaxUs +
-                            denseStageP95(DenseGpuTimer.VISIBLE_WARP) >
-                            DENSE_GPU_BUDGET_US) {
-                rejectDense("combined-pair-warp-over-budget", null);
-                return;
-            }
+            if (!consumeCompletedDenseGpuPairs()) return;
         }
+        if (denseGpuTimer == null) return;
         int disjointAfter = denseGpuTimer.takeDisjointCount();
         if (disjointAfter > 0) {
             denseTimerDisjoint += disjointAfter;
             rejectDense("gpu-timer-disjoint", null);
         }
+    }
+
+    private void failDenseGpuPairOnce(long pairSequence, String reason) {
+        int slot = (int) (pairSequence & 127L);
+        if (pairSequence > 0L && denseGpuFailedPairSequences[slot] != pairSequence) {
+            denseGpuFailedPairSequences[slot] = pairSequence;
+            shedDenseWork(reason);
+        } else {
+            // The same stage spike, pair sum and warp sum are one failed pair,
+            // not three independent failures. They still invalidate recovery.
+            denseGpuAdaptation.invalidateRecoveryEvidence();
+        }
+    }
+
+    private boolean consumeCompletedDenseGpuPairs() {
+        long pairSequence;
+        while ((pairSequence = denseGpuPairLedger.takeCompletedPair()) > 0L) {
+            long totalUs = denseGpuPairLedger.completedTotalUs(pairSequence);
+            if (totalUs <= 0L) {
+                rejectDense("invalid-timer-pair-total", null);
+                return false;
+            }
+            ++denseGpuCompletePairs;
+            denseGpuCompleteLastUs = totalUs;
+            denseGpuCompleteTotalUs += totalUs;
+            denseGpuCompleteMaxUs = Math.max(denseGpuCompleteMaxUs, totalUs);
+            if (!denseGpuHeadroom.recordShader(denseGpuHeadroom.evidenceEpoch(),
+                    pairSequence, totalUs, denseGpuBudgetUs())) {
+                rejectDense("invalid-timer-physical-join", null);
+                return false;
+            }
+            if (totalUs > denseGpuBudgetUs())
+                failDenseGpuPairOnce(pairSequence, "combined-pair-warp-over-budget");
+            if (denseGpuTimer == null) return false;
+        }
+        return consumeDensePhysicalGpuHeadroom();
+    }
+
+    private long previousDenseJoinEpoch, previousDenseJoinFrameId;
+    private long previousDenseJoinTargetNs, previousDenseJoinActualNs;
+    private int denseJoinedGapEvidenceCount;
+    private final SubmissionTimingHistory denseSubmissionHistory = new SubmissionTimingHistory();
+
+    private boolean consumeDensePhysicalGpuHeadroom() {
+        GpuPhysicalHeadroomLedger.Result result;
+        while ((result = denseGpuHeadroom.takeCompleted()) != null) {
+            if (result.presentationEpoch != schedulerPresentationEpoch()) {
+                denseGpuAdaptation.invalidateRecoveryEvidence();
+                if (result.generated()) ++denseGpuPhysicalUnknownPairs;
+                continue;
+            }
+            // Join adjacent owned results, not unrelated rolling averages.
+            // Target and actual deltas distinguish a planned scan skip from
+            // a late physical presentation. Missing IDs remain explicit.
+            if (result.actualNs > 0L) {
+                if (frameRate.generatesIntermediateFrames() &&
+                        frameRate.panelScansPerOutput() == 1 &&
+                        previousDenseJoinEpoch == result.presentationEpoch &&
+                        previousDenseJoinActualNs > 0L && result.panelPeriodNs > 0L &&
+                        result.actualNs - previousDenseJoinActualNs >
+                                result.panelPeriodNs + result.panelPeriodNs / 2L &&
+                        denseJoinedGapEvidenceCount < 8) {
+                    ++denseJoinedGapEvidenceCount;
+                    Log.w(TAG, "Built-in joined physical gap generator=" + generatorId +
+                            " previousFrameId=" + previousDenseJoinFrameId +
+                            " frameId=" + result.frameId +
+                            " previousTargetNs=" + previousDenseJoinTargetNs +
+                            " targetNs=" + result.desiredNs +
+                            " previousActualNs=" + previousDenseJoinActualNs +
+                            " actualNs=" + result.actualNs +
+                            " periodNs=" + result.panelPeriodNs +
+                            " pair=" + result.pairSequence +
+                            " outcome=" + result.outcome + " reason=" + result.reason +
+                            " submissions=" + denseSubmissionHistory.describe(
+                                    result.presentationEpoch, previousDenseJoinFrameId, result.frameId));
+                }
+                previousDenseJoinEpoch = result.presentationEpoch;
+                previousDenseJoinFrameId = result.frameId;
+                previousDenseJoinTargetNs = result.desiredNs;
+                previousDenseJoinActualNs = result.actualNs;
+            }
+            boolean verified = result.outcome ==
+                    GpuPhysicalHeadroomLedger.Outcome.VERIFIED_HEADROOM;
+            if (result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS) {
+                ++denseGpuPhysicalDeadlineMisses;
+                // Bounded failure-only evidence: distinguish a wrong physical
+                // slot from late application rendering before blaming shaders.
+                if (denseGpuPhysicalDeadlineMisses <= 4L) {
+                    Log.w(TAG, "Dense physical deadline evidence generator=" + generatorId +
+                            " frameId=" + result.frameId + " pair=" + result.pairSequence +
+                            " warp=" + result.warpSequence + " reason=" + result.reason +
+                            " desiredNs=" + result.desiredNs + " actualNs=" + result.actualNs +
+                            " deadlineNs=" + result.deadlineNs +
+                            " renderCompleteNs=" + result.renderCompleteNs +
+                            " latchNs=" + result.latchNs +
+                            " compositionStartNs=" + result.startNs +
+                            " compositorGpuFinishedNs=" + result.gpuFinishedNs +
+                            " timestampSupportedMask=" + result.supportedMask +
+                            " panelPeriodNs=" + result.panelPeriodNs +
+                            " shaderCostUs=" + result.shaderCostUs +
+                            " shaderBudgetUs=" + result.shaderBudgetUs);
+                }
+                if (result.generated())
+                    failDenseGpuPairOnce(result.pairSequence, "physical-pair-deadline-miss");
+                else
+                    shedDenseWork("physical-pair-deadline-miss");
+                if (denseGpuTimer == null) return false;
+                continue;
+            }
+            if (!verified) denseGpuAdaptation.invalidateRecoveryEvidence();
+            // Endpoints maintain continuity, but do not count as healthy
+            // generated pairs or borrow another pair's shader measurement.
+            if (!result.generated()) continue;
+            if (verified) ++denseGpuPhysicalVerifiedPairs;
+            else if (result.outcome == GpuPhysicalHeadroomLedger.Outcome.MARGINAL_HEADROOM)
+                ++denseGpuPhysicalMarginalPairs;
+            else ++denseGpuPhysicalUnknownPairs;
+            denseGpuPhysicalLastAppMarginNs = result.appMarginNs;
+            denseGpuPhysicalLastCompositorMarginNs = result.compositorMarginNs;
+            int slot = (int) (result.pairSequence & 127L);
+            if (denseGpuFailedPairSequences[slot] == result.pairSequence) {
+                denseGpuAdaptation.invalidateRecoveryEvidence();
+                continue;
+            }
+            // This is an exact pair + own warp + successful EGL swap + that
+            // frame's driver-rendering/compositor completion join. Delayed
+            // observation time and rolling cadence averages are never inputs.
+            applyDenseGpuDecision(denseGpuAdaptation.onCompletedPair(
+                    ++denseGpuCompletionSequence, result.shaderCostUs,
+                    result.shaderBudgetUs, verified), result.reason);
+            if (denseGpuTimer == null) return false;
+        }
+        return true;
     }
 
     private long denseStageP95(int stage) {
@@ -3293,17 +6116,72 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     /** Session cap on automatic dense re-arms after transient timer anomalies. */
-    private static final int DENSE_TRANSIENT_REJECT_REARM_LIMIT = 8;
+    private static final int DENSE_TRANSIENT_REJECT_REARM_LIMIT = 32;
     private int denseTransientRejections;
+    // Cached shader work level; the session-owned policy is the sole writer.
+    // Minimum-work overload has a bounded Direct fallback. Quality recovery
+    // requires consecutive complete timing AND independent physical headroom.
+    private int denseWorkLevel;
 
-    /** True only for driver measurement anomalies that invalidate the current
-     * timing evidence without implying a broken GL pipeline: a disjoint
-     * interval is EXT_disjoint_timer_query's defined discard event, and an
-     * elapsed overflow is an observed Adreno all-ones result while Cemu's
-     * Vulkan queue shared the GPU. Every other reason (context, GL error,
-     * malformed/stale results, budget overruns) stays a permanent reject. */
+    /** One independent failed pair, never a repeated rolling-window maximum. */
+    private void shedDenseWork(String reason) {
+        ++denseLoadAnomalies;
+        applyDenseGpuDecision(denseGpuAdaptation.onFailure(denseGpuFailure(reason)), reason);
+    }
+
+    private void applyDenseGpuDecision(GpuWorkAdaptationPolicy.Decision decision, String reason) {
+        denseWorkLevel = denseGpuAdaptation.workLevel();
+        if (decision != GpuWorkAdaptationPolicy.Decision.UNCHANGED) {
+            Log.w(TAG, "Dense GPU adaptation generator=" + generatorId +
+                    " decision=" + decision +
+                    " reason=" + reason + " workLevel=" + denseWorkLevel +
+                    " anomalies=" + denseLoadAnomalies +
+                    " failures=" + denseGpuAdaptation.failureCount() +
+                    " minimumWorkFailures=" + denseGpuAdaptation.failuresAtMinimum());
+        }
+        if (decision == GpuWorkAdaptationPolicy.Decision.DISABLE_GENERATION)
+            rejectDense("persistent-gpu-overload", null);
+    }
+    private long denseLoadAnomalies;
+
+    private static GpuWorkAdaptationPolicy.Failure denseGpuFailure(String reason) {
+        if (isOverBudgetDenseRejection(reason))
+            return GpuWorkAdaptationPolicy.Failure.GPU_OVER_BUDGET;
+        if ("gpu-timer-disjoint".equals(reason) ||
+                ("native-timer-status-" + DenseGpuTimer.STATUS_DISJOINT).equals(reason))
+            return GpuWorkAdaptationPolicy.Failure.TIMER_DISJOINT;
+        if ("surface-cadence-below-reported-output".equals(reason) ||
+                "physical-pair-deadline-miss".equals(reason))
+            return GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS;
+        if ("stale-timer-result".equals(reason) ||
+                "zero-timer-result".equals(reason) ||
+                "wrapped-incomplete-timer-pair".equals(reason))
+            return GpuWorkAdaptationPolicy.Failure.TIMER_MISSING;
+        if (reason != null && reason.contains("timer"))
+            return GpuWorkAdaptationPolicy.Failure.TIMER_INVALID;
+        return GpuWorkAdaptationPolicy.Failure.PIPELINE_FAILURE;
+    }
+
+    private static boolean isOverBudgetDenseRejection(String reason) {
+        return "async-gpu-pair-over-budget".equals(reason) ||
+                "async-gpu-stage-over-budget".equals(reason) ||
+                "combined-pair-warp-over-budget".equals(reason);
+    }
+
+    /** Recoverable epoch failures, still subject to both session limits.
+     * Every failure ends the current timing evidence and presents Direct;
+     * a later re-arm cannot erase minimum-work overload or restore quality. */
     private static boolean isTransientDenseRejection(String reason) {
+        // Guest speed is never reduced to hide GPU overload. Context, GL,
+        // malformed/expired results and ownership failures are not re-armed.
         return "gpu-timer-disjoint".equals(reason) ||
+                "surface-cadence-below-reported-output".equals(reason) ||
+                "wrapped-incomplete-timer-pair".equals(reason) ||
+                "duplicate-warp-timer".equals(reason) ||
+                "invalid-timer-result".equals(reason) ||
+                "async-gpu-pair-over-budget".equals(reason) ||
+                "combined-pair-warp-over-budget".equals(reason) ||
+                "async-signature-failure".equals(reason) ||
                 ("native-timer-status-" + DenseGpuTimer.STATUS_DISJOINT)
                         .equals(reason) ||
                 ("native-timer-status-" + DenseGpuTimer.STATUS_ELAPSED_OVERFLOW)
@@ -3318,7 +6196,14 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         // periodic switch refresh re-arm a fresh timer and epoch on a later
         // HEALTH boundary, bounded per session so a persistently glitching
         // driver converges to the permanent fail-closed state.
-        boolean recoverable = isTransientDenseRejection(reason) &&
+        boolean overBudget = isOverBudgetDenseRejection(reason);
+        if (!denseGpuAdaptation.generationDisabled())
+            denseGpuAdaptation.onFailure(denseGpuFailure(reason));
+        else
+            denseGpuAdaptation.invalidateRecoveryEvidence();
+        denseWorkLevel = denseGpuAdaptation.workLevel();
+        boolean recoverable = !denseGpuAdaptation.generationDisabled() &&
+                (isTransientDenseRejection(reason) || overBudget) &&
                 ++denseTransientRejections <= DENSE_TRANSIENT_REJECT_REARM_LIMIT;
         if (!recoverable) densePyramidUnavailable = true;
         densePerformanceRejected = true;
@@ -3326,7 +6211,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         // The legacy v22 estimator remains useful as diagnostic code, but it
         // must never become a silent visual fallback: that exact transition
         // produced doubled/ghosted PS2 imagery while the badge still claimed
-        // 50/100.  Collapse the controller to truthful endpoint-only output.
+        // an interpolated target. Collapse the controller to truthful
+        // endpoint-only output.
         frameRate.setGenerationAvailable(false);
         invalidateBufferedPairForReprime(false);
         teardownDenseEpoch("runtime-reject");
@@ -3338,8 +6224,21 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             Log.e(TAG, "Dense pyramid rejected generator=" + generatorId +
                     " reason=" + reason + " recoverable=" + (recoverable ? 1 : 0) +
                     " transientRejections=" + denseTransientRejections, failure);
-        reportedSourceFps = -1;
-        reportedOutputFps = -1;
+        if (!recoverable) {
+            // Endpoint-only output still owns an intermediate renderer. Once
+            // generation cannot recover, retire it through the host's normal
+            // producer acknowledgement and rebind the exact Direct Surface.
+            // Never close/rebind here on the generator's rendering thread.
+            failRuntimePresentation("Built-in generation unavailable; requesting Direct recovery",
+                    new IllegalStateException("Permanent frame-generation rejection: " + reason,
+                            failure));
+            return;
+        }
+        reportedSourceTenths = -1;
+        reportedOutputTenths = -1;
+        reportedTargetTenths = -1;
+        reportedCadenceQualified = false;
+        reportedBackendLabel = null;
         reportStats();
     }
 
@@ -3350,6 +6249,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
      * path. A later enable must create a new native timer and sequence epoch. */
     private void teardownDenseEpoch(String reason) {
         motionEstimateReady = false;
+        if (physicalPresentationTracker != null)
+            physicalPresentationTracker.setReadyTimingEnabled(false);
+        resetDenseGpuEvidenceEpoch();
         // Native discard below destroys every pending signature-query owner.
         // Drop the matching retained Java textures before the query sequence
         // can be rebased for a later qualification epoch; otherwise a reused
@@ -3390,6 +6292,16 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         if (cleanupFailure != null)
             Log.e(TAG, "Dense epoch cleanup failed generator=" + generatorId +
                     " reason=" + reason, cleanupFailure);
+    }
+
+    private void resetDenseGpuEvidenceEpoch() {
+        denseGpuPairLedger.beginEvidenceEpoch();
+        denseGpuAdaptation.beginEvidenceEpoch();
+        denseGpuHeadroom.beginEvidenceEpoch(denseGpuAdaptation.evidenceEpochCount());
+        denseGpuHeadroomPresentationEpoch = 0L;
+        pendingDenseGpuHeadroomReject = null;
+        denseGpuCompletionSequence = 0L;
+        java.util.Arrays.fill(denseGpuFailedPairSequences, 0L);
     }
 
     private void clearAllMotionFieldsAfterDenseReject() {
@@ -3433,25 +6345,117 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     private void buildDensePyramid(int source, int endpoint) {
-        drawDensePyramid(source, historyWidth, historyHeight,
-                densePyramidTextures[endpoint][0], denseLevelWidths[1], denseLevelHeights[1]);
+        // Box-filter ladder (2026-09-03): history -> /4 -> /16 with exact 4x4
+        // boxes, then the 64x36 analysis level from the /16 image and the
+        // 32x18 level from the 64x36 one with exact 2x2 boxes.  Every pixel
+        // of the source contributes to the coarse levels, so a 60-px
+        // coarse texel no longer sees an aliased 2x2 sample of its block.
+        // Never destroy detail below the requested search resolution and then
+        // enlarge it again. Small native surfaces (e.g. DS 256x192) previously
+        // passed through 16x12 on the way to a 96x72 search image.
+        int filtered = source;
+        int filteredWidth = historyWidth;
+        int filteredHeight = historyHeight;
+        for (int stage = 0; stage < 2; ++stage) {
+            if (denseBoxWidths[stage] < denseLevelWidths[1] ||
+                    denseBoxHeights[stage] < denseLevelHeights[1]) break;
+            drawDensePyramid(filtered, filteredWidth, filteredHeight,
+                    denseBoxTextures[endpoint][stage],
+                    denseBoxWidths[stage], denseBoxHeights[stage], 1f);
+            filtered = denseBoxTextures[endpoint][stage];
+            filteredWidth = denseBoxWidths[stage];
+            filteredHeight = denseBoxHeights[stage];
+        }
+        drawDensePyramid(filtered, filteredWidth, filteredHeight,
+                densePyramidTextures[endpoint][0], denseLevelWidths[1], denseLevelHeights[1], 0.5f);
         drawDensePyramid(densePyramidTextures[endpoint][0],
                 denseLevelWidths[1], denseLevelHeights[1],
-                densePyramidTextures[endpoint][1], denseLevelWidths[2], denseLevelHeights[2]);
+                densePyramidTextures[endpoint][1], denseLevelWidths[2], denseLevelHeights[2], 0.5f);
     }
 
     private void drawDensePyramid(int source, int sourceWidth, int sourceHeight,
-                                  int destination, int width, int height) {
+                                  int destination, int width, int height, float tapScale) {
         attachDenseTarget(destination, width, height);
         GLES20.glUseProgram(densePyramidProgram);
         bindQuad(densePyramidProgram);
         bindTexture(densePyramidProgram, "uTexture", source, 0);
         uniform2(densePyramidProgram, "uInputTexel",
                 1f / Math.max(1, sourceWidth), 1f / Math.max(1, sourceHeight));
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePyramidProgram, "uTapScale"), tapScale);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
-    private void solveDenseDirection(int direction, int reference, int target) {
+    private void buildDenseGlobalSeed(int direction, int reference, int target) {
+        float limit = activeFlowLimitPixels();
+        float coarse = limit / 4f;
+        float fine = Math.max(1f, coarse / 4f);
+        drawDenseGlobalCosts(reference, target,
+                denseGlobalSeedTextures[direction], false,
+                denseGlobalCoarseCostTextures[direction], 9, coarse, limit);
+        reduceDenseGlobalCosts(denseGlobalCoarseCostTextures[direction],
+                denseGlobalCoarseCostTextures[direction],
+                denseGlobalSeedTextures[direction], false,
+                denseGlobalCoarseSeedTextures[direction], 9, coarse, limit);
+        drawDenseGlobalCosts(reference, target,
+                denseGlobalCoarseSeedTextures[direction], true,
+                denseGlobalFineCostTextures[direction], 5, fine, limit);
+        reduceDenseGlobalCosts(denseGlobalFineCostTextures[direction],
+                denseGlobalCoarseCostTextures[direction],
+                denseGlobalCoarseSeedTextures[direction], true,
+                denseGlobalSeedTextures[direction], 5, fine, limit);
+        drawDenseGlobalCut(reference, target, denseGlobalSeedTextures[direction],
+                denseGlobalCutTextures[direction]);
+    }
+
+    private void drawDenseGlobalCut(int reference, int target, int seed,
+                                    int destination) {
+        attachDenseTarget(destination, 1, 1);
+        GLES20.glUseProgram(denseGlobalCutProgram);
+        bindQuad(denseGlobalCutProgram);
+        bindTexture(denseGlobalCutProgram, "uReference", reference, 0);
+        bindTexture(denseGlobalCutProgram, "uTarget", target, 1);
+        bindTexture(denseGlobalCutProgram, "uCenterSeed", seed, 2);
+        uniform2(denseGlobalCutProgram, "uSourceSize", historyWidth, historyHeight);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    private void drawDenseGlobalCosts(int reference, int target, int center,
+                                      boolean useCenter, int destination,
+                                      int gridSize, float step, float limit) {
+        attachDenseTarget(destination, gridSize, gridSize);
+        GLES20.glUseProgram(denseGlobalCostProgram);
+        bindQuad(denseGlobalCostProgram);
+        bindTexture(denseGlobalCostProgram, "uReference", reference, 0);
+        bindTexture(denseGlobalCostProgram, "uTarget", target, 1);
+        bindTexture(denseGlobalCostProgram, "uCenterSeed", center, 2);
+        uniform2(denseGlobalCostProgram, "uSourceSize", historyWidth, historyHeight);
+        uniform2(denseGlobalCostProgram, "uGridSize", gridSize, gridSize);
+        uniform2(denseGlobalCostProgram, "uStep", step, step);
+        uniform2(denseGlobalCostProgram, "uFlowLimit", limit, limit);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseGlobalCostProgram,
+                "uUseCenter"), useCenter ? 1f : 0f);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    private void reduceDenseGlobalCosts(int costs, int zeroCosts, int center,
+                                        boolean useCenter, int destination,
+                                        int gridSize, float step, float limit) {
+        attachDenseTarget(destination, 1, 1);
+        GLES20.glUseProgram(denseGlobalReduceProgram);
+        bindQuad(denseGlobalReduceProgram);
+        bindTexture(denseGlobalReduceProgram, "uCosts", costs, 0);
+        bindTexture(denseGlobalReduceProgram, "uZeroCosts", zeroCosts, 1);
+        bindTexture(denseGlobalReduceProgram, "uCenterSeed", center, 2);
+        uniform2(denseGlobalReduceProgram, "uGridSize", gridSize, gridSize);
+        uniform2(denseGlobalReduceProgram, "uStep", step, step);
+        uniform2(denseGlobalReduceProgram, "uFlowLimit", limit, limit);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseGlobalReduceProgram,
+                "uUseCenter"), useCenter ? 1f : 0f);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    private void solveDenseDirection(int direction, int reference, int target,
+                                     boolean temporalGuideReady) {
         int prior = 0;
         for (int level = DENSE_LEVELS - 1; level >= 0; --level) {
             int ref = level == 0 ? reference :
@@ -3460,11 +6464,13 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     densePyramidTextures[direction == 0 ? 1 : 0][level - 1];
             int width = denseLevelWidths[level];
             int height = denseLevelHeights[level];
-            // Direction zero defers its former copy-only full-resolution draw
-            // until direction one exists, then spends that same draw on the
-            // independently scored reciprocal closure below.
-            int iterations = DENSE_LEVEL_ITERATIONS[level] -
-                    (direction == 0 && level == 0 ? 1 : 0);
+            // Both directions perform the same fixed work. The first fine
+            // draw expands the independently solved 64x36 field to 128x72;
+            // the remaining three draws search locally in that direction's
+            // own image domain.
+            int iterations = DENSE_LEVEL_ITERATIONS[level];
+            if (level == DENSE_LEVELS - 1 && denseWorkLevel > 0)
+                iterations = Math.max(4, iterations - 2 * denseWorkLevel);
             for (int iteration = 0; iteration < iterations; ++iteration) {
                 int output = denseFlowTextures[direction][level][iteration & 1];
                 attachDenseTarget(output, width, height);
@@ -3474,29 +6480,39 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 bindTexture(denseSolveProgram, "uTarget", dst, 1);
                 bindTexture(denseSolveProgram, "uPriorFlow", prior == 0 ?
                         denseFlowTextures[direction][level][1] : prior, 2);
-                // Direction zero remains an independent image-cost solve.
-                // The first coarse reverse iteration gets a forward-derived
-                // basin proposal. The fine expansion may cheaply retain that
-                // proposal before its three local searches. The last fine
-                // pass and the post-reverse forward closure also score the
-                // bounded fixed-point inverse. Every use is independently
-                // scored in its image domain; no pass forces agreement and
-                // bidirectional validation remains authoritative.
                 boolean coarsestFirst = level == DENSE_LEVELS - 1 &&
                         iteration == 0;
-                boolean finestBootstrap = level == 0 && iteration == 0;
-                boolean finestLast = level == 0 && iteration == iterations - 1;
-                boolean reciprocalGuide = direction == 1 &&
-                        (coarsestFirst || finestBootstrap || finestLast) &&
-                        denseFinalTextures[0] != 0;
-                bindTexture(denseSolveProgram, "uGuideFlow", reciprocalGuide ?
-                        denseFinalTextures[0] : denseFlowTextures[0][0][0], 3);
+                boolean temporalGuide = temporalGuideReady && coarsestFirst;
+                bindTexture(denseSolveProgram, "uTemporalFlow",
+                        denseValidatedTextures[direction], 3);
+                boolean reciprocalGuide = direction == 1 && iteration == 0;
+                int reciprocalTexture = reciprocalGuide ?
+                        denseFlowTextures[0][level]
+                                [(DENSE_LEVEL_ITERATIONS[level] - 1) & 1] :
+                        denseValidatedTextures[0];
+                bindTexture(denseSolveProgram, "uReciprocalFlow",
+                        reciprocalTexture, 4);
+                bindTexture(denseSolveProgram, "uGlobalSeed",
+                        denseGlobalSeedTextures[direction], 5);
                 GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
                         "uHasPrior"), prior == 0 ? 0f : 1f);
                 GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                        "uUseTemporalGuide"), temporalGuide ? 1f : 0f);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
                         "uUseReciprocalGuide"), reciprocalGuide ? 1f : 0f);
                 GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
-                        "uGuideLimit"), DENSE_MAX_FLOW_PIXELS);
+                        "uUseGlobalSeed"),
+                        denseV28ReducedAnalysisRequested && coarsestFirst ? 1f : 0f);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                        "uUseNeighborProposal"), 0f);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                        "uReciprocalMargin"), 0.002f);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                        "uNeighborMargin"), 0.002f);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                        "uCycleObjectiveWeight"), 0f);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                        "uTemporalLimit"), denseMaxFlowPixels());
                 GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
                         "uUseWidePatch"), level == DENSE_LEVELS - 1 ? 1f : 0f);
                 GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
@@ -3508,12 +6524,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 // field exists. Three later 1px searches preserve the former
                 // 3px fine-level reach with substantially less shared-GPU ALU.
                 GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
-                        "uBypassSearch"), direction == 1 && level == 0 &&
-                        iteration == 0 ? 1f : 0f);
+                        "uBypassSearch"), level == 0 && iteration == 0 ? 1f : 0f);
                 uniform2(denseSolveProgram, "uAnalysisTexel",
                         1f / width, 1f / height);
-                uniform2(denseSolveProgram, "uGuideTexel",
-                        1f / denseLevelWidths[0], 1f / denseLevelHeights[0]);
                 int priorWidth = level == DENSE_LEVELS - 1 ? width :
                         denseLevelWidths[level + 1];
                 int priorHeight = level == DENSE_LEVELS - 1 ? height :
@@ -3524,6 +6537,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 }
                 uniform2(denseSolveProgram, "uPriorTexel",
                         1f / priorWidth, 1f / priorHeight);
+                uniform2(denseSolveProgram, "uReciprocalTexel",
+                        1f / denseLevelWidths[level],
+                        1f / denseLevelHeights[level]);
                 uniform2(denseSolveProgram, "uSourceSize", historyWidth, historyHeight);
                 // Exact per-component reach: 8*4.5 + 4*2 + 3*1 = 47px for
                 // 40+ FPS sources. A 30-or-lower tier doubles the per-frame
@@ -3535,11 +6551,14 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 // and tap cost; the finer levels' 11px correction capacity
                 // absorbs the coarser quantization. The coarsest half-pixel
                 // step remains Q8.8-exact in both modes.
-                float coarsestStep =
-                        frameRate.lockedSourceFps() <= 30 ? 9.0f : 4.5f;
+                // Derived from the active reach: 4.5px for a 47px reach,
+                // ~12px for the 108px reach of a 1080p source.
+                float coarsestStep = denseCoarsestStep();
                 float step = level == 2 ? coarsestStep :
                         level == 1 ? 2f : 1f;
                 uniform2(denseSolveProgram, "uUpdateStep", step, step);
+                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                        "uExhaustiveRadius"), coarsestFirst ? 4f : 0f);
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
                 prior = output;
             }
@@ -3547,42 +6566,93 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         denseFinalTextures[direction] = prior;
     }
 
-    private void refineDenseForwardFromReverse(int reference, int target) {
-        int prior = denseFinalTextures[0];
-        int output = prior == denseFlowTextures[0][0][0] ?
-                denseFlowTextures[0][0][1] : denseFlowTextures[0][0][0];
+    /**
+     * Performs one full-resolution current-cost refinement from the finalized
+     * opposite field. This is a proposal, not inverse projection: the shader
+     * retains the direction's existing solution unless the reciprocal basin
+     * improves that direction's photometric/chroma/gradient objective by a
+     * strict margin, then still executes its normal local 3x3 search.
+     */
+    private void refineDenseReciprocalDirection(int direction, int reference,
+                                                 int target) {
+        int prior = denseFinalTextures[direction];
+        int output = prior == denseFlowTextures[direction][0][0] ?
+                denseFlowTextures[direction][0][1] :
+                denseFlowTextures[direction][0][0];
         attachDenseTarget(output, denseAnalysisWidth, denseAnalysisHeight);
         GLES20.glUseProgram(denseSolveProgram);
         bindQuad(denseSolveProgram);
         bindTexture(denseSolveProgram, "uReference", reference, 0);
         bindTexture(denseSolveProgram, "uTarget", target, 1);
         bindTexture(denseSolveProgram, "uPriorFlow", prior, 2);
-        bindTexture(denseSolveProgram, "uGuideFlow", denseFinalTextures[1], 3);
+        bindTexture(denseSolveProgram, "uTemporalFlow",
+                denseValidatedTextures[direction], 3);
+        bindTexture(denseSolveProgram, "uReciprocalFlow",
+                denseFinalTextures[1 - direction], 4);
+        bindTexture(denseSolveProgram, "uGlobalSeed",
+                denseGlobalSeedTextures[direction], 5);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
                 "uHasPrior"), 1f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                "uUseTemporalGuide"), 0f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
                 "uUseReciprocalGuide"), 1f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
-                "uGuideLimit"), DENSE_MAX_FLOW_PIXELS);
+                "uUseGlobalSeed"), 0f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                "uUseNeighborProposal"), 1f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                "uReciprocalMargin"), 0.006f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                "uNeighborMargin"), 0.002f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                "uCycleObjectiveWeight"), 0.006f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                "uTemporalLimit"), denseMaxFlowPixels());
         GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
                 "uUseWidePatch"), 0f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
                 "uFinalConsensus"), 0f);
-        // With a guide present, bypass scores current versus reciprocal and
-        // returns before the 3x3 local search. Thus this draw cannot extend the
-        // exact 47px reach or add the ALU of another fine search iteration.
         GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
-                "uBypassSearch"), 1f);
+                "uBypassSearch"), 0f);
         uniform2(denseSolveProgram, "uAnalysisTexel",
                 1f / denseAnalysisWidth, 1f / denseAnalysisHeight);
         uniform2(denseSolveProgram, "uPriorTexel",
                 1f / denseAnalysisWidth, 1f / denseAnalysisHeight);
-        uniform2(denseSolveProgram, "uGuideTexel",
+        uniform2(denseSolveProgram, "uReciprocalTexel",
                 1f / denseAnalysisWidth, 1f / denseAnalysisHeight);
         uniform2(denseSolveProgram, "uSourceSize", historyWidth, historyHeight);
-        uniform2(denseSolveProgram, "uUpdateStep", 0f, 0f);
+        uniform2(denseSolveProgram, "uUpdateStep", 1f, 1f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                "uExhaustiveRadius"), 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
-        denseFinalTextures[0] = output;
+        denseFinalTextures[direction] = output;
+    }
+
+    /** Two neighbour-fill passes, ping-ponging so the result lands back in the validated texture. */
+    private void fillDenseDirection(int direction) {
+        if (denseFillProgram == 0) return;
+        int source = denseValidatedTextures[direction];
+        int scratch = denseFillTextures[direction];
+        // Passes 0-1: strict fill of isolated rejections from validated
+        // neighbours.  Passes 2-3: relaxed diffusion into flat cells.  Even
+        // pass count, so the result lands back in the validated texture.
+        // Passes 0-1 strict, 2-3 relaxed (flat cells), 4-5 wide occlusion
+        // inpainting.  Even pass count, so the result lands back in the
+        // validated texture.
+        int passes = denseWorkLevel == 0 ? 6 : denseWorkLevel == 1 ? 2 : 0;
+        for (int pass = 0; pass < passes; ++pass) {
+            int destination = (pass & 1) == 0 ? scratch : denseValidatedTextures[direction];
+            int input = (pass & 1) == 0 ? source : scratch;
+            attachDenseTarget(destination, denseAnalysisWidth, denseAnalysisHeight);
+            GLES20.glUseProgram(denseFillProgram);
+            bindQuad(denseFillProgram);
+            bindTexture(denseFillProgram, "uField", input, 0);
+            uniform2(denseFillProgram, "uTexel", 1f / denseAnalysisWidth, 1f / denseAnalysisHeight);
+            GLES20.glUniform1f(GLES20.glGetUniformLocation(denseFillProgram, "uRelaxed"),
+                    pass >= 4 ? 2f : pass >= 2 ? 1f : 0f);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        }
     }
 
     private void validateDenseDirection(int direction, int reference, int target) {
@@ -3602,13 +6672,13 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         float[] rect = denseActiveRect();
         GLES20.glUniform4f(GLES20.glGetUniformLocation(denseCycleProgram, "uActiveRect"),
                 rect[0], rect[1], rect[2], rect[3]);
-        float limit = Math.min(DENSE_MAX_FLOW_PIXELS,
+        float limit = Math.min(denseMaxFlowPixels(),
                 flowLimitPixels(historyWidth, historyHeight));
         uniform2(denseCycleProgram, "uFlowRange", limit / historyWidth,
                 limit / historyHeight);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(denseCycleProgram,
                 "uValidityBase"),
-                frameRate.lockedSourceFps() <= 30 ? 4f : 2f);
+                2f * Math.max(1f, activeFlowLimitPixels() / DENSE_MAX_FLOW_PIXELS));
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
@@ -3617,6 +6687,186 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         // GameSurfaceView shapes the Surface layer itself; black pillars live
         // in the parent window and are never present in these textures.
         return new float[]{0f, 0f, 1f, 1f};
+    }
+
+    // Diagnostic flow dump (2026-09-02, wiiu-b61 frame proof): a recording of
+    // the panel showed the two synthesized slots of a 40->120 pan holding the
+    // exact nearest endpoint, i.e. dense reliability below 0.02 across the
+    // moving region while the validity counters read healthy.  When the
+    // marker file exists, the validated and raw dense fields plus the
+    // half-resolution endpoint pyramids are written to the app's files dir
+    // for offline inspection.  Bounded to a few dumps per session.
+    private static final java.io.File DENSE_FLOW_DUMP_MARKER =
+            new java.io.File("/data/local/tmp/lucent-flowdump");
+    // Optional diagnostic override; still requires the primary marker and
+    // retains the eight-dump limit and 700ms attempt interval. This controls
+    // evidence collection only, never runtime generation admission.
+    private static final java.io.File DENSE_FLOW_DUMP_LOW_MOTION_MARKER =
+            new java.io.File("/data/local/tmp/lucent-flowdump-low-motion");
+    private static final java.io.File DENSE_FLOW_DUMP_DIR =
+            new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                    "Android/data/com.thorium.preview/files/flowdump");
+    private static final int DENSE_FLOW_DUMP_LIMIT = 8;
+    // A burst of dumps is re-armed by touching the marker (its mtime is the
+    // burst id). By default the coarse endpoint difference must exceed the
+    // threshold so a burst lands on a pan, not startup static frames. The
+    // explicit low-motion marker permits inspecting subtle local animation.
+    private static final float DENSE_FLOW_DUMP_MIN_COARSE_DIFFERENCE = 10f / 255f;
+    private java.nio.ByteBuffer denseCoarseReadbackA, denseCoarseReadbackB;
+
+    /** Mean absolute luma difference of the two coarsest (32x18) pyramid levels. */
+    private float readDenseCoarseDifference() {
+        int w = denseLevelWidths[DENSE_LEVELS - 1], h = denseLevelHeights[DENSE_LEVELS - 1];
+        int bytes = w * h * 4;
+        if (denseCoarseReadbackA == null || denseCoarseReadbackA.capacity() < bytes) {
+            denseCoarseReadbackA = java.nio.ByteBuffer.allocateDirect(bytes).order(java.nio.ByteOrder.nativeOrder());
+            denseCoarseReadbackB = java.nio.ByteBuffer.allocateDirect(bytes).order(java.nio.ByteOrder.nativeOrder());
+        }
+        attachDenseTarget(densePyramidTextures[0][DENSE_LEVELS - 2], w, h);
+        denseCoarseReadbackA.clear();
+        GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, denseCoarseReadbackA);
+        attachDenseTarget(densePyramidTextures[1][DENSE_LEVELS - 2], w, h);
+        denseCoarseReadbackB.clear();
+        GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, denseCoarseReadbackB);
+        long sum = 0;
+        for (int i = 0; i < bytes; i += 4) {
+            int la = ((denseCoarseReadbackA.get(i) & 0xff) * 77 + (denseCoarseReadbackA.get(i + 1) & 0xff) * 150 +
+                    (denseCoarseReadbackA.get(i + 2) & 0xff) * 29) >> 8;
+            int lb = ((denseCoarseReadbackB.get(i) & 0xff) * 77 + (denseCoarseReadbackB.get(i + 1) & 0xff) * 150 +
+                    (denseCoarseReadbackB.get(i + 2) & 0xff) * 29) >> 8;
+            sum += Math.abs(la - lb);
+        }
+        return sum / (255f * (bytes / 4));
+    }
+    private int denseFlowDumpCount;
+    private long denseFlowDumpLastNs;
+    /** Per-direction dense global seed in source pixels (0 = backward, 1 = forward). */
+    private final float[][] denseSeedPx = new float[2][2];
+    private long denseFlowDumpBurstId;
+    private final java.nio.ByteBuffer denseSeedReadback =
+            java.nio.ByteBuffer.allocateDirect(4).order(java.nio.ByteOrder.nativeOrder());
+
+    private float[] readDenseGlobalSeedPixels(int direction) {
+        attachDenseTarget(denseGlobalSeedTextures[direction], 1, 1);
+        denseSeedReadback.clear();
+        GLES20.glReadPixels(0, 0, 1, 1, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE,
+                denseSeedReadback);
+        int r = denseSeedReadback.get(0) & 0xff, g = denseSeedReadback.get(1) & 0xff;
+        int b = denseSeedReadback.get(2) & 0xff, a = denseSeedReadback.get(3) & 0xff;
+        int x = r * 256 + g, y = b * 256 + a;
+        if (x >= 32768) x -= 65536;
+        if (y >= 32768) y -= 65536;
+        return new float[] {x / 256f, y / 256f};
+    }
+
+    private void maybeDumpDenseFlow(int previousIndex, int currentIndex) {
+        long now = System.nanoTime();
+        if (!DENSE_FLOW_DUMP_MARKER.exists()) return;
+        boolean contiguousCapture = new java.io.File(
+                "/data/local/tmp/lucent-flowdump-contiguous").exists();
+        if (!contiguousCapture && now - denseFlowDumpLastNs < 700_000_000L) return;
+        // This opt-in diagnostic intentionally stalls for readback. Its output
+        // is image evidence only; never use it to qualify presentation timing.
+        if (contiguousCapture && (activeLeftSequence <= 0L ||
+                activeRightSequence != activeLeftSequence + 1L ||
+                activeRightTimestampNs <= activeLeftTimestampNs)) return;
+        long burst = DENSE_FLOW_DUMP_MARKER.lastModified();
+        if (burst != denseFlowDumpBurstId) {
+            denseFlowDumpBurstId = burst;
+            denseFlowDumpCount = 0;
+        }
+        if (denseFlowDumpCount >= DENSE_FLOW_DUMP_LIMIT) return;
+        // Rate-limit attempts, not only successful dumps. Even a rejected
+        // scene performs a synchronous GPU readback below; polling it every
+        // promotion contaminates the frame-pacing measurement.
+        denseFlowDumpLastNs = now;
+        // Trigger on the raw coarsest-pyramid image difference, not on the
+        // global seed: the seed reduce zeroes itself unless the pan beats the
+        // zero-motion cost by 3.5 percent, which a dark-background pan fails.
+        float coarseDifference = readDenseCoarseDifference();
+        if (coarseDifference < DENSE_FLOW_DUMP_MIN_COARSE_DIFFERENCE &&
+                !DENSE_FLOW_DUMP_LOW_MOTION_MARKER.exists() && !contiguousCapture) {
+            Log.i(TAG, "Dense flow dump waiting generator=" + generatorId +
+                    " coarseDifference=" + coarseDifference +
+                    " required=" + DENSE_FLOW_DUMP_MIN_COARSE_DIFFERENCE);
+            return;
+        }
+        float[] seed = readDenseGlobalSeedPixels(0);
+        ++denseFlowDumpCount;
+        try {
+            DENSE_FLOW_DUMP_DIR.mkdirs();
+            java.io.File file = new java.io.File(DENSE_FLOW_DUMP_DIR,
+                    "dump-" + generatorId + "-" + (denseFlowDumpBurstId / 1000L % 100000L) +
+                    "-" + denseFlowDumpCount + ".bin");
+            try (java.io.DataOutputStream out = new java.io.DataOutputStream(
+                    new java.io.BufferedOutputStream(new java.io.FileOutputStream(file), 1 << 16))) {
+                out.writeInt(0x4c464431); // 'LFD1'
+                out.writeFloat(activeFlowLimitPixels());
+                out.writeFloat(denseMaxFlowPixels());
+                out.writeInt(frameRate.lockedSourceFps());
+                out.writeInt(historyWidth);
+                out.writeInt(historyHeight);
+                out.writeInt(10);
+                dumpDensePlane(out, "validated0", denseValidatedTextures[0],
+                        denseAnalysisWidth, denseAnalysisHeight);
+                dumpDensePlane(out, "validated1", denseValidatedTextures[1],
+                        denseAnalysisWidth, denseAnalysisHeight);
+                dumpDensePlane(out, "final0", denseFinalTextures[0],
+                        denseAnalysisWidth, denseAnalysisHeight);
+                dumpDensePlane(out, "final1", denseFinalTextures[1],
+                        denseAnalysisWidth, denseAnalysisHeight);
+                dumpDensePlane(out, "previousHalf", densePyramidTextures[0][0],
+                        denseLevelWidths[1], denseLevelHeights[1]);
+                dumpDensePlane(out, "currentHalf", densePyramidTextures[1][0],
+                        denseLevelWidths[1], denseLevelHeights[1]);
+                // Capture endpoints from the SAME live pair as these fields.
+                // Half-resolution pyramids alone cannot prove native edge quality.
+                dumpDensePlane(out, "previousFull", historyTextures[previousIndex],
+                        historyWidth, historyHeight);
+                dumpDensePlane(out, "currentFull", historyTextures[currentIndex],
+                        historyWidth, historyHeight);
+                dumpDensePlane(out, "seed0", denseGlobalSeedTextures[0], 1, 1);
+                dumpDensePlane(out, "seed1", denseGlobalSeedTextures[1], 1, 1);
+            }
+            try (java.io.PrintWriter metadata = new java.io.PrintWriter(
+                    new java.io.File(file.getPath() + ".json"))) {
+                metadata.println("{\"leftSequence\":" + activeLeftSequence +
+                        ",\"rightSequence\":" + activeRightSequence +
+                        ",\"leftSubmission\":" + activeLeftSubmission +
+                        ",\"rightSubmission\":" + activeRightSubmission +
+                        ",\"leftTimestampNs\":" + activeLeftTimestampNs +
+                        ",\"rightTimestampNs\":" + activeRightTimestampNs +
+                        ",\"contiguousCapture\":" + contiguousCapture +
+                        ",\"timingQualified\":false}");
+                if (metadata.checkError()) throw new java.io.IOException("flow metadata write failed");
+            }
+            Log.i(TAG, "Dense flow dump written generator=" + generatorId +
+                    " file=" + file + " analysis=" + denseAnalysisWidth + "x" +
+                    denseAnalysisHeight + " limitPx=" + activeFlowLimitPixels() +
+                    " lockedFps=" + frameRate.lockedSourceFps() +
+                    " seedPx=" + seed[0] + "," + seed[1] +
+                    " coarseDifference=" + coarseDifference);
+        } catch (java.io.IOException | RuntimeException failure) {
+            Log.w(TAG, "Dense flow dump failed generator=" + generatorId, failure);
+        }
+    }
+
+    private void dumpDensePlane(java.io.DataOutputStream out, String name, int texture,
+                                int width, int height) throws java.io.IOException {
+        byte[] label = name.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        out.writeInt(label.length);
+        out.write(label);
+        out.writeInt(width);
+        out.writeInt(height);
+        java.nio.ByteBuffer pixels = java.nio.ByteBuffer.allocateDirect(width * height * 4)
+                .order(java.nio.ByteOrder.nativeOrder());
+        attachDenseTarget(texture, width, height);
+        GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA,
+                GLES20.GL_UNSIGNED_BYTE, pixels);
+        byte[] copy = new byte[width * height * 4];
+        pixels.rewind();
+        pixels.get(copy);
+        out.write(copy);
     }
 
     private void attachDenseTarget(int texture, int width, int height) {
@@ -3849,13 +7099,77 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
-    /** Applies the same maximize-height, aspect-preserving viewport to every visible path. */
+    /** Draws the Vulkan-produced app-owned image with the required Y-origin conversion. */
+    private void drawExternalGeneratedTexture(int sourceTexture) {
+        GLES20.glUseProgram(externalGeneratedTextureCopyProgram);
+        bindQuad(externalGeneratedTextureCopyProgram);
+        bindTexture(externalGeneratedTextureCopyProgram, "uTexture", sourceTexture, 0);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    /** Once measured, physical scan phase replaces callback phase for Built-in. */
+    private static boolean requiresNonblockingBuiltinSwap(boolean hasExternalTransport) {
+        return !hasExternalTransport;
+    }
+
+    private static boolean sampleBuiltinCompositorTiming(boolean prepared, boolean dense,
+            boolean external, boolean generating, int samples) {
+        return prepared && dense && !external && generating && samples >= 0 && samples < 64;
+    }
+
+    private long builtinQueueCutoffMisses;
+    private long builtinPlanCallbackNs, builtinPlanNowNs;
+    private long builtinPlanCompositeDeadlineNs, builtinPlanIntervalNs, builtinPlanLatencyNs;
+    private int builtinPlanGapEvidenceCount;
+
+    private PhysicalPresentationDeadline nextBuiltInDeadline(long callbackNs, long nowNs) {
+        builtinPlanIntervalNs = 0L;
+        PhysicalPresentationTracker tracker = physicalPresentationTracker;
+        if (externalTransport == null && densePyramidEnabled && tracker != null &&
+                tracker.available() && tracker.compositorTiming(builtinCompositorTiming)) {
+            // The observed EGL queue cost was ~0.25ms and first query ~0.56ms.
+            // Keep 1ms for queue handoff; actual GPU completion remains checked
+            // against this earlier cutoff by the physical evidence ledger.
+            long planNowNs = System.nanoTime();
+            PhysicalPresentationDeadline egl = PhysicalPresentationDeadline.nextEgl(
+                    builtinCompositorTiming[0], builtinCompositorTiming[1],
+                    builtinCompositorTiming[2], planNowNs,
+                    builtInLastCommittedTargetNs, 1_000_000L);
+            // Copy the planning query: the later submission probe reuses its
+            // array. Emit only after swap, never inside this admission window.
+            builtinPlanCallbackNs = callbackNs;
+            builtinPlanNowNs = planNowNs;
+            builtinPlanCompositeDeadlineNs = builtinCompositorTiming[0];
+            builtinPlanIntervalNs = builtinCompositorTiming[1];
+            builtinPlanLatencyNs = builtinCompositorTiming[2];
+            // A stale/invalid returned timeline must not fall back to the old
+            // two-ms assumption for this callback.
+            return egl;
+        }
+        long periodNs = frameRate.panelPeriodNs();
+        if (builtInPhysicalClock.available() &&
+                builtInPhysicalClock.nominalPeriodNs() ==
+                        Math.max(1L, Math.round(1e9 / frameRate.declaredPanelHz()))) {
+            return PhysicalPresentationDeadline.nextAligned(callbackNs,
+                    // Use recent physical phase, not the epoch's old phase
+                    // multiplied by an independently evolving frequency fit.
+                    // The committed-target guard still forbids repeating a scan.
+                    builtInPhysicalClock.lastActualNs(), builtInPhysicalClock.planningPeriodNs(),
+                    nowNs, builtInLastCommittedTargetNs);
+        }
+        return PhysicalPresentationDeadline.next(callbackNs, periodNs, nowNs);
+    }
+
+    /** Preserve aspect and contain the whole image, including on the lower panel. */
     private void setPresentationViewport() {
         float aspect = presentationAspect > 0f ? presentationAspect :
                 (float) outputWidth / outputHeight;
-        int contentWidth = Math.max(1, Math.round(outputHeight * aspect));
-        GLES20.glViewport((outputWidth - contentWidth) / 2, 0,
-                contentWidth, outputHeight);
+        com.thorium.lucent.video.PresentationGeometry.Rectangle bounds =
+                com.thorium.lucent.video.PresentationGeometry.fitInside(
+                        outputWidth, outputHeight, aspect);
+        // Geometry uses top-left coordinates; OpenGL uses bottom-left.
+        GLES20.glViewport(bounds.left, outputHeight - bounds.bottom,
+                bounds.width(), bounds.height());
     }
 
     private void copyExternalTo(int destinationTexture) {
@@ -3875,6 +7189,19 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         checkGl("copy producer frame");
+    }
+
+    private static boolean builtinClockAdmissionReady(boolean dense, boolean rejected,
+                                                      int display, double physicalHz) {
+        return dense && !rejected && display == 0 &&
+                Double.isFinite(physicalHz) && physicalHz > 0.0;
+    }
+
+    private static boolean requiresDenseGpuHeadroomBinding(boolean synthetic, int scans) {
+        // Before source-clock qualification, real endpoint swaps have no uniform
+        // scan count. They cannot earn recovery credit, but are not a broken GPU
+        // binding. A synthetic swap must still fail closed if its scans are zero.
+        return synthetic || scans > 0;
     }
 
     private long schedulerDueSelectedCount() { return presents; }
@@ -3920,7 +7247,13 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     /** Starts a fresh bounded evidence reservoir whenever presentation state
      * changes, without relabelling or erasing any already-enqueued atlas. */
     private void refreshProofEvidencePresentationEpoch() {
-        if (!qualificationProofEnabled || !densePyramidEnabled ||
+        // The dense generator is the product path (2026-09-01), so HEALTH
+        // records exist before the harness arms proof.  The evidence epoch
+        // label describes presentation state, not whether proof is armed;
+        // leaving it at 0 pre-arm made every pre-arm window "impossible"
+        // for the v36 epoch rule (run n64-tier2).  Enqueue counts remain
+        // zero until proof is armed, so the per-epoch budget is unchanged.
+        if (!densePyramidEnabled ||
                 activeProofSchemaVersion() != DENSE_V28_PROOF_SCHEMA_VERSION)
             return;
         long presentationEpoch = schedulerPresentationEpoch();
@@ -3934,14 +7267,126 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         lastProofPresent = Long.MIN_VALUE;
     }
 
-    private void presentBuffered(long frameTimeNanos, int presentation,
+    /** True only for the Thor's native 60-Hz mode carrying every-scan output. */
+    private boolean modeAlignedSixtyHertzOneScanOutput() {
+        return externalTransport != null && externalRatePathActive &&
+                !externalTransport.requiresCompositorFrameTimeline() &&
+                frameRate.panelScansPerOutput() == 1 &&
+                frameRate.panelClockMeasured() && frameRate.panelHz() < 90.0;
+    }
+
+    private void presentBuffered(PhysicalPresentationDeadline deadline,
+                                 CompositorFrameTimeline.Selection compositorTimeline,
+                                 int presentation,
                                  float selectedPhase) {
+        if (deadline == null || !deadline.valid())
+            throw new IllegalArgumentException(
+                    "physical presentation deadline is invalid");
         // selectBufferedPresentation may change the scheduler epoch in this
         // callback. Rebind before deciding whether this presented frame can
         // consume the new epoch's bounded proof budget.
         refreshProofEvidencePresentationEpoch();
         boolean realThisTick = presentation ==
                 AdaptiveFrameRateController.PRESENT_REAL;
+        long selectedTimestampNs = frameRate.bufferedSelectedTargetSourceNs();
+        // Use the same overflow-safe integer midpoint as private preparation.
+        // Recomputing from float phase can round an odd span the other way.
+        if (!realThisTick) {
+            selectedTimestampNs = AdaptiveFrameRateController.exactMidpointTimestampNs(
+                    activeLeftTimestampNs, activeRightTimestampNs);
+        }
+        long presentationEpoch = schedulerPresentationEpoch();
+        int requestWidth = externalTransport == null ? historyWidth :
+                externalTransport.endpointWidth();
+        int requestHeight = externalTransport == null ? historyHeight :
+                externalTransport.endpointHeight();
+        FrameGenerationPresentationRequest presentationRequest;
+        if (activeRightSequence == 0L) {
+            if (!realThisTick || selectedTimestampNs != activeLeftTimestampNs)
+                throw new IllegalStateException(
+                        "unpaired frame-generation request is not the retained endpoint");
+            presentationRequest = FrameGenerationPresentationRequest.endpoint(
+                    generatorId, presentationEpoch,
+                    activeLeftSequence, activeLeftTimestampNs,
+                    deadline.contentPresentationTimeNs(),
+                    deadline.driverDesiredPresentTimeNs(),
+                    deadline.hardCompletionDeadlineNs(),
+                    deadline.presentationPipelineScans(),
+                    requestWidth, requestHeight,
+                    FrameGenerationPresentationRequest.FORMAT_RGBA8_UNORM);
+        } else {
+            presentationRequest = FrameGenerationPresentationRequest.between(
+                    generatorId, presentationEpoch,
+                    activeLeftSequence, activeLeftTimestampNs,
+                    activeRightSequence, activeRightTimestampNs,
+                    selectedTimestampNs,
+                    deadline.contentPresentationTimeNs(),
+                    deadline.driverDesiredPresentTimeNs(),
+                    deadline.hardCompletionDeadlineNs(),
+                    deadline.presentationPipelineScans(),
+                    requestWidth, requestHeight,
+                    FrameGenerationPresentationRequest.FORMAT_RGBA8_UNORM);
+        }
+        if (Math.abs(presentationRequest.phase() - selectedPhase) > 0.00001)
+            throw new IllegalStateException(
+                    "controller phase disagrees with immutable endpoint timestamps");
+        if (!realThisTick && !midpointPairBudget.canAdmit(presentationRequest))
+            throw new IllegalStateException("midpoint admission rejected: " +
+                    midpointPairBudget.lastRejection());
+        if (externalTransport != null) {
+            boolean requiresCompositorTimeline =
+                    externalTransport.requiresCompositorFrameTimeline();
+            // Direct WSI needs no speculative release window when the target
+            // is provably the first scan after the latest completed physical
+            // row. EmuFusion owns this decision from its physical clock; the
+            // backend receives only the resulting immutable not-before time.
+            // Multi-scan targets and compositor-timeline paths retain their
+            // existing guarded windows unchanged.
+            if (!requiresCompositorTimeline && externalRatePathActive &&
+                    frameRate.panelScansPerOutput() == 1 &&
+                    externalPhysicalClock.available()) {
+                presentationRequest = modeAlignedSixtyHertzOneScanOutput() ?
+                        presentationRequest.
+                                withReleaseAfterModeAlignedPredecessorScan(
+                                        externalPhysicalClock.
+                                                planningPeriodNs()) :
+                        presentationRequest.
+                                withReleaseAfterImmediatePriorPhysicalScan(
+                                        externalPhysicalClock.lastActualNs(),
+                                        externalPhysicalClock.
+                                                planningPeriodNs());
+            }
+            if (requiresCompositorTimeline && compositorTimeline == null)
+                throw new IllegalStateException(
+                        "external presentation lacks a compositor frame timeline");
+            if (!requiresCompositorTimeline && compositorTimeline != null)
+                throw new IllegalStateException(
+                        "direct external presentation received a compositor token");
+            if (requiresCompositorTimeline) {
+                presentationRequest =
+                        presentationRequest.
+                                withTargetCompositorFrameTimeline(
+                                compositorTimeline.vsyncId(),
+                                compositorTimeline.expectedPresentationTimeNs(),
+                                compositorTimeline.deadlineNs());
+            }
+            if (externalTransport.usesAppOwnedPresentation()) {
+                if (presentationRequest.isGenerated()) {
+                    pendingAppOwnedRequest = presentationRequest;
+                    pendingAppOwnedPhase = selectedPhase;
+                    pendingAppOwnedPreparation = buildExternalGeneratedPreparation(
+                            presentation, deadline);
+                }
+                presentAppOwnedExternalBuffered(
+                        presentationRequest, presentation, selectedPhase);
+            } else
+                presentExternalBuffered(presentationRequest, presentation);
+            return;
+        }
+        // Unlike a deferred external enqueue, this path is now attempting the
+        // actual render. A subsequent shader/swap failure cannot renew budget.
+        if (!realThisTick && !midpointPairBudget.admit(presentationRequest))
+            throw new IllegalStateException("midpoint render admission rejected");
         boolean captureProof = false;
         float proofPhase = 0f;
         boolean renderedSynthetic = false;
@@ -3965,6 +7410,11 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         GLES20.glViewport(0, 0, outputWidth, outputHeight);
         GLES20.glClearColor(0f, 0f, 0f, 1f);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        // densePairMeanDifference is never measured in the cadence path (the
+        // synchronous proof readbacks were removed), so this Java hold never
+        // fires; the hard-cut hold lives in the interpolate shader
+        // (uDenseCutTex, build 92).  Kept only as the documented fallback
+        // should a CPU-side pair difference ever be reinstated.
         boolean denseSceneCut = densePyramidEnabled && densePairMeanDifference > .18f;
         if (realThisTick) {
             // A timestamp boundary may select either exact endpoint: phase0 is
@@ -3995,9 +7445,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             throw new IllegalStateException(
                     "buffered synthetic selected without an adjacent ready pair");
         } else {
-            // Always maximize height and preserve the source display aspect.
-            // A width larger than the Surface is intentionally clipped equally
-            // on both sides; a narrower picture is pillarboxed by the clear.
+            // Fit the complete image at its source display aspect. The clear
+            // above supplies any necessary letterboxing or pillarboxing.
             setPresentationViewport();
             float phase = selectedPhase;
             phaseDiagSum += phase;
@@ -4033,11 +7482,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 }
             }
             else drawTexture2d(historyTextures[previousIndex]);
+            if (renderedSynthetic) drawProofMark();
             proofPhase = phase;
-            // Every selected output tick between retained decoded images is
-            // generated. Timestamp resampling may choose several distinct
-            // fractions from one longer interval, but never extrapolates past
-            // the exact adjacent endpoints or repeats a source-clock target.
+            // Admission above permits one exact midpoint for this retained pair.
             boolean synthetic = renderedSynthetic &&
                     presentation == AdaptiveFrameRateController.PRESENT_SYNTHETIC &&
                     sustainable &&
@@ -4067,17 +7514,125 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             }
         }
         if (Build.VERSION.SDK_INT >= 18) {
-            long desiredPresentNs = FrameGenerationCadence.nextPresentationTimeNs(
-                    frameTimeNanos, Math.max(1L, Math.round(
-                            1_000_000_000.0 / Math.max(1f, refreshHz))),
-                    System.nanoTime());
-            if (desiredPresentNs <= 0L ||
+            if (deadline.driverDesiredPresentTimeNs() <= 0L ||
                     !EGLExt.eglPresentationTimeANDROID(
-                            eglDisplay, eglSurface, desiredPresentNs))
+                            eglDisplay, eglSurface,
+                            deadline.driverDesiredPresentTimeNs()))
                 fail("eglPresentationTimeANDROID");
         }
         long swapStarted = densePyramidEnabled ? System.nanoTime() : 0L;
-        if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) fail("eglSwapBuffers");
+        PhysicalPresentationTracker physicalTracker = physicalPresentationTracker;
+        boolean physicalFramePrepared = physicalTracker != null &&
+                physicalTracker.available() && physicalTracker.prepareFrame();
+        long densePhysicalFrameId = physicalFramePrepared ? physicalTracker.preparedFrameId() : 0L;
+        boolean sampleCompositorTiming = sampleBuiltinCompositorTiming(physicalFramePrepared,
+                densePyramidEnabled, externalTransport != null,
+                frameRate.generatesIntermediateFrames(), builtinCompositorTimingSamples);
+        long compositorQueryStartNs = sampleCompositorTiming ? System.nanoTime() : 0L;
+        boolean compositorTimingAvailable = sampleCompositorTiming &&
+                physicalTracker.compositorTiming(builtinCompositorTiming);
+        long compositorQueryEndNs = sampleCompositorTiming ? System.nanoTime() : 0L;
+        if (physicalTracker != null && !physicalTracker.available())
+            logPhysicalPresentationFailure(physicalTracker);
+        if (externalTransport == null &&
+                deadline.hardCompletionDeadlineNs() < deadline.driverDesiredPresentTimeNs() &&
+                System.nanoTime() >= deadline.hardCompletionDeadlineNs()) {
+            ++builtinQueueCutoffMisses;
+            if (builtinQueueCutoffMisses <= 8L) {
+                Log.w(TAG, "Built-in queue cutoff missed generator=" + generatorId +
+                        " frameId=" + densePhysicalFrameId +
+                        " synthetic=" + renderedSynthetic +
+                        " targetNs=" + deadline.contentPresentationTimeNs() +
+                        " deadlineNs=" + deadline.hardCompletionDeadlineNs() +
+                        " observedNs=" + System.nanoTime());
+            }
+            if (physicalFramePrepared) physicalTracker.cancelPrepared();
+            // Do not swap stale content or commit scheduler credit after its
+            // prospective EGL queue deadline. The next callback selects anew.
+            frameRate.abortBufferedPresentation();
+            invalidateBufferedPairForReprime(false);
+            return;
+        }
+        beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);
+        long denseSwapEnteredNs = densePyramidEnabled ? System.nanoTime() : 0L;
+        if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
+            discardFullImageCapture();
+            if (physicalFramePrepared) physicalTracker.cancelPrepared();
+            fail("eglSwapBuffers");
+        }
+        long denseSwapReturnedNs = densePyramidEnabled ? System.nanoTime() : 0L;
+        boolean densePhysicalFrameCommitted = physicalFramePrepared && physicalTracker.commitPrepared(
+                frameRate.panelScansPerOutput(), frameRate.panelPeriodNs());
+        if (densePyramidEnabled && densePhysicalFrameCommitted && externalTransport == null)
+            denseSubmissionHistory.record(schedulerPresentationEpoch(), densePhysicalFrameId,
+                    deadline.contentPresentationTimeNs(), deadline.hardCompletionDeadlineNs(),
+                    denseSwapEnteredNs, denseSwapReturnedNs, renderedSynthetic);
+        finishFullImageCapture(densePhysicalFrameCommitted);
+        if (sampleCompositorTiming) {
+            ++builtinCompositorTimingSamples;
+            Log.i(TAG, "Built-in compositor submission generator=" + generatorId +
+                    " frameId=" + densePhysicalFrameId + " synthetic=" + renderedSynthetic +
+                    " available=" + compositorTimingAvailable +
+                    " queryStartNs=" + compositorQueryStartNs +
+                    " queryEndNs=" + compositorQueryEndNs +
+                    " swapReturnedNs=" + System.nanoTime() +
+                    " targetNs=" + deadline.contentPresentationTimeNs() +
+                    " requestedNs=" + deadline.driverDesiredPresentTimeNs() +
+                    " compositeDeadlineNs=" + (compositorTimingAvailable ? builtinCompositorTiming[0] : 0L) +
+                    " compositeIntervalNs=" + (compositorTimingAvailable ? builtinCompositorTiming[1] : 0L) +
+                    " compositeLatencyNs=" + (compositorTimingAvailable ? builtinCompositorTiming[2] : 0L));
+        }
+        if (builtinPlanIntervalNs > 0L && builtInLastCommittedTargetNs > 0L &&
+                frameRate.generatesIntermediateFrames() && frameRate.panelScansPerOutput() == 1 &&
+                deadline.contentPresentationTimeNs() - builtInLastCommittedTargetNs >
+                        builtinPlanIntervalNs + builtinPlanIntervalNs / 2L &&
+                builtinPlanGapEvidenceCount < 8) {
+            ++builtinPlanGapEvidenceCount;
+            Log.w(TAG, "Built-in committed target gap generator=" + generatorId +
+                    " frameId=" + densePhysicalFrameId +
+                    " previousTargetNs=" + builtInLastCommittedTargetNs +
+                    " targetNs=" + deadline.contentPresentationTimeNs() +
+                    " callbackNs=" + builtinPlanCallbackNs + " planNowNs=" + builtinPlanNowNs +
+                    " compositeDeadlineNs=" + builtinPlanCompositeDeadlineNs +
+                    " intervalNs=" + builtinPlanIntervalNs + " latencyNs=" + builtinPlanLatencyNs +
+                    " reserveNs=1000000 skippedScans=" + deadline.skippedPanelScans());
+        }
+        builtInLastCommittedTargetNs = deadline.contentPresentationTimeNs();
+        if (physicalFramePrepared && !densePhysicalFrameCommitted)
+            logPhysicalPresentationFailure(physicalTracker);
+        if (densePyramidEnabled) {
+            if (denseGpuHeadroomPresentationEpoch != presentationEpoch) {
+                denseGpuHeadroomPresentationEpoch = presentationEpoch;
+                denseGpuAdaptation.invalidateRecoveryEvidence();
+            }
+            if (!densePhysicalFrameCommitted ||
+                    !requiresDenseGpuHeadroomBinding(renderedSynthetic,
+                            frameRate.panelScansPerOutput())) {
+                ++denseGpuPhysicalUnboundEvents;
+                denseGpuAdaptation.invalidateRecoveryEvidence();
+            } else if (!denseGpuHeadroom.bindSwap(denseGpuHeadroom.evidenceEpoch(),
+                    presentationEpoch, densePhysicalFrameId,
+                    renderedSynthetic ? densePromotions : 0L,
+                    renderedSynthetic ? denseWarpSequence : 0L,
+                    deadline.contentPresentationTimeNs(), deadline.hardCompletionDeadlineNs(),
+                    frameRate.panelScansPerOutput(), frameRate.panelPeriodNs())) {
+                // The visible swap already succeeded. Preserve its controller
+                // commit below; reject at the next timer poll before more
+                // synthesis, not halfway through this presentation transaction.
+                denseGpuAdaptation.invalidateRecoveryEvidence();
+                pendingDenseGpuHeadroomReject = "gpu-headroom-binding-failure";
+                Log.e(TAG, "Dense GPU swap binding rejected generator=" + generatorId +
+                        " presentationEpoch=" + presentationEpoch +
+                        " frameId=" + densePhysicalFrameId +
+                        " pair=" + (renderedSynthetic ? densePromotions : 0L) +
+                        " warp=" + (renderedSynthetic ? denseWarpSequence : 0L) +
+                        " desiredNs=" + deadline.contentPresentationTimeNs() +
+                        " deadlineNs=" + deadline.hardCompletionDeadlineNs() +
+                        " scans=" + frameRate.panelScansPerOutput() +
+                        " periodNs=" + frameRate.panelPeriodNs() +
+                        " ledger={" + denseGpuHeadroom.bindingState() + "}");
+            }
+        }
         if (!outputFrameRateReassertedAfterSwap) {
             outputFrameRateReassertedAfterSwap = true;
             requestOutputFrameRate("first-successful-swap");
@@ -4093,6 +7648,24 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             frameRate.abortBufferedPresentation();
             endpointAdvance = 0;
             invalidateBufferedPairForReprime(false);
+        }
+        if (endpointAdvance == 1 &&
+                frameRate.bufferedRetainedLeftSequence() != activeRightSequence) {
+            Log.e(TAG, "Buffered commit ownership mismatch" +
+                    " generator=" + generatorId +
+                    " presentation=" + presentation +
+                    " phase=" + frameRate.bufferedSelectedPhase() +
+                    " displayLeft=" + activeLeftSequence +
+                    " displayRight=" + activeRightSequence +
+                    " controllerLeft=" +
+                            frameRate.bufferedRetainedLeftSequence() +
+                    " controllerRight=" +
+                            frameRate.bufferedRetainedRightSequence() +
+                    " expectedAdvance=" +
+                            frameRate.bufferedExpectedAdvance() +
+                    " credits=" + frameRate.bufferedOutputCredits() +
+                    " epoch=" + schedulerPresentationEpoch() +
+                    " reason=" + frameRate.bufferedLastEpochReason());
         }
         // A failed/aborted decision advances the controller epoch. Keep the
         // emitted HEALTH identity and any post-swap atlas on that exact epoch.
@@ -4176,13 +7749,44 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     schedulerPresentationCallbackCount() -
                             lastHealthPresentationCallbacks;
             long windowPresentationEpoch = schedulerPresentationEpoch();
+            // A window that saw no callback and no present (a reset that
+            // coincided with the 120-present boundary) reports nothing; the
+            // verifier accepts a zero-work record only as the proof-reset
+            // snapshot with zero lifetime counters, and a mid-session one
+            // rejected the entire PSP log (run psp-b19).  Fold it into the
+            // next window instead of emitting it.
+            boolean emptyResetWindow = windowPresents == 0L &&
+                    windowPresentationCallbacks == 0L &&
+                    (densePromotions > 0L || proofSamples > 0L);
             double actualPresentHz = windowPresents * 1000.0 / windowElapsedMs;
+            boolean generationMissesTarget =
+                    frameRate.generatesIntermediateFrames() &&
+                    FrameGenerationCadence.generationMissesTargetCadence(
+                            windowElapsedMs, windowPresents,
+                            frameRate.lockedSourceFps(), frameRate.outputFps());
             boolean targetScheduleEligible = denseCadenceTargetEligible(
                     windowElapsedMs, windowPromoted, frameRate.lockedSourceFps(),
                     windowDueNoEndpoint, windowSyntheticQuotaSkipped,
                     windowDuePhaseClamped,
                     windowSyntheticNotReady, windowDuplicatePairSelection,
                     windowPresentationEpoch, lastHealthPresentationEpoch);
+            // A missed generated target can convict the presentation path only
+            // when every selected slot had the source endpoint/pair evidence
+            // needed to produce it. r31's F-Zero course transition had 8--32
+            // due-without-endpoint slots in three consecutive windows: the
+            // renderer remained comfortably inside budget, yet this formerly
+            // accumulated an unconditional target failure and permanently
+            // disabled dense generation. Use the same independent scheduling
+            // eligibility required by the dense cadence gate so source/menu
+            // starvation resets, rather than advances, the failure streak.
+            generationTargetFailureWindows =
+                    FrameGenerationCadence.advanceCadenceFailureWindows(
+                            generationTargetFailureWindows,
+                            targetScheduleEligible,
+                            generationMissesTarget);
+            boolean generationTargetReject = generationMissesTarget &&
+                    generationTargetFailureWindows >=
+                            DENSE_CADENCE_REJECT_CONSECUTIVE_WINDOWS;
             boolean cadenceUnderTarget = densePyramidEnabled &&
                     targetScheduleEligible && windowPresents >= HEALTH_INTERVAL &&
                     actualPresentHz < Math.max(1.0, frameRate.outputFps() * .96);
@@ -4209,14 +7813,26 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 pendingDenseHealthPresents = windowPresents;
                 pendingDenseHealthGenerated = windowGenerated;
                 pendingDenseHealthPromoted = windowPromoted;
-            } else if (activeProofSchemaVersion() == DENSE_V28_PROOF_SCHEMA_VERSION) {
-                logSplitHealth(now, windowElapsedMs, windowPresents,
-                        windowGenerated, windowPromoted, windowDueSelected,
-                        windowDueNoEndpoint, windowDuePhaseClamped,
-                        windowRealPriority, windowSyntheticQuotaSkipped,
-                        windowPresentationEpoch, windowSyntheticSelected,
-                        windowSyntheticPairCreated, windowSyntheticNotReady,
-                        windowDuplicatePairSelection);
+            } else if (!emptyResetWindow &&
+                    activeProofSchemaVersion() == DENSE_V28_PROOF_SCHEMA_VERSION) {
+                try {
+                    logSplitHealth(now, windowElapsedMs, windowPresents,
+                            windowGenerated, windowPromoted, windowDueSelected,
+                            windowDueNoEndpoint, windowDuePhaseClamped,
+                            windowRealPriority, windowSyntheticQuotaSkipped,
+                            windowPresentationEpoch, windowSyntheticSelected,
+                            windowSyntheticPairCreated, windowSyntheticNotReady,
+                            windowDuplicatePairSelection);
+                } catch (RuntimeException healthTransportFailure) {
+                    // The visible swap and buffered endpoint transaction have
+                    // already committed above. Evidence transport is allowed
+                    // to fail closed, but it must never roll back only the
+                    // renderer half of a successful presentation. Doing so
+                    // manufactured a one-endpoint controller/renderer split
+                    // once per HEALTH interval on physical Thor hardware.
+                    Log.e(TAG, "Presentation health transport failed after " +
+                            "successful swap", healthTransportFailure);
+                }
             } else Log.i(TAG, "Presentation health generator=" + generatorId +
                     " role=" + displayRole + " displayId=" + displayId +
                     " proofContract=" + activeProofContract() +
@@ -4346,7 +7962,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     " denseGpuCompleteTotalUs=" + denseGpuCompleteTotalUs +
                     " denseGpuCompleteMaxUs=" + denseGpuCompleteMaxUs +
                     " denseGpuCompleteLastUs=" + denseGpuCompleteLastUs +
-                    " denseGpuBudgetUs=" + DENSE_GPU_BUDGET_US +
+                    " denseGpuBudgetUs=" + denseGpuBudgetUs() +
                     " denseTimedPairs=" + denseTimedPairs +
                     " denseWarpSequence=" + denseWarpSequence +
                     " denseWarpMaxCompletedSequence=" +
@@ -4433,9 +8049,810 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 lastHealthGenerated = generatedPresents;
                 lastHealthPromoted = promotedFrameCount;
                 updateSchedulerHealthBaseline();
+                if (generationTargetReject) {
+                    Log.e(TAG, "Frame generation failed its target cadence" +
+                            " generator=" + generatorId +
+                            " role=" + displayRole +
+                            " source=" + frameRate.lockedSourceFps() +
+                            " target=" + frameRate.outputFps() +
+                            " actual=" + String.format(java.util.Locale.US,
+                                    "%.2f", actualPresentHz));
+                    if (densePyramidEnabled)
+                        rejectDense("presentation-below-direct-source-floor", null);
+                    else {
+                        frameRate.setGenerationAvailable(false);
+                        invalidateBufferedPairForReprime(false);
+                    }
+                    resetHealthWindowAfterStreamChange();
+                }
             }
         }
         reportStats();
+    }
+
+    /**
+     * Builds and completes the first midpoint inside the already-published
+     * generated scheduler epoch. No visible slot is selected while this method
+     * returns false, so the active pair and its timestamps cannot move under
+     * the private output.
+     */
+    private boolean primeFirstExternalGeneratedOutput() {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null || !externalRatePathPriming ||
+                !externalRatePathOutputPriming ||
+                !frameRate.generationAvailable() ||
+                activeLeftSequence <= 0L ||
+                activeRightSequence != activeLeftSequence + 1L ||
+                !transport.hasAdjacentPair(
+                        activeLeftSequence, activeRightSequence) ||
+                !transport.hasPreparedLookahead(activeRightSequence))
+            return false;
+        long midpointNs =
+                AdaptiveFrameRateController.exactMidpointTimestampNs(
+                        activeLeftTimestampNs, activeRightTimestampNs);
+        if (midpointNs <= activeLeftTimestampNs ||
+                midpointNs >= activeRightTimestampNs)
+            throw new IllegalStateException(
+                    "external output-prime midpoint is not interior");
+        FrameGenerationPreparationRequest request =
+                FrameGenerationPreparationRequest.between(
+                        generatorId, schedulerPresentationEpoch(),
+                        activeLeftSequence, activeLeftTimestampNs,
+                        activeRightSequence, activeRightTimestampNs,
+                        midpointNs,
+                        transport.endpointWidth(), transport.endpointHeight(),
+                        FrameGenerationPresentationRequest.FORMAT_RGBA8_UNORM);
+        submitExternalGeneratedPreparation(request);
+        ExternalFrameGenerationTransport.PreparationReadiness readiness =
+                transport.preparationReadiness(request);
+        ExternalFrameGenerationTransport.GenerationReadiness pairReadiness =
+                transport.generationReadiness(
+                        activeLeftSequence, activeRightSequence);
+        if (readiness ==
+                    ExternalFrameGenerationTransport.PreparationReadiness.UNSAFE ||
+                pairReadiness ==
+                    ExternalFrameGenerationTransport.GenerationReadiness.UNSAFE) {
+            // A scene cut during the invisible first-output prime is an
+            // ordinary discontinuity, not a fatal backend failure. Discard
+            // the exact pair and publish one fresh scheduler epoch while the
+            // already-proven model/import cache stays warm. No output from
+            // either side of the cut can become visible or qualify the new
+            // evidence epoch.
+            long previousEpoch = schedulerPresentationEpoch();
+            invalidateBufferedPairForReprime();
+            observedBufferedPresentationEpoch =
+                    schedulerPresentationEpoch();
+            refreshProofEvidencePresentationEpoch();
+            externalDirectOutputPhaseAnchorNs = 0L;
+            resetHealthWindowAfterStreamChange();
+            Log.i(TAG, "External output-prime pair rejected" +
+                    " generator=" + generatorId +
+                    " previousEpoch=" + previousEpoch +
+                    " epoch=" + schedulerPresentationEpoch() +
+                    " pair=" + request.leftSequence() + "/" +
+                            request.rightSequence() +
+                    " preparationReadiness=" + readiness +
+                    " pairReadiness=" + pairReadiness);
+            return false;
+        }
+        if (readiness !=
+                ExternalFrameGenerationTransport.PreparationReadiness.READY)
+            return false;
+        if (pairReadiness !=
+                ExternalFrameGenerationTransport.GenerationReadiness.READY)
+            return false;
+        return transport.privateGenerationPipelineWarm();
+    }
+
+    /**
+     * Prepares a future fractional output behind the selected visible WSI.
+     *
+     * <p>A prime REAL leaves A/B active, so its following midpoint uses A/B. A
+     * REAL-right decision retires A/B and advances to B/C, so the exact queued
+     * successor C is peeked without consuming the FIFO. On an exact 2x path,
+     * the successful A/B midpoint also authorizes preparing B/C immediately:
+     * REAL B occupies the intervening output slot, giving private inference a
+     * complete source interval before the B/C midpoint instead of one panel
+     * interval. The immutable request is still submitted only after the
+     * current visible WSI command succeeds, so private compute can never sit
+     * in front of the frame being shown.</p>
+     */
+    private FrameGenerationPreparationRequest buildExternalGeneratedPreparation(
+            int presentation, PhysicalPresentationDeadline deadline) {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        boolean prepareAfterReal = presentation ==
+                AdaptiveFrameRateController.PRESENT_REAL;
+        boolean prepareSuccessorAfterExactDoubleSynthetic = presentation ==
+                AdaptiveFrameRateController.PRESENT_SYNTHETIC &&
+                frameRate.bufferedPendingExactDoubleSchedule();
+        if (transport == null ||
+                (!externalRatePathActive && !externalRatePathPriming) ||
+                (!prepareAfterReal &&
+                        !prepareSuccessorAfterExactDoubleSynthetic) ||
+                deadline == null || !deadline.valid() ||
+                activeLeftSequence <= 0L ||
+                activeRightSequence != activeLeftSequence + 1L ||
+                !transport.hasAdjacentPair(
+                        activeLeftSequence, activeRightSequence))
+            return null;
+
+        long leftSequence = activeLeftSequence;
+        long leftTimestampNs = activeLeftTimestampNs;
+        long rightSequence = activeRightSequence;
+        long rightTimestampNs = activeRightTimestampNs;
+        int advance = frameRate.bufferedEndpointAdvanceAfterPresentation();
+        if (prepareSuccessorAfterExactDoubleSynthetic && advance != 0)
+            return null;
+        if (advance == 1 || prepareSuccessorAfterExactDoubleSynthetic) {
+            if (endpointFifoCount <= 0) return null;
+            int successorSlot = endpointFifoHead;
+            long successorSequence = endpointFifoSequence[successorSlot];
+            long successorTimestampNs =
+                    endpointFifoTimestampNs[successorSlot];
+            if (successorSequence != activeRightSequence + 1L ||
+                    !AdaptiveFrameRateController.endpointSpanContinuous(
+                            activeRightTimestampNs, successorTimestampNs,
+                            frameRate.presentationSourceHz(),
+                            activeRightUniqueSequence,
+                            endpointFifoUniqueSequence[successorSlot],
+                            activeRightSubmission,
+                            endpointFifoSubmission[successorSlot],
+                            activeRightCandidateLoss,
+                            endpointFifoCandidateLoss[successorSlot],
+                            slotLatticeProducer))
+                return null;
+            leftSequence = activeRightSequence;
+            leftTimestampNs = activeRightTimestampNs;
+            rightSequence = successorSequence;
+            rightTimestampNs = successorTimestampNs;
+        } else if (advance != 0) {
+            return null;
+        }
+        if (!transport.hasAdjacentPair(leftSequence, rightSequence)) return null;
+
+        long outputPeriodNs;
+        long preparationLeadNs;
+        long nextPhysicalPresentationNs;
+        try {
+            int preparationScans = externalRatePathPriming ?
+                    frameRate.candidateGeneratedPanelScansPerOutput() :
+                    frameRate.panelScansPerOutput();
+            if (preparationScans <= 0) return null;
+            outputPeriodNs = Math.multiplyExact(
+                    externalPhysicalClock.planningPeriodNs(),
+                    (long) preparationScans);
+            preparationLeadNs = Math.multiplyExact(outputPeriodNs,
+                    prepareSuccessorAfterExactDoubleSynthetic ? 2L : 1L);
+            nextPhysicalPresentationNs = Math.addExact(
+                    deadline.contentPresentationTimeNs(), preparationLeadNs);
+        } catch (ArithmeticException overflow) {
+            return null;
+        }
+        if (outputPeriodNs <= 0L || nextPhysicalPresentationNs <= 0L)
+            return null;
+        long targetSourceNs = externalRatePathPriming ?
+                AdaptiveFrameRateController.exactMidpointTimestampNs(
+                        leftTimestampNs, rightTimestampNs) :
+                frameRate.previewBufferedGeneratedTargetSourceNsAfterPendingCommit(
+                        nextPhysicalPresentationNs,
+                        leftTimestampNs, rightTimestampNs);
+        // Exact endpoints use the existing cached-import passthrough. Only a
+        // strictly interior sample needs expensive private RIFE preparation.
+        if (targetSourceNs <= leftTimestampNs ||
+                targetSourceNs >= rightTimestampNs)
+            return null;
+        return FrameGenerationPreparationRequest.between(
+                generatorId, schedulerPresentationEpoch(),
+                leftSequence, leftTimestampNs,
+                rightSequence, rightTimestampNs,
+                targetSourceNs,
+                transport.endpointWidth(), transport.endpointHeight(),
+                FrameGenerationPresentationRequest.FORMAT_RGBA8_UNORM);
+    }
+
+    private FrameGenerationPreparationRequest deferredExternalPreparation;
+
+    private boolean retryDeferredExternalPreparation() {
+        FrameGenerationPreparationRequest request = deferredExternalPreparation;
+        if (request == null) return false;
+        if (request.presentationEpoch() != schedulerPresentationEpoch() ||
+                request.leftSequence() < activeLeftSequence ||
+                (request.leftSequence() == activeLeftSequence && activePairSyntheticCommitted)) {
+            deferredExternalPreparation = null;
+            return false;
+        }
+        submitExternalGeneratedPreparation(request);
+        return true;
+    }
+
+    private void registerExternalPreparationCapacityListener() {
+        ExternalFrameGenerationTransport registered = externalTransport;
+        if (registered == null || !registered.usesAppOwnedPresentation()) return;
+        registered.setPreparationCapacityListener(() -> {
+            if (closed.get() || externalPresentationFailed ||
+                    externalTransport != registered || !externalRatePathActive ||
+                    externalLastPlannedPhysicalNs <= 0L ||
+                    observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;
+            try {
+                if (pendingAppOwnedRequest != null) {
+                    // GPU-ready notification is useful precisely when the
+                    // selected output was waiting for it. Retry that immutable
+                    // request first; its existing deadline/identity checks and
+                    // successful-commit path own successor preparation. Never
+                    // bypass an unresolved request or replan its slot.
+                    retryPendingAppOwnedPresentation();
+                    if (pendingAppOwnedRequest != null) return;
+                    // Expiration can clear the pending request without a
+                    // successful commit to refill future work. Do not lose
+                    // this GPU-capacity notification and leave the queue idle
+                    // until another display callback. A retry may also have
+                    // invalidated the epoch; that cannot authorize refill.
+                    if (closed.get() || externalPresentationFailed ||
+                            externalTransport != registered || !externalRatePathActive ||
+                            externalLastPlannedPhysicalNs <= 0L ||
+                            observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;
+                }
+                // The previous visible swap is already queued. Continue only
+                // immutable future work; transport still captures/waits its GL
+                // dependency, and no presentation/credit is committed here.
+                if (!retryDeferredExternalPreparation()) prepareExternalLookahead();
+            } catch (RuntimeException failure) {
+                failRuntimePresentation("External preparation refill failed", failure);
+            }
+        });
+    }
+
+    private void submitExternalGeneratedPreparation(
+            FrameGenerationPreparationRequest request) {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null || request == null) return;
+        FrameGenerationPreparationRequest earlier = deferredExternalPreparation;
+        if (earlier != null && earlier.presentationEpoch() == schedulerPresentationEpoch() &&
+                earlier.leftSequence() >= activeLeftSequence &&
+                !(earlier.leftSequence() == activeLeftSequence && activePairSyntheticCommitted) &&
+                earlier.leftSequence() < request.leftSequence()) {
+            // Preserve exact earlier identity across ordinary display-driven
+            // submissions too, not only the capacity callback. The existing
+            // lookahead walk can revisit later work after this is admitted.
+            request = earlier;
+        }
+        ExternalFrameGenerationTransport.PreparationResult result =
+                transport.prepare(request);
+        if (result != ExternalFrameGenerationTransport.PreparationResult.SUBMITTED &&
+                result !=
+                        ExternalFrameGenerationTransport.PreparationResult.ALREADY_READY &&
+                result != ExternalFrameGenerationTransport.PreparationResult.NOT_READY)
+            throw new IllegalStateException(
+                "external transport returned an unknown preparation result");
+        // Do not bypass the immediate requested midpoint with farther-future
+        // work when it failed admission. A later pair occupying a free bridge
+        // cannot satisfy the earlier immutable presentation identity.
+        if (result == ExternalFrameGenerationTransport.PreparationResult.NOT_READY) {
+            deferredExternalPreparation = request;
+            return;
+        }
+        deferredExternalPreparation = null;
+        prepareExternalLookahead();
+    }
+
+    /** Prepare immutable future midpoints without consuming or retiming the FIFO. */
+    private int externalLookaheadPairCount() {
+        if (externalTransport == null) return 0;
+        // Candidate 66.7 ms inference lead, rounded to whole source intervals.
+        // This remains qualification policy until physical-device acceptance.
+        int sourceIntervals = Math.max(1, (int) Math.ceil(frameRate.presentationSourceHz() / 15.0));
+        return Math.min(4, Math.min(sourceIntervals, externalTransport.preparationLookaheadPairs()));
+    }
+
+    private void prepareExternalLookahead() {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null || !transport.usesAppOwnedPresentation() ||
+                (!externalRatePathActive && !externalRatePathPriming && !externalRatePathOutputPriming) ||
+                activeRightSequence <= 0L) return;
+        int sourceFps = externalRatePathActive ? frameRate.presentationSourceFps() : frameRate.candidateGeneratedSourceFps();
+        int outputFps = externalRatePathActive ? frameRate.outputFps() : frameRate.candidateGeneratedOutputFps();
+        if (sourceFps <= 0 || outputFps != 2 * sourceFps) return;
+        int limit = Math.min(endpointFifoCount, externalLookaheadPairCount());
+        long left = activeRightSequence, leftNs = activeRightTimestampNs;
+        long unique = activeRightUniqueSequence, loss = activeRightCandidateLoss;
+        int submission = activeRightSubmission;
+        for (int offset = 0; offset < limit; offset++) {
+            int slot = endpointFifoSlot(offset);
+            long right = endpointFifoSequence[slot], rightNs = endpointFifoTimestampNs[slot];
+            if (right != left + 1L || !AdaptiveFrameRateController.endpointSpanContinuous(
+                    leftNs, rightNs, frameRate.presentationSourceHz(), unique,
+                    endpointFifoUniqueSequence[slot], submission, endpointFifoSubmission[slot],
+                    loss, endpointFifoCandidateLoss[slot], slotLatticeProducer) ||
+                    !transport.hasAdjacentPair(left, right)) return;
+            FrameGenerationPreparationRequest future = FrameGenerationPreparationRequest.between(
+                    generatorId, schedulerPresentationEpoch(), left, leftNs, right, rightNs,
+                    AdaptiveFrameRateController.exactMidpointTimestampNs(leftNs, rightNs),
+                    transport.endpointWidth(), transport.endpointHeight(),
+                    FrameGenerationPresentationRequest.FORMAT_RGBA8_UNORM);
+            if (transport.prepare(future) == ExternalFrameGenerationTransport.PreparationResult.NOT_READY) return;
+            left = right; leftNs = rightNs; unique = endpointFifoUniqueSequence[slot];
+            submission = endpointFifoSubmission[slot]; loss = endpointFifoCandidateLoss[slot];
+        }
+    }
+
+    /**
+     * Presents one external image through EmuFusion's own EGL window.
+     *
+     * <p>The backend may bind only a completed private RGBA8 image. It never
+     * sees the output Surface and cannot commit scheduler or delivered-FPS
+     * state. The controller decision, EGL timestamp, swap, frame-timestamp ID,
+     * endpoint advance, and physical accounting remain in this method.</p>
+     */
+    private FrameGenerationPresentationRequest pendingAppOwnedRequest;
+    private FrameGenerationPreparationRequest pendingAppOwnedPreparation;
+    private float pendingAppOwnedPhase;
+    private FrameGenerationPresentationRequest scheduledAppOwnedRetry;
+
+    private void scheduleAppOwnedRetry() {
+        final FrameGenerationPresentationRequest request = pendingAppOwnedRequest;
+        if (request == null || scheduledAppOwnedRetry == request ||
+                closed.get() || externalPresentationFailed) return;
+        scheduledAppOwnedRetry = request;
+        if (!handler.postDelayed(() -> {
+            if (scheduledAppOwnedRetry == request) scheduledAppOwnedRetry = null;
+            if (closed.get() || externalPresentationFailed ||
+                    pendingAppOwnedRequest != request) return;
+            try {
+                retryPendingAppOwnedPresentation();
+            } catch (RuntimeException failure) {
+                failRuntimePresentation("App-owned output retry failed", failure);
+            }
+        }, 1L)) {
+            scheduledAppOwnedRetry = null;
+            throw new IllegalStateException("Renderer owner rejected output retry");
+        }
+    }
+
+    private boolean retryPendingAppOwnedPresentation() {
+        FrameGenerationPresentationRequest request = pendingAppOwnedRequest;
+        if (request == null) return false;
+        if (request.presentationEpoch() != schedulerPresentationEpoch()) {
+            pendingAppOwnedRequest = null;
+            pendingAppOwnedPreparation = null;
+            return false;
+        }
+        FrameGenerationPreparationRequest preparation = pendingAppOwnedPreparation;
+        long before = frameRate.bufferedPresentationCount();
+        try {
+            presentAppOwnedExternalBuffered(request,
+                    AdaptiveFrameRateController.PRESENT_SYNTHETIC, pendingAppOwnedPhase);
+            if (frameRate.bufferedPresentationCount() == before + 1L && preparation != null)
+                submitExternalGeneratedPreparation(preparation);
+        } catch (RuntimeException failure) {
+            frameRate.abortBufferedPresentation();
+            invalidateBufferedPairForReprime(false);
+            throw failure;
+        }
+        // Never select/replan or catch up another output in this callback.
+        return true;
+    }
+
+    private void presentAppOwnedExternalBuffered(
+            FrameGenerationPresentationRequest request, int presentation,
+            float selectedPhase) {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null || !transport.usesAppOwnedPresentation() ||
+                physicalPresentationTracker == null ||
+                !physicalPresentationTracker.available())
+            throw new IllegalStateException(
+                    "app-owned external presentation authority is unavailable");
+        boolean generated = request.isGenerated();
+        if (generated) {
+            if (presentation != AdaptiveFrameRateController.PRESENT_SYNTHETIC ||
+                    !externalRatePathActive || !request.hasAdjacentPair() ||
+                    !transport.hasAdjacentPair(
+                            request.leftSequence(), request.rightSequence()))
+                throw new IllegalStateException(
+                        "app-owned generated request lacks its exact authorized pair");
+        } else if (presentation != AdaptiveFrameRateController.PRESENT_REAL) {
+            throw new IllegalStateException(
+                    "app-owned endpoint request was not selected REAL");
+        }
+        int endpointAdvance = frameRate.bufferedEndpointAdvanceAfterPresentation();
+        if (frameRate.bufferedOutputCredits() <= 0 ||
+                (endpointAdvance != 0 && endpointAdvance != 1) ||
+                (endpointAdvance == 1 &&
+                        activeRightSequence != activeLeftSequence + 1L))
+            throw new IllegalStateException(
+                    "app-owned presentation controller state is not committable");
+        long presentationEpochBeforeAdvance = schedulerPresentationEpoch();
+        if (request.sessionEpoch() != generatorId ||
+                request.presentationEpoch() != presentationEpochBeforeAdvance ||
+                request.outputWidth() != transport.endpointWidth() ||
+                request.outputHeight() != transport.endpointHeight() ||
+                request.outputFormat() !=
+                        FrameGenerationPresentationRequest.FORMAT_RGBA8_UNORM)
+            throw new IllegalStateException(
+                    "app-owned presentation contract identity changed or expired");
+        if (System.nanoTime() >= request.hardCompletionDeadlineNs() ||
+                (generated && !PhysicalPresentationDeadline.appOwnedSubmissionHasQueueLead(
+                        request.desiredPhysicalPresentTimeNs(),
+                        frameRate.panelPeriodNs(), System.nanoTime()))) {
+            pendingAppOwnedRequest = null;
+            pendingAppOwnedPreparation = null;
+            ++bufferedSyntheticNotReadyCount;
+            frameRate.dropBufferedPresentationSlot();
+            return;
+        }
+        if (appOwnedPhysicalPending.size() >= 64)
+            throw new IllegalStateException(
+                    "app-owned physical presentation ledger is full");
+        if (!externalPhysicalSlotAvailable(request, frameRate.panelPeriodNs())) {
+            pendingAppOwnedRequest = null;
+            pendingAppOwnedPreparation = null;
+            ++externalPhysicalSlotRejectedCount;
+            ++bufferedSyntheticNotReadyCount;
+            Log.w(TAG, "App-owned physical slot already reserved; slot dropped" +
+                    " generator=" + generatorId +
+                    " desiredNs=" + request.desiredPhysicalPresentTimeNs() +
+                    " lastSubmittedNs=" + externalLastPlannedPhysicalNs);
+            frameRate.dropBufferedPresentationSlot();
+            return;
+        }
+
+        ExternalFrameGenerationTransport.AppOwnedOutput generatedOutput = null;
+        long bindStartedNs = generated ? System.nanoTime() : 0L;
+        if (generated) {
+            generatedOutput = transport.bindAppOwnedOutput(
+                    request, externalGeneratedTexture);
+            if (generatedOutput == null) {
+                // Retain the exact selected request/decision until a later
+                // callback succeeds or its original deadline expires.
+                scheduleAppOwnedRetry();
+                return;
+            }
+        }
+        long bindWallNs = generated ?
+                Math.max(1L, System.nanoTime() - bindStartedNs) : 1L;
+        // A ready image does not renew its display slot. Binding may itself
+        // consume the predecessor-scan reserve (Thor frame 1340); never turn
+        // that into a knowingly late swap or count it as a successful output.
+        if (generated && !PhysicalPresentationDeadline.appOwnedSubmissionHasQueueLead(
+                request.desiredPhysicalPresentTimeNs(),
+                frameRate.panelPeriodNs(), System.nanoTime())) {
+            if (generatedOutput != null)
+                transport.releaseAppOwnedOutput(generatedOutput, false);
+            pendingAppOwnedRequest = null;
+            pendingAppOwnedPreparation = null;
+            ++bufferedSyntheticNotReadyCount;
+            frameRate.dropBufferedPresentationSlot();
+            return;
+        }
+        boolean swapSucceeded = false;
+        boolean trackerPrepared = false;
+        long frameId = 0L;
+        int physicalScansPerOutput = appOwnedPhysicalScansPerOutput();
+        long physicalPanelPeriodNs = frameRate.panelPeriodNs();
+        if (physicalScansPerOutput <= 0 || physicalPanelPeriodNs <= 0L)
+            throw new IllegalStateException(
+                    "app-owned physical cadence identity is unavailable");
+        long submissionStartedNs = bindStartedNs > 0L ?
+                bindStartedNs : System.nanoTime();
+        long swapStartedNs = System.nanoTime();
+        try {
+            if (generated && !midpointPairBudget.admit(request))
+                throw new IllegalStateException("app-owned midpoint admission rejected");
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            GLES20.glClearColor(0f, 0f, 0f, 1f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+            setPresentationViewport();
+            if (generated) {
+                drawExternalGeneratedTexture(generatedOutput.textureId > 0 ?
+                        generatedOutput.textureId : externalGeneratedTexture);
+            } else {
+                drawTexture2d(historyTextures[selectedPhase >= 1f ?
+                        currentIndex : previousIndex]);
+            }
+            if (Build.VERSION.SDK_INT >= 18 &&
+                    (request.driverDesiredPresentTimeNs() <= 0L ||
+                            !EGLExt.eglPresentationTimeANDROID(
+                                    eglDisplay, eglSurface,
+                                    request.driverDesiredPresentTimeNs())))
+                fail("eglPresentationTimeANDROID(app-owned)");
+            trackerPrepared = physicalPresentationTracker.prepareFrame();
+            frameId = physicalPresentationTracker.preparedFrameId();
+            if (!trackerPrepared || frameId <= 0L)
+                throw new IllegalStateException(
+                        "app-owned swap has no physical frame ID");
+            beginFullImageCapture(generated, frameId, selectedPhase);
+            if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
+                physicalPresentationTracker.cancelPrepared();
+                trackerPrepared = false;
+                fail("eglSwapBuffers(app-owned)");
+            }
+            swapSucceeded = true;
+            if (!physicalPresentationTracker.commitPrepared(
+                    physicalScansPerOutput, physicalPanelPeriodNs))
+                throw new IllegalStateException(
+                        "app-owned physical frame-ID commit failed");
+            trackerPrepared = false;
+            long swapCompletedNs = System.nanoTime();
+            appOwnedPhysicalPending.addLast(new AppOwnedPhysicalPending(
+                    frameId, request, generatedOutput, bindWallNs,
+                    Math.max(1L, swapCompletedNs - swapStartedNs),
+                    submissionStartedNs, swapStartedNs, swapCompletedNs,
+                    physicalScansPerOutput, physicalPanelPeriodNs));
+            ++appOwnedExternalSubmittedCount;
+            if (externalAppOwnedActivationFirstSwapPending)
+                externalAppOwnedActivationFirstSwapPending = false;
+            // Image-only qualification records the exact displayed generated
+            // buffer and retained endpoints, never a replacement interpolation.
+            finishFullImageCapture(true);
+        } finally {
+            if (!swapSucceeded) finishFullImageCapture(false);
+            if (trackerPrepared) physicalPresentationTracker.cancelPrepared();
+            if (generatedOutput != null)
+                transport.releaseAppOwnedOutput(generatedOutput, swapSucceeded);
+        }
+
+        if (!outputFrameRateReassertedAfterSwap) {
+            outputFrameRateReassertedAfterSwap = true;
+            requestOutputFrameRate("first-successful-app-owned-swap");
+        }
+        recordExternalPhysicalSlot(request);
+        frameRate.commitBufferedPresentation(true);
+        pendingAppOwnedRequest = null;
+        pendingAppOwnedPreparation = null;
+        if (generated) {
+            ++generatedPresents;
+            ++bufferedSyntheticSelectedCount;
+            activePairSyntheticCommitted = true;
+            bufferedLastSelectedSyntheticPair = activeLeftSequence;
+            phaseDiagSum += request.phase();
+            phaseDiagMin = Math.min(phaseDiagMin, (float) request.phase());
+            phaseDiagMax = Math.max(phaseDiagMax, (float) request.phase());
+            ++phaseDiagCount;
+            phaseDiagSpanSumNs +=
+                    request.rightTimestampNs() - request.leftTimestampNs();
+        }
+        ++presents;
+        commitBufferedEndpointAdvance(presentation, endpointAdvance);
+        if (activeLeftSequence > 0L)
+            transport.releaseBefore(activeLeftSequence);
+        refreshProofEvidencePresentationEpoch();
+        if (schedulerPresentationEpoch() != presentationEpochBeforeAdvance)
+            resetHealthWindowAfterStreamChange();
+    }
+
+    /**
+     * Exact panel occupancy for an app-owned EGL swap.
+     *
+     * <p>The generated-path accessor is deliberately zero while EmuFusion is
+     * still presenting Direct endpoints during private-pipeline warm-up. A
+     * Direct endpoint nevertheless has a physical cadence identity: the
+     * nearest positive panel divisor of the currently selected source clock.
+     * Snapshot this value once before the swap so native commit and the Java
+     * join row can never observe different controller states.</p>
+     */
+    private static boolean directExternalSubmissionWindowOpen(
+            long targetNs, long nowNs, long periodNs, int scans) {
+        if (nowNs < 0L || targetNs <= nowNs || periodNs <= 0L || scans <= 0)
+            return false;
+        long lead = PhysicalPresentationDeadline.THOR_DIRECT_OUTPUT_SUBMISSION_LEAD_NS;
+        if (periodNs > (Long.MAX_VALUE - lead) / scans) return false;
+        return targetNs - nowNs <= lead + periodNs * scans;
+    }
+
+    private int appOwnedPhysicalScansPerOutput() {
+        int generatedScans = frameRate.panelScansPerOutput();
+        if (generatedScans > 0) return generatedScans;
+        double sourceHz = frameRate.presentationSourceHz();
+        double panelHz = frameRate.panelHz();
+        if (!Double.isFinite(sourceHz) || sourceHz <= 0.0 ||
+                !Double.isFinite(panelHz) || panelHz <= 0.0)
+            return 1;
+        double ratio = panelHz / sourceHz;
+        if (!Double.isFinite(ratio) || ratio <= 1.0) return 1;
+        return Math.max(1, (int) Math.min(1000L, Math.round(ratio)));
+    }
+
+    /**
+     * Rejects a previously reserved scan before any backend or EGL ownership.
+     * Token IDs identify callback proposals, not distinct physical scans: two
+     * different tokens may have the same expected presentation timestamp.
+     * Half a scan also excludes tiny target shifts caused by phase reanchors.
+     */
+    private boolean externalPhysicalSlotAvailable(
+            FrameGenerationPresentationRequest request, long panelPeriodNs) {
+        long desiredNs = request.desiredPhysicalPresentTimeNs();
+        if (desiredNs <= 0L || panelPeriodNs <= 0L ||
+                externalLastPlannedPhysicalNs < 0L ||
+                externalLastSubmittedCompositorExpectedNs < 0L)
+            throw new IllegalStateException("invalid external physical slot identity");
+        long minimumSeparationNs = Math.max(1L, panelPeriodNs / 2L);
+        if (externalLastPlannedPhysicalNs > 0L &&
+                (desiredNs <= externalLastPlannedPhysicalNs ||
+                        desiredNs - externalLastPlannedPhysicalNs < minimumSeparationNs))
+            return false;
+        if (request.hasCompositorFrameTimeline()) {
+            long expectedNs = request.compositorExpectedPresentationTimeNs();
+            if (expectedNs <= 0L)
+                throw new IllegalStateException("invalid compositor physical slot identity");
+            if (externalLastSubmittedCompositorExpectedNs > 0L &&
+                    (expectedNs <= externalLastSubmittedCompositorExpectedNs ||
+                            expectedNs - externalLastSubmittedCompositorExpectedNs <
+                                    minimumSeparationNs))
+                return false;
+        }
+        return true;
+    }
+
+    /** Called only after accepted submission; proposals do not reserve scans. */
+    private void recordExternalPhysicalSlot(
+            FrameGenerationPresentationRequest request) {
+        externalLastPlannedPhysicalNs = request.desiredPhysicalPresentTimeNs();
+        if (request.hasCompositorFrameTimeline())
+            externalLastSubmittedCompositorExpectedNs =
+                    request.compositorExpectedPresentationTimeNs();
+    }
+
+    /** Submits exactly one EmuFusion-selected request to the Vulkan backend. */
+    private void presentExternalBuffered(
+            FrameGenerationPresentationRequest request, int presentation) {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport == null || !request.hasAdjacentPair() ||
+                !transport.hasAdjacentPair(
+                        request.leftSequence(), request.rightSequence()))
+            throw new IllegalStateException(
+                    "external presentation lacks its exact adjacent endpoint pair");
+        if (request.isGenerated() &&
+                presentation != AdaptiveFrameRateController.PRESENT_SYNTHETIC)
+            throw new IllegalStateException(
+                    "generated external request was not selected synthetic");
+        if (request.isGenerated() && !externalRatePathActive)
+            throw new IllegalStateException(
+                    "unqualified external rate attempted generated output");
+        if (request.isGenerated() &&
+                !externalPhysicalClockBootstrap.complete())
+            throw new IllegalStateException(
+                    "external generation attempted before physical-clock bootstrap");
+        if (!request.isGenerated() &&
+                presentation != AdaptiveFrameRateController.PRESENT_REAL)
+            throw new IllegalStateException(
+                    "endpoint external request was not selected real");
+        // Endpoint-only Direct rows stay identity-joined and contribute to
+        // actual physical cadence, but they do not qualify this backend. A
+        // generated path replaces the sentinel with its exact panel divisor
+        // after a clean presentation-epoch boundary.
+        int scansPerOutput = externalRatePathActive ?
+                frameRate.panelScansPerOutput() : 1;
+        if (scansPerOutput <= 0)
+            throw new IllegalStateException(
+                    "external presentation has no exact panel divisor");
+        int endpointAdvance = frameRate.bufferedEndpointAdvanceAfterPresentation();
+        if (frameRate.bufferedOutputCredits() <= 0 ||
+                (endpointAdvance != 0 && endpointAdvance != 1) ||
+                (endpointAdvance == 1 &&
+                        activeRightSequence != activeLeftSequence + 1L))
+            throw new IllegalStateException(
+                    "external presentation controller state is not committable");
+        if (!externalPresentationLedger.canSubmit())
+            throw new IllegalStateException(
+                    "external physical-presentation ledger is full");
+        long presentationEpochBeforeAdvance = schedulerPresentationEpoch();
+        if (presentationEpochBeforeAdvance <= 0L)
+            throw new IllegalStateException(
+                    "external presentation has no valid scheduler epoch");
+        if (request.sessionEpoch() != generatorId ||
+                request.presentationEpoch() != presentationEpochBeforeAdvance ||
+                request.outputWidth() != transport.endpointWidth() ||
+                request.outputHeight() != transport.endpointHeight() ||
+                request.outputFormat() !=
+                        FrameGenerationPresentationRequest.FORMAT_RGBA8_UNORM)
+            throw new IllegalStateException(
+                    "external presentation contract identity changed");
+        if (transport.requiresCompositorFrameTimeline() !=
+                request.hasCompositorFrameTimeline())
+            throw new IllegalStateException(
+                    "external presentation timing contract changed");
+        // The immutable proposal may expire during otherwise valid preflight.
+        // No backend ownership has begun, so consume only this missed output
+        // slot, exactly like a zero-wait transport NOT_READY. Keep malformed
+        // identity/controller failures above fatal and never move the deadline.
+        boolean slotAvailable = externalPhysicalSlotAvailable(
+                request, frameRate.panelPeriodNs());
+        if (!slotAvailable) {
+            ++externalPhysicalSlotRejectedCount;
+            Log.w(TAG, "External physical slot already reserved; slot dropped" +
+                    " generator=" + generatorId +
+                    " desiredNs=" + request.desiredPhysicalPresentTimeNs() +
+                    " lastSubmittedNs=" + externalLastPlannedPhysicalNs +
+                    " compositorExpectedNs=" +
+                            request.compositorExpectedPresentationTimeNs() +
+                    " lastCompositorExpectedNs=" +
+                            externalLastSubmittedCompositorExpectedNs);
+        }
+        ExternalFrameGenerationTransport.EnqueueResult result =
+                !slotAvailable || System.nanoTime() >= request.hardCompletionDeadlineNs()
+                        ? ExternalFrameGenerationTransport.EnqueueResult.NOT_READY
+                        : transport.enqueue(request);
+        if (result == ExternalFrameGenerationTransport.EnqueueResult.DEFERRED) {
+            ++externalPrequeueDeferredCount;
+            if (externalPrequeueDeferredCount == 1L)
+                Log.i(TAG, "External presentation deferred before release gate" +
+                        " generator=" + generatorId +
+                        " generated=" + (request.isGenerated() ? 1 : 0) +
+                        " left=" + request.leftSequence() +
+                        " right=" + request.rightSequence() +
+                        " desiredNs=" +
+                                request.desiredPhysicalPresentTimeNs() +
+                        " hardDeadlineNs=" +
+                                request.hardCompletionDeadlineNs());
+            frameRate.deferBufferedPresentationSlot();
+            return;
+        }
+        if (result == ExternalFrameGenerationTransport.EnqueueResult.NOT_READY) {
+            // The transport contract defines zero-wait NOT_READY as one
+            // ordinary output-slot underrun. It is not a backend/session
+            // failure and must never be retried or caught up. The controller
+            // has already consumed this divisor-lattice slot; clear only its
+            // uncommitted decision and retain the exact adjacent endpoint pair
+            // for a normally paced later slot. Destroying the pair here made
+            // one transient native-busy result trigger an endless re-prime
+            // loop (physical r49: stable 40 FPS collapsed to ~8 FPS).
+            // No presentation, generated-frame, credit, or endpoint-advance
+            // counter is committed here.
+            ++bufferedSyntheticNotReadyCount;
+            Log.w(TAG, "External presentation not ready; slot dropped" +
+                    " generator=" + generatorId +
+                    " generated=" + (request.isGenerated() ? 1 : 0) +
+                    " left=" + request.leftSequence() +
+                    " right=" + request.rightSequence() +
+                    " desiredNs=" + request.desiredPhysicalPresentTimeNs() +
+                    " hardDeadlineNs=" + request.hardCompletionDeadlineNs() +
+                    " nowNs=" + System.nanoTime() +
+                    " pendingPhysical=" +
+                            transport.pendingPhysicalPresentationCount());
+            frameRate.dropBufferedPresentationSlot();
+            return;
+        }
+        if (result != ExternalFrameGenerationTransport.EnqueueResult.SUBMITTED)
+            throw new IllegalStateException(
+                    "external presentation transport returned an unknown result");
+        // enqueue is synchronous and this renderer is serialized. The earlier
+        // preflight forbids reused pairs before submission; spend only after
+        // SUBMITTED so a proven no-op deferral cannot freeze the next callback.
+        if (request.isGenerated() && !midpointPairBudget.admit(request))
+            throw new IllegalStateException("submitted midpoint admission changed");
+
+        if (request.hasCompositorFrameTimeline())
+            ++compositorFrameTimelineCommitted;
+
+        recordExternalPhysicalSlot(request);
+        if (externalRatePathActive &&
+                !transport.requiresCompositorFrameTimeline() &&
+                externalDirectOutputPhaseAnchorNs == 0L)
+            externalDirectOutputPhaseAnchorNs =
+                    request.desiredPhysicalPresentTimeNs();
+        frameRate.commitBufferedPresentation(true);
+        externalPresentationLedger.submit(request, scansPerOutput);
+
+        if (request.isGenerated()) {
+            ++bufferedSyntheticSelectedCount;
+            activePairSyntheticCommitted = true;
+            bufferedLastSelectedSyntheticPair = activeLeftSequence;
+            phaseDiagSum += request.phase();
+            phaseDiagMin = Math.min(phaseDiagMin, (float) request.phase());
+            phaseDiagMax = Math.max(phaseDiagMax, (float) request.phase());
+            ++phaseDiagCount;
+            phaseDiagSpanSumNs +=
+                    request.rightTimestampNs() - request.leftTimestampNs();
+        }
+
+        commitBufferedEndpointAdvance(presentation, endpointAdvance);
+        if (activeLeftSequence > 0L)
+            transport.releaseBefore(activeLeftSequence);
+        prepareExternalRealPairIfPossible();
+        long presentationEpochAfterAdvance = schedulerPresentationEpoch();
+        refreshProofEvidencePresentationEpoch();
+        if (presentationEpochAfterAdvance != presentationEpochBeforeAdvance)
+            resetHealthWindowAfterStreamChange();
     }
 
     static boolean denseCadenceTargetEligible(long elapsedMs, long promoted,
@@ -4541,6 +8958,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         lastHealthPresents = presents;
         lastHealthGenerated = generatedPresents;
         lastHealthPromoted = promotedFrameCount;
+        denseCadenceFailureWindows = 0;
+        generationTargetFailureWindows = 0;
         updateSchedulerHealthBaseline();
     }
 
@@ -4556,6 +8975,12 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                                 long windowSyntheticPairCreated,
                                 long windowSyntheticNotReady,
                                 long windowDuplicatePairSelection) {
+        // The first dense window is cut before any present has bound the
+        // evidence epoch (run n64-tier4: seq 1 carried epoch 7 / evidence 0
+        // and the harness parser rejected the entire log).  Bind it here so
+        // every emitted record labels the epoch it actually describes.
+        if (schedulerPresentationEpoch() > 0L)
+            refreshProofEvidencePresentationEpoch();
         long sequence = ++healthSequence;
         String key = healthKey(sequence, healthWindowStartNanos, now);
         String base = "Presentation health base" + key +
@@ -4577,6 +9002,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 " proofEvidenceEnqueuedInEpoch=" +
                         proofEvidenceEnqueuedInEpoch +
                 " endpointFifoCoalesced=" + endpointFifoCoalesced +
+                " externalEndpointAdmissionRejected=" + externalEndpointAdmissionRejected +
                 " endpointTimestampCorrections=" + endpointTimestampCorrections +
                 " denseDiagnosticLastTargetSourceNs=" +
                         denseDiagnosticLastTargetSourceNs +
@@ -4654,7 +9080,25 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 " v21CorrectVectorPredictedSyntheticPixels=" + motionSynthesizedSyntheticPixels +
                 denseDiagnosticDirectionTelemetry("Backward", 0) +
                 denseDiagnosticDirectionTelemetry("Forward", 1);
-        logBoundedHealth(base);
+        // Diagnostic only, own tag-line so the strict HEALTH grammar is
+        // untouched: melonDS's primary never left 1x on nds1/nds2
+        // (2026-08-17) and the health record cannot distinguish which
+        // acquisition precondition is starving.
+        if (!frameRate.tierAcquiredForDiagnostics())
+            Log.i(TAG, "Tier acquisition diag generator=" + generatorId +
+                    " producerSamples=" + frameRate.producerSamplesForDiagnostics() +
+                    " decisionPeriods=" + frameRate.decisionPeriodsForDiagnostics() +
+                    " producerHz=" + String.format(java.util.Locale.US, "%.2f",
+                            frameRate.measuredProducerHz()) +
+                    " submissionHz=" + String.format(java.util.Locale.US, "%.2f",
+                            frameRate.measuredSubmissionHz()) +
+                    " generationAvailable=" + frameRate.generationAvailable() +
+                    " swSubmits=" + diagSoftwareSubmits +
+                    " hwSubmits=" + diagHardwareSubmits +
+                    " uniqueVerdicts=" + diagUniqueVerdicts +
+                    " duplicateVerdicts=" + diagDuplicateVerdicts +
+                    " lastSignatureByteSum=" + diagLastSignatureByteSum +
+                    " lastSignatureChangedPixels=" + diagLastChangedPixels);
         String extension = "Presentation health dense-extension" + key +
                 " proofEvidencePresentationEpoch=" +
                         proofEvidencePresentationEpoch +
@@ -4666,7 +9110,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 " denseGpuCompleteTotalUs=" + denseGpuCompleteTotalUs +
                 " denseGpuCompleteMaxUs=" + denseGpuCompleteMaxUs +
                 " denseGpuCompleteLastUs=" + denseGpuCompleteLastUs +
-                " denseGpuBudgetUs=" + DENSE_GPU_BUDGET_US +
+                " denseGpuBudgetUs=" + denseGpuBudgetUs() +
                 " denseTimedPairs=" + denseTimedPairs +
                 " denseWarpSequence=" + denseWarpSequence +
                 " denseWarpMaxCompletedSequence=" + denseWarpMaxCompletedSequence +
@@ -4749,14 +9193,132 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 wallTelemetry("Swap", denseSwapWallObservedUs, denseSwapWallSamples, denseSwapWallTotalUs, denseSwapWallMaxUs) +
                 wallTelemetry("ProofEnqueue", denseProofEnqueueWallObservedUs, denseProofEnqueueWallSamples, denseProofEnqueueWallTotalUs, denseProofEnqueueWallMaxUs) +
                 wallTelemetry("ProofPoll", denseProofPollWallObservedUs, denseProofPollWallSamples, denseProofPollWallTotalUs, denseProofPollWallMaxUs);
+        // The split base/extension records already sit close to logcat's hard
+        // payload limit. Keep exact rational clocks in a third, strictly
+        // joined schema44 record rather than risking silent tail truncation.
+        String rationalClock = "Presentation health rational-clock" + key +
+                " proofEvidencePresentationEpoch=" +
+                        proofEvidencePresentationEpoch +
+                " rClock=" + Math.max(0L, Math.round(
+                        frameRate.presentationSourceHz() * 1000.0)) + "/" +
+                        Math.max(0L, Math.round(
+                                frameRate.targetOutputHz() * 1000.0)) + "/" +
+                        Math.max(0L, Math.round(
+                                frameRate.panelHz() * 1000.0)) + "/" +
+                        frameRate.panelScansPerOutput() + "/" +
+                        (frameRate.uniformOutputQualified() ? 1 : 0) + "/" +
+                        Math.max(0L, Math.round(
+                                windowPresents * 1_000_000.0 /
+                                        Math.max(1L, windowElapsedMs))) + "/" +
+                        (frameRate.usesAuthoritativeSourceRate() ?
+                                "auth" : "pts");
+        // Validate the complete joined transaction before emitting its first
+        // line. A too-large extension must not leave an otherwise valid-looking
+        // orphan base record for the verifier or runtime collector.
+        validateBoundedHealth(base);
+        validateBoundedHealth(extension);
+        validateBoundedHealth(rationalClock);
+        logBoundedHealth(base);
         logBoundedHealth(extension);
+        logBoundedHealth(rationalClock);
+        // Lifetime render/submission admissions survive scheduler resets.
+        // No-op deferrals spend nothing. This is not a physical-present count.
+        logBoundedHealth("Midpoint admission health" + key +
+                " maxMultiplier=2 admittedAttempts=" + midpointPairBudget.admitted() +
+                " rejectedAttempts=" + midpointPairBudget.rejected() +
+                " omittedMidpoints=" + frameRate.bufferedMidpointOmittedCount() +
+                " lastRejection=" + midpointPairBudget.lastRejection());
+        logDenseGpuAdaptation(key);
+        logDenseTrajectoryDiagnosis(key);
     }
 
-    private static void logBoundedHealth(String record) {
+    private void logDenseGpuAdaptation(String key) {
+        String record = "Dense GPU adaptation health" + key +
+                " workLevel=" + denseGpuAdaptation.workLevel() +
+                " disabled=" + (denseGpuAdaptation.generationDisabled() ? 1 : 0) +
+                " completeEstimatorAndOwnWarpPairs=" + denseGpuCompletePairs +
+                " pendingPairs=" + denseGpuPairLedger.pendingPairCount() +
+                " retiredWithoutWarp=" + denseGpuPairLedger.unpairedEstimateCount() +
+                " completeGpuTotalUs=" + denseGpuCompleteTotalUs +
+                " completeGpuMaxUs=" + denseGpuCompleteMaxUs +
+                " shaderBudgetUs=" + denseGpuBudgetUs() +
+                " physicalMarginVerifiedPairs=" + denseGpuPhysicalVerifiedPairs +
+                " physicalMarginUnknownPairs=" + denseGpuPhysicalUnknownPairs +
+                " physicalMarginMarginalPairs=" + denseGpuPhysicalMarginalPairs +
+                " physicalDeadlineMisses=" + denseGpuPhysicalDeadlineMisses +
+                " physicalUnboundEvents=" + denseGpuPhysicalUnboundEvents +
+                " physicalPending=" + denseGpuHeadroom.pendingCount() +
+                " readyTimestampSupportedMask=" + denseGpuReadyTimestampSupportedMask +
+                " lastAppReadyMarginNs=" + denseGpuPhysicalLastAppMarginNs +
+                " lastCompositorReadyMarginNs=" + denseGpuPhysicalLastCompositorMarginNs +
+                " physicalHeadroomUnknownPairs=" + denseGpuAdaptation.physicalHeadroomUnknownPairs() +
+                " consecutiveHealthyPairs=" + denseGpuAdaptation.consecutiveHealthyPairs() +
+                " failures=" + denseGpuAdaptation.failureCount() +
+                " minimumWorkFailures=" + denseGpuAdaptation.failuresAtMinimum() +
+                " overloadFailures=" + denseGpuAdaptation.failureCount(
+                        GpuWorkAdaptationPolicy.Failure.GPU_OVER_BUDGET) +
+                " missingTimers=" + denseGpuAdaptation.failureCount(
+                        GpuWorkAdaptationPolicy.Failure.TIMER_MISSING) +
+                " invalidTimers=" + denseGpuAdaptation.failureCount(
+                        GpuWorkAdaptationPolicy.Failure.TIMER_INVALID) +
+                " disjointTimers=" + denseGpuAdaptation.failureCount(
+                        GpuWorkAdaptationPolicy.Failure.TIMER_DISJOINT) +
+                " reductions=" + denseGpuAdaptation.reductionCount() +
+                " restorations=" + denseGpuAdaptation.restorationCount() +
+                " disableTransitions=" + denseGpuAdaptation.disableTransitionCount() +
+                " evidenceEpochs=" + denseGpuAdaptation.evidenceEpochCount();
+        logBoundedHealth(record);
+    }
+
+    private void logDenseTrajectoryDiagnosis(String key) {
+        if (!densePyramidEnabled || denseTrajectorySamples == 0L) return;
+        String record = "Dense flow trajectory diagnostic" + key +
+                " proofEvidencePresentationEpoch=" +
+                        proofEvidencePresentationEpoch +
+                " samples=" + denseTrajectorySamples +
+                " cells=" + denseTrajectoryCells +
+                " changedCells=" + denseTrajectoryChangedCells +
+                " changedAnyValidCells=" +
+                        denseTrajectoryChangedAnyValidCells +
+                " changedAnyMovingValidCells=" +
+                        denseTrajectoryChangedAnyMovingValidCells +
+                " changedBothMovingValidCells=" +
+                        denseTrajectoryChangedBothMovingValidCells +
+                " changedTiles=" + denseTrajectoryChangedTiles +
+                " changedMovingOwnedTiles=" +
+                        denseTrajectoryChangedMovingOwnedTiles +
+                " errors=" + denseTrajectoryErrors +
+                denseTrajectoryDirectionTelemetry("Backward", 0) +
+                denseTrajectoryDirectionTelemetry("Forward", 1);
+        validateBoundedHealth(record);
+        Log.i(TAG, record);
+    }
+
+    private String denseTrajectoryDirectionTelemetry(String name,
+                                                       int direction) {
+        return " " + name + "ValidCells=" +
+                denseTrajectoryValidCells[direction] +
+                " " + name + "MovingValidCells=" +
+                denseTrajectoryMovingValidCells[direction] +
+                " " + name + "StrongMovingValidCells=" +
+                denseTrajectoryStrongMovingValidCells[direction] +
+                " " + name + "ChangedValidCells=" +
+                denseTrajectoryChangedValidCells[direction] +
+                " " + name + "ChangedMovingValidCells=" +
+                denseTrajectoryChangedMovingValidCells[direction] +
+                " " + name + "UnchangedMovingValidCells=" +
+                denseTrajectoryUnchangedMovingValidCells[direction];
+    }
+
+    private static void validateBoundedHealth(String record) {
         int bytes = record.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
         if (bytes > HEALTH_LOG_MAX_UTF8_BYTES)
             throw new IllegalStateException("split health record exceeds " +
                     HEALTH_LOG_MAX_UTF8_BYTES + " UTF-8 bytes: " + bytes);
+    }
+
+    private static void logBoundedHealth(String record) {
+        validateBoundedHealth(record);
         Log.i(TAG, record);
     }
 
@@ -4799,8 +9361,20 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             requested = qualificationProofSwitch.enabled();
         } catch (RuntimeException ignored) {}
         try {
-            denseRequested = requested && densePyramidSwitch.enabled();
+            // Dense generation is the product path; proof mode only decides
+            // whether evidence is captured from it (see captureProof). Owner
+            // launches previously fell to the legacy v22 estimator because
+            // this arm required the shell proof global (2026-09-01 audit).
+            denseRequested = densePyramidSwitch.enabled();
         } catch (RuntimeException ignored) {}
+        // Defense in depth for alternate secondary-surface owners: only the
+        // default/top display is allowed to activate dense interpolation.
+        // The lower panel remains direct and cannot consume the top panel's
+        // motion-estimation budget.
+        if (displayId > 0) {
+            denseRequested = false;
+            frameRate.setGenerationAvailable(false);
+        }
         if (denseRequested) {
             try {
                 v27Requested = denseV27ReducedAnalysisSwitch.enabled();
@@ -4819,6 +9393,18 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     " startupV28=" + denseV28ReducedAnalysisRequested +
                     " requestedV28=" + v28Requested);
         }
+        // The dense generator now runs before proof is armed, so a proof
+        // transition finds GPU timer queries in flight.  The counter reset
+        // below then makes their sequences exceed the zeroed promotion count
+        // and the next poll rejects the pyramid for good ("invalid-timer-
+        // result", run n64-tier3 2026-09-01).  Rebuild the dense epoch at the
+        // transition instead, exactly as the old arm-time start-up did.
+        if (denseRequested && !densePyramidUnavailable &&
+                requested != qualificationProofEnabled &&
+                (wasDense || denseGpuTimer != null)) {
+            teardownDenseEpoch(requested ? "proof-armed" : "proof-disarmed");
+            frameRate.resetPresentation();
+        }
         boolean nextDense = false;
         if (denseRequested && !densePyramidUnavailable) {
             try {
@@ -4832,7 +9418,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                         failure);
             }
         }
-        if (nextDense) frameRate.setGenerationAvailable(true);
+        if (nextDense) frameRate.setGenerationAvailable(externalTransport != null ||
+                builtinClockAdmissionReady(true, densePyramidUnavailable, displayId,
+                        physicalPanelHz()));
         else if (denseRequested) frameRate.setGenerationAvailable(false);
         if (!nextDense && (wasDense || denseGpuTimer != null))
             teardownDenseEpoch("settings-disabled");
@@ -4841,6 +9429,9 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         qualificationProofEnabled = requested;
         densePyramidEnabled = nextDense;
         if (nextDense) {
+            // Product generation may start with qualification capture OFF.
+            // Establish ownership outside the proof-only counter reset below.
+            if (denseGpuHeadroom.evidenceEpoch() == 0L) resetDenseGpuEvidenceEpoch();
             healthWindowStartNanos = System.nanoTime();
             lastHealthPresents = presents;
             lastHealthGenerated = generatedPresents;
@@ -4851,6 +9442,60 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             activeMotionVectors = 0;
             confidentMotionVectors = 0;
             proofSamples = 0;
+            // The candidate-lattice and regional-flow telemetry are proof
+            // counters too: the verifier requires latticeRegionSamples ==
+            // proofSamples * cells in EVERY health record.  They were not
+            // reset with proofSamples, so a proof re-arm after a pacing lift
+            // (switch-b59, 2026-09-02: proof 1, lattice 14784) failed the
+            // whole segment on "telemetry does not cover every proof region".
+            latticeRegionSamples = 0;
+            latticeBackwardCoherentRegions = 0;
+            latticeForwardCoherentRegions = 0;
+            latticeBackwardBoundaryRegions = 0;
+            latticeForwardBoundaryRegions = 0;
+            latticeBackwardCoherentBoundaryRegions = 0;
+            latticeForwardCoherentBoundaryRegions = 0;
+            latticeBackwardCoherentRegionCount = 0;
+            latticeForwardCoherentRegionCount = 0;
+            latticeBackwardBoundaryRegionCount = 0;
+            latticeForwardBoundaryRegionCount = 0;
+            latticeBackwardCoherentBoundaryRegionCount = 0;
+            latticeForwardCoherentBoundaryRegionCount = 0;
+            latticeBackwardPeakSupport = 0;
+            latticeForwardPeakSupport = 0;
+            regionalFlowRegionSamples = 0;
+            regionalBackwardSupportedRegions = 0;
+            regionalForwardSupportedRegions = 0;
+            regionalBackwardNeighborRegions = 0;
+            regionalForwardNeighborRegions = 0;
+            regionalBackwardConstantNeighborRegions = 0;
+            regionalForwardConstantNeighborRegions = 0;
+            regionalBackwardGradientNeighborRegions = 0;
+            regionalForwardGradientNeighborRegions = 0;
+            regionalBackwardAcceptedRegions = 0;
+            regionalForwardAcceptedRegions = 0;
+            regionalBackwardAcceptedBoundaryRegions = 0;
+            regionalForwardAcceptedBoundaryRegions = 0;
+            regionalBackwardCycleAcceptedRegions = 0;
+            regionalForwardCycleAcceptedRegions = 0;
+            regionalBackwardAcceptedRegionCount = 0;
+            regionalForwardAcceptedRegionCount = 0;
+            regionalBackwardAcceptedBoundaryRegionCount = 0;
+            regionalForwardAcceptedBoundaryRegionCount = 0;
+            regionalBackwardSupportedRegionCount = 0;
+            regionalForwardSupportedRegionCount = 0;
+            regionalBackwardNeighborRegionCount = 0;
+            regionalForwardNeighborRegionCount = 0;
+            regionalBackwardConstantNeighborRegionCount = 0;
+            regionalForwardConstantNeighborRegionCount = 0;
+            regionalBackwardGradientNeighborRegionCount = 0;
+            regionalForwardGradientNeighborRegionCount = 0;
+            regionalBackwardCycleAcceptedRegionCount = 0;
+            regionalForwardCycleAcceptedRegionCount = 0;
+            regionalBackwardPeakSupport = 0;
+            regionalForwardPeakSupport = 0;
+            regionalBackwardPeakConfidence = 0;
+            regionalForwardPeakConfidence = 0;
             syntheticProofSamples = 0;
             syntheticDistinctFromEndpoints = 0;
             changingProofOutputs = 0;
@@ -4869,6 +9514,8 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             denseGpuCompleteTotalUs = 0;
             denseGpuCompleteMaxUs = 0;
             denseGpuCompleteLastUs = 0;
+            denseGpuCompletePairs = 0;
+            resetDenseGpuEvidenceEpoch();
             for (int stage = 0; stage < denseStageTotalUs.length; ++stage) {
                 denseStageTotalUs[stage] = 0;
                 denseStageMaxUs[stage] = 0;
@@ -4891,6 +9538,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             densePerformanceRejected = false;
             pendingDenseCadenceReject = false;
             denseCadenceFailureWindows = 0;
+            generationTargetFailureWindows = 0;
             pendingDenseHealthPresents = 0L;
             pendingDenseHealthGenerated = 0L;
             pendingDenseHealthPromoted = 0L;
@@ -4903,11 +9551,21 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             denseProofWallSamples = 0;
             denseProofWallTotalUs = 0;
             denseProofWallMaxUs = 0;
-            denseSignatureSequence = 0;
             denseSignatureReady = 0;
             denseSignatureUnavailable = 0;
             denseSignatureMaxQueueAge = 0;
-            denseSignatureBaselineReady = false;
+            // The external source classifier exists independently of the
+            // qualification-proof switch. Its native query IDs and retained
+            // texture candidates are one live ownership epoch; rebasing only
+            // the Java sequence here leaves pending native rows with a larger
+            // sequence and deterministically reports age=-1. Preserve that
+            // classifier across proof-counter resets. The built-in dense arm
+            // still starts a fresh classifier with its fresh timer epoch.
+            if (externalSignatureTimer == null) {
+                denseSignatureSequence = 0L;
+                denseSignatureBaselineReady = false;
+                clearSignatureCandidates();
+            }
             java.util.Arrays.fill(densePromotionWallObservedUs, 0L);
             java.util.Arrays.fill(denseSignatureWallObservedUs, 0L);
             java.util.Arrays.fill(denseProofWallObservedUs, 0L);
@@ -4955,6 +9613,21 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             denseDiagnosticPackedCells = 0L;
             denseDiagnosticPartitionErrors = 0L;
             denseDiagnosticReservedBitErrors = 0L;
+            denseTrajectorySamples = 0L;
+            denseTrajectoryCells = 0L;
+            denseTrajectoryChangedCells = 0L;
+            denseTrajectoryChangedAnyValidCells = 0L;
+            denseTrajectoryChangedAnyMovingValidCells = 0L;
+            denseTrajectoryChangedBothMovingValidCells = 0L;
+            denseTrajectoryChangedTiles = 0L;
+            denseTrajectoryChangedMovingOwnedTiles = 0L;
+            denseTrajectoryErrors = 0L;
+            java.util.Arrays.fill(denseTrajectoryValidCells, 0L);
+            java.util.Arrays.fill(denseTrajectoryMovingValidCells, 0L);
+            java.util.Arrays.fill(denseTrajectoryStrongMovingValidCells, 0L);
+            java.util.Arrays.fill(denseTrajectoryChangedValidCells, 0L);
+            java.util.Arrays.fill(denseTrajectoryChangedMovingValidCells, 0L);
+            java.util.Arrays.fill(denseTrajectoryUnchangedMovingValidCells, 0L);
             proofAtlasEnqueued = 0;
             proofAtlasCompleted = 0;
             proofEvidencePresentationEpoch = schedulerPresentationEpoch();
@@ -5016,7 +9689,7 @@ public final class DisplayFrameGenerator implements AutoCloseable,
 
     private String denseVariant() {
         return denseV28ReducedAnalysisRequested ?
-                "fragment-128x72-v39-present-timed-vector-trajectory" :
+                "fragment-v62-parallel-global-seed" :
                 denseV27ReducedAnalysisRequested ? "fragment-192x108-v27" :
                 "fragment-256x144-v26";
     }
@@ -5026,14 +9699,24 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         for (int level = 0; level < DENSE_LEVELS; ++level)
             oneDirection += (long) denseLevelWidths[level] * denseLevelHeights[level] *
                     DENSE_LEVEL_ITERATIONS[level];
-        return oneDirection * 2L;
+        long refinement = denseV28ReducedAnalysisRequested ?
+                2L * denseLevelWidths[0] * denseLevelHeights[0] : 0L;
+        return oneDirection * 2L + refinement;
+    }
+
+    private int densePassesPerPromotion() {
+        return DENSE_BASE_PASSES_PER_PROMOTION +
+                (denseV28ReducedAnalysisRequested ?
+                        DENSE_RECIPROCAL_REFINEMENT_PASSES +
+                                DENSE_GLOBAL_SEED_PASSES : 0);
     }
 
     private long denseTotalTexelsPerPromotion() {
         long pyramid = 2L * ((long) denseLevelWidths[1] * denseLevelHeights[1] +
                 (long) denseLevelWidths[2] * denseLevelHeights[2]);
         long validation = 2L * denseLevelWidths[0] * denseLevelHeights[0];
-        return denseSolveTexelsPerPromotion() + pyramid + validation;
+        long globalSeed = denseV28ReducedAnalysisRequested ? 216L : 0L;
+        return denseSolveTexelsPerPromotion() + pyramid + validation + globalSeed;
     }
 
     private int activeBackwardFlow() {
@@ -5046,7 +9729,32 @@ public final class DisplayFrameGenerator implements AutoCloseable,
 
     private float activeFlowLimitPixels() {
         float limit = flowLimitPixels(historyWidth, historyHeight);
-        return densePyramidEnabled ? Math.min(DENSE_MAX_FLOW_PIXELS, limit) : limit;
+        return densePyramidEnabled ? Math.min(denseMaxFlowPixels(), limit) : limit;
+    }
+
+    // Recording-side evidence (2026-09-03): while the marker file exists,
+    // every presented SYNTHETIC frame carries a magenta square in the window's
+    // top-left corner and real frames carry nothing, so a panel capture can
+    // label real/generated frames without trusting any log.  Off by default.
+    private static final java.io.File PROOF_MARK_MARKER =
+            new java.io.File("/data/local/tmp/lucent-proofmark");
+    private static final int PROOF_MARK_PX = 32;
+    private boolean proofMarkEnabled;
+    private int proofMarkPollCountdown;
+
+    private void drawProofMark() {
+        if (--proofMarkPollCountdown <= 0) {
+            proofMarkPollCountdown = 120;
+            proofMarkEnabled = PROOF_MARK_MARKER.exists();
+        }
+        if (!proofMarkEnabled) return;
+        GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
+        GLES20.glScissor(0, Math.max(0, outputHeight - PROOF_MARK_PX),
+                PROOF_MARK_PX, PROOF_MARK_PX);
+        GLES20.glClearColor(1f, 0f, 1f, 1f);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
+        GLES20.glClearColor(0f, 0f, 0f, 1f);
     }
 
     private void drawMotionFrame(float phase) {
@@ -5066,6 +9774,33 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 interpolateProgram, "uPhase"), phase);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(
                 interpolateProgram, "uDenseEncoding"), densePyramidEnabled ? 1f : 0f);
+        // The dense global seeds are 1x1 Q8.8 textures; sampling them keeps
+        // the presentation free of readbacks (a per-pair glReadPixels is a
+        // GPU sync point, and the dense timer ring fails closed on stalls).
+        boolean seedsReady = densePyramidEnabled && denseV28ReducedAnalysisRequested &&
+                denseGlobalSeedTextures[0] != 0;
+        bindTexture(interpolateProgram, "uDenseSeedBackwardTex",
+                seedsReady ? denseGlobalSeedTextures[0] : historyTextures[currentIndex], 6);
+        bindTexture(interpolateProgram, "uDenseSeedForwardTex",
+                seedsReady ? denseGlobalSeedTextures[1] : historyTextures[currentIndex], 7);
+        uniform2(interpolateProgram, "uDenseSeedSourceSize",
+                Math.max(1f, historyWidth), Math.max(1f, historyHeight));
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
+                "uDenseSeedEnabled"), seedsReady ? 1f : 0f);
+        // The cut texture needs a ninth sampler unit; GLES2 only guarantees
+        // eight, so the hold is disabled (never mis-bound) on smaller GPUs.
+        if (maxFragmentTextureUnits == 0) {
+            int[] units = new int[1];
+            GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_IMAGE_UNITS, units, 0);
+            maxFragmentTextureUnits = Math.max(1, units[0]);
+        }
+        boolean cutReady = seedsReady && maxFragmentTextureUnits >= 9 &&
+                denseGlobalCutTextures[0] != 0;
+        bindTexture(interpolateProgram, "uDenseCutTex",
+                cutReady ? denseGlobalCutTextures[0] : historyTextures[currentIndex],
+                cutReady ? 8 : 7);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
+                "uDenseCutEnabled"), cutReady ? 1f : 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
@@ -5572,6 +10307,135 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         }
     }
 
+    private FullResolutionFrameReadback fullImageCapture;
+    private int fullImageTexture, fullImageFramebuffer;
+    private long fullImageEpoch, fullImageFrameId;
+    private String fullImageMetadata;
+    private boolean fullImageQueued, fullImageAttempted;
+
+    /** Explicit image-only diagnostic. Its timings are instrumented, never a pacing pass. */
+    private void beginFullImageCapture(boolean synthetic, long frameId, float phase) {
+        // The explicit one-shot marker is sufficient authority for image
+        // diagnostics. Do not arm the separate proof mode: that mode resets
+        // epochs and can change the rendering workload we intend to inspect.
+        if (fullImageCapture != null || fullImageAttempted || !synthetic ||
+                frameId <= 0 ||
+                !(new java.io.File("/data/local/tmp/emufusion-full-frame-capture").exists() ||
+                  new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                          "Android/data/com.thorium.preview/files/emufusion-full-frame-capture").exists())) return;
+        fullImageAttempted = true;
+        Log.i(TAG, "Full image capture armed generator=" + generatorId + " frameId=" + frameId);
+        try {
+            fullImageEpoch = schedulerPresentationEpoch();
+            fullImageFrameId = frameId;
+            int[] capturedViewport = new int[4];
+            GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, capturedViewport, 0);
+            fullImageCapture = new FullResolutionFrameReadback(
+                    FullResolutionFrameReadback.backendForContext(actualEglContextMajor), outputWidth, outputHeight,
+                    fullImageEpoch, frameId);
+            int[] names = new int[1];
+            GLES20.glGenTextures(1, names, 0);
+            fullImageTexture = names[0];
+            allocateTexture(fullImageTexture, outputWidth, outputHeight);
+            GLES20.glGenFramebuffers(1, names, 0);
+            fullImageFramebuffer = names[0];
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            fullImageCapture.enqueue(presents + 1L); // Exact visible G, not a re-render.
+            fullImageMetadata = "generator=" + generatorId + "\nepoch=" + fullImageEpoch +
+                    "\nphysicalFrameId=" + frameId + "\nleft=" + activeLeftSequence +
+                    "\nright=" + activeRightSequence + "\nleftNs=" + activeLeftTimestampNs +
+                    "\nrightNs=" + activeRightTimestampNs + "\nphase=" + phase +
+                    "\nwidth=" + outputWidth + "\nheight=" + outputHeight +
+                    "\nviewport=" + java.util.Arrays.toString(capturedViewport) +
+                    "\nformat=RGBA8-bottom-up\ninstrumentedTiming=true\n" +
+                    "readback=" + FullResolutionFrameReadback.readbackName(actualEglContextMajor) + "\n" +
+                    "presentationOutcome=unresolved-use-physical-frame-log\n";
+            fullImageQueued = true;
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "Full image capture unavailable", failure);
+            discardFullImageCapture();
+        }
+    }
+
+    private void finishFullImageCapture(boolean committed) {
+        if (fullImageCapture == null) return;
+        boolean captureScissorWasEnabled = GLES20.glIsEnabled(GLES20.GL_SCISSOR_TEST);
+        try {
+            if (fullImageQueued) {
+                if (!committed) { discardFullImageCapture(); return; }
+                GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fullImageFramebuffer);
+                GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER,
+                        GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_TEXTURE_2D, fullImageTexture, 0);
+                if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                        GLES20.GL_FRAMEBUFFER_COMPLETE)
+                    throw new IllegalStateException("full image framebuffer incomplete");
+                for (int endpoint = 0; endpoint < 2; ++endpoint) {
+                    GLES20.glViewport(0, 0, outputWidth, outputHeight);
+                    GLES20.glClearColor(0f, 0f, 0f, 1f);
+                    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+                    setPresentationViewport();
+                    // References must be actual retained source images, not
+                    // endpoint-phase reconstructions by the shader under test.
+                    drawTexture2d(historyTextures[endpoint == 0 ?
+                            previousIndex : currentIndex]);
+                    fullImageCapture.enqueue(presents + 1L);
+                }
+                fullImageQueued = false;
+            }
+            final byte[][] images = fullImageCapture.poll(presents + 1L,
+                    schedulerPresentationEpoch(), fullImageFrameId);
+            if (images == null) {
+                if (fullImageCapture.isClosed()) {
+                    Log.w(TAG, "Full image capture discarded before readback completed" +
+                            " frameId=" + fullImageFrameId + " captureEpoch=" + fullImageEpoch +
+                            " currentEpoch=" + schedulerPresentationEpoch());
+                    discardFullImageCapture();
+                }
+                return;
+            }
+            final String metadata = fullImageMetadata;
+            final String name = "capture-" + generatorId + "-" + fullImageFrameId;
+            discardFullImageCapture();
+            Thread writer = new Thread(() -> {
+                try {
+                    java.io.File directory = new java.io.File(
+                            new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                                    "Android/data/com.thorium.preview/files/full-frame-capture"), name);
+                    if (!directory.mkdirs()) throw new java.io.IOException("capture directory exists/unavailable");
+                    String[] labels = {"generated.rgba", "left.rgba", "right.rgba"};
+                    for (int i = 0; i < images.length; ++i)
+                        try (java.io.FileOutputStream out = new java.io.FileOutputStream(
+                                new java.io.File(directory, labels[i]))) { out.write(images[i]); }
+                    try (java.io.FileOutputStream out = new java.io.FileOutputStream(
+                            new java.io.File(directory, "metadata.txt"))) {
+                        out.write(metadata.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                    Log.i(TAG, "Full image triplet exported " + directory);
+                } catch (java.io.IOException failure) { Log.w(TAG, "Full image export failed", failure); }
+            }, "EmuFusion-image-export");
+            writer.setDaemon(true);
+            writer.start();
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "Full image capture failed", failure);
+            discardFullImageCapture();
+        } finally {
+            if (captureScissorWasEnabled) GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
+            else GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        }
+    }
+
+    private void discardFullImageCapture() {
+        if (fullImageCapture != null) fullImageCapture.close();
+        fullImageCapture = null;
+        fullImageQueued = false;
+        if (fullImageTexture != 0) GLES20.glDeleteTextures(1, new int[] {fullImageTexture}, 0);
+        if (fullImageFramebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {fullImageFramebuffer}, 0);
+        fullImageTexture = fullImageFramebuffer = 0;
+    }
+
     private void renderProofAtlasTile(int x, int y, int kind, float phase) {
         GLES20.glViewport(x, y, PROOF_WIDTH, PROOF_HEIGHT);
         if (kind == 0) drawMotionFrame(0f);
@@ -5872,6 +10736,16 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         }
         analyzeProofPayload(phase, hashProofBytes(proofPrevious),
                 hashProofBytes(proofCurrent), hashProofBytes(proofOutput));
+        try {
+            // Diagnostic-only CPU accounting over bytes already delivered by
+            // the asynchronous atlas. A diagnosis failure must never reject
+            // an otherwise valid generated frame or alter qualification.
+            accumulateDenseTrajectoryDiagnosis(denseBackward, denseForward);
+        } catch (RuntimeException diagnosticFailure) {
+            ++denseTrajectoryErrors;
+            Log.w(TAG, "Dense flow trajectory diagnosis unavailable generator=" +
+                    generatorId, diagnosticFailure);
+        }
         ++proofAtlasCompleted;
         ++proofEvidenceAccepted;
         proofEvidenceLastAcceptedAtlasSequence = row[3];
@@ -5882,6 +10756,38 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     "proof evidence acceptance conservation mismatch");
         recordDenseWall(DENSE_WALL_PROOF_POLL,
                 System.nanoTime() - started);
+    }
+
+    private void accumulateDenseTrajectoryDiagnosis(byte[] backward,
+                                                      byte[] forward) {
+        DenseFlowTrajectoryDiagnostics.Sample sample =
+                DenseFlowTrajectoryDiagnostics.analyze(proofPrevious,
+                        proofCurrent, backward, forward, PROOF_WIDTH,
+                        PROOF_HEIGHT);
+        ++denseTrajectorySamples;
+        denseTrajectoryCells += sample.cells;
+        denseTrajectoryChangedCells += sample.changedCells;
+        denseTrajectoryChangedAnyValidCells += sample.changedAnyValidCells;
+        denseTrajectoryChangedAnyMovingValidCells +=
+                sample.changedAnyMovingValidCells;
+        denseTrajectoryChangedBothMovingValidCells +=
+                sample.changedBothMovingValidCells;
+        denseTrajectoryChangedTiles += sample.changedTiles;
+        denseTrajectoryChangedMovingOwnedTiles +=
+                sample.changedMovingOwnedTiles;
+        for (int direction = 0; direction < 2; ++direction) {
+            denseTrajectoryValidCells[direction] += sample.validCells[direction];
+            denseTrajectoryMovingValidCells[direction] +=
+                    sample.movingValidCells[direction];
+            denseTrajectoryStrongMovingValidCells[direction] +=
+                    sample.strongMovingValidCells[direction];
+            denseTrajectoryChangedValidCells[direction] +=
+                    sample.changedValidCells[direction];
+            denseTrajectoryChangedMovingValidCells[direction] +=
+                    sample.changedMovingValidCells[direction];
+            denseTrajectoryUnchangedMovingValidCells[direction] +=
+                    sample.unchangedMovingValidCells[direction];
+        }
     }
 
     /** Decodes schema36's separately nearest-sampled packed mask tile. */
@@ -6056,35 +10962,497 @@ public final class DisplayFrameGenerator implements AutoCloseable,
     }
 
     private void reportStats() {
-        int source = frameRate.lockedSourceFps();
-        int targetOutput = frameRate.outputFps();
+        double source = frameRate.sustainedMeasuredSourceHz();
+        double targetOutput = frameRate.targetOutputHz();
         long now = System.nanoTime();
-        if (source != statsTargetSourceFps ||
-                targetOutput != statsTargetOutputFps) {
-            statsTargetSourceFps = source;
-            statsTargetOutputFps = targetOutput;
-            statsWindowStartNanos = now;
-            statsWindowStartPresents = presents;
-            publishReportedFrameRate(source, 0, targetOutput);
-            return;
-        }
+        reportSourceAdmissionDiagnostic(now);
+        // Diagnostic windows follow elapsed time, not a fluctuating target.
+        // Resetting this clock on every millihertz change hid 44 seconds of
+        // live health rows in the Switch 7c739 test. Physical qualification
+        // still uses its own exact cadence/epoch ledgers below; an app-swap
+        // average across a rate change is not evidence of uniform scanout.
         if (statsWindowStartNanos == 0L) {
             statsWindowStartNanos = now;
             statsWindowStartPresents = presents;
-            publishReportedFrameRate(source, 0, targetOutput);
+            publishReportedFrameRate(source, 0.0, targetOutput, false);
             return;
         }
         long elapsedNs = now - statsWindowStartNanos;
         if (elapsedNs < 1_000_000_000L) return;
         long committed = presents - statsWindowStartPresents;
-        int actualOutput = committed <= 0L ? 0 : (int) Math.min(targetOutput,
-                Math.max(1L, (long) Math.floor(
-                        committed * 1_000_000_000.0 / elapsedNs)));
+        // Keep successful app-side swaps as diagnostic evidence, but publish
+        // only EGL_DISPLAY_PRESENT_TIME_ANDROID as A. A compositor-dropped
+        // swap therefore lowers physical cadence instead of being fabricated
+        // as delivered output.
+        double swapOutput = committed <= 0L ? 0.0 :
+                committed * 1_000_000_000.0 / elapsedNs;
+        int scansPerOutput = frameRate.panelScansPerOutput();
+        long panelPeriodNs = frameRate.panelPeriodNs();
+        PhysicalPresentationTracker physicalTracker = physicalPresentationTracker;
+        boolean externalPhysical = externalTransport != null;
+        boolean externalBackendOwnsPresentation = externalPhysical &&
+                !externalTransport.usesAppOwnedPresentation();
+        boolean externalAppOwnsPresentation = externalPhysical &&
+                externalTransport.usesAppOwnedPresentation();
+        int externalCandidateOutput = externalPhysical ?
+                frameRate.candidateGeneratedOutputFps() : 0;
+        int externalCandidateSource = externalPhysical ?
+                frameRate.candidateGeneratedSourceFps() : 0;
+        int externalCandidateScans = externalPhysical ?
+                frameRate.candidateGeneratedPanelScansPerOutput() : 0;
+        boolean externalCandidateSupported = externalPhysical &&
+                frameRate.panelClockMeasured() &&
+                (externalAppOwnsPresentation ?
+                        physicalTracker != null && physicalTracker.available() :
+                        externalPhysicalClockBootstrap.complete()) &&
+                externalCandidateScans > 0 &&
+                externalTransport.supportsRatePath(
+                        externalCandidateSource, externalCandidateOutput);
+        int physicalScans = externalPhysical ?
+                externalPhysicalScansPerOutput : scansPerOutput;
+        long physicalPeriod = externalPhysical ?
+                externalPhysicalRefreshDurationNs : panelPeriodNs;
+        // An app-owned external result is first recorded by the EGL tracker,
+        // then joined here to the exact pending request and its scheduler
+        // epoch.  The tracker's rolling cadence cannot see that epoch and can
+        // therefore span a same-divisor re-prime boundary.  External paths use
+        // the joined, epoch-partitioned cadence ledger; only the built-in path
+        // reads the tracker's private rolling window directly.
+        double physicalOutput = externalPhysical ?
+                externalPhysicalCadence.actualHz(physicalScans, physicalPeriod) :
+                physicalTracker == null ? 0.0 :
+                        physicalTracker.actualHz(scansPerOutput, panelPeriodNs);
+        boolean externalTimingIdentity = externalBackendOwnsPresentation ?
+                externalPhysicalClockBootstrap.complete() &&
+                        externalPresentationEvidence.identityMatches(
+                                physicalScans, physicalPeriod,
+                                schedulerPresentationEpoch(), 0) :
+                externalAppOwnsPresentation &&
+                        appOwnedExternalPresentationEvidence.identityMatches(
+                                physicalScans, physicalPeriod,
+                                schedulerPresentationEpoch());
+        // On-time submitted frames do not prove complete output: a generated
+        // slot abandoned before submission never enters the physical ledger.
+        // Keep this session unqualified after any scheduler underrun.
+        boolean externalTimingPassed = frameRate.bufferedUnderrunCount() == 0L &&
+                (externalBackendOwnsPresentation ?
+                externalPresentationEvidence.timingQualified() :
+                externalAppOwnsPresentation &&
+                        appOwnedExternalPresentationEvidence.timingQualified());
+        boolean externalContentIdentity = externalPhysical &&
+                externalGeneratedContentEvidence.identityMatches(
+                        schedulerPresentationEpoch());
+        boolean externalNumericContentPassed = externalContentIdentity &&
+                externalGeneratedContentEvidence.numericProofPassed();
+        boolean physicalQualified = frameRate.panelClockMeasured() &&
+                (externalPhysical ?
+                        externalPhysicalCadence.qualified(
+                                physicalScans, physicalPeriod) &&
+                        externalTimingIdentity &&
+                        externalTimingPassed &&
+                        externalNumericContentPassed &&
+                        externalPathManuallyCertified() :
+                        physicalTracker != null &&
+                                physicalTracker.cadenceQualified(
+                                        scansPerOutput, panelPeriodNs));
         statsWindowStartNanos = now;
         statsWindowStartPresents = presents;
+        CadenceSnapshotLog.write(TAG, generatorId, "App swap cadence" +
+                " callbackSamples=" + callbackDeltaSamples +
+                " callbackTotalUs=" + callbackDeltaTotalUs +
+                " callbackMaxUs=" + callbackDeltaMaxUs +
+                " callbackLate=" + callbackLateCount +
+                " externalClockBoundaryWaits=" + externalClockBoundaryWaits +
+                " externalLookaheadReadinessWaits=" + externalLookaheadReadinessWaits +
+                " externalBootstrapCapacityWaits=" + externalBootstrapCapacityWaits +
+                " externalEndpointAdmissionRejected=" + externalEndpointAdmissionRejected +
+                " externalEndpointAdmissionBlocked=" + (externalEndpointAdmissionBlocked ? 1 : 0) +
+                " generator=" + generatorId +
+                " role=" + displayRole +
+                " displayId=" + displayId +
+                " externalBackend=" + (externalRatePathActive ?
+                        externalTransport.backendLabel() : "Direct") +
+                " source=" + String.format(java.util.Locale.US, "%.3f", source) +
+                " target=" + String.format(java.util.Locale.US, "%.3f", targetOutput) +
+                " panel=" + String.format(java.util.Locale.US, "%.6f",
+                        frameRate.panelHz()) +
+                " panelMeasured=" + (frameRate.panelClockMeasured() ? 1 : 0) +
+                " swap=" + String.format(java.util.Locale.US, "%.3f", swapOutput) +
+                " canonical=" + String.format(java.util.Locale.US, "%.3f",
+                        frameRate.provenTimestampSourceHzForDiagnostics()) +
+                " uniqueClock=" + String.format(java.util.Locale.US, "%.3f",
+                        frameRate.qualifiedUniqueTimestampSourceHzForDiagnostics()) +
+                " canonicalCandidate=" + String.format(java.util.Locale.US,
+                        "%.3f", frameRate.canonicalReacquireCandidateHzForDiagnostics()) +
+                " canonicalEvidenceMs=" +
+                        (frameRate.canonicalReacquireEvidenceNsForDiagnostics() /
+                                1_000_000L) +
+                " canonicalProof=" +
+                        frameRate.canonicalProofSummaryForDiagnostics() +
+                " schedulerCommitted=" +
+                        frameRate.bufferedPresentationCount() +
+                " schedulerReal=" + frameRate.bufferedRealCount() +
+                " schedulerSynthetic=" + frameRate.bufferedSyntheticCount() +
+                " schedulerLeadWaits=" + frameRate.bufferedLeadWaitCount() +
+                " schedulerDuplicateWaits=" + frameRate.bufferedDuplicateWaitCount() +
+                " schedulerPrimeWaits=" + frameRate.bufferedPrimeWaitCount() +
+                " schedulerUnavailable=" +
+                        frameRate.bufferedUnavailableSlotCount() +
+                " schedulerLastUnavailableReason=" +
+                        frameRate.bufferedLastUnavailableReason() +
+                " builtinQueueCutoffMisses=" + builtinQueueCutoffMisses +
+                " schedulerUnderrun=" + frameRate.bufferedUnderrunCount() +
+                " schedulerCredits=" + frameRate.bufferedOutputCredits() +
+                " schedulerEpoch=" + schedulerPresentationEpoch() +
+                " schedulerEpochReason=" + frameRate.bufferedLastEpochReason() +
+                " externalSubmissionDurationOverruns=" + appOwnedExternalPresentationEvidence.submissionDurationOverruns() +
+                " schedulerEpochDiagnostic=" + frameRate.bufferedLastMismatchDiagnostic() +
+                " activeLeft=" + activeLeftSequence +
+                " activeRight=" + activeRightSequence +
+                " fifoCount=" + endpointFifoCount +
+                " committed=" + committed +
+                " elapsedNs=" + elapsedNs +
+                " physicalAvailable=" + (externalPhysical ?
+                        (externalBackendOwnsPresentation ?
+                                (physicalPeriod > 0L ? 1 : 0) :
+                                (physicalTracker != null &&
+                                        physicalTracker.available() ? 1 : 0)) :
+                        (physicalTracker != null && physicalTracker.available() ? 1 : 0)) +
+                " physicalBackend=" + (externalBackendOwnsPresentation ?
+                        "vulkan" : externalAppOwnsPresentation ?
+                                "egl-app-owned" : "egl") +
+                " externalAppOwned=" +
+                        (externalAppOwnsPresentation ? 1 : 0) +
+                " physical=" + String.format(java.util.Locale.US, "%.3f",
+                        physicalOutput) +
+                " physicalQualified=" + (physicalQualified ? 1 : 0) +
+                " physicalProof=" + (physicalTracker != null ?
+                        physicalTracker.lastRejection().replace(' ', '_') :
+                        "no-tracker") +
+                " physicalSamples=" + (externalPhysical ?
+                        externalPhysicalCadence.sampleCount() :
+                        (physicalTracker == null ? 0 : physicalTracker.sampleCount())) +
+                " physicalPresented=" + (externalPhysical ?
+                        externalPhysicalCadence.successfulPresents() :
+                        (physicalTracker == null ? 0 :
+                                physicalTracker.physicallyPresentedCount())) +
+                " physicalDropped=" + (externalPhysical ?
+                        externalPhysicalCadence.droppedPresents() :
+                        (physicalTracker == null ? 0 :
+                                physicalTracker.compositorDroppedCount())) +
+                " physicalUnavailable=" + (externalPhysical ?
+                        externalPhysicalCadence.unavailablePresents() :
+                        (physicalTracker == null ? 0 :
+                                physicalTracker.unavailablePresentationCount())) +
+                " physicalPending=" + (externalPhysical ?
+                        (externalBackendOwnsPresentation ?
+                                externalTransport.pendingPhysicalPresentationCount() :
+                                (physicalTracker == null ? 0 :
+                                        physicalTracker.pendingCount())) :
+                        (physicalTracker == null ? 0 : physicalTracker.pendingCount())) +
+                " externalAnchorTail=" + externalPhysicalAnchorTailRows +
+                " externalSubmitted=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalSubmittedCount :
+                                externalPresentationLedger.submittedCount()) +
+                " externalFrameTimelineCallbacks=" +
+                        compositorFrameTimelineCallbacks +
+                " externalFrameTimelineMatched=" +
+                        compositorFrameTimelineSelected +
+                " externalFrameTimelineUnavailable=" +
+                        compositorFrameTimelineUnavailable +
+                " externalPredictionPeriodNs=" + compositorPredictionLattice.periodNs() +
+                " externalPredictionOrdinal=" + compositorPredictionLattice.headOrdinal() +
+                " externalFrameTimelineCommitted=" +
+                        compositorFrameTimelineCommitted +
+                " externalFrameTimelineNativeCallbackSequence=" +
+                        compositorFrameTimelineNativeCallbackSequence +
+                " externalFrameTimelineNativeFrameTimeNs=" +
+                        compositorFrameTimelineNativeFrameTimeNs +
+                " externalFrameTimelineErrorMaxNs=" +
+                        compositorFrameTimelineErrorMaxNs +
+                " externalFrameTimelineProbeLive=" +
+                        compositorFrameTimelineProbeLive +
+                " externalFrameTimelineProbeNoLive=" +
+                        compositorFrameTimelineProbeNoLive +
+                " externalFrameTimelineProbeErrorSignedMinNs=" +
+                        compositorFrameTimelineProbeErrorSignedMinNs +
+                " externalFrameTimelineProbeErrorSignedMaxNs=" +
+                        compositorFrameTimelineProbeErrorSignedMaxNs +
+                " externalFrameTimelineProbeErrorSignedLastNs=" +
+                        compositorFrameTimelineProbeErrorSignedLastNs +
+                " externalLockedSourceFps=" +
+                        (externalPhysical ? frameRate.lockedSourceFps() : 0) +
+                " externalPresentationSourceHz=" + String.format(
+                        java.util.Locale.US, "%.9f",
+                        externalPhysical ? frameRate.presentationSourceHz() : 0.0) +
+                " externalCandidateOutput=" + externalCandidateOutput +
+                " externalCandidateSource=" + externalCandidateSource +
+                " externalCandidateScans=" + externalCandidateScans +
+                " externalCandidateSupported=" +
+                        (externalCandidateSupported ? 1 : 0) +
+                " externalRatePathActive=" +
+                        (externalRatePathActive ? 1 : 0) +
+                " externalRatePathPriming=" +
+                        (externalRatePathPriming ? 1 : 0) +
+                " externalRatePathOutputPriming=" +
+                        (externalRatePathOutputPriming ? 1 : 0) +
+                " externalGenerationAvailable=" +
+                        (frameRate.generationAvailable() ? 1 : 0) +
+                " externalPhysicalEndpoint=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPhysicalEndpointCount :
+                                externalPresentationLedger.
+                                        physicalEndpointCount()) +
+                " externalPhysicalGenerated=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPhysicalGeneratedCount :
+                                externalPresentationLedger.
+                                        physicalGeneratedCount()) +
+                " externalPrequeueDeferred=" +
+                        externalPrequeueDeferredCount +
+                " externalTimingQualified=" +
+                        (externalTimingIdentity && externalTimingPassed ? 1 : 0) +
+                " externalTimingEpoch=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        presentationEpoch() :
+                                externalPresentationEvidence.
+                                        presentationEpoch()) +
+                " externalTimingWindow=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalTimingWindow : 0L) +
+                " externalTimingDroppedBaseline=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalTimingDroppedBaseline : 0L) +
+                " externalTimingUnavailableBaseline=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalTimingUnavailableBaseline : 0L) +
+                " externalTimingSamples=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        physicalPresents() :
+                                externalPresentationEvidence.
+                                        physicalPresents()) +
+                " externalTimingStartNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        firstActualPresentNs() :
+                                externalPresentationEvidence.
+                                        firstActualPresentNs()) +
+                " externalTimingEndNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        lastActualPresentNs() :
+                                externalPresentationEvidence.
+                                        lastActualPresentNs()) +
+                " externalTimingEndpoint=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        physicalEndpoints() :
+                                externalPresentationEvidence.
+                                        physicalEndpoints()) +
+                " externalTimingGenerated=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        physicalGenerated() :
+                                externalPresentationEvidence.
+                                        physicalGenerated()) +
+                " externalTimingScans=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        targetScansPerOutput() :
+                                externalPresentationEvidence.
+                                        targetScansPerOutput()) +
+                " externalTimingPipelineScans=" +
+                        (externalAppOwnsPresentation ? 0 :
+                                externalPresentationEvidence.
+                                        targetPresentationPipelineScans()) +
+                " externalTimingRefreshNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        targetPanelPeriodNs() :
+                                externalPresentationEvidence.
+                                        targetRefreshDurationNs()) +
+                " externalDeadlineMisses=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        submissionDeadlineMisses() :
+                                externalPresentationEvidence.deadlineMisses()) +
+                " externalDesiredSlotMisses=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        desiredSlotMisses() :
+                                externalPresentationEvidence.
+                                        desiredSlotMisses()) +
+                " externalEarliestPresentMisses=" +
+                        (externalAppOwnsPresentation ? 0 :
+                                externalPresentationEvidence.
+                                        earliestPresentMisses()) +
+                " externalEarlyPresentViolations=" +
+                        (externalAppOwnsPresentation ? 0 :
+                                externalPresentationEvidence.
+                                        earlyPresentViolations()) +
+                " externalEarlySlotMisses=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        earlyDesiredSlotMisses() :
+                                externalPresentationEvidence.
+                                        earlyDesiredSlotMisses()) +
+                " externalLateSlotMisses=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        lateDesiredSlotMisses() :
+                                externalPresentationEvidence.
+                                        lateDesiredSlotMisses()) +
+                " externalPresentMarginMinNs=" +
+                        externalPresentationEvidence.minPresentMarginNs() +
+                " externalPresentMarginP05Ns=" +
+                        externalPresentationEvidence.presentMarginP05Ns() +
+                " externalPresentMarginP50Ns=" +
+                        externalPresentationEvidence.presentMarginP50Ns() +
+                " externalPresentMarginP95Ns=" +
+                        externalPresentationEvidence.presentMarginP95Ns() +
+                " externalPresentMarginMaxNs=" +
+                        externalPresentationEvidence.maxPresentMarginNs() +
+                " externalPresentMarginLastNs=" +
+                        externalPresentationEvidence.lastPresentMarginNs() +
+                " externalLateSlotMarginMinNs=" +
+                        externalPresentationEvidence.minLateSlotPresentMarginNs() +
+                " externalLateSlotMarginMaxNs=" +
+                        externalPresentationEvidence.maxLateSlotPresentMarginNs() +
+                " externalEnqueueMaxNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        maxBindWallNs() :
+                                externalPresentationEvidence.
+                                        maxEnqueueWallNs()) +
+                " externalGpuMaxNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        maxGpuWorkNs() :
+                                externalPresentationEvidence.maxGpuWorkNs()) +
+                " externalCombinedP95Ns=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        criticalP95Ns() :
+                                externalPresentationEvidence.combinedP95Ns()) +
+                " externalCombinedMaxNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        maxCriticalWallNs() :
+                                externalPresentationEvidence.maxCombinedNs()) +
+                " externalBindMaxNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        maxBindWallNs() : 0L) +
+                " externalSwapMaxNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        maxSwapWallNs() : 0L) +
+                " externalGpuBudgetMisses=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        gpuBudgetMisses() : 0L) +
+                " externalSlotErrorMaxNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        maxDesiredSlotErrorNs() :
+                                externalPresentationEvidence.
+                                        maxDesiredSlotErrorNs()) +
+                " externalSlotErrorSignedMinNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        minSignedDesiredSlotErrorNs() :
+                                externalPresentationEvidence.
+                                        minSignedDesiredSlotErrorNs()) +
+                " externalSlotErrorSignedMaxNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        maxSignedDesiredSlotErrorNs() :
+                                externalPresentationEvidence.
+                                        maxSignedDesiredSlotErrorNs()) +
+                " externalSlotErrorSignedLastNs=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        lastSignedDesiredSlotErrorNs() :
+                                externalPresentationEvidence.
+                                        lastSignedDesiredSlotErrorNs()) +
+                " externalPhysicalClockPeriodNs=" +
+                        externalPhysicalClock.planningPeriodNs() +
+                " externalPhysicalClockTrackedAnchorNs=" +
+                        externalPhysicalClock.trackedPlanningAnchorNs() +
+                " externalPhysicalClockScans=" +
+                        externalPhysicalClock.observedScans() +
+                " externalPhysicalClockFrequencyScans=" +
+                        externalPhysicalClock.frequencyObservedScans() +
+                " externalPhysicalClockFrequencyDiscontinuities=" +
+                        externalPhysicalClock.frequencyDiscontinuities() +
+                " externalPhysicalClockCalibrated=" +
+                        (externalAppOwnsPresentation ?
+                                (externalPhysicalClock.available() ? 1 : 0) :
+                                (externalPhysicalClockBootstrap.complete() ? 1 : 0)) +
+                " externalPhysicalClockCalibrationPresents=" +
+                        (externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        physicalPresents() :
+                                externalPhysicalClockBootstrap.
+                                        calibrationPresents()) +
+                " externalPhaseMin=" + String.format(java.util.Locale.US,
+                        "%.6f", externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        minGeneratedPhase() :
+                                externalPresentationEvidence.
+                                        minGeneratedPhase()) +
+                " externalPhaseMax=" + String.format(java.util.Locale.US,
+                        "%.6f", externalAppOwnsPresentation ?
+                                appOwnedExternalPresentationEvidence.
+                                        maxGeneratedPhase() :
+                                externalPresentationEvidence.
+                                        maxGeneratedPhase()) +
+                " externalContentNumericPassed=" +
+                        (externalNumericContentPassed ? 1 : 0) +
+                " externalContentEpoch=" +
+                        externalGeneratedContentEvidence.presentationEpoch() +
+                " externalContentProofs=" +
+                        externalGeneratedContentEvidence.proofs() +
+                " externalContentEndpoints=" +
+                        externalGeneratedContentEvidence.endpointProofs() +
+                " externalContentGenerated=" +
+                        externalGeneratedContentEvidence.generatedProofs() +
+                " externalContentMovingGenerated=" +
+                        externalGeneratedContentEvidence.movingGeneratedProofs() +
+                " externalContentDistinctMovingGenerated=" +
+                        externalGeneratedContentEvidence.distinctMovingGeneratedProofs() +
+                " externalContentSceneCutRisk=" +
+                        externalGeneratedContentEvidence.sceneCutRiskGeneratedProofs() +
+                " externalUnsafePairs=" + externalUnsafePairCount +
+                " externalContentEndpointFailures=" +
+                        externalGeneratedContentEvidence.endpointPassthroughFailures() +
+                " externalContentEqualsLeft=" +
+                        externalGeneratedContentEvidence.generatedEqualsLeft() +
+                " externalContentEqualsRight=" +
+                        externalGeneratedContentEvidence.generatedEqualsRight() +
+                " externalContentAnalysisMaxNs=" +
+                        externalGeneratedContentEvidence.maxAnalysisWallNs() +
+                " externalContentEndpointMadMaxPpm=" +
+                        externalGeneratedContentEvidence.maxEndpointMadPpm() +
+                " externalContentHistogramMaxPpm=" +
+                        externalGeneratedContentEvidence.maxEndpointHistogramDistancePpm() +
+                " externalContentOutputLeftMadMaxPpm=" +
+                        externalGeneratedContentEvidence.maxOutputLeftMadPpm() +
+                " externalContentOutputRightMadMaxPpm=" +
+                        externalGeneratedContentEvidence.maxOutputRightMadPpm() +
+                " externalContentManualPassed=" +
+                        (externalPathManuallyCertified() ? 1 : 0));
         if (phaseDiagCount > 0) {
             Log.i(TAG, "Phase diagnostic" +
                     " generator=" + generatorId +
+                    " endpointOffsetUs=" + (frameRate.endpointOffsetNs() / 1000L) +
+                    " driftUsPerS=" + String.format(java.util.Locale.US, "%.1f",
+                            frameRate.endpointDriftUsPerSecond()) +
+                    " driftSpanS=" + String.format(java.util.Locale.US, "%.1f",
+                            frameRate.endpointDriftSpanSeconds()) +
                     " syntheticCount=" + phaseDiagCount +
                     " phaseMean=" + String.format(java.util.Locale.US, "%.4f",
                             phaseDiagSum / phaseDiagCount) +
@@ -6101,7 +11469,821 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             phaseDiagCount = 0;
             phaseDiagSpanSumNs = 0.0;
         }
-        publishReportedFrameRate(source, actualOutput, targetOutput);
+        publishReportedFrameRate(source, physicalOutput, targetOutput,
+                physicalQualified);
+    }
+
+    private void publishExternalPhysicalClock() {
+        double hz = externalPhysicalClock.sustainedFrequencyHz(System.nanoTime());
+        if (!(hz > 0.0) ||
+                Math.abs(hz / frameRate.declaredPanelHz() - 1.0) > 0.0075) return;
+        long actualNs = externalPhysicalClock.lastActualNs();
+        if (qualifiedPhysicalPanelHz == 0.0) {
+            frameRate.setPhysicalDisplayRefreshHz(hz);
+            qualifiedPhysicalPanelHz = hz;
+            qualifiedPhysicalPanelRefinedNs = actualNs;
+        } else if (actualNs - qualifiedPhysicalPanelRefinedNs >= 5_000_000_000L &&
+                Math.abs(hz / qualifiedPhysicalPanelHz - 1.0) >= 0.000005 &&
+                frameRate.refinePhysicalDisplayRefreshHz(hz)) {
+            qualifiedPhysicalPanelHz = hz;
+            qualifiedPhysicalPanelRefinedNs = actualNs;
+        }
+        // Actual-present evidence only; the core/audio owner reads this pair.
+        qualifiedPhysicalPanelObservedNs = actualNs;
+    }
+
+    private void pollPhysicalPresentations() {
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport != null && transport.usesAppOwnedPresentation()) {
+            // This poll only recycles private generator buffers. The visible
+            // Surface and its physical frame IDs belong to the EGL tracker.
+            java.util.List<ExternalFrameGenerationTransport.PresentationEvent>
+                    backendEvents = transport.poll();
+            if (!backendEvents.isEmpty() ||
+                    transport.pendingPhysicalPresentationCount() != 0)
+                throw new IllegalStateException(
+                        "app-owned backend reported a visible presentation");
+            pollAppOwnedPhysicalPresentations();
+            return;
+        }
+        if (transport != null) {
+            java.util.List<ExternalFrameGenerationTransport.PresentationEvent>
+                    completed = transport.poll();
+            for (ExternalFrameGenerationTransport.PresentationEvent event : completed) {
+                long eventEpoch = event.request.presentationEpoch();
+                if (externalPhysicalAccountingEpoch != eventEpoch) {
+                    externalPhysicalCadence.reset();
+                    // A scheduler epoch may follow a long interval with no
+                    // app-owned presents. Thor may stop maintaining the old
+                    // child Surface's scan phase while it is idle. A dropped
+                    // event can be the first exact evidence of that boundary,
+                    // so partition cadence before recording either event kind.
+                    // A scheduler epoch changes endpoint/proof ownership, not
+                    // the panel oscillator. Preserve the independently learned
+                    // period for the same reported physical refresh mode, but
+                    // discard the old phase until this epoch's first actual
+                    // scan anchors it. r203 otherwise restarted at nominal
+                    // 16.666666 ms while Thor was scanning near 16.659 ms;
+                    // queue latency let that known drift cross the unchanged
+                    // 2% slot gate before the new 500 ms estimate could affect
+                    // already-submitted rows.
+                    externalPhysicalClock.beginPresentationEpoch();
+                    externalPhysicalAccountingEpoch = eventEpoch;
+                    externalPhysicalAnchorTailRows = 0;
+                }
+                if (event.kind ==
+                        ExternalFrameGenerationTransport.PresentationEvent.Kind.DROPPED) {
+                    ExternalPresentationLedger.Drop drop =
+                            externalPresentationLedger.physicallyDropped(
+                                    event.request, event.presentId,
+                                    event.refreshDurationNs);
+                    externalPhysicalCadence.recordDropped(
+                            drop.scansPerOutput, drop.refreshDurationNs);
+                    if (externalPhysicalAnchorTailRows > 0)
+                        --externalPhysicalAnchorTailRows;
+                    continue;
+                }
+                ExternalFrameGenerationTransport.PhysicalPresentation row =
+                        event.presentation;
+                if (row == null)
+                    throw new IllegalStateException(
+                            "external presented event has no physical row");
+                ExternalPresentationLedger.Commit commit =
+                        externalPresentationLedger.physicallyPresented(
+                                row.request, row.presentId,
+                                row.desiredPresentTimeNs,
+                                row.actualPresentTimeNs,
+                                row.earliestPresentTimeNs,
+                                row.presentMarginNs,
+                                row.refreshDurationNs,
+                                row.enqueueWallNs,
+                                row.gpuWorkNs);
+                boolean physicalEpochChanged =
+                        externalPresentationEvidence.presentationEpoch() > 0L &&
+                        externalPresentationEvidence.presentationEpoch() !=
+                                commit.presentationEpoch;
+                if (row.request.hasCompositorFrameTimeline())
+                    presentationClockDiagnostics.record(row.presentId,
+                            row.request.sessionEpoch(), row.request.presentationEpoch(),
+                            row.actualPresentTimeNs, row.request.desiredPhysicalPresentTimeNs(),
+                            row.request.compositorFrameTimelineVsyncId(),
+                            row.request.compositorExpectedPresentationTimeNs(),
+                            row.request.compositorFrameTimelineDeadlineNs(),
+                            row.refreshDurationNs, System.nanoTime());
+                if (!externalPhysicalClock.record(
+                            commit.actualPresentTimeNs,
+                            commit.refreshDurationNs,
+                            commit.request.hasCompositorFrameTimeline() ?
+                                    commit.request.
+                                            compositorExpectedPresentationTimeNs() :
+                                    commit.actualPresentTimeNs)) {
+                    boolean endedDirectEpoch = !externalRatePathActive &&
+                            !commit.generated &&
+                            commit.presentationEpoch !=
+                                    schedulerPresentationEpoch();
+                    if (!endedDirectEpoch) {
+                        throw new IllegalStateException(
+                                "external physical scan clock is inconsistent");
+                    }
+                    // A screen capture, loading hold, or other bounded source
+                    // pause can end the scheduler epoch while endpoint-only
+                    // requests from the old epoch are already inside Vulkan/
+                    // SurfaceFlinger. Their eventual physical rows remain
+                    // truthful completions, but a many-second idle interval
+                    // is not evidence about the new epoch's scan lattice.
+                    // Re-anchor Direct on this independently observed row;
+                    // the first completion carrying the new epoch will reset
+                    // it again through externalPhysicalAccountingEpoch. Never
+                    // forgive this condition for generated content or a live
+                    // generated rate path.
+                    externalPhysicalClock.reset();
+                    if (!externalPhysicalClock.record(
+                                commit.actualPresentTimeNs,
+                                commit.refreshDurationNs,
+                                commit.request.hasCompositorFrameTimeline() ?
+                                        commit.request.
+                                                compositorExpectedPresentationTimeNs() :
+                                        commit.actualPresentTimeNs)) {
+                        throw new IllegalStateException(
+                                "external stale-epoch physical row cannot re-anchor");
+                    }
+                    externalDirectOutputPhaseAnchorNs = 0L;
+                    Log.w(TAG, "External stale Direct clock re-anchored" +
+                            " generator=" + generatorId +
+                            " completedEpoch=" + commit.presentationEpoch +
+                            " schedulerEpoch=" +
+                                    schedulerPresentationEpoch() +
+                            " actualNs=" + commit.actualPresentTimeNs);
+                }
+                publishExternalPhysicalClock();
+                for (long dropped = 0L; dropped < commit.droppedBefore; ++dropped)
+                    externalPhysicalCadence.recordDropped(
+                            commit.scansPerOutput, commit.refreshDurationNs);
+                if (externalPhysicalClockBootstrap.calibrationRow(
+                        commit.presentationEpoch)) {
+                    externalPhysicalClockBootstrap.recordCalibrationPresent(
+                            commit.generated, commit.presentationEpoch);
+                    if (!externalPhysicalClockBootstrap.complete()) {
+                        if (!externalPhysicalCadence.recordPresented(
+                                commit.actualPresentTimeNs,
+                                commit.scansPerOutput,
+                                commit.refreshDurationNs))
+                            throw new IllegalStateException(
+                                    "external calibration cadence is inconsistent");
+                        externalPhysicalScansPerOutput = commit.scansPerOutput;
+                        externalPhysicalRefreshDurationNs = commit.refreshDurationNs;
+                        ++presents;
+                        if (!outputFrameRateReassertedAfterSwap) {
+                            outputFrameRateReassertedAfterSwap = true;
+                            requestOutputFrameRate(
+                                    "first-physical-vulkan-calibration-present");
+                        }
+                    }
+                    continue;
+                }
+                if (physicalEpochChanged) {
+                    // The first returned row after an idle/re-prime boundary
+                    // was necessarily planned from the preceding epoch's
+                    // physical anchor. Its actual timestamp is the new anchor,
+                    // not evidence that the new epoch missed its requested
+                    // slot. Only an exact endpoint may establish this boundary;
+                    // generated content would have an unauditable phase.
+                    if (commit.generated)
+                        throw new IllegalStateException(
+                                "external epoch anchor cannot be generated");
+                    externalPresentationEvidence.beginEpoch(
+                            commit.scansPerOutput,
+                            commit.refreshDurationNs,
+                            commit.presentationEpoch,
+                            commit.request.presentationPipelineScans());
+                    externalGeneratedContentEvidence.beginEpoch(
+                            commit.presentationEpoch);
+                    // This exact endpoint is the first physically completed
+                    // row in the new rate-path epoch. Preserve its measured
+                    // scan as the committed divisor phase instead of falling
+                    // back to the arbitrary calibration-row phase.
+                    externalDirectOutputPhaseAnchorNs =
+                            commit.actualPresentTimeNs;
+                    // Every row still pending after this first actual scan was
+                    // planned without the new physical phase. Keep those
+                    // truthful visible completions, but do not let their old
+                    // target timestamps qualify or quarantine the new path.
+                    // Newly submitted rows use this actual anchor; FIFO timing
+                    // guarantees the captured pending prefix retires first.
+                    externalPhysicalAnchorTailRows =
+                            externalPresentationLedger.pendingCount();
+                    if (!externalPhysicalCadence.recordPresented(
+                                    commit.actualPresentTimeNs,
+                                    commit.scansPerOutput,
+                                    commit.refreshDurationNs))
+                        throw new IllegalStateException(
+                                "external epoch-anchor cadence is inconsistent");
+                    externalPhysicalScansPerOutput = commit.scansPerOutput;
+                    externalPhysicalRefreshDurationNs = commit.refreshDurationNs;
+                    ++presents;
+                    if (!outputFrameRateReassertedAfterSwap) {
+                        outputFrameRateReassertedAfterSwap = true;
+                        requestOutputFrameRate(
+                                "first-physical-vulkan-epoch-anchor");
+                    }
+                    Log.i(TAG, "External physical clock epoch anchored" +
+                            " generator=" + generatorId +
+                            " presentId=" + row.presentId +
+                            " epoch=" + commit.presentationEpoch +
+                            " queuedPreAnchor=" +
+                                    externalPhysicalAnchorTailRows +
+                            " actualNs=" + commit.actualPresentTimeNs);
+                    continue;
+                }
+                if (externalPhysicalAnchorTailRows > 0) {
+                    --externalPhysicalAnchorTailRows;
+                    // Re-anchor on each member of the captured prefix. The
+                    // last such actual scan is the first phase known not to
+                    // depend on a pre-anchor plan.
+                    externalDirectOutputPhaseAnchorNs =
+                            commit.actualPresentTimeNs;
+                    externalPhysicalCadence.reset();
+                    if (!externalPhysicalCadence.recordPresented(
+                                    commit.actualPresentTimeNs,
+                                    commit.scansPerOutput,
+                                    commit.refreshDurationNs))
+                        throw new IllegalStateException(
+                                "external pre-anchor tail cadence is inconsistent");
+                    externalPhysicalScansPerOutput = commit.scansPerOutput;
+                    externalPhysicalRefreshDurationNs = commit.refreshDurationNs;
+                    ++presents;
+                    if (!outputFrameRateReassertedAfterSwap) {
+                        outputFrameRateReassertedAfterSwap = true;
+                        requestOutputFrameRate(
+                                "physical-vulkan-pre-anchor-tail");
+                    }
+                    Log.i(TAG, "External physical pre-anchor row excluded" +
+                            " generator=" + generatorId +
+                            " presentId=" + row.presentId +
+                            " epoch=" + commit.presentationEpoch +
+                            " remaining=" + externalPhysicalAnchorTailRows +
+                            " actualNs=" + commit.actualPresentTimeNs);
+                    continue;
+                }
+                long timingMissesBefore =
+                        externalPresentationEvidence.deadlineMisses() +
+                        externalPresentationEvidence.desiredSlotMisses() +
+                        externalPresentationEvidence.earliestPresentMisses() +
+                        externalPresentationEvidence.earlyPresentViolations();
+                externalPresentationEvidence.record(commit,
+                        PhysicalPresentationDeadline.THOR_DRIVER_LEAD_NS);
+                externalGeneratedContentEvidence.record(commit, row.contentProof);
+                long timingMissesAfter =
+                        externalPresentationEvidence.deadlineMisses() +
+                        externalPresentationEvidence.desiredSlotMisses() +
+                        externalPresentationEvidence.earliestPresentMisses() +
+                        externalPresentationEvidence.earlyPresentViolations();
+                boolean currentRatePathEpoch =
+                        commit.presentationEpoch == schedulerPresentationEpoch();
+                if (externalRatePathActive && currentRatePathEpoch &&
+                        timingMissesAfter > timingMissesBefore) {
+                    // A physical-slot miss makes every later interpolation
+                    // timestamp unsafe even when FIFO cadence remains uniform.
+                    // r51 stayed near 40 FPS after slipping one whole panel
+                    // scan, but continued showing generated images against the
+                    // wrong source-time phase. Permanently quarantine generation
+                    // for this session and continue exact endpoint-only Direct
+                    // presentation through the already-live Vulkan transport.
+                    markExternalTimingRejected();
+                    externalRatePathActive = false;
+                    externalRatePathPriming = false;
+                    externalRatePathOutputPriming = false;
+                    externalAppOwnedActivationFirstSwapPending = false;
+                    externalDirectOutputPhaseAnchorNs = 0L;
+                    transport.setGeneratedRatePathActive(false);
+                    frameRate.setGenerationAvailable(false);
+                    invalidateBufferedPairForReprime(false);
+                    resetHealthWindowAfterStreamChange();
+                    Log.e(TAG, "External generation disabled after physical-slot miss" +
+                            " generator=" + generatorId +
+                            " presentId=" + row.presentId +
+                            " generated=" + (commit.generated ? 1 : 0) +
+                            " phase=" + String.format(java.util.Locale.US,
+                                    "%.6f", commit.request.phase()) +
+                            " contentNs=" +
+                                    commit.request.desiredPhysicalPresentTimeNs() +
+                            " desiredNs=" + row.desiredPresentTimeNs +
+                            " timelineVsyncId=" +
+                                    commit.request.compositorFrameTimelineVsyncId() +
+                            " timelineTokenExpectedNs=" +
+                                    commit.request.
+                                            compositorTokenExpectedPresentationTimeNs() +
+                            " timelineExpectedNs=" +
+                                    commit.request.compositorExpectedPresentationTimeNs() +
+                            " timelineDeadlineNs=" +
+                                    commit.request.compositorFrameTimelineDeadlineNs() +
+                            " latchNs=" + row.earliestPresentTimeNs +
+                            " actualNs=" + row.actualPresentTimeNs +
+                            " presentMarginNs=" + row.presentMarginNs +
+                            " enqueueWallNs=" + row.enqueueWallNs +
+                            " gpuWorkNs=" + row.gpuWorkNs +
+                            " deadlineMisses=" +
+                                    externalPresentationEvidence.deadlineMisses() +
+                            " desiredSlotMisses=" +
+                                    externalPresentationEvidence.desiredSlotMisses());
+                }
+                if (!externalPhysicalCadence.recordPresented(
+                                commit.actualPresentTimeNs,
+                                commit.scansPerOutput,
+                                commit.refreshDurationNs))
+                    throw new IllegalStateException(
+                            "external physical-presentation accounting mismatch");
+                externalPhysicalScansPerOutput = commit.scansPerOutput;
+                externalPhysicalRefreshDurationNs = commit.refreshDurationNs;
+                ++presents;
+                if (!outputFrameRateReassertedAfterSwap) {
+                    outputFrameRateReassertedAfterSwap = true;
+                    requestOutputFrameRate("first-physical-vulkan-present");
+                }
+                if (commit.generated) {
+                    ++generatedPresents;
+                }
+            }
+            if (externalPresentationLedger.pendingCount() !=
+                    transport.pendingPhysicalPresentationCount())
+                throw new IllegalStateException(
+                        "external submitted/timing queue conservation mismatch");
+            int pending = externalPresentationLedger.pendingCount();
+            if (externalPhysicalClockBootstrap.ready(
+                    externalPhysicalClock.available(), pending,
+                    transport.pendingPhysicalPresentationCount())) {
+                externalPhysicalClockBootstrap.commit(
+                        externalPhysicalClock.available(), pending,
+                        transport.pendingPhysicalPresentationCount());
+                externalDirectOutputPhaseAnchorNs = 0L;
+                externalPhysicalCadence.reset();
+                long previousEpoch = schedulerPresentationEpoch();
+                frameRate.resetPresentation();
+                observedBufferedPresentationEpoch =
+                        schedulerPresentationEpoch();
+                resetEndpointTimelineForSchedulerEpoch();
+                refreshProofEvidencePresentationEpoch();
+                resetHealthWindowAfterStreamChange();
+                externalPhysicalClockBoundaryCommittedThisCallback = true;
+                Log.i(TAG, "External physical clock calibrated" +
+                        " generator=" + generatorId +
+                        " calibrationPresents=" +
+                        externalPhysicalClockBootstrap.calibrationPresents() +
+                        " clockAnchorNs=" + externalPhysicalClock.anchorNs() +
+                        " clockPeriodNs=" +
+                        externalPhysicalClock.planningPeriodNs() +
+                        " excludedTailPending=" + pending +
+                        " previousEpoch=" + previousEpoch +
+                        " epoch=" + schedulerPresentationEpoch());
+            }
+            return;
+        }
+        PhysicalPresentationTracker tracker = physicalPresentationTracker;
+        if (tracker == null || !tracker.available()) return;
+        tracker.poll();
+        // Built-in recovery consumes the exact committed EGL frame owner.
+        // Untracked Direct/old-epoch events are never borrowed for headroom.
+        PhysicalPresentationTracker.Event denseEvent;
+        while ((denseEvent = tracker.takeCompletedEvent()) != null) {
+            // Callback phase is not the physical scan phase. Calibrate only
+            // from actual PRESENTED events, independently of shader headroom.
+            if (denseEvent.kind == PhysicalPresentationTracker.Event.Kind.PRESENTED)
+                builtInPhysicalClock.record(denseEvent.actualPresentTimeNs,
+                        Math.max(1L, Math.round(1e9 / frameRate.declaredPanelHz())));
+            double physicalHz = builtInPhysicalClock.sustainedFrequencyHz(System.nanoTime());
+            if (physicalHz > 0.0 && Math.abs(physicalHz / frameRate.declaredPanelHz() - 1.0) <= 0.0075) {
+                if (qualifiedPhysicalPanelHz == 0.0) {
+                    qualifiedPhysicalPanelHz = physicalHz;
+                    frameRate.setPhysicalDisplayRefreshHz(physicalHz);
+                    qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
+                } else if (builtInPhysicalClock.lastActualNs() -
+                        qualifiedPhysicalPanelRefinedNs >= 5_000_000_000L &&
+                        Math.abs(physicalHz / qualifiedPhysicalPanelHz - 1.0) >= 0.000005 &&
+                        frameRate.refinePhysicalDisplayRefreshHz(physicalHz)) {
+                    // Publish only an accepted transition. The guest owner
+                    // applies the same rate to pacing and audio; the controller
+                    // independently verifies the ensuing source intervals.
+                    qualifiedPhysicalPanelHz = physicalHz;
+                    qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
+                }
+                qualifiedPhysicalPanelObservedNs = builtInPhysicalClock.lastActualNs();
+            }
+            if (!densePyramidEnabled) continue;
+            if (!denseGpuHeadroom.ownsFrame(denseEvent.frameId)) {
+                ++denseGpuPhysicalUnboundEvents;
+                denseGpuAdaptation.invalidateRecoveryEvidence();
+                continue;
+            }
+            int status = denseEvent.kind == PhysicalPresentationTracker.Event.Kind.PRESENTED ?
+                    GpuPhysicalHeadroomLedger.PRESENTED :
+                    denseEvent.kind == PhysicalPresentationTracker.Event.Kind.DROPPED ?
+                            GpuPhysicalHeadroomLedger.DROPPED : GpuPhysicalHeadroomLedger.UNAVAILABLE;
+            denseGpuReadyTimestampSupportedMask = denseEvent.readyTimestampSupportedMask;
+            if (!denseGpuHeadroom.recordPhysical(denseGpuHeadroom.evidenceEpoch(),
+                    denseEvent.frameId, status, denseEvent.actualPresentTimeNs,
+                    denseEvent.scansPerOutput, denseEvent.panelPeriodNs,
+                    denseEvent.readyTimestampSupportedMask, denseEvent.renderingCompleteTimeNs,
+                    denseEvent.compositionLatchTimeNs, denseEvent.compositionStartTimeNs,
+                    denseEvent.compositorGpuFinishedTimeNs)) {
+                rejectDense("invalid-timer-physical-identity", null);
+                continue;
+            }
+            consumeDensePhysicalGpuHeadroom();
+        }
+        if (!tracker.available()) denseGpuAdaptation.invalidateRecoveryEvidence();
+        if (!tracker.available()) logPhysicalPresentationFailure(tracker);
+    }
+
+    private void pollAppOwnedPhysicalPresentations() {
+        PhysicalPresentationTracker tracker = physicalPresentationTracker;
+        if (tracker == null || !tracker.available()) return;
+        // App-owned external generation needs the same exact-frame readiness
+        // evidence as the built-in path. Capability bits alone do not enable
+        // collection: without this, failure logs contain synthetic -1 defaults.
+        // This is not reached by Strict Off's isolated direct SurfaceView.
+        tracker.setReadyTimingEnabled(true);
+        tracker.poll();
+        PhysicalPresentationTracker.Event event;
+        while ((event = tracker.takeCompletedEvent()) != null) {
+            AppOwnedPhysicalPending pending = appOwnedPhysicalPending.pollFirst();
+            if (pending == null || pending.frameId != event.frameId ||
+                    pending.scansPerOutput != event.scansPerOutput ||
+                    pending.panelPeriodNs != event.panelPeriodNs)
+                throw new IllegalStateException(
+                        "app-owned physical result does not match its EGL swap");
+            if (event.kind ==
+                    PhysicalPresentationTracker.Event.Kind.UNAVAILABLE) {
+                externalPhysicalCadence.recordUnavailable(
+                        event.scansPerOutput, event.panelPeriodNs);
+                long eventEpoch = pending.request.presentationEpoch();
+                if (externalPhysicalAccountingEpoch != eventEpoch) {
+                    externalPhysicalAccountingEpoch = eventEpoch;
+                    externalPhysicalClock.beginPresentationEpoch();
+                    externalGeneratedContentEvidence.beginEpoch(eventEpoch);
+                }
+                restartAppOwnedExternalTimingWindow(
+                        event.scansPerOutput, event.panelPeriodNs, eventEpoch);
+                resetHealthWindowAfterStreamChange();
+                Log.w(TAG, "App-owned physical timestamp history expired; " +
+                        "evidence window restarted" +
+                        " generator=" + generatorId +
+                        " frameId=" + event.frameId +
+                        " generated=" +
+                                (pending.request.isGenerated() ? 1 : 0) +
+                        " eventEpoch=" + eventEpoch +
+                        " currentEpoch=" + schedulerPresentationEpoch() +
+                        " timingWindow=" +
+                                appOwnedExternalTimingWindow +
+                        " desiredNs=" +
+                                pending.request.desiredPhysicalPresentTimeNs() +
+                        " swapCompletedNs=" + pending.swapCompletedNs +
+                        " resultAgeNs=" + Math.max(0L,
+                                System.nanoTime() - pending.swapCompletedNs) +
+                        " pendingAfter=" + appOwnedPhysicalPending.size());
+                continue;
+            }
+            if (event.kind != PhysicalPresentationTracker.Event.Kind.PRESENTED) {
+                externalPhysicalCadence.recordDropped(
+                        event.scansPerOutput, event.panelPeriodNs);
+                markExternalTimingRejected();
+                externalRatePathActive = false;
+                externalRatePathPriming = false;
+                externalRatePathOutputPriming = false;
+                externalAppOwnedActivationFirstSwapPending = false;
+                externalTransport.setGeneratedRatePathActive(false);
+                frameRate.setGenerationAvailable(false);
+                invalidateBufferedPairForReprime(false);
+                resetHealthWindowAfterStreamChange();
+                Log.e(TAG, "App-owned physical presentation failed closed" +
+                        " generator=" + generatorId +
+                        " frameId=" + event.frameId +
+                        " result=" + event.kind +
+                        " generated=" +
+                                (pending.request.isGenerated() ? 1 : 0) +
+                        " eventEpoch=" +
+                                pending.request.presentationEpoch() +
+                        " currentEpoch=" + schedulerPresentationEpoch() +
+                        " desiredNs=" +
+                                pending.request.desiredPhysicalPresentTimeNs() +
+                        " driverDesiredNs=" +
+                                pending.request.driverDesiredPresentTimeNs() +
+                        " swapCompletedNs=" + pending.swapCompletedNs +
+                        " resultAgeNs=" + Math.max(0L,
+                                System.nanoTime() - pending.swapCompletedNs) +
+                        " scansPerOutput=" + pending.scansPerOutput +
+                        " panelPeriodNs=" + pending.panelPeriodNs +
+                        " pendingAfter=" + appOwnedPhysicalPending.size());
+                continue;
+            }
+            long eventEpoch = pending.request.presentationEpoch();
+            if (pending.request.isGenerated())
+                ++appOwnedExternalPhysicalGeneratedCount;
+            else
+                ++appOwnedExternalPhysicalEndpointCount;
+            if (externalPhysicalAccountingEpoch != eventEpoch) {
+                externalPhysicalAccountingEpoch = eventEpoch;
+                externalPhysicalCadence.reset();
+                externalPhysicalClock.beginPresentationEpoch();
+                restartAppOwnedExternalTimingWindow(
+                        event.scansPerOutput, event.panelPeriodNs, eventEpoch);
+                externalGeneratedContentEvidence.beginEpoch(eventEpoch);
+            }
+            long timingMissesBefore =
+                    appOwnedExternalPresentationEvidence.
+                            submissionDeadlineMisses() +
+                    appOwnedExternalPresentationEvidence.desiredSlotMisses() +
+                    appOwnedExternalPresentationEvidence.gpuBudgetMisses();
+            appOwnedExternalPresentationEvidence.record(
+                    pending.request, event.frameId,
+                    event.actualPresentTimeNs,
+                    event.scansPerOutput, event.panelPeriodNs,
+                    pending.bindWallNs, pending.swapWallNs,
+                    pending.swapCompletedNs,
+                    pending.generatedOutput == null ? 0L :
+                            pending.generatedOutput.gpuWorkNs);
+            if (pending.generatedOutput != null)
+                externalGeneratedContentEvidence.recordAppOwnedGenerated(
+                        eventEpoch, event.frameId, pending.request,
+                        pending.generatedOutput.contentProof);
+            long timingMissesAfter =
+                    appOwnedExternalPresentationEvidence.
+                            submissionDeadlineMisses() +
+                    appOwnedExternalPresentationEvidence.desiredSlotMisses() +
+                    appOwnedExternalPresentationEvidence.gpuBudgetMisses();
+            boolean cadenceConsistent =
+                    externalPhysicalCadence.recordPresented(
+                            event.actualPresentTimeNs,
+                            event.scansPerOutput, event.panelPeriodNs);
+            long priorPhysicalActualNs = externalPhysicalClock.lastActualNs();
+            boolean clockConsistent = externalPhysicalClock.record(
+                    event.actualPresentTimeNs, event.panelPeriodNs);
+            if (!clockConsistent && !externalRatePathActive &&
+                    !pending.request.isGenerated() &&
+                    priorPhysicalActualNs > 0L &&
+                    event.actualPresentTimeNs > priorPhysicalActualNs &&
+                    externalPhysicalClock.nominalPeriodNs() ==
+                            event.panelPeriodNs) {
+                // A Direct-only title/menu pause may leave no app swaps for
+                // seconds. The panel oscillator continues, but accumulated
+                // nominal-vs-measured drift can move the first resumed row
+                // beyond the strict quarter-scan continuity residual. That
+                // independently returned row is a safe new planning anchor;
+                // retain the measured oscillator period and let the physical
+                // cadence ring keep the real visible gap. Never do this once
+                // generated output is active or for a generated row: those
+                // paths must remain fatal on any phase discontinuity.
+                externalPhysicalClock.beginPresentationEpoch();
+                clockConsistent = externalPhysicalClock.record(
+                        event.actualPresentTimeNs, event.panelPeriodNs);
+                if (clockConsistent)
+                    Log.i(TAG, "App-owned Direct physical clock re-anchored" +
+                            " generator=" + generatorId +
+                            " priorActualNs=" + priorPhysicalActualNs +
+                            " actualNs=" + event.actualPresentTimeNs +
+                            " gapNs=" +
+                                    (event.actualPresentTimeNs -
+                                            priorPhysicalActualNs));
+            }
+            if (!cadenceConsistent || !clockConsistent)
+                throw new IllegalStateException(
+                        "app-owned physical cadence is inconsistent");
+            publishExternalPhysicalClock();
+            externalPhysicalScansPerOutput = event.scansPerOutput;
+            externalPhysicalRefreshDurationNs = event.panelPeriodNs;
+            if (externalRatePathActive &&
+                    eventEpoch == schedulerPresentationEpoch() &&
+                    timingMissesAfter > timingMissesBefore) {
+                long submissionBudgetMisses = appOwnedExternalPresentationEvidence.submissionDeadlineMisses();
+                long physicalSlotMisses = appOwnedExternalPresentationEvidence.desiredSlotMisses();
+                long inferenceBudgetMisses = appOwnedExternalPresentationEvidence.gpuBudgetMisses();
+                markExternalTimingRejected();
+                externalRatePathActive = false;
+                externalRatePathPriming = false;
+                externalRatePathOutputPriming = false;
+                externalAppOwnedActivationFirstSwapPending = false;
+                externalTransport.setGeneratedRatePathActive(false);
+                frameRate.setGenerationAvailable(false);
+                invalidateBufferedPairForReprime(false);
+                resetHealthWindowAfterStreamChange();
+                Log.e(TAG, "App-owned external timing failed closed" +
+                        " generator=" + generatorId +
+                        " submissionBudgetMisses=" + submissionBudgetMisses +
+                        " physicalSlotMisses=" + physicalSlotMisses +
+                        " inferenceBudgetMisses=" + inferenceBudgetMisses +
+                        " frameId=" + event.frameId +
+                        " generated=" +
+                                (pending.request.isGenerated() ? 1 : 0) +
+                        " desiredNs=" +
+                                pending.request.desiredPhysicalPresentTimeNs() +
+                        " driverDesiredNs=" +
+                                pending.request.driverDesiredPresentTimeNs() +
+                        " hardDeadlineNs=" +
+                                pending.request.hardCompletionDeadlineNs() +
+                        " actualNs=" + event.actualPresentTimeNs +
+                        " actualMinusDesiredNs=" +
+                                (event.actualPresentTimeNs -
+                                        pending.request.
+                                                desiredPhysicalPresentTimeNs()) +
+                        " submissionStartedNs=" +
+                                pending.submissionStartedNs +
+                        " swapStartedNs=" + pending.swapStartedNs +
+                        " swapCompletedNs=" + pending.swapCompletedNs +
+                        " submissionLeadToDesiredNs=" +
+                                (pending.request.
+                                        desiredPhysicalPresentTimeNs() -
+                                        pending.submissionStartedNs) +
+                        " swapLeadToDesiredNs=" +
+                                (pending.request.
+                                        desiredPhysicalPresentTimeNs() -
+                                        pending.swapCompletedNs) +
+                        " completionReserveNs=" +
+                                (pending.request.hardCompletionDeadlineNs() -
+                                        pending.swapCompletedNs) +
+                        " resultAgeNs=" + Math.max(0L,
+                                System.nanoTime() - pending.swapCompletedNs) +
+                        " left=" + pending.request.leftSequence() +
+                        " right=" + pending.request.rightSequence() +
+                        " targetSourceNs=" +
+                                pending.request.presentationTimestampNs() +
+                        " phaseBits=" + Long.toUnsignedString(
+                                Double.doubleToRawLongBits(
+                                        pending.request.phase())) +
+                        " bindWallNs=" + pending.bindWallNs +
+                        " swapWallNs=" + pending.swapWallNs +
+                        " readyTimestampSupportedMask=" + event.readyTimestampSupportedMask +
+                        " renderingCompleteNs=" + event.renderingCompleteTimeNs +
+                        " compositionLatchNs=" + event.compositionLatchTimeNs +
+                        " compositionStartNs=" + event.compositionStartTimeNs +
+                        " compositorGpuFinishedNs=" + event.compositorGpuFinishedTimeNs +
+                        " gpuWorkNs=" +
+                                (pending.generatedOutput == null ? 0L :
+                                        pending.generatedOutput.gpuWorkNs));
+            }
+        }
+        maybeRecoverAppOwnedDirectPhysicalTiming();
+        if (!tracker.available()) logPhysicalPresentationFailure(tracker);
+    }
+
+    private void restartAppOwnedExternalTimingWindow(
+            int scansPerOutput, long panelPeriodNs, long presentationEpoch) {
+        if (appOwnedExternalTimingWindow == Long.MAX_VALUE)
+            throw new IllegalStateException(
+                    "app-owned timing-window sequence overflow");
+        appOwnedExternalPresentationEvidence.restartWindow(
+                scansPerOutput, panelPeriodNs, presentationEpoch);
+        externalGeneratedContentEvidence.restartWindow(presentationEpoch);
+        ++appOwnedExternalTimingWindow;
+        appOwnedExternalTimingDroppedBaseline =
+                externalPhysicalCadence.droppedPresents();
+        appOwnedExternalTimingUnavailableBaseline =
+                externalPhysicalCadence.unavailablePresents();
+    }
+
+    /**
+     * Re-arms an app-owned qualification only after an independently clean
+     * Direct physical epoch.
+     *
+     * <p>An explicit compositor drop or a proven physical-slot miss must fail
+     * closed immediately, but it must not permanently disable safe Direct
+     * re-prime for the rest of the game. Finite timestamp-history expiry is
+     * handled separately by restarting only the evidence window because it
+     * does not prove that a frame was dropped. Recovery from an actual timing
+     * failure is intentionally stricter than ordinary fallback: no generated
+     * path may be active, both the Java
+     * request ledger and native timestamp queue must be empty, the measured
+     * physical clock must be live, and the current exact scan divisor must
+     * have at least two clean seconds of physically presented rows. A fresh
+     * scheduler epoch then prevents old endpoint/proof ownership from crossing
+     * the recovery boundary. Any failure after generated activation remains
+     * fatal for that active qualification window.</p>
+     */
+    private void maybeRecoverAppOwnedDirectPhysicalTiming() {
+        PhysicalPresentationTracker tracker = physicalPresentationTracker;
+        if (!externalTimingRejected || externalRatePathActive ||
+                externalRatePathPriming || externalTransport == null ||
+                !externalTransport.usesAppOwnedPresentation() ||
+                tracker == null || !tracker.available() ||
+                !appOwnedPhysicalPending.isEmpty() ||
+                tracker.pendingCount() != 0 ||
+                externalPhysicalScansPerOutput <= 0 ||
+                externalPhysicalRefreshDurationNs <= 0L ||
+                !externalPhysicalClock.available() ||
+                !externalPhysicalCadence.qualified(
+                        externalPhysicalScansPerOutput,
+                        externalPhysicalRefreshDurationNs))
+            return;
+        long previousEpoch = schedulerPresentationEpoch();
+        externalTimingRejected = false;
+        frameRate.resetPresentation();
+        observedBufferedPresentationEpoch = schedulerPresentationEpoch();
+        resetEndpointTimelineForSchedulerEpoch();
+        refreshProofEvidencePresentationEpoch();
+        resetHealthWindowAfterStreamChange();
+        Log.i(TAG, "App-owned Direct physical timing recovered" +
+                " generator=" + generatorId +
+                " samples=" + tracker.sampleCount() +
+                " scansPerOutput=" + externalPhysicalScansPerOutput +
+                " panelPeriodNs=" + externalPhysicalRefreshDurationNs +
+                " previousEpoch=" + previousEpoch +
+                " epoch=" + schedulerPresentationEpoch());
+    }
+
+    /**
+     * Numeric proof can reject a path but can never certify moving-video
+     * quality.  A future immutable per-system/path certification manifest may
+     * implement this; qualification builds remain explicitly unqualified
+     * until the required physical and manual inspection has occurred.
+     */
+    private boolean externalPathManuallyCertified() { return false; }
+
+    private void logPhysicalPresentationFailure(
+            PhysicalPresentationTracker tracker) {
+        if (physicalPresentationUnavailableLogged) return;
+        physicalPresentationUnavailableLogged = true;
+        Log.e(TAG, "Physical scanout timestamp tracker failed closed" +
+                " generator=" + generatorId +
+                " nativeStatus=" +
+                        (tracker == null ? 0 : tracker.lastNativeFailure()) +
+                " actualAvailable=0");
+        publishReportedFrameRate(frameRate.sustainedMeasuredSourceHz(), 0.0,
+                frameRate.targetOutputHz(), false);
+    }
+
+    private void reportSourceAdmissionDiagnostic(long now) {
+        if (sourceDiagWindowStartNanos == 0L) {
+            sourceDiagWindowStartNanos = now;
+            sourceDiagStartHardwareSubmits = diagHardwareSubmits;
+            sourceDiagStartSoftwareSubmits = diagSoftwareSubmits;
+            sourceDiagStartUniqueVerdicts = diagUniqueVerdicts;
+            sourceDiagStartDuplicateVerdicts = diagDuplicateVerdicts;
+            sourceDiagStartUniqueFrames = uniqueFrameCount;
+            sourceDiagStartEndpoints = endpointSequence;
+            sourceDiagStartCandidateUnavailable = endpointCandidateUnavailable;
+            sourceDiagStartTimestampCorrections = endpointTimestampCorrections;
+            sourceDiagStartFifoCoalesced = endpointFifoCoalesced;
+            return;
+        }
+        long elapsedNs = now - sourceDiagWindowStartNanos;
+        if (elapsedNs < 1_000_000_000L) return;
+        long hardware = diagHardwareSubmits - sourceDiagStartHardwareSubmits;
+        long software = diagSoftwareSubmits - sourceDiagStartSoftwareSubmits;
+        long unique = diagUniqueVerdicts - sourceDiagStartUniqueVerdicts;
+        long duplicate = diagDuplicateVerdicts - sourceDiagStartDuplicateVerdicts;
+        long uniqueFrames = uniqueFrameCount - sourceDiagStartUniqueFrames;
+        long endpoints = endpointSequence - sourceDiagStartEndpoints;
+        reportedAdmissionAcceptedEndpoints = endpoints;
+        long unavailable = endpointCandidateUnavailable -
+                sourceDiagStartCandidateUnavailable;
+        long timestampCorrections = endpointTimestampCorrections -
+                sourceDiagStartTimestampCorrections;
+        long coalesced = endpointFifoCoalesced - sourceDiagStartFifoCoalesced;
+        double seconds = elapsedNs / 1_000_000_000.0;
+        Log.i(TAG, "Source admission diagnostic" +
+                " generator=" + generatorId +
+                " elapsedNs=" + elapsedNs +
+                " hwSubmits=" + hardware +
+                " swSubmits=" + software +
+                " uniqueVerdicts=" + unique +
+                " duplicateVerdicts=" + duplicate +
+                " uniqueFrames=" + uniqueFrames +
+                " acceptedEndpoints=" + endpoints +
+                " hardwareHz=" + String.format(java.util.Locale.US,
+                        "%.3f", hardware / seconds) +
+                " uniqueHz=" + String.format(java.util.Locale.US,
+                        "%.3f", uniqueFrames / seconds) +
+                " endpointHz=" + String.format(java.util.Locale.US,
+                        "%.3f", endpoints / seconds) +
+                " sustainedSourceHz=" + String.format(java.util.Locale.US,
+                        "%.3f", frameRate.sustainedMeasuredSourceHz()) +
+                " qualifiedUniqueClockHz=" + String.format(
+                        java.util.Locale.US, "%.3f",
+                        frameRate.qualifiedUniqueTimestampSourceHzForDiagnostics()) +
+                " candidateUnavailable=" + unavailable +
+                " timestampCorrections=" + timestampCorrections +
+                " fifoCoalesced=" + coalesced +
+                " changedPixels=" + diagLastChangedPixels +
+                " signatureByteSum=" + diagLastSignatureByteSum +
+                " timestampProof=" +
+                        frameRate.canonicalProofSummaryForDiagnostics() +
+                " retentionProof=" +
+                        frameRate.canonicalRetentionProofSummaryForDiagnostics());
+        if (nativeSourceImageObserver != null)
+            Log.i(TAG, "Native source-image observation generator=" + generatorId +
+                    " " + nativeSourceImageObserver.diagnostic());
+        if (nativeEndpointProvenance != null)
+            Log.i(TAG, "Native endpoint provenance generator=" + generatorId +
+                    " " + nativeEndpointProvenanceDiagnostic() + " external=" +
+                    (externalTransport == null ? "none" : externalTransport.sourceProvenanceDiagnostic()));
+        sourceDiagWindowStartNanos = now;
+        sourceDiagStartHardwareSubmits = diagHardwareSubmits;
+        sourceDiagStartSoftwareSubmits = diagSoftwareSubmits;
+        sourceDiagStartUniqueVerdicts = diagUniqueVerdicts;
+        sourceDiagStartDuplicateVerdicts = diagDuplicateVerdicts;
+        sourceDiagStartUniqueFrames = uniqueFrameCount;
+        sourceDiagStartEndpoints = endpointSequence;
+        sourceDiagStartCandidateUnavailable = endpointCandidateUnavailable;
+        sourceDiagStartTimestampCorrections = endpointTimestampCorrections;
+        sourceDiagStartFifoCoalesced = endpointFifoCoalesced;
     }
 
     private void reportPresentationStall(long frameTimeNs) {
@@ -6125,25 +12307,128 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                 " epoch=" + frameRate.bufferedPresentationEpoch() +
                 " left=" + activeLeftSequence +
                 " right=" + activeRightSequence +
+                " leftTs=" + activeLeftTimestampNs +
+                " rightTs=" + activeRightTimestampNs +
                 " pairReady=" + activePairReady +
                 " motionReady=" + motionEstimateReady +
                 " fifoCount=" + endpointFifoCount +
                 " fifoHead=" + fifoHeadSequence +
                 " targetSourceNs=" + frameRate.bufferedSelectedTargetSourceNs() +
+                " controllerPrimed=" + frameRate.bufferedPrimed() +
+                " controllerLeft=" + frameRate.bufferedRetainedLeftSequence() +
+                " controllerRight=" + frameRate.bufferedRetainedRightSequence() +
+                " expectedAdvance=" + frameRate.bufferedExpectedAdvance() +
+                " credits=" + frameRate.bufferedOutputCredits() +
+                " minimumReprime=" + frameRate.bufferedMinimumReprimeSequence() +
                 " unavailable=" + frameRate.bufferedUnavailableSlotCount() +
                 " underruns=" + frameRate.bufferedUnderrunCount() +
                 " coalesced=" + endpointFifoCoalesced);
     }
 
-    private void publishReportedFrameRate(int source, int output,
-                                          int targetOutput) {
-        if (source == reportedSourceFps && output == reportedOutputFps) return;
-        reportedSourceFps = source;
-        reportedOutputFps = output;
-        StatsListener callback = statsListener;
-        if (callback != null) callback.onFrameRate(source, output);
-        Log.i(TAG, "Frame rate committed " + source + " / " + output +
-                " FPS target=" + targetOutput);
+    private void logBufferedEpochBoundary(String stage, long previousEpoch) {
+        Log.w(TAG, "Buffered presentation epoch reset" +
+                " generator=" + generatorId +
+                " stage=" + stage +
+                " reason=" + frameRate.bufferedLastEpochReason() +
+                " previousEpoch=" + previousEpoch +
+                " epoch=" + frameRate.bufferedPresentationEpoch() +
+                " source=" + frameRate.lockedSourceFps() +
+                " output=" + frameRate.outputFps() +
+                " left=" + activeLeftSequence +
+                " right=" + activeRightSequence +
+                " leftTs=" + activeLeftTimestampNs +
+                " rightTs=" + activeRightTimestampNs +
+                " pairReady=" + activePairReady +
+                " motionReady=" + motionEstimateReady +
+                " fifoCount=" + endpointFifoCount +
+                " expectedAdvance=" + frameRate.bufferedExpectedAdvance() +
+                " credits=" + frameRate.bufferedOutputCredits() +
+                " diagnostic=" + frameRate.bufferedLastMismatchDiagnostic() +
+                " minimumReprime=" + frameRate.bufferedMinimumReprimeSequence());
+    }
+
+    private void publishReportedFrameRate(double source, double output,
+                                          double targetOutput,
+                                          boolean cadenceQualified) {
+        int sourceTenths = (int) Math.max(0L, Math.round(source * 10.0));
+        int outputTenths = (int) Math.max(0L, Math.round(output * 10.0));
+        int targetTenths = (int) Math.max(0L, Math.round(targetOutput * 10.0));
+        String backendLabel = activeBackendLabel();
+        reportedMeasuredTier = frameRate.tierAcquiredForDiagnostics() &&
+                !frameRate.usesAuthoritativeSourceRate() ?
+                frameRate.lockedSourceFps() : 0;
+        // A core that runs at full speed while its game updates every Nth
+        // frame (Ocarina: 60 submissions, 20 unique) is an exact duplicate
+        // schedule and must never be paced down.  A core whose unique clock
+        // is an irregular fraction of its submission clock (Dolphin tonight:
+        // 60 calls, 57.8 unique with 4 percent held frames) is failing its
+        // clock and is the pacing case.
+        double submission = frameRate.measuredSubmissionHz();
+        // The MEASURED unique-image rate, not presentationSourceHz(): the
+        // latter keeps the previously qualified clock (PSP run psp-b52b: a
+        // 30-fps section still reported the earlier 60-Hz lattice, so
+        // 60/60 = 1 read as irregular and the probe paced a regular 2:1
+        // stream down to 40).
+        double unique = frameRate.measuredProducerHz();
+        boolean irregular = false;
+        if (submission > 1.0 && unique > 1.0) {
+            double ratio = submission / unique;
+            long nearest = Math.round(ratio);
+            // 0.06 (was 0.02): melonDS's exact 2:1 schedule measured 2.03
+            // on one-second buckets and the load-hold probe paced the DS
+            // down to 20 (run nds-b50b, 2026-09-02).  A genuinely
+            // irregular stream (Dolphin 60/57.8 = 1.04, Flycast 60/53 =
+            // 1.13) is nowhere near an integer ratio.
+            irregular = nearest < 2L || Math.abs(ratio - nearest) > 0.06;
+        }
+        // A stream that accepted no endpoints in the admission window (DS on
+        // melonDS, run nds-b51: 60 submits, 0 unique) has no delivery rate
+        // to downgrade to; the probe must never pace it (it paced the DS to
+        // 20 against a static top screen).
+        if (reportedAdmissionAcceptedEndpoints <= 0L) irregular = false;
+        // A core submitting on its 60-Hz lattice with fewer than ~10 percent
+        // held frames (Metroid Prime on Dolphin: 60 submits, 55-58 unique at
+        // ANY pace) keeps that lattice through the bridged held-frame proof;
+        // pacing it to 40 only trades 60->120 x2 for a 37.5-unique 40 lattice
+        // (gc-b50b, gc-b52).  Leave it to the canonical acquisition.
+        // Wii U run wiiu-b56b (2026-09-02): NES Remix hovered 52-59 unique of
+        // 60 for an hour, unqualified, straddling this threshold, so the
+        // host's evidence streak reset every few seconds and the downgrade
+        // probe never re-fired after its lift.  The light-hold band is now
+        // reported separately; the host demands a much longer unqualified
+        // streak for it instead of ignoring it.
+        boolean lightlyHeld = irregular && submission >= 59.0 && unique >= 55.0;
+        if (lightlyHeld) irregular = false;
+        reportedStreamLightlyHeld = lightlyHeld;
+        reportedStreamIrregular = irregular;
+        reportedUniqueHz = unique;
+        reportedClockAcquisitionInProgress =
+                frameRate.canonicalReacquireEvidenceNsForDiagnostics() > 0L ||
+                frameRate.canonicalReacquireCandidateHzForDiagnostics() > 0.0;
+        reportedPanelClockRatio = frameRate.panelClockRatio();
+        reportedEndpointDriftUsPerS = frameRate.endpointDriftUsPerSecond();
+        reportedEndpointOffsetNs = frameRate.endpointOffsetNs();
+        if (sourceTenths == reportedSourceTenths &&
+                outputTenths == reportedOutputTenths &&
+                targetTenths == reportedTargetTenths &&
+                cadenceQualified == reportedCadenceQualified &&
+                backendLabel.equals(reportedBackendLabel)) return;
+        reportedSourceTenths = sourceTenths;
+        reportedOutputTenths = outputTenths;
+        reportedTargetTenths = targetTenths;
+        reportedCadenceQualified = cadenceQualified;
+        reportedBackendLabel = backendLabel;
+        FrameGenerationRenderer.StatsListener callback = statsListener;
+        if (callback != null) callback.onFrameRate(source, targetOutput, output,
+                cadenceQualified);
+        Log.i(TAG, "Frame rate committed source=" +
+                String.format(java.util.Locale.US, "%.1f", source) +
+                " target=" + String.format(java.util.Locale.US, "%.3f",
+                        targetOutput) +
+                " actual=" + String.format(java.util.Locale.US, "%.3f",
+                        output) +
+                " cadenceQualified=" + (cadenceQualified ? 1 : 0) +
+                " backend=" + backendLabel + " FPS");
     }
 
     private void bindQuad(int program) {
@@ -6168,7 +12453,41 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         }
     }
 
+    private void reopenUnusedSoftwareTransport(int width, int height) {
+        if (submittedFrameCount != 0 || !externalTransport.usesAppOwnedPresentation() ||
+                !appOwnedPhysicalPending.isEmpty())
+            throw new IllegalStateException("Native geometry requires an unused private transport");
+        // No endpoint has been exported. Drain constructor GPU work before
+        // destroying its EGL producer and ImageReader; keep the emulator's
+        // input Surface and the visible output Surface unchanged.
+        externalTransport.close();
+        externalTransport = null;
+        if (!EGL14.eglDestroySurface(eglDisplay, eglEndpointSurface))
+            fail("eglDestroySurface(native-geometry)");
+        eglEndpointSurface = EGL14.EGL_NO_SURFACE;
+        try {
+            externalTransport = externalTransportFactory.open(outputSurface, handler, width, height);
+        } catch (Exception failure) {
+            throw new IllegalStateException("Native software transport initialization failed", failure);
+        }
+        if (!externalTransport.usesAppOwnedPresentation() ||
+                externalTransport.endpointWidth() != width || externalTransport.endpointHeight() != height)
+            throw new IllegalStateException("Native software transport geometry mismatch");
+        registerExternalPreparationCapacityListener();
+        eglEndpointSurface = EGL14.eglCreateWindowSurface(eglDisplay, endpointEglConfig,
+                externalTransport.endpointSurface(), new int[]{EGL14.EGL_NONE}, 0);
+        if (eglEndpointSurface == EGL14.EGL_NO_SURFACE) fail("eglCreateWindowSurface(native-geometry)");
+        if (!EGL14.eglMakeCurrent(eglDisplay, eglEndpointSurface, eglEndpointSurface, eglContext) ||
+                !EGL14.eglSwapInterval(eglDisplay, externalTransportFactory.endpointSwapInterval()) ||
+                !EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext))
+            fail("eglConfigureSurface(native-geometry)");
+        Log.i(TAG, "External native software geometry width=" + width + " height=" + height);
+    }
+
     private void releaseGl() {
+        discardFullImageCapture();
+        closeNativeSourceImageObserver();
+        RuntimeException transportCloseFailure = null;
         if (choreographer != null) choreographer.removeFrameCallback(this);
         choreographer = null;
         Surface producer = inputSurface;
@@ -6180,9 +12499,34 @@ public final class DisplayFrameGenerator implements AutoCloseable,
             inputTexture.release();
             inputTexture = null;
         }
+        EGLSurface workingSurface = workingEglSurface();
         if (eglDisplay != EGL14.EGL_NO_DISPLAY && eglContext != EGL14.EGL_NO_CONTEXT &&
-                eglSurface != EGL14.EGL_NO_SURFACE)
-            EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext);
+                workingSurface != EGL14.EGL_NO_SURFACE)
+            EGL14.eglMakeCurrent(eglDisplay, workingSurface, workingSurface, eglContext);
+        ExternalFrameGenerationTransport transport = externalTransport;
+        if (transport != null && transport.usesAppOwnedPresentation()) {
+            // The native private pool owns EGLImages and GL completion fences
+            // created by this exact context. Retire it while that context is
+            // current; waiting here is an explicit teardown boundary, never a
+            // live presentation-path GPU wait.
+            try {
+                transport.close();
+            } catch (RuntimeException failure) {
+                transportCloseFailure = failure;
+            } finally {
+                externalTransport = null;
+            }
+        }
+        if (physicalPresentationTracker != null) {
+            physicalPresentationTracker.close();
+            physicalPresentationTracker = null;
+        }
+        appOwnedPhysicalPending.clear();
+        if (externalSignatureTimer != null) {
+            externalSignatureTimer.discardPending();
+            externalSignatureTimer.close();
+            externalSignatureTimer = null;
+        }
         if (denseGpuTimer != null) {
             // PBO/fence/query objects belong to this EGL context. It is still
             // current on the owning handler here; never move this close below
@@ -6227,8 +12571,12 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         if (signatureQueryTexture != 0)
             GLES20.glDeleteTextures(1, new int[]{signatureQueryTexture}, 0);
         if (externalTexture != 0) GLES20.glDeleteTextures(1, new int[]{externalTexture}, 0);
+        if (externalGeneratedTexture != 0)
+            GLES20.glDeleteTextures(1, new int[]{externalGeneratedTexture}, 0);
         if (copyProgram != 0) GLES20.glDeleteProgram(copyProgram);
         if (textureCopyProgram != 0) GLES20.glDeleteProgram(textureCopyProgram);
+        if (externalGeneratedTextureCopyProgram != 0)
+            GLES20.glDeleteProgram(externalGeneratedTextureCopyProgram);
         if (signatureCompareProgram != 0) GLES20.glDeleteProgram(signatureCompareProgram);
         if (coarseMotionProgram != 0) GLES20.glDeleteProgram(coarseMotionProgram);
         if (refineMotionProgram != 0) GLES20.glDeleteProgram(refineMotionProgram);
@@ -6249,12 +12597,31 @@ public final class DisplayFrameGenerator implements AutoCloseable,
                     GLES20.glDeleteTextures(2, denseFlowTextures[direction][level], 0);
             if (densePyramidTextures[direction][0] != 0)
                 GLES20.glDeleteTextures(2, densePyramidTextures[direction], 0);
+            if (denseBoxTextures[direction][0] != 0)
+                GLES20.glDeleteTextures(2, denseBoxTextures[direction], 0);
         }
         if (denseValidatedTextures[0] != 0)
             GLES20.glDeleteTextures(2, denseValidatedTextures, 0);
+            GLES20.glDeleteTextures(2, denseFillTextures, 0);
+        if (denseGlobalCoarseCostTextures[0] != 0)
+            GLES20.glDeleteTextures(2, denseGlobalCoarseCostTextures, 0);
+        if (denseGlobalFineCostTextures[0] != 0)
+            GLES20.glDeleteTextures(2, denseGlobalFineCostTextures, 0);
+        if (denseGlobalCoarseSeedTextures[0] != 0)
+            GLES20.glDeleteTextures(2, denseGlobalCoarseSeedTextures, 0);
+        if (denseGlobalSeedTextures[0] != 0)
+            GLES20.glDeleteTextures(2, denseGlobalSeedTextures, 0);
+            GLES20.glDeleteTextures(2, denseGlobalCutTextures, 0);
         if (densePyramidProgram != 0) GLES20.glDeleteProgram(densePyramidProgram);
+        if (denseGlobalCostProgram != 0)
+            GLES20.glDeleteProgram(denseGlobalCostProgram);
+        if (denseGlobalReduceProgram != 0)
+            GLES20.glDeleteProgram(denseGlobalReduceProgram);
+        if (denseGlobalCutProgram != 0)
+            GLES20.glDeleteProgram(denseGlobalCutProgram);
         if (denseSolveProgram != 0) GLES20.glDeleteProgram(denseSolveProgram);
         if (denseCycleProgram != 0) GLES20.glDeleteProgram(denseCycleProgram);
+        if (denseFillProgram != 0) GLES20.glDeleteProgram(denseFillProgram);
         if (denseQ8ProbeProgram != 0) GLES20.glDeleteProgram(denseQ8ProbeProgram);
         if (proofAtlasHeaderProgram != 0)
             GLES20.glDeleteProgram(proofAtlasHeaderProgram);
@@ -6263,18 +12630,34 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
             EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE,
                     EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT);
+            if (eglEndpointSurface != EGL14.EGL_NO_SURFACE)
+                EGL14.eglDestroySurface(eglDisplay, eglEndpointSurface);
             if (eglSurface != EGL14.EGL_NO_SURFACE)
                 EGL14.eglDestroySurface(eglDisplay, eglSurface);
             if (eglContext != EGL14.EGL_NO_CONTEXT)
                 EGL14.eglDestroyContext(eglDisplay, eglContext);
             EGL14.eglTerminate(eglDisplay);
         }
+        transport = externalTransport;
+        externalTransport = null;
+        if (transport != null) {
+            try {
+                transport.close();
+            } catch (RuntimeException failure) {
+                if (transportCloseFailure == null)
+                    transportCloseFailure = failure;
+                else
+                    transportCloseFailure.addSuppressed(failure);
+            }
+        }
+        eglEndpointSurface = EGL14.EGL_NO_SURFACE;
         eglSurface = EGL14.EGL_NO_SURFACE;
         eglContext = EGL14.EGL_NO_CONTEXT;
         eglDisplay = EGL14.EGL_NO_DISPLAY;
         Log.i(TAG, "Frame generator detached presents=" + presents +
                 " generated=" + generatedPresents + " real=" + realFrameCount +
                 " submitted=" + submittedFrameCount);
+        if (transportCloseFailure != null) throw transportCloseFailure;
     }
 
     private static void bindTexture(int program, String uniform, int texture, int unit) {
@@ -6325,6 +12708,49 @@ public final class DisplayFrameGenerator implements AutoCloseable,
         GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
         GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
         GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+    }
+
+    private static final class AppOwnedPhysicalPending {
+        final long frameId;
+        final FrameGenerationPresentationRequest request;
+        final ExternalFrameGenerationTransport.AppOwnedOutput generatedOutput;
+        final long bindWallNs;
+        final long swapWallNs;
+        final long submissionStartedNs;
+        final long swapStartedNs;
+        final long swapCompletedNs;
+        final int scansPerOutput;
+        final long panelPeriodNs;
+
+        AppOwnedPhysicalPending(
+                long frameId, FrameGenerationPresentationRequest request,
+                ExternalFrameGenerationTransport.AppOwnedOutput generatedOutput,
+                long bindWallNs, long swapWallNs,
+                long submissionStartedNs, long swapStartedNs,
+                long swapCompletedNs,
+                int scansPerOutput, long panelPeriodNs) {
+            if (frameId <= 0L || request == null || bindWallNs <= 0L ||
+                    swapWallNs <= 0L || submissionStartedNs <= 0L ||
+                    swapStartedNs < submissionStartedNs ||
+                    swapCompletedNs < swapStartedNs ||
+                    scansPerOutput <= 0 ||
+                    panelPeriodNs <= 0L ||
+                    request.isGenerated() != (generatedOutput != null) ||
+                    (generatedOutput != null &&
+                            generatedOutput.request != request))
+                throw new IllegalArgumentException(
+                        "app-owned physical row identity is invalid");
+            this.frameId = frameId;
+            this.request = request;
+            this.generatedOutput = generatedOutput;
+            this.bindWallNs = bindWallNs;
+            this.swapWallNs = swapWallNs;
+            this.submissionStartedNs = submissionStartedNs;
+            this.swapStartedNs = swapStartedNs;
+            this.swapCompletedNs = swapCompletedNs;
+            this.scansPerOutput = scansPerOutput;
+            this.panelPeriodNs = panelPeriodNs;
+        }
     }
 
     private static void checkGl(String operation) {

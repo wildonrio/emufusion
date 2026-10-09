@@ -1,0 +1,20 @@
+diff --git a/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp b/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
+--- a/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
++++ b/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
+@@ -217,10 +217,15 @@ void GLInfo::init()
+ 
+ 	anisotropic_filtering = Utils::isExtensionSupported(*this, "GL_EXT_texture_filter_anisotropic");
+ 
+-#ifdef OS_ANDROID
++#if defined(EGL) && defined(OS_ANDROID)
+ 	eglImage = eglImage &&
+ 	        ( (isGLES2 && GraphicBufferWrapper::isSupportAvailable()) || (isGLESX && GraphicBufferWrapper::isPublicSupportAvailable()) ) &&
+ 		    (renderer != Renderer::PowerVR) && (renderer != Renderer::Tegra) && (renderer != Renderer::Angle);
++#else
++	// Match ContextImpl::createColorBufferReader's compiled implementation.
++	// Advertising EGL images without that reader skips texture allocation in
++	// FrameBuffer::_initColorFBTexture and leaves readback FBOs incomplete.
++	eglImage = false;
+ #endif
+ 
+ 	if (renderer == Renderer::Intel) {

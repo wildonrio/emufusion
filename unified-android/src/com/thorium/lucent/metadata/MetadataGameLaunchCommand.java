@@ -1,6 +1,6 @@
 package com.thorium.lucent.metadata;
 
-/** Pure builder for the one same-window Lucent metadata command. */
+/** Pure builder for the one same-window EmuFusion metadata command. */
 public final class MetadataGameLaunchCommand {
     private static final String ACTION = "com.thorium.preview.LAUNCH_INTERNAL_GAME";
     private static final String COMPONENT =
@@ -18,7 +18,7 @@ public final class MetadataGameLaunchCommand {
         String engine = normalize(engineId);
         String launchAction = action == null ? "" : action.trim();
         if (system.isEmpty() || engine.isEmpty() || launchAction.isEmpty()) return "";
-        // Pegasus's Android frontend accepts only `am start` syntax. Lucent's
+        // Pegasus's Android frontend accepts only `am start` syntax. EmuFusion's
         // patched MainActivity.launchAmCommand intercepts this exact internal
         // action before startActivity, validates it, and attaches the host to
         // the already-live Activity. The command therefore remains compatible

@@ -5,19 +5,133 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+
+static void *adapter_java_vm;
+
+#define MAX_JNI_INITIALIZED_ADAPTERS 16
+static pthread_mutex_t adapter_jni_onload_lock = PTHREAD_MUTEX_INITIALIZER;
+static void *adapter_jni_initialized[MAX_JNI_INITIALIZED_ADAPTERS];
+static size_t adapter_jni_initialized_count;
+
+typedef int (*fn_lucent_set_java_vm)(uint32_t, void *);
+
+static void set_error(char *buffer, size_t size, const char *format, ...);
+
+void lucent_native_adapter_supply_java_vm(void *java_vm) {
+    adapter_java_vm = java_vm;
+}
+
 #if defined(__ANDROID__)
 #include <android/log.h>
+#include <jni.h>
+
+/* Android invokes JNI_OnLoad only for libraries opened through
+ * System.loadLibrary. Lucent opens an adapter with dlopen, so an adapter that
+ * embeds an Android frontend never gets its JNI state initialised: Eden caches
+ * the process JavaVM there, and without it Common::Android::GetEnvForThread()
+ * returns null and the first helper thread that reaches for a JNIEnv dies on a
+ * null dereference. The bridge hands us the VM in JNI_OnLoad and we perform the
+ * call Android would have made. The same problem is solved for libretro cores
+ * by lucent_retro_supply_android_java_vm; an adapter differs only in exporting
+ * the standard entry point rather than a Lucent-specific setter. */
+/* Android's linker returns the same soinfo/handle when the same absolute
+ * adapter path is opened again. JNI_OnLoad is a process-lifetime hook, not a
+ * per-session hook, so invoking it on every NativeAdapterHost construction is
+ * both incorrect and expensive for Eden's very large JNI library. Keep the
+ * small set of successfully initialised adapter handles process-wide. This
+ * also makes background preloading safe: the later gameplay session reuses the
+ * already relocated library without re-running Eden's JNI bootstrap. */
+typedef jint (*fn_jni_on_load)(JavaVM *, void *);
 #endif
+
+/* Prefer a Lucent-specific, ABI-versioned handoff. aPS3e uses this because its
+ * JNI_OnLoad unconditionally registers upstream Activity classes; invoking it
+ * in the unified app aborts ART before a Java error can be reported. Adapters
+ * without the setter retain the old JNI_OnLoad path exactly. */
+static bool supply_java_vm_to_adapter(void *library,
+                                      char *error, size_t error_size) {
+    fn_lucent_set_java_vm set_vm = NULL;
+    void *setter_symbol;
+#if defined(__ANDROID__)
+    fn_jni_on_load on_load = NULL;
+    void *on_load_symbol;
+    jint version;
+#endif
+    if (!library || !adapter_java_vm) return true;
+    pthread_mutex_lock(&adapter_jni_onload_lock);
+    for (size_t index = 0; index < adapter_jni_initialized_count; ++index) {
+        if (adapter_jni_initialized[index] == library) {
+            pthread_mutex_unlock(&adapter_jni_onload_lock);
+            return true;
+        }
+    }
+    dlerror();
+    setter_symbol = dlsym(library, LUCENT_NATIVE_ADAPTER_JAVA_VM_SYMBOL);
+    if (setter_symbol) {
+        int accepted;
+        memcpy(&set_vm, &setter_symbol, sizeof(set_vm));
+        accepted = set_vm(LUCENT_NATIVE_ADAPTER_JAVA_VM_VERSION,
+                          adapter_java_vm);
+        if (!accepted) {
+            set_error(error, error_size,
+                      "adapter rejected JavaVM handoff version %u",
+                      LUCENT_NATIVE_ADAPTER_JAVA_VM_VERSION);
+            pthread_mutex_unlock(&adapter_jni_onload_lock);
+            return false;
+        }
+        if (adapter_jni_initialized_count < MAX_JNI_INITIALIZED_ADAPTERS)
+            adapter_jni_initialized[adapter_jni_initialized_count++] = library;
+        pthread_mutex_unlock(&adapter_jni_onload_lock);
+#if defined(__ANDROID__)
+        __android_log_print(ANDROID_LOG_INFO, "LucentNativeAdapter",
+                "adapter accepted versioned JavaVM handoff version=%u",
+                LUCENT_NATIVE_ADAPTER_JAVA_VM_VERSION);
+#endif
+        return true;
+    }
+#if defined(__ANDROID__)
+    dlerror();
+    on_load_symbol = dlsym(library, "JNI_OnLoad");
+    if (!on_load_symbol) {
+        pthread_mutex_unlock(&adapter_jni_onload_lock);
+        return true;
+    }
+    memcpy(&on_load, &on_load_symbol, sizeof(on_load));
+    version = on_load((JavaVM *)adapter_java_vm, NULL);
+    if (version >= JNI_VERSION_1_6 &&
+            adapter_jni_initialized_count < MAX_JNI_INITIALIZED_ADAPTERS) {
+        adapter_jni_initialized[adapter_jni_initialized_count++] = library;
+    }
+    pthread_mutex_unlock(&adapter_jni_onload_lock);
+    __android_log_print(version >= JNI_VERSION_1_6 ? ANDROID_LOG_INFO
+                                                   : ANDROID_LOG_ERROR,
+            "LucentNativeAdapter",
+            "adapter JNI_OnLoad returned 0x%x for JavaVM %p", version,
+            adapter_java_vm);
+    if (version < JNI_VERSION_1_6) {
+        set_error(error, error_size, "adapter JNI_OnLoad rejected the JavaVM");
+        return false;
+    }
+    return true;
+#else
+    pthread_mutex_unlock(&adapter_jni_onload_lock);
+    return true;
+#endif
+}
 
 struct lucent_native_adapter_host {
     void *library;
     const lucent_native_adapter *vtable;
     lucent_native_engine *engine;
     lucent_native_capabilities capabilities;
+    uint32_t (*source_binding)(lucent_source_binding_v1 *, uint32_t);
+    uint32_t (*source_query)(uint64_t, uint64_t, uint64_t, lucent_source_image_v1 *, uint32_t);
     bool loaded;
     bool started;
     bool stopped;
@@ -85,6 +199,12 @@ lucent_native_adapter_host *lucent_native_adapter_open(
         set_error(error, error_size, "cannot load adapter: %s", dlerror());
         return NULL;
     }
+    /* Before the entry point runs, so no adapter thread can reach for a JNIEnv
+     * that has not been established yet. */
+    if (!supply_java_vm_to_adapter(library, error, error_size)) {
+        dlclose(library);
+        return NULL;
+    }
     dlerror();
     symbol = dlsym(library, LUCENT_NATIVE_ADAPTER_ENTRY_SYMBOL);
     if (!symbol || dlerror()) {
@@ -118,7 +238,8 @@ lucent_native_adapter_host *lucent_native_adapter_open(
     memset(&capabilities, 0, sizeof(capabilities));
     vtable->describe(&capabilities);
     if (capabilities.abi_version != LUCENT_NATIVE_ADAPTER_ABI_VERSION ||
-            !capabilities.engine_id || !capabilities.engine_id[0]) {
+            !capabilities.engine_id || !capabilities.engine_id[0] ||
+            capabilities.max_controllers == 0) {
         set_error(error, error_size,
                   "adapter describe() reported an invalid capability record");
         dlclose(library);
@@ -134,15 +255,22 @@ lucent_native_adapter_host *lucent_native_adapter_open(
     host->library = library;
     host->vtable = vtable;
     host->capabilities = capabilities;
+    /* Resolve optional hot-path queries once during setup, not under a live
+     * renderer deadline where dlsym may contend on the dynamic-linker lock. */
+    void *binding_symbol = dlsym(library, "lucent_native_adapter_source_image_binding_v1");
+    void *query_symbol = dlsym(library, "lucent_native_adapter_query_source_image_v1");
+    if (binding_symbol) memcpy(&host->source_binding, &binding_symbol, sizeof(host->source_binding));
+    if (query_symbol) memcpy(&host->source_query, &query_symbol, sizeof(host->source_query));
 #if defined(__ANDROID__)
     __android_log_print(ANDROID_LOG_INFO, "LucentNativeAdapter",
             "adapter loaded engine=%s version=%s abi=%u quickResume=%d "
-            "persistentSave=%d dualScreen=%d",
+            "persistentSave=%d dualScreen=%d maxControllers=%u",
             capabilities.engine_id,
             capabilities.engine_version ? capabilities.engine_version : "",
             capabilities.abi_version, capabilities.has_quick_resume ? 1 : 0,
             capabilities.has_persistent_save ? 1 : 0,
-            capabilities.dual_screen ? 1 : 0);
+            capabilities.dual_screen ? 1 : 0,
+            capabilities.max_controllers);
 #endif
     return host;
 }
@@ -239,6 +367,7 @@ bool lucent_native_adapter_run_frame(lucent_native_adapter_host *host,
 }
 
 bool lucent_native_adapter_set_control(lucent_native_adapter_host *host,
+                                       uint32_t controller_index,
                                        lucent_native_control control,
                                        float value,
                                        char *error, size_t error_size) {
@@ -246,7 +375,7 @@ bool lucent_native_adapter_set_control(lucent_native_adapter_host *host,
         set_error(error, error_size, "adapter is not running");
         return false;
     }
-    host->vtable->set_control(host->engine, control, value);
+    host->vtable->set_control(host->engine, controller_index, control, value);
     return true;
 }
 
@@ -366,10 +495,14 @@ bool lucent_native_adapter_surface_recreated(lucent_native_adapter_host *host,
 
 bool lucent_native_adapter_stop(lucent_native_adapter_host *host,
                                 char *error, size_t error_size) {
-    if (!host || !host->engine) {
+    if (!host) {
         set_error(error, error_size, "adapter session is not created");
         return false;
     }
+    /* Preparation may reject missing user firmware after open/describe but
+     * before create. There is no engine to stop in that state; let the owner
+     * close its wrapper instead of permanently retaining a failed session. */
+    if (!host->engine) return true;
     if (host->stopped) return true;
     host->vtable->stop(host->engine);
     host->started = false;
@@ -384,7 +517,46 @@ void lucent_native_adapter_destroy(lucent_native_adapter_host *host) {
         host->vtable->destroy(host->engine);
         host->engine = NULL;
     }
-    if (host->library) dlclose(host->library);
+    /*
+     * The engine library is DELIBERATELY left mapped.
+     *
+     * dlclose() does not merely drop a mapping: the linker runs the library's
+     * static destructors through __cxa_finalize first. For a 23 MB emulator
+     * core that means destroying every file-scope object it owns, and neither
+     * of the engines behind this ABI is built to survive that.
+     *
+     * Cemu is the measured case. It is a one-title-per-process emulator whose
+     * own Android frontend calls exitProcess(0) when the user quits, so it has
+     * no path that returns the library to a pristine state and never joins
+     * several of its file-scope std::thread objects -- the title-list refresh
+     * worker and the IOSU service threads among them. ~std::thread on a thread
+     * that is still joinable calls std::terminate() by definition, so unloading
+     * the library killed the whole app on the way out of a Wii U session:
+     *
+     *     #04 std::terminate()
+     *     #05 std::__ndk1::thread::~thread()
+     *     #06 __cxa_finalize
+     *     #07 soinfo::call_destructors()
+     *     #09 do_dlclose
+     *     #12 lucent_native_adapter_destroy
+     *     #18 NativeAdapterEngineSession.closeHost
+     *
+     * Even without that abort the unload would be unsound: both engines spawn
+     * DETACHED threads (Cemu's PPC timer calibration, its ThreadPool
+     * fire-and-forget work and its title thread; Eden's equivalents), and this
+     * host has no way to know they have finished. Unmapping the code they are
+     * executing is a dangling-code-pointer crash waiting for the next
+     * scheduling slice.
+     *
+     * Keeping it mapped is also what the adapters already assume: the Cemu
+     * adapter's process-wide one-shot initialisation exists precisely because
+     * the library stays loaded and a second title launches into the same
+     * process. Costing address space in a process that will dlopen the same
+     * path again is the cheap side of this trade.
+     *
+     * The dlclose() calls on the LOAD-FAILURE paths above are unaffected and
+     * still correct: nothing in the engine has run at that point.
+     */
     free(host);
 }
 
@@ -398,7 +570,142 @@ bool lucent_native_adapter_has_persistent_save(
     return host && host->capabilities.has_persistent_save;
 }
 
+uint32_t lucent_native_adapter_max_controllers(
+        const lucent_native_adapter_host *host) {
+    return host ? host->capabilities.max_controllers : 1u;
+}
+
 bool lucent_native_adapter_dual_screen(
         const lucent_native_adapter_host *host) {
     return host && host->capabilities.dual_screen;
+}
+
+double lucent_native_adapter_average_fps(lucent_native_adapter_host *host) {
+    /* Optional and resolved per call rather than cached at open(), because an
+     * adapter is free to publish the hook only once a session is live. */
+    static const char standard_symbol[] =
+            "lucent_native_adapter_average_game_fps";
+    static const char fps_symbol[] = "lucent_eden_average_game_fps";
+    double (*reader)(void) = NULL;
+    void *symbol;
+    if (!host || !host->library || !host->started) {
+        return LUCENT_NATIVE_ADAPTER_FPS_UNSUPPORTED;
+    }
+    dlerror();
+    symbol = dlsym(host->library, standard_symbol);
+    if (!symbol && host->capabilities.engine_id &&
+            strcmp(host->capabilities.engine_id, "eden") == 0) {
+        dlerror();
+        symbol = dlsym(host->library, fps_symbol);
+    }
+    if (!symbol) return LUCENT_NATIVE_ADAPTER_FPS_UNSUPPORTED;
+    memcpy(&reader, &symbol, sizeof(reader));
+    return reader();
+}
+
+bool lucent_native_adapter_set_fg_presentation(lucent_native_adapter_host *host,
+                                              bool enabled) {
+    void (*setter)(bool) = NULL;
+    void *symbol;
+    if (!host || !host->library || !host->loaded) return false;
+    dlerror();
+    symbol = dlsym(host->library, "lucent_native_adapter_set_fg_presentation_v1");
+    if (!symbol) return false;
+    memcpy(&setter, &symbol, sizeof(setter));
+    setter(enabled);
+    return true;
+}
+
+double lucent_native_adapter_declared_video_hz(lucent_native_adapter_host *host) {
+    double (*reader)(void) = NULL;
+    void *symbol;
+    if (!host || !host->library || !host->started) return 0.0;
+    dlerror();
+    symbol = dlsym(host->library, "lucent_native_adapter_declared_video_hz");
+    if (!symbol) return 0.0;
+    memcpy(&reader, &symbol, sizeof(reader));
+    return reader();
+}
+
+bool lucent_native_adapter_set_paced_video_hz(lucent_native_adapter_host *host,
+                                              double hz) {
+    bool (*setter)(double) = NULL;
+    void *symbol;
+    if (!host || !host->library || !host->started) return false;
+    if (hz != 0.0) {
+        double declared = lucent_native_adapter_declared_video_hz(host);
+        if (!isfinite(declared) || declared <= 1.0 || declared >= 1000.0 ||
+            !isfinite(hz) || hz <= 1.0 || hz >= 1000.0 ||
+            fabs(hz / declared - 1.0) > 0.0075 + 1.0e-12) return false;
+    }
+    dlerror();
+    symbol = dlsym(host->library, "lucent_native_adapter_set_paced_video_hz");
+    if (!symbol) return false;
+    memcpy(&setter, &symbol, sizeof(setter));
+    return setter(hz);
+}
+
+uint32_t lucent_native_adapter_timing_capabilities(lucent_native_adapter_host *host) {
+    uint32_t (*reader)(void) = NULL;
+    void *symbol;
+    if (!host || !host->library || !host->started) return 0u;
+    dlerror();
+    symbol = dlsym(host->library, "lucent_native_adapter_timing_capabilities_v1");
+    if (!symbol) return 0u;
+    memcpy(&reader, &symbol, sizeof(reader));
+    return reader() & (LUCENT_NATIVE_TIMING_BASE_CLOCK_CORRECTION |
+                       LUCENT_NATIVE_TIMING_SUBMISSION_TIMESTAMPS |
+                       LUCENT_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE);
+}
+
+double lucent_native_adapter_producer_timeline_hz(lucent_native_adapter_host *host) {
+    double (*reader)(void) = NULL;
+    void *symbol;
+    if (!(lucent_native_adapter_timing_capabilities(host) &
+            LUCENT_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE)) return 0.0;
+    dlerror();
+    symbol = dlsym(host->library, "lucent_native_adapter_producer_timeline_hz");
+    if (!symbol) return 0.0;
+    memcpy(&reader, &symbol, sizeof(reader));
+    double hz = reader();
+    return isfinite(hz) && hz > 1.0 && hz < 1000.0 ? hz : 0.0;
+}
+
+uint32_t lucent_native_adapter_source_image_binding(lucent_native_adapter_host *host,
+        lucent_source_binding_v1 *out, uint32_t out_size) {
+    if (!out || out_size < sizeof(*out)) return LUCENT_SOURCE_BAD_ARGUMENT;
+    memset(out, 0, sizeof(*out));
+    if (!host || !host->library || !host->started) return LUCENT_SOURCE_CLOSED;
+    if (!host->source_binding) return LUCENT_SOURCE_UNSUPPORTED;
+    uint32_t result = host->source_binding(out, out_size);
+    if (result == LUCENT_SOURCE_MATCH_ACCEPTED &&
+            (out->version != LUCENT_SOURCE_IMAGE_VERSION || out->struct_size != sizeof(*out) ||
+             !out->session_epoch || !out->surface_epoch)) {
+        memset(out, 0, sizeof(*out));
+        return LUCENT_SOURCE_BAD_ARGUMENT;
+    }
+    return result;
+}
+
+uint32_t lucent_native_adapter_query_source_image(lucent_native_adapter_host *host,
+        uint64_t session_epoch, uint64_t surface_epoch, uint64_t buffer_timestamp_ns,
+        lucent_source_image_v1 *out, uint32_t out_size) {
+    if (!out || out_size < sizeof(*out) || !session_epoch || !surface_epoch || !buffer_timestamp_ns)
+        return LUCENT_SOURCE_BAD_ARGUMENT;
+    memset(out, 0, sizeof(*out));
+    if (!host || !host->library || !host->started) return LUCENT_SOURCE_CLOSED;
+    if (!host->source_query) return LUCENT_SOURCE_UNSUPPORTED;
+    uint32_t result = host->source_query(session_epoch, surface_epoch, buffer_timestamp_ns, out, out_size);
+    if (result == LUCENT_SOURCE_MATCH_ACCEPTED || result == LUCENT_SOURCE_PENDING ||
+            result == LUCENT_SOURCE_AMBIGUOUS || result == LUCENT_SOURCE_REJECTED) {
+        if (out->version != LUCENT_SOURCE_IMAGE_VERSION || out->struct_size != sizeof(*out) ||
+                out->state != result || out->buffer_timestamp_ns != buffer_timestamp_ns ||
+                out->composition.header.session_epoch != session_epoch ||
+                out->composition.header.surface_epoch != surface_epoch ||
+                out->composition.retained_layer_count > LUCENT_SOURCE_IMAGE_MAX_LAYERS) {
+            memset(out, 0, sizeof(*out));
+            return LUCENT_SOURCE_BAD_ARGUMENT;
+        }
+    }
+    return result;
 }

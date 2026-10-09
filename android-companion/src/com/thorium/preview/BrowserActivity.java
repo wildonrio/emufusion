@@ -39,14 +39,14 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** A small browser that remains inside Lucent and routes ordinary web
+/** A small browser that remains inside EmuFusion and routes ordinary web
  * downloads through Android's DownloadManager into the public Downloads
  * directory. It deliberately retains WebView's default TLS validation.
  *
  * On a dual-screen Thor this window belongs on the physical lower display,
  * the same surface the preview player uses: it is a companion window, never
  * a second library. It runs in its own task so it stacks above the resident
- * PreviewActivity instead of replacing it, which keeps Lucent — not Android's
+ * PreviewActivity instead of replacing it, which keeps EmuFusion — not Android's
  * launcher — in ownership of that display for the whole browsing session. */
 public final class BrowserActivity extends Activity {
     public static final String EXTRA_URL = "com.thorium.preview.BROWSER_URL";
@@ -71,7 +71,7 @@ public final class BrowserActivity extends Activity {
     private EditText address;
     private TextView progress;
 
-    /** Opens Lucent's browser on the display it belongs to and returns that
+    /** Opens EmuFusion's browser on the display it belongs to and returns that
      * display id, or {@link #LAUNCH_FAILED}. Callable from the service, which
      * is why it carries the same background-activity-start handling as the
      * preview and secondary-gameplay launches. */
@@ -329,10 +329,10 @@ public final class BrowserActivity extends Activity {
         String scheme = uri.getScheme();
         if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
             return false;
-        // Keep Lucent's browser in the same package. Downloads are handled by
+        // Keep EmuFusion's browser in the same package. Downloads are handled by
         // BrowserDownloadListener; arbitrary deep links must not switch into
         // another application or create a second app/task identity.
-        Toast.makeText(this, "Only web links and downloads open inside Lucent",
+        Toast.makeText(this, "Only web links and downloads open inside EmuFusion",
                 Toast.LENGTH_SHORT).show();
         return true;
     }
@@ -365,7 +365,7 @@ public final class BrowserActivity extends Activity {
                 request.addRequestHeader("Accept", "*/*");
                 request.addRequestHeader("Accept-Language", "en-US,en;q=0.9");
                 request.setTitle(fileName);
-                request.setDescription("Downloaded from Lucent Browser");
+                request.setDescription("Downloaded from EmuFusion Browser");
                 request.setAllowedOverMetered(true);
                 request.setAllowedOverRoaming(true);
                 request.setNotificationVisibility(
@@ -376,7 +376,7 @@ public final class BrowserActivity extends Activity {
                         getSystemService(Context.DOWNLOAD_SERVICE);
                 if (manager == null) throw new IllegalStateException("DownloadManager unavailable");
                 // enqueue() transfers ownership to the system's
-                // android.providers.downloads process. Nothing in Lucent may
+                // android.providers.downloads process. Nothing in EmuFusion may
                 // call manager.remove(id) afterwards: the transfer has to
                 // outlive this Activity, this display, and this process.
                 long downloadId = manager.enqueue(request);
@@ -432,6 +432,17 @@ public final class BrowserActivity extends Activity {
     @Override public void onBackPressed() {
         if (webView != null && webView.canGoBack()) webView.goBack();
         else super.onBackPressed();
+    }
+
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        // BrowserActivity owns a separate focusable window (and, on a Thor,
+        // can own the lower display), so MainActivity's pre-Qt key hook cannot
+        // see volume presses delivered here. Route the complete DOWN/UP pair
+        // through the same controller: ACTION_DOWN adjusts STREAM_MUSIC once
+        // and reconciles every app-owned sink, while ACTION_UP is consumed
+        // without a second adjustment.
+        if (AppVolumeController.handleKeyEvent(this, event)) return true;
+        return super.dispatchKeyEvent(event);
     }
 
     @Override protected void onPause() {

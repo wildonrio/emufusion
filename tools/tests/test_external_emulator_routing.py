@@ -35,6 +35,7 @@ def _read(path: Path) -> str:
 CATALOG = _read(COMPANION / "EmulatorCatalog.java")
 ROUTE_STORE = _read(COMPANION / "EngineRouteStore.java")
 IMPORTER = _read(COMPANION / "ImportManager.java")
+GAME_SYSTEMS = _read(COMPANION / "GameSystems.java")
 MIGRATION = _read(COMPANION / "LaunchMetadataRouter.java")
 TRAMPOLINE = _read(COMPANION / "RomLaunchActivity.java")
 PROVIDER = _read(COMPANION / "RomFileProvider.java")
@@ -44,17 +45,15 @@ DOC = _read(ROOT / "docs" / "external-emulator-routing.md") \
 
 
 class EngineRouteStoreContractTest(unittest.TestCase):
-    def test_default_is_internal_when_an_engine_exists_else_external(self):
-        # resolve(): explicit EXTERNAL wins; explicit INTERNAL degrades to
-        # EXTERNAL if no engine; no explicit choice -> internal when an engine
-        # exists, external otherwise.
+    def test_default_is_internal_and_external_requires_explicit_choice(self):
+        # Engine/prerequisite failure must never grant permission to leave the
+        # app. An explicit External selection remains supported.
         block = ROUTE_STORE[ROUTE_STORE.index("public static String resolve"):]
         block = block[:block.index("public static String chosenEmulator")]
         self.assertIn('if (EXTERNAL.equals(stored)) return EXTERNAL;', block)
-        self.assertIn("hasInternalEngine(context, canonical)", block)
-        self.assertIn("internalAvailable ? INTERNAL : EXTERNAL", block)
-        self.assertIn(
-            "return internalAvailable ? INTERNAL : EXTERNAL;", block)
+        self.assertNotIn("hasInternalEngine(context, canonical)", block)
+        self.assertNotIn("internalAvailable ? INTERNAL : EXTERNAL", block)
+        self.assertIn("return INTERNAL;", block)
 
     def test_hasInternalEngine_uses_the_release_qualified_router(self):
         self.assertIn("GameLaunchRouter.supportsSystem(context,", ROUTE_STORE)
@@ -85,6 +84,37 @@ class EngineRouteStoreContractTest(unittest.TestCase):
         self.assertIn("ROUTE_PREFIX + canonical", ROUTE_STORE)
         self.assertIn("EMULATOR_PREFIX + canonical", ROUTE_STORE)
         self.assertIn("editor.remove(EMULATOR_PREFIX + canonical)", ROUTE_STORE)
+
+    def test_a_user_defined_custom_emulator_counts_as_an_external_option(self):
+        # A system the curated catalog cannot serve at all (no maintained
+        # standalone emulator) must still be pointable by hand, so the
+        # "no catalog option" refusal yields to a validated custom target.
+        block = ROUTE_STORE[ROUTE_STORE.index("public static boolean setRoute"):]
+        self.assertIn("!EmulatorCatalog.hasExternalOption(canonical)", block)
+        self.assertIn("&& !CustomEmulatorStore.has(context, canonical)", block)
+        # ...but only once the guided setup has proved it resolves on device.
+        self.assertIn(
+            "if (CustomEmulatorStore.option(context, canonical) == null) return false;",
+            block)
+
+    def test_internal_stays_the_default_for_every_engine_backed_system(self):
+        # The picker must not be able to weaken this: nothing in the settings
+        # surface writes a route except through setRoute, and resolve() has no
+        # branch that prefers external when an engine exists.
+        block = ROUTE_STORE[ROUTE_STORE.index("public static String resolve"):]
+        block = block[:block.index("public static String chosenEmulator")]
+        self.assertNotIn("EXTERNAL : INTERNAL", block)
+        self.assertNotIn("internalAvailable ? INTERNAL : EXTERNAL", block)
+        self.assertIn("return INTERNAL;", block)
+
+    def test_dolphin_never_falls_back_external_without_user_choice(self):
+        block = ROUTE_STORE[ROUTE_STORE.index("public static String resolve"):]
+        block = block[:block.index("public static String chosenEmulator")]
+        self.assertLess(block.index('if (EXTERNAL.equals(stored)) return EXTERNAL;'),
+                        block.rindex('return INTERNAL;'))
+        launch = ROUTE_STORE[ROUTE_STORE.index("public static String launchCommand"):]
+        self.assertIn('? GameLaunchRouter.metadataCommand(context, canonical) : "";',
+                      launch)
 
 
 class RouteChangeRewritesMetadataTest(unittest.TestCase):
@@ -126,9 +156,9 @@ class EmulatorCatalogRecipeTest(unittest.TestCase):
         for token in systems:
             self.assertNotIn("-none", token, f"malformed unsupported token {token!r}")
         # Xbox/Xbox360/Apple II stay genuinely optionless (no maintained Android
-        # port). PS3 now routes to aPS3e (user-required), so it is NOT here.
+        # port). PS3 is intentionally absent because aPS3e is built in.
         self.assertIn("xbox", systems)
-        self.assertNotIn("ps3", systems)
+        self.assertNotIn('put("ps3",', CATALOG)
 
     def test_three_delivery_recipes_exist(self):
         # FILE_PATH -> --es <key>; ACTION_VIEW -> -d file://; CONTENT_URI -> the
@@ -144,9 +174,21 @@ class EmulatorCatalogRecipeTest(unittest.TestCase):
         self.assertIn("--es LIBRETRO ", block)
 
     def test_content_uri_systems_target_the_trampoline(self):
-        # Switch (.xci/.nsp) and Wii U (.wux/.wud) both need scoped-storage URIs.
+        # Switch, Wii U, and official Dolphin all use a one-shot scoped URI.
         self.assertIn('put("switch", contentUri(', CATALOG)
         self.assertIn('put("wiiu", contentUri(', CATALOG)
+        self.assertIn('put("gamecube", contentUri("dolphin"', CATALOG)
+        self.assertIn('put("wii", contentUri("dolphin"', CATALOG)
+
+    def test_dolphin_trampoline_preflights_compressed_disc_images(self):
+        self.assertIn('" --es launch_profile dolphin"', CATALOG)
+        self.assertIn('!"dolphin".equals(launchProfile)', TRAMPOLINE)
+        self.assertIn('DiscImagePreflight.validate("gamecube", rom)', TRAMPOLINE)
+
+    def test_ps3_has_no_external_emulator_recipe(self):
+        self.assertNotIn('put("ps3",', CATALOG)
+        self.assertNotIn("ps3App()", CATALOG)
+        self.assertNotIn('" --es launch_profile ps3"', CATALOG)
 
     def test_retroarch_is_a_listed_external_option(self):
         self.assertIn('"RetroArch"', CATALOG)
@@ -186,6 +228,32 @@ class TrampolineBoundaryTest(unittest.TestCase):
         self.assertIn('canonical.startsWith("/storage/")', PROVIDER)
         self.assertIn('throw new FileNotFoundException("Read only")', PROVIDER)
 
+    def test_ps3_trampoline_derives_only_verified_folder_or_iso_shapes(self):
+        self.assertIn('!"aenu.aps3e".equals(targetPackage)', TRAMPOLINE)
+        self.assertIn('!"aenu.aps3e.EmulatorActivity".equals(targetActivity)',
+                      TRAMPOLINE)
+        self.assertIn('!"aenu.intent.action.APS3E".equals(targetAction)', TRAMPOLINE)
+        self.assertIn('"eboot.bin".equals(lower)', TRAMPOLINE)
+        self.assertIn('"ps3_game".equalsIgnoreCase', TRAMPOLINE)
+        self.assertIn('new File(ps3Game, "PARAM.SFO").isFile()', TRAMPOLINE)
+        self.assertIn('launch.putExtra("game_dir", titleRoot.getAbsolutePath())', TRAMPOLINE)
+        self.assertIn('launch.putExtra("iso_uri", uri.toString())', TRAMPOLINE)
+
+
+class Ps3ImportShapeTest(unittest.TestCase):
+    def test_download_scan_indexes_verified_folder_dump_in_place(self):
+        self.assertIn('new File(file, "PS3_GAME/USRDIR/EBOOT.BIN")', IMPORTER)
+        self.assertIn("File titleRoot = ps3TitleRoot(eboot);", IMPORTER)
+        self.assertIn('canonical(eboot.getAbsolutePath()) + ":" + eboot.length(), true',
+                      IMPORTER)
+        self.assertIn("candidates = uniqueCandidates(candidates);", IMPORTER)
+
+    def test_pkg_is_not_advertised_as_a_bootable_ps3_game(self):
+        ps3 = GAME_SYSTEMS[GAME_SYSTEMS.index('add("ps3",'):]
+        ps3 = ps3[:ps3.index('add("wii",')]
+        self.assertIn('"iso"', ps3)
+        self.assertNotIn("pkg", ps3.lower())
+
 
 class DesignNoteTest(unittest.TestCase):
     def test_design_note_names_the_future_route_endpoints(self):
@@ -215,6 +283,8 @@ JAVA = JAVA_HOME / "bin" / "java"
 DEPS = UNIFIED / "build" / "deps"
 COMMONS = DEPS / "commons-compress-1.21.jar"
 XZ = DEPS / "xz-1.9.jar"
+WEBSOCKET = DEPS / "nv-websocket-client-2.14.jar"
+WEBRTC = DEPS / "webrtc-android-150.7871.01/classes.jar"
 
 HARNESS = r'''
 package com.thorium.preview;
@@ -240,7 +310,8 @@ public final class ExternalEmulatorRoutingHarness {
         check(EmulatorCatalog.hasExternalOption("wiiu"), "wiiu external option");
         check(EmulatorCatalog.hasExternalOption("3ds"), "3ds external option");
         // PS3 now routes to aPS3e (user-required representation).
-        check(EmulatorCatalog.hasExternalOption("ps3"), "ps3 aPS3e external option");
+        check(!EmulatorCatalog.hasExternalOption("ps3"),
+                "ps3 is built in and has no external option");
         // Genuinely optionless system stays fail-closed.
         check(!EmulatorCatalog.hasExternalOption("xbox"), "xbox optionless");
 
@@ -254,6 +325,10 @@ public final class ExternalEmulatorRoutingHarness {
                 "switch recipe uses trampoline");
         check(swCmd.contains("--es target_package dev.legacy.eden_emulator"),
                 "switch recipe forwards package");
+
+        check(GameSystems.byFolder("ps3").extensions.contains("iso") &&
+                !GameSystems.byFolder("ps3").extensions.contains("pkg"),
+                "ps3 accepts bootable ISO but not install-only PKG");
 
         // FILE_PATH recipe uses the emulator's own ROM extra + clear-task.
         EmulatorCatalog.Option psx = EmulatorCatalog.optionForId("psx", "duckstation");
@@ -289,6 +364,23 @@ public final class ExternalEmulatorRoutingHarness {
         check(!none.updateAvailable && none.offerCommand.isEmpty(),
                 "no offer when current");
 
+        // The settings picker validates a custom emulator against the pure
+        // delivery vocabulary while the recipe builder switches on the
+        // catalog's copies. They are aliases, not parallel spellings: a
+        // divergence would make a validated custom entry unlaunchable.
+        check(EmulatorCatalog.DELIVERY_FILE_PATH ==
+                com.thorium.lucent.emulators.ExternalEmulatorDelivery.FILE_PATH,
+                "file-path delivery constant is shared");
+        check(EmulatorCatalog.DELIVERY_ACTION_VIEW ==
+                com.thorium.lucent.emulators.ExternalEmulatorDelivery.ACTION_VIEW,
+                "action-view delivery constant is shared");
+        check(EmulatorCatalog.DELIVERY_CONTENT_URI ==
+                com.thorium.lucent.emulators.ExternalEmulatorDelivery.CONTENT_URI,
+                "content-uri delivery constant is shared");
+        check(!com.thorium.lucent.emulators.ExternalEmulatorDelivery.known(
+                EmulatorCatalog.DELIVERY_UNSUPPORTED),
+                "the unsupported marker is not a delivery a custom entry can pick");
+
         System.out.println("HARNESS_OK");
     }
 }
@@ -297,7 +389,7 @@ public final class ExternalEmulatorRoutingHarness {
 
 @unittest.skipUnless(
     ANDROID_JAR.is_file() and JAVAC.is_file() and COMMONS.is_file()
-    and XZ.is_file(),
+    and XZ.is_file() and WEBSOCKET.is_file() and WEBRTC.is_file(),
     "Android SDK / JDK17 / build deps not available for the executing harness")
 class EmulatorCatalogExecutingTest(unittest.TestCase):
     def test_catalog_logic_runs(self):
@@ -330,7 +422,7 @@ class EmulatorCatalogExecutingTest(unittest.TestCase):
         argfile = Path(workdir) / "sources.txt"
         argfile.write_text("\n".join(sources), encoding="utf-8")
         classpath = os.pathsep.join(
-            str(p) for p in (ANDROID_JAR, COMMONS, XZ))
+            str(p) for p in (ANDROID_JAR, COMMONS, XZ, WEBSOCKET, WEBRTC))
         compile_result = subprocess.run(
             [str(JAVAC), "-source", "8", "-target", "8", "-encoding", "UTF-8",
              "-classpath", classpath, "-d", str(classes), f"@{argfile}"],

@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 2,
+  "acceptanceStandard": "exact-2x-2026-09-04",
+  "goalDocument": "docs/FRAME-GENERATION-GOAL-2026-09-04.md",
+  "runtimeMatrix": "unified-android/tools/runtime-acceptance-matrix.json",
+  "status": "UNVERIFIED",
+  "statusPolicy": {
+    "kind": "initial-unverified-snapshot",
+    "advancement": "This revision records the initial acceptance state. New immutable run reports may establish later results. Before promoting a status here, deliberately revise the initial-state validator assertions and attach evidence under this exact standard; historical summaries cannot qualify.",
+    "sourceChanges": "A source-fixed finding is not a passed system or backend; physical-device verification remains separate."
+  },
+  "scope": {
+    "consoleCount": 19,
+    "order": "newest-first-commercial-hardware-release",
+    "primaryPanel": "required",
+    "secondaryPanelDirectGeometryAndInput": "required-when-present",
+    "secondaryPanelGeneration": "optional",
+    "historicalEvidence": "context-only; never inherits PASS under this standard",
+    "deviceScope": "qualify each device, GPU driver, display mode, engine and backend combination"
+  },
+  "policy": {
+    "allowedGenerationMultipliers": [1, 2],
+    "maximumSyntheticFramesPerAdjacentChangingPair": 1,
+    "syntheticTimeFraction": 0.5,
+    "maximumClockCorrectionRelativeToDeclared": 0.0075,
+    "overload": "preserve-guest-speed; reduce-rendering-cost-or-disable-generation",
+    "outputCadence": "selected physical refresh divided by output content rate must be an integer; verify actual presents",
+    "fixed120HzExamples": {"20": 40, "30": 60, "40": 40, "60": 120},
+    "fixed60HzExamples": {"20": 20, "30": 60, "40": null, "60": 60},
+    "unsupportedCadence": "use a supported matching mode or report the limitation; never invent an 80-Hz mode on a 60/120-Hz panel",
+    "sourceIdentity": "measure retired guest ticks and distinct content updates separately; present count is not guest FPS",
+    "unsafeMidpoint": "hold an authentic endpoint and count the fallback; do not count it as useful generation",
+    "direct": "raw emulator Surface; no intermediate frame-generation renderer",
+    "aspect": "preserve native display aspect; contain the complete image; maximize size without cropping",
+    "lsfgPrivate": "private permitted build and payload only; no publication or redistribution"
+  },
+  "backendRequirements": {
+    "direct": "required",
+    "builtin": "required-when-supported",
+    "lsfgPrivate": "required-when-supported",
+    "independentEvidence": true,
+    "unsupportedBackend": "record capability failure and visible fallback; an unsupported path is not a PASS"
+  },
+  "requiredEvidence": {
+    "identity": [
+      "immutable APK, engine, model/payload and input artifact SHA-256 digests",
+      "device model, GPU, driver, OS, actual display mode and backend that ran",
+      "title, save/checkpoint, settings, workload/input trace and run epoch"
+    ],
+    "physicalPresentation": [
+      "actual physical-present timestamps or fences matched to frame identities, with raw interval distribution",
+      "integer scan holds on the actual measured display clock; no unexplained early, late, dropped or repeated holds in accepted moving windows",
+      "startup, scene changes, steady motion and recovery separated; averages and requested timestamps alone do not qualify"
+    ],
+    "guestClockAudio": [
+      "retired guest ticks and emulated-time versus monotonic-time trace; declared and applied clocks and correction ratio",
+      "distinct content update cadence separate from emulation clock and presentation cadence",
+      "audio timestamps, queue underruns/overruns and A/V drift under the same run; correction remains within 0.75 percent of declared clock"
+    ],
+    "generatedContent": [
+      "lossless endpoint A, exact generated midpoint, endpoint B and actual presented-output captures from moving gameplay",
+      "each capture bound to pair IDs, generation fraction, model/backend, raw GPU output identity and physical-present event",
+      "held-out real intermediate frames from deterministic replay or a suitable high-rate source, never used as generator inputs",
+      "motion and occlusion ROI comparisons against held-frame and blend baselines, including HUD, scrolling, disocclusions and scene cuts",
+      "reviewed contact sheets and quantitative errors; neither different pixels nor a 0.5 blend coefficient alone proves useful interpolation"
+    ],
+    "adaptation": [
+      "GPU completion-fence latency and memory use, including tail latency while the emulator competes for GPU time",
+      "capability checks, deadline admission, thermal/load stress and sustained recovery hysteresis on representative weaker and stronger GPUs",
+      "overload reduces cost or disables generation while preserving guest speed; every fallback is counted and backend is visible"
+    ],
+    "geometryAndOled": [
+      "screenshots verify native aspect, complete image, correct panel orientation and screen assignment",
+      "panels wake only for bounded active tests; cleanup runs after success and failure and verifies both panels off",
+      "secondary direct display and touch remain correct when present; optional secondary generation cannot block primary qualification"
+    ]
+  },
+  "sourceFindings": [
+    {
+      "id": "direct-and-near-native-clock",
+      "summary": "Off bypasses the intermediate Surface; software and hardware hosts separately apply near-native clock synchronization.",
+      "sources": [
+        {"path": "unified-android/src/com/thorium/preview/game/GameSurfaceView.java", "line": 427},
+        {"path": "unified-android/src/com/thorium/preview/game/LibretroEngineSession.java", "line": 323},
+        {"path": "unified-android/src/com/thorium/preview/ExperimentalGlesRenderLoop.java", "line": 778}
+      ]
+    },
+    {
+      "id": "large-tier-slowdown",
+      "reviewState": "SOURCE_FIXED_DEVICE_UNVERIFIED",
+      "summary": "Pre-change September 4 audit found load-driven guest downclocking. Current source removes that controller and its probes, and software, GLES and native-adapter session setters reject corrections outside 0.75 percent of the original declared clock. Runtime proof of preserved speed is still required.",
+      "sources": [
+        {"path": "unified-android/src/com/thorium/lucent/timing/DisplaySyncPolicy.java", "line": 46},
+        {"path": "unified-android/src/com/thorium/preview/game/LibretroEngineSession.java", "line": 440},
+        {"path": "unified-android/src/com/thorium/preview/ExperimentalGlesRenderLoop.java", "line": 878},
+        {"path": "unified-android/src/com/thorium/preview/game/NativeAdapterEngineSession.java", "line": 381},
+        {"path": "unified-android/src/com/thorium/preview/game/InWindowGameHost.java", "line": 1}
+      ]
+    },
+    {
+      "id": "nominal-versus-physical-clock",
+      "reviewState": "OPEN",
+      "summary": "The pre-change panel-ratio path was fixed at one; it has now been removed with the load-tier probes. Current source still uses nominal synchronized clocks and lacks a proved measured fractional-panel clock lock. Physical interval and long-run phase evidence remain required.",
+      "sources": [
+        {"path": "unified-android/src/com/thorium/lucent/timing/DisplaySyncPolicy.java", "line": 25},
+        {"path": "unified-android/src/com/thorium/preview/game/InWindowGameHost.java", "line": 1}
+      ]
+    },
+    {
+      "id": "gpu-capacity-unavailable",
+      "summary": "Hardware work capacity reports zero because CPU submission time does not measure asynchronous GPU completion.",
+      "sources": [{"path": "unified-android/src/com/thorium/preview/ExperimentalGlesRenderLoop.java", "line": 863}]
+    },
+    {
+      "id": "native-timeline-capability",
+      "summary": "All native adapters are labelled trusted 60-Hz producers, although aPS3e has no declared/paced clock or measured-FPS hook.",
+      "sources": [
+        {"path": "unified-android/src/com/thorium/preview/game/InWindowGameHost.java", "line": 1861},
+        {"path": "unified-android/native/lucent_native_adapter_host.c", "line": 562},
+        {"path": "engines/patches/aps3e-lucent-adapter.cpp", "line": 365}
+      ]
+    },
+    {
+      "id": "eden-clock-identity",
+      "summary": "Eden's paced VI base still divides by game swap interval; its separately quantized Vulkan present stamps are not retired guest-frame identities.",
+      "sources": [
+        {"path": "engines/patches/eden-lucent-adapter.cpp", "line": 863},
+        {"path": "engines/eden-source-lock.json", "line": 132},
+        {"path": "docs/EDEN-SWITCH-CORE-TIMING-VERIFICATION.md", "line": 1}
+      ]
+    },
+    {
+      "id": "cemu-lsfg-surface-crash",
+      "summary": "The September 3 demonstration records a Cemu Vulkan surface-recreation SIGSEGV after LSFG attaches. It is a blocker, not successful integration evidence.",
+      "sources": [{"path": "docs/LSFG-LIVE-DEMO-2026-09-03.md", "line": 67}]
+    },
+    {
+      "id": "hardware-route-selection",
+      "summary": "Wii overrides Dolphin to Vulkan; GameCube remains GLES. ARMSX2 and Azahar select Vulkan through their opt-in runtime.",
+      "sources": [
+        {"path": "unified-android/src/com/thorium/preview/game/PpssppGlesEngineSession.java", "line": 347},
+        {"path": "engines/phase2-qualification-opt-in.json", "line": 115}
+      ]
+    },
+    {
+      "id": "software-route-selection",
+      "summary": "Phase-one routes other than explicit opengl use the software host, including SwanStation's multi renderer declaration.",
+      "sources": [{"path": "unified-android/src/com/thorium/preview/game/LibretroEngineSpec.java", "line": 61}]
+    },
+    {
+      "id": "device-specific-policy",
+      "summary": "DisplaySyncPolicy uses Thor's 60/120-Hz modes, and Eden forces Docked. Qualification must discover device limits rather than assuming these settings fit every GPU.",
+      "sources": [
+        {"path": "unified-android/src/com/thorium/lucent/timing/DisplaySyncPolicy.java", "line": 18},
+        {"path": "engines/patches/eden-lucent-adapter.cpp", "line": 454}
+      ]
+    }
+  ],
+  "systems": [
+    {
+      "id": "switch", "name": "Nintendo Switch", "status": "UNVERIFIED",
+      "engines": ["eden"], "route": "native-adapter-vulkan", "dualScreen": false,
+      "clockControl": "Eden integer VI adapter hook; host only permits corrections within 0.75 percent of declared clock",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Reconcile guest swap interval, VI clock and timestamp provenance; verify the new bounded clock guard on device.", "Complete the documented three consecutive 600-second engine-stability runs plus exact-2x evidence."],
+      "findingRefs": ["eden-clock-identity", "large-tier-slowdown", "native-timeline-capability", "device-specific-policy"]
+    },
+    {
+      "id": "wiiu", "name": "Nintendo Wii U", "status": "UNVERIFIED",
+      "engines": ["cemu"], "route": "native-adapter-vulkan", "dualScreen": true,
+      "clockControl": "Cemu custom emulated vsync; corrected nominal 60 Hz; host guards the integer adapter hook to 0.75 percent",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Resolve recorded LSFG surface-recreation crash.", "Add retired guest-frame measurement and verify audio against corrected clock; verify the new host clock guard preserves gameplay speed."],
+      "findingRefs": ["cemu-lsfg-surface-crash", "large-tier-slowdown", "native-timeline-capability"]
+    },
+    {
+      "id": "n3ds", "name": "Nintendo 3DS", "status": "UNVERIFIED",
+      "engines": ["azahar"], "route": "libretro-vulkan", "dualScreen": true,
+      "clockControl": "shared synchronized hardware run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x Vulkan capture, guest-clock and physical-cadence evidence absent; verify both panels' geometry."],
+      "findingRefs": ["direct-and-near-native-clock", "hardware-route-selection", "gpu-capacity-unavailable"]
+    },
+    {
+      "id": "wii", "name": "Nintendo Wii", "status": "UNVERIFIED",
+      "engines": ["dolphin"], "route": "libretro-vulkan", "dualScreen": false,
+      "clockControl": "shared synchronized hardware run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Qualify actual Vulkan override, flicker-free moving output and generated midpoints; measure GPU completion headroom."],
+      "findingRefs": ["hardware-route-selection", "gpu-capacity-unavailable"]
+    },
+    {
+      "id": "ps3", "name": "Sony PlayStation 3", "status": "UNVERIFIED",
+      "engines": ["aps3e"], "route": "native-adapter-vulkan", "dualScreen": false,
+      "clockControl": "no declared/paced video clock or retired-game-FPS hook exposed",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Implement or explicitly report missing timing capability; remove unsupported trusted 60-Hz timeline assumption.", "Demonstrate stable gameplay and independent backend evidence."],
+      "findingRefs": ["native-timeline-capability"]
+    },
+    {
+      "id": "psp", "name": "Sony PlayStation Portable", "status": "UNVERIFIED",
+      "engines": ["ppsspp"], "route": "libretro-gles", "dualScreen": false,
+      "clockControl": "shared synchronized hardware run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x evidence absent; qualify FMV-to-game cadence changes and competing GPU load."],
+      "findingRefs": ["direct-and-near-native-clock", "gpu-capacity-unavailable"]
+    },
+    {
+      "id": "nds", "name": "Nintendo DS", "status": "UNVERIFIED",
+      "engines": ["melonds-ds"], "route": "libretro-software", "dualScreen": true,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x evidence absent; verify screen assignment, independent changing content and lower touch."],
+      "findingRefs": ["direct-and-near-native-clock", "software-route-selection"]
+    },
+    {
+      "id": "gc", "name": "Nintendo GameCube", "status": "UNVERIFIED",
+      "engines": ["dolphin"], "route": "libretro-gles", "dualScreen": false,
+      "clockControl": "shared synchronized hardware run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x evidence absent; verify preserved gameplay speed after tier-controller removal and measure GPU deadlines before 60-to-120 admission."],
+      "findingRefs": ["hardware-route-selection", "large-tier-slowdown", "gpu-capacity-unavailable"]
+    },
+    {
+      "id": "gba", "name": "Nintendo Game Boy Advance", "status": "UNVERIFIED",
+      "engines": ["mgba"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Prove recurring judder absent with raw physical intervals and clock/audio trace; new generated-content evidence absent."],
+      "findingRefs": ["direct-and-near-native-clock", "nominal-versus-physical-clock"]
+    },
+    {
+      "id": "ps2", "name": "Sony PlayStation 2", "status": "UNVERIFIED",
+      "engines": ["armsx2", "play"], "route": "libretro-vulkan-or-gles", "dualScreen": false,
+      "clockControl": "shared synchronized hardware run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Qualify ARMSX2 Vulkan and Play GLES separately; new exact-2x evidence and GPU completion budgets absent."],
+      "findingRefs": ["hardware-route-selection", "gpu-capacity-unavailable"]
+    },
+    {
+      "id": "dreamcast", "name": "Sega Dreamcast", "status": "UNVERIFIED",
+      "engines": ["flycast"], "route": "libretro-gles", "dualScreen": false,
+      "clockControl": "shared synchronized hardware run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x cadence, moving-midpoint quality and GPU adaptation evidence absent."],
+      "findingRefs": ["direct-and-near-native-clock", "gpu-capacity-unavailable"]
+    },
+    {
+      "id": "gbc", "name": "Nintendo Game Boy Color", "status": "UNVERIFIED",
+      "engines": ["sameboy"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x evidence absent; distinguish intended sprite stepping from presentation judder."],
+      "findingRefs": ["direct-and-near-native-clock", "software-route-selection"]
+    },
+    {
+      "id": "n64", "name": "Nintendo 64", "status": "UNVERIFIED",
+      "engines": ["mupen64plus-next"], "route": "libretro-gles", "dualScreen": false,
+      "clockControl": "shared synchronized hardware loop; VI-origin filtering only when generation is enabled",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Requalify distinct 20/30/60-FPS titles under exact-2x standard; historical LSFG 20-to-40 demonstration does not establish complete acceptance.", "Verify per-game native aspect and provenance-bound midpoint quality."],
+      "findingRefs": ["direct-and-near-native-clock", "gpu-capacity-unavailable", "nominal-versus-physical-clock"]
+    },
+    {
+      "id": "psx", "name": "Sony PlayStation", "status": "UNVERIFIED",
+      "engines": ["swanstation"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x evidence absent; qualify native display aspect and mixed game/video update cadences."],
+      "findingRefs": ["direct-and-near-native-clock", "software-route-selection"]
+    },
+    {
+      "id": "snes", "name": "Super Nintendo Entertainment System", "status": "UNVERIFIED",
+      "engines": ["mesen-s"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Prove recurring judder absent with raw physical intervals and clock/audio trace; new generated-content evidence absent."],
+      "findingRefs": ["direct-and-near-native-clock", "nominal-versus-physical-clock"]
+    },
+    {
+      "id": "gamegear", "name": "Sega Game Gear", "status": "UNVERIFIED",
+      "engines": ["gearsystem"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x cadence and moving-midpoint quality evidence absent."],
+      "findingRefs": ["direct-and-near-native-clock", "software-route-selection"]
+    },
+    {
+      "id": "gb", "name": "Nintendo Game Boy", "status": "UNVERIFIED",
+      "engines": ["sameboy"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x evidence absent; preserve native pixel/display geometry and real sprite motion."],
+      "findingRefs": ["direct-and-near-native-clock", "software-route-selection"]
+    },
+    {
+      "id": "megadrive", "name": "Sega Mega Drive / Genesis", "status": "UNVERIFIED",
+      "engines": ["blastem"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["New exact-2x cadence, scrolling-content quality and audio-clock evidence absent."],
+      "findingRefs": ["direct-and-near-native-clock", "software-route-selection"]
+    },
+    {
+      "id": "nes", "name": "Nintendo Entertainment System / Famicom", "status": "UNVERIFIED",
+      "engines": ["mesen"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared synchronized software run loop and audio-rate mapping",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Requalify real scrolling games independently of synthetic fixtures and historical summary passes."],
+      "findingRefs": ["direct-and-near-native-clock", "software-route-selection"]
+    }
+  ],
+  "additionalPlatforms": [
+    {
+      "id": "windows", "name": "Windows / DOS guest PC", "console": false, "status": "UNVERIFIED",
+      "engines": ["dosbox-pure"], "route": "libretro-software", "dualScreen": false,
+      "clockControl": "shared host video synchronization; guest program speed also depends on emulated PC timing",
+      "backendStatus": {"direct": "UNVERIFIED", "builtin": "UNVERIFIED", "lsfgPrivate": "UNVERIFIED"},
+      "blockers": ["Outside the 19-console count; qualify guest PC timing separately and do not infer modern Win32/Win64 support."],
+      "findingRefs": ["direct-and-near-native-clock", "software-route-selection"]
+    }
+  ]
+}

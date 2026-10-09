@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove that the Lucent AppleWin core contains no upstream firmware blobs."""
+"""Prove that the EmuFusion AppleWin core contains no upstream firmware blobs."""
 
 from __future__ import annotations
 

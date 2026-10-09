@@ -1,0 +1,673 @@
+// Generated test harness: declarations and decision methods are inserted
+// byte-for-byte from the isolated native candidate. Hardware work is stubbed.
+#include <array>
+#include <cerrno>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <fcntl.h>
+#include <functional>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <unistd.h>
+#include <utility>
+#include <vector>
+#include "midpoint_timestamp.hpp"
+#define LOGE(...) do {} while (0)
+
+#define CHECK(...) do { if (!(__VA_ARGS__)) throw std::runtime_error( \
+    std::string("assertion at line ") + std::to_string(__LINE__) + ": " #__VA_ARGS__); } while (0)
+
+using VkResult = int;
+using VkCommandBuffer = uint64_t;
+using VkFence = uint64_t;
+using VkSemaphore = uint64_t;
+using VkImage = uint64_t;
+using VkDeviceMemory = uint64_t;
+using VkBuffer = uint64_t;
+struct VkExtent2D { uint32_t width = 0; uint32_t height = 0; };
+constexpr int VK_NULL_HANDLE = 0;
+constexpr int VK_SUCCESS = 0;
+constexpr int VK_NOT_READY = 1;
+constexpr int VK_STRUCTURE_TYPE_SUBMIT_INFO = 4;
+constexpr int VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR = 5;
+constexpr int VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT = 6;
+struct VkSubmitInfo {
+    int sType;
+    uint32_t commandBufferCount;
+    const VkCommandBuffer* pCommandBuffers;
+    uint32_t signalSemaphoreCount;
+    const VkSemaphore* pSignalSemaphores;
+};
+struct VkSemaphoreGetFdInfoKHR { int sType; VkSemaphore semaphore; int handleType; };
+struct AHardwareBuffer { int identity; };
+
+uint64_t fakeNow = 0;
+uint64_t clockReads = 0;
+uint64_t monotonicNs() { ++clockReads; return fakeNow; }
+void requireSuccess(VkResult result, const char* operation) {
+    if (result != VK_SUCCESS) throw std::runtime_error(operation);
+}
+int ownedFd() {
+    const int fd = ::open("/dev/null", O_RDONLY);
+    CHECK(fd >= 0);
+    return fd;
+}
+bool fdOpen(int fd) { return ::fcntl(fd, F_GETFD) >= 0; }
+@READY_OBSERVATION@
+std::map<int, ReadyFenceObservation> readyObservations;
+ReadyFenceObservation observeReadyFence(int fd) {
+    if (fd == -1) return {true, 0, true};
+    if (fd < -1) throw std::runtime_error("invalid ready FD");
+    CHECK(fdOpen(fd));
+    auto found = readyObservations.find(fd);
+    return found == readyObservations.end() ? ReadyFenceObservation{} : found->second;
+}
+@DRAIN_TIMEOUT@
+
+struct FakeDeviceFunctions {
+    uint64_t resetFenceCalls = 0;
+    uint64_t resetCommandCalls = 0;
+    uint64_t submitCalls = 0;
+    uint64_t exportCalls = 0;
+    uint64_t fenceQueries = 0;
+    uint64_t advanceOnFenceQuery = 0;
+    uint64_t advanceOnSubmit = 0;
+    int exportedFd = -1;
+    bool failExport = false;
+    std::map<VkFence, VkResult> fenceStatuses;
+    VkResult vkResetFences(int, uint32_t, const VkFence*) { ++resetFenceCalls; return VK_SUCCESS; }
+    VkResult vkResetCommandBuffer(VkCommandBuffer, int) { ++resetCommandCalls; return VK_SUCCESS; }
+    VkResult vkQueueSubmit(int, uint32_t count, const VkSubmitInfo* submit, VkFence) {
+        CHECK(count == 1 && submit != nullptr);
+        ++submitCalls;
+        fakeNow += advanceOnSubmit;
+        return VK_SUCCESS;
+    }
+    VkResult vkGetSemaphoreFdKHR(int, const VkSemaphoreGetFdInfoKHR*, int* fd) {
+        ++exportCalls;
+        if (failExport) return -4;
+        exportedFd = ownedFd();
+        *fd = exportedFd;
+        return VK_SUCCESS;
+    }
+    VkResult vkGetFenceStatus(int, VkFence fence) {
+        ++fenceQueries;
+        fakeNow += advanceOnFenceQuery;
+        auto found = fenceStatuses.find(fence);
+        return found == fenceStatuses.end() ? VK_NOT_READY : found->second;
+    }
+};
+struct FakeTripletWriter { void discard(uint64_t, const char*) {} };
+
+class Fixture final {
+public:
+    @SLOT_COUNT@
+    @DECLARATIONS@
+    bool fatal_ = false;
+    struct { bool liveResourcesReady = true; } capabilities_;
+    uint64_t presentationEpoch_ = 1;
+    uint32_t nextLiveSlot_ = 0;
+    uint32_t inferenceSlot_ = UINT32_MAX;
+    std::array<LiveSlot, kFixedSlotCount> live_{};
+    FakeDeviceFunctions deviceFunctions_;
+    int queue_ = 1;
+    int device_ = 1;
+    uint32_t pendingPresentations_ = 0;
+    uint64_t surfaceCutoffDrops_ = 0;
+    uint64_t surfaceCutoffRetired_ = 0;
+    uint64_t imports = 0;
+    uint64_t recordCalls = 0;
+    uint64_t advanceOnRecord = 0;
+    std::array<ImportedImage, 8> images{};
+    std::vector<std::string> dropLogs;
+    std::unique_ptr<FakeTripletWriter> tripletWriter_;
+
+    Fixture() {
+        fakeNow = 0;
+        clockReads = 0;
+        readyObservations.clear();
+        for (uint32_t i = 0; i < live_.size(); ++i) {
+            live_[i].copyFence = 100 + i * 2;
+            live_[i].presentFence = 101 + i * 2;
+            live_[i].copyCommand = 200 + i * 2;
+            live_[i].presentCommand = 201 + i * 2;
+            live_[i].inputReady = 300 + i;
+        }
+    }
+    ~Fixture() {
+        // Fixture-only cleanup happens after assertions; real tested retirement
+        // uses the extracted resetLiveSlotStorage() and real POSIX close().
+        for (auto& slot : live_) {
+            if (slot.readySyncFd >= 0 && fdOpen(slot.readySyncFd)) ::close(slot.readySyncFd);
+            if (slot.proofTimestampSyncFd >= 0 && fdOpen(slot.proofTimestampSyncFd)) ::close(slot.proofTimestampSyncFd);
+        }
+        const int fd = deviceFunctions_.exportedFd;
+        if (fd >= 0 && fdOpen(fd)) ::close(fd);
+    }
+    ImportedImage& cachedSourceImage(AHardwareBuffer* buffer) {
+        CHECK(buffer != nullptr);
+        for (auto& image : images) if (image.buffer == buffer) return image;
+        for (auto& image : images) if (image.buffer == nullptr) {
+            ++imports;
+            image.buffer = buffer;
+            return image;
+        }
+        throw std::runtime_error("fixture import cache full");
+    }
+    void recordEndpointCopy(uint32_t index, LiveSlot& slot) {
+        CHECK(index < kFixedSlotCount && slot.sourceLeft != nullptr && slot.sourceRight != nullptr);
+        ++recordCalls;
+        fakeNow += advanceOnRecord;
+    }
+    bool readyFdSignaled(LiveSlot& slot) { return observeReadyFence(slot.readySyncFd).ready; }
+    void logSurfaceCutoffDrop(const LiveSlot&, const char* stage, uint64_t,
+                              const DropDrainObservation&) { dropLogs.emplace_back(stage); }
+
+    @METHODS@
+};
+
+namespace emufusion::lsfg { using OwnedVulkanHost = ::Fixture; }
+@PREPARED_GENERATED@
+@JNI_SLOT_COUNT@
+struct Host {
+    std::mutex mutex;
+    bool closed = false;
+    bool contextsPrewarmed = true;
+    uint32_t width = 320;
+    uint32_t height = 240;
+    Fixture* ownedVulkan;
+    std::optional<PreparedGenerated> preparedGenerated;
+    std::optional<PreparedRealPair> preparedRealPair;
+    std::vector<int> droppedCompletions;
+    unsigned readyDispatchCalls = 0;
+    explicit Host(Fixture& fixture) : ownedVulkan(&fixture) {}
+};
+using jint = int32_t;
+using jlong = int64_t;
+using jobject = AHardwareBuffer*;
+using jclass = void*;
+struct JNIEnv {};
+#define JNIEXPORT
+#define JNICALL
+Host* fromHandle(jlong handle) { return reinterpret_cast<Host*>(handle); }
+AHardwareBuffer* AHardwareBuffer_fromHardwareBuffer(JNIEnv*, jobject buffer) { return buffer; }
+// Dispatch itself is exercised with its production body in the pipeline test.
+// This leaf checks the exact JNI acceptance boundary without consuming a
+// completion or changing the separately tested native slot lifetime.
+void dispatchReadySurfaceSubmission(Host* host) {
+    CHECK(!host->preparedGenerated && !host->preparedRealPair);
+    CHECK(host->ownedVulkan->pendingPresentations_ > 0);
+    ++host->readyDispatchCalls;
+}
+@JNI_ENQUEUE@
+
+using State = Fixture::LiveSlotState;
+using Request = Fixture::LiveRequest;
+using Prepared = Fixture::PreparedPresentation;
+AHardwareBuffer left{1}, right{2}, other{3};
+Request valid(bool generated = false) {
+    return Request{
+        .left = &left, .right = &right, .presentId = 7,
+        .physicalPresentTimeNs = 60'000'000, .desiredPresentTimeNs = 55'000'000,
+        .completionDeadlineNs = 50'000'000, .refreshDurationNs = 8'333'333,
+        .compositorFrameTimelineVsyncId = 9,
+        .compositorFrameTimelineExpectedNs = 60'000'000,
+        .compositorFrameTimelineDeadlineNs = 49'666'667,
+        .generated = generated, .presentRight = !generated,
+        .sessionEpoch = 1, .presentationEpoch = 2,
+        .leftSequence = 10, .rightSequence = 11,
+        .leftTimestampNs = 100, .rightTimestampNs = 200,
+        .contentTimestampNs = generated ? 150U : 200U,
+    };
+}
+auto requestIdentity(const Request& request) {
+    return std::tie(request.left, request.right, request.presentId,
+        request.physicalPresentTimeNs, request.desiredPresentTimeNs,
+        request.completionDeadlineNs, request.refreshDurationNs,
+        request.compositorFrameTimelineVsyncId, request.compositorFrameTimelineExpectedNs,
+        request.compositorFrameTimelineDeadlineNs, request.generated, request.presentRight,
+        request.sessionEpoch, request.presentationEpoch, request.leftSequence, request.rightSequence,
+        request.leftTimestampNs, request.rightTimestampNs, request.contentTimestampNs);
+}
+void sameRequest(const Request& a, const Request& b) { CHECK(requestIdentity(a) == requestIdentity(b)); }
+void sameSlot(const Fixture::LiveSlot& a, const Fixture::LiveSlot& b) {
+    sameRequest(a.request, b.request);
+    CHECK(a.copyCommand == b.copyCommand && a.presentCommand == b.presentCommand);
+    CHECK(a.copyFence == b.copyFence && a.presentFence == b.presentFence);
+    CHECK(a.inputReady == b.inputReady && a.acquire == b.acquire && a.render == b.render);
+    CHECK(a.sourceLeft == b.sourceLeft && a.sourceRight == b.sourceRight && a.state == b.state);
+    CHECK(a.readySyncFd == b.readySyncFd && a.proofTimestampSyncFd == b.proofTimestampSyncFd);
+    CHECK(a.gpuStartNs == b.gpuStartNs && a.gpuCompletionObservedNs == b.gpuCompletionObservedNs);
+    CHECK(a.privatePairStatus == b.privatePairStatus && a.privateProofPrepared == b.privateProofPrepared);
+    CHECK(a.cutoffObservedNs == b.cutoffObservedNs && a.cutoffDropOrdinal == b.cutoffDropOrdinal);
+    CHECK(a.cutoffBranch == b.cutoffBranch && a.fullCaptureId == b.fullCaptureId);
+}
+void noAdmission(const Fixture& fixture) {
+    CHECK(!fixture.fatal_ && fixture.nextLiveSlot_ == 0 && fixture.pendingPresentations_ == 0);
+    CHECK(fixture.imports == 0 && fixture.recordCalls == 0);
+    CHECK(fixture.deviceFunctions_.resetFenceCalls == 0 && fixture.deviceFunctions_.resetCommandCalls == 0);
+    CHECK(fixture.deviceFunctions_.submitCalls == 0 && fixture.deviceFunctions_.exportCalls == 0);
+}
+template<class Exception = std::exception, class Function> void throws(Function function) {
+    bool caught = false;
+    try { function(); } catch (const Exception&) { caught = true; }
+    CHECK(caught);
+}
+Prepared privateReady(Fixture& fixture, uint32_t index = 1) {
+    auto& slot = fixture.live_.at(index);
+    slot.state = State::PrivateReady;
+    slot.request.left = &left;
+    slot.request.right = &right;
+    slot.request.generated = true;
+    slot.sourceLeft = &fixture.images[0];
+    slot.sourceRight = &fixture.images[1];
+    fixture.images[0].buffer = &left;
+    fixture.images[1].buffer = &right;
+    slot.readySyncFd = ownedFd();
+    slot.proofTimestampSyncFd = ownedFd();
+    slot.privatePairStatus = 1;
+    slot.privateProofPrepared = true;
+    slot.gpuStartNs = 123;
+    slot.gpuCompletionObservedNs = 456;
+    return Prepared{index, -1};
+}
+void cachePair(Host& host, const Prepared& prepared, const Request& request) {
+    host.preparedGenerated = PreparedGenerated{
+        .left = request.left, .right = request.right,
+        .sessionEpoch = request.sessionEpoch, .presentationEpoch = request.presentationEpoch,
+        .leftSequence = request.leftSequence, .leftTimestampNs = request.leftTimestampNs,
+        .rightSequence = request.rightSequence, .rightTimestampNs = request.rightTimestampNs,
+        .presentationTimestampNs = request.contentTimestampNs, .prepared = prepared,
+    };
+}
+void cacheRealPair(Host& host, const Prepared& prepared, const Request& request) {
+    host.ownedVulkan->live_[prepared.slotIndex].request.generated = false;
+    cachePair(host, prepared, request);
+    host.preparedGenerated->presentationTimestampNs = request.leftTimestampNs;
+    host.preparedRealPair = PreparedRealPair{*host.preparedGenerated};
+    host.preparedGenerated.reset();
+}
+int enqueue(Host& host, const Request& request, int width = 320, int format = 1) {
+    return Java_com_thorium_preview_game_NativeLsfgBridge_enqueue(nullptr, nullptr,
+        reinterpret_cast<jlong>(&host), request.left, request.right,
+        static_cast<jlong>(request.sessionEpoch), static_cast<jlong>(request.presentationEpoch),
+        static_cast<jlong>(request.leftSequence), static_cast<jlong>(request.leftTimestampNs),
+        static_cast<jlong>(request.rightSequence), static_cast<jlong>(request.rightTimestampNs),
+        static_cast<jlong>(request.contentTimestampNs), static_cast<jlong>(request.physicalPresentTimeNs),
+        static_cast<jlong>(request.desiredPresentTimeNs), static_cast<jlong>(request.completionDeadlineNs),
+        static_cast<jlong>(request.compositorFrameTimelineVsyncId),
+        static_cast<jlong>(request.compositorFrameTimelineExpectedNs),
+        static_cast<jlong>(request.compositorFrameTimelineDeadlineNs), width, 240, format,
+        static_cast<jlong>(request.presentId));
+}
+Request nextProposal(Request request) {
+    // A new explicit proposal, not production mutation of the expired request.
+    request.physicalPresentTimeNs += 100'000'000;
+    request.desiredPresentTimeNs += 100'000'000;
+    request.completionDeadlineNs += 100'000'000;
+    request.compositorFrameTimelineExpectedNs += 100'000'000;
+    request.compositorFrameTimelineDeadlineNs += 100'000'000;
+    ++request.compositorFrameTimelineVsyncId;
+    return request;
+}
+
+void malformed_expired() {
+    std::vector<std::function<void(Request&)>> changes = {
+        [](auto& r) { r.left = nullptr; }, [](auto& r) { r.right = nullptr; },
+        [](auto& r) { r.presentId = 0; }, [](auto& r) { r.presentId = uint64_t{UINT32_MAX} + 1; },
+        [](auto& r) { r.physicalPresentTimeNs = 0; }, [](auto& r) { r.desiredPresentTimeNs = 0; },
+        [](auto& r) { r.completionDeadlineNs = 0; }, [](auto& r) { r.refreshDurationNs = 0; },
+        [](auto& r) { r.completionDeadlineNs = r.desiredPresentTimeNs + 1; },
+        [](auto& r) { r.desiredPresentTimeNs = r.physicalPresentTimeNs + 1; },
+        [](auto& r) { r.compositorFrameTimelineVsyncId = 0; },
+        [](auto& r) { r.compositorFrameTimelineExpectedNs = 0; },
+        [](auto& r) { r.compositorFrameTimelineDeadlineNs = 0; },
+    };
+    for (const auto& change : changes) {
+        Fixture fixture;
+        auto request = valid(); change(request); fakeNow = UINT64_MAX;
+        const auto before = fixture.live_;
+        throws<std::invalid_argument>([&] { fixture.tryPrepare(request); });
+        noAdmission(fixture);
+        CHECK(clockReads == 0);
+        for (size_t i = 0; i < before.size(); ++i) sameSlot(before[i], fixture.live_[i]);
+    }
+    for (int kind = 0; kind < 3; ++kind) {
+        Fixture fixture;
+        fakeNow = UINT64_MAX;
+        if (kind == 0) fixture.fatal_ = true;
+        if (kind == 1) fixture.capabilities_.liveResourcesReady = false;
+        if (kind == 2) fixture.presentationEpoch_ = 0;
+        throws([&] { fixture.tryPrepare(valid()); });
+        CHECK(clockReads == 0 && fixture.deviceFunctions_.resetFenceCalls == 0);
+    }
+}
+void entry_expired() {
+    for (uint64_t late : {0ULL, 1ULL, 1'000'000ULL}) {
+        Fixture fixture;
+        auto request = valid(); fakeNow = request.completionDeadlineNs + late;
+        const auto before = fixture.live_;
+        CHECK(!fixture.tryPrepare(request));
+        noAdmission(fixture);
+        CHECK(clockReads == 1 && fixture.deviceFunctions_.fenceQueries == 0);
+        for (size_t i = 0; i < before.size(); ++i) sameSlot(before[i], fixture.live_[i]);
+    }
+    Fixture fixture;
+    auto request = valid(); request.physicalPresentTimeNs = UINT64_MAX;
+    request.desiredPresentTimeNs = UINT64_MAX; request.completionDeadlineNs = UINT64_MAX;
+    fakeNow = UINT64_MAX;
+    CHECK(!fixture.tryPrepare(request)); noAdmission(fixture);
+}
+void retirement_expiry() {
+    Fixture fixture;
+    auto request = valid(); fakeNow = request.completionDeadlineNs - 1;
+    fixture.live_[2].state = State::Abandoned;
+    fixture.deviceFunctions_.advanceOnFenceQuery = 1;
+    const auto before = fixture.live_;
+    CHECK(!fixture.tryPrepare(request));
+    noAdmission(fixture);
+    CHECK(fakeNow == request.completionDeadlineNs && clockReads == 2);
+    CHECK(fixture.deviceFunctions_.fenceQueries == 1);
+    for (size_t i = 0; i < before.size(); ++i) sameSlot(before[i], fixture.live_[i]);
+}
+void retirement_then_fresh() {
+    Fixture fixture;
+    auto request = valid(); fakeNow = request.completionDeadlineNs - 1;
+    auto& abandoned = fixture.live_[2]; abandoned.state = State::Abandoned;
+    abandoned.readySyncFd = ownedFd(); const int fd = abandoned.readySyncFd;
+    readyObservations[fd] = {true, 1, true};
+    fixture.deviceFunctions_.fenceStatuses[abandoned.copyFence] = VK_SUCCESS;
+    fixture.deviceFunctions_.advanceOnFenceQuery = 1;
+    CHECK(!fixture.tryPrepare(request)); noAdmission(fixture);
+    CHECK(abandoned.state == State::Idle && !fdOpen(fd));
+    CHECK(fixture.live_[0].state == State::Idle && fixture.live_[0].request.presentId == 0);
+    auto fresh = nextProposal(request);
+    auto prepared = fixture.tryPrepare(fresh);
+    CHECK(prepared && prepared->slotIndex == 0);
+    sameRequest(fixture.live_[0].request, fresh);
+    CHECK(fixture.deviceFunctions_.submitCalls == 1);
+}
+void no_idle_slot() {
+    Fixture fixture;
+    for (auto& slot : fixture.live_) slot.state = State::PrivateReady;
+    fakeNow = 1;
+    const auto before = fixture.live_;
+    CHECK(!fixture.tryPrepare(valid())); noAdmission(fixture);
+    for (size_t i = 0; i < before.size(); ++i) sameSlot(before[i], fixture.live_[i]);
+}
+void pre_deadline_accept() {
+    Fixture fixture;
+    auto request = valid(); request.presentId = UINT32_MAX;
+    request.compositorFrameTimelineVsyncId = 0;
+    request.compositorFrameTimelineExpectedNs = 0;
+    request.compositorFrameTimelineDeadlineNs = 0;
+    fakeNow = request.completionDeadlineNs - 1;
+    auto prepared = fixture.tryPrepare(request);
+    CHECK(prepared && prepared->slotIndex == 0 && fdOpen(prepared->inputReadySyncFd));
+    sameRequest(fixture.live_[0].request, request);
+    CHECK(fixture.live_[0].state == State::CopyQueued && fixture.pendingPresentations_ == 0);
+    CHECK(fixture.deviceFunctions_.resetFenceCalls == 2 && fixture.deviceFunctions_.resetCommandCalls == 2);
+    CHECK(fixture.imports == 2 && fixture.recordCalls == 1 && fixture.deviceFunctions_.submitCalls == 1);
+    fixture.presentPrepared(*prepared, prepared->inputReadySyncFd);
+    CHECK(fixture.pendingPresentations_ == 1 && fixture.oldestPendingSurfacePresentId() == UINT32_MAX);
+}
+void private_expiry_preserves() {
+    Fixture fixture;
+    const auto prepared = privateReady(fixture);
+    auto request = valid(true); fakeNow = request.completionDeadlineNs;
+    const auto before = fixture.live_[1];
+    CHECK(!fixture.activatePrivatePrepared(prepared, request));
+    sameSlot(before, fixture.live_[1]); noAdmission(fixture);
+    CHECK(fdOpen(before.readySyncFd) && fdOpen(before.proofTimestampSyncFd));
+    CHECK(fixture.privatePreparedPairStatus(prepared) == 1);
+    CHECK(!fixture.activatePrivatePrepared(prepared, request));
+    sameSlot(before, fixture.live_[1]); noAdmission(fixture);
+}
+void private_malformed_expired() {
+    for (int kind = 0; kind < 6; ++kind) {
+        Fixture fixture; auto prepared = privateReady(fixture);
+        auto request = valid(true); fakeNow = UINT64_MAX;
+        if (kind == 0) request.presentId = 0;
+        if (kind == 1) prepared.slotIndex = Fixture::kFixedSlotCount;
+        if (kind == 2) fixture.live_[1].state = State::PrivateAwaitingReady;
+        if (kind == 3) request.generated = false;
+        if (kind == 4) request.left = &other;
+        if (kind == 5) request.right = &other;
+        const auto before = fixture.live_[1];
+        throws([&] { fixture.activatePrivatePrepared(prepared, request); });
+        sameSlot(before, fixture.live_[1]); noAdmission(fixture);
+        CHECK(clockReads == 0);
+    }
+}
+void private_accept_once() {
+    Fixture fixture; auto prepared = privateReady(fixture);
+    auto request = valid(true); fakeNow = request.completionDeadlineNs;
+    const auto before = fixture.live_[1];
+    CHECK(!fixture.activatePrivatePrepared(prepared, request));
+    auto fresh = nextProposal(request);
+    CHECK(fixture.activatePrivatePrepared(prepared, fresh));
+    auto& slot = fixture.live_[1]; sameRequest(slot.request, fresh);
+    CHECK(slot.state == State::AwaitingReady && fixture.pendingPresentations_ == 1);
+    CHECK(slot.sourceLeft == before.sourceLeft && slot.sourceRight == before.sourceRight);
+    CHECK(slot.readySyncFd == before.readySyncFd && slot.proofTimestampSyncFd == before.proofTimestampSyncFd);
+    CHECK(fdOpen(slot.readySyncFd) && fdOpen(slot.proofTimestampSyncFd));
+    throws<std::logic_error>([&] { fixture.activatePrivatePrepared(prepared, fresh); });
+    CHECK(fixture.pendingPresentations_ == 1 && fixture.deviceFunctions_.submitCalls == 0);
+}
+void jni_expiry_preserves() {
+    Fixture fixture; Host host(fixture); auto prepared = privateReady(fixture);
+    auto request = valid(true); cachePair(host, prepared, request);
+    const auto before = fixture.live_[1]; fakeNow = request.completionDeadlineNs;
+    CHECK(enqueue(host, request) == 0);
+    CHECK(host.readyDispatchCalls == 0);
+    CHECK(host.preparedGenerated && host.preparedGenerated->prepared.slotIndex == prepared.slotIndex);
+    sameSlot(before, fixture.live_[1]); noAdmission(fixture);
+    CHECK(fdOpen(before.readySyncFd) && fdOpen(before.proofTimestampSyncFd));
+    auto fresh = nextProposal(request);
+    CHECK(enqueue(host, fresh) == 1);
+    CHECK(host.readyDispatchCalls == 1);
+    CHECK(!host.preparedGenerated && fixture.pendingPresentations_ == 1);
+    sameRequest(fixture.live_[1].request, fresh);
+    CHECK(enqueue(host, fresh) == 0 && fixture.pendingPresentations_ == 1);
+    CHECK(host.readyDispatchCalls == 1);
+}
+void jni_malformed_expired() {
+    std::vector<std::function<void(Request&)>> changes = {
+        [](auto& r) { r.sessionEpoch = 0; }, [](auto& r) { r.presentationEpoch = 0; },
+        [](auto& r) { r.leftSequence = 0; }, [](auto& r) { ++r.rightSequence; },
+        [](auto& r) { r.leftTimestampNs = 0; }, [](auto& r) { r.rightTimestampNs = r.leftTimestampNs; },
+        [](auto& r) { r.contentTimestampNs = 151; }, [](auto& r) { r.contentTimestampNs = 201; },
+        [](auto& r) { r.presentId = uint64_t{UINT32_MAX} + 1; },
+        [](auto& r) { r.compositorFrameTimelineExpectedNs = r.compositorFrameTimelineDeadlineNs + 2'000'000; },
+        [](auto& r) { r.compositorFrameTimelineExpectedNs = r.compositorFrameTimelineDeadlineNs + 27'000'001; },
+    };
+    for (const auto& change : changes) {
+        Fixture fixture; Host host(fixture); auto prepared = privateReady(fixture);
+        auto request = valid(true); cachePair(host, prepared, request); change(request);
+        const auto before = fixture.live_[1]; fakeNow = UINT64_MAX;
+        CHECK(enqueue(host, request) == -1);
+        CHECK(host.preparedGenerated); sameSlot(before, fixture.live_[1]); noAdmission(fixture);
+        CHECK(clockReads == 0);
+    }
+    Fixture fixture; Host host(fixture); auto request = valid(true); fakeNow = UINT64_MAX;
+    CHECK(enqueue(host, request, 319) == -1);
+    CHECK(enqueue(host, request, 320, 2) == -1); noAdmission(fixture);
+}
+void jni_pair_mismatch() {
+    Fixture fixture; Host host(fixture); auto prepared = privateReady(fixture);
+    auto request = valid(true); cachePair(host, prepared, request);
+    auto otherRequest = nextProposal(request); ++otherRequest.presentationEpoch;
+    const auto before = fixture.live_[1];
+    CHECK(enqueue(host, otherRequest) == 0 && host.preparedGenerated);
+    sameSlot(before, fixture.live_[1]); noAdmission(fixture);
+}
+void jni_sequence_boundary() {
+    Fixture fixture; Host host(fixture); auto request = valid();
+    request.leftSequence = INT64_MAX;
+    request.rightSequence = 1;
+    fakeNow = UINT64_MAX;
+    // No signed successor exists: a malformed JNI pair must return an error
+    // before arithmetic overflow, regardless of its already-expired target.
+    CHECK(enqueue(host, request) == -1);
+    noAdmission(fixture);
+}
+void jni_unknown_pair_status() {
+    Fixture fixture; Host host(fixture); auto prepared = privateReady(fixture);
+    auto request = valid(true); cachePair(host, prepared, request);
+    fixture.live_[1].privatePairStatus = 0;
+    const auto before = fixture.live_[1];
+    CHECK(enqueue(host, request) == 0 && host.preparedGenerated);
+    sameSlot(before, fixture.live_[1]); noAdmission(fixture);
+}
+void jni_queue_backpressure() {
+    Fixture fixture; Host host(fixture); auto prepared = privateReady(fixture);
+    auto request = valid(true); cachePair(host, prepared, request);
+    host.droppedCompletions.resize(kSlotCount);
+    const auto before = fixture.live_[1];
+    CHECK(enqueue(host, request) == 0 && host.preparedGenerated);
+    sameSlot(before, fixture.live_[1]); noAdmission(fixture);
+}
+void jni_endpoint_expiry() {
+    Fixture fixture; Host host(fixture); auto request = valid();
+    const auto prepared = privateReady(fixture); cacheRealPair(host, prepared, request);
+    const auto before = fixture.live_[prepared.slotIndex];
+    fakeNow = request.completionDeadlineNs;
+    CHECK(enqueue(host, request) == 0); noAdmission(fixture);
+    CHECK(host.preparedRealPair && !host.preparedGenerated);
+    sameSlot(before, fixture.live_[prepared.slotIndex]);
+}
+void jni_endpoint_accept_once() {
+    Fixture fixture; Host host(fixture); auto request = valid();
+    fakeNow = request.completionDeadlineNs - 1;
+    // A runtime real endpoint cannot start new GPU work inside the visible
+    // deadline. It must activate the exact, already-private canonical pair.
+    CHECK(enqueue(host, request) == 0); noAdmission(fixture);
+    CHECK(host.readyDispatchCalls == 0);
+    const auto prepared = privateReady(fixture); cacheRealPair(host, prepared, request);
+    CHECK(enqueue(host, request) == 1);
+    CHECK(host.readyDispatchCalls == 1);
+    CHECK(fixture.pendingPresentations_ == 1 && fixture.deviceFunctions_.submitCalls == 0);
+    sameRequest(fixture.live_[prepared.slotIndex].request, request);
+    CHECK(!host.preparedRealPair && enqueue(host, request) == 0);
+    CHECK(host.readyDispatchCalls == 1);
+    CHECK(fixture.pendingPresentations_ == 1);
+}
+void post_submit_expiry() {
+    Fixture fixture; auto request = valid(); fakeNow = request.completionDeadlineNs - 1;
+    fixture.deviceFunctions_.advanceOnSubmit = 2;
+    auto prepared = fixture.tryPrepare(request);
+    CHECK(fakeNow > request.completionDeadlineNs && prepared);
+    CHECK(fixture.live_[0].state == State::CopyQueued && fdOpen(prepared->inputReadySyncFd));
+    CHECK(fixture.live_[0].sourceLeft != nullptr && fixture.live_[0].sourceRight != nullptr);
+    fixture.presentPrepared(*prepared, prepared->inputReadySyncFd);
+    CHECK(fixture.pendingPresentations_ == 1 && fixture.oldestPendingSurfacePresentId() == request.presentId);
+}
+void accepted_drop_retirement() {
+    Fixture fixture; auto request = valid(); fakeNow = request.completionDeadlineNs - 1;
+    fixture.deviceFunctions_.advanceOnSubmit = 2;
+    auto prepared = fixture.tryPrepare(request); CHECK(prepared);
+    fixture.presentPrepared(*prepared, prepared->inputReadySyncFd);
+    auto& slot = fixture.live_[0]; const int fd = slot.readySyncFd;
+    auto* sourceLeft = slot.sourceLeft; auto* sourceRight = slot.sourceRight;
+    readyObservations[fd] = {false, 0, true};
+    CHECK(!fixture.pollSurfaceSubmission());
+    CHECK(slot.state == State::SurfaceDroppedAwaitingReady && !fixture.fatal_);
+    CHECK(slot.sourceLeft == sourceLeft && slot.sourceRight == sourceRight && fdOpen(fd));
+    CHECK(fixture.pendingPresentations_ == 1 && fixture.oldestPendingSurfacePresentId() == request.presentId);
+    CHECK(!fixture.pollDroppedSurfacePresentation());
+    CHECK(slot.state == State::SurfaceDroppedAwaitingReady && fdOpen(fd));
+    fixture.deviceFunctions_.fenceStatuses[slot.copyFence] = VK_SUCCESS;
+    CHECK(!fixture.pollDroppedSurfacePresentation());
+    readyObservations[fd] = {true, fakeNow, true};
+    auto drop = fixture.pollDroppedSurfacePresentation();
+    CHECK(drop && drop->dropped && drop->presentId == request.presentId);
+    CHECK(drop->actualPresentTimeNs == 0 && drop->pairStatus == 0);
+    CHECK(drop->desiredPresentTimeNs == request.desiredPresentTimeNs);
+    CHECK(slot.state == State::Idle && slot.sourceLeft == nullptr && slot.sourceRight == nullptr);
+    CHECK(!fdOpen(fd) && fixture.pendingPresentations_ == 0 && fixture.surfaceCutoffRetired_ == 1);
+    CHECK(!fixture.pollDroppedSurfacePresentation());
+    CHECK(fixture.surfaceCutoffDrops_ == 1 && !fixture.fatal_);
+}
+void private_drop_waits_for_proof() {
+    Fixture fixture; auto prepared = privateReady(fixture); auto request = valid(true);
+    auto& slot = fixture.live_[1]; const int readyFd = slot.readySyncFd, proofFd = slot.proofTimestampSyncFd;
+    CHECK(fixture.activatePrivatePrepared(prepared, request));
+    fakeNow = request.completionDeadlineNs;
+    fixture.deviceFunctions_.fenceStatuses[slot.copyFence] = VK_SUCCESS;
+    readyObservations[readyFd] = {true, fakeNow - 1, true};
+    CHECK(!fixture.pollSurfaceSubmission());
+    CHECK(!fixture.pollDroppedSurfacePresentation());
+    CHECK(slot.state == State::SurfaceDroppedAwaitingReady && fdOpen(readyFd) && fdOpen(proofFd));
+    CHECK(fixture.pendingPresentations_ == 1);
+    fixture.deviceFunctions_.fenceStatuses[slot.presentFence] = VK_SUCCESS;
+    auto drop = fixture.pollDroppedSurfacePresentation();
+    CHECK(drop && drop->dropped && drop->actualPresentTimeNs == 0);
+    CHECK(!fdOpen(readyFd) && !fdOpen(proofFd) && slot.state == State::Idle);
+    CHECK(fixture.pendingPresentations_ == 0);
+}
+void accepted_drop_timeout() {
+    Fixture fixture; auto prepared = privateReady(fixture); auto request = valid(true);
+    CHECK(fixture.activatePrivatePrepared(prepared, request));
+    fakeNow = request.completionDeadlineNs;
+    CHECK(!fixture.pollSurfaceSubmission());
+    auto& slot = fixture.live_[1]; const auto before = slot;
+    fakeNow += kDroppedDrainTimeoutNs;
+    throws<std::runtime_error>([&] { fixture.pollDroppedSurfacePresentation(); });
+    CHECK(fixture.fatal_ && fixture.pendingPresentations_ == 1 && fixture.surfaceCutoffRetired_ == 0);
+    sameSlot(before, slot);
+    CHECK(fdOpen(slot.readySyncFd) && fdOpen(slot.proofTimestampSyncFd));
+}
+void accepted_drop_fence_error() {
+    Fixture fixture; auto prepared = privateReady(fixture); auto request = valid(true);
+    CHECK(fixture.activatePrivatePrepared(prepared, request));
+    fakeNow = request.completionDeadlineNs;
+    CHECK(!fixture.pollSurfaceSubmission());
+    auto& slot = fixture.live_[1]; fixture.deviceFunctions_.fenceStatuses[slot.copyFence] = -4;
+    const auto before = slot;
+    throws<std::runtime_error>([&] { fixture.pollDroppedSurfacePresentation(); });
+    CHECK(fixture.fatal_ && fixture.pendingPresentations_ == 1 && fixture.surfaceCutoffRetired_ == 0);
+    sameSlot(before, slot); CHECK(fdOpen(slot.readySyncFd));
+}
+void export_failure_owned() {
+    Fixture fixture; auto request = valid(); fakeNow = request.completionDeadlineNs - 1;
+    fixture.deviceFunctions_.failExport = true;
+    throws<std::runtime_error>([&] { fixture.tryPrepare(request); });
+    CHECK(fixture.fatal_ && fixture.live_[0].state == State::CopyQueued);
+    CHECK(fixture.live_[0].sourceLeft != nullptr && fixture.live_[0].sourceRight != nullptr);
+    CHECK(fixture.deviceFunctions_.submitCalls == 1 && fixture.deviceFunctions_.exportCalls == 1);
+}
+
+int main(int argc, char** argv) {
+    const std::map<std::string, void(*)()> cases = {
+        {"malformed_expired", malformed_expired}, {"entry_expired", entry_expired},
+        {"retirement_expiry", retirement_expiry}, {"retirement_then_fresh", retirement_then_fresh},
+        {"no_idle_slot", no_idle_slot}, {"pre_deadline_accept", pre_deadline_accept},
+        {"private_expiry_preserves", private_expiry_preserves}, {"private_malformed_expired", private_malformed_expired},
+        {"private_accept_once", private_accept_once}, {"jni_expiry_preserves", jni_expiry_preserves},
+        {"jni_malformed_expired", jni_malformed_expired}, {"jni_pair_mismatch", jni_pair_mismatch},
+        {"jni_sequence_boundary", jni_sequence_boundary},
+        {"jni_unknown_pair_status", jni_unknown_pair_status}, {"jni_queue_backpressure", jni_queue_backpressure},
+        {"jni_endpoint_expiry", jni_endpoint_expiry}, {"jni_endpoint_accept_once", jni_endpoint_accept_once},
+        {"post_submit_expiry", post_submit_expiry}, {"accepted_drop_retirement", accepted_drop_retirement},
+        {"private_drop_waits_for_proof", private_drop_waits_for_proof},
+        {"accepted_drop_timeout", accepted_drop_timeout}, {"accepted_drop_fence_error", accepted_drop_fence_error},
+        {"export_failure_owned", export_failure_owned},
+    };
+    try {
+        CHECK(argc == 2);
+        const auto found = cases.find(argv[1]); CHECK(found != cases.end());
+        found->second();
+        std::cout << "PASS " << argv[1] << '\n';
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "FAIL: " << error.what() << '\n';
+        return 1;
+    }
+}

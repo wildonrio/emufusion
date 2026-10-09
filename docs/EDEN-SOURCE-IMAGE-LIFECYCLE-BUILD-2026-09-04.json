@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-04",
+  "status": "BUILT_DEVICE_UNVERIFIED",
+  "build": {
+    "reportedBy": "root agent",
+    "command": "ninja -C engines/build/switch-src/eden/build-android -j6 yuzu-android",
+    "exitCode": 0,
+    "logPath": "/tmp/emufusion-v2-eden-lifecycle-build.log",
+    "logSha256": "c6fcf2ff29c3949c3e7d9b09c83f884c90e444ec9ae7163ebd0493b0a0dc4c2c",
+    "linkTarget": "yuzu-android",
+    "note": "Root reported successful compile/link. This agent independently stripped, inspected and staged the produced library; no device operations."
+  },
+  "artifact": {
+    "path": "engines/build/arm64-v8a/liblucent_native_adapter_eden.so",
+    "sha256": "74efdc7a95e63f5434ee4cd0a27b1200d66f141f128dbfb7a66fe4797d30a8d4",
+    "sizeBytes": 35557264,
+    "elfMachine": "AARCH64",
+    "byteOrder": "little-endian",
+    "ptLoadAlignment": "0x4000",
+    "loadSegmentAlignments": [
+      "0x4000",
+      "0x4000",
+      "0x4000",
+      "0x4000"
+    ],
+    "buildId": "2265a77b4c574a65f99c6fde9474fbd87b1ad503",
+    "soname": "libyuzu-android.so",
+    "definedDynamicSymbolCount": 52637,
+    "requiredExports": [
+      "lucent_native_adapter_entry",
+      "lucent_eden_average_game_fps",
+      "lucent_native_adapter_declared_video_hz",
+      "lucent_native_adapter_set_paced_video_hz",
+      "lucent_native_adapter_timing_capabilities_v1",
+      "lucent_native_adapter_source_image_binding_v1",
+      "lucent_native_adapter_query_source_image_v1"
+    ],
+    "stripTool": "/Users/tyleryoung/Code/cemu/Cemu-0.5/android-sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip",
+    "stripArguments": "--strip-all -o <isolated-temporary-library> <built-libyuzu-android.so>",
+    "unstrippedPath": "engines/build/switch-src/eden/build-android/src/android/app/src/main/jni/libyuzu-android.so",
+    "unstrippedSizeBytes": 387841584,
+    "measuredBy": "system_route_audit via configured llvm-readelf, llvm-nm, shasum and wc"
+  },
+  "sourceInputs": [
+    {
+      "path": "engines/patches/eden-lucent-adapter.cpp",
+      "sha256": "cfed1c9c546b707685fa3b879e28209ad45c205113066ddab87fb8ef3da7fa7a",
+      "sizeBytes": 42964
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/common/android/id_cache.cpp",
+      "sha256": "a2cf40feb5f562d3e99e48e06ae36de6a2b4462aaac79728a87b1d783a772131",
+      "sizeBytes": 25199
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/audio_core/sink/sink_details.cpp",
+      "sha256": "d3494ca8dcaec7d414c76e1c8c83f6306b2187137f01710b8e7cdd341958270f",
+      "sizeBytes": 7612
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/core/core_timing.cpp",
+      "sha256": "00d4ec51f7a805659ddf9e354f2c896a95924302353732ad939577df2e904e3e",
+      "sizeBytes": 11398
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/core/core.cpp",
+      "sha256": "cf81273e0fd55ffcea6f3d4094e76f281e2f55045169370ef3e8e8e81d2c7820",
+      "sizeBytes": 33673
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/common/host_memory.cpp",
+      "sha256": "cf5a5d9d11a77839e4af9d16fb5d992b94d1ef4b3458dde8d2b6e09b634d2388",
+      "sizeBytes": 31484
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/buffer_cache/memory_tracker_base.h",
+      "sha256": "abc738437263b15556b51ea2b76f2c4567f7a0a16100f0f88c55f17f8c99f996",
+      "sizeBytes": 12460
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/android/app/src/main/jni/CMakeLists.txt",
+      "sha256": "eedfcccf01842bf0d1cc917739ad4fe093858bb31e769a95747e5ea20379c469",
+      "sizeBytes": 1717
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/vulkan_common/vulkan_device.cpp",
+      "sha256": "544f455755f3a8e40faece8b8bd9838865d74e82fd6491fae6db0da3f3113cde",
+      "sizeBytes": 76144
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/vulkan_common/vulkan_device.h",
+      "sha256": "32d1ee1ba322183e3a2aac7bdb5cbd44234bbffb771aa6e9cfbe0b69dc2cb7c2",
+      "sizeBytes": 53884
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/renderer_vulkan/vk_swapchain.cpp",
+      "sha256": "49fc92610d937ef8009c11367303bd4fc3dbe2f122a0753acdbf661a07eca2e4",
+      "sizeBytes": 16745
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/common/lucent_pacing.h",
+      "sha256": "f2bd435e391ec0f1ce9c9a058a856266102e48969143e44ec5a854e309e6bc38",
+      "sizeBytes": 2932
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/core/hle/service/vi/conductor.cpp",
+      "sha256": "00b6553938718c5129d922031c00ed237c4086ad740afd7327a8d48cea661cf6",
+      "sizeBytes": 5898
+    },
+    {
+      "path": "engines/patches/eden-lucent-pacing.h",
+      "sha256": "f2bd435e391ec0f1ce9c9a058a856266102e48969143e44ec5a854e309e6bc38",
+      "sizeBytes": 2932
+    },
+    {
+      "path": "engines/patches/eden-lucent-clock.patch",
+      "sha256": "1d63ac65bd84607d35a3d6d3fbbe4970f9529b02b3fb7871c5e32a7854d08262",
+      "sizeBytes": 33718
+    },
+    {
+      "path": "engines/tools/apply_eden_timing_patch.py",
+      "sha256": "82c525f437c14383669ed856aad7f997e1a53f7395131934a7c44dea82ed1567",
+      "sizeBytes": 2825
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/core/hle/service/nvdrv/devices/nvdisp_disp0.cpp",
+      "sha256": "735ab3a98afda1ec1517dfaafc8217031c7b1c16ca92471451e6f2640bdb83d1",
+      "sizeBytes": 3914
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/core/hle/service/nvnflinger/display.h",
+      "sha256": "b138a13f11d2c621eb8290ab07442fb8e036a4cb46a14e551a9c9df8ed619e79",
+      "sizeBytes": 1635
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/core/hle/service/nvnflinger/hardware_composer.cpp",
+      "sha256": "8e66c24f73fabbf157e8d27cdd3ae901280b2e8cf6e28b365bc05d4bd6fc8c94",
+      "sizeBytes": 10739
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/core/hle/service/nvnflinger/hwc_layer.h",
+      "sha256": "b65eef3e4533abd1f85e5f5036253a3944399235a757e3c573f2ccc22975e2a1",
+      "sizeBytes": 1113
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/framebuffer_config.h",
+      "sha256": "1074fa42be6eb53b3db0d7bbc77c24222326e51da04d4eee4a4f20f3558d0be7",
+      "sizeBytes": 1123
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/gpu.cpp",
+      "sha256": "783e718c5bf6dfcc57dcb1920bf8d4698572ec5f48f20e5e5e29a76d03aa7760",
+      "sizeBytes": 16643
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/gpu.h",
+      "sha256": "7c46e52926093e9b2015d60b257d1e55c89d4ae3e7fc06c3a8d09f7368cb6d81",
+      "sizeBytes": 7628
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/renderer_base.h",
+      "sha256": "7aaf7bfb59c050e8ba62f20cb002877d2f5c54ed8f0b4b8be00aec87ca76f89c",
+      "sizeBytes": 3459
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/renderer_vulkan/renderer_vulkan.cpp",
+      "sha256": "354ad586e86be86d11e6c92082d04fb2fd0a7a2c43e2a3c07a7af4117f2a6b4c",
+      "sizeBytes": 13880
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/renderer_vulkan/renderer_vulkan.h",
+      "sha256": "4f0aed889728f5be4335bfacdf317cd23578b589c46294045974a1b3cd07ccc2",
+      "sizeBytes": 3764
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/renderer_vulkan/vk_present_manager.cpp",
+      "sha256": "013231c6a035ad63bc5123ddf5a5f0dc7e8a65882992d0a89a855f8a05c008c6",
+      "sizeBytes": 21049
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/renderer_vulkan/vk_present_manager.h",
+      "sha256": "ca98b1e820c3231d5d44aeb35a3be99726cc123c4b2632eeae420df05d87d382",
+      "sizeBytes": 3124
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/video_core/renderer_vulkan/vk_swapchain.h",
+      "sha256": "7e06de3f2368a95f64824c9615b729bab6afd1d91fc5b0a3cc474ed925a9e3e2",
+      "sizeBytes": 3635
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/common/lucent_source_image.h",
+      "sha256": "6230ede67321e0395d6dfd3f4b51c5dc9c0dada2d155498efd91a55d06aa9554",
+      "sizeBytes": 8459
+    },
+    {
+      "path": "engines/build/switch-src/eden/src/common/lucent_source_image_types.h",
+      "sha256": "8212fa605a8d931ad45367c149742d74cab51b8af33fcf178b27c4250ae4dcbb",
+      "sizeBytes": 3157
+    },
+    {
+      "path": "engines/patches/eden-lucent-source-image.h",
+      "sha256": "6230ede67321e0395d6dfd3f4b51c5dc9c0dada2d155498efd91a55d06aa9554",
+      "sizeBytes": 8459
+    },
+    {
+      "path": "unified-android/native/include/lucent_native_source_image.h",
+      "sha256": "8212fa605a8d931ad45367c149742d74cab51b8af33fcf178b27c4250ae4dcbb",
+      "sizeBytes": 3157
+    }
+  ],
+  "sourceChecks": {
+    "reproductionCheck": {
+      "command": "python3 engines/tools/apply_eden_timing_patch.py",
+      "status": "passed"
+    },
+    "preStaging": {
+      "command": "python3 -m unittest tools.tests.test_phase3_eden_source_image_join tools.tests.test_phase3_eden_timing_contract tools.tests.test_eden_surface_lifecycle",
+      "tests": 26,
+      "status": "passed"
+    },
+    "postStaging": {
+      "status": "passed",
+      "command": "python3 -m unittest tools.tests.test_phase3_eden_packaging tools.tests.test_phase3_eden_timing_contract tools.tests.test_phase3_eden_core_timing tools.tests.test_phase3_eden_source_image_join tools.tests.test_eden_surface_lifecycle tools.tests.test_native_source_image_java",
+      "tests": 92
+    }
+  },
+  "previousArtifact": {
+    "sha256": "d597932f0111349f341fdb8be13f5e6ddfb68bdee92c29246d8716be5bfd7004",
+    "backupPath": "/tmp/emufusion-eden-lifecycle-stage.Hl9Uue/previous-lib-d597932f.so"
+  },
+  "sourceAuthorityEnabled": false,
+  "notProven": [
+    "installation or launch of this artifact",
+    "sleep/wake lifecycle recovery on the real Android driver",
+    "exact SurfaceTexture-consumed image join (consumer runtime still pending)",
+    "whole-guest/audio clock correction",
+    "physical presentation cadence",
+    "useful generated midpoint quality"
+  ]
+}

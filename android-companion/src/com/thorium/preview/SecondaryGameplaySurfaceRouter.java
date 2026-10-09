@@ -9,7 +9,7 @@ import android.provider.Settings;
 import android.util.Log;
 import android.view.Surface;
 
-/** Routes one in-process emulator session to Lucent's physical lower display. */
+/** Routes one in-process emulator session to EmuFusion's physical lower display. */
 public final class SecondaryGameplaySurfaceRouter {
     public static final String ACTION_SECONDARY_GAMEPLAY =
             "com.thorium.preview.SECONDARY_GAMEPLAY";
@@ -20,13 +20,35 @@ public final class SecondaryGameplaySurfaceRouter {
     public interface Listener {
         void onSecondarySurfaceAvailable(Surface surface, int width, int height);
         void onSecondarySurfaceDestroyed();
+        void onSecondarySurfaceError(Throwable failure);
         void onSecondaryTouch(float normalizedX, float normalizedY, boolean pressed);
     }
 
+    /** The resumed lower-display Activity, when there is one to hand to. */
+    public interface Host {
+        void showSecondaryGameplaySurface(long generation);
+    }
+
     private static Listener listener;
+    private static Host host;
     private static long generation;
+    private static String requestedSystem = "";
 
     private SecondaryGameplaySurfaceRouter() {}
+
+    /** Registered by {@link PreviewActivity} for exactly as long as it is resumed. */
+    public static synchronized void attachHost(Host candidate) {
+        host = candidate;
+        // Android can recreate the lower Activity while the emulator survives
+        // sleep. Its last Intent may be a preview BLANK, not the original game
+        // request. The live route, not that stale Intent, owns the replacement.
+        if (candidate != null && listener != null)
+            candidate.showSecondaryGameplaySurface(generation);
+    }
+
+    public static synchronized void detachHost(Host candidate) {
+        if (host == candidate) host = null;
+    }
 
     public static synchronized boolean request(
             Context context, String systemId, Listener next) {
@@ -44,7 +66,25 @@ public final class SecondaryGameplaySurfaceRouter {
                 " path=" + (overlays ? "startActivity(canDrawOverlays)" : "PendingIntent") +
                 " (SDK=" + Build.VERSION.SDK_INT + ")");
         listener = next;
+        requestedSystem = normalize(systemId);
         long requestedGeneration = ++generation;
+        // The lower-display Activity is already up and resumed in this very
+        // process for all but the first moments after boot, so hand it the
+        // surface directly. Starting an Activity on display 4 instead would
+        // move display 4 to the top of Android's display order, and because
+        // that Activity is deliberately FLAG_NOT_FOCUSABLE the display would
+        // then be top-focused with no focusable window in it -- every
+        // controller press would be routed there, the game would see none of
+        // them, and Android would ANR PreviewActivity five seconds later.
+        // PrimaryDisplayFocusGuard repairs that state; not entering it mid-game
+        // is better still.
+        Host attached = host;
+        if (attached != null) {
+            Log.i(TAG, "request served by the resumed lower-display activity generation=" +
+                    requestedGeneration + " system=" + systemId);
+            attached.showSecondaryGameplaySurface(requestedGeneration);
+            return true;
+        }
         Intent activity = new Intent(context, PreviewActivity.class)
                 .setAction(ACTION_SECONDARY_GAMEPLAY)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
@@ -83,6 +123,7 @@ public final class SecondaryGameplaySurfaceRouter {
     public static synchronized void release(Context context, Listener owner) {
         if (owner == null || listener != owner) return;
         listener = null;
+        requestedSystem = "";
         ++generation;
         if (context != null) context.sendBroadcast(new Intent(PreviewService.ACTION_BLANK)
                 .setPackage(context.getPackageName()));
@@ -92,6 +133,12 @@ public final class SecondaryGameplaySurfaceRouter {
         return listener != null && generation == candidate;
     }
 
+    /** Azahar's SideScreen touch crop is portrait in its producer buffer. */
+    static synchronized boolean isClockwiseQuarterTurn(long candidate) {
+        return listener != null && generation == candidate &&
+                ("3ds".equals(requestedSystem) || "n3ds".equals(requestedSystem));
+    }
+
     static synchronized void surfaceAvailable(
             long candidate, Surface surface, int width, int height) {
         boolean matched = listener != null && generation == candidate;
@@ -99,8 +146,19 @@ public final class SecondaryGameplaySurfaceRouter {
                 " match=" + matched + " listener=" + (listener != null) +
                 " valid=" + (surface != null && surface.isValid()) +
                 " size=" + width + "x" + height);
-        if (matched)
+        if (matched && surface != null && surface.isValid())
             listener.onSecondarySurfaceAvailable(surface, width, height);
+    }
+
+    /** An unresolved renderer owner must end loading, never deliver a null or
+     * still-owned Surface as Direct. Do not call engine error UI under the
+     * router monitor: its normal exit may release this route. */
+    static void surfaceFailed(long candidate, Throwable failure) {
+        final Listener target;
+        synchronized (SecondaryGameplaySurfaceRouter.class) {
+            target = generation == candidate ? listener : null;
+        }
+        if (target != null) target.onSecondarySurfaceError(failure);
     }
 
     /** Synchronous: returns only after the listener detached from the dying
@@ -115,15 +173,27 @@ public final class SecondaryGameplaySurfaceRouter {
 
     static synchronized void touch(
             long candidate, float normalizedX, float normalizedY, boolean pressed) {
-        if (listener != null && generation == candidate)
+        if (listener != null && generation == candidate) {
+            // DS removes its image bars in the session. Preserve an outside
+            // drag as release before clamping would turn it into an edge tap.
+            // Other engines retain their existing coordinate contract.
+            if (("nds".equals(requestedSystem) || "ds".equals(requestedSystem)) &&
+                    (!Float.isFinite(normalizedX) || !Float.isFinite(normalizedY) ||
+                     normalizedX < 0f || normalizedX >= 1f ||
+                     normalizedY < 0f || normalizedY >= 1f)) pressed = false;
             listener.onSecondaryTouch(clamp(normalizedX), clamp(normalizedY), pressed);
+        }
     }
 
     static boolean supports(String systemId) {
-        String value = systemId == null ? "" : systemId.trim().toLowerCase();
+        String value = normalize(systemId);
         return "nds".equals(value) || "ds".equals(value) ||
                 "3ds".equals(value) || "n3ds".equals(value) ||
                 "wiiu".equals(value) || "wii-u".equals(value);
+    }
+
+    private static String normalize(String systemId) {
+        return systemId == null ? "" : systemId.trim().toLowerCase();
     }
 
     private static float clamp(float value) {

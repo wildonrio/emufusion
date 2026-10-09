@@ -23,9 +23,24 @@ public final class DeviceCatalog {
 
     public static DeviceCatalog standard() {
         Map<CanonicalControl, InputSignal> standard = standardMapping();
+        Map<CanonicalControl, InputSignal> odinStyle = odinStyleMapping();
+        Map<CanonicalControl, InputSignal> unknownAynStyle = withoutFaceButtons(standard);
         List<DeviceProfile> profiles = new ArrayList<>();
         // Built-in Android handheld controls. Names supplement capability checks;
         // the runtime persists the final match using descriptor + VID/PID.
+        //
+        // AYN's controller-style switch changes the face-button KeyEvents and
+        // the product ID. Canonical controls describe physical positions, so
+        // normalize both known identities before the generic name profile.
+        profiles.add(profile("ayn-odin-style", 0x2020, 0x0111,
+                ".*", true, odinStyle));
+        profiles.add(profile("ayn-xbox-style", 0x2020, 0x0112,
+                ".*", true, standard));
+        // An unknown AYN style must not silently guess the four positions.
+        // D-pad, sticks and shoulders remain usable, and an explicit remap can
+        // add face controls for a new firmware/product identity.
+        profiles.add(profile("ayn-unknown-controller-style", 0x2020, -1,
+                ".*", true, unknownAynStyle));
         profiles.add(profile("ayn-handheld", -1, -1, "AYN|Odin|Thor", true, standard));
         profiles.add(profile("retroid-handheld", -1, -1, "Retroid|Pocket Flip", true, standard));
         profiles.add(profile("logitech-g-cloud", -1, -1, "G Cloud|Logitech G Cloud", true, standard));
@@ -71,6 +86,26 @@ public final class DeviceCatalog {
         map.put(CanonicalControl.RIGHT_X_POSITIVE, InputSignal.axis(AndroidInputCodes.AXIS_Z, 1));
         map.put(CanonicalControl.RIGHT_Y_NEGATIVE, InputSignal.axis(AndroidInputCodes.AXIS_RZ, -1));
         map.put(CanonicalControl.RIGHT_Y_POSITIVE, InputSignal.axis(AndroidInputCodes.AXIS_RZ, 1));
+        return map;
+    }
+
+    private static Map<CanonicalControl, InputSignal> odinStyleMapping() {
+        EnumMap<CanonicalControl, InputSignal> map =
+                new EnumMap<>(standardMapping());
+        map.put(CanonicalControl.SOUTH, InputSignal.key(AndroidInputCodes.BUTTON_B));
+        map.put(CanonicalControl.EAST, InputSignal.key(AndroidInputCodes.BUTTON_A));
+        map.put(CanonicalControl.WEST, InputSignal.key(AndroidInputCodes.BUTTON_Y));
+        map.put(CanonicalControl.NORTH, InputSignal.key(AndroidInputCodes.BUTTON_X));
+        return map;
+    }
+
+    private static Map<CanonicalControl, InputSignal> withoutFaceButtons(
+            Map<CanonicalControl, InputSignal> source) {
+        EnumMap<CanonicalControl, InputSignal> map = new EnumMap<>(source);
+        map.remove(CanonicalControl.SOUTH);
+        map.remove(CanonicalControl.EAST);
+        map.remove(CanonicalControl.WEST);
+        map.remove(CanonicalControl.NORTH);
         return map;
     }
 

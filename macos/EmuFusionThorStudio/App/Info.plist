@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleDisplayName</key><string>EmuFusion Thor Studio</string>
+    <key>CFBundleExecutable</key><string>EmuFusionThorStudio</string>
+    <key>CFBundleIdentifier</key><string>com.wildonrio.emufusion.thorstudio</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleName</key><string>EmuFusion Thor Studio</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>1.0.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSMicrophoneUsageDescription</key><string>EmuFusion Thor Studio uses your selected Mac microphone when you enable narration recording.</string>
+    <key>NSScreenCaptureUsageDescription</key><string>EmuFusion Thor Studio captures its two read-only Thor mirror windows to build the live hardware composition.</string>
+    <key>NSPrincipalClass</key><string>NSApplication</string>
+</dict>
+</plist>

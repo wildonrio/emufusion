@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Release gate for in-process engines.
  *
- * A registry row is intentionally insufficient on its own. Lucent only routes
+ * A registry row is intentionally insufficient on its own. EmuFusion only routes
  * a game internally when every release qualification flag is present and the
  * corresponding core is physically bundled inside the signed APK. Development
  * and license-blocked rows therefore remain unlaunchable until an internal
@@ -172,7 +172,7 @@ public final class InternalEngineCatalog {
             }
         } catch (Exception ignored) {
             // A missing/damaged registry disables internal engines. It never
-            // never enables a fallback route outside Lucent.
+            // never enables a fallback route outside EmuFusion.
         }
         return new Snapshot(byId, bySystem);
     }

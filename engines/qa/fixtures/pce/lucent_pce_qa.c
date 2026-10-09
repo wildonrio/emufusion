@@ -1,7 +1,7 @@
 /*
- * Original Lucent PC Engine qualification cartridge.
+ * Original EmuFusion PC Engine qualification cartridge.
  *
- * Copyright 2026 Lucent contributors
+ * Copyright 2026 EmuFusion contributors
  * SPDX-License-Identifier: GPL-3.0-only
  *
  * This deliberately tiny program presents a visible frame, emits a steady PSG

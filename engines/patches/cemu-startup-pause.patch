@@ -1,0 +1,95 @@
+--- a/src/Cafe/CafeSystem.cpp
++++ b/src/Cafe/CafeSystem.cpp
+@@ -1,4 +1,5 @@
+ #include "Cafe/OS/common/OSCommon.h"
++#include <mutex>
+ #include "WindowSystem.h"
+ #include "Cafe/OS/libs/gx2/GX2.h"
+ #include "Cafe/GameProfile/GameProfile.h"
+@@ -465,7 +466,12 @@
+ 	bool sSystemRunning = false;
+ 	TitleId sForegroundTitleId = 0;
+ 
++	// Pause may be requested after LaunchForegroundTitle returns but before
++	// cemu_initForGame has created the guest threads. Serialize that request
++	// with readiness; suspending an empty active-thread list loses the pause.
++	std::mutex sTitlePauseMutex;
+ 	bool sTitlePaused = false;
++	bool sTitleThreadsReady = false;
+ 
+ 	GameInfo2 sGameInfo_ForegroundTitle;
+ 
+@@ -890,6 +896,12 @@
+ 		for(auto& module : s_iosuModules)
+ 			module->TitleStart();
+ 		cemu_initForGame();
++		{
++			std::lock_guard pauseLock(sTitlePauseMutex);
++			sTitleThreadsReady = true;
++			if (sTitlePaused)
++				coreinit::SuspendActiveThreads();
++		}
+ 		// enter scheduler
+ 		if ((ActiveSettings::GetCPUMode() == CPUMode::MulticoreRecompiler || LaunchSettings::ForceMultiCoreInterpreter()) && !LaunchSettings::ForceInterpreter())
+ 			coreinit::OSSchedulerBegin(3);
+@@ -901,7 +913,12 @@
+ 	{
+ 		PPCTimer_waitForInit();
+ 		// start system
+-		sSystemRunning = true;
++		{
++			std::lock_guard pauseLock(sTitlePauseMutex);
++			sTitlePaused = false;
++			sTitleThreadsReady = false;
++			sSystemRunning = true;
++		}
+ 		WindowSystem::NotifyGameLoaded();
+ 		std::thread t(_LaunchTitleThread);
+ 		t.detach();
+@@ -914,6 +931,7 @@
+ 
+ 	void PauseTitle()
+ 	{
++		std::lock_guard pauseLock(sTitlePauseMutex);
+ 		if (!sSystemRunning || sTitlePaused)
+ 		{
+ 			return;
+@@ -921,11 +939,13 @@
+ 
+ 		sTitlePaused = true;
+ 
+-		coreinit::SuspendActiveThreads();
++		if (sTitleThreadsReady)
++			coreinit::SuspendActiveThreads();
+ 	}
+ 
+ 	void ResumeTitle()
+ 	{
++		std::lock_guard pauseLock(sTitlePauseMutex);
+ 		if (!sSystemRunning || !sTitlePaused)
+ 		{
+ 			return;
+@@ -933,7 +953,8 @@
+ 
+ 		sTitlePaused = false;
+ 
+-		coreinit::ResumeActiveThreads();
++		if (sTitleThreadsReady)
++			coreinit::ResumeActiveThreads();
+ 	}
+ 
+ 	TitleId GetForegroundTitleId()
+@@ -1076,7 +1097,12 @@
+         MlcStorageUnmountAllTitles();
+         UnmountBaseDirectories();
+         DestroyMemorySpace();
+-		sSystemRunning = false;
++		{
++			std::lock_guard pauseLock(sTitlePauseMutex);
++			sTitleThreadsReady = false;
++			sTitlePaused = false;
++			sSystemRunning = false;
++		}
+ 	}
+ 
+ 	/* Virtual mlc storage */

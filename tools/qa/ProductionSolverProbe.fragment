@@ -1,0 +1,269 @@
+    int historyWidth=256,historyHeight=192,frameBuffer=fb;
+    int denseSolveProgram,densePyramidProgram=program,denseWorkLevel;
+    int denseAnalysisWidth=192,denseAnalysisHeight=144;
+    int denseGlobalCostProgram,denseGlobalReduceProgram,denseGlobalCutProgram;
+    int exhaustiveReduceProgram;boolean gpuSeed;
+    boolean multiSeed=false;
+    int denseCycleProgram,denseFillProgram,midpointProgram;
+    int[] denseFillTextures=new int[2];
+    static final float DENSE_MAX_FLOW_PIXELS=47f;
+    boolean scoreMidpoint=true;
+    boolean mixedMidpoint=false;
+    java.nio.file.Path evidenceDirectory;
+    float flowLimitPixels(int w,int h){return 38.4f;}
+    int[] denseGlobalCoarseCostTextures=new int[2],denseGlobalFineCostTextures=new int[2],denseGlobalCoarseSeedTextures=new int[2],denseGlobalCutTextures=new int[2];
+    float activeFlowLimitPixels(){return 38.4f;}
+    boolean denseV28ReducedAnalysisRequested;
+    static final int DENSE_LEVELS=3;
+    static final int[] DENSE_LEVEL_ITERATIONS={4,4,8};
+    int[] denseLevelWidths={192,96,48},denseLevelHeights={144,72,36};
+    int[] denseBoxWidths={64,16},denseBoxHeights={48,12};
+    int[][] denseBoxTextures=new int[2][2],densePyramidTextures=new int[2][2];
+    int[][][] denseFlowTextures=new int[2][3][2];
+    int[] denseValidatedTextures=new int[2],denseGlobalSeedTextures=new int[2],denseFinalTextures=new int[2];
+    float denseMaxFlowPixels(){return 47f;}
+    float probeCoarseStep=4.5f;
+    float denseCoarsestStep(){return probeCoarseStep;}
+    static void uniform2(int p,String name,float a,float b){glUniform2f(glGetUniformLocation(p,name),a,b);}
+    static void bindTexture(int p,String name,int texture,int unit){
+        glActiveTexture(GL_TEXTURE0+unit);glBindTexture(GL_TEXTURE_2D,texture);glUniform1i(glGetUniformLocation(p,name),unit);
+    }
+    void bindQuad(int p){
+        FloatBuffer q=ByteBuffer.allocateDirect(32).order(ByteOrder.nativeOrder()).asFloatBuffer();
+        q.put(new float[]{-1,-1,1,-1,-1,1,1,1}).flip();
+        int a=glGetAttribLocation(p,"p");glEnableVertexAttribArray(a);glVertexAttribPointer(a,2,GL_FLOAT,false,0,q);
+    }
+    int raw(int w,int h){
+        int t=texture(w,h,ByteBuffer.allocateDirect(w*h*4));
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);return t;
+    }
+    void initialize(String shaderPath)throws Exception{
+        evidenceDirectory=Paths.get(shaderPath).getParent().resolve("images");Files.createDirectory(evidenceDirectory);
+        denseCycleProgram=loadProgram(shaderPath,"DENSE_CYCLE_SHADER");
+        denseFillProgram=loadProgram(shaderPath,"DENSE_FILL_SHADER");
+        midpointProgram=loadProgram(shaderPath,"MOTION_INTERPOLATE_SHADER");
+        exhaustiveReduceProgram=loadProgram(shaderPath,"DENSE_EXHAUSTIVE_REDUCE_SHADER");
+        denseGlobalCostProgram=loadProgram(shaderPath,"DENSE_GLOBAL_COST_SHADER");
+        denseGlobalReduceProgram=loadProgram(shaderPath,"DENSE_GLOBAL_REDUCE_SHADER");
+        denseGlobalCutProgram=loadProgram(shaderPath,"DENSE_GLOBAL_CUT_SHADER");
+        denseSolveProgram=glCreateProgram();
+        glAttachShader(denseSolveProgram,shader(GL_VERTEX_SHADER,"attribute vec2 p;varying vec2 vTexCoord;void main(){vTexCoord=p*.5+.5;gl_Position=vec4(p,0.,1.);}"));
+        glAttachShader(denseSolveProgram,shader(GL_FRAGMENT_SHADER,new String(Files.readAllBytes(Paths.get(shaderPath)),"UTF-8")));
+        glLinkProgram(denseSolveProgram);int[] ok=new int[1];glGetProgramiv(denseSolveProgram,GL_LINK_STATUS,ok,0);
+        check(ok[0]!=0,glGetProgramInfoLog(denseSolveProgram));
+        for(int d=0;d<2;d++){
+            denseGlobalCoarseCostTextures[d]=raw(9,9);denseGlobalFineCostTextures[d]=raw(5,5);
+            denseGlobalCoarseSeedTextures[d]=raw(1,1);denseGlobalCutTextures[d]=raw(1,1);
+            denseValidatedTextures[d]=texture(192,144,null);denseFillTextures[d]=texture(192,144,null);denseGlobalSeedTextures[d]=raw(1,1);
+            for(int l=0;l<3;l++)for(int ping=0;ping<2;ping++)denseFlowTextures[d][l][ping]=raw(denseLevelWidths[l],denseLevelHeights[l]);
+            for(int l=0;l<2;l++){
+                denseBoxTextures[d][l]=texture(denseBoxWidths[l],denseBoxHeights[l],null);
+                densePyramidTextures[d][l]=texture(denseLevelWidths[l+1],denseLevelHeights[l+1],null);
+            }
+        }
+    }
+    int loadProgram(String path,String name)throws Exception{
+        int p=glCreateProgram();
+        glAttachShader(p,shader(GL_VERTEX_SHADER,"attribute vec2 p;varying vec2 vTexCoord;void main(){vTexCoord=p*.5+.5;gl_Position=vec4(p,0.,1.);}"));
+        glAttachShader(p,shader(GL_FRAGMENT_SHADER,new String(Files.readAllBytes(Paths.get(path).getParent().resolve(name+".glsl")),"UTF-8")));
+        glLinkProgram(p);int[] ok=new int[1];glGetProgramiv(p,GL_LINK_STATUS,ok,0);check(ok[0]!=0,glGetProgramInfoLog(p));return p;
+    }
+    void exhaustiveSeed(int direction,int reference,int target){
+        // Diagnostic only: CPU argmin of image-derived GPU costs; no truth input.
+        int radius=(int)Math.floor(activeFlowLimitPixels()),size=2*radius+1;
+        int costs=raw(size,size);glFinish();long start=System.nanoTime();
+        drawDenseGlobalCosts(reference,target,denseGlobalSeedTextures[direction],false,costs,size,1,activeFlowLimitPixels());
+        glFinish();long elapsed=System.nanoTime()-start;
+        ByteBuffer pixels=ByteBuffer.allocateDirect(size*size*4);
+        glReadPixels(0,0,size,size,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+        int best=radius*size+radius,bestCost=65536;
+        for(int i=0;i<size*size;i++){
+            int cost=(pixels.get(i*4)&255)*256+(pixels.get(i*4+1)&255);
+            int dx=i%size-radius,dy=i/size-radius;
+            int bx=best%size-radius,by=best/size-radius;
+            if(cost<bestCost||(cost==bestCost&&dx*dx+dy*dy<bx*bx+by*by)){bestCost=cost;best=i;}
+        }
+        int x=best%size-radius,y=best/size-radius;
+        ByteBuffer seed=ByteBuffer.allocateDirect(4);
+        seed.put((byte)x).put((byte)0).put((byte)y).put((byte)0).flip();
+        if(gpuSeed){
+            int rows=raw(1,size);
+            glFinish();long reduceStart=System.nanoTime();
+            for(int pass=0;pass<2;pass++){
+                attachDenseTarget(pass==0?rows:denseGlobalSeedTextures[direction],1,pass==0?size:1);
+                glUseProgram(exhaustiveReduceProgram);bindQuad(exhaustiveReduceProgram);
+                bindTexture(exhaustiveReduceProgram,"uCosts",pass==0?costs:rows,0);
+                glUniform1f(glGetUniformLocation(exhaustiveReduceProgram,"uSize"),size);
+                glUniform1f(glGetUniformLocation(exhaustiveReduceProgram,"uRows"),pass);
+                glUniform1f(glGetUniformLocation(exhaustiveReduceProgram,"uExclude"),0);
+                glDrawArrays(GL_TRIANGLE_STRIP,0,4);
+            }
+            glFinish();long reduceNs=System.nanoTime()-reduceStart;
+            ByteBuffer actual=ByteBuffer.allocateDirect(4);
+            glReadPixels(0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,actual);
+            for(int i=0;i<4;i++)check(actual.get(i)==seed.get(i),"GPU argmin disagrees with CPU reference");
+            System.out.println("GPU_REDUCTION exact_cpu_match=true synchronized_us="+reduceNs/1000.0);
+            if(multiSeed){
+                int first=denseGlobalSeedTextures[direction],second=raw(1,1);
+                for(int pass=0;pass<2;pass++){
+                    attachDenseTarget(pass==0?rows:second,1,pass==0?size:1);
+                    glUseProgram(exhaustiveReduceProgram);bindQuad(exhaustiveReduceProgram);
+                    bindTexture(exhaustiveReduceProgram,"uCosts",pass==0?costs:rows,0);
+                    bindTexture(exhaustiveReduceProgram,"uExcluded",first,1);
+                    glUniform1f(glGetUniformLocation(exhaustiveReduceProgram,"uSize"),size);
+                    glUniform1f(glGetUniformLocation(exhaustiveReduceProgram,"uRows"),pass);
+                    glUniform1f(glGetUniformLocation(exhaustiveReduceProgram,"uExclude"),1);
+                    glDrawArrays(GL_TRIANGLE_STRIP,0,4);
+                }
+                int pair=raw(2,1);
+                for(int index=0;index<2;index++){
+                    attachDenseTarget(index==0?first:second,1,1);
+                    glBindTexture(GL_TEXTURE_2D,pair);
+                    glCopyTexSubImage2D(GL_TEXTURE_2D,0,index,0,0,0,1,1);
+                }
+                denseGlobalSeedTextures[direction]=pair;
+                attachDenseTarget(pair,2,1);ByteBuffer selected=ByteBuffer.allocateDirect(8);
+                glReadPixels(0,0,2,1,GL_RGBA,GL_UNSIGNED_BYTE,selected);
+                int secondBest=-1,secondCost=65536;
+                for(int i=0;i<size*size;i++){
+                    int dx=i%size-radius,dy=i/size-radius;
+                    if((dx-x)*(dx-x)+(dy-y)*(dy-y)<=9)continue;
+                    int cost=(pixels.get(i*4)&255)*256+(pixels.get(i*4+1)&255);
+                    int bx=secondBest<0?999:secondBest%size-radius,by=secondBest<0?999:secondBest/size-radius;
+                    if(cost<secondCost||(cost==secondCost&&dx*dx+dy*dy<bx*bx+by*by)){secondCost=cost;secondBest=i;}
+                }
+                int sx=selected.get(4),sy=selected.get(6);
+                int selectedIndex=(sy+radius)*size+sx+radius;
+                check(selected.get(5)==0&&selected.get(7)==0,"noninteger second seed");
+                check(selectedIndex>=0&&selectedIndex<size*size,"second seed outside grid");
+                int actualCost=(pixels.get(selectedIndex*4)&255)*256+(pixels.get(selectedIndex*4+1)&255);
+                int bx=secondBest%size-radius,by=secondBest/size-radius;
+                check(actualCost==secondCost&&sx*sx+sy*sy==bx*bx+by*by,"second GPU minimum/tie distance differs from CPU");
+                check((sx-x)*(sx-x)+(sy-y)*(sy-y)>9,"second seed exclusion violated");
+                System.out.println("SECOND_SEED cpu_minimum_and_tie_distance_match=true");
+                System.out.println("TWO_SEEDS direction="+direction+" first_x="+selected.get(0)+" second_x="+selected.get(4)+" second_y="+selected.get(6)+" image_derived=true");
+            }
+        }else{
+            glBindTexture(GL_TEXTURE_2D,denseGlobalSeedTextures[direction]);
+            glTexSubImage2D(GL_TEXTURE_2D,0,0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,seed);
+        }
+        System.out.println("EXHAUSTIVE_SEED direction="+direction+" xy="+x+","+y+" costs="+size*size+" cost16="+bestCost+" synchronized_draw_us="+elapsed/1000.0+" cpu_reduction="+!gpuSeed);
+        check(glGetError()==GL_NO_ERROR,"exhaustive seed");
+    }
+    void runSolver(String shaderPath,int displacement,float coarseStep,boolean seed,boolean exhaustive,boolean gpu)throws Exception{
+        gpuSeed=gpu;
+        probeCoarseStep=coarseStep;
+        denseV28ReducedAnalysisRequested=seed; // Probe-only: retain full-size allocation above.
+        System.out.println("PROBE coarse_step="+coarseStep+" fixture_override=true");
+        initialize(shaderPath);
+        byte[] original=new byte[256*192*4];java.util.Random rng=new java.util.Random(771);
+        // Fine colour texture plus broad luminance structure: unique translation.
+        for(int y=0;y<192;y++)for(int x=0;x<256;x++){
+            int i=(y*256+x)*4;
+            for(int c=0;c<3;c++)original[i+c]=(byte)(40+rng.nextInt(100)+((x/17+y/13)%2)*70);
+            original[i+3]=(byte)255;
+        }
+        ByteBuffer a=ByteBuffer.allocateDirect(original.length),b=ByteBuffer.allocateDirect(original.length);
+        a.put(original).flip();
+        for(int y=0;y<192;y++)for(int x=0;x<256;x++)b.put(original,(y*256+Math.max(0,x-displacement))*4,4);
+        b.flip();int left=texture(256,192,a),right=texture(256,192,b);
+        if(seed){
+            if(exhaustive){exhaustiveSeed(0,left,right);exhaustiveSeed(1,right,left);}
+            else{buildDenseGlobalSeed(0,left,right);buildDenseGlobalSeed(1,right,left);}
+            for(int d=0;d<2;d++){
+                attachDenseTarget(denseGlobalSeedTextures[d],1,1);ByteBuffer bytes=ByteBuffer.allocateDirect(4);
+                glReadPixels(0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bytes);
+                System.out.println("GLOBAL_SEED direction="+d+" rgba="+(bytes.get(0)&255)+","+(bytes.get(1)&255)+","+(bytes.get(2)&255)+","+(bytes.get(3)&255));
+            }
+        }
+        for(boolean old:new boolean[]{true,false}){
+            for(int d=0;d<2;d++){
+                int source=d==0?left:right;
+                if(old){
+                    drawDensePyramid(source,256,192,denseBoxTextures[d][0],64,48,1);
+                    drawDensePyramid(denseBoxTextures[d][0],64,48,denseBoxTextures[d][1],16,12,1);
+                    drawDensePyramid(denseBoxTextures[d][1],16,12,densePyramidTextures[d][0],96,72,.5f);
+                    drawDensePyramid(densePyramidTextures[d][0],96,72,densePyramidTextures[d][1],48,36,.5f);
+                }else buildDensePyramid(source,d);
+            }
+            solveDenseDirection(0,left,right,false);solveDenseDirection(1,right,left,false);
+            check(glGetError()==GL_NO_ERROR,"production solver GL error");
+            for(int round=0;round<3;round++){
+            if(round>0){
+                refineDenseReciprocalDirection(0,left,right);
+                refineDenseReciprocalDirection(1,right,left);
+                check(glGetError()==GL_NO_ERROR,"reciprocal GL error");
+            }
+            for(int d=0;d<2;d++){
+                attachDenseTarget(denseFinalTextures[d],192,144);
+                ByteBuffer pixels=ByteBuffer.allocateDirect(192*144*4);glReadPixels(0,0,192,144,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+                double error=0;int good=0,total=0;
+                int margin=Math.max(12,(int)Math.ceil(displacement*192.0/256)+4);
+                for(int y=12;y<132;y++)for(int x=margin;x<192-margin;x++){
+                    int i=(y*192+x)*4;
+                    int qx=(pixels.get(i)&255)*256+(pixels.get(i+1)&255),qy=(pixels.get(i+2)&255)*256+(pixels.get(i+3)&255);
+                    if(qx>=32768)qx-=65536;if(qy>=32768)qy-=65536;
+                    double e=Math.hypot(qx/256.0-(d==0?-displacement:displacement),qy/256.0);
+                    error+=e;if(e<=.5)good++;total++;
+                }
+                System.out.println("PRODUCTION_SOLVER shift="+displacement+" old_pyramid="+old+" refinement_round="+round+" direction="+d+" epe="+error/total+" fraction_within_half_pixel="+(double)good/total);
+            }
+            if(scoreMidpoint)midpoint(left,right,original,displacement,old,round);
+            }
+        }
+    }
+    void midpoint(int left,int right,byte[] truthSource,int displacement,boolean old,int round)throws Exception{
+        String prefix="old-"+old+"-round-"+round;
+        for(int d=0;d<2;d++)saveField(denseFinalTextures[d],prefix+"-raw-"+d);
+        validateDenseDirection(0,left,right);validateDenseDirection(1,right,left);
+        for(int d=0;d<2;d++)saveField(denseValidatedTextures[d],prefix+"-validated-"+d);
+        fillDenseDirection(0);fillDenseDirection(1);
+        for(int d=0;d<2;d++)saveField(denseValidatedTextures[d],prefix+"-filled-"+d);
+        int output=texture(256,192,null);attachDenseTarget(output,256,192);
+        int p=midpointProgram;glUseProgram(p);bindQuad(p);
+        bindTexture(p,"uPrevious",left,0);bindTexture(p,"uCurrent",right,1);
+        bindTexture(p,"uBackwardMotion",denseValidatedTextures[0],2);bindTexture(p,"uForwardMotion",denseValidatedTextures[1],3);
+        bindTexture(p,"uGlobalBackwardMotion",denseValidatedTextures[0],4);bindTexture(p,"uGlobalForwardMotion",denseValidatedTextures[1],5);
+        bindTexture(p,"uDenseSeedBackwardTex",denseGlobalSeedTextures[0],6);bindTexture(p,"uDenseSeedForwardTex",denseGlobalSeedTextures[1],7);
+        bindTexture(p,"uDenseCutTex",denseGlobalSeedTextures[0],8);
+        uniform2(p,"uFlowRange",38.4f/256,38.4f/192);uniform2(p,"uDenseSeedSourceSize",256,192);
+        uniform2(p,"uDenseFieldSize",192,144);
+        glUniform1f(glGetUniformLocation(p,"uPhase"),.5f);
+        glUniform1f(glGetUniformLocation(p,"uDenseEncoding"),1);
+        glUniform1f(glGetUniformLocation(p,"uDenseSeedEnabled"),0);
+        glUniform1f(glGetUniformLocation(p,"uDenseCutEnabled"),0);
+        glDrawArrays(GL_TRIANGLE_STRIP,0,4);
+        ByteBuffer pixels=ByteBuffer.allocateDirect(256*192*4);glReadPixels(0,0,256,192,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+        check(glGetError()==GL_NO_ERROR,"midpoint GL error");
+        byte[] truth=new byte[256*192*4],generated=new byte[truth.length];pixels.rewind();pixels.get(generated);
+        for(int y=0;y<192;y++)for(int x=0;x<256;x++){
+            int movement=mixedMidpoint&&y>=96?-displacement:displacement;
+            int sourceX=Math.max(0,Math.min(255,x-movement/2));
+            System.arraycopy(truthSource,(y*256+sourceX)*4,truth,(y*256+x)*4,4);
+        }
+        String label="old-"+old+"-round-"+round;
+        Files.write(evidenceDirectory.resolve(label+".rgba"),generated);
+        Files.write(evidenceDirectory.resolve("reference.rgba"),truth);
+        long error=0,seamError=0;int severe=0,count=0,seamSevere=0,seamCount=0;int margin=Math.max(16,displacement+4);
+        for(int y=16;y<176;y++)for(int x=margin;x<256-margin;x++){
+            int maximum=0,sum=0;
+            for(int c=0;c<3;c++){
+                int e=Math.abs((generated[(y*256+x)*4+c]&255)-(truth[(y*256+x)*4+c]&255));
+                sum+=e;maximum=Math.max(maximum,e);
+            }
+            if(mixedMidpoint&&y>=80&&y<112){seamError+=sum;if(maximum>40)seamSevere++;seamCount++;continue;}
+            error+=sum;
+            if(maximum>40)severe++;count++;
+        }
+        System.out.println("MIDPOINT old_pyramid="+old+" round="+round+" rgb_mae="+(double)error/(count*3)+" severe_pixels="+severe+" pixels="+count+" mixed="+mixedMidpoint);
+        if(seamCount>0)System.out.println("MIDPOINT_SEAM old_pyramid="+old+" round="+round+" rgb_mae="+(double)seamError/(seamCount*3)+" severe_pixels="+seamSevere+" pixels="+seamCount);
+    }
+    void saveField(int texture,String name)throws Exception{
+        attachDenseTarget(texture,192,144);
+        ByteBuffer pixels=ByteBuffer.allocateDirect(192*144*4);
+        glReadPixels(0,0,192,144,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+        check(glGetError()==GL_NO_ERROR,"field capture");
+        byte[] bytes=new byte[pixels.capacity()];pixels.get(bytes);
+        Files.write(evidenceDirectory.resolve(name+".rgba"),bytes);
+    }

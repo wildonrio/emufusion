@@ -1,0 +1,18 @@
+Subject: [CANDIDATE] SPU: Fix race in PUTLLC with unchanged data
+Upstream: https://github.com/RPCS3/rpcs3/commit/8126a199f529e2bcd0025815fb9cffd0fa9fb700
+Source: aenu1/aps3e b5ae1af50d5e2f3b705506e7380a4504e086840b
+Status: Unbuilt and not device-qualified; no claim that this fixes ICO.
+
+diff --git a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp
+@@ -3803,7 +3803,8 @@ bool spu_thread::do_putllc(const spu_mfc_cmd& args)
+ 			}
+ 
+ 			// Writeback of unchanged data. Only check memory change
+-			if (cmp_rdata(rdata, vm::_ref<spu_rdata_t>(addr)) && res.compare_and_swap_test(rtime, rtime + 128))
++			// For the comparison, load twice for atomicity
++			if (cmp_rdata(rdata, vm::_ref<spu_rdata_t>(addr)) && res == rtime && cmp_rdata(rdata, vm::_ref<spu_rdata_t>(addr)) && res.compare_and_swap_test(rtime, rtime + 128))
+ 			{
+ 				raddr = 0; // Disable notification
+ 				return true;

@@ -24,7 +24,7 @@ LUCENT_APPLICATION = (ROOT / "unified-android" / "src" / "com" / "thorium" /
 BROWSER_ACTIVITY = (ROOT / "android-companion" / "src" / "com" / "thorium" /
                     "preview" / "BrowserActivity.java")
 BRANDING_PATCH = (ROOT / "unified-android" / "tools" /
-                  "patch_lucent_branding.py")
+                  "patch_emufusion_branding.py")
 VULKAN_BACKEND = (ROOT / "unified-android" / "native" /
                   "lucent_android_vulkan_backend.c")
 
@@ -35,9 +35,9 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
         self.harness = ACTIVITY_QA.read_text(encoding="utf-8")
         self.opt_in = json.loads(OPT_IN.read_text(encoding="utf-8"))
 
-    def test_default_build_is_fail_closed(self):
+    def test_default_build_packages_internal_dolphin(self):
         self.assertIn(
-            "INCLUDE_PHASE2_PPSSPP=${LUCENT_INCLUDE_PHASE2_PPSSPP:-0}",
+            "INCLUDE_PHASE2_PPSSPP=${LUCENT_INCLUDE_PHASE2_PPSSPP:-1}",
             self.build,
         )
         self.assertIn('if [ "$INCLUDE_PHASE2_PPSSPP" = 1 ]; then', self.build)
@@ -104,13 +104,14 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
         runtimes = {row["id"]: row["runtime"] for row in self.opt_in["engines"]}
         self.assertEqual("vulkan-libretro", runtimes["armsx2"])
         self.assertEqual("vulkan-libretro", runtimes["azahar"])
+        self.assertEqual("vulkan-libretro", runtimes["dolphin"])
         armsx2 = next(row for row in self.opt_in["engines"]
                       if row["id"] == "armsx2")
         self.assertIn("pcsx2/resources/patches.zip",
                       armsx2["systemAssetRequiredFiles"])
         self.assertTrue(all(runtime == "gles-libretro"
                             for engine_id, runtime in runtimes.items()
-                            if engine_id not in {"armsx2", "azahar"}))
+                            if engine_id not in {"armsx2", "azahar", "dolphin"}))
         applewin = next(row for row in self.opt_in["engines"]
                         if row["id"] == "applewin")
         self.assertEqual(["apple2"], applewin["libraryRouteSystems"])
@@ -160,6 +161,9 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
         self.assertIn(".PRESENT_FRONTEND_FBO", session)
         self.assertIn(".PRESENT_DIRECT_WINDOW", session)
         self.assertIn('"Renderer policy engine="', session)
+        self.assertIn('" sourceTimeline=" + (filteredSourceTimeline ?', session)
+        self.assertIn('"Producer clock engine="', session)
+        self.assertIn('" stamp=core-run-sequence"', session)
         self.assertIn('"Surface available engine="', session)
 
     def test_both_sessions_emit_the_canonical_commit_marker(self):
@@ -191,15 +195,33 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
                    "preview" / "game" / "GameLaunchRequest.java").read_text(
                        encoding="utf-8")
         phase2_session = SESSION.read_text(encoding="utf-8")
+        phase1_session = PHASE1_SESSION.read_text(encoding="utf-8")
         self.assertIn('Pattern.compile("qa-[0-9a-f]{32}")', host)
         self.assertIn('source.getBooleanExtra("qualification_only", false)', host)
-        self.assertIn("Phase2QualificationCatalog.byId(activity, engine) == null", host)
+        self.assertIn("boolean phaseTwoNamespace = phaseTwo != null", host)
+        self.assertIn("boolean phaseOneNamespace = approvedPhaseOne;", host)
+        namespace = host[host.index('String qualificationSession = "";'):]
+        namespace = namespace[:namespace.index('FrameGenerationSettings.Mode launchMode')]
+        self.assertNotIn("FrameGenerationSettings.qualificationTransport(", namespace)
+        self.assertIn("!phaseTwoNamespace && !phaseOneNamespace", host)
         self.assertIn('qualification_session")).isEmpty()', host)
         self.assertIn("EXTRA_QUALIFICATION_SESSION", request)
         self.assertIn('":qa:" + request.qualificationSession', phase2_session)
         self.assertIn('"engine-saves-qa/" + request.qualificationSession',
                       phase2_session)
         self.assertIn("Isolated qualification runtime state engine=", phase2_session)
+        self.assertNotIn(
+            "entry.phaseTwoQualification &&\n                        "
+            "!launch.qualificationSession.isEmpty()",
+            phase1_session,
+        )
+        self.assertIn(
+            'String saveRoot = !launch.qualificationSession.isEmpty() ?',
+            phase1_session,
+        )
+        self.assertIn('\":qa:\" + launch.qualificationSession', phase1_session)
+        self.assertIn("Isolated qualification runtime state engine=",
+                      phase1_session)
         self.assertIn('"--ez", "qualification_only", "true"', self.harness)
         self.assertIn(
             "gameplay_identity = launch(adb_path, serial, case, qualification_session)",
@@ -329,7 +351,8 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
             "startForegroundService(new Intent(this, PreviewService.class))",
             preview,
         )
-        self.assertNotIn("startForegroundService(service)", application)
+        self.assertIn("startForegroundService(service)", application)
+        self.assertIn("Build.VERSION.SDK_INT >= Build.VERSION_CODES.O", application)
 
     def test_in_app_browser_does_not_delegate_deep_links_to_other_apps(self):
         browser = BROWSER_ACTIVITY.read_text(encoding="utf-8")
@@ -337,11 +360,21 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
             "private final class BrowserDownloadListener", 1
         )[0]
         self.assertNotIn("startActivity", method)
-        self.assertIn("Only web links and downloads open inside Lucent", method)
+        self.assertIn("Only web links and downloads open inside EmuFusion", method)
+
+    def test_theme_publication_invalidates_qml_cache(self):
+        source = (ROOT / "android-companion" / "src" / "com" / "thorium" /
+                  "preview" / "ThemeInstaller.java").read_text(encoding="utf-8")
+        publish = source.split("private static void publishStagedFile", 1)[1].split(
+            "static String installedVersion", 1
+        )[0]
+        self.assertIn('"theme.qml".equals(relative)', publish)
+        self.assertIn("target.setLastModified(cacheBuster)", publish)
+        self.assertIn("replacedTimestamp + 1L", publish)
 
     def test_visible_upstream_branding_is_rewritten_but_abi_names_are_not(self):
         branding = BRANDING_PATCH.read_text(encoding="utf-8")
-        self.assertIn("patch_lucent_branding.py", self.build)
+        self.assertIn("patch_emufusion_branding.py", self.build)
         self.assertIn('"Exit Pegasus"', branding)
         self.assertIn('"Pegasus couldn\'t find any games on your device.', branding)
         self.assertIn('"Lucent Frontend - version"', branding)

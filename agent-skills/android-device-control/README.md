@@ -1,11 +1,11 @@
 # Installing the Android Device Control skill
 
 This folder is a portable copy of the Codex `android-device-control` skill used
-to inspect and operate the Android devices during Lucent development. It does
+to inspect and operate the Android devices during EmuFusion development. It does
 not contain device IDs, RustDesk passwords, ADB keys, account credentials, or
 API keys.
 
-## Install from the Lucent repository
+## Install from the EmuFusion repository
 
 Clone or update the repository, then copy the complete skill directory into
 your personal Codex skills folder:
@@ -32,7 +32,7 @@ The skill should then appear as `android-device-control`.
 
 ## Use without installing
 
-An AI working directly in the Lucent checkout can read
+An AI working directly in the EmuFusion checkout can read
 `agent-skills/android-device-control/SKILL.md` and run the bundled controller:
 
 ```sh

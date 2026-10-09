@@ -1,0 +1,16 @@
+--- a/src/Cafe/OS/libs/snd_core/ax_out.cpp
++++ b/src/Cafe/OS/libs/snd_core/ax_out.cpp
+@@ -508,6 +508,14 @@
+ 
+ 		// handle minimum wait time (1.7MS)
+ 		if ((now - s_last_check) < kWaitDurationMinimum)
++			return;
++
++		// A still-running mix did not produce this period's samples. Keep its
++		// deadline pending instead of advancing the audio clock and discarding
++		// 3 ms of output. Once it completes, the existing bounded catch-up and
++		// minimum spacing recover short stalls without overlapping AX frames.
++		if (snd_core::isInitialized() &&
++			numQueuedFramesSndGeneric != snd_core::getNumProcessedFrames())
+ 			return;
+ 		s_last_check = now;

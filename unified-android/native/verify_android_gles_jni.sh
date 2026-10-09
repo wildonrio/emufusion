@@ -17,8 +17,14 @@ case "$(uname -s)" in
     *) printf 'Unsupported JNI verification host\n' >&2; exit 1 ;;
 esac
 
-"$PROJECT_DIR/native/build.sh" >/dev/null
-LIBRARY="$PROJECT_DIR/build/native/$ABI/liblucent_libretro_host.so"
+if [ -n "${LUCENT_GLES_VERIFY_LIBRARY:-}" ]; then
+    # Qualification candidates can verify the Java/native contract without
+    # rebuilding or replacing the unrelated normal staging artifacts.
+    LIBRARY="$LUCENT_GLES_VERIFY_LIBRARY"
+else
+    "$PROJECT_DIR/native/build.sh" >/dev/null
+    LIBRARY="$PROJECT_DIR/build/native/$ABI/liblucent_libretro_host.so"
+fi
 READELF="$NDK_DIR/toolchains/llvm/prebuilt/$HOST/bin/llvm-readelf"
 if [ ! -f "$ANDROID_JAR" ] || [ ! -x "$JAVA_HOME/bin/javac" ] ||
         [ ! -x "$READELF" ] || [ ! -f "$LIBRARY" ]; then
@@ -28,6 +34,11 @@ fi
 
 "$JAVA_HOME/bin/javac" -source 8 -target 8 -encoding UTF-8 \
     -classpath "$ANDROID_JAR" -h "$CHECK_DIR" -d "$CHECK_DIR" \
+    "$PROJECT_DIR/src/com/thorium/lucent/timing/DisplaySyncPolicy.java" \
+    "$PROJECT_DIR/src/com/thorium/lucent/video/NativeSourceImageProvider.java" \
+    "$PROJECT_DIR/src/com/thorium/lucent/video/RuntimePresentationFailure.java" \
+    "$PROJECT_DIR/src/com/thorium/preview/game/FrameGenerationRenderer.java" \
+    "$PROJECT_DIR/src/com/thorium/preview/game/FrameGenerationRendererRegistry.java" \
     "$PROJECT_DIR/src/com/thorium/preview/LibretroHost.java" \
     "$PROJECT_DIR/src/com/thorium/preview/ExperimentalGlesLibretroHost.java" \
     "$PROJECT_DIR/src/com/thorium/preview/ExperimentalVulkanLibretroHost.java" \
@@ -35,9 +46,18 @@ fi
     >/dev/null 2>&1
 
 SYMBOLS=$($READELF -Ws "$LIBRARY")
+for method in ReadVideoInfo CopyVideoFrameInto SetSynchronizedVideoRate; do
+    symbol="Java_com_thorium_preview_LibretroHost_native$method"
+    if ! printf '%s\n' "$SYMBOLS" | grep -q " $symbol$"; then
+        printf 'Missing software libretro JNI export: %s\n' "$symbol" >&2
+        exit 1
+    fi
+done
 for method in CreateGles LoadGameGles AttachSurfaceGles RecreateSurfaceGles \
-        RunAndPresentGles DetachSurfaceGles SetPausedGles HardwareInfoGles \
+        ResizeSurfaceGles RunAndPresentGles RunAndPresentStatusGles RunWithoutPresentStatusGles DetachSurfaceGles SetPausedGles HardwareInfoGles \
         SetJoypadButtonGles SetAnalogAxisGles DrainAudioGles AvInfoGles \
+        SetSynchronizedVideoRateGles \
+        CheatResetGles CheatSetGles \
         SerializeGles UnserializeGles ReadSaveRamGles WriteSaveRamGles \
         DestroyGles; do
     symbol="Java_com_thorium_preview_ExperimentalGlesLibretroHost_native$method"
@@ -47,10 +67,20 @@ for method in CreateGles LoadGameGles AttachSurfaceGles RecreateSurfaceGles \
     fi
 done
 
+SOFTWARE_HEADER="$CHECK_DIR/com_thorium_preview_LibretroHost.h"
+for signature in 'nativeReadVideoInfo' 'nativeCopyVideoFrameInto' \
+        'nativeSetSynchronizedVideoRate'; do
+    if ! grep -q "$signature" "$SOFTWARE_HEADER"; then
+        printf 'Generated software Java/JNI contract is missing: %s\n' "$signature" >&2
+        exit 1
+    fi
+done
+
 HEADER="$CHECK_DIR/com_thorium_preview_ExperimentalGlesLibretroHost.h"
 for signature in 'nativeAttachSurfaceGles' 'Landroid/view/Surface;' \
-        'nativeRunAndPresentGles' 'nativeRecreateSurfaceGles' \
-        'nativeDrainAudioGles' 'nativeAvInfoGles' 'nativeStateReadyGles' 'nativeSerializeGles' \
+        'nativeRunAndPresentStatusGles' 'nativeRunWithoutPresentStatusGles' 'nativeRecreateSurfaceGles' 'nativeResizeSurfaceGles' \
+        'nativeDrainAudioGles' 'nativeAvInfoGles' 'nativeSetSynchronizedVideoRateGles' \
+        'nativeStateReadyGles' 'nativeSerializeGles' \
         'nativeUnserializeGles' 'nativeReadSaveRamGles' \
         'nativeWriteSaveRamGles'; do
     if ! grep -q "$signature" "$HEADER"; then

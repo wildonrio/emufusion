@@ -1,0 +1,67 @@
+diff --git a/core/cheats.h b/core/cheats.h
+index b385de5..e03bad5 100644
+--- a/core/cheats.h
++++ b/core/cheats.h
+@@ -83,6 +83,25 @@ public:
+ 	// Returns true if using 16:9 anamorphic screen ratio
+ 	bool isWidescreen() const { return widescreen_cheat != nullptr; }
+ 	void addGameSharkCheat(const std::string& name, const std::string& s);
++	// Lucent: retro_cheat_set addresses live cheats by a frontend-owned
++	// index and the libretro contract is retro_cheat_reset() followed by one
++	// retro_cheat_set() per currently active code, so the whole list is
++	// rebuilt on every change instead of edited by index. Disk cheat files
++	// never load under LIBRETRO (see loadCheatFile), so the only other
++	// producer of `cheats` in that build is CheatManager::reset(gameId),
++	// which seeds mandatory builtIn=true boot/compat fixups for specific
++	// titles (see cheats.cpp). Those must survive a live-cheat edit, so
++	// only the non-builtIn (frontend-added) entries are dropped here.
++	void resetLiveCheats() {
++		for (size_t i = 0; i < cheats.size(); )
++		{
++			if (cheats[i].builtIn)
++				i++;
++			else
++				cheats.erase(cheats.begin() + i);
++		}
++		setActive(!cheats.empty());
++	}
+ 
+ private:
+ 	u32 readRam(u32 addr, u32 bits);
+diff --git a/shell/libretro/libretro.cpp b/shell/libretro/libretro.cpp
+index a4444c9..f27b8d8 100644
+--- a/shell/libretro/libretro.cpp
++++ b/shell/libretro/libretro.cpp
+@@ -2539,9 +2539,27 @@ bool retro_unserialize(const void * data, size_t size)
+ // Cheats
+ void retro_cheat_reset()
+ {
+-   // Nothing to do here
++	cheatManager.resetLiveCheats();
+ }
+-void retro_cheat_set(unsigned unused, bool unused1, const char* unused2)
++void retro_cheat_set(unsigned index, bool enabled, const char* code)
+ {
+-   // Nothing to do here
++	if (code == nullptr || *code == '\0')
++		return;
++	size_t countBefore = cheatManager.cheatCount();
++	try {
++		cheatManager.addGameSharkCheat("Lucent live cheat " + std::to_string(index), code);
++	}
++	catch (const FlycastException& e) {
++		WARN_LOG(COMMON, "retro_cheat_set: rejected code for index %u: %s", index, e.what());
++		return;
++	}
++	// One retro_cheat_set() call carries a whole cheat's code verbatim, but
++	// Lucent's multi-line convention ('+'-joined lines = one cheat) can make
++	// addGameSharkCheat() push several Cheat entries for it (e.g. two
++	// independent GameShark write pairs). Every pushed entry defaults to
++	// disabled, so all of them -- not just the last -- must be enabled here
++	// or the earlier writes silently never apply even though the UI shows
++	// the cheat as on. A code with no hex digits parses to zero entries.
++	for (size_t i = countBefore; i < cheatManager.cheatCount(); i++)
++		cheatManager.enableCheat(i, enabled);
+ }
+ 
+ 

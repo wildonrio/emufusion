@@ -41,6 +41,13 @@ mkdir -p "$BUILD_DIR"
     -Wl,--no-undefined -Wl,-z,relro,-z,now $PAGE_SIZE_LDFLAGS \
     -ldl -landroid -llog -lEGL -lGLESv3 \
     -o "$BUILD_DIR/liblucent_libretro_host.so"
+# Qualification-only EXT timer bridge. It resolves extension entry points
+# against the generator's current EGL context at runtime and carries no engine.
+"$CC" -std=c11 -O2 -fPIC -fvisibility=hidden -Wall -Wextra -Werror \
+    -shared "$PROJECT_DIR/native/lucent_framegen_timer_jni.c" \
+    -Wl,--no-undefined -Wl,-z,relro,-z,now $PAGE_SIZE_LDFLAGS \
+    -lEGL -lGLESv2 \
+    -o "$BUILD_DIR/liblucent_framegen_timer.so"
 "$VULKAN_CC" -std=c11 -O2 -fPIC -fvisibility=hidden -Wall -Wextra -Werror \
     -I"$PROJECT_DIR/native/include" \
     -shared "$PROJECT_DIR/native/lucent_libretro_host.c" \
@@ -60,5 +67,6 @@ mkdir -p "$BUILD_DIR"
     -ldl -landroid -llog \
     -o "$BUILD_DIR/liblucent_native_adapter_host.so"
 printf '%s\n' "$BUILD_DIR/liblucent_libretro_host.so"
+printf '%s\n' "$BUILD_DIR/liblucent_framegen_timer.so"
 printf '%s\n' "$BUILD_DIR/liblucent_vulkan_host.so"
 printf '%s\n' "$BUILD_DIR/liblucent_native_adapter_host.so"

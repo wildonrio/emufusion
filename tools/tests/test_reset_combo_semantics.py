@@ -96,10 +96,19 @@ class ResetComboSemanticsTest(unittest.TestCase):
 
     def test_a_withheld_start_press_is_replayed_when_the_combo_does_not_fire(self):
         up = self.start.split("KeyEvent.ACTION_UP", 1)[1]
-        self.assertIn("latchTapToSession(event);", up)
+        self.assertIn("if (startWithheldForCombo) latchTapToSession(event);", up)
         latch = method_body(self.source, "private void latchTapToSession")
         self.assertIn("KeyEvent.ACTION_DOWN", latch)
         self.assertIn("TAP_SELECT_HOLD_MS);", latch)
+
+    def test_an_unowned_start_release_cannot_synthesize_a_start_tap(self):
+        down = self.start.split("KeyEvent.ACTION_DOWN", 1)[1].split(
+            "KeyEvent.ACTION_UP", 1)[0]
+        self.assertIn("startWithheldForCombo = true;", down)
+        self.assertIn("startWithheldForCombo = false;", down)
+        up = self.start.split("KeyEvent.ACTION_UP", 1)[1]
+        self.assertIn("if (startWithheldForCombo) latchTapToSession(event);", up)
+        self.assertIn("startWithheldForCombo = false;", up)
 
     def test_select_keeps_its_existing_tap_and_hold_behaviour(self):
         up = self.stop.split("KeyEvent.ACTION_UP", 1)[1]
@@ -135,6 +144,11 @@ class ResetComboSemanticsTest(unittest.TestCase):
         start_index = handle.index("KeyEvent.KEYCODE_BUTTON_START")
         self.assertGreater(start_index, menu_index,
                            "Start must fall through to the pause-menu handler")
+
+    def test_libretro_logs_the_aggregate_start_boundary(self):
+        libretro = LIBRETRO_SESSION.read_text(encoding="utf-8")
+        self.assertIn("if (retroId == 3)", libretro)
+        self.assertIn("Joypad aggregate Start transition", libretro)
 
     def test_reset_is_a_fail_closed_engine_capability(self):
         interface = SESSION.read_text(encoding="utf-8")

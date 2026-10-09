@@ -13,6 +13,9 @@ public final class BootReceiver extends BroadcastReceiver {
         Intent service = new Intent(context, PreviewService.class);
         context.startForegroundService(service);
 
+        // Boot delivery bypasses PreviewService's launch gateway. Keep its
+        // background work alive, but never open a window while the panels sleep.
+        if (!PrimaryDisplayFocusGuard.isInteractive(context)) return;
         Intent activity = new Intent(context, PreviewActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ActivityOptions options = ActivityOptions.makeBasic();
@@ -23,6 +26,7 @@ public final class BootReceiver extends BroadcastReceiver {
         if (displayId < 0) return;
         options.setLaunchDisplayId(displayId);
         try {
+            if (!PrimaryDisplayFocusGuard.isInteractive(context)) return;
             context.startActivity(activity, options.toBundle());
         } catch (RuntimeException ignored) {
             // ADB or the next Pegasus selection will restore the activity if

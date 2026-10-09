@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static retro_environment_t environment;
@@ -31,6 +33,18 @@ static unsigned port_device_count;
 static unsigned last_port;
 static unsigned last_device;
 
+#if defined(LUCENT_MOCK_DLCLOSE_MARKER)
+__attribute__((destructor)) static void record_mock_dso_finalized(void) {
+    const char *path = getenv("LUCENT_MOCK_DLCLOSE_MARKER_PATH");
+    FILE *marker;
+    if (!path || !path[0]) return;
+    marker = fopen(path, "wb");
+    if (!marker) return;
+    fputs("finalized\n", marker);
+    fclose(marker);
+}
+#endif
+
 /* Test-only probes resolved by the host harness through dlopen/dlsym. */
 void lucent_mock_emit_video(unsigned width, unsigned height, size_t pitch) {
     uint32_t pixels[8] = {0};
@@ -45,6 +59,11 @@ void lucent_mock_emit_audio(size_t frames) {
 bool lucent_mock_probe_null_environment(void) {
     return environment && environment(RETRO_ENVIRONMENT_GET_CAN_DUPE, NULL);
 }
+bool lucent_mock_overscan_enabled(void) {
+    bool enabled = true;
+    return !environment ||
+            !environment(RETRO_ENVIRONMENT_GET_OVERSCAN, &enabled) || enabled;
+}
 bool lucent_mock_callbacks_were_set_before_init(void) { return callback_before_init; }
 void lucent_mock_set_oversized_state(bool value) { oversized_state = value; }
 void lucent_mock_set_changing_state_size(bool value) {
@@ -54,6 +73,18 @@ void lucent_mock_set_changing_state_size(bool value) {
 }
 void lucent_mock_set_oversized_save_ram(bool value) { oversized_save_ram = value; }
 void lucent_mock_set_sample_rate(double value) { reported_sample_rate = value; }
+bool lucent_mock_change_runtime_sample_rate(double value) {
+    struct retro_system_av_info info;
+    if (!environment) return false;
+    memset(&info, 0, sizeof(info));
+    info.geometry.base_width = 1;
+    info.geometry.base_height = 1;
+    info.geometry.max_width = 1;
+    info.geometry.max_height = 1;
+    info.timing.fps = 60.0;
+    info.timing.sample_rate = value;
+    return environment(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &info);
+}
 void lucent_mock_set_prepare_exit_result(bool value) { prepare_exit_result = value; }
 unsigned lucent_mock_prepare_exit_count(void) { return prepare_exit_count; }
 unsigned lucent_mock_unload_count(void) { return unload_count; }
@@ -65,16 +96,35 @@ int16_t lucent_mock_pointer_state(unsigned id) {
     return input_state ? input_state(0, RETRO_DEVICE_POINTER, 0, id) : 0;
 }
 const char *lucent_mock_option_value(const char *key) {
-    if (!key) return NULL;
-    if (strcmp(key, "lucent_software_test") == 0) return software_default;
-    if (strcmp(key, "puae_kickstart") == 0) return puae_kickstart;
-    return NULL;
+    struct retro_variable current;
+    if (!key || !environment) return NULL;
+    current.key = key;
+    current.value = NULL;
+    return environment(RETRO_ENVIRONMENT_GET_VARIABLE, &current) ?
+            current.value : NULL;
 }
 
 void retro_init(void) {
     struct retro_variable definitions[] = {
         { "lucent_software_test", "Software default; preferred|other" },
         { "puae_kickstart", "Kickstart ROM; auto|aros" },
+        { "dolphin_widescreen", "Wii widescreen; disabled|enabled" },
+        { "dolphin_widescreen_hack", "Widescreen hack; disabled|enabled" },
+        { "dolphin_aspect_ratio", "Aspect ratio; 3|0|1|2" },
+        { "dolphin_osd_enabled", "On-Screen Display; enabled|disabled" },
+        { "dolphin_efb_scale", "Internal resolution; 2|1|3|4" },
+        { "mupen64plus-aspect", "Aspect ratio; 4:3|16:9|16:9 adjusted" },
+        { "swanstation_GPU_WidescreenHack", "Widescreen hack; false|true" },
+        { "swanstation_Display_AspectRatio", "Aspect ratio; 4:3|16:9|Native" },
+        { "reicast_widescreen_cheats", "Widescreen cheats; disabled|enabled" },
+        { "reicast_widescreen_hack", "Widescreen hack; disabled|enabled" },
+        { "armsx2_aspect_ratio", "Aspect ratio; Auto 4:3/3:2|4:3|16:9|Stretch" },
+        { "armsx2_widescreen_patches", "Widescreen patches; disabled|enabled" },
+        { "mesen_aspect_ratio", "Aspect ratio; Auto|No Stretching|NTSC|PAL|4:3|16:9" },
+        { "mupen64plus-169screensize", "16:9 size; 640x360|1920x1080|3840x2160" },
+        { "dolphin_cheats_enabled", "Internal cheats; disabled|enabled" },
+        { "ppsspp_cheats", "Internal cheats; disabled|enabled" },
+        { "citra_resolution_factor", "Internal resolution; 4|1|2|3|5" },
         { NULL, NULL },
     };
     struct retro_variable current = { "lucent_software_test", NULL };
@@ -180,9 +230,14 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code) {
     (void)index; (void)enabled; (void)code;
 }
 bool retro_load_game(const struct retro_game_info *game) {
+#if defined(LUCENT_MOCK_REJECT_GAME)
+    (void)game;
+    return false;
+#else
     if (!game || !game->data || game->size == 0) return false;
     counter = ((const uint8_t *)game->data)[0];
     return true;
+#endif
 }
 bool retro_load_game_special(unsigned type, const struct retro_game_info *games, size_t count) {
     (void)type; (void)games; (void)count; return false;

@@ -88,6 +88,9 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
         self.assertIn('strcmp(variable->key, "mupen64plus-rdp-plugin")', NATIVE_HOST)
         self.assertIn('strcmp(variable->key, "mupen64plus-rsp-plugin")', NATIVE_HOST)
         self.assertIn('strcmp(variable->key, "mupen64plus-ThreadedRenderer")', NATIVE_HOST)
+        self.assertIn('strcmp(variable->key, "mupen64plus-EnableOverscan")', NATIVE_HOST)
+        self.assertIn('strcmp(variable->key, "mupen64plus-OverscanTop")', NATIVE_HOST)
+        self.assertIn('strcmp(variable->key, "mupen64plus-OverscanBottom")', NATIVE_HOST)
         self.assertRegex(
             NATIVE_HOST,
             r'(?s)mupen64plus-rdp-plugin"\) == 0\).*?'
@@ -102,6 +105,11 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
             NATIVE_HOST,
             r'(?s)mupen64plus-ThreadedRenderer"\) == 0\).*?'
             r'find_option_token\(options, "False"',
+        )
+        self.assertRegex(
+            NATIVE_HOST,
+            r'(?s)mupen64plus-EnableOverscan"\) == 0\).*?'
+            r'find_option_token\(\s*options, "Disabled"',
         )
 
     def test_genesis_and_n64_recipes_are_pinned_and_16k_aligned(self):
@@ -179,7 +187,7 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
             {
                 "nes", "snes", "gb", "gbc", "gba", "sg1000",
                 "mastersystem", "gamegear", "psx", "nds",
-                "zxspectrum", "arcade", "neogeo", "dos", "pcengine", "ngp",
+                "zxspectrum", "arcade", "neogeo", "dos", "windows", "pcengine", "ngp",
                 "wonderswancolor",
             },
             {case.system for case in module.CASES},

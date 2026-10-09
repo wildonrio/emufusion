@@ -1,0 +1,16 @@
+diff --git a/app/src/main/cpp/aps3e_rp3_impl.cpp b/app/src/main/cpp/aps3e_rp3_impl.cpp
+--- a/app/src/main/cpp/aps3e_rp3_impl.cpp
++++ b/app/src/main/cpp/aps3e_rp3_impl.cpp
+@@ -119,6 +119,11 @@ __attribute__((constructor)) static void init_localized_strings()
+     constexpr int n=sizeof(localized_string_keys)/sizeof(localized_string_keys[0]);
+     for(int i=0;i<n;i++){
+         const char* key_id = localized_string_keys[i];
+-        localized_strings[i]= getenv(key_id)?:"?";
++        if (const char* translated = getenv(key_id); translated && *translated) {
++            localized_strings[i] = translated;
++        } else {
++            localized_strings[i] = key_id;
++            std::replace(localized_strings[i].begin(), localized_strings[i].end(), '_', ' ');
++        }
+     }
+ }

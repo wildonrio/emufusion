@@ -6,7 +6,7 @@ import android.util.Log;
 
 import com.thorium.preview.game.InWindowGameHost;
 
-/** Intercepts Lucent's internal `am start` syntax before any Activity starts. */
+/** Intercepts EmuFusion's internal `am start` syntax before any Activity starts. */
 public final class InProcessGameLaunchCommand {
     private static final String TAG = "LucentLaunchCommand";
     private static final String COMPONENT =
@@ -15,7 +15,7 @@ public final class InProcessGameLaunchCommand {
     private InProcessGameLaunchCommand() {}
 
     /**
-     * Returns true only when this command belongs to Lucent's internal game
+     * Returns true only when this command belongs to EmuFusion's internal game
      * route. The inherited Pegasus launcher falls through unchanged for every
      * other Android command. A recognized but invalid internal command is
      * consumed and rejected; it must never fall through to startActivity.

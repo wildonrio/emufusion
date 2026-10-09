@@ -1,13 +1,13 @@
 # ScummVM Phase 2 integration record
 
-ScummVM can run inside Lucent's existing `MainActivity`. The pinned upstream
+ScummVM can run inside EmuFusion's existing `MainActivity`. The pinned upstream
 source contains its own libretro backend and an official Android `ndk-build`
-target. Lucent implements the libretro API independently; this route does not
+target. EmuFusion implements the libretro API independently; this route does not
 package or launch a RetroArch frontend and does not use ScummVM's standalone
 Android Activity or launcher.
 
 This is currently a **qualification path**, not a release approval. It proves
-that a pinned Android ARM64 core can be built for Lucent, but it does not close
+that a pinned Android ARM64 core can be built for EmuFusion, but it does not close
 the legal-content, dependency-license, runtime, performance, or device gates.
 
 ## Exact source closure
@@ -28,7 +28,7 @@ under NDK r27. The staged Android makefile also receives
 `-Wl,-z,max-page-size=16384`; the recipe fails unless `llvm-readelf` confirms
 that every `PT_LOAD` segment uses `0x4000` alignment.
 The SHA-256-locked
-`engines/patches/scummvm-lucent-exit-autosave.patch` adds Lucent's only
+`engines/patches/scummvm-lucent-exit-autosave.patch` adds EmuFusion's only
 core-local behavior: a synchronous, fail-closed engine-native exit autosave
 and per-content resume marker. It does not add a launcher or RetroArch UI.
 
@@ -70,22 +70,22 @@ $HOME/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_
 ## Direct launch contract
 
 The core accepts either a `.scummvm` hook or any file inside a recognized game
-directory. For ordinary library entries Lucent may pass a stable file within
+directory. For ordinary library entries EmuFusion may pass a stable file within
 the game directory; ScummVM's detector then launches that game directly. The
 standalone launcher is not part of the task or recents identity.
 
-Controller events and mouse-style analog motion use Lucent's existing libretro
+Controller events and mouse-style analog motion use EmuFusion's existing libretro
 input bridge. The core produces software frames and stereo PCM through the
 same callbacks as other in-process engines. A legal qualification candidate is
 pinned in `engines/scummvm-test-content-lock.json`: ScummVM's official
 *Flight of the Amazon Queen - Freeware Floppy Version* download, SHA-256
 `2e59de85f708cdb32bf85c85b394ac091c05f7647e856b71f5b3ae73fde761e0`.
-It is fetched directly from ScummVM for testing and is never bundled in Lucent;
+It is fetched directly from ScummVM for testing and is never bundled in EmuFusion;
 the freeware label is not treated as permission for third-party redistribution.
 
 ## Exit persistence contract
 
-This is a hard upstream capability boundary, not an unfinished Lucent flag:
+This is a hard upstream capability boundary, not an unfinished EmuFusion flag:
 
 ```text
 retro_serialize_size() = 0
@@ -93,7 +93,7 @@ retro_serialize()      = false
 retro_unserialize()    = false
 ```
 
-ScummVM's own core metadata likewise declares `savestate = false`. Lucent must
+ScummVM's own core metadata likewise declares `savestate = false`. EmuFusion must
 therefore never send this core through the generic serialization vault.
 
 The patched core instead exports this optional extension alongside the normal
@@ -103,7 +103,7 @@ libretro API:
 bool retro_lucent_prepare_exit_autosave(void);
 ```
 
-The Lucent host calls it on held-Stop before `retro_unload_game()`. The normal
+The EmuFusion host calls it on held-Stop before `retro_unload_game()`. The normal
 frame loop is stopped first; the extension synchronously switches into
 ScummVM's emulation co-thread, so the save runs on the engine thread rather
 than the Android UI or lifecycle executor. The request advances at most 120
@@ -129,7 +129,7 @@ For example, upstream SCI/SCI32 explicitly return autosave slot `-1`, so they
 fail closed. Generic arbitrary Quick Resume and the 10-minute memory-state
 timeline remain unavailable.
 
-Lucent's host, JNI bridge, and Java session path enforce this contract. When
+EmuFusion's host, JNI bridge, and Java session path enforce this contract. When
 the extension returns `false`, the native host does not call
 `retro_unload_game`; its loaded flag stays set and another frame can run. JNI
 destruction refuses to bypass the gate. The session resumes the core, keeps the
@@ -155,7 +155,7 @@ Qualification packaging is fail-closed and must perform all of these steps:
 3. stage the complete `scummvm-system/scummvm/` runtime-data directory at the
    system path exposed to the core;
 4. stage the complete `scummvm-compliance/` directory in APK assets and expose
-   its notices from Lucent's legal/About surface; and
+   its notices from EmuFusion's legal/About surface; and
 5. abort if the generator, registry validator, artifact hash, runtime-data tree
    hash, 16 KiB segment-alignment check, or any required input fails.
 
@@ -167,10 +167,10 @@ are closed; qualification inclusion is explicit and never silently selected.
 Use only the pinned official-download fixture above for the initial gate:
 
 1. Verify the ZIP SHA-256, extract it outside the APK, and launch a stable file
-   inside its directory directly from Lucent.
-2. Confirm one Lucent task/window, visible frames, stereo audio, and physical
+   inside its directory directly from EmuFusion.
+2. Confirm one EmuFusion task/window, visible frames, stereo audio, and physical
    input without a standalone ScummVM or RetroArch Activity.
-3. Reach a save-safe point, hold Stop, and confirm return to Lucent only after
+3. Reach a save-safe point, hold Stop, and confirm return to EmuFusion only after
    the native save and marker exist. Relaunch and verify exact resume.
 4. Trigger Stop at an unsafe point and confirm a nonfatal message, no unload,
    and an immediately playable next frame.

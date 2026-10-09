@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-04",
+  "status": "BUILT_DEVICE_UNVERIFIED",
+  "build": {
+    "reportedBy": "root agent",
+    "command": "ninja -C engines/build/switch-src/eden/build-android -j6 yuzu-android",
+    "exitCode": 0,
+    "recompiled": [
+      "vk_swapchain.cpp",
+      "conductor.cpp",
+      "lucent_adapter.cpp"
+    ],
+    "linkTarget": "yuzu-android",
+    "note": "Successful compiler run reported by root; this subagent separately stripped and inspected the produced library."
+  },
+  "artifact": {
+    "path": "engines/build/arm64-v8a/liblucent_native_adapter_eden.so",
+    "sha256": "d597932f0111349f341fdb8be13f5e6ddfb68bdee92c29246d8716be5bfd7004",
+    "sizeBytes": 35544128,
+    "elfMachine": "AARCH64",
+    "ptLoadAlignment": "0x4000",
+    "loadSegmentAlignments": [
+      "0x4000",
+      "0x4000",
+      "0x4000",
+      "0x4000"
+    ],
+    "soname": "libyuzu-android.so",
+    "definedDynamicSymbolCount": 52619,
+    "requiredExports": [
+      "lucent_native_adapter_entry",
+      "lucent_eden_average_game_fps",
+      "lucent_native_adapter_declared_video_hz",
+      "lucent_native_adapter_set_paced_video_hz",
+      "lucent_native_adapter_timing_capabilities_v1"
+    ],
+    "stripTool": "/Users/tyleryoung/Code/cemu/Cemu-0.5/android-sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip",
+    "stripArguments": "--strip-all -o <temporary-staged-library> <built-libyuzu-android.so>",
+    "measuredBy": "system_route_audit via llvm-readelf, llvm-nm, shasum, wc"
+  },
+  "sourceChecks": {
+    "command": "python3 -m unittest tools.tests.test_phase3_eden_timing_contract tools.tests.test_phase3_eden_core_timing tools.tests.test_phase3_eden_packaging",
+    "beforeStaging": {
+      "tests": 77,
+      "status": "passed"
+    },
+    "afterStaging": {
+      "tests": 77,
+      "status": "passed"
+    }
+  },
+  "notProven": [
+    "installation or launch",
+    "physical cadence",
+    "whole-guest/audio correction",
+    "image-linked source identity",
+    "generated midpoint quality"
+  ],
+  "previousArtifact": {
+    "sha256": "fd2773d14e244173c8304844b1f2add09a2e37a611951c135fbd22a44e4f09dc",
+    "backupPath": "/tmp/emufusion-eden-stage.HRKbVu/previous-lib-fd2773d1.so"
+  }
+}

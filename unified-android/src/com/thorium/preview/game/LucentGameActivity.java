@@ -26,7 +26,7 @@ import android.widget.TextView;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Full-screen Lucent shell used by every in-process emulation engine. */
+/** Full-screen EmuFusion shell used by every in-process emulation engine. */
 public final class LucentGameActivity extends Activity
         implements GameSurface.Listener, EngineSession.Listener {
     private static final String TAG = "LucentGame";
@@ -47,6 +47,7 @@ public final class LucentGameActivity extends Activity
     private TextView status;
     private Button restoreButton;
     private boolean prepared;
+    private boolean surfaceStartupFailed;
     private boolean activityResumed;
     private boolean menuVisible;
     private boolean stopPressed;
@@ -69,7 +70,7 @@ public final class LucentGameActivity extends Activity
 
         request = GameLaunchRequest.from(getIntent());
         if (!request.isValid()) {
-            showFatalError("Lucent received an incomplete game launch request.", null);
+            showFatalError("EmuFusion received an incomplete game launch request.", null);
             return;
         }
         SessionReturnRouter.remember(this, request.returnState);
@@ -147,8 +148,30 @@ public final class LucentGameActivity extends Activity
         if (session != null) session.detachSurface();
     }
 
+    @Override public void onSurfaceStartupError(String message, Throwable cause) {
+        surfaceStartupFailed = true;
+        prepared = false;
+        onSessionError(message, cause);
+    }
+
+    @Override public void onSurfaceRuntimeError(String message, Throwable cause) {
+        runOnUiThread(() -> {
+            if (surfaceStartupFailed || isFinishing() || exitStarted.get()) return;
+            surfaceStartupFailed = true;
+            prepared = false;
+            if (session != null) {
+                try { session.pause(EngineSession.PauseReason.ANDROID_BACKGROUND); }
+                catch (RuntimeException pauseFailure) {
+                    Log.e(TAG, "Could not pause after display failure", pauseFailure);
+                }
+            }
+            showFatalError(message, cause);
+        });
+    }
+
     @Override public void onSessionReady() {
         runOnUiThread(() -> {
+            if (surfaceStartupFailed) return;
             prepared = true;
             status.setVisibility(View.GONE);
             if (touchControls != null && session != null)
@@ -159,6 +182,10 @@ public final class LucentGameActivity extends Activity
     }
 
     @Override public void onSessionError(String message, Throwable cause) {
+        if (cause instanceof com.thorium.lucent.video.RuntimePresentationFailure.Failure) {
+            onSurfaceRuntimeError(cause.getMessage(), cause);
+            return;
+        }
         runOnUiThread(() -> showFatalError(message, cause));
     }
 
@@ -193,10 +220,14 @@ public final class LucentGameActivity extends Activity
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
 
-        gameSurface = new GameSurface(this);
-        root.addView(gameSurface, new FrameLayout.LayoutParams(
+        gameSurface = new GameSurface(this, request.frameGenerationMode);
+        // The running engine, not a system-wide frontend guess, owns aspect.
+        gameSurface.setDisplayAspect(0f);
+        FrameLayout.LayoutParams videoParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT));
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        videoParams.gravity = Gravity.CENTER;
+        root.addView(gameSurface, videoParams);
 
         touchControls = new TouchControlsView(this);
         touchControls.setVisibility(View.GONE);
@@ -266,9 +297,9 @@ public final class LucentGameActivity extends Activity
         });
         panel.addView(restoreButton, rowParams(dp(58)));
 
-        Button exit = menuButton("Exit to Lucent");
+        Button exit = menuButton("Exit to EmuFusion");
         exit.setTextColor(Color.rgb(255, 151, 151));
-        exit.setOnClickListener(view -> exitToLucent());
+        exit.setOnClickListener(view -> exitToEmuFusion());
         panel.addView(exit, rowParams(dp(58)));
 
         FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
@@ -348,7 +379,7 @@ public final class LucentGameActivity extends Activity
                 if (stopPressed && generation == stopGeneration) {
                     stopHoldTriggered = true;
                     stopPressed = false;
-                    exitToLucent();
+                    exitToEmuFusion();
                 }
             }, STOP_HOLD_MS);
             return true;
@@ -380,37 +411,38 @@ public final class LucentGameActivity extends Activity
         return true;
     }
 
-    private void exitToLucent() {
+    private void exitToEmuFusion() {
         if (!exitStarted.compareAndSet(false, true)) return;
         Log.i(TAG, "Exit to Lucent invoked engine=" + request.engineId +
                 " system=" + request.systemId);
         menuVisible = false;
         if (pauseOverlay != null) pauseOverlay.setVisibility(View.VISIBLE);
         if (status != null) {
-            status.setText("Saving and returning to Lucent…");
+            status.setText("Saving and returning to EmuFusion…");
             status.setVisibility(View.VISIBLE);
             status.bringToFront();
         }
         if (session == null) {
-            SessionReturnRouter.finishToLucent(this, request.returnState);
+            SessionReturnRouter.finishToEmuFusion(this, request.returnState);
             return;
         }
         session.stop(EngineSession.StopReason.EXIT_TO_LUCENT,
                 () -> runOnUiThread(() ->
-                        SessionReturnRouter.finishToLucent(this, request.returnState)));
+                        SessionReturnRouter.finishToEmuFusion(this, request.returnState)));
     }
 
     private void showFatalError(String message, Throwable cause) {
         String detail = message == null || message.trim().isEmpty()
-                ? "Lucent could not start this game." : message;
+                ? "EmuFusion could not start this game." : message;
         new AlertDialog.Builder(this)
-                .setTitle("Unable to start game")
+                .setTitle(cause instanceof com.thorium.lucent.video.RuntimePresentationFailure.Failure
+                        ? "Game display stopped" : "Unable to start game")
                 .setMessage(detail)
                 .setCancelable(false)
-                .setPositiveButton("Return to Lucent", (dialog, which) -> {
+                .setPositiveButton("Return to EmuFusion", (dialog, which) -> {
                     SessionReturnState state = request == null
                             ? SessionReturnState.EMPTY : request.returnState;
-                    SessionReturnRouter.finishToLucent(this, state);
+                    SessionReturnRouter.finishToEmuFusion(this, state);
                 })
                 .show();
     }

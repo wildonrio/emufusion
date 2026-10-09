@@ -1,0 +1,271 @@
+--- a/app/src/main/cpp/rpcs3/rpcs3/util/types.hpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/util/types.hpp
+@@ -131,7 +131,35 @@
+ using llong  = long long;
+ 
+ using uptr = std::uintptr_t;
++
++#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++namespace utils::android_tagged_ptr
++{
++	// Android arm64 malloc pointers use the top byte as an allocator tag. The
++	// RPCS3 lock-free layouts retain their original low 16 metadata bits, so
++	// the packed form is: [8-bit tag][40-bit heap VA][16-bit metadata].
++	constexpr uptr tag_mask = 0xff00000000000000ull;
++	constexpr uptr middle_address_mask = 0x00ffff0000000000ull;
++	constexpr uptr low_address_mask = 0x000000ffffffffffull;
++	constexpr uint metadata_bits = 16;
++
++	constexpr bool can_pack(uptr raw) noexcept
++	{
++		return !(raw & middle_address_mask);
++	}
+ 
++	constexpr uptr pack(uptr raw) noexcept
++	{
++		return (raw & tag_mask) | ((raw & low_address_mask) << metadata_bits);
++	}
++
++	constexpr uptr unpack(uptr packed) noexcept
++	{
++		return (packed & tag_mask) | ((packed >> metadata_bits) & low_address_mask);
++	}
++}
++#endif
++
+ using u8  = std::uint8_t;
+ using u16 = std::uint16_t;
+ using u32 = std::uint32_t;
+--- a/app/src/main/cpp/rpcs3/rpcs3/util/shared_ptr.hpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/util/shared_ptr.hpp
+@@ -572,10 +572,40 @@
+ 	class atomic_ptr
+ 	{
+ 		mutable atomic_t<uptr> m_val{0};
++
++		static uptr pointer_bits(uptr val) noexcept
++		{
++			return val & c_ptr_mask;
++		}
++
++		static uptr encode_pointer(const volatile void* ptr) noexcept
++		{
++			const uptr raw = reinterpret_cast<uptr>(ptr);
++		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++			ensure(utils::android_tagged_ptr::can_pack(raw));
++			return utils::android_tagged_ptr::pack(raw);
++		#else
++			return raw << c_ref_size;
++		#endif
++		}
+ 
++		static uptr decode_pointer(uptr val) noexcept
++		{
++		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++			return utils::android_tagged_ptr::unpack(val);
++		#else
++			return val >> c_ref_size;
++		#endif
++		}
++
++		static bool same_pointer(uptr lhs, uptr rhs) noexcept
++		{
++			return pointer_bits(lhs) == pointer_bits(rhs);
++		}
++
+ 		static shared_counter* d(uptr val) noexcept
+ 		{
+-			return std::launder(reinterpret_cast<shared_counter*>((val >> c_ref_size) - sizeof(shared_counter)));
++			return std::launder(reinterpret_cast<shared_counter*>(decode_pointer(val) - sizeof(shared_counter)));
+ 		}
+ 
+ 		shared_counter* d() const noexcept
+@@ -585,12 +615,12 @@
+ 
+ 		static uptr to_val(const volatile std::remove_extent_t<T>* ptr) noexcept
+ 		{
+-			return (reinterpret_cast<uptr>(ptr) << c_ref_size);
++			return encode_pointer(ptr);
+ 		}
+ 
+ 		static std::remove_extent_t<T>* ptr_to(uptr val) noexcept
+ 		{
+-			return reinterpret_cast<std::remove_extent_t<T>*>(val >> c_ref_size);
++			return reinterpret_cast<std::remove_extent_t<T>*>(decode_pointer(val));
+ 		}
+ 
+ 		template <typename U>
+@@ -668,7 +698,7 @@
+ 		{
+ 			const uptr v = m_val.raw();
+ 
+-			if (v >> c_ref_size)
++			if (pointer_bits(v))
+ 			{
+ 				const auto o = d(v);
+ 
+@@ -723,8 +753,9 @@
+ 			// Add reference
+ 			const auto [prev, did_ref] = m_val.fetch_op([](uptr& val)
+ 			{
+-				if (val >> c_ref_size)
++				if (pointer_bits(val))
+ 				{
++					ensure((val & c_ref_mask) != c_ref_mask);
+ 					val++;
+ 					return true;
+ 				}
+@@ -745,7 +776,7 @@
+ 			// Dereference if still the same pointer
+ 			const auto [_, did_deref] = m_val.fetch_op([prev = prev](uptr& val)
+ 			{
+-				if (val >> c_ref_size == prev >> c_ref_size)
++				if (same_pointer(val, prev))
+ 				{
+ 					val--;
+ 					return true;
+@@ -772,8 +803,9 @@
+ 			// Add reference
+ 			const auto [prev, did_ref] = m_val.fetch_op([](uptr& val)
+ 			{
+-				if (val >> c_ref_size)
++				if (pointer_bits(val))
+ 				{
++					ensure((val & c_ref_mask) != c_ref_mask);
+ 					val++;
+ 					return true;
+ 				}
+@@ -813,7 +845,7 @@
+ 			// Dereference if still the same pointer
+ 			const auto [_, did_deref] = m_val.fetch_op([prev = prev](uptr& val)
+ 			{
+-				if (val >> c_ref_size == prev >> c_ref_size)
++				if (same_pointer(val, prev))
+ 				{
+ 					val--;
+ 					return true;
+@@ -901,8 +933,8 @@
+ 		// Ineffective
+ 		[[nodiscard]] bool compare_exchange(shared_type& cmp_and_old, shared_type exch)
+ 		{
+-			const uptr _old = reinterpret_cast<uptr>(cmp_and_old.m_ptr);
+-			const uptr _new = reinterpret_cast<uptr>(exch.m_ptr);
++			const uptr _old = to_val(cmp_and_old.m_ptr);
++			const uptr _new = to_val(exch.m_ptr);
+ 
+ 			if (exch.m_ptr)
+ 			{
+@@ -913,19 +945,20 @@
+ 
+ 			const uptr _val = m_val.fetch_op([&](uptr& val)
+ 			{
+-				if (val >> c_ref_size == _old)
++				if (same_pointer(val, _old))
+ 				{
+ 					// Set new value
+-					val = _new << c_ref_size;
++					val = pointer_bits(_new);
+ 				}
+ 				else if (val)
+ 				{
+ 					// Reference previous value
++					ensure((val & c_ref_mask) != c_ref_mask);
+ 					val++;
+ 				}
+ 			});
+ 
+-			if (_val >> c_ref_size == _old)
++			if (same_pointer(_val, _old))
+ 			{
+ 				// Success (exch is consumed, cmp_and_old is unchanged)
+ 				if (exch.m_ptr)
+@@ -956,7 +989,7 @@
+ 			// Dereference if still the same pointer
+ 			const auto [_, did_deref] = m_val.fetch_op([_val](uptr& val)
+ 			{
+-				if (val >> c_ref_size == _val >> c_ref_size)
++				if (same_pointer(val, _val))
+ 				{
+ 					val--;
+ 					return true;
+@@ -987,8 +1020,8 @@
+ 		template <typename U> requires same_ptr_implicit_v<T, U>
+ 		bool compare_and_swap_test(const shared_ptr<U>& cmp, shared_type exch)
+ 		{
+-			const uptr _old = reinterpret_cast<uptr>(cmp.m_ptr);
+-			const uptr _new = reinterpret_cast<uptr>(exch.m_ptr);
++			const uptr _old = to_val(cmp.m_ptr);
++			const uptr _new = to_val(exch.m_ptr);
+ 
+ 			if (exch.m_ptr)
+ 			{
+@@ -999,10 +1032,10 @@
+ 
+ 			const auto [_val, ok] = m_val.fetch_op([&](uptr& val)
+ 			{
+-				if (val >> c_ref_size == _old)
++				if (same_pointer(val, _old))
+ 				{
+ 					// Set new value
+-					val = _new << c_ref_size;
++					val = pointer_bits(_new);
+ 					return true;
+ 				}
+ 
+@@ -1059,9 +1092,9 @@
+ 			do
+ 			{
+ 				// Update old head with current value
+-				next.m_ptr = reinterpret_cast<T*>(old.m_val.raw() >> c_ref_size);
++				next.m_ptr = ptr_to(old.m_val.raw());
+ 
+-			} while (!m_val.compare_exchange(old.m_val.raw(), reinterpret_cast<uptr>(exch.m_ptr) << c_ref_size));
++			} while (!m_val.compare_exchange(old.m_val.raw(), to_val(exch.m_ptr)));
+ 
+ 			// This argument is consumed (moved from)
+ 			exch.m_ptr = nullptr;
+@@ -1076,7 +1109,7 @@
+ 		// Simple atomic load is much more effective than load(), but it's a non-owning reference
+ 		T* observe() const noexcept
+ 		{
+-			return reinterpret_cast<T*>(m_val >> c_ref_size);
++			return ptr_to(m_val);
+ 		}
+ 
+ 		explicit constexpr operator bool() const noexcept
+--- a/app/src/main/cpp/rpcs3/Utilities/lockless.h
++++ b/app/src/main/cpp/rpcs3/Utilities/lockless.h
+@@ -388,9 +388,24 @@
+ 
+ 	lf_queue_item<T>* load(u64 value) const noexcept
+ 	{
++		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++		return reinterpret_cast<lf_queue_item<T>*>(utils::android_tagged_ptr::unpack(value));
++		#else
+ 		return reinterpret_cast<lf_queue_item<T>*>(value >> 16);
++		#endif
+ 	}
+ 
++	static u64 store(const lf_queue_item<T>* item) noexcept
++	{
++		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++		const uptr raw = reinterpret_cast<uptr>(item);
++		ensure(utils::android_tagged_ptr::can_pack(raw));
++		return utils::android_tagged_ptr::pack(raw);
++		#else
++		return reinterpret_cast<u64>(item) << 16;
++		#endif
++	}
++
+ 	// Extract all elements and reverse element order (FILO to FIFO)
+ 	lf_queue_item<T>* reverse() noexcept
+ 	{
+@@ -464,7 +479,7 @@
+ 		auto oldv = m_head.load();
+ 		auto item = new lf_queue_item<T>(load(oldv), std::forward<Args>(args)...);
+ 
+-		while (!m_head.compare_exchange(oldv, reinterpret_cast<u64>(item) << 16))
++		while (!m_head.compare_exchange(oldv, store(item)))
+ 		{
+ 			item->m_link = load(oldv);
+ 		}

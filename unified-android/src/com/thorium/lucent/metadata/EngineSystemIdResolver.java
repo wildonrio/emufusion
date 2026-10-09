@@ -22,6 +22,7 @@ public final class EngineSystemIdResolver {
         alias(aliases, "arcade", "mame", "fbneo", "fba", "finalburnneo");
         alias(aliases, "snes", "supernintendo", "superfamicom");
         alias(aliases, "nes", "famicom", "fc");
+        alias(aliases, "windows", "win", "windows10", "pc");
         ALIASES = Collections.unmodifiableMap(aliases);
     }
 

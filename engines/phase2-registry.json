@@ -4,14 +4,28 @@
   "generatedAt": "2026-08-06",
   "selectedFirstRunnable": "ppsspp",
   "expectedSystems": [
-    "apple2", "amiga", "amigacd32", "saturn", "dreamcast", "naomi",
-    "atomiswave", "ps2", "gamecube", "wii", "psp", "3ds", "scummvm", "jaguar"
+    "apple2",
+    "amiga",
+    "amigacd32",
+    "saturn",
+    "dreamcast",
+    "naomi",
+    "atomiswave",
+    "ps2",
+    "gamecube",
+    "wii",
+    "psp",
+    "3ds",
+    "scummvm",
+    "jaguar"
   ],
   "engines": [
     {
       "id": "applewin",
       "displayName": "AppleWin libretro",
-      "systems": ["apple2"],
+      "systems": [
+        "apple2"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "The exact cross-platform fork now has a byte-identical Android ARM64 libretro compiler/linker proof with all upstream ROM and firmware blobs removed. Runtime remains fail-closed on exact user-supplied firmware, while dependency closure, lawful firmware provenance, legal test content, state behavior, performance, and device qualification remain blocked.",
@@ -33,95 +47,412 @@
         "evidence": "Pinned primary AppleWin source headers grant GPL version 2 or, at the recipient's option, any later version; the root LICENSE carries the GPLv2 terms.",
         "notes": "Audit the libretro frontend, bundled libraries, generated files, and every compiled source before distribution."
       },
-      "android": {"abis": ["arm64-v8a"], "minApi": 23, "integrationEvidence": "build-reproduced", "jit": false, "multiScreen": false, "notes": "The exact source and ImGui font dependency build offline for Android ARM64 with networking disabled. Lucent's checksum-locked patch removes all ROM and firmware resources from the binary and loads them only from the app-private system directory. This is qualification packaging evidence, not release approval."},
-      "firmware": {"required": true, "requiredForSystems": ["apple2"], "acceptedHashes": [], "notes": "The qualification catalog recognizes one exact six-file Apple IIe Enhanced runtime profile copied only from user storage. Lucent distributes none of those bytes. The firmware gate remains false until lawful provenance and device execution are independently evidenced."},
-      "state": {"capability": "libretro-serialize", "qualified": false, "migrationQualified": false, "notes": "Serialization source exists; 100-cycle restore, process-death, and version-migration tests have not run."},
-      "renderer": {"requested": "software", "qualified": false, "notes": "Software video is expected; pixel format, geometry, and sustained pacing remain untested."},
-      "legalTestContent": {"status": "blocked", "sourceRepository": "https://github.com/audetto/AppleWin", "sourceCommit": "2045a52d89363005476e670e45df048655edccf7", "sourcePath": null, "license": "Unresolved for a bootable fixture", "artifactSha256": null, "notes": "The emulator test suite is not a bootable Apple II title. A source-built, explicitly licensed disk plus legally usable ROM path is still required."},
-      "build": {"recipe": "engines/build_core.sh applewin", "proofArtifactPath": "engines/build/arm64-v8a/applewin_libretro.so", "proofArtifactSha256": "89d220448e3de1796d176708b9b19ef03d12d64aedd1db1b3a689e9096eb4aae", "reproducible": false, "notes": "Two clean builds from the exact archive, SHA-256-pinned Cousine font, and SHA-256-locked external-firmware patch produced byte-identical Android ARM64 cores. The proof binary contains none of the upstream ROM or firmware byte sequences. Production remains reproducible=false until the complete dependency, firmware-provenance, legal-content, renderer, state, performance, and device gates close."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 23,
+        "integrationEvidence": "build-reproduced",
+        "jit": false,
+        "multiScreen": false,
+        "notes": "The exact source and ImGui font dependency build offline for Android ARM64 with networking disabled. Lucent's checksum-locked patch removes all ROM and firmware resources from the binary and loads them only from the app-private system directory. This is qualification packaging evidence, not release approval."
+      },
+      "firmware": {
+        "required": true,
+        "requiredForSystems": [
+          "apple2"
+        ],
+        "acceptedHashes": [],
+        "notes": "The qualification catalog recognizes one exact six-file Apple IIe Enhanced runtime profile copied only from user storage. Lucent distributes none of those bytes. The firmware gate remains false until lawful provenance and device execution are independently evidenced."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Serialization source exists; 100-cycle restore, process-death, and version-migration tests have not run."
+      },
+      "renderer": {
+        "requested": "software",
+        "qualified": false,
+        "notes": "Software video is expected; pixel format, geometry, and sustained pacing remain untested."
+      },
+      "legalTestContent": {
+        "status": "blocked",
+        "sourceRepository": "https://github.com/audetto/AppleWin",
+        "sourceCommit": "2045a52d89363005476e670e45df048655edccf7",
+        "sourcePath": null,
+        "license": "Unresolved for a bootable fixture",
+        "artifactSha256": null,
+        "notes": "The emulator test suite is not a bootable Apple II title. A source-built, explicitly licensed disk plus legally usable ROM path is still required."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh applewin",
+        "proofArtifactPath": "engines/build/arm64-v8a/applewin_libretro.so",
+        "proofArtifactSha256": "e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84",
+        "reproducible": false,
+        "notes": "October 5: the 16 KiB-aligned source candidate is in normal staging. Two clean builds at the same isolated path match; path independence is not proven. Exact Android 16 KiB loader accepts it and firmware checks pass. No new game/runtime/release qualification; existing gates remain false."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "puae",
       "displayName": "PUAE",
-      "systems": ["amiga", "amigacd32"],
+      "systems": [
+        "amiga",
+        "amigacd32"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "The exact core now has a byte-identical Android ARM64 interpreter build proof, a hash-bound built-in AROS snapshot, fail-closed user-only CD32 firmware profiles, and a deterministic CC0 boot fixture. AROS source reproduction, dependency rights, device runtime, state, renderer, and performance remain unqualified.",
       "selectedFirstRunnable": false,
-      "source": {"status": "pinned", "repository": "https://github.com/libretro/libretro-uae", "commit": "96ebfcfc2c66233ad37f6dc99ee991211dc719ad", "archive": "https://github.com/libretro/libretro-uae/archive/96ebfcfc2c66233ad37f6dc99ee991211dc719ad.tar.gz", "archiveSha256": "af671aa1b42eb5b97a05b3ac2e57b6f397f3e17bbd0be7ac204636c2321d3cf0", "verifiedAt": "2026-08-06", "submodules": [], "notes": "Top-level archive is pinned; vendored/generated dependency provenance remains a separate gate."},
-      "license": {"spdx": "GPL-2.0-or-later", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "Pinned primary emulator source files grant GPL version 2 or, at the recipient's option, any later version; COPYING contains the GPLv2 terms. A configuration-specific 227-object inventory and notices now identify the linked vendored components.", "notes": "WHDLoad/data rights and exact AROS source-to-ROM provenance remain unresolved, so the distribution gate stays open."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 23, "integrationEvidence": "build-reproduced", "jit": false, "multiScreen": false, "notes": "Lucent reproduces the exact pinned core with the NDK 27 AArch64 toolchain and fixed SOURCE_DATE_EPOCH. The conservative proof uses the interpreter; JIT and physical-device performance remain separate gates."},
-      "firmware": {"required": true, "requiredForSystems": ["amigacd32"], "acceptedHashes": [], "notes": "Amiga qualification uses the exact built-in AROS image bound by SHA-256 in engines/puae-firmware-policy.json. CD32 fails closed on exact-size, upstream-compatible user files; Lucent never packages or downloads proprietary Kickstart/CD32 ROMs. The firmware release gate remains false because the embedded AROS image has not been reproduced from a pinned AROS source revision and lawful user-ROM provenance is not inferred from compatibility hashes."},
-      "state": {"capability": "libretro-serialize", "qualified": false, "migrationQualified": false, "notes": "Large-state determinism, disk changes, and compatibility across engine upgrades must be measured."},
-      "renderer": {"requested": "software", "qualified": false, "notes": "Software rendering is expected; audio/video pacing and high-resolution Amiga modes remain untested."},
-      "legalTestContent": {"status": "blocked", "sourceRepository": "https://github.com/wildonrio/pegasus-lucent", "sourceCommit": null, "sourcePath": "engines/qa/fixtures/puae-minimal", "license": "CC0-1.0", "artifactSha256": "e5692a1ef7a769936b283b465f1dd965979a2cae1e16e4f8af32e41c310724b1", "notes": "A deterministic source-built 880 KiB Amiga boot-block fixture now exists and contains no firmware or game assets. The gate remains false until its exact artifact is exercised on the target device through the packaged core."},
-      "build": {"recipe": "engines/build_core.sh puae", "proofArtifactPath": "engines/build/arm64-v8a/puae_libretro.so", "proofArtifactSha256": "562db09fef04f1fe4460e99938e58b3435dd2d3b6b03e25660786f6d47e20d2f", "reproducible": false, "notes": "Two clean fixed-epoch builds produced byte-identical Android ARM64 cores. The build now verifies the exact embedded AROS payload and excludes known CD32 firmware identities. Production remains reproducible=false until all dependency/license, firmware provenance, legal-content runtime, state, renderer, performance, and device gates close."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "source": {
+        "status": "pinned",
+        "repository": "https://github.com/libretro/libretro-uae",
+        "commit": "96ebfcfc2c66233ad37f6dc99ee991211dc719ad",
+        "archive": "https://github.com/libretro/libretro-uae/archive/96ebfcfc2c66233ad37f6dc99ee991211dc719ad.tar.gz",
+        "archiveSha256": "af671aa1b42eb5b97a05b3ac2e57b6f397f3e17bbd0be7ac204636c2321d3cf0",
+        "verifiedAt": "2026-08-06",
+        "submodules": [],
+        "notes": "Top-level archive is pinned; vendored/generated dependency provenance remains a separate gate."
+      },
+      "license": {
+        "spdx": "GPL-2.0-or-later",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "Pinned primary emulator source files grant GPL version 2 or, at the recipient's option, any later version; COPYING contains the GPLv2 terms. A configuration-specific 227-object inventory and notices now identify the linked vendored components.",
+        "notes": "WHDLoad/data rights and exact AROS source-to-ROM provenance remain unresolved, so the distribution gate stays open."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 23,
+        "integrationEvidence": "build-reproduced",
+        "jit": false,
+        "multiScreen": false,
+        "notes": "Lucent reproduces the exact pinned core with the NDK 27 AArch64 toolchain and fixed SOURCE_DATE_EPOCH. The conservative proof uses the interpreter; JIT and physical-device performance remain separate gates."
+      },
+      "firmware": {
+        "required": true,
+        "requiredForSystems": [
+          "amigacd32"
+        ],
+        "acceptedHashes": [],
+        "notes": "Amiga qualification uses the exact built-in AROS image bound by SHA-256 in engines/puae-firmware-policy.json. CD32 fails closed on exact-size, upstream-compatible user files; Lucent never packages or downloads proprietary Kickstart/CD32 ROMs. The firmware release gate remains false because the embedded AROS image has not been reproduced from a pinned AROS source revision and lawful user-ROM provenance is not inferred from compatibility hashes."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Large-state determinism, disk changes, and compatibility across engine upgrades must be measured."
+      },
+      "renderer": {
+        "requested": "software",
+        "qualified": false,
+        "notes": "Software rendering is expected; audio/video pacing and high-resolution Amiga modes remain untested."
+      },
+      "legalTestContent": {
+        "status": "blocked",
+        "sourceRepository": "https://github.com/wildonrio/pegasus-lucent",
+        "sourceCommit": null,
+        "sourcePath": "engines/qa/fixtures/puae-minimal",
+        "license": "CC0-1.0",
+        "artifactSha256": "e5692a1ef7a769936b283b465f1dd965979a2cae1e16e4f8af32e41c310724b1",
+        "notes": "A deterministic source-built 880 KiB Amiga boot-block fixture now exists and contains no firmware or game assets. The gate remains false until its exact artifact is exercised on the target device through the packaged core."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh puae",
+        "proofArtifactPath": "engines/build/arm64-v8a/puae_libretro.so",
+        "proofArtifactSha256": "29d03ec1b442431243fd6e7fbc902a811d130a693c274b673dd3a1c61d0aeadf",
+        "reproducible": false,
+        "notes": "October 5: the 16 KiB-aligned source candidate is in normal staging. Two clean builds at the same isolated path match; path independence is not proven. Exact Android 16 KiB loader accepts it and embedded firmware checks pass. No new game/runtime/release qualification; existing gates remain false."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "beetle-saturn",
       "displayName": "Beetle Saturn",
-      "systems": ["saturn"],
+      "systems": [
+        "saturn"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "The exact accuracy baseline now has a byte-identical Android ARM64 compiler/linker proof, but dependency licenses, BIOS, legal content, state behavior, renderer behavior, performance, and device operation remain unqualified.",
       "selectedFirstRunnable": false,
-      "source": {"status": "pinned", "repository": "https://github.com/libretro/beetle-saturn-libretro", "commit": "84461434f249c1b5cd10c83ae922feae84e1acf8", "archive": "https://github.com/libretro/beetle-saturn-libretro/archive/84461434f249c1b5cd10c83ae922feae84e1acf8.tar.gz", "archiveSha256": "8d7c0e57c4dd31ca1e6e9122e5b4a306abe289963918809a16872a3a3b72d750", "verifiedAt": "2026-08-06", "submodules": [], "notes": "Pinned as one Saturn benchmark candidate, not selected for shipment."},
-      "license": {"spdx": "GPL-2.0-or-later", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "Pinned primary Mednafen source headers grant GPL version 2 or, at the recipient's option, any later version; COPYING contains GPLv2 terms.", "notes": "Audit the complete core and bundled dependency closure before integration."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 23, "integrationEvidence": "build-reproduced", "jit": false, "multiScreen": false, "notes": "Two clean NDK 27 AArch64 builds from the exact source archive matched byte-for-byte. This proves the compiler/linker path only; sustained full-speed operation on target Android hardware is not assumed."},
-      "firmware": {"required": true, "requiredForSystems": ["saturn"], "acceptedHashes": [], "notes": "User-supplied Saturn BIOS is required; no redistributable identity is accepted."},
-      "state": {"capability": "libretro-serialize", "qualified": false, "migrationQualified": false, "notes": "Large serialized states require determinism and migration testing."},
-      "renderer": {"requested": "software", "qualified": false, "notes": "Accuracy baseline uses software rendering; frame pacing and thermal viability are open."},
-      "legalTestContent": {"status": "blocked", "sourceRepository": "https://github.com/johannes-fetz/joengine", "sourceCommit": null, "sourcePath": null, "license": "Candidate source license requires pinned artifact audit", "artifactSha256": null, "notes": "Jo Engine is a candidate homebrew path, but Lucent has not pinned its SDK closure or produced a reproducible disc image."},
-      "build": {"recipe": "engines/build_core.sh beetle-saturn", "proofArtifactPath": "engines/build/arm64-v8a/beetle-saturn_libretro.so", "proofArtifactSha256": "7bfae9182013eee9f7141e20bf33633d2f5d2a4b417b5f907aea14cab449aca5", "reproducible": false, "notes": "Two clean builds from the exact archive produced byte-identical Android ARM64 cores. Production remains reproducible=false until dependency/license, firmware, legal-content, state, renderer, performance, and device gates close."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "source": {
+        "status": "pinned",
+        "repository": "https://github.com/libretro/beetle-saturn-libretro",
+        "commit": "84461434f249c1b5cd10c83ae922feae84e1acf8",
+        "archive": "https://github.com/libretro/beetle-saturn-libretro/archive/84461434f249c1b5cd10c83ae922feae84e1acf8.tar.gz",
+        "archiveSha256": "8d7c0e57c4dd31ca1e6e9122e5b4a306abe289963918809a16872a3a3b72d750",
+        "verifiedAt": "2026-08-06",
+        "submodules": [],
+        "notes": "Pinned as one Saturn benchmark candidate, not selected for shipment."
+      },
+      "license": {
+        "spdx": "GPL-2.0-or-later",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "Pinned primary Mednafen source headers grant GPL version 2 or, at the recipient's option, any later version; COPYING contains GPLv2 terms.",
+        "notes": "Audit the complete core and bundled dependency closure before integration."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 23,
+        "integrationEvidence": "build-reproduced",
+        "jit": false,
+        "multiScreen": false,
+        "notes": "Two clean NDK 27 AArch64 builds from the exact source archive matched byte-for-byte. This proves the compiler/linker path only; sustained full-speed operation on target Android hardware is not assumed."
+      },
+      "firmware": {
+        "required": true,
+        "requiredForSystems": [
+          "saturn"
+        ],
+        "acceptedHashes": [],
+        "notes": "User-supplied Saturn BIOS is required; no redistributable identity is accepted."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Large serialized states require determinism and migration testing."
+      },
+      "renderer": {
+        "requested": "software",
+        "qualified": false,
+        "notes": "Accuracy baseline uses software rendering; frame pacing and thermal viability are open."
+      },
+      "legalTestContent": {
+        "status": "blocked",
+        "sourceRepository": "https://github.com/johannes-fetz/joengine",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "Candidate source license requires pinned artifact audit",
+        "artifactSha256": null,
+        "notes": "Jo Engine is a candidate homebrew path, but Lucent has not pinned its SDK closure or produced a reproducible disc image."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh beetle-saturn",
+        "proofArtifactPath": "engines/build/arm64-v8a/beetle-saturn_libretro.so",
+        "proofArtifactSha256": "6f98de98caae22a2f50394711b4ae866f49c7b401d8e21453a9ccdfaf27dd5c6",
+        "reproducible": false,
+        "notes": "October 5: the source-built 16 KiB-aligned candidate is in normal staging after acceptance by the strict Android loader. No independent reproduction or new game/runtime/release qualification for this artifact; existing gates remain false."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "ymir",
       "displayName": "Ymir",
-      "systems": ["saturn"],
+      "systems": [
+        "saturn"
+      ],
       "route": "benchmark-only",
       "status": "experimental",
       "statusReason": "Ymir is pinned as a modern accuracy benchmark, but upstream does not currently provide an Android integration path for Lucent.",
       "selectedFirstRunnable": false,
-      "source": {"status": "pinned", "repository": "https://github.com/StrikerX3/Ymir", "commit": "6ef1ad7077e1209aa36f25d64b225362b8e5a7c9", "archive": "https://github.com/StrikerX3/Ymir/archive/6ef1ad7077e1209aa36f25d64b225362b8e5a7c9.tar.gz", "archiveSha256": "55467d296d8e14542ac479874c0da756aeaff82086bf185613730de9f56325cb", "verifiedAt": "2026-08-06", "submodules": [], "notes": "Benchmark identity only; no Android build recipe is claimed."},
-      "license": {"spdx": "GPL-3.0-only", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "The pinned LICENSE contains the GPL version 3 terms.", "notes": "Dependency closure and notices still require audit."},
-      "android": {"abis": [], "minApi": null, "integrationEvidence": "unsupported", "jit": false, "multiScreen": false, "notes": "No supported Android target was verified at the pin."},
-      "firmware": {"required": true, "requiredForSystems": ["saturn"], "acceptedHashes": [], "notes": "User-supplied Saturn BIOS remains required for benchmark parity."},
-      "state": {"capability": "native-save-state", "qualified": false, "migrationQualified": false, "notes": "Desktop state behavior does not establish Lucent lifecycle compatibility."},
-      "renderer": {"requested": "vulkan", "qualified": false, "notes": "Renderer is not qualified on Android because the platform route is absent."},
-      "legalTestContent": {"status": "blocked", "sourceRepository": "https://github.com/johannes-fetz/joengine", "sourceCommit": null, "sourcePath": null, "license": "Candidate source license requires pinned artifact audit", "artifactSha256": null, "notes": "Use the same future legal Saturn fixture for all candidates."},
-      "build": {"recipe": null, "reproducible": false, "notes": "Remain benchmark-only until upstream or Lucent has a maintainable Android port."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "source": {
+        "status": "pinned",
+        "repository": "https://github.com/StrikerX3/Ymir",
+        "commit": "6ef1ad7077e1209aa36f25d64b225362b8e5a7c9",
+        "archive": "https://github.com/StrikerX3/Ymir/archive/6ef1ad7077e1209aa36f25d64b225362b8e5a7c9.tar.gz",
+        "archiveSha256": "55467d296d8e14542ac479874c0da756aeaff82086bf185613730de9f56325cb",
+        "verifiedAt": "2026-08-06",
+        "submodules": [],
+        "notes": "Benchmark identity only; no Android build recipe is claimed."
+      },
+      "license": {
+        "spdx": "GPL-3.0-only",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "The pinned LICENSE contains the GPL version 3 terms.",
+        "notes": "Dependency closure and notices still require audit."
+      },
+      "android": {
+        "abis": [],
+        "minApi": null,
+        "integrationEvidence": "unsupported",
+        "jit": false,
+        "multiScreen": false,
+        "notes": "No supported Android target was verified at the pin."
+      },
+      "firmware": {
+        "required": true,
+        "requiredForSystems": [
+          "saturn"
+        ],
+        "acceptedHashes": [],
+        "notes": "User-supplied Saturn BIOS remains required for benchmark parity."
+      },
+      "state": {
+        "capability": "native-save-state",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Desktop state behavior does not establish Lucent lifecycle compatibility."
+      },
+      "renderer": {
+        "requested": "vulkan",
+        "qualified": false,
+        "notes": "Renderer is not qualified on Android because the platform route is absent."
+      },
+      "legalTestContent": {
+        "status": "blocked",
+        "sourceRepository": "https://github.com/johannes-fetz/joengine",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "Candidate source license requires pinned artifact audit",
+        "artifactSha256": null,
+        "notes": "Use the same future legal Saturn fixture for all candidates."
+      },
+      "build": {
+        "recipe": null,
+        "reproducible": false,
+        "notes": "Remain benchmark-only until upstream or Lucent has a maintainable Android port."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": false,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "yabasanshiro",
       "displayName": "YabaSanshiro",
-      "systems": ["saturn"],
+      "systems": [
+        "saturn"
+      ],
       "route": "benchmark-only",
       "status": "source-blocked",
       "statusReason": "The historically referenced official source URL was unavailable when audited, so Lucent will not silently substitute an unverified fork.",
       "selectedFirstRunnable": false,
-      "source": {"status": "unavailable", "repository": "https://github.com/devmiyax/yabause", "commit": null, "archive": null, "archiveSha256": null, "verifiedAt": "2026-08-06", "submodules": [], "notes": "The official repository URL returned unavailable/404. A new primary-source identity must be established before any build work."},
-      "license": {"spdx": "NOASSERTION", "distributionGate": "blocked", "dependencyAuditComplete": false, "evidence": "No available pinned primary source was present to audit.", "notes": "Do not use third-party mirrors as authority."},
-      "android": {"abis": ["arm64-v8a"], "minApi": null, "integrationEvidence": "unverified", "jit": false, "multiScreen": false, "notes": "Historical Android releases do not replace an auditable source pin."},
-      "firmware": {"required": true, "requiredForSystems": ["saturn"], "acceptedHashes": [], "notes": "No Saturn BIOS is distributed or accepted while the engine source is blocked."},
-      "state": {"capability": "unverified", "qualified": false, "migrationQualified": false, "notes": "No state API is accepted without a pinned source."},
-      "renderer": {"requested": "multi", "qualified": false, "notes": "Renderer remains unqualified."},
-      "legalTestContent": {"status": "blocked", "sourceRepository": "https://github.com/johannes-fetz/joengine", "sourceCommit": null, "sourcePath": null, "license": "Candidate source license requires pinned artifact audit", "artifactSha256": null, "notes": "A shared Saturn test artifact may be used only after the engine source gate clears."},
-      "build": {"recipe": null, "reproducible": false, "notes": "No recipe may be added until a primary upstream and exact commit are pinned."},
-      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "source": {
+        "status": "unavailable",
+        "repository": "https://github.com/devmiyax/yabause",
+        "commit": null,
+        "archive": null,
+        "archiveSha256": null,
+        "verifiedAt": "2026-08-06",
+        "submodules": [],
+        "notes": "The official repository URL returned unavailable/404. A new primary-source identity must be established before any build work."
+      },
+      "license": {
+        "spdx": "NOASSERTION",
+        "distributionGate": "blocked",
+        "dependencyAuditComplete": false,
+        "evidence": "No available pinned primary source was present to audit.",
+        "notes": "Do not use third-party mirrors as authority."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": null,
+        "integrationEvidence": "unverified",
+        "jit": false,
+        "multiScreen": false,
+        "notes": "Historical Android releases do not replace an auditable source pin."
+      },
+      "firmware": {
+        "required": true,
+        "requiredForSystems": [
+          "saturn"
+        ],
+        "acceptedHashes": [],
+        "notes": "No Saturn BIOS is distributed or accepted while the engine source is blocked."
+      },
+      "state": {
+        "capability": "unverified",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "No state API is accepted without a pinned source."
+      },
+      "renderer": {
+        "requested": "multi",
+        "qualified": false,
+        "notes": "Renderer remains unqualified."
+      },
+      "legalTestContent": {
+        "status": "blocked",
+        "sourceRepository": "https://github.com/johannes-fetz/joengine",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "Candidate source license requires pinned artifact audit",
+        "artifactSha256": null,
+        "notes": "A shared Saturn test artifact may be used only after the engine source gate clears."
+      },
+      "build": {
+        "recipe": null,
+        "reproducible": false,
+        "notes": "No recipe may be added until a primary upstream and exact commit are pinned."
+      },
+      "gates": {
+        "source": false,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": false,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "flycast",
       "displayName": "Flycast",
-      "systems": ["dreamcast", "naomi", "atomiswave"],
+      "systems": [
+        "dreamcast",
+        "naomi",
+        "atomiswave"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "Flycast now has an exact, reproducible Android ARM64 GLES3 libretro proof hosted in Lucent. Dreamcast device behavior plus arcade firmware, licensing, renderer, state, compatibility, and performance gates remain unqualified.",
@@ -135,27 +466,106 @@
         "verifiedAt": "2026-08-07",
         "dependencyLock": "engines/flycast-source-lock.json",
         "submodules": [
-          {"path": "core/deps/libchdr", "repository": "https://github.com/flyinghead/libchdr", "commit": "5f82799f2c8cad1e9cd26d39a0f8d36369a5534b", "archiveSha256": "11b01f5d376128c78100e48ad5db34edd0d33510fd047a5a22c03aa8e35cfd00"},
-          {"path": "core/deps/tinygettext", "repository": "https://github.com/flyinghead/tinygettext", "commit": "41572a67f96013691685a38f0032f3c97aa34f79", "archiveSha256": "1ceb1c0f77caaf500806cdd8a14e122762e43ce3a399a2aa228dfc0174ede709"},
-          {"path": "core/deps/tinygettext/external/tinycmmc", "repository": "https://github.com/Grumbel/tinycmmc", "commit": "9a51e13802d930feb7261ba8876940659b258cb7", "archiveSha256": "60ed6cd061401ad76ebcde9e4b8847b85b4dfa0a86cf2bd7d99fa01f9a233a1d"},
-          {"path": "core/deps/asio", "repository": "https://github.com/flyinghead/asio", "commit": "d3402006e84efb6114ff93e4f2b8508412ed80d5", "archiveSha256": "0364ea2e2b9c1623e32a9587e0e2da08669f0f8d0f6be9abaa48e57d992ed079"}
+          {
+            "path": "core/deps/libchdr",
+            "repository": "https://github.com/flyinghead/libchdr",
+            "commit": "5f82799f2c8cad1e9cd26d39a0f8d36369a5534b",
+            "archiveSha256": "11b01f5d376128c78100e48ad5db34edd0d33510fd047a5a22c03aa8e35cfd00"
+          },
+          {
+            "path": "core/deps/tinygettext",
+            "repository": "https://github.com/flyinghead/tinygettext",
+            "commit": "41572a67f96013691685a38f0032f3c97aa34f79",
+            "archiveSha256": "1ceb1c0f77caaf500806cdd8a14e122762e43ce3a399a2aa228dfc0174ede709"
+          },
+          {
+            "path": "core/deps/tinygettext/external/tinycmmc",
+            "repository": "https://github.com/Grumbel/tinycmmc",
+            "commit": "9a51e13802d930feb7261ba8876940659b258cb7",
+            "archiveSha256": "60ed6cd061401ad76ebcde9e4b8847b85b4dfa0a86cf2bd7d99fa01f9a233a1d"
+          },
+          {
+            "path": "core/deps/asio",
+            "repository": "https://github.com/flyinghead/asio",
+            "commit": "d3402006e84efb6114ff93e4f2b8508412ed80d5",
+            "archiveSha256": "0364ea2e2b9c1623e32a9587e0e2da08669f0f8d0f6be9abaa48e57d992ed079"
+          }
         ],
         "notes": "The exact external gitlink closure used by the Android ARM64 GLES3 profile is checksum locked; vendored dependencies remain covered by the top-level archive hash and require their release-license audit."
       },
-      "license": {"spdx": "GPL-2.0-or-later", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "Pinned primary source headers grant GPL version 2 or, at the recipient's option, any later version; the root LICENSE carries the GPLv2 text.", "notes": "Audit every bundled dependency and generated component before integration."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 24, "integrationEvidence": "build-reproduced", "jit": true, "multiScreen": false, "notes": "The exact GLES3 libretro profile builds reproducibly with NDK 27, CMake 3.31.6, and Ninja 1.12.1. API 24 is required by this revision's network-interface calls."},
-      "firmware": {"required": false, "requiredForSystems": ["naomi", "atomiswave"], "acceptedHashes": [], "notes": "Dreamcast may use HLE paths; Naomi/Atomiswave BIOS sets are user-supplied and none are accepted for distribution."},
-      "state": {"capability": "libretro-serialize", "qualified": false, "migrationQualified": false, "notes": "JIT, disc, arcade, and renderer state must survive repeated restore and upgrades."},
-      "renderer": {"requested": "opengl", "qualified": false, "notes": "OpenGL ES 3 is compiled for the first Thor qualification. Vulkan, GLES context loss, cache behavior, and sustained frame pacing remain separate gates."},
-      "legalTestContent": {"status": "candidate", "sourceRepository": "https://github.com/KallistiOS/KallistiOS", "sourceCommit": null, "sourcePath": null, "license": "BSD-3-Clause candidate", "artifactSha256": null, "notes": "KallistiOS examples are a candidate Dreamcast fixture, but the toolchain and artifact are not pinned; no equivalent Naomi/Atomiswave fixture is accepted."},
-      "build": {"recipe": "engines/build_core.sh flycast", "proofArtifactPath": "engines/build/arm64-v8a/flycast_libretro.so", "proofArtifactSha256": "9f463fd96331dcaf507a853de5c501b06fa2abd5084ebdff5a869f6cce2ad0d5", "reproducible": false, "notes": "Two clean, independent source roots produced byte-identical stripped Android ARM64 cores at the recorded SHA-256. Production remains reproducible=false until the full license, legal-content, renderer, state, performance, and device gates close."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "license": {
+        "spdx": "GPL-2.0-or-later",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "Pinned primary source headers grant GPL version 2 or, at the recipient's option, any later version; the root LICENSE carries the GPLv2 text.",
+        "notes": "Audit every bundled dependency and generated component before integration."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 24,
+        "integrationEvidence": "build-reproduced",
+        "jit": true,
+        "multiScreen": false,
+        "notes": "The exact GLES3 libretro profile builds reproducibly with NDK 27, CMake 3.31.6, and Ninja 1.12.1. API 24 is required by this revision's network-interface calls."
+      },
+      "firmware": {
+        "required": false,
+        "requiredForSystems": [
+          "naomi",
+          "atomiswave"
+        ],
+        "acceptedHashes": [],
+        "notes": "Dreamcast may use HLE paths; Naomi/Atomiswave BIOS sets are user-supplied and none are accepted for distribution."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "JIT, disc, arcade, and renderer state must survive repeated restore and upgrades."
+      },
+      "renderer": {
+        "requested": "opengl",
+        "qualified": false,
+        "notes": "OpenGL ES 3 is compiled for the first Thor qualification. Vulkan, GLES context loss, cache behavior, and sustained frame pacing remain separate gates."
+      },
+      "legalTestContent": {
+        "status": "candidate",
+        "sourceRepository": "https://github.com/KallistiOS/KallistiOS",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "BSD-3-Clause candidate",
+        "artifactSha256": null,
+        "notes": "KallistiOS examples are a candidate Dreamcast fixture, but the toolchain and artifact are not pinned; no equivalent Naomi/Atomiswave fixture is accepted."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh flycast",
+        "proofArtifactPath": "engines/build/arm64-v8a/flycast_libretro.so",
+        "proofArtifactSha256": "5a25b2987d95711a7e2462438babf6b2b494917be2988a1a18fd55eab7090464",
+        "reproducible": false,
+        "notes": "2026-10-04: 16 KiB shared/module linking and normalized build paths retain the Android shared-memory and cheat patches. A fresh separate build matches the exact 5a25 core tested in the simulator; normal staging now uses that core. Old 938 is rejected by the strict 16 KiB loader; 5a25 loads. Bounded Sonic Adventure boss entry and save recovery are recorded, not sustained gameplay/audio acceptance. See docs/qa/android-portability-2026-10-04-portable-integration/build-comparison.json and the flycast-input-compare/state-growth evidence. Production runtime/release gates remain unchanged. Previous 4 KiB artifact 938709bb4f39c788a3938d4906806ff0358b98b0abd4eafbdb9f766f36f7c5f2 is backed up."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "play",
       "displayName": "Play!",
-      "systems": ["ps2"],
+      "systems": [
+        "ps2"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "Play! is the BIOS-free PS2 candidate. Its exact upstream Android libretro profile now has a reproducible ARM64 compiler/linker proof, but dependency licensing, legal content, compatibility, state lifecycle, renderer behavior, performance, and device operation remain unqualified.",
@@ -169,35 +579,152 @@
         "verifiedAt": "2026-08-07",
         "dependencyLock": "engines/play-source-lock.json",
         "submodules": [
-          {"path": "deps/AltKit", "repository": "https://github.com/jpd002/AltKit", "commit": "f799f60ef6fa8b9676b4102b7dfa169fb40b6c92", "archiveSha256": "ca348273563d836765dbe48a1fd446f9efb75d778822a09d14a7fd1d1f325ff2"},
-          {"path": "deps/CodeGen", "repository": "https://github.com/jpd002/Play--CodeGen", "commit": "a5009f7dca062695b8e5aebbd71e67b4ddfa9251", "archiveSha256": "c9699563583ff4811d0c227259da1782a685303f7c3f5de0af0696e47ed706b5"},
-          {"path": "deps/Dependencies", "repository": "https://github.com/jpd002/Play-Dependencies", "commit": "8a5f6b1dea0b888b5a42b821e79470142bbea4e3", "archiveSha256": "fa8dc6c346a5141af959260037f6ac30b9987456dc07d13405e7bfb065076f93"},
-          {"path": "deps/Framework", "repository": "https://github.com/jpd002/Play--Framework", "commit": "587f278917acc0026bf5fc34b39f995fc26bd015", "archiveSha256": "3e4f87b6df7228dad15d9270cb15d855f8dd1b8803c7c30361549ff0f89326bc"},
-          {"path": "deps/Nuanceur", "repository": "https://github.com/jpd002/Nuanceur", "commit": "d96578b5a18edc67a268ed4811f0a035c56de7a0", "archiveSha256": "07e63150025de47068f9be3146af92e34aba884887c20ad441e536e32fe3f1ef"},
-          {"path": "deps/libchdr", "repository": "https://github.com/jpd002/libchdr", "commit": "284e38b6e53e0a7270cc234934e45230ed915a25", "archiveSha256": "5c184845ac1c40fc5edd351887eb32ef42c2c016fe9daaeb6eeb2bab378bd148"},
-          {"path": "deps/Dependencies/SDWebImage", "repository": "https://github.com/rs/SDWebImage", "commit": "0df32ea232aca587d5b67760b7f877079c51966c", "archiveSha256": "5f0b0ff2793c88127caa913f3777bbbcde8c140539da8c8bee75841705226dd3"},
-          {"path": "deps/Dependencies/ghc_filesystem", "repository": "https://github.com/gulrak/filesystem", "commit": "2a8b380f8d4e77b389c42a194ab9c70d8e3a0f1e", "archiveSha256": "e11db30e695764cb19daf5058a9997c933c5ebdb3e29c697898258cbded8d65f"},
-          {"path": "deps/Dependencies/xxHash", "repository": "https://github.com/Cyan4973/xxHash", "commit": "e626a72bc2321cd320e953a0ccf1584cad60f363", "archiveSha256": "34e71c085636fbc1726482996d92719d0a16e6a6097970ecf2990a27b3821162"},
-          {"path": "deps/Dependencies/zlib", "repository": "https://github.com/madler/zlib", "commit": "5a82f71ed1dfc0bec044d9702463dbdf84ea3b71", "archiveSha256": "54577b3e64db3d85268e909609faac1410d816376b037a1a415418f87f35814d"},
-          {"path": "deps/Dependencies/zstd", "repository": "https://github.com/facebook/zstd", "commit": "f8745da6ff1ad1e7bab384bd1f9d742439278e99", "archiveSha256": "4b0bd1f0cfb25e61b9103c35f27395530ff5b4c0d2513a00fd745849e85ea52c"},
-          {"path": "deps/Nuanceur/deps/vkrunner", "repository": "https://github.com/jpd002/vkrunner", "commit": "1b28778d9593d708aaa9dfa579e61c6cb08146dc", "archiveSha256": "7e3b0128b696ac80178589727b3d76aae5413abb5d06192b6391c5fe9e63a0e6"}
+          {
+            "path": "deps/AltKit",
+            "repository": "https://github.com/jpd002/AltKit",
+            "commit": "f799f60ef6fa8b9676b4102b7dfa169fb40b6c92",
+            "archiveSha256": "ca348273563d836765dbe48a1fd446f9efb75d778822a09d14a7fd1d1f325ff2"
+          },
+          {
+            "path": "deps/CodeGen",
+            "repository": "https://github.com/jpd002/Play--CodeGen",
+            "commit": "a5009f7dca062695b8e5aebbd71e67b4ddfa9251",
+            "archiveSha256": "c9699563583ff4811d0c227259da1782a685303f7c3f5de0af0696e47ed706b5"
+          },
+          {
+            "path": "deps/Dependencies",
+            "repository": "https://github.com/jpd002/Play-Dependencies",
+            "commit": "8a5f6b1dea0b888b5a42b821e79470142bbea4e3",
+            "archiveSha256": "fa8dc6c346a5141af959260037f6ac30b9987456dc07d13405e7bfb065076f93"
+          },
+          {
+            "path": "deps/Framework",
+            "repository": "https://github.com/jpd002/Play--Framework",
+            "commit": "587f278917acc0026bf5fc34b39f995fc26bd015",
+            "archiveSha256": "3e4f87b6df7228dad15d9270cb15d855f8dd1b8803c7c30361549ff0f89326bc"
+          },
+          {
+            "path": "deps/Nuanceur",
+            "repository": "https://github.com/jpd002/Nuanceur",
+            "commit": "d96578b5a18edc67a268ed4811f0a035c56de7a0",
+            "archiveSha256": "07e63150025de47068f9be3146af92e34aba884887c20ad441e536e32fe3f1ef"
+          },
+          {
+            "path": "deps/libchdr",
+            "repository": "https://github.com/jpd002/libchdr",
+            "commit": "284e38b6e53e0a7270cc234934e45230ed915a25",
+            "archiveSha256": "5c184845ac1c40fc5edd351887eb32ef42c2c016fe9daaeb6eeb2bab378bd148"
+          },
+          {
+            "path": "deps/Dependencies/SDWebImage",
+            "repository": "https://github.com/rs/SDWebImage",
+            "commit": "0df32ea232aca587d5b67760b7f877079c51966c",
+            "archiveSha256": "5f0b0ff2793c88127caa913f3777bbbcde8c140539da8c8bee75841705226dd3"
+          },
+          {
+            "path": "deps/Dependencies/ghc_filesystem",
+            "repository": "https://github.com/gulrak/filesystem",
+            "commit": "2a8b380f8d4e77b389c42a194ab9c70d8e3a0f1e",
+            "archiveSha256": "e11db30e695764cb19daf5058a9997c933c5ebdb3e29c697898258cbded8d65f"
+          },
+          {
+            "path": "deps/Dependencies/xxHash",
+            "repository": "https://github.com/Cyan4973/xxHash",
+            "commit": "e626a72bc2321cd320e953a0ccf1584cad60f363",
+            "archiveSha256": "34e71c085636fbc1726482996d92719d0a16e6a6097970ecf2990a27b3821162"
+          },
+          {
+            "path": "deps/Dependencies/zlib",
+            "repository": "https://github.com/madler/zlib",
+            "commit": "5a82f71ed1dfc0bec044d9702463dbdf84ea3b71",
+            "archiveSha256": "54577b3e64db3d85268e909609faac1410d816376b037a1a415418f87f35814d"
+          },
+          {
+            "path": "deps/Dependencies/zstd",
+            "repository": "https://github.com/facebook/zstd",
+            "commit": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+            "archiveSha256": "4b0bd1f0cfb25e61b9103c35f27395530ff5b4c0d2513a00fd745849e85ea52c"
+          },
+          {
+            "path": "deps/Nuanceur/deps/vkrunner",
+            "repository": "https://github.com/jpd002/vkrunner",
+            "commit": "1b28778d9593d708aaa9dfa579e61c6cb08146dc",
+            "archiveSha256": "7e3b0128b696ac80178589727b3d76aae5413abb5d06192b6391c5fe9e63a0e6"
+          }
         ],
         "notes": "The exact top-level and nested gitlink closure staged by the Android libretro proof is locked separately; no mutable checkout or recursive network fetch participates in the build."
       },
-      "license": {"spdx": "BSD-3-Clause", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "The pinned License.txt contains three-clause BSD-style redistribution terms for the primary project.", "notes": "All third-party libraries, generated assets, and JIT code still require file-level audit."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 23, "integrationEvidence": "build-reproduced", "jit": true, "multiScreen": false, "notes": "Two clean exact-pin integration-patched OpenGL libretro builds matched for Android AArch64. The core loads through Lucent's private dlopen host using the narrow JavaVM hook and has physical AYN Thor rendering, audio, input, and process-death restore evidence."},
-      "firmware": {"required": false, "requiredForSystems": [], "acceptedHashes": [], "notes": "Play!'s target route is BIOS-free; no Sony BIOS is bundled."},
-      "state": {"capability": "native-save-state", "compatibilityVersion": 4, "qualified": false, "migrationQualified": false, "notes": "Compatibility v4 pauses the asynchronous VM through a bounded, cancelable handshake, drains only already-pending GS work, recovers the late-claim cancellation race, preserves the live renderer, and includes timing state. Determinism, 100-cycle restore, JIT invalidation, and upgrade migration remain under qualification."},
-      "renderer": {"requested": "vulkan", "qualified": false, "notes": "Vulkan preferred; surface lifecycle and fallback behavior need the Phase 2 host gate."},
-      "legalTestContent": {"status": "candidate", "sourceRepository": "https://github.com/ps2dev/ps2sdk", "sourceCommit": null, "sourcePath": null, "license": "BSD-style candidate", "artifactSha256": null, "notes": "PS2SDK samples are a candidate, but a specific source path, toolchain closure, ELF/disc artifact, and hashes must be pinned."},
-      "build": {"recipe": "engines/build_core.sh play", "reproducible": false, "proofArtifactPath": "engines/build/arm64-v8a/play_libretro.so", "proofArtifactSha256": "a90adf7f06c12c8a7505420a18b18bfaca812737a7612436b69041a89fb86843", "notes": "Two clean builds of the exact pinned Darwin CMake/Ninja and NDK 27 profile matched byte-for-byte after applying six SHA-256-locked reviewed patches covering JavaVM, libretro-thread behavior, Android tagged-address normalization plus ART-safe chained/restored EE page-protection fault handling, frontend output size, bounded audio FIFO with observable overflow telemetry, and bounded VM-paused complete-state handling. Production remains reproducible=false until the dependency/license, fixture, runtime, and release pipeline gates close."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": true, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "The pinned License.txt contains three-clause BSD-style redistribution terms for the primary project.",
+        "notes": "All third-party libraries, generated assets, and JIT code still require file-level audit."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 23,
+        "integrationEvidence": "build-reproduced",
+        "jit": true,
+        "multiScreen": false,
+        "notes": "Two clean exact-pin integration-patched OpenGL libretro builds matched for Android AArch64. The core loads through Lucent's private dlopen host using the narrow JavaVM hook and has physical AYN Thor rendering, audio, input, and process-death restore evidence."
+      },
+      "firmware": {
+        "required": false,
+        "requiredForSystems": [],
+        "acceptedHashes": [],
+        "notes": "Play!'s target route is BIOS-free; no Sony BIOS is bundled."
+      },
+      "state": {
+        "capability": "native-save-state",
+        "compatibilityVersion": 4,
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Compatibility v4 pauses the asynchronous VM through a bounded, cancelable handshake, drains only already-pending GS work, recovers the late-claim cancellation race, preserves the live renderer, and includes timing state. Determinism, 100-cycle restore, JIT invalidation, and upgrade migration remain under qualification."
+      },
+      "renderer": {
+        "requested": "vulkan",
+        "qualified": false,
+        "notes": "Vulkan preferred; surface lifecycle and fallback behavior need the Phase 2 host gate."
+      },
+      "legalTestContent": {
+        "status": "candidate",
+        "sourceRepository": "https://github.com/ps2dev/ps2sdk",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "BSD-style candidate",
+        "artifactSha256": null,
+        "notes": "PS2SDK samples are a candidate, but a specific source path, toolchain closure, ELF/disc artifact, and hashes must be pinned."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh play",
+        "reproducible": false,
+        "proofArtifactPath": "engines/build/arm64-v8a/play_libretro.so",
+        "proofArtifactSha256": "911fad87e54c22fa328347fc908e7af8fa7fd7e8d10c272d620171d4681f5bc4",
+        "notes": "Two clean builds of the exact pinned Darwin CMake/Ninja and NDK 27 profile matched byte-for-byte after applying six SHA-256-locked reviewed patches covering JavaVM, libretro-thread behavior, Android tagged-address normalization plus ART-safe chained/restored EE page-protection fault handling, frontend output size, bounded audio FIFO with observable overflow telemetry, and bounded VM-paused complete-state handling. Production remains reproducible=false until the dependency/license, fixture, runtime, and release pipeline gates close."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": true,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "armsx2",
       "displayName": "ARMSX2",
-      "systems": ["ps2"],
+      "systems": [
+        "ps2"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "ARMSX2 is the Vulkan-first AArch64 PS2 replacement candidate for Play!. Its exact source builds as an Android ARM64 libretro core and is wired into Lucent's in-process Vulkan host; physical-device performance, state, firmware, compatibility, and distribution audits remain release gates.",
@@ -213,42 +740,170 @@
         "submodules": [],
         "notes": "The repository vendors its compile closure except shaderc's seven exact DEPS revisions; those inputs and Lucent's Android libretro patch are separately locked."
       },
-      "license": {"spdx": "GPL-3.0-only", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "The pinned root COPYING.GPLv3 contains GPL version 3 terms.", "notes": "Every vendored component and the shaderc dependency closure require file-level SPDX audit before release."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 24, "integrationEvidence": "build-reproduced", "jit": true, "multiScreen": false, "notes": "The exact source plus locked Lucent patch builds an Android ARM64 Vulkan libretro core with NDK 27 and Lucent's API-24 Vulkan host."},
-      "firmware": {"required": true, "requiredForSystems": ["ps2"], "acceptedHashes": [], "notes": "A legally dumped user PS2 BIOS is required and is never bundled."},
-      "state": {"capability": "libretro-serialize", "compatibilityVersion": 2, "qualified": false, "migrationQualified": false, "notes": "The core exposes serialize/unserialize; compatibility v2 identifies Lucent's Android Vulkan host integration while process-death, 100-cycle, JIT, renderer-loss, and upgrade migration gates remain open."},
-      "renderer": {"requested": "vulkan", "qualified": false, "notes": "Lucent negotiates Vulkan render-interface v1 and presents the core image in its own activity. Surface loss, sustained pacing, and device-specific correctness remain under qualification."},
-      "legalTestContent": {"status": "candidate", "sourceRepository": "https://github.com/ps2dev/ps2sdk", "sourceCommit": null, "sourcePath": null, "license": "BSD-style candidate", "artifactSha256": null, "notes": "An exact PS2SDK fixture and complete toolchain closure still need to be pinned."},
-      "build": {"recipe": "engines/build_core.sh armsx2", "proofArtifactPath": "engines/build/arm64-v8a/armsx2_libretro.so", "proofArtifactSha256": "14baf81c3df6be7e34b7461ee9557616c4996ed49f137a948efb13303af35a13", "reproducible": false, "notes": "Two isolated clean builds with the exact locked recipe produced byte-identical stripped AArch64 ELF files. The candidate remains release-unqualified until dependency/license, legal-content, state, renderer, performance, and device gates close."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "license": {
+        "spdx": "GPL-3.0-only",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "The pinned root COPYING.GPLv3 contains GPL version 3 terms.",
+        "notes": "Every vendored component and the shaderc dependency closure require file-level SPDX audit before release."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 24,
+        "integrationEvidence": "build-reproduced",
+        "jit": true,
+        "multiScreen": false,
+        "notes": "The exact source plus locked Lucent patch builds an Android ARM64 Vulkan libretro core with NDK 27 and Lucent's API-24 Vulkan host."
+      },
+      "firmware": {
+        "required": true,
+        "requiredForSystems": [
+          "ps2"
+        ],
+        "acceptedHashes": [],
+        "notes": "A legally dumped user PS2 BIOS is required and is never bundled."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "compatibilityVersion": 2,
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "The core exposes serialize/unserialize, but a physically observed matching God of War snapshot was accepted while ARMSX2 continued publishing only black Vulkan frames. Runtime state restore is quarantined without deleting the immutable snapshot; ordinary PS2 memory-card data remains enabled. Process-death, fresh restore, 100-cycle, JIT, renderer-loss, and upgrade migration gates remain open."
+      },
+      "renderer": {
+        "requested": "vulkan",
+        "qualified": false,
+        "notes": "Lucent negotiates Vulkan render-interface v1 and presents the core image in its own activity. Surface loss, sustained pacing, and device-specific correctness remain under qualification."
+      },
+      "legalTestContent": {
+        "status": "candidate",
+        "sourceRepository": "https://github.com/ps2dev/ps2sdk",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "BSD-style candidate",
+        "artifactSha256": null,
+        "notes": "An exact PS2SDK fixture and complete toolchain closure still need to be pinned."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh armsx2",
+        "proofArtifactPath": "engines/build/arm64-v8a/armsx2_libretro.so",
+        "proofArtifactSha256": "a763df4dd4b49c3e5eda713f058e46b95b4579ce7d51fe6a9a51ad7f154bdf50",
+        "reproducible": false,
+        "notes": "October 6 qualification staging: normal-recipe, source-receipt-verified 4 KiB and 16 KiB descriptor-batching/input-attachment fixes. Both page variants pass bounded internal Training input and normal exit; 4 KiB external Vulkan core/synchronization validation passes. Same-scene landscape 4 KiB package comparison: corrected 59.46/59.45 callbacks per second with 8/14 underruns, older 57.75/55.15 with 201/329. Zero sampled PCM drops. Sequential host-GPU comparison, not isolated patch attribution or universal speed/audio acceptance. No two-clean-build reproducibility, state, physical-device or release acceptance. Backup and evidence: docs/qa/android-portability-2026-10-06-ps2-performance."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "dolphin",
       "displayName": "Dolphin",
-      "systems": ["gamecube", "wii"],
+      "systems": [
+        "gamecube",
+        "wii"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "The maintained Dolphin libretro fork now has an exact normalized reproducible Android ARM64 in-process core and is qualification-packaged with its Sys data. GameCube/Wii legal-content, runtime, input, state, renderer, performance, and device gates remain unqualified until the Thor matrix passes.",
       "selectedFirstRunnable": false,
-      "source": {"status": "pinned", "repository": "https://github.com/libretro/dolphin", "commit": "0ff12a5a2835762e0665afe6a161a648b433f996", "archive": "https://github.com/libretro/dolphin/archive/0ff12a5a2835762e0665afe6a161a648b433f996.tar.gz", "archiveSha256": "3c6698d6da772065194be118871ce24620f0fdc76894bc568e34d48f93de7494", "verifiedAt": "2026-08-07", "dependencyLock": "engines/dolphin-source-lock.json", "submodules": [], "notes": "The exact top-level archive, 30 staged dependency/gitlink inputs, toolchain identities, normalized build output, and CMake profile are frozen in the dependency lock."},
-      "license": {"spdx": "GPL-2.0-or-later", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "Pinned COPYING says most original code is GPLv2+ and the aggregate is GPLv3-compatible, with per-file SPDX data in LICENSES.", "notes": "Generate a complete SPDX bill of materials for the chosen Android configuration."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 26, "integrationEvidence": "build-reproduced", "jit": true, "multiScreen": false, "notes": "The exact maintained libretro target builds as one AArch64 shared object with no Dolphin Activity/package dependency. It uses Lucent's existing same-MainActivity hardware host."},
-      "firmware": {"required": false, "requiredForSystems": ["wii"], "acceptedHashes": [], "notes": "Baseline GameCube/Wii game boot does not require a distributed BIOS; user NAND/system data may be required for specific Wii services and is never bundled."},
-      "state": {"capability": "libretro-serialize", "qualified": false, "migrationQualified": false, "notes": "The core exports serialize/unserialize. Large JIT/GPU states, repeated process death, and version migration require device qualification."},
-      "renderer": {"requested": "opengl", "qualified": false, "notes": "Lucent requests the maintained core's Android GLES path first and applies its 2x EFB profile, the highest integer scale that wholly fits a 1920x1080 frontend target. Vulkan, GLES lifecycle, shader caches, surface loss, and frame pacing remain unqualified."},
-      "legalTestContent": {"status": "candidate", "sourceRepository": "https://github.com/devkitPro/gamecube-examples", "sourceCommit": null, "sourcePath": null, "license": "Example-specific open-source terms require pinning", "artifactSha256": null, "notes": "GameCube and Wii devkitPro examples are candidates; exact repos, toolchain versions, licenses, DOL artifacts, and hashes must be locked separately."},
-      "build": {"recipe": "engines/build_core.sh dolphin", "proofArtifactPath": "engines/build/arm64-v8a/dolphin_libretro.so", "proofArtifactSha256": "c071d3810f74db7a38c499a9725021b62992417177c80a7b6074692b14864ced", "reproducible": false, "notes": "Lucent's checksum-locked OpenGL callback patch is included. Two clean staged builds produced the same raw build ID and the same normalized 16 KiB-aligned AArch64 artifact at the recorded SHA-256. The release qualification flag remains false pending the full device gate."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "source": {
+        "status": "pinned",
+        "repository": "https://github.com/libretro/dolphin",
+        "commit": "0ff12a5a2835762e0665afe6a161a648b433f996",
+        "archive": "https://github.com/libretro/dolphin/archive/0ff12a5a2835762e0665afe6a161a648b433f996.tar.gz",
+        "archiveSha256": "3c6698d6da772065194be118871ce24620f0fdc76894bc568e34d48f93de7494",
+        "verifiedAt": "2026-08-07",
+        "dependencyLock": "engines/dolphin-source-lock.json",
+        "submodules": [],
+        "notes": "The exact top-level archive, 30 staged dependency/gitlink inputs, toolchain identities, normalized build output, and CMake profile are frozen in the dependency lock."
+      },
+      "license": {
+        "spdx": "GPL-2.0-or-later",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "Pinned COPYING says most original code is GPLv2+ and the aggregate is GPLv3-compatible, with per-file SPDX data in LICENSES.",
+        "notes": "Generate a complete SPDX bill of materials for the chosen Android configuration."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 26,
+        "integrationEvidence": "build-reproduced",
+        "jit": true,
+        "multiScreen": false,
+        "notes": "The exact maintained libretro target builds as one AArch64 shared object with no Dolphin Activity/package dependency. It uses Lucent's existing same-MainActivity hardware host."
+      },
+      "firmware": {
+        "required": false,
+        "requiredForSystems": [
+          "wii"
+        ],
+        "acceptedHashes": [],
+        "notes": "Baseline GameCube/Wii game boot does not require a distributed BIOS; user NAND/system data may be required for specific Wii services and is never bundled."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "The core exports serialize/unserialize. Large JIT/GPU states, repeated process death, and version migration require device qualification."
+      },
+      "renderer": {
+        "requested": "opengl",
+        "qualified": false,
+        "notes": "Lucent requests the maintained core's Android GLES path first and applies its 2x EFB profile, the highest integer scale that wholly fits a 1920x1080 frontend target. Vulkan, GLES lifecycle, shader caches, surface loss, and frame pacing remain unqualified."
+      },
+      "legalTestContent": {
+        "status": "candidate",
+        "sourceRepository": "https://github.com/devkitPro/gamecube-examples",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "Example-specific open-source terms require pinning",
+        "artifactSha256": null,
+        "notes": "GameCube and Wii devkitPro examples are candidates; exact repos, toolchain versions, licenses, DOL artifacts, and hashes must be locked separately."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh dolphin",
+        "proofArtifactPath": "engines/build/arm64-v8a/dolphin_libretro.so",
+        "proofArtifactSha256": "12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6",
+        "reproducible": false,
+        "notes": "The checksum-locked callback, signal-stack and descriptor-allocation error patches are included. The October5 incremental build first reproduced the previous normalized artifact exactly, then built the descriptor correction. Independent fresh rebuild and corrected-core gameplay qualification remain pending; release qualification stays false."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "ppsspp",
       "displayName": "PPSSPP",
-      "systems": ["psp"],
+      "systems": [
+        "psp"
+      ],
       "route": "libretro-core",
       "status": "experimental",
-      "statusReason": "Official v1.20.4 now has a byte-identical Android ARM64 build and an exact one-window AYN Thor gameplay/audio/input/Stop-return/process-death-restore checkpoint. Dependency, legal fixture, FFmpeg, 100-cycle, migration, Vulkan lifecycle, sustained-performance, and broader-device gates remain open, so it is not release-qualified or shipped.",
+      "statusReason": "Official v1.20.4 now has a byte-identical, exact-FFmpeg Android ARM64 build. The earlier FFmpeg-off one-window AYN Thor checkpoint does not qualify this new binary; FMV/game transition, legal fixture, 100-cycle, migration, Vulkan lifecycle, sustained-performance, final distribution, and broader-device gates remain open, so it is not release-qualified or shipped.",
       "selectedFirstRunnable": true,
       "source": {
         "status": "pinned",
@@ -259,93 +914,452 @@
         "archive": "https://github.com/hrydgard/ppsspp/archive/fa50bb1976065c4f8b1b47af227d367fe9771555.tar.gz",
         "archiveSha256": "9054138072d49c306d65c17059bd85662b4ff46abe1ea6bb53d854dc80592ea6",
         "dependencyLock": "engines/ppsspp-source-lock.json",
-        "verifiedAt": "2026-08-06",
+        "verifiedAt": "2026-08-10",
         "submodules": [
-          {"path": "ext/SPIRV-Cross", "repository": "https://github.com/KhronosGroup/SPIRV-Cross", "commit": "4212eef67ed0ca048cb726a6767185504e7695e5", "archiveSha256": "a7adf77b5680795302aee160309c6cb81b0da341d92bd7face01f9a156b65aeb"},
-          {"path": "ext/aemu_postoffice", "repository": "https://github.com/Kethen/aemu_postoffice", "commit": "530fee545c27ffb8524a8f496cbbcfdb687fe8c5", "archiveSha256": "b3eb2372c5f4f611ab66e3b596be7ba12fe96b9bb347e7b2bcd4d7c979363e53"},
-          {"path": "ext/armips", "repository": "https://github.com/Kingcom/armips", "commit": "a8d71f0f279eb0d30ecf6af51473b66ae0cf8e8d", "archiveSha256": "a520df5b673fc1649661f8506ddf35f62fb55e05d9f5a6c44b4d807b6aab3fbd"},
-          {"path": "ext/armips/ext/filesystem", "repository": "https://github.com/Kingcom/filesystem", "commit": "3f1c185ab414e764c694b8171d1c4d8c5c437517", "archiveSha256": "cc1c5439d29031477868bdea25b68b4210dc8ed018bb63a65e708afe405db4e1"},
-          {"path": "ext/cpu_features", "repository": "https://github.com/google/cpu_features", "commit": "fd4ffc1632db7b4e763bd28ffa6fc9d761cf3587", "archiveSha256": "60b2e0e7adfbf40f0c69fb77ad197440a8435532285a83b19f99b4f886cca67a"},
-          {"path": "ext/glslang", "repository": "https://github.com/hrydgard/glslang", "commit": "50e0708ec3a5c16020c4f845c654b80b8edb80bd", "archiveSha256": "15941716c09bdb476e8eefcec24b8c8359e5e7bca3bfebe648b6a2206689c485"},
-          {"path": "ext/libadrenotools", "repository": "https://github.com/bylaws/libadrenotools", "commit": "8fae8ce254dfc1344527e05301e43f37dea2df80", "archiveSha256": "ceffce971676d4cfdf348a082df06fc92a1dca6d95bea892a480d63f200961cb"},
-          {"path": "ext/libadrenotools/lib/linkernsbypass", "repository": "https://github.com/bylaws/liblinkernsbypass", "commit": "aa3975893d83ef1bc84c321ec60c65fbf1287887", "archiveSha256": "da1128c8aa771c4d24766b53a47822d0717baa5c536ca8491220402942b80638"},
-          {"path": "ext/libchdr", "repository": "https://github.com/rtissera/libchdr", "commit": "8bba7745d758627258b315997a860039244cedaf", "archiveSha256": "169e3d2edf86d5501434301fa2505319ebd40aae83d4a5eedf05f6becbf13a3b"},
-          {"path": "ext/lua", "repository": "https://github.com/hrydgard/ppsspp-lua", "commit": "7648485f14e8e5ee45e8e39b1eb4d3206dbd405a", "archiveSha256": "ee31027159979d7be564e19710e10339179992f6d663d38337e78340dd31987b"},
-          {"path": "ext/miniupnp", "repository": "https://github.com/miniupnp/miniupnp", "commit": "27d13ca9beeb5541f5fbf11959dced03dac39972", "archiveSha256": "a07a32b2db1f6c5f2823847d47ba6e326b08fbcfe78690801fda9c3aeddf25a3"},
-          {"path": "ext/naett", "repository": "https://github.com/erkkah/naett", "commit": "5f695cfa9fcbf30668a4d3ac4b4abf1cd89a1302", "archiveSha256": "65b68d645290ecd7478747d52feebf73b390021137a10897cc2a692bf6446afe"},
-          {"path": "ext/OpenXR-SDK", "repository": "https://github.com/KhronosGroup/OpenXR-SDK", "commit": "be392bf6949adeeabad5082aa79d12aacbda781f", "archiveSha256": "f91007ec5cd5380184678cb282353a6b97b6ba2278ef4911e217472186a31762"},
-          {"path": "ext/rapidjson", "repository": "https://github.com/Tencent/rapidjson", "commit": "73063f5002612c6bf64fe24f851cd5cc0d83eef9", "archiveSha256": "896eb817fb2bc62a0a84ca65fac3e3c385b410e6dbf70d69c411e25776663e39"},
-          {"path": "ext/rcheevos", "repository": "https://github.com/RetroAchievements/rcheevos", "commit": "ebfe8ca1bf944358e27200d66964fcb4e00e2487", "archiveSha256": "5a5afc951f1d485acd1b532a104a2a73b859a359ac0563704b1911c862c3854e"},
-          {"path": "ext/zstd", "repository": "https://github.com/facebook/zstd", "commit": "f8745da6ff1ad1e7bab384bd1f9d742439278e99", "archiveSha256": "4b0bd1f0cfb25e61b9103c35f27395530ff5b4c0d2513a00fd745849e85ea52c"},
-          {"path": "libretro/libretro-common", "repository": "https://github.com/libretro/libretro-common", "commit": "76a3d54feb0ee0ce9d59b90aa24694f3782063d3", "archiveSha256": "da3c61d2d47df12536a7977443387c1c3d7a750fe8c916c943860788b590db7e"}
+          {
+            "path": "ext/SPIRV-Cross",
+            "repository": "https://github.com/KhronosGroup/SPIRV-Cross",
+            "commit": "4212eef67ed0ca048cb726a6767185504e7695e5",
+            "archiveSha256": "a7adf77b5680795302aee160309c6cb81b0da341d92bd7face01f9a156b65aeb"
+          },
+          {
+            "path": "ext/aemu_postoffice",
+            "repository": "https://github.com/Kethen/aemu_postoffice",
+            "commit": "530fee545c27ffb8524a8f496cbbcfdb687fe8c5",
+            "archiveSha256": "b3eb2372c5f4f611ab66e3b596be7ba12fe96b9bb347e7b2bcd4d7c979363e53"
+          },
+          {
+            "path": "ext/armips",
+            "repository": "https://github.com/Kingcom/armips",
+            "commit": "a8d71f0f279eb0d30ecf6af51473b66ae0cf8e8d",
+            "archiveSha256": "a520df5b673fc1649661f8506ddf35f62fb55e05d9f5a6c44b4d807b6aab3fbd"
+          },
+          {
+            "path": "ext/armips/ext/filesystem",
+            "repository": "https://github.com/Kingcom/filesystem",
+            "commit": "3f1c185ab414e764c694b8171d1c4d8c5c437517",
+            "archiveSha256": "cc1c5439d29031477868bdea25b68b4210dc8ed018bb63a65e708afe405db4e1"
+          },
+          {
+            "path": "ext/cpu_features",
+            "repository": "https://github.com/google/cpu_features",
+            "commit": "fd4ffc1632db7b4e763bd28ffa6fc9d761cf3587",
+            "archiveSha256": "60b2e0e7adfbf40f0c69fb77ad197440a8435532285a83b19f99b4f886cca67a"
+          },
+          {
+            "path": "ext/glslang",
+            "repository": "https://github.com/hrydgard/glslang",
+            "commit": "50e0708ec3a5c16020c4f845c654b80b8edb80bd",
+            "archiveSha256": "15941716c09bdb476e8eefcec24b8c8359e5e7bca3bfebe648b6a2206689c485"
+          },
+          {
+            "path": "ext/libadrenotools",
+            "repository": "https://github.com/bylaws/libadrenotools",
+            "commit": "8fae8ce254dfc1344527e05301e43f37dea2df80",
+            "archiveSha256": "ceffce971676d4cfdf348a082df06fc92a1dca6d95bea892a480d63f200961cb"
+          },
+          {
+            "path": "ext/libadrenotools/lib/linkernsbypass",
+            "repository": "https://github.com/bylaws/liblinkernsbypass",
+            "commit": "aa3975893d83ef1bc84c321ec60c65fbf1287887",
+            "archiveSha256": "da1128c8aa771c4d24766b53a47822d0717baa5c536ca8491220402942b80638"
+          },
+          {
+            "path": "ext/libchdr",
+            "repository": "https://github.com/rtissera/libchdr",
+            "commit": "8bba7745d758627258b315997a860039244cedaf",
+            "archiveSha256": "169e3d2edf86d5501434301fa2505319ebd40aae83d4a5eedf05f6becbf13a3b"
+          },
+          {
+            "path": "ext/lua",
+            "repository": "https://github.com/hrydgard/ppsspp-lua",
+            "commit": "7648485f14e8e5ee45e8e39b1eb4d3206dbd405a",
+            "archiveSha256": "ee31027159979d7be564e19710e10339179992f6d663d38337e78340dd31987b"
+          },
+          {
+            "path": "ext/miniupnp",
+            "repository": "https://github.com/miniupnp/miniupnp",
+            "commit": "27d13ca9beeb5541f5fbf11959dced03dac39972",
+            "archiveSha256": "a07a32b2db1f6c5f2823847d47ba6e326b08fbcfe78690801fda9c3aeddf25a3"
+          },
+          {
+            "path": "ext/naett",
+            "repository": "https://github.com/erkkah/naett",
+            "commit": "5f695cfa9fcbf30668a4d3ac4b4abf1cd89a1302",
+            "archiveSha256": "65b68d645290ecd7478747d52feebf73b390021137a10897cc2a692bf6446afe"
+          },
+          {
+            "path": "ext/OpenXR-SDK",
+            "repository": "https://github.com/KhronosGroup/OpenXR-SDK",
+            "commit": "be392bf6949adeeabad5082aa79d12aacbda781f",
+            "archiveSha256": "f91007ec5cd5380184678cb282353a6b97b6ba2278ef4911e217472186a31762"
+          },
+          {
+            "path": "ext/rapidjson",
+            "repository": "https://github.com/Tencent/rapidjson",
+            "commit": "73063f5002612c6bf64fe24f851cd5cc0d83eef9",
+            "archiveSha256": "896eb817fb2bc62a0a84ca65fac3e3c385b410e6dbf70d69c411e25776663e39"
+          },
+          {
+            "path": "ext/rcheevos",
+            "repository": "https://github.com/RetroAchievements/rcheevos",
+            "commit": "ebfe8ca1bf944358e27200d66964fcb4e00e2487",
+            "archiveSha256": "5a5afc951f1d485acd1b532a104a2a73b859a359ac0563704b1911c862c3854e"
+          },
+          {
+            "path": "ext/zstd",
+            "repository": "https://github.com/facebook/zstd",
+            "commit": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+            "archiveSha256": "4b0bd1f0cfb25e61b9103c35f27395530ff5b4c0d2513a00fd745849e85ea52c"
+          },
+          {
+            "path": "ffmpeg",
+            "repository": "https://github.com/hrydgard/ppsspp-ffmpeg.git",
+            "commit": "1e3b4965632f60b1d85360261d1b9dd45444bc71",
+            "archiveSha256": "93b942daa799dedf4f7a1a3f143c081c1945f2a67b7d13717f9fbb5c0ef4dd51"
+          },
+          {
+            "path": "libretro/libretro-common",
+            "repository": "https://github.com/libretro/libretro-common",
+            "commit": "76a3d54feb0ee0ce9d59b90aa24694f3782063d3",
+            "archiveSha256": "da3c61d2d47df12536a7977443387c1c3d7a750fe8c916c943860788b590db7e"
+          }
         ],
-        "notes": "Official annotated tag v1.20.4 peels to this commit. The listed entries are the exact staged compile-input closure for the initial Android ARM64 LIBRETRO/FFmpeg-off profile; they are not a claim about every upstream submodule. OpenXR-SDK is still a compile-time header dependency with OPENXR=OFF (archive SHA-256 f91007ec5cd5380184678cb282353a6b97b6ba2278ef4911e217472186a31762); miniupnp headers remain required with USE_MINIUPNPC=OFF (archive SHA-256 a07a32b2db1f6c5f2823847d47ba6e326b08fbcfe78690801fda9c3aeddf25a3)."
+        "notes": "Official annotated tag v1.20.4 peels to this commit. The listed entries are the exact staged compile-input closure for the Android ARM64 LIBRETRO/FFmpeg-enabled profile; FFmpeg's archiveSha256 field records its 3,381-file sparse corresponding-source closure rather than a tar archive. OpenXR-SDK is still a compile-time header dependency with OPENXR=OFF; miniupnp headers remain required with USE_MINIUPNPC=OFF."
       },
-      "license": {"spdx": "GPL-2.0-or-later", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "The pinned LICENSE.TXT states GPL version 2 or, at the recipient's option, any later version, and includes third-party notices.", "notes": "Audit every pinned submodule and generated asset; FFmpeg is excluded from the initial proof to reduce the closure."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 23, "integrationEvidence": "build-reproduced", "jit": true, "multiScreen": false, "notes": "The exact pin and dependency lock produced a byte-identical ELF64 AArch64 libretro shared object. APK SHA-256 12e0e83494a75b0f709b93b2a0c4efed9810f7c1632dc5272f2e9278ead37006 also passed Lucent's bounded one-window AYN Thor runtime checkpoint; this is not broad device qualification."},
-      "firmware": {"required": false, "requiredForSystems": [], "acceptedHashes": [], "notes": "PPSSPP does not require a proprietary PSP BIOS for the planned legal homebrew probe."},
-      "state": {"capability": "libretro-serialize", "qualified": false, "migrationQualified": false, "notes": "A Quick Resume commit and live restore after forced process death passed on the exact Thor checkpoint. The 100-cycle, corruption, JIT/GPU, reboot, and cross-version migration matrices remain open."},
-      "renderer": {"requested": "vulkan", "qualified": false, "notes": "The GLES frontend-FBO route passed visible rendering, physical input, lifecycle return, and restore in MainActivity on the Thor. Vulkan, repeated context loss, sustained pacing, and broader-device behavior remain open."},
-      "legalTestContent": {"status": "candidate", "sourceRepository": null, "sourceCommit": null, "sourcePath": "engines/qa/fixtures/ppsspp-minimal", "license": "CC0-1.0", "artifactSha256": null, "notes": "Lucent-owned source-only fixture; no EBOOT.PBP is checked in or approved. PSPSDK commit 314b2083f2e1eaf145fc5de342736336fe1f0148 (archive SHA-256 dac46dbb30b8ceaf0780e61f6f23252c2c788315d0f9b57fc694f7a5bc16b562) is candidate SDK provenance, not an approved toolchain. Do not use pspautotests binaries: its placeholder LICENSE is not a redistribution grant."},
-      "build": {"recipe": "engines/build_core.sh ppsspp", "proofArtifactPath": "engines/build/arm64-v8a/ppsspp_libretro.so", "proofArtifactSha256": "734ba9e0c1e7040b16b0a1e6d2183914e8f9e203b9c3102899427425a925c3ba", "reproducible": false, "notes": "Two fresh epoch-fixed LIBRETRO=ON, USE_FFMPEG=OFF Android AArch64 builds with Lucent's narrow frontend-framebuffer lifecycle adapter matched byte-for-byte at the recorded SHA-256 and BuildID f791f34db0009b16b9a1b0e6713c90c115db10a1, with zero absolute builder paths. This limited compiler/linker profile reproduced; the production candidate remains reproducible=false because FFmpeg, legal content, gameplay, renderer, state, performance, and device gates are open."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": true, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "license": {
+        "spdx": "GPL-2.0-or-later",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "The exact linked-source audit concludes the combined binary GPL-3.0-only; pinned PPSSPP is GPL-2.0-or-later and pinned FFmpeg is LGPL-2.1-or-later AND IJG with GPL, nonfree, and version3 disabled.",
+        "notes": "The compiled-file, FFmpeg-source, static-archive-member, and notice bundle is complete for this binary. Runtime assets and final distribution counsel review remain open, so the aggregate license gate stays false."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 23,
+        "integrationEvidence": "build-reproduced",
+        "jit": true,
+        "multiScreen": false,
+        "notes": "The exact pin and dependency lock produced a byte-identical normalized ELF64 AArch64 libretro shared object with FFmpeg enabled. APK SHA-256 12e0e83494a75b0f709b93b2a0c4efed9810f7c1632dc5272f2e9278ead37006 passed Lucent's bounded one-window AYN Thor checkpoint with the earlier FFmpeg-off artifact; it is not runtime evidence for the current binary or broad device qualification."
+      },
+      "firmware": {
+        "required": false,
+        "requiredForSystems": [],
+        "acceptedHashes": [],
+        "notes": "PPSSPP does not require a proprietary PSP BIOS for the planned legal homebrew probe."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "compatibilityVersion": 2,
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Compatibility v2 snapshots remain preserved, but automatic PPSSPP restore now fails closed because an accepted snapshot can later publish repeated black frames while retro_run and audio continue. Ordinary PSP savedata remains enabled; fresh commit/restore, renderer migration, 100-cycle, corruption, JIT/GPU, reboot, and cross-version matrices remain open."
+      },
+      "renderer": {
+        "requested": "vulkan",
+        "qualified": false,
+        "notes": "The GLES frontend-FBO route passed visible rendering, physical input, lifecycle return, and restore in MainActivity on the Thor with the earlier FFmpeg-off artifact. The current FFmpeg-enabled binary still requires FMV-to-game, GLES, Vulkan, repeated context-loss, sustained-pacing, and broader-device validation."
+      },
+      "legalTestContent": {
+        "status": "candidate",
+        "sourceRepository": null,
+        "sourceCommit": null,
+        "sourcePath": "engines/qa/fixtures/ppsspp-minimal",
+        "license": "CC0-1.0",
+        "artifactSha256": null,
+        "notes": "Lucent-owned source-only fixture; no EBOOT.PBP is checked in or approved. PSPSDK commit 314b2083f2e1eaf145fc5de342736336fe1f0148 (archive SHA-256 dac46dbb30b8ceaf0780e61f6f23252c2c788315d0f9b57fc694f7a5bc16b562) is candidate SDK provenance, not an approved toolchain. Do not use pspautotests binaries: its placeholder LICENSE is not a redistribution grant."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh ppsspp",
+        "proofArtifactPath": "engines/build/arm64-v8a/ppsspp_libretro.so",
+        "proofArtifactSha256": "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
+        "reproducible": false,
+        "notes": "Two fresh isolated LIBRETRO=ON, USE_FFMPEG=ON Android AArch64 builds produced byte-identical normalized ELFs at the recorded SHA-256 after removing only LLD's absolute-root-sensitive GNU build-ID note. The recipe now gates the exact hash, ELF64/AArch64/DYN identity, Android-only DT_NEEDED closure, required libretro exports, and linked-source compliance bundle before atomically publishing the core last. Runtime FMV/game transition, legal content, renderer, state, performance, and device gates remain open."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": true,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "azahar",
       "displayName": "Azahar",
-      "systems": ["3ds"],
+      "systems": [
+        "3ds"
+      ],
       "route": "libretro-core",
       "status": "experimental",
-      "statusReason": "Azahar's official 2125.1.3 release publishes an Android ARM64 libretro core that is now wired to Lucent's in-process Vulkan host. Source reproducibility, complete dependency notices, keys/system-data policy, Thor dual-display routing, state migration, performance, and device compatibility remain unqualified.",
+      "statusReason": "Pinned-source Android ARM64 libretro core with 16 KiB alignment. Bounded single-screen Star Fox 64 3D training controls, restore and normal exits verified. Audio, sustained performance, physical multi-device, broader titles and release qualification remain incomplete.",
       "selectedFirstRunnable": false,
-      "source": {"status": "pinned", "repository": "https://github.com/azahar-emu/azahar", "commit": "b42d0916ba9799297ae0e27c07d56801da1b5de5", "archive": "https://github.com/azahar-emu/azahar/archive/b42d0916ba9799297ae0e27c07d56801da1b5de5.tar.gz", "archiveSha256": "8da46436e9d4cd937af2dba5ed39a33c2102e4f833c9051a9bb6e2711831e065", "verifiedAt": "2026-08-07", "dependencyLock": "engines/azahar-source-lock.json", "submodules": [], "notes": "Official stable tag 2125.1.3 resolves to this commit. The official Android ARM64 libretro release artifact is separately hash-locked; the large transitive source/submodule closure remains an explicit release gate."},
-      "license": {"spdx": "GPL-2.0-or-later", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "Pinned primary source headers state GPLv2 or any later version; the root license.txt contains the GPLv2 terms.", "notes": "Audit file-level SPDX, inherited code, and the complete dependency closure before distribution."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 29, "integrationEvidence": "build-published", "jit": true, "multiScreen": true, "notes": "The exact official release artifact is an ELF64 AArch64 libretro core with the required load/run/state exports. It is a verified upstream artifact, not yet a Lucent-reproduced build."},
-      "firmware": {"required": false, "requiredForSystems": [], "acceptedHashes": [], "notes": "The qualified scope is decrypted user-owned CCI content, which needs no external keys or system archives. Encrypted content remains unsupported until a separate user-file identity policy is audited; Lucent accepts and distributes no keys."},
-      "state": {"capability": "libretro-serialize", "compatibilityVersion": 1, "qualified": false, "migrationQualified": false, "notes": "The official core exports serialize/unserialize. JIT, GPU, dual-screen, process-death, 100-cycle, and version migration behavior remain unqualified."},
-      "renderer": {"requested": "vulkan", "qualified": false, "notes": "Android's supported default is Vulkan. The official core completes init and game load but currently spins in the first frame without telemetry in Lucent's Vulkan host; OpenGL ES was also tested and failed identically. Vulkan interface compatibility, shader cache, surface loss, and Thor dual-display routing remain open gates."},
-      "legalTestContent": {"status": "candidate", "sourceRepository": "https://github.com/devkitPro/3ds-examples", "sourceCommit": null, "sourcePath": null, "license": "Example-specific open-source terms require pinning", "artifactSha256": null, "notes": "A devkitPro 3DS example is the candidate, but exact source/toolchain closure and a legal CIA/3DSX artifact are not pinned."},
-      "build": {"recipe": "engines/build_core.sh azahar", "proofArtifactPath": "engines/build/arm64-v8a/azahar_libretro.so", "proofArtifactSha256": "d723066fa7c812618b5695d94b0fd85594e6c196e9e08ca9ba7134371a8da645", "reproducible": false, "notes": "The recipe verifies and extracts Azahar's official stable Android ARM64 libretro release artifact. Reproducing it from the complete source/submodule/toolchain closure remains open, so the Android compiler gate stays false."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "source": {
+        "status": "pinned",
+        "repository": "https://github.com/azahar-emu/azahar",
+        "commit": "b42d0916ba9799297ae0e27c07d56801da1b5de5",
+        "archive": "https://github.com/azahar-emu/azahar/archive/b42d0916ba9799297ae0e27c07d56801da1b5de5.tar.gz",
+        "archiveSha256": "8da46436e9d4cd937af2dba5ed39a33c2102e4f833c9051a9bb6e2711831e065",
+        "verifiedAt": "2026-10-04",
+        "dependencyLock": "engines/azahar-source-lock.json",
+        "submodules": [],
+        "notes": "Stable 2125.1.3 commit; exact 52 recursive Git links and one Android strerror_r patch locked. Dependencies include unused upstream components; this is source identity, not a complete license audit."
+      },
+      "license": {
+        "spdx": "GPL-2.0-or-later",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "Pinned primary source headers state GPLv2 or any later version; the root license.txt contains the GPLv2 terms.",
+        "notes": "Audit file-level SPDX, inherited code, and the complete dependency closure before distribution."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 23,
+        "integrationEvidence": "build-reproduced",
+        "jit": true,
+        "multiScreen": true,
+        "notes": "Locally source-compiled with NDK27/API23 and 16 KiB alignment; two clean different-path builds on this host match. Actual strict16KiB Android loader and bounded Star Fox training/lifecycle verified. Broader device and release qualification remain open."
+      },
+      "firmware": {
+        "required": false,
+        "requiredForSystems": [],
+        "acceptedHashes": [],
+        "notes": "The qualified scope is decrypted user-owned CCI content, which needs no external keys or system archives. Encrypted content remains unsupported until a separate user-file identity policy is audited; Lucent accepts and distributes no keys."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "compatibilityVersion": 1,
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Two normal checkpoints/exits with intervening visible Star Fox training restoration and post-restore touch input verified on the source-built core. Migration from other core hashes, process death and 100-cycle qualification remain open."
+      },
+      "renderer": {
+        "requested": "vulkan",
+        "qualified": false,
+        "notes": "Internal Vulkan renders Star Fox 64 3D on single-screen landscape Android16/16KiB. Bounded training and controls verified; broad rendering, surface-loss, audio and physical-GPU qualification remain open."
+      },
+      "legalTestContent": {
+        "status": "candidate",
+        "sourceRepository": "https://github.com/devkitPro/3ds-examples",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "Example-specific open-source terms require pinning",
+        "artifactSha256": null,
+        "notes": "A devkitPro 3DS example is the candidate, but exact source/toolchain closure and a legal CIA/3DSX artifact are not pinned."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh azahar",
+        "proofArtifactPath": "engines/build/arm64-v8a/azahar_libretro.so",
+        "proofArtifactSha256": "d7150458b86d5493f5a78d850df204fe04b854124d92d0d2040fb104b6f69c7d",
+        "reproducible": false,
+        "notes": "Normal recipe builds the pinned Git closure with builtin keyblob disabled, checks the exact tested output hash and preserves unknown local edits. Two clean different-path builds on this host match d7150458, qualifying the compiler/linker evidence only; runtime and release gates remain open. Evidence: docs/qa/android-portability-2026-10-04-azahar-pages/normal-integration.json."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "scummvm",
       "displayName": "ScummVM",
-      "systems": ["scummvm"],
+      "systems": [
+        "scummvm"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "Lucent reproducibly builds and packages the exact 32-engine lite-profile Android ARM64 core, runtime data, linked-component notices, and fail-closed engine-native exit autosave path. Direct launch, audio/input, persistence cycles, performance, and device compatibility remain unqualified.",
       "selectedFirstRunnable": false,
-      "source": {"status": "pinned", "repository": "https://github.com/scummvm/scummvm", "commit": "6aa8fa9b6f9e5a7ae670cc355af1b727ff75c995", "archive": "https://github.com/scummvm/scummvm/archive/6aa8fa9b6f9e5a7ae670cc355af1b727ff75c995.tar.gz", "archiveSha256": "8e2080a442b4e78c045795714ac4b699023f631e2045fb133d496cd29419fa67", "verifiedAt": "2026-08-07", "dependencyLock": "engines/scummvm-source-lock.json", "submodules": [{"path":"backends/platform/libretro/deps/libretro-deps","repository":"https://github.com/libretro/libretro-deps","commit":"7e6e34f0319f4c7448d72f0e949e76265ccf55a1","archiveSha256":"d7b3437ab94280c12ce24582c5adbc977bd01a1dfd73ea1a34971dd43f6eb24a"},{"path":"backends/platform/libretro/deps/libretro-common","repository":"https://github.com/libretro/libretro-common","commit":"70ed90c42ddea828f53dd1b984c6443ddb39dbd6","archiveSha256":"f8dcfc36107c1715e456cb4d15690aa50bb6f75cdefc3ab1fb32d0a13b245297"}], "notes": "Exact core and dependency archives are SHA-256 locked. The supported scope is upstream's pinned 32-engine lite profile with WIP engines disabled, not universal ScummVM compatibility."},
-      "license": {"spdx": "GPL-3.0-or-later", "distributionGate": "compatible-candidate", "dependencyAuditComplete": true, "evidence": "The binary-specific compliance generator maps all 337 linked external objects to 15 audited components plus four embedded subcomponents and emits exact notices, license evidence, and per-object hashes.", "notes": "Packaging fails on unknown components, object-count drift, artifact drift, or license-evidence drift. The complete corresponding pinned source and build scripts remain required by the source offer."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 21, "integrationEvidence": "build-reproduced", "jit": false, "multiScreen": false, "notes": "Two isolated clean NDK r27 builds are byte-identical; every PT_LOAD is 0x4000-aligned for Android 16 KiB pages. Lucent hosts the software-frame libretro core in-process and does not launch ScummVM or RetroArch UI."},
-      "firmware": {"required": false, "requiredForSystems": [], "acceptedHashes": [], "notes": "No console firmware is required; users provide game data."},
-      "state": {"capability": "engine-saves-only", "qualified": false, "migrationQualified": false, "notes": "Generic libretro serialization is unavailable. The optional retro_lucent_prepare_exit_autosave extension saves on the ScummVM co-thread and fails held-Stop closed; SCI/SCI32 and any title without a safe native autosave slot reject exit rather than claim persistence."},
-      "renderer": {"requested": "software", "qualified": false, "notes": "The exact core emits software frames through Lucent's in-process GLES presentation host. Visible rendering, pacing, context-loss, and multi-device behavior remain device gates."},
-      "legalTestContent": {"status": "candidate", "sourceRepository": "https://www.scummvm.org/games/", "sourceCommit": null, "sourcePath": "engines/scummvm-test-content-lock.json", "license": "Official ScummVM freeware download; qualification download only", "artifactSha256": "2e59de85f708cdb32bf85c85b394ac091c05f7647e856b71f5b3ae73fde761e0", "notes": "Flight of the Amazon Queen Freeware Floppy Version is hash-pinned for direct official download during qualification and is never bundled in Lucent. Its freeware label is not treated as a third-party redistribution grant."},
-      "build": {"recipe": "engines/build_scummvm_core.sh", "proofArtifactPath": "engines/build/arm64-v8a/scummvm_libretro.so", "proofArtifactSha256": "668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d", "reproducible": false, "notes": "Two clean builds produced the same 25,793,128-byte Android ARM64 artifact. The 207 runtime-data files and exact compliance bundle are mandatory. Production remains reproducible=false until legal-content execution, runtime, persistence, performance, and device matrices pass."},
-      "gates": {"source": true, "license": true, "dependencies": true, "androidArm64": true, "firmware": true, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "source": {
+        "status": "pinned",
+        "repository": "https://github.com/scummvm/scummvm",
+        "commit": "6aa8fa9b6f9e5a7ae670cc355af1b727ff75c995",
+        "archive": "https://github.com/scummvm/scummvm/archive/6aa8fa9b6f9e5a7ae670cc355af1b727ff75c995.tar.gz",
+        "archiveSha256": "8e2080a442b4e78c045795714ac4b699023f631e2045fb133d496cd29419fa67",
+        "verifiedAt": "2026-08-07",
+        "dependencyLock": "engines/scummvm-source-lock.json",
+        "submodules": [
+          {
+            "path": "backends/platform/libretro/deps/libretro-deps",
+            "repository": "https://github.com/libretro/libretro-deps",
+            "commit": "7e6e34f0319f4c7448d72f0e949e76265ccf55a1",
+            "archiveSha256": "d7b3437ab94280c12ce24582c5adbc977bd01a1dfd73ea1a34971dd43f6eb24a"
+          },
+          {
+            "path": "backends/platform/libretro/deps/libretro-common",
+            "repository": "https://github.com/libretro/libretro-common",
+            "commit": "70ed90c42ddea828f53dd1b984c6443ddb39dbd6",
+            "archiveSha256": "f8dcfc36107c1715e456cb4d15690aa50bb6f75cdefc3ab1fb32d0a13b245297"
+          }
+        ],
+        "notes": "Exact core and dependency archives are SHA-256 locked. The supported scope is upstream's pinned 32-engine lite profile with WIP engines disabled, not universal ScummVM compatibility."
+      },
+      "license": {
+        "spdx": "GPL-3.0-or-later",
+        "distributionGate": "compatible-candidate",
+        "dependencyAuditComplete": true,
+        "evidence": "The binary-specific compliance generator maps all 337 linked external objects to 15 audited components plus four embedded subcomponents and emits exact notices, license evidence, and per-object hashes.",
+        "notes": "Packaging fails on unknown components, object-count drift, artifact drift, or license-evidence drift. The complete corresponding pinned source and build scripts remain required by the source offer."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 21,
+        "integrationEvidence": "build-reproduced",
+        "jit": false,
+        "multiScreen": false,
+        "notes": "Two isolated clean NDK r27 builds are byte-identical; every PT_LOAD is 0x4000-aligned for Android 16 KiB pages. Lucent hosts the software-frame libretro core in-process and does not launch ScummVM or RetroArch UI."
+      },
+      "firmware": {
+        "required": false,
+        "requiredForSystems": [],
+        "acceptedHashes": [],
+        "notes": "No console firmware is required; users provide game data."
+      },
+      "state": {
+        "capability": "engine-saves-only",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Generic libretro serialization is unavailable. The optional retro_lucent_prepare_exit_autosave extension saves on the ScummVM co-thread and fails held-Stop closed; SCI/SCI32 and any title without a safe native autosave slot reject exit rather than claim persistence."
+      },
+      "renderer": {
+        "requested": "software",
+        "qualified": false,
+        "notes": "The exact core emits software frames through Lucent's in-process GLES presentation host. Visible rendering, pacing, context-loss, and multi-device behavior remain device gates."
+      },
+      "legalTestContent": {
+        "status": "candidate",
+        "sourceRepository": "https://www.scummvm.org/games/",
+        "sourceCommit": null,
+        "sourcePath": "engines/scummvm-test-content-lock.json",
+        "license": "Official ScummVM freeware download; qualification download only",
+        "artifactSha256": "2e59de85f708cdb32bf85c85b394ac091c05f7647e856b71f5b3ae73fde761e0",
+        "notes": "Flight of the Amazon Queen Freeware Floppy Version is hash-pinned for direct official download during qualification and is never bundled in Lucent. Its freeware label is not treated as a third-party redistribution grant."
+      },
+      "build": {
+        "recipe": "engines/build_scummvm_core.sh",
+        "proofArtifactPath": "engines/build/arm64-v8a/scummvm_libretro.so",
+        "proofArtifactSha256": "668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d",
+        "reproducible": false,
+        "notes": "Two clean builds produced the same 25,793,128-byte Android ARM64 artifact. The 207 runtime-data files and exact compliance bundle are mandatory. Production remains reproducible=false until legal-content execution, runtime, persistence, performance, and device matrices pass."
+      },
+      "gates": {
+        "source": true,
+        "license": true,
+        "dependencies": true,
+        "androidArm64": true,
+        "firmware": true,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     },
     {
       "id": "virtualjaguar",
       "displayName": "Virtual Jaguar",
-      "systems": ["jaguar"],
+      "systems": [
+        "jaguar"
+      ],
       "route": "libretro-core",
       "status": "experimental",
       "statusReason": "Lucent reproducibly builds the exact pin for Android ARM64, but embedded/required firmware provenance, legal test content, compatibility, state determinism, performance, and device qualification remain blocked or open.",
       "selectedFirstRunnable": false,
-      "source": {"status": "pinned", "repository": "https://github.com/libretro/virtualjaguar-libretro", "commit": "59f7f9cc594ae6c6982c2bd8fc0dbf36873f9869", "archive": "https://github.com/libretro/virtualjaguar-libretro/archive/59f7f9cc594ae6c6982c2bd8fc0dbf36873f9869.tar.gz", "archiveSha256": "81b2d166f1539d6278894965ed049b3267ad6260957bf25046eab2d98dd27c0b", "verifiedAt": "2026-08-06", "submodules": [], "notes": "Pinned as the current compatibility baseline, not as an approved engine."},
-      "license": {"spdx": "GPL-3.0-only", "distributionGate": "audit-required", "dependencyAuditComplete": false, "evidence": "The pinned LICENSE contains GPL version 3 terms.", "notes": "Audit bundled BIOS/data blobs and all inherited code separately from the root license."},
-      "android": {"abis": ["arm64-v8a"], "minApi": 23, "integrationEvidence": "build-reproduced", "jit": false, "multiScreen": false, "notes": "Two clean checksum-verified ndk-build runs produced the same Android ARM64 proof artifact. This does not establish gameplay compatibility or performance."},
-      "firmware": {"required": true, "requiredForSystems": ["jaguar"], "acceptedHashes": [], "notes": "Bundled or embedded Jaguar BIOS bytes require source/provenance review; no identity is accepted yet."},
-      "state": {"capability": "libretro-serialize", "qualified": false, "migrationQualified": false, "notes": "Serialization must pass state cycles across a compatibility-focused legal fixture set."},
-      "renderer": {"requested": "software", "qualified": false, "notes": "Software renderer expected; correctness and sustained performance are open gates."},
-      "legalTestContent": {"status": "blocked", "sourceRepository": "https://github.com/cubanismo/jaguar-sdk", "sourceCommit": null, "sourcePath": null, "license": "Candidate SDK terms and output require audit", "artifactSha256": null, "notes": "A source-built Jaguar homebrew fixture is possible, but no exact toolchain/content pin or artifact hash is accepted."},
-      "build": {"recipe": "engines/build_core.sh virtualjaguar", "proofArtifactPath": "engines/build/arm64-v8a/virtualjaguar_libretro.so", "proofArtifactSha256": "9644e815b82776f7633e2d6408b93738ef0ce9d7294a63c529ce2deda77e64ed", "reproducible": false, "notes": "Two fresh archive extractions built byte-identical Android ARM64 artifacts. Production remains reproducible=false because embedded BIOS provenance, legal content, compatibility, state, performance, and device gates are open."},
-      "gates": {"source": true, "license": false, "dependencies": false, "androidArm64": true, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "source": {
+        "status": "pinned",
+        "repository": "https://github.com/libretro/virtualjaguar-libretro",
+        "commit": "59f7f9cc594ae6c6982c2bd8fc0dbf36873f9869",
+        "archive": "https://github.com/libretro/virtualjaguar-libretro/archive/59f7f9cc594ae6c6982c2bd8fc0dbf36873f9869.tar.gz",
+        "archiveSha256": "81b2d166f1539d6278894965ed049b3267ad6260957bf25046eab2d98dd27c0b",
+        "verifiedAt": "2026-08-06",
+        "submodules": [],
+        "notes": "Pinned as the current compatibility baseline, not as an approved engine."
+      },
+      "license": {
+        "spdx": "GPL-3.0-only",
+        "distributionGate": "audit-required",
+        "dependencyAuditComplete": false,
+        "evidence": "The pinned LICENSE contains GPL version 3 terms.",
+        "notes": "Audit bundled BIOS/data blobs and all inherited code separately from the root license."
+      },
+      "android": {
+        "abis": [
+          "arm64-v8a"
+        ],
+        "minApi": 23,
+        "integrationEvidence": "build-reproduced",
+        "jit": false,
+        "multiScreen": false,
+        "notes": "Two clean checksum-verified ndk-build runs produced the same Android ARM64 proof artifact. This does not establish gameplay compatibility or performance."
+      },
+      "firmware": {
+        "required": true,
+        "requiredForSystems": [
+          "jaguar"
+        ],
+        "acceptedHashes": [],
+        "notes": "Bundled or embedded Jaguar BIOS bytes require source/provenance review; no identity is accepted yet."
+      },
+      "state": {
+        "capability": "libretro-serialize",
+        "qualified": false,
+        "migrationQualified": false,
+        "notes": "Serialization must pass state cycles across a compatibility-focused legal fixture set."
+      },
+      "renderer": {
+        "requested": "software",
+        "qualified": false,
+        "notes": "Software renderer expected; correctness and sustained performance are open gates."
+      },
+      "legalTestContent": {
+        "status": "blocked",
+        "sourceRepository": "https://github.com/cubanismo/jaguar-sdk",
+        "sourceCommit": null,
+        "sourcePath": null,
+        "license": "Candidate SDK terms and output require audit",
+        "artifactSha256": null,
+        "notes": "A source-built Jaguar homebrew fixture is possible, but no exact toolchain/content pin or artifact hash is accepted."
+      },
+      "build": {
+        "recipe": "engines/build_core.sh virtualjaguar",
+        "proofArtifactPath": "engines/build/arm64-v8a/virtualjaguar_libretro.so",
+        "proofArtifactSha256": "96127fc828445bc5714da54f078c34ea045219c620b9f3fa50f9d9be1a6d8ffa",
+        "reproducible": false,
+        "notes": "October 5: the source-built 16 KiB-aligned candidate is in normal staging after acceptance by the strict Android loader. No independent reproduction or new game/runtime/release qualification for this artifact; existing gates remain false."
+      },
+      "gates": {
+        "source": true,
+        "license": false,
+        "dependencies": false,
+        "androidArm64": true,
+        "firmware": false,
+        "legalContent": false,
+        "renderer": false,
+        "state": false,
+        "performance": false,
+        "device": false
+      },
       "shipped": false
     }
   ]

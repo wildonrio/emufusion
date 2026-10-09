@@ -16,12 +16,20 @@ LOCK = ROOT / "engines" / "dolphin-source-lock.json"
 RECIPE = ROOT / "engines" / "build_core.sh"
 ACTIVITY_QA = ROOT / "unified-android" / "tools" / "run_phase2_activity_qa.py"
 LIBRETRO_INPUT = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "input" / "LibretroJoypadLayout.java"
+SYSTEM_LAYOUTS = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "input" / "SystemControlLayouts.java"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_controller_mapping import layout_blocks  # noqa: E402
 LIBRETRO_HOST = ROOT / "unified-android" / "native" / "lucent_libretro_host.c"
 RENDERED_DUPLICATE_PATCH = (
     ROOT / "engines" / "patches" /
     "dolphin-libretro-submit-rendered-duplicate-xfb.patch"
 )
 PHASE2_SESSION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game" / "PpssppGlesEngineSession.java"
+GLES_HOST = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "ExperimentalGlesLibretroHost.java"
+GLES_LOOP = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "ExperimentalGlesRenderLoop.java"
+GLES_JNI = ROOT / "unified-android" / "native" / "lucent_libretro_jni.c"
+WII_POINTER = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "input" / "WiiIrPointer.java"
+DISC_PREFLIGHT = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game" / "DiscImagePreflight.java"
 CORRUPT_FBO_FIXTURE = (
     ROOT / "unified-android" / "test" / "fixtures" / "dolphin-corrupt-fbo.png"
 )
@@ -34,6 +42,34 @@ class DolphinCompilerProofTests(unittest.TestCase):
         cls.engine = next(row for row in registry["engines"] if row["id"] == "dolphin")
         cls.lock = json.loads(LOCK.read_text(encoding="utf-8"))
         cls.recipe = RECIPE.read_text(encoding="utf-8")
+
+    def test_disc_images_are_validated_before_native_core_load(self):
+        session = PHASE2_SESSION.read_text(encoding="utf-8")
+        preflight = DISC_PREFLIGHT.read_text(encoding="utf-8")
+        self.assertLess(
+            session.index("DiscImagePreflight.validate(request.systemId, game)"),
+            session.index("entry.installRuntime(appContext, request.systemId)"),
+        )
+        self.assertIn("declaredSize != file.length()", preflight)
+        self.assertIn("container header checksum is invalid", preflight)
+        self.assertIn("secondary header checksum is invalid", preflight)
+        self.assertIn('"gamecube".equals(systemId)', preflight)
+        self.assertIn('"wii".equals(systemId)', preflight)
+
+    def test_quick_resume_recreates_dolphin_presentation(self):
+        session = PHASE2_SESSION.read_text(encoding="utf-8")
+        restore = session.split(
+            "private void restoreQuickResume", 1)[1].split(
+                "private Throwable saveQuickResume", 1)[0]
+        self.assertIn('"dolphin".equals(entry.id)', restore)
+        self.assertIn("applyRuntimeState(active, state);", restore)
+        self.assertIn("active.unserialize(state, migrateRenderer);", restore)
+        self.assertNotIn("active.recreateSurface(current);", restore)
+        self.assertIn("stale cyan/blank", restore)
+        manual = session.split("private void restore(StateSnapshot snapshot)", 1)[1].split(
+            "private synchronized void refreshDevices", 1)[0]
+        self.assertIn("applyRuntimeState(active, loaded.state);", manual)
+        self.assertNotIn("active.unserialize(loaded.state);", manual)
 
     def test_core_and_dependency_closure_are_exact(self):
         source = self.engine["source"]
@@ -117,13 +153,18 @@ class DolphinCompilerProofTests(unittest.TestCase):
         )[0]
         path = "engines/tools/dolphin-git-shim/git"
         expected_sha = (
-            "131517d95843d4cb23d50623faa078b7b4cf6db0c5b6824785e9cfeb2e2a91a3"
+            "7f0591b727b7961b72092778de867b3c4498b1fe3eb935fa38bb47a9cf6a462c"
         )
         self.assertIn(path, dolphin_recipe)
         self.assertIn(expected_sha, dolphin_recipe)
         self.assertTrue((ROOT / path).is_file())
+        self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), expected_sha)
         self.assertIn('PATH="$dolphin_git_path:$PATH"', dolphin_recipe)
-        self.assertEqual(len(self.lock["patches"]), 1)
+        self.assertEqual(len(self.lock["patches"]), 3)
+        for row in self.lock["patches"]:
+            self.assertEqual(hashlib.sha256((ROOT / row["path"]).read_bytes()).hexdigest(), row["sha256"])
+            self.assertIn(row["path"], dolphin_recipe)
+            self.assertIn(row["sha256"], dolphin_recipe)
         locked_patch = self.lock["patches"][0]
         self.assertEqual(
             locked_patch["path"],
@@ -151,7 +192,7 @@ class DolphinCompilerProofTests(unittest.TestCase):
             "phase2-qualification-opt-in.json").read_text(encoding="utf-8"))
         row = next(value for value in opt_in["engines"] if value["id"] == "dolphin")
         self.assertEqual(row["libraryRouteSystems"], ["gamecube", "wii"])
-        self.assertEqual(row["runtime"], "gles-libretro")
+        self.assertEqual(row["runtime"], "vulkan-libretro")
         self.assertEqual(row["systemAssetDestination"], "dolphin-emu")
 
     def test_activity_qa_accepts_android_logcat_pid_tag_format(self):
@@ -166,43 +207,51 @@ class DolphinCompilerProofTests(unittest.TestCase):
         mapping = LIBRETRO_INPUT.read_text(encoding="utf-8")
         phase2_session = PHASE2_SESSION.read_text(encoding="utf-8")
         harness = ACTIVITY_QA.read_text(encoding="utf-8")
-        # Dolphin (GameCube/Wii) keeps A at the south position and each console
-        # gets its own table, taken from the pinned core's own input
-        # descriptors rather than the generic RetroPad convention.
-        gamecube = mapping.split("private static int gameCube(", 1)[1].split(
-            "\n    }", 1
-        )[0]
-        self.assertIn('case SOUTH: return 8;', gamecube)   # A
-        self.assertIn('case EAST: return 0;', gamecube)    # B
-        self.assertIn('case WEST: return 1;', gamecube)    # Y
-        self.assertIn('case NORTH: return 9;', gamecube)   # X
-        self.assertIn('case L2: return 12;', gamecube)     # L trigger
-        self.assertIn('case R2: return 13;', gamecube)     # R trigger
-        self.assertIn('case R1: return 11;', gamecube)     # Z
+        # Dolphin (GameCube/Wii) keeps A under the thumb and each console gets
+        # its own table in SystemControlLayouts, taken from the pinned core's
+        # own input descriptors rather than the generic RetroPad convention.
+        # Every entry carries the console's name and the RetroPad ID together,
+        # so the remap editor and the running game cannot disagree.
+        tables = layout_blocks(SYSTEM_LAYOUTS.read_text(encoding="utf-8"))
+        gamecube = tables["gamecube"]
+        # descGC: A=8, B=0, X=9, Y=1, L/R are the analog triggers and Z=R(11).
+        # A GameCube pad is not a diamond — A sits in the middle with B to its
+        # lower left, X to its right and Y above it — so B takes the left face
+        # button and X the right.
+        self.assertEqual(("A", 8), gamecube["SOUTH"])
+        self.assertEqual(("B", 0), gamecube["WEST"])
+        self.assertEqual(("X", 9), gamecube["EAST"])
+        self.assertEqual(("Y", 1), gamecube["NORTH"])
+        self.assertEqual(("L", 12), gamecube["L2"])
+        self.assertEqual(("R", 13), gamecube["R2"])
+        self.assertEqual(("Z", 11), gamecube["R1"])
         # RetroPad L(10) is descGC's "Triforce - Test" and SELECT(2) its
         # "Triforce - Coin". Neither is a GameCube control, so neither binds.
-        self.assertIn('case L1: return -1;', gamecube)
-        self.assertIn('case SELECT: return -1;', gamecube)
+        self.assertNotIn("L1", gamecube)
+        self.assertNotIn("SELECT", gamecube)
         # descWiimote/descWiimoteNunchuk: X(9) is "1"/Nunchuk C, Y(1) is
         # "2"/Nunchuk Z, L(10)/R(11) are -/+ and L2(12) shakes the Nunchuk.
-        wii = mapping.split("private static int wii(", 1)[1].split("\n    }", 1)[0]
-        self.assertIn('case SOUTH: return 8;', wii)
-        self.assertIn('case EAST: return 0;', wii)
-        self.assertIn('case WEST: return 9;', wii)
-        self.assertIn('case NORTH: return 1;', wii)
-        self.assertIn('case L1: return 10;', wii)
-        self.assertIn('case R1: return 11;', wii)
-        self.assertIn('case L2: return 12;', wii)
-        self.assertIn('case R2: return 13;', wii)
+        wii = tables["wii"]
+        self.assertEqual(8, wii["SOUTH"][1])
+        self.assertEqual(0, wii["EAST"][1])
+        self.assertEqual(9, wii["WEST"][1])
+        self.assertEqual(1, wii["NORTH"][1])
+        self.assertEqual(10, wii["L1"][1])
+        self.assertEqual(11, wii["R1"][1])
+        self.assertEqual(12, wii["L2"][1])
+        self.assertEqual(13, wii["R2"][1])
+        # The semantic table still names the right stick as IR; the session
+        # mirrors it to a real pointer while preserving analog index 1.
+        self.assertEqual(("C_STICK", -1), gamecube["RIGHT_X_POSITIVE"])
+        self.assertEqual(("IR_POINTER", -1), wii["RIGHT_X_POSITIVE"])
         # Nunchuk-only titles need Dolphin's RETRO_DEVICE_WIIMOTE_NC device.
         self.assertIn(
             'WIIMOTE_NUNCHUK = (3 << 8) | RETRO_DEVICE_JOYPAD', mapping
         )
         self.assertIn('portDeviceFor(String systemId)', mapping)
-        # The Wiimote IR pointer and the GameCube C-stick are both
-        # RETRO_DEVICE_ANALOG index 1, so the right stick never becomes a
-        # digital button, and the left stick never doubles as the D-pad on a
-        # console whose core reads it as its own analog control.
+        # The right stick never becomes a digital button, and the left stick
+        # never doubles as the D-pad on a console whose core reads it as its
+        # own analog control.
         self.assertIn('case RIGHT_X_NEGATIVE: case RIGHT_X_POSITIVE:', mapping)
         analog = mapping.split("public static boolean hasAnalogStick(", 1)[1].split(
             "\n    }", 1
@@ -216,6 +265,37 @@ class DolphinCompilerProofTests(unittest.TestCase):
         self.assertIn("GameCube physical A did not leave the initial prompt", harness)
         self.assertIn("Dolphin submitted incomplete frames after navigation", harness)
         self.assertIn('if visible_burst_frames != 16:', harness)
+
+    def test_wii_ir_is_a_real_gles_pointer_without_sacrificing_tilt(self):
+        session = PHASE2_SESSION.read_text(encoding="utf-8")
+        host = GLES_HOST.read_text(encoding="utf-8")
+        loop = GLES_LOOP.read_text(encoding="utf-8")
+        jni = GLES_JNI.read_text(encoding="utf-8")
+        pointer = WII_POINTER.read_text(encoding="utf-8")
+        self.assertIn("WiiIrPointer", session)
+        self.assertIn("active.setPointer(0, pointer.x, pointer.y, pointer.pressed)",
+                      session)
+        motion = session.split("dispatchGenericMotionEvent", 1)[1].split(
+            "openControls", 1)[0]
+        self.assertIn("active.setAnalogAxis(0, 1, 0, normalizedRightX)", motion)
+        self.assertIn("wiiIrPointer.move(normalizedRightX, normalizedRightY)", motion)
+        keys = session.split("dispatchKeyEvent", 1)[1].split(
+            "dispatchGenericMotionEvent", 1)[0]
+        self.assertIn("control == CanonicalControl.SOUTH", keys)
+        self.assertIn("wiiIrPointer.setPressed(pressed)", keys)
+        self.assertIn("nativeHost.setPointer(port, x, y, pressed)", loop)
+        self.assertIn("nativeSetPointerGles", host)
+        self.assertIn("nativeSetPointerGles", jni)
+        self.assertIn("lucent_retro_set_pointer", jni)
+        self.assertIn("Short.MIN_VALUE", pointer)
+        self.assertIn("Short.MAX_VALUE", pointer)
+
+    def test_dolphin_uses_pointer_backed_ir_mode(self):
+        host = LIBRETRO_HOST.read_text(encoding="utf-8")
+        profile = host.split('"dolphin_ir_mode"', 1)[1].split(
+            "} else if", 1
+        )[0]
+        self.assertIn('find_option_token(options, "2", &value_size)', profile)
 
     def test_dolphin_runs_single_core_to_avoid_the_frame_pump_deadlock(self):
         # Dolphin's dual-core libretro pump calls Core::DoFrameStep() before
@@ -240,6 +320,47 @@ class DolphinCompilerProofTests(unittest.TestCase):
         )[0]
         self.assertIn('options, "0", &value_size', profile)
         self.assertNotIn('options, "Synchronous", &value_size', profile)
+
+    def test_wii_uses_vulkan_without_changing_gamecube_api(self):
+        session = PHASE2_SESSION.read_text(encoding="utf-8")
+        selection = session.split("final boolean useVulkanRuntime", 1)[1].split(
+            "final ExperimentalGlesRenderLoop loop", 1
+        )[0]
+        self.assertIn('"vulkan-libretro".equals(entry.runtime)', selection)
+        self.assertIn('"dolphin".equals(entry.id)', selection)
+        self.assertIn("isWiiSystem(request.systemId)", selection)
+        self.assertNotIn("isGameCubeSystem", selection)
+        self.assertIn("useVulkanRuntime ?", session)
+
+        vulkan = (ROOT / "unified-android" / "src" / "com" / "thorium" /
+                  "preview" / "ExperimentalVulkanLibretroHost.java").read_text(
+                      encoding="utf-8")
+        jni = (ROOT / "unified-android" / "native" /
+               "lucent_libretro_vulkan_jni.c").read_text(encoding="utf-8")
+        self.assertIn("nativeSetControllerPortDeviceVulkan(handle, port, device)",
+                      vulkan)
+        self.assertIn("nativeSetControllerPortDeviceVulkan", jni)
+        self.assertIn("lucent_retro_set_controller_port_device", jni)
+
+    def test_rejected_dolphin_dso_is_quarantined_before_dlclose(self):
+        # Exact Thor tombstones showed rejected/partial Dolphin globals crashing
+        # from DSO finalizers beneath dlclose. Keep only those failed mappings
+        # process-resident; completed sessions retain their existing unload.
+        host = LIBRETRO_HOST.read_text(encoding="utf-8")
+        self.assertIn('strcmp(name, "liblucent_core_dolphin.so") == 0', host)
+        self.assertIn("!is_dolphin_core_path(host->core_path)", host)
+        self.assertIn("!host->completed_game_load", host)
+        self.assertIn("host->completed_game_load = false;", host)
+        self.assertIn("host->completed_game_load = true;", host)
+        self.assertIn("dolphin_mapping_quarantined = true;", host)
+        self.assertIn(
+            "quarantined rejected/partial Dolphin linker image without dlclose",
+            host,
+        )
+        self.assertIn("ANDROID_DLEXT_FORCE_LOAD", host)
+        self.assertIn("forcing fresh Dolphin linker image after quarantine", host)
+        self.assertIn("} else if (host->library) {", host)
+        self.assertIn("dlclose(host->library);", host)
 
     def test_activity_qa_rejects_exact_corrupt_dolphin_frame(self):
         self.assertEqual(

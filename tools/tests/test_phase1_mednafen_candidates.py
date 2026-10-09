@@ -22,15 +22,15 @@ class PhaseOneMednafenCandidatesTest(unittest.TestCase):
         expected = {
             "beetle-pce-fast": (
                 "ec3ef1874f0590ab6d5cd4bba86969ee085e8bef2de4b4e5f2422fe38a2c2d3d",
-                "5c92dc4f2db1cca7a8a701f53fcd8d97be3fa598517e812bb26814c3b12ed6f7",
+                "fafe860e48508f371548fa7dcd58d78cf19df085826b47be4033a32a92b54943",
             ),
             "beetle-neopop": (
                 "ffeabf2a357548f3a55423d542c31bb1e08571d81d7104f8213df3bfa2eb9c9f",
-                "5cfa9b6da0874181c6c09966977115e4c9874307ddaa19ccc890ce880f86a937",
+                "4b4d3fdc9c9910bfc86ad2fac5e6aff874efb9140102639cca2117512a345e21",
             ),
             "beetle-cygne": (
                 "bce15c0e2505e15b7b55fa1d51b4a12219d07a67be62bbca5c26678d0d89c659",
-                "62d8f5b67fc91d52e38002de7889f5202cff3a9a230e49c0ac9fe4207c9a040a",
+                "0707f63a69593dd99b13a60c3bab7ef3e48558dc357988bd9b21f3d3010481ea",
             ),
         }
         for engine_id, (archive_sha, artifact_sha) in expected.items():
@@ -66,8 +66,10 @@ class PhaseOneMednafenCandidatesTest(unittest.TestCase):
 
     def test_pc_engine_cd_is_not_advertised_without_an_enforced_firmware_contract(self):
         row = self.rows["beetle-pce-fast"]
-        self.assertEqual(["pcengine"], row["systems"])
-        self.assertNotIn("pcenginecd", row["systems"])
+        self.assertEqual(["pcengine", "pcenginecd"], row["systems"])
+        self.assertEqual(["pcenginecd"], row["firmware"]["requiredForSystems"])
+        self.assertFalse(row["firmware"]["required"], "Cartridges must not require a CD BIOS")
+        self.assertIn("PcEngineCdFirmware", row["firmware"]["notes"])
         self.assertIn("PC Engine CD", row["firmware"]["notes"])
 
     def test_cygne_does_not_advertise_unqualified_monochrome_wonderswan(self):

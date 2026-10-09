@@ -1,0 +1,20 @@
+--- a/src/gui/opengl/qopengltextureuploader.cpp
++++ b/src/gui/opengl/qopengltextureuploader.cpp
+@@ -126,6 +126,17 @@
+     case QImage::Format_RGB32:
+     case QImage::Format_ARGB32:
+     case QImage::Format_ARGB32_Premultiplied:
++#if defined(Q_OS_ANDROID)
++        {
++            // Both EXT and APPLE BGRA paths are broken on this translator.
++            // Fall through to Qt's existing RGBA8888 conversion below; keep
++            // premultiplied alpha, scaling and mipmap behavior unchanged.
++            const char *renderer = reinterpret_cast<const char *>(funcs->glGetString(GL_RENDERER));
++            const bool brokenEmulatorBgra = renderer && strstr(renderer, "Android Emulator OpenGL ES Translator");
++            if (brokenEmulatorBgra)
++                break;
++        }
++#endif
+         if (isOpenGL12orBetter) {
+             externalFormat = GL_BGRA;
+             internalFormat = GL_RGBA;

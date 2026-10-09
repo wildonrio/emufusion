@@ -6,7 +6,7 @@ import java.util.Map;
 /**
  * Aggregates every physical source that can assert the same libretro joypad ID.
  *
- * <p>Lucent deliberately routes more than one physical control to one console
+ * <p>EmuFusion deliberately routes more than one physical control to one console
  * direction: on an Xbox-style handheld the hat (ABS_HAT0X/ABS_HAT0Y) and the
  * left analog stick both mean "the D-pad" on a D-pad-only console, and a pad
  * that also reports BTN_DPAD_* keys adds a third source. Sending each source

@@ -3,7 +3,7 @@ package com.thorium.lucent.navigation;
 /**
  * Converts a two-axis right-stick sample into a debounced, one-shot direction.
  * The press and release thresholds intentionally differ so stick noise cannot
- * repeatedly switch Lucent views while the user holds one direction.
+ * repeatedly switch EmuFusion views while the user holds one direction.
  */
 public final class RightStickViewRouter {
     public enum Direction { NONE, UP, DOWN, LEFT, RIGHT }

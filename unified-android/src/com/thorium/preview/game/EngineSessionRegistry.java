@@ -42,7 +42,7 @@ public final class EngineSessionRegistry {
         UnavailableEngineSession(String engineId) { this.engineId = engineId; }
 
         @Override public void prepare(GameLaunchRequest request, Listener listener) {
-            listener.onSessionError("Engine is not installed in this Lucent build: "
+            listener.onSessionError("Engine is not installed in this EmuFusion build: "
                     + engineId, null);
         }
         @Override public void attachSurface(android.view.Surface surface, int width, int height) {}

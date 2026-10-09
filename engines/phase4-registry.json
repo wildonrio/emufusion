@@ -1,0 +1,842 @@
+{
+  "$schema": "./phase4-registry.schema.json",
+  "schemaVersion": 1,
+  "phase": 4,
+  "generatedAt": "2026-08-08",
+  "oneAppContract": true,
+  "distributionLicense": "GPL-3.0-only",
+  "intent": "Complete console coverage. Phase 4 closes the gaps left by Phases 1-3: systems whose Phase 1 engine was recorded as licence-blocked, systems whose engine is built but never packaged, systems whose hardware an approved engine already emulates but which Lucent never routes, and notable consoles with no engine in any registry. Every row starts with all gates false and shipped false, exactly like Phases 1-3. Phase 4 identifies candidates and evidence; it pins no source and qualifies nothing.",
+  "licensePolicy": {
+    "compatible": [
+      "GPL-3.0-only", "GPL-3.0-or-later", "GPL-2.0-or-later",
+      "LGPL-2.0-or-later", "LGPL-2.1-only", "LGPL-2.1-or-later",
+      "LGPL-3.0-only", "LGPL-3.0-or-later",
+      "MIT", "MIT-0", "X11", "ISC", "BSD-2-Clause", "BSD-3-Clause",
+      "Zlib", "libpng-2.0", "curl", "Apache-2.0", "MPL-2.0",
+      "Unlicense", "CC0-1.0", "FSFAP", "ClArtistic", "Artistic-2.0"
+    ],
+    "incompatible": [
+      "GPL-2.0-only", "GPL-1.0-only", "Artistic-1.0", "Artistic-1.0-Perl",
+      "CC-BY-NC-4.0", "SSPL-1.0", "BUSL-1.1", "NOASSERTION"
+    ],
+    "note": "Lucent distributes one combined work under GPL-3.0-only. Inbound GPL-2.0-or-later is compatible because the or-later option permits version 3; GPL-2.0-only is not. A bare GPLv2 COPYING or LICENSE document does NOT establish only-versus-or-later: only the per-file grant or an explicit project declaration does. Phase 1 read several COPYING files as GPL-2.0-only and was wrong six times."
+  },
+  "categories": {
+    "misaudited": "An earlier phase recorded a blocking licence for this system's engine, but the pinned upstream licence text contradicts that record. Phase 4 must re-audit the incumbent at file level; it does not need a different engine.",
+    "blocked-replacement": "The incumbent engine is genuinely incompatible with GPL-3.0-only distribution. Phase 4 must record a different licence-compatible engine or escalate a product decision.",
+    "unpackaged": "An approved, licence-compatible engine already builds but is never staged into the APK.",
+    "unadvertised": "An approved, licence-compatible engine already emulates this hardware, but Lucent advertises no system id for it and the id does not resolve to any engine.",
+    "missing": "No engine exists in any Lucent registry for this system."
+  },
+  "expectedSystems": [
+    "atari2600", "atari5200", "atari800", "amstradcpc", "atarist", "c64",
+    "odyssey2", "segacd", "sega32x", "virtualboy", "msx", "colecovision",
+    "intellivision", "wonderswan", "neogeopocket", "pcenginecd", "atarilynx",
+    "vectrex", "pcfx", "cdi", "x68000"
+  ],
+  "engines": [
+    {
+      "id": "stella-reaudit",
+      "systems": ["atari2600"],
+      "category": "misaudited",
+      "priorEngine": "stella-2023",
+      "priorPhase": 1,
+      "blocker": "Phase 1 recorded Stella as GPL-2.0-only with no evidence field and blocked it. The upstream licence grant says version 2 or any later version, so the block does not hold. A file-level re-audit and an Android ARM64 build proof are still required.",
+      "status": "research",
+      "candidate": {
+        "name": "Stella",
+        "repository": "https://github.com/stella-emu/stella",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "correctsRecordedSpdx": "GPL-2.0-only",
+          "distributionGate": "audit-required",
+          "evidence": "Copyright.txt grants the work \"under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or any later version.\" Lucent's own registry recorded GPL-2.0-only with an empty evidence field. Stella's License.txt is the bare GPLv2 document, which is what the Phase 1 reading appears to have been based on; a GPLv2 document does not decide only-versus-or-later.",
+          "evidenceUrl": "https://raw.githubusercontent.com/stella-emu/stella/master/Copyright.txt"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "Stella maintains its own in-tree libretro core at src/os/libretro/, including jni/Application.mk containing \"APP_STL := c++_static\", \"APP_ABI := all\" and \"APP_CPPFLAGS := -fexceptions\", so an NDK arm64-v8a build is an upstream-supported target rather than a third-party fork."
+        },
+        "firmware": {
+          "required": false,
+          "note": "The Atari 2600 needs no BIOS. Phase 1 already recorded firmware.required=false for this system, so no firmware gate work is implied."
+        },
+        "rationale": "The incumbent engine was never actually incompatible, so the accurate and actively maintained upstream is available at no cost. Preferring upstream Stella over the libretro/stella2023 fork Lucent pinned also moves Lucent onto a core the Stella team maintains themselves.",
+        "rejectedAlternatives": [
+          {
+            "name": "Gopher2600",
+            "repository": "https://github.com/JetSetIlly/Gopher2600",
+            "license": "GPL-3.0-or-later",
+            "reason": "Licence is a perfect match and the project is very active, but it is a Go plus SDL plus imgui desktop application with no libretro core and no Android target, so it cannot enter Lucent's in-process host."
+          },
+          {
+            "name": "stella2014-libretro",
+            "repository": "https://github.com/libretro/stella2014-libretro",
+            "license": "GPL-2.0-or-later",
+            "reason": "Compatible and has a working jni build, but it is frozen at 2014-era accuracy and is strictly worse than current Stella now that the licence objection has gone."
+          },
+          {
+            "name": "MAME a2600 driver",
+            "repository": "https://github.com/mamedev/mame",
+            "license": "GPL-2.0-or-later",
+            "reason": "The driver file itself is BSD-3-Clause, but a driver cannot run without the MAME framework and MAME is a far heavier dependency than a dedicated 2600 core for no accuracy gain."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "atari800-reaudit",
+      "systems": ["atari5200", "atari800"],
+      "category": "misaudited",
+      "priorEngine": "atari800",
+      "priorPhase": 1,
+      "blocker": "Phase 1 recorded atari800 as GPL-2.0-only with no evidence field. Every sampled core source file grants version 2 or any later version. A file-level re-audit is required, and the packaging metadata contradiction below must be resolved before the licence gate can close.",
+      "status": "research",
+      "note": "Packaging metadata in the upstream tree (debian/copyright and atari800.spec) says GPLv2 without the or-later qualifier, while the per-file copyright grants say or-later. Per-file grants are authoritative, but the contradiction is real and should be recorded in the re-audit rather than glossed over.",
+      "candidate": {
+        "name": "Atari800",
+        "repository": "https://github.com/libretro/libretro-atari800",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "correctsRecordedSpdx": "GPL-2.0-only",
+          "distributionGate": "audit-required",
+          "evidence": "src/atari.c states \"Atari800 is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.\" The same grant appears in antic.c, gtia.c, pokey.c, cartridge.c, memory.c, pia.c and binload.c.",
+          "evidenceUrl": "https://raw.githubusercontent.com/atari800/atari800/master/src/atari.c"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "The libretro fork carries jni/Android.mk and jni/Application.mk and is listed in libretro-super recipes/android/cores-android, so arm64-v8a is an existing upstream build target."
+        },
+        "firmware": {
+          "required": false,
+          "freeReplacement": "AltirraOS, bundled in the atari800 tree under emuos/ (FSFAP all-permissive)",
+          "note": "The proprietary Atari OS and BASIC ROMs are NOT required. atari800 bundles AltirraOS, Avery Lee's clean-room replacement, whose emuos/LICENSE reads \"Copying and distribution of this file, with or without modification, are permitted in any medium without royalty provided the copyright notice and this notice are preserved.\" The libretro core-info marks all seven Atari ROM entries firmware_opt=true because the built-in OS covers them. Phase 1 had already recorded firmware.required=false for this row."
+        },
+        "rationale": "The incumbent engine was never incompatible, and it is the only Atari 8-bit and 5200 option with a proven Android libretro core today. It additionally solves its own firmware problem by bundling an all-permissive clean-room OS, which removes any user-supplied-ROM requirement for this system.",
+        "rejectedAlternatives": [
+          {
+            "name": "AltirraSDL",
+            "repository": "https://github.com/ilmenit/AltirraSDL",
+            "license": "GPL-2.0-or-later",
+            "reason": "More accurate than atari800 and licence-compatible (its headers inherit Altirra's version 2 or later grant, contradicting the project website's GPLv2 summary), but its libretro core targets only Linux, Windows and macOS; the Android target is a standalone SDL3 app, not a core Lucent could host."
+          },
+          {
+            "name": "MAME a5200/a800 drivers",
+            "repository": "https://github.com/mamedev/mame",
+            "license": "GPL-2.0-or-later",
+            "reason": "Compatible, but a much heavier dependency with no accuracy advantage over atari800 for these systems, and it would reintroduce a user-supplied ROM requirement that AltirraOS removes."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "caprice32-reaudit",
+      "systems": ["amstradcpc"],
+      "category": "misaudited",
+      "priorEngine": "caprice32",
+      "priorPhase": 1,
+      "blocker": "Phase 1 recorded Caprice32 as GPL-2.0-only with no evidence field. All twenty licence-carrying source files grant version 2 or any later version, so the code is compatible. The genuine remaining blocker is different and firmware-shaped: the libretro core compiles Amstrad's CPC firmware ROMs into the binary.",
+      "status": "research",
+      "candidate": {
+        "name": "Caprice32",
+        "repository": "https://github.com/libretro/libretro-cap32",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "correctsRecordedSpdx": "GPL-2.0-only",
+          "distributionGate": "audit-required",
+          "evidence": "src/cap32.cpp states \"This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.\" The in-tree debian/copyright records Files: * as License: GPL-2.0+. The README's prose summary of \"version 2 (GPLv2)\" does not override twenty explicit per-file grants.",
+          "evidenceUrl": "https://raw.githubusercontent.com/ColinPitrat/caprice32/master/src/cap32.cpp"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "cap32_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot, so an Android ARM64 core build is already an upstream-supported target."
+        },
+        "firmware": {
+          "required": true,
+          "note": "BLOCKER, and it is not the code licence. libretro-cap32 #includes rom/464.h, rom/6128.h and rom/amsdos.h, compiling Amstrad's firmware into the core, and those ROM headers carry a GPL notice that upstream's own debian/copyright contradicts with Files: rom/* Copyright: 1984-1990 Amstrad License: Commercial. Amstrad's 1999 permission is a bare attribution grant that does not cover Locomotive BASIC and states that no one should be charging for the ROM code. Lucent must strip the embedded ROMs and load user-supplied firmware, exactly as engines/patches already does for AppleWin."
+        },
+        "rationale": "The incumbent engine was never incompatible and it far outclasses the alternatives, supporting eight disc and tape formats and selectable 464/664/6128/6128+ models. The re-audit must move the recorded blocker from the code licence, where it does not belong, to the embedded firmware, where it does.",
+        "rejectedAlternatives": [
+          {
+            "name": "CrocoDS",
+            "repository": "https://github.com/libretro/libretro-crocods",
+            "license": "GPL-2.0-or-later",
+            "reason": "Its root LICENSE is MIT but that covers only the wrapper; twenty-five files under crocods-core/ carry GPL-2.0-or-later headers including code lifted from Caprice32, so the effective licence is GPL-2.0-or-later. It is compatible but much weaker, supporting only sna, dsk and kcr."
+          },
+          {
+            "name": "Arnold",
+            "license": "GPL-2.0-or-later",
+            "reason": "Compatible across all 217 licence-carrying files, but it has no Android or libretro core, so there is no route into Lucent's host."
+          },
+          {
+            "name": "ACE-DL",
+            "license": "proprietary freeware",
+            "reason": "Closed source, so it can never enter a GPL-3.0-only combined distribution."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "hatari-reaudit",
+      "systems": ["atarist"],
+      "category": "misaudited",
+      "priorEngine": "hatari",
+      "priorPhase": 1,
+      "blocker": "Phase 1 recorded Hatari as GPL-2.0-only with no evidence field. Three independent places in the tree grant version 2 or any later version, including the embedded WinUAE 68k CPU core, so the licence block does not hold. The remaining work is a file-level re-audit plus a decision to ship EmuTOS instead of demanding a proprietary TOS image.",
+      "status": "research",
+      "candidate": {
+        "name": "Hatari",
+        "repository": "https://github.com/libretro/hatari",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "correctsRecordedSpdx": "GPL-2.0-only",
+          "distributionGate": "audit-required",
+          "evidence": "src/main.c states \"This file is distributed under the GNU General Public License, version 2 or at your option any later version.\" readme.txt section 1 repeats \"either version 2 of the License, or (at your option) any later version\", hatari.spec declares License: GPLv2+, and the embedded src/cpu/ WinUAE core carries the same or-later grant.",
+          "evidenceUrl": "https://raw.githubusercontent.com/libretro/hatari/master/src/main.c"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "The libretro fork carries libretro/jni/Android.mk and Application.mk, Makefile.libretro has an explicit android platform target, and it is listed in libretro-super recipes/android/cores-android."
+        },
+        "firmware": {
+          "required": true,
+          "freeReplacement": "EmuTOS (GPL-2.0-or-later)",
+          "note": "Phase 1 recorded that a user-supplied tos.img is required. EmuTOS removes that: bios/bios.c states \"This file is distributed under the GPL, version 2 or at your option any later version\", so Lucent may ship it as the default OS ROM and offer a user-supplied TOS as an override. Honest limitation: EmuTOS runs GEM applications and many games well, but a minority of ST games and demos that poke TOS internals still need genuine TOS."
+        },
+        "rationale": "Hatari is the only accurate ST, STE, TT and Falcon emulator with a maintained libretro Android core, and it was never licence-incompatible. Pairing it with EmuTOS converts a mandatory proprietary-firmware system into one that boots out of the box.",
+        "rejectedAlternatives": [
+          {
+            "name": "Hatari with IPF/libcapsimage support enabled",
+            "license": "proprietary (Software Preservation Society)",
+            "reason": "Hatari's readme grants a special exception permitting linking against libcapsimage, but that is a permission and not an obligation. Enabling IPF would inject a proprietary dependency into a GPL-3.0-only work, so the Lucent build must leave it off."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "vice-reaudit",
+      "systems": ["c64"],
+      "category": "misaudited",
+      "priorEngine": "vice-x64sc",
+      "priorPhase": 1,
+      "blocker": "Phase 1 recorded VICE as GPL-2.0-only with no evidence field. Every sampled source file in the pinned tree grants version 2 or any later version, so the code is compatible. The genuine remaining blocker is that VICE ships Commodore's KERNAL, BASIC and character ROMs in-tree.",
+      "status": "research",
+      "candidate": {
+        "name": "VICE x64sc",
+        "repository": "https://github.com/libretro/vice-libretro",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "correctsRecordedSpdx": "GPL-2.0-only",
+          "distributionGate": "audit-required",
+          "evidence": "vice/src/main.c in the exact pinned libretro tree states \"This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.\" The same grant appears in src/c64/c64.c, src/maincpu.c, src/vicii/vicii.c, the bundled reSID, and the README copyright section.",
+          "evidenceUrl": "https://raw.githubusercontent.com/libretro/vice-libretro/master/vice/src/main.c"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "vice_x64sc_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot and nine vice_* cores appear in libretro-super recipes/android/cores-android; the fork's README lists Android among supported platforms."
+        },
+        "firmware": {
+          "required": true,
+          "note": "BLOCKER, and it is not the code licence. VICE's own README states that the ROM files in the C128 and C64 directories are copyright Commodore Business Machines. Lucent must strip them and require user-supplied ROMs. A free replacement exists, MEGA65 open-roms under LGPL-3.0-or-later, but its own STATUS.md admits most BASIC commands and BASIC variables and arrays are still missing, so it is not yet a drop-in default the way EmuTOS and AltirraOS are."
+        },
+        "rationale": "The incumbent engine was never incompatible, and it beats every alternative outright: Frodo is marked experimental with no save states and a narrow format list, and VirtualC64's genuinely separable core has no Android or libretro port at all.",
+        "rejectedAlternatives": [
+          {
+            "name": "VirtualC64",
+            "repository": "https://github.com/dirkwhoffmann/virtualc64",
+            "license": "GPL-3.0-or-later AND MPL-2.0 AND MIT",
+            "reason": "Fully licence-compatible and its VCCore is genuinely separable plain C++20, but everything around it is Xcode and Swift and no Android or libretro port exists."
+          },
+          {
+            "name": "Frodo",
+            "repository": "https://github.com/libretro/Frodo-libretro",
+            "license": "GPL-2.0-or-later",
+            "reason": "Compatible and already on the Android buildbot, but its core-info marks it is_experimental=true with savestate=false, and it accepts neither .crt nor .tap, which fails Lucent's state and compatibility requirements."
+          },
+          {
+            "name": "MEGA65 open-roms",
+            "license": "LGPL-3.0-or-later",
+            "reason": "The only free C64 ROM replacement, and licence-compatible, but its own STATUS.md lists most BASIC commands and BASIC integer/float variables and arrays as missing, so it cannot yet replace the Commodore ROMs by default."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "o2em-reaudit",
+      "systems": ["odyssey2"],
+      "category": "misaudited",
+      "priorEngine": "o2em",
+      "priorPhase": 1,
+      "blocker": "Phase 1 recorded O2EM as Artistic-1.0, which the FSF declines to call free. The upstream licence is the Clarified Artistic License, which the FSF lists as free and GPL-compatible. The remaining blockers are a file-level re-audit and a user-supplied BIOS contract.",
+      "status": "research",
+      "candidate": {
+        "name": "O2EM",
+        "repository": "https://github.com/libretro/libretro-o2em",
+        "license": {
+          "spdx": "ClArtistic",
+          "correctsRecordedSpdx": "Artistic-1.0",
+          "distributionGate": "audit-required",
+          "evidence": "Upstream O2EM 1.18's COPYING opens with the title \"The Clarified Artistic License\" and its README states \"This package is released under the Clarified Artistic License (see COPYING)\". The FSF licence list records the Clarified Artistic License as \"a free software license, compatible with the GPL\", whereas it declines to call the original Artistic License 1.0 free. Clause 5 explicitly permits charging a distribution fee, so there is no non-commercial restriction.",
+          "evidenceUrl": "https://www.gnu.org/licenses/license-list.html"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "The libretro fork carries jni/Android.mk and jni/Application.mk with APP_ABI := all and -DANDROID, and is listed in libretro-super recipes/android/cores-android."
+        },
+        "firmware": {
+          "required": true,
+          "note": "No free BIOS replacement exists for the Odyssey2, unlike EmuTOS for the ST or AltirraOS for the Atari 8-bit. O2EM's README states the BIOS \"can not be included in this archive\" for copyright reasons because it lives inside the 8048 processor, and the libretro core-info marks o2rom.bin, c52.bin, g7400.bin and jopac.bin all firmware_opt=false. This system can only ever ship with a fail-closed user-supplied firmware contract."
+        },
+        "rationale": "The incumbent engine was misclassified against the wrong Artistic License variant and is in fact GPL-compatible. It is also the only Odyssey2 emulator with any Android-buildable core, so there is no alternative to weigh it against.",
+        "rejectedAlternatives": [
+          {
+            "name": "libretro-o2em's own COPYING file",
+            "license": "Artistic-2.0",
+            "reason": "Recorded here as a provenance warning rather than a candidate. The fork's COPYING is the Artistic License 2.0 text added in 2020 by a libretro contributor, not by the upstream copyright holders. It happens not to change the outcome because both Clarified Artistic and Artistic-2.0 are FSF-confirmed GPL-compatible, but the re-audit must rely on the upstream grant."
+          },
+          {
+            "name": "Odyssey2_MiSTer",
+            "repository": "https://github.com/MiSTer-devel/Odyssey2_MiSTer",
+            "license": "GPL-3.0-only",
+            "reason": "Licence-perfect but it is FPGA Verilog for DE10-Nano hardware and cannot run on Android at all."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "blastem-segacd-32x",
+      "systems": ["segacd", "sega32x"],
+      "category": "blocked-replacement",
+      "priorEngine": "picodrive",
+      "priorPhase": 1,
+      "blocker": "PicoDrive's block is genuine and confirmed: its COPYING states \"Redistributions may not be sold, nor may they be used in a commercial product or activity.\" That is a non-commercial restriction no GPL permits, so PicoDrive can never ship. Sega CD and 32X need a different engine.",
+      "status": "research",
+      "candidate": {
+        "name": "BlastEm",
+        "repository": "https://github.com/libretro/blastem",
+        "license": {
+          "spdx": "GPL-3.0-or-later AND Zlib",
+          "auditRef": "engines/audits/blastem-license.json",
+          "distributionGate": "compatible-candidate",
+          "evidence": "blastem.c states \"BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater\", the repository COPYING is the GPLv3 text, and Lucent's own audit at engines/audits/blastem-license.json already concluded \"Compatible candidate. BlastEm is GPL-3.0-or-later and the only selected third-party implementation is zlib under the Zlib license.\"",
+          "evidenceUrl": "https://github.com/libretro/blastem"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "Lucent already builds this exact engine for arm64-v8a. engines/reproducibility-lock.json records blastem at commit 84e567e1 with two independent byte-identical builds and the checked-in patch engines/patches/blastem-libretro-android-portability.patch, and unified-android/build.sh already stages liblucent_core_blastem.so. BlastEm is absent from the libretro Android buildbot, but that is irrelevant because Lucent does not use it."
+        },
+        "firmware": {
+          "required": true,
+          "note": "Sega CD requires a regional BIOS; libblastem.c reads bios_CD_U/E/J.bin from an external path, so a user-supplied fail-closed firmware contract fits Lucent's existing model with no ROM stripping needed. 32X requires no BIOS at all."
+        },
+        "rationale": "BlastEm is already a registered, licence-audited, reproducibly built and APK-staged Lucent engine, and its source tree already contains complete Sega CD support (segacd.c, cd_graphics.c, cdd_mcu.c, lc8951.c, rf5c164.c, cdimage.c) and 32X support (32x.c, 32x_video.c, sh7095.c, with libblastem.c registering the 32x and 32xcd system types). Phase 4 therefore only has to enable two extra system targets on an engine it already ships, rather than integrate a new one.",
+        "rejectedAlternatives": [
+          {
+            "name": "Genesis Plus GX",
+            "repository": "https://github.com/ekeeke/Genesis-Plus-GX",
+            "license": "LicenseRef-NonCommercial",
+            "reason": "Explicitly rejected. Its LICENSE.txt carries the same clause as PicoDrive, \"Redistributions may not be sold, nor may they be used in a commercial product or activity\", and libretro's own metadata records license = \"Non-commercial\". It is not a viable Sega CD candidate despite being commonly suggested as one."
+          },
+          {
+            "name": "ares",
+            "repository": "https://github.com/ares-emulator/ares",
+            "license": "ISC",
+            "reason": "Licence-perfect and it implements both Mega CD and 32X, but its README supports only Windows, macOS and Linux/BSD, there are no libretro references in its build system, and it has no Android path."
+          },
+          {
+            "name": "ClownMDEmu",
+            "license": "AGPL-3.0-or-later",
+            "reason": "Already on the Android arm64 buildbot and does Mega CD, but AGPL's network clause keeps attaching to that code, so a combined work containing it could not honestly be labelled GPL-3.0-only. It also has no 32X support."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "beetle-vb-softfloat",
+      "systems": ["virtualboy"],
+      "category": "blocked-replacement",
+      "priorEngine": "beetle-vb",
+      "priorPhase": 1,
+      "blocker": "The pinned beetle-vb tree carries SoftFloat release 2b, whose terms restrict use to organisations that indemnify the author and take full responsibility for all losses incurred by their customers and clients, which is why Lucent's audit concluded compatibility was not established. The evidence now suggests that block is over-strict, but it is cheaper to delete the component than to argue it.",
+      "status": "research",
+      "note": "The FSF objection to SoftFloat 2b that the QEMU project acted on in 2014 was a GPLv2 finding, and GPLv2 section 6 tolerates no additional terms at all. Lucent distributes under GPLv3, whose section 7 expressly permits limiting liability (a), requiring preservation of legal notices (b) and requiring indemnification of licensors (f); 2b's own text even lets the indemnity be discharged \"possibly via similar legal warning\". Debian ships this exact package in main, classifying the SoftFloat files as permissive-Hauser. Two corrections for anyone re-reading the trail: SoftFloat release 2c did NOT relax these terms, it broadened them, and only release 3 is BSD-3-Clause; and the replacement discussed here is Mednafen's own clean-room code, not BSD SoftFloat 3. Separately, mednafen/hw_cpu/v810/v810_cpu.cpp is dual-licensed GPL-2.0-or-later OR the non-commercial Reality Boy terms, so the Lucent build must adopt the GPL arm and delete the Reality Boy header, never the reverse.",
+      "candidate": {
+        "name": "Beetle VB rebased onto Mednafen's own V810 FP implementation",
+        "repository": "https://github.com/libretro/beetle-vb-libretro",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "distributionGate": "audit-required",
+          "evidence": "The offending component can be removed rather than argued about, and the exposure is one file. Makefile.common adds fpu-new/softfloat.c and v810_cpu.h includes fpu-new/softfloat.h; that is the entire surface. Mednafen replaced legacy SoftFloat between 2014 and 2016 with its own clean-room V810 floating-point implementation, and libretro/beetle-pcfx-libretro already ships that replacement for the identical V810 CPU: it has mednafen/hw_cpu/v810/v810_fp_ops.cpp and no fpu-new/ directory at all, while beetle-vb still has fpu-new/softfloat.c and no v810_fp_ops. v810_fp_ops.cpp carries the plain Mednafen grant \"either version 2 of the License, or (at your option) any later version\", so porting it into beetle-vb makes the tree uniformly GPL-2.0-or-later. Every other GPL-headered file in beetle-vb is already or-later; none is version-2-only.",
+          "evidenceUrl": "https://github.com/libretro/beetle-pcfx-libretro/blob/master/mednafen/hw_cpu/v810/v810_fp_ops.cpp"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "beetle-vb already builds for Android ARM64 through Lucent's own engines/build_core.sh Mednafen software-core recipe, which is the same recipe that produced byte-identical beetle-cygne, beetle-neopop and beetle-pce-fast artifacts."
+        },
+        "firmware": {
+          "required": false,
+          "note": "The Virtual Boy needs no BIOS, and Phase 1 already recorded firmware.required=false for this row."
+        },
+        "rationale": "This keeps the accurate Mednafen Virtual Boy emulation while deleting the component that caused the block, and the replacement is not speculative: it is upstream Mednafen code already shipping in a sibling libretro core for the very same CPU. It is a far smaller and better-evidenced change than adopting an unproven engine.",
+        "rejectedAlternatives": [
+          {
+            "name": "ares",
+            "repository": "https://github.com/ares-emulator/ares",
+            "license": "ISC",
+            "reason": "Licence-perfect and it has a Virtual Boy core, but it supports only Windows, macOS and Linux/BSD with no libretro or Android path."
+          },
+          {
+            "name": "beetle-vb as currently pinned, keeping SoftFloat 2b",
+            "license": "GPL-2.0-or-later AND LicenseRef-SoftFloat-2b",
+            "reason": "Not rejected on the merits so much as on cost of proof. SoftFloat 2b permits commercial derivative works, its clauses map onto GPLv3 section 7 paragraphs (a), (b) and (f), and Debian ships this exact package in main. But no published FSF, Debian or Fedora assessment of 2b against GPLv3 specifically could be found, and Lucent's model is fail-closed on unresolved third-party terms. Removing the component is a bounded change that retires the question instead of relying on an argument."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "msx-replacement",
+      "systems": ["msx"],
+      "category": "blocked-replacement",
+      "priorEngine": "bluemsx",
+      "priorPhase": 1,
+      "blocker": "blueMSX's own license.txt admits its sources are \"either under BSD license, GPL or freeware\", and freeware is not a free-software licence. Src/VideoChips/V9938.c additionally carries a field-of-use restriction stating the command engine may not be used in any other kind of software, which no GPL permits. The block is correct.",
+      "status": "research",
+      "noCompatibleCandidate": {
+        "reason": "Every MSX core with a working Android build is licence-blocked, and the only clearly-licensed MSX emulator has neither an Android build nor a libretro core. openMSX declares license: 'GPL-2.0-only' in its meson.build and contains third-party GPL-2.0-only code that nobody can upgrade, its own release notes say the Android build is totally broken and unplanned, and no openMSX libretro core exists. The one technically compatible path is MAME's MSX drivers under the GPL-2.0-or-later MAME aggregate, but that means MAME romset conventions, no C-BIOS machine and a very large core for a system Lucent would otherwise serve with a dedicated emulator. MSX therefore needs a product decision rather than an invented candidate.",
+        "productDecision": "needs-product-decision",
+        "rejectedAlternatives": [
+          {
+            "name": "openMSX",
+            "repository": "https://github.com/openMSX/openMSX",
+            "license": "GPL-2.0-only",
+            "reason": "Upstream declares license: 'GPL-2.0-only' on line 3 of meson.build, Debian's reviewed copyright file records Files: * as GPL-2 while deliberately using GPL-2+ for other components, and src/laserdisc/yuv2rgb.cc is marked \"This code is GPL2 (only)\" third-party Novell code that cannot be relicensed. Its Android port is declared dead in the 21.0 release notes and it has no libretro core."
+          },
+          {
+            "name": "fMSX",
+            "license": "LicenseRef-NonCommercial",
+            "reason": "States \"You cannot use fMSX source code for commercial purposes unless you contact me to arrange the conditions of such usage\", which is incompatible with GPL-3.0-only distribution."
+          },
+          {
+            "name": "MAME/MESS MSX drivers",
+            "repository": "https://github.com/mamedev/mame",
+            "license": "GPL-2.0-or-later",
+            "reason": "The only technically compatible option, and copyright compatibility is now established by engines/audits/mame-license.json. It remains a poor product fit: a very large core, MAME-specific romset naming, no C-BIOS machine so it needs dumped proprietary BIOS anyway, and the MAME trademark obligation below. Recorded as the fallback if the product decision is to keep MSX rather than drop it."
+          },
+          {
+            "name": "FBNeo",
+            "license": "LicenseRef-NonCommercial",
+            "reason": "Rejected outright: its licence forbids selling and commercial use, so it can never enter a GPL-3.0-only combined distribution."
+          }
+        ]
+      },
+      "note": "Firmware would be half-solved if an engine existed. C-BIOS is BSD-2-Clause and freely shippable, openMSX bundles it under Contrib/cbios/, and Debian ships it in main; it covers MSX1, MSX2 and MSX2+ cartridge games only, with no cassette, disk or BASIC support. The catch is that MAME cannot use C-BIOS, so the one compatible core and the one free BIOS cannot be paired. That pairing is unsolved and is part of what the product decision must weigh.",
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "gearcoleco-packaging",
+      "systems": ["colecovision"],
+      "category": "unpackaged",
+      "priorEngine": "gearcoleco",
+      "priorPhase": 1,
+      "blocker": "The engine is licence-compatible and compiles, but unified-android/build.sh stages neither of its core lists, so ColecoVision has no engine in any APK. The BIOS position has improved but does not clear: a legal open BIOS is now reproducible and shippable as a default, yet it cannot run commercial cartridges, so the firmware gate stays closed for the actual library.",
+      "status": "research",
+      "note": "Gearcoleco's Memory::LoadBios validates only that the image is 0x2000 bytes and performs no hash check, so Lucent must enforce the accepted firmware identity itself rather than relying on the core to reject an unexpected image.",
+      "candidate": {
+        "name": "Gearcoleco",
+        "repository": "https://github.com/drhelius/Gearcoleco",
+        "license": {
+          "spdx": "GPL-3.0-only",
+          "distributionGate": "compatible-candidate",
+          "evidence": "The repository LICENSE is the GNU General Public License Version 3, 29 June 2007, and libretro's gearcoleco_libretro.info records license = \"GPLv3\". Lucent's own registry already records this engine as a compatible candidate; nothing about the licence is in dispute.",
+          "evidenceUrl": "https://raw.githubusercontent.com/drhelius/Gearcoleco/master/LICENSE"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "Lucent's engines/build_core.sh already has a gearcoleco recipe with a checked-in patch, and engines/build/arm64-v8a/gearcoleco_libretro.so exists locally. gearcoleco_libretro_android.so.zip is also published on the libretro arm64-v8a buildbot."
+        },
+        "firmware": {
+          "required": true,
+          "freeReplacement": "8bitworkshop minbios (GPL-3.0-only), reproducible but boot-only",
+          "note": "PARTIALLY SOLVED, and the Phase 1 record is now out of date. engines/firmware/README.md says the 8bitworkshop minbios.asm could not be assembled, but reproducibility has since been PROVEN: building naken_asm from source and applying three syntax ports for the modern assembler (EQU to equ, DS to resb, .DB to .db), then zero-padding to 8192 bytes, yields a byte-identical ROM at sha1 5a84aad05fabab07a48738bdeea7cd620d1ece8b. It is genuinely clean-room rather than a disassembly: 20 instructions and 47 code bytes against roughly 7418 non-filler bytes in the real BIOS, and its font was cleared as a generic 6x8 typeface rather than the BIOS font. Lucent may therefore ship it as a lawful default so the core boots instead of showing a no-BIOS splash. It does NOT clear the firmware gate for the library: it has no BIOS jump table, 0x0F00-0x1FFF is all zero, and its cold-start path accepts only a 55 AA header while commercial cartridges use AA 55 because Coleco mandated the branded title screen, so real cartridges hit RST 0 and hang. Keep a user-supplied slot for the original NTSC BIOS at sha1 45bedc4cbdeac66c7df59e9e599195c778d86a92 and surface ColecoVision as needing the user's own BIOS."
+        },
+        "rationale": "There is nothing to replace: the incumbent is already GPL-3.0-only, already has a working Lucent build recipe, and is by the same author as Gearsystem, which Lucent already stages. The Phase 4 work is packaging plus a two-tier firmware contract, not engine selection.",
+        "rejectedAlternatives": [
+          {
+            "name": "8bitworkshop minbios as a full BIOS replacement",
+            "repository": "https://github.com/sehugg/8bitworkshop",
+            "license": "GPL-3.0-only",
+            "reason": "Accepted as a lawful boot ROM but rejected as a compatibility replacement. It implements no BIOS jump table and only recognises the 55 AA homebrew header, so commercial cartridges using AA 55 hang at RST 0. Shipping it must not be represented as making the ColecoVision library playable."
+          },
+          {
+            "name": "No-delay, short-delay and fire-skip BIOS variants",
+            "license": "NOASSERTION",
+            "reason": "Widely circulated but they are modified copies of Coleco's original ROM, so they are derivative works with no redistribution grant."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "freeintv-packaging",
+      "systems": ["intellivision"],
+      "category": "unpackaged",
+      "priorEngine": "freeintv",
+      "priorPhase": 1,
+      "blocker": "The engine is licence-compatible and compiles, but unified-android/build.sh stages neither of its core lists, so Intellivision has no engine in any APK. The mandatory EXEC and GROM firmware also has no accepted redistributable identity.",
+      "status": "research",
+      "candidate": {
+        "name": "FreeIntv",
+        "repository": "https://github.com/libretro/FreeIntv",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "distributionGate": "compatible-candidate",
+          "evidence": "The FreeIntv copyright header grants the work under the GNU General Public License \"either version 2 of the License, or (at your option) any later version\", confirmed in both LICENSE and every source header, and libretro's freeintv_libretro.info records license = \"GPLv2+\". Ignore GitHub's NOASSERTION on libretro/FreeIntv: it is a detector artefact caused by a custom preamble sitting before the verbatim GPL body, not a licensing problem. Lucent's own registry already records this engine as a compatible candidate.",
+          "evidenceUrl": "https://raw.githubusercontent.com/libretro/FreeIntv/master/LICENSE"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "Lucent's engines/build_core.sh already has a freeintv recipe and engines/build/arm64-v8a/freeintv_libretro.so exists locally. freeintv_libretro_android.so.zip is also published on the libretro arm64-v8a buildbot."
+        },
+        "firmware": {
+          "required": true,
+          "note": "BLOCKER with no alternative path. Both exec.bin and grom.bin are mandatory, marked firmware0_opt=false and firmware1_opt=false, with no HLE and no core option to bypass them. engines/firmware/README.md records that jzIntv's miniexec.bin and minigrom.bin ship without corresponding assembly source or file-scoped licence notices; they are additionally useless as a substitute because only 557 of 4096 EXEC words are populated, about 13.6 percent, which drives only the author's own homebrew. No free replacement exists anywhere, so unlike ColecoVision this system has no lawful default at all and can only ship with a fail-closed user-supplied firmware contract."
+        },
+        "rationale": "There is nothing to replace: the incumbent is GPL-2.0-or-later, already compiles under Lucent's own recipe, and is the standard free Intellivision core. The Phase 4 work is packaging plus a firmware contract, not engine selection.",
+        "rejectedAlternatives": [
+          {
+            "name": "jzIntv miniexec.bin and minigrom.bin",
+            "license": "NOASSERTION",
+            "reason": "Already evaluated and rejected by Lucent. The jzIntv source archive distributes these as binaries with no corresponding assembly source and no file-scoped copyright or licence notices; a top-level GPL text beside binary-only firmware is not sufficient evidence to redistribute them, and they are deliberately incomplete."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "wonderswan-mono-routing",
+      "systems": ["wonderswan"],
+      "category": "unadvertised",
+      "priorEngine": "beetle-cygne",
+      "priorPhase": 1,
+      "blocker": "Beetle Cygne is the Mednafen WonderSwan core and emulates the monochrome model in the same binary, but Lucent advertises only the wonderswancolor system id. EngineSystemIdResolver has no alias mapping wonderswan onto it, so a library entry for the monochrome model resolves to a system id no engine claims and cannot launch.",
+      "status": "research",
+      "candidate": {
+        "name": "Beetle Cygne",
+        "repository": "https://github.com/libretro/beetle-wswan-libretro",
+        "license": {
+          "spdx": "GPL-2.0-or-later AND LicenseRef-V30MZ-Permissive",
+          "auditRef": "engines/audits/beetle-cygne-license.json",
+          "distributionGate": "compatible-candidate",
+          "evidence": "Lucent's own audit at engines/audits/beetle-cygne-license.json concluded \"GPL-3.0-compatible candidate through the GPL-2.0-or-later option; the permissive V30MZ component additionally requires author credit.\" No new licence work is needed for this row.",
+          "evidenceUrl": "https://github.com/libretro/beetle-wswan-libretro"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "Already solved. The pinned source produced byte-identical Android ARM64 artifacts and unified-android/build.sh already stages liblucent_core_beetle_cygne.so, so no new build work is required for this row."
+        },
+        "firmware": {
+          "required": false,
+          "note": "The WonderSwan needs no BIOS, and Phase 1 already recorded firmware.required=false for this engine."
+        },
+        "rationale": "This is a routing and qualification gap rather than an engine gap, and it must not be solved by adding a second engine. Phase 1 deliberately restricted the systems array to wonderswancolor because no separately licensed monochrome fixture had been qualified; Phase 4 must supply that fixture, add the alias, and extend the systems array on the existing row.",
+        "rejectedAlternatives": [
+          {
+            "name": "Adding a second WonderSwan engine",
+            "license": "n/a",
+            "reason": "Rejected on principle. The hardware is already emulated by a staged, reproducible, licence-audited Lucent core; the missing pieces are a redistributable monochrome fixture and an id alias, so introducing another engine would add compliance surface for no capability."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "neogeopocket-mono-routing",
+      "systems": ["neogeopocket"],
+      "category": "unadvertised",
+      "priorEngine": "beetle-neopop",
+      "priorPhase": 1,
+      "blocker": "Beetle NeoPop emulates both the monochrome Neo Geo Pocket and the Color model, and its registry row already claims the whole ngp family, but EngineSystemIdResolver has no alias mapping neogeopocket, neogeopocketcolor or ngpc onto ngp. SystemControlLayouts and the controller documentation already name those ids, so a library using them gets controls but no engine.",
+      "status": "research",
+      "candidate": {
+        "name": "Beetle NeoPop",
+        "repository": "https://github.com/libretro/beetle-ngp-libretro",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "auditRef": "engines/audits/beetle-neopop-license.json",
+          "distributionGate": "compatible-candidate",
+          "evidence": "Lucent's own audit at engines/audits/beetle-neopop-license.json concluded \"GPL-3.0-compatible candidate through the GPL-2.0-or-later option, subject to complete release notice and corresponding-source review.\" No new licence work is needed for this row.",
+          "evidenceUrl": "https://github.com/libretro/beetle-ngp-libretro"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "Already solved. The pinned source produced byte-identical Android ARM64 artifacts, it passed 100 exact serialized-state cycles on ARM64 Android, and unified-android/build.sh already stages liblucent_core_beetle_neopop.so."
+        },
+        "firmware": {
+          "required": false,
+          "note": "The Neo Geo Pocket needs no BIOS, and Phase 1 already recorded firmware.required=false for this engine."
+        },
+        "rationale": "This is purely an id-resolution gap. The engine, the build, the state proof and the controller layouts all already exist; only the alias table and a monochrome QA fixture are missing, since the existing Phase 1 fixture is a Neo Geo Pocket Color title.",
+        "rejectedAlternatives": [
+          {
+            "name": "Adding a second Neo Geo Pocket engine",
+            "license": "n/a",
+            "reason": "Rejected on principle. The registered ngp row already covers the monochrome model, so a second engine would add compliance surface for no capability."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "pcenginecd-routing",
+      "systems": ["pcenginecd"],
+      "category": "unadvertised",
+      "priorEngine": "beetle-pce-fast",
+      "priorPhase": 1,
+      "blocker": "Beetle PCE Fast supports PC Engine CD, but Phase 1 deliberately excluded the system, recording that it is \"deferred until Lucent can enforce a user-supplied system-card identity per system\". A test asserts pcenginecd is absent from the engine's systems array, so a large and significant library is unreachable by design rather than by accident.",
+      "status": "research",
+      "candidate": {
+        "name": "Beetle PCE Fast",
+        "repository": "https://github.com/libretro/beetle-pce-fast-libretro",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "auditRef": "engines/audits/beetle-pce-fast-license.json",
+          "distributionGate": "compatible-candidate",
+          "evidence": "Lucent's own audit at engines/audits/beetle-pce-fast-license.json concluded \"GPL-3.0-compatible candidate through the GPL-2.0-or-later option, subject to complete release notice and corresponding-source review.\" No new licence work is needed for this row.",
+          "evidenceUrl": "https://github.com/libretro/beetle-pce-fast-libretro"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "Already solved. The pinned source is reproducible, passed the full callback and 100-cycle state gate on ARM64 Android, and unified-android/build.sh already stages liblucent_core_beetle_pce_fast.so."
+        },
+        "firmware": {
+          "required": true,
+          "note": "This is the whole reason the system is deferred. PC Engine CD requires a user-supplied system card ROM, and the Phase 1 row explicitly declines to advertise the system until a per-system firmware identity can be enforced. The Phase 4 work is that firmware contract, not engine or build work."
+        },
+        "rationale": "PC Engine CD is the single largest library any already-approved Lucent engine can reach but does not expose. The engine, the build, the reproducibility proof and the state qualification are all done; only the firmware contract and the system id are missing, which makes this the cheapest genuine coverage gain in Phase 4.",
+        "rejectedAlternatives": [
+          {
+            "name": "Beetle SuperGrafx or a second PC Engine engine",
+            "license": "GPL-2.0-or-later",
+            "reason": "Rejected as out of scope. The staged core already handles CD content; adding another NEC core would not remove the firmware requirement, which is the actual blocker."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "gearlynx",
+      "systems": ["atarilynx"],
+      "category": "missing",
+      "blocker": "No Lucent engine exists for the Atari Lynx in any registry, and the system does not even appear in the external fallback catalog, so it is entirely uncovered.",
+      "status": "research",
+      "candidate": {
+        "name": "Gearlynx",
+        "repository": "https://github.com/drhelius/Gearlynx",
+        "license": {
+          "spdx": "GPL-3.0-or-later",
+          "distributionGate": "compatible-candidate",
+          "evidence": "src/gearlynx_core.cpp states \"This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.\" The repository LICENSE is the GPLv3 text and the libretro core-info database records license = \"GPLv3\".",
+          "evidenceUrl": "https://raw.githubusercontent.com/drhelius/Gearlynx/main/src/gearlynx_core.cpp"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "platforms/libretro/ contains libretro.cpp, Makefile.common and gearlynx_libretro.info, and platforms/libretro/jni/Application.mk contains \"APP_STL := c++_static\", \"APP_ABI := all\" and \"NDK_TOOLCHAIN_VERSION := clang\". Honest caveat: it is not yet in libretro-super recipes/android/cores-android, so no buildbot binary exists and Lucent must build it, exactly as it already does for its sibling Gearsystem which has a byte-identical jni layout."
+        },
+        "firmware": {
+          "required": false,
+          "note": "The Lynx boot ROM is optional for the common libretro Lynx cores; this must be confirmed against Gearlynx specifically during qualification rather than assumed."
+        },
+        "rationale": "It is by Ignacio Sanchez, the author of Gearsystem and Gearcoleco which Lucent already builds, so the recipe shape and code conventions are already understood in-house. Its GPL-3.0-or-later licence needs no version-compatibility argument at all, and it is under active daily development.",
+        "rejectedAlternatives": [
+          {
+            "name": "Beetle Lynx",
+            "repository": "https://github.com/libretro/beetle-lynx-libretro",
+            "license": "GPL-2.0-or-later AND Zlib",
+            "reason": "Also fully compatible and it has the advantage of an existing buildbot binary. Worth recording that the widely repeated claim that its underlying Handy code is non-commercial is false: mednafen/lynx/license.txt is the Zlib licence, which states permission is granted \"for any purpose, including commercial applications\". It is the fallback if a battle-tested binary matters more than maintenance activity."
+          },
+          {
+            "name": "libretro-handy",
+            "license": "Zlib",
+            "reason": "The same Zlib-licensed Handy core, but it carries no root LICENSE or COPYING file at all and no licence headers on its libretro glue, which is weaker provenance than Lucent's compliance model accepts."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "vecx",
+      "systems": ["vectrex"],
+      "category": "missing",
+      "blocker": "No Lucent engine exists for the Vectrex. The only Android-capable core, libretro-vecx, hard-compiles the copyrighted GCE executive ROM into its binary with no external BIOS path whatsoever, so it cannot be packaged as-is.",
+      "status": "research",
+      "candidate": {
+        "name": "VecX",
+        "repository": "https://github.com/libretro/libretro-vecx",
+        "license": {
+          "spdx": "GPL-3.0-only",
+          "distributionGate": "audit-required",
+          "evidence": "LICENSE.md is the GNU General Public License Version 3, 29 June 2007 and libretro's vecx_libretro.info records license = \"GPLv3\". Audit rather than compatible-candidate because the core source files vecx.c, e6809.c and libretro.c carry no per-file licence headers at all, so the GPL-3.0 claim rests on the repository licence file plus libretro metadata; only vecx_psg.c and vecx_psg.h have headers, and those are MIT.",
+          "evidenceUrl": "https://raw.githubusercontent.com/libretro/libretro-vecx/master/LICENSE.md"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "jni/Android.mk and jni/Application.mk are present and vecx_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot."
+        },
+        "firmware": {
+          "required": true,
+          "note": "BLOCKER, and it requires patching the core rather than only a firmware contract. libretro.c contains \"#define STANDARD_BIOS\", \"#include \\\"bios/system.h\\\"\" and \"memcpy(rom, bios_data, bios_data_size);\" with no code path that reads a BIOS from the system directory. bios/system.bin is byte-identical to MAME's copyrighted exec_rom.bin at SHA1 65d07426b520ddd3115d40f255511e0fd2e20ae7, and bios/fast.bin matches MAME's us-fastboot.bin, a hack of the original and therefore still derivative. Smith Engineering's permission covers not-for-profit circulation only, which is a non-commercial restriction that GPLv3 sections 7 and 10 forbid adding. No clean-room replacement exists; circulating BIOS.ASM files are disassemblies. Lucent must strip the embedded ROM and add an external user-supplied BIOS path, the same pattern as its existing AppleWin ROM-removal patch."
+        },
+        "rationale": "It is the only GPL-3-compatible Vectrex engine with a shipping Android arm64 core, and the fix required is a small, well-understood patch of the kind Lucent has already written once for AppleWin. Recording it as audit-required rather than compatible-candidate is deliberate given the missing per-file headers.",
+        "rejectedAlternatives": [
+          {
+            "name": "MAME vectrex driver",
+            "repository": "https://github.com/mamedev/mame",
+            "license": "GPL-2.0-or-later",
+            "reason": "Compatible, and it would avoid the embedded-ROM problem because MAME loads the BIOS externally, but it is a far heavier dependency for a single simple system and would still require the same user-supplied ROM."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "beetle-pcfx",
+      "systems": ["pcfx"],
+      "category": "missing",
+      "blocker": "No Lucent engine exists for the PC-FX, leaving the NEC family incomplete alongside the already-approved Beetle PCE Fast. The system requires a proprietary 1 MB BIOS with no free replacement and no high-level-emulation path.",
+      "status": "research",
+      "candidate": {
+        "name": "Beetle PC-FX",
+        "repository": "https://github.com/libretro/beetle-pcfx-libretro",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "distributionGate": "compatible-candidate",
+          "evidence": "mednafen/pcfx/king.cpp states \"This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.\" A whole-tree grep found 41 files with that or-later grant, one file granting version 3 or later, zero GPL-2.0-only phrasings and zero non-commercial clauses. Crucially it also contains no legacy SoftFloat: it carries mednafen/hw_cpu/v810/v810_fp_ops.cpp and no fpu-new/ directory, unlike beetle-vb.",
+          "evidenceUrl": "https://raw.githubusercontent.com/libretro/beetle-pcfx-libretro/master/mednafen/pcfx/king.cpp"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "jni/Android.mk and jni/Application.mk with APP_ABI := all are present, and mednafen_pcfx_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot. It is also a Mednafen core, so Lucent's existing build_mednafen_software_core() recipe shape applies."
+        },
+        "firmware": {
+          "required": true,
+          "note": "pcfx.rom is mandatory, exactly 1 MB, md5 08e36edbea28a017f79f8d4f7ff9b6d7, marked firmware_opt=false. libretro.cpp opens it from the system directory and hard-fails without it. It is proprietary NEC firmware with no free replacement and no HLE path, so this system can only ever ship with a fail-closed user-supplied firmware contract."
+        },
+        "rationale": "It is the cleanest licence result of the entire missing set, verified by whole-tree grep rather than by sampling, and it slots into a Mednafen recipe Lucent has already used to produce byte-identical artifacts three times. The firmware requirement is the only real obstacle and it matches the contract Lucent already needs for PC Engine CD.",
+        "rejectedAlternatives": [
+          {
+            "name": "MAME pcfx driver",
+            "repository": "https://github.com/mamedev/mame",
+            "license": "GPL-2.0-or-later",
+            "reason": "Compatible but far less mature for PC-FX than Mednafen, and a much heavier dependency for no benefit."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "same-cdi",
+      "systems": ["cdi"],
+      "category": "missing",
+      "blocker": "No Lucent engine exists for the Philips CD-i. The system needs a Philips system ROM plus two MC68HC705C8A servo and slave MCU dumps, both of which MAME marks BAD_DUMP, and there is no free replacement for any of them.",
+      "status": "research",
+      "note": "MAME is a registered trademark and docs/source/license.rst requires permission to use the MAME name, logo or wordmark. Copyright compatibility does not carry trademark permission, so any Lucent surface naming this engine, and any compliance notice generated for it, must respect that obligation. The same applies to the X68000 row.",
+      "candidate": {
+        "name": "SAME CDi",
+        "repository": "https://github.com/libretro/same_cdi",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "auditRef": "engines/audits/mame-license.json",
+          "distributionGate": "audit-required",
+          "evidence": "The COPYING ambiguity is now closed. Lucent's own audit at engines/audits/mame-license.json enumerated every licence tag under src/ and found zero GPL-2.0-only tags against 434 GPL-2.0+ ones, concluding copyright compatibility is established at both file and aggregate level. MAME's docs/source/license.rst states \"The MAME project as a whole is distributed under the terms of the GNU General Public License, version 2 or later (GPL-2.0+)\" and the same_cdi README repeats it; the COPYING file's bare \"version 2\" phrasing is stale boilerplate. The CD-i driver itself is marked \"// license:BSD-3-Clause\". This stays audit-required rather than compatible-candidate because the same_cdi fork's own file selection has not been audited, only upstream MAME's.",
+          "evidenceUrl": "https://raw.githubusercontent.com/mamedev/mame/master/docs/source/license.rst"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "Makefile.libretro has an explicit android-arm64 platform target setting ANDROID_TRIPLE := aarch64-linux-android and PTR64 = 1, and same_cdi_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot."
+        },
+        "firmware": {
+          "required": true,
+          "note": "cdimono1.zip is mandatory, marked firmware_opt=false. It needs cdi200.rom or cdi220b.rom plus zx405037p cdi_servo_2.1 and zx405042p cdi_slave_2.0, all copyrighted and the two MCU dumps flagged BAD_DUMP upstream. There is no free replacement, so only a fail-closed user-supplied firmware contract is possible."
+        },
+        "rationale": "CD-i looked unreachable but is not: this is the only CD-i implementation with any Android ARM64 path at all, since the alternative CD-i Emulator is closed-source and Windows-only. Recording it as audit-required is deliberate because the MAME COPYING contradiction is a real open question rather than settled.",
+        "rejectedAlternatives": [
+          {
+            "name": "CD-i Emulator by CD-i Fan",
+            "license": "proprietary",
+            "reason": "Closed source with no public repository and no licence statement obtainable, so it can never enter a GPL-3.0-only combined distribution regardless of technical merit."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    },
+    {
+      "id": "x68000",
+      "systems": ["x68000"],
+      "category": "missing",
+      "blocker": "No Lucent engine exists for the Sharp X68000. The obvious candidate, px68k, presents a bare GPLv2 COPYING file that no upstream grant supports, and its true origin licenses the code for non-profit use only.",
+      "status": "research",
+      "note": "MAME is a registered trademark and docs/source/license.rst requires permission to use the MAME name, logo or wordmark. That obligation is separate from copyright and applies to any Lucent surface or compliance notice naming this engine. It is one more reason this row is recorded as the honest floor rather than a recommendation.",
+      "candidate": {
+        "name": "MAME x68000 driver",
+        "repository": "https://github.com/mamedev/mame",
+        "license": {
+          "spdx": "GPL-2.0-or-later",
+          "auditRef": "engines/audits/mame-license.json",
+          "distributionGate": "audit-required",
+          "evidence": "src/mame/sharp/x68k.cpp is marked \"// license:BSD-3-Clause\" and sits inside the MAME aggregate. Lucent's own audit at engines/audits/mame-license.json establishes copyright compatibility at both file and aggregate level, finding zero GPL-2.0-only tags anywhere in the tree, so the COPYING file's bare \"version 2\" phrasing does not block. This stays audit-required because a MAME build that includes the x68000 driver is a different file selection from the pinned arcade-only configuration that audit covers, and because of the trademark obligation noted on the row.",
+          "evidenceUrl": "https://raw.githubusercontent.com/mamedev/mame/master/docs/source/license.rst"
+        },
+        "androidArm64": {
+          "route": "libretro-core",
+          "evidence": "mamemess_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot, and Lucent already has a working constrained MAME build recipe in engines/build_core.sh."
+        },
+        "firmware": {
+          "required": true,
+          "note": "Both an IPL ROM and a font ROM are required and neither has a free replacement. Sharp's celebrated 2000 release of the X68000 IPL ROM was granted for non-commercial use and emulation, which is itself a non-commercial condition, so those bytes cannot be bundled either. Fonts ripped from CGROM.DAT are derivative works. Only a fail-closed user-supplied firmware contract is possible, and the product should weigh whether that is worth the integration cost."
+        },
+        "rationale": "This is the only licence-compatible X68000 path that exists, and it is recorded here so the row is honest rather than empty. It is deliberately unattractive: it means MAME romset conventions and a heavy core for one system, so the realistic outcome is that X68000 is dropped from scope. See the rejected px68k entry for why the obvious answer fails.",
+        "rejectedAlternatives": [
+          {
+            "name": "px68k",
+            "repository": "https://github.com/libretro/px68k-libretro",
+            "license": "LicenseRef-NonCommercial",
+            "reason": "Rejected, and its COPYING file is actively misleading. It ships the bare GPLv2 text and GitHub detects GPL-2.0, but upstream hissorii/px68k has no licence at all, only five files in the whole repository carry a GPL header, and the entire x68k/ emulation directory is unlicensed. Its true origin is Kenjo's WinX68k, whose LICENSES file prohibits incorporating the source into commercial software without the author's consent and permits modification and distribution only for non-profit released software. Libretro's own metadata classifies it license = \"Custom Non-Commercial\"."
+          },
+          {
+            "name": "XM6 / XM6 TypeG",
+            "license": "UNVERIFIED",
+            "reason": "No licence statement was obtained, so it is recorded as unverified rather than assumed closed. It has no Android or libretro path regardless, so it is not a viable candidate either way."
+          }
+        ]
+      },
+      "gates": {"source": false, "license": false, "dependencies": false, "androidArm64": false, "firmware": false, "legalContent": false, "renderer": false, "state": false, "performance": false, "device": false},
+      "shipped": false
+    }
+  ]
+}

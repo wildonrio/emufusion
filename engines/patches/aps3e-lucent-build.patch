@@ -1,0 +1,50 @@
+diff --git a/app/build.gradle.bak b/app/build.gradle.bak
+index 134de7dd..de92b6e0 100644
+--- a/app/build.gradle.bak
++++ b/app/build.gradle.bak
+@@ -2,6 +2,12 @@ plugins {
+     alias(libs.plugins.android.application)
+ }
+ 
++def lucentAdapterSource = System.getenv('LUCENT_ADAPTER_SOURCE')
++def lucentAdapterInclude = System.getenv('LUCENT_ADAPTER_INCLUDE')
++if (!lucentAdapterSource || !lucentAdapterInclude) {
++    throw new GradleException('Lucent adapter source/include environment is required')
++}
++
+ android {
+     namespace 'aenu.aps3e'
+     compileSdk 35
+@@ -20,6 +26,8 @@ android {
+             cmake {
+                 abiFilters 'arm64-v8a'
+                 cppFlags ''
++                arguments "-DLUCENT_ADAPTER_SOURCE=${lucentAdapterSource}",
++                        "-DLUCENT_ADAPTER_INCLUDE=${lucentAdapterInclude}"
+             }
+         }
+ 
+@@ -78,4 +86,4 @@ dependencies {
+     testImplementation libs.junit
+     androidTestImplementation libs.ext.junit
+     androidTestImplementation libs.espresso.core
+-}
+\ No newline at end of file
++}
+diff --git a/app/src/main/cpp/CMakeLists.txt b/app/src/main/cpp/CMakeLists.txt
+index 723c3c04..7503f8b0 100644
+--- a/app/src/main/cpp/CMakeLists.txt
++++ b/app/src/main/cpp/CMakeLists.txt
+@@ -32,6 +32,12 @@ add_subdirectory(rpcs3 EXCLUDE_FROM_ALL)
+ add_library(emu SHARED)
+ set_target_properties(emu PROPERTIES OUTPUT_NAME "e")
+ 
++if(DEFINED LUCENT_ADAPTER_SOURCE)
++    target_sources(emu PRIVATE ${LUCENT_ADAPTER_SOURCE})
++    target_include_directories(emu PRIVATE ${LUCENT_ADAPTER_INCLUDE})
++    set_target_properties(emu PROPERTIES OUTPUT_NAME "lucent_native_adapter_aps3e")
++endif()
++
+ target_link_options(emu PRIVATE -Wl,--exclude-libs,ALL)
+ 
+ #target_compile_options(emu PRIVATE -flto)

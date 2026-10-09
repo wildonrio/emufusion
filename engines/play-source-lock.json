@@ -1,6 +1,14 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-07",
+  "verifiedAt": "2026-10-04",
+  "alignmentProof": {
+    "artifactSha256": "911fad87e54c22fa328347fc908e7af8fa7fd7e8d10c272d620171d4681f5bc4",
+    "freshBuildCount": 2,
+    "byteIdentical": true,
+    "pageAlignment": 16384,
+    "scope": "Different clean source/build paths with existing six integration patches and explicit shared/module linker alignment. Strict Android 16 KiB loader accepts binary; not a new gameplay/runtime pass.",
+    "evidence": "docs/qa/android-portability-2026-10-04-highend-pages/build-results.json"
+  },
   "buildProfile": "android-arm64-libretro-opengl-no-ui",
   "closureScope": "exact-staged-source-and-gitlink-closure-for-this-build-profile",
   "sourceDateEpoch": 1783783385,

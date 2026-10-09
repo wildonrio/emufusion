@@ -19,6 +19,7 @@
  * advertises the wrong ABI so the host's fail-closed ABI gate can be exercised.
  */
 #include "../include/lucent_native_adapter.h"
+#include "../include/lucent_native_source_image.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +29,28 @@
 #define MOCK_PATTERN_BASE 0xC0DE0000u
 #define MOCK_SAVE_FILE "mock-wiiu.sav"
 static const char MOCK_SENTINEL[] = "LUCENT-MOCK-WIIU-SAVE\n";
+#ifndef MOCK_NO_FG_PRESENTATION
+static bool mock_fg_presentation;
+__attribute__((visibility("default")))
+void lucent_native_adapter_set_fg_presentation_v1(bool enabled) {
+    mock_fg_presentation = enabled;
+}
+__attribute__((visibility("default")))
+bool lucent_mock_fg_presentation(void) { return mock_fg_presentation; }
+#endif
+
+#if defined(MOCK_JAVA_VM_SETTER_SUCCESS) || defined(MOCK_JAVA_VM_SETTER_FAILURE)
+__attribute__((visibility("default")))
+int lucent_native_adapter_set_java_vm(uint32_t version, void *java_vm) {
+#ifdef MOCK_JAVA_VM_SETTER_FAILURE
+    (void)version;
+    (void)java_vm;
+    return 0;
+#else
+    return version == 1u && java_vm == (void *)(uintptr_t)0x1234u;
+#endif
+}
+#endif
 
 #ifdef MOCK_ABI_MISMATCH
 #define MOCK_ABI_VERSION (LUCENT_NATIVE_ADAPTER_ABI_VERSION + 1u)
@@ -48,6 +71,64 @@ struct lucent_native_engine {
     float last_control_value;
 };
 
+/* Optional tier-pacing hooks, exported so the host's dlsym path is proven. */
+static double mock_paced_video_hz;
+
+#ifdef MOCK_SOURCE_IMAGE_SIDEBAND
+__attribute__((visibility("default")))
+uint32_t lucent_native_adapter_source_image_binding_v1(lucent_source_binding_v1 *out, uint32_t size) {
+    if (!out || size < sizeof(*out)) return LUCENT_SOURCE_BAD_ARGUMENT;
+    memset(out, 0, sizeof(*out));
+    out->version = LUCENT_SOURCE_IMAGE_VERSION;
+#ifdef MOCK_SOURCE_BAD_BINDING
+    out->version = 2;
+#endif
+    out->struct_size = sizeof(*out);
+    out->session_epoch = 11; out->surface_epoch = 12; out->swapchain_epoch = 13;
+    return LUCENT_SOURCE_MATCH_ACCEPTED;
+}
+__attribute__((visibility("default")))
+uint32_t lucent_native_adapter_query_source_image_v1(uint64_t session, uint64_t surface,
+        uint64_t timestamp, lucent_source_image_v1 *out, uint32_t size) {
+    if (!out || size < sizeof(*out)) return LUCENT_SOURCE_BAD_ARGUMENT;
+    memset(out, 0, sizeof(*out));
+    out->version = LUCENT_SOURCE_IMAGE_VERSION; out->struct_size = sizeof(*out);
+    out->state = LUCENT_SOURCE_MATCH_ACCEPTED;
+    out->buffer_timestamp_ns = timestamp;
+#ifdef MOCK_SOURCE_BAD_ROW
+    ++out->buffer_timestamp_ns;
+#endif
+    out->composition.header.session_epoch = session;
+    out->composition.header.surface_epoch = surface;
+    out->composition.header.swapchain_epoch = 13;
+    out->composition.layers[0].queue_frame_number = 42;
+    return LUCENT_SOURCE_MATCH_ACCEPTED;
+}
+#endif
+
+#ifdef MOCK_TIMING_CAPABILITIES
+__attribute__((visibility("default")))
+uint32_t lucent_native_adapter_timing_capabilities_v1(void) {
+    return MOCK_TIMING_CAPABILITIES;
+}
+#endif
+#ifdef MOCK_PRODUCER_TIMELINE_HZ
+__attribute__((visibility("default")))
+double lucent_native_adapter_producer_timeline_hz(void) {
+    return MOCK_PRODUCER_TIMELINE_HZ;
+}
+#endif
+
+__attribute__((visibility("default")))
+double lucent_native_adapter_declared_video_hz(void) { return 60.0; }
+
+__attribute__((visibility("default")))
+bool lucent_native_adapter_set_paced_video_hz(double hz) {
+    if (hz > 60.0) return false;
+    mock_paced_video_hz = hz > 0.0 ? hz : 0.0;
+    return true;
+}
+
 static void mock_describe(lucent_native_capabilities *out) {
     if (!out) return;
     out->abi_version = MOCK_ABI_VERSION;
@@ -57,6 +138,7 @@ static void mock_describe(lucent_native_capabilities *out) {
     out->has_persistent_save = true;    /* Normal save flush is supported. */
     out->dual_screen = true;            /* Wii U TV + GamePad views. */
     out->required_firmware = 0;
+    out->max_controllers = 1;           /* This mock drives only controller_index 0. */
 }
 
 static lucent_native_engine *mock_create(void) {
@@ -125,8 +207,9 @@ static bool mock_run_frame(lucent_native_engine *engine) {
     return true;
 }
 
-static void mock_set_control(lucent_native_engine *engine,
+static void mock_set_control(lucent_native_engine *engine, uint32_t controller_index,
                              lucent_native_control control, float value) {
+    (void)controller_index;
     (void)control;
     if (engine) engine->last_control_value = value;
 }
@@ -144,8 +227,17 @@ static bool mock_flush_save(lucent_native_engine *engine) {
     FILE *file;
     if (!engine || !engine->loaded) return false;
     if (!engine->save_directory) return true; /* Nothing to persist to. */
-    if ((size_t)snprintf(path, sizeof(path), "%s/%s",
-                         engine->save_directory, MOCK_SAVE_FILE) >= sizeof(path))
+    /* Only the directory is a runtime %s argument; MOCK_SAVE_FILE is
+     * compile-time string-literal-concatenated into the format itself. A
+     * short literal passed as its own separate %s argument here previously
+     * tripped an ASan global-buffer-overflow false positive on this
+     * toolchain's vsnprintf once an unrelated struct-layout change (adding
+     * lucent_native_capabilities.max_controllers) shifted nearby global
+     * string placement -- Apple's libc %s scan for short literals can read
+     * in fixed-size chunks past the terminator, which ASan's redzone then
+     * flags even though the extra bytes are never used. */
+    if ((size_t)snprintf(path, sizeof(path), "%s/" MOCK_SAVE_FILE,
+                         engine->save_directory) >= sizeof(path))
         return false;
     file = fopen(path, "wb");
     if (!file) return false;

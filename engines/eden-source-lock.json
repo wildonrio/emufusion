@@ -1,9 +1,37 @@
 {
   "schemaVersion": 1,
+  "stickClickCandidate20261007": "One adapter TU adds L3/R3 controls23/24; existing fixes and all other native inputs retained. Host mapping tests, unchanged exports and16KiB ELF alignment pass. No new runtime qualification yet. Evidence: docs/qa/android-portability-2026-10-07-native-stick-clicks/eden/native-result.json. Previous runtime/artifact notes below are historical.",
   "engineId": "eden",
   "systems": [
     "switch"
   ],
+  "portableConsoleModeCheckpoint": {
+    "date": "2026-10-04",
+    "status": "handheld-default-launch-menu-and-exit-verified-gameplay-unqualified",
+    "previousArtifactSha256": "c21e570bb993299e899b7ef7ad5ccddb5b08af275fd8572e1561bef997c895f4",
+    "rebuiltArtifactSha256": "1df3da965802842f50514870b96dae5776a2d0a3a1eb50dcc528c0799c42c827",
+    "buildId": "8f784cb76a8ee5ca8f0545f870f1fd804bbbb684",
+    "evidencePath": "docs/qa/android-portability-2026-10-04-switch-handheld/outcome.json",
+    "note": "Replace the unconditional Thor-panel-based Docked override with the pinned upstream Android Handheld default. Set it before guest initialization on every load; log the effective value after logging initialization. Isolated adapter-TU rebuild, unchanged other objects and prior failed-Load repair. Exact candidate807dfefd on headless landscape Android16/Lavapipe confirms handheld mode, first frame, save notice, intro, title, main-menu input and normal durable-flush/stop/release/library return. Title/menu speed remains about1.7-2.2FPS: no level-gameplay, audio, smoothness, physical-phone or universal compatibility pass. Other emulator/Java payloads unchanged. No public release or qualification flag change. Older mode/artifact notes below are historical."
+  },
+  "startupFailureCheckpoint": {
+    "date": "2026-10-04",
+    "status": "startup-error-and-exit-regression-verified-gameplay-unqualified",
+    "previousArtifactSha256": "dee2fd65315b51ab4607a99164fe2b28fc4e74d3fa79f06f8a55159148062334",
+    "rebuiltArtifactSha256": "c21e570bb993299e899b7ef7ad5ccddb5b08af275fd8572e1561bef997c895f4",
+    "buildId": "44759298ef3f4959a00ab674b93d392dd4a9eed1",
+    "evidencePath": "docs/qa/android-portability-2026-10-04-start-failure/outcome.json",
+    "note": "Recompiled only the adapter TU to explain ErrorVideoCore; relinked against the exact prior fixed core archive and unchanged remaining objects. Prior failed-load crash repair retained. Dynamic export names unchanged; four LOAD segments retain 0x4000 alignment. Companion Java shows the startup cause and waits for the render owner before deciding whether an unstarted session needs save handling. Two host-Vulkan failures return without false save warnings; software Vulkan reaches the owned game's startup sequence, then normal save flush/stop/release/library return. No gameplay, smoothness, physical-device or full save-content acceptance. Earlier checkpoints are historical, not the current artifact identity. No public release or qualification flags changed."
+  },
+  "failedLoadCheckpoint": {
+    "date": "2026-10-04",
+    "status": "crash-recovery-verified-gameplay-unqualified",
+    "previousArtifactSha256": "13462144097fa0b11a5ed73e198e68ffe9b9e77ef2678c53dbb6ee5a46d758a9",
+    "rebuiltArtifactSha256": "dee2fd65315b51ab4607a99164fe2b28fc4e74d3fa79f06f8a55159148062334",
+    "buildId": "3d3544b4226a1644076a108cce5d00876660f5c9",
+    "evidencePath": "docs/qa/android-portability-2026-10-04-switch-load/outcome.json",
+    "note": "Recompiled only core.cpp; replaced one archive member, preserving 551 other members. Same configured link command and exact existing dependencies. Two host-GPU failures complete native teardown and recover to the library without SIGSEGV. Same APK with software Vulkan reaches Mega Man 11 main menu via input, then normal save/stop/release and library return. Software-renderer speed is inadequate; no gameplay, audio, cadence, physical-device or universal compatibility pass. Export names unchanged and four PT_LOAD segments retain 0x4000 alignment. Old artifact/lock retained beside evidence. No public release or qualification gates changed. Earlier checkpoints below are historical; their artifact identities are not this new build."
+  },
   "route": "native-adapter",
   "buildProfile": "android-arm64-native-adapter-vulkan",
   "closureScope": "staged-source-and-CPM-fetched-dependency-closure-for-this-build-profile",
@@ -11,10 +39,11 @@
   "reproducibleNote": "Exactly ONE build of this tree exists. No second, independent, byte-identical build has been attempted, so no reproducibility claim is made and no independentBuilds proof is recorded. The dependency closure below is also incomplete: the configure line enables YUZU_USE_CPM=ON with CPMUTIL_FORCE_BUNDLED=ON, so CPM fetched third-party sources at configure time that are NOT individually pinned here. Every gate in engines/phase3-registry.json stays false and shipped stays false. Packaging is opt-in only (LUCENT_INCLUDE_PHASE3_EDEN=1) and the Java NativeAdapterCatalog still requires the artifact sha256 below to match byte-for-byte before Switch resolves INTERNAL.",
   "adapterAbi": {
     "header": "unified-android/native/include/lucent_native_adapter.h",
-    "abiVersion": 1,
+    "abiVersion": 2,
     "entrySymbol": "lucent_native_adapter_entry",
     "expectedLibraryName": "liblucent_native_adapter_eden.so",
-    "renderKind": "LUCENT_NATIVE_RENDER_VULKAN_WINDOW"
+    "renderKind": "LUCENT_NATIVE_RENDER_VULKAN_WINDOW",
+    "note": "2026-09-07: bumped 1 -> 2 for the local-multiplayer ABI change (lucent_native_capabilities gained max_controllers; set_control gained a controller_index parameter ahead of the control enum). The host loader, JNI bridge, Java wrapper, engine-session class, and C test mocks were updated for the new signature elsewhere this session; this lock records only the eden adapter translation unit's own conforming update, described in the patches[] entry and the artifact note below."
   },
   "core": {
     "repository": "https://git.eden-emu.dev/eden-emu/eden",
@@ -41,7 +70,7 @@
     "ANDROID_PLATFORM": "android-30",
     "CMAKE_BUILD_TYPE": "Release",
     "ENABLE_QT": 0,
-    "ENABLE_WEB_SERVICE": 1,
+    "ENABLE_WEB_SERVICE": 0,
     "ANDROID_ARM_NEON": true,
     "YUZU_USE_CPM": "ON",
     "CPMUTIL_FORCE_BUNDLED": "ON",
@@ -49,32 +78,332 @@
     "BUILD_TESTING": "OFF",
     "YUZU_TESTS": "OFF",
     "DYNARMIC_TESTS": "OFF",
-    "note": "Eden is a standalone Switch emulator with its own Android Activity. This profile builds its native library with the adapter translation unit compiled in and no Eden UI in Lucent's process; Lucent owns the surface, audio sink, pause/resume, save flushing, and teardown ordering."
+    "note": "Eden is a standalone Switch emulator with its own Android Activity. This profile builds its native library with the adapter translation unit compiled in and no Eden UI in Lucent's process; Lucent owns the surface, audio sink, pause/resume, save flushing, and teardown ordering. Web services are disabled because the embedded frontend exposes no Eden sign-in or room UI; leaving them enabled caused repeated background socket traffic inside EmuFusion during gameplay and added code/relocation work to the launch path."
   },
   "patches": [
     {
+      "path": "engines/patches/eden-process-load-unwind.patch",
+      "sha256": "060d351e18fdb3c229ada544345cd875637a62c94ccdbdc38efd4d13d5565505",
+      "sizeBytes": 1391,
+      "role": "failed-load-source-reproduction",
+      "note": "Scoped local crash fix; apply with git apply after the existing core.cpp teardown patches. Reverse/check and a temporary-tree reverse/forward byte-exact round trip pass. Does not replace unrelated edits or relax Vulkan feature requirements."
+    },
+    {
       "path": "engines/patches/eden-lucent-adapter.cpp",
-      "sha256": "5583b16791eaebe4147e8c689fb42996d7d4a39ef539a479319e020574ad13d6",
+      "sha256": "19b417b8d4d62a9e36a95d5b6c32321a1c78f5e7294d7aee00a449e99dd0339c",
       "role": "adapter-translation-unit",
-      "note": "Compiled INTO Eden's own native library. Implements the lucent_native_adapter vtable and exports lucent_native_adapter_entry plus the lucent_eden_average_game_fps measurement hook."
+      "portableDefaultNote": "October4: current default is Handheld, not the Docked mode described in the historical note below. See portableConsoleModeCheckpoint; no CPU, timing, image, control or aspect-ratio policy change.",
+      "note": "Compiled into Eden's native library. Implements the adapter, host-owned PCM sink and timing/image diagnostics. Embedded load explicitly selects Dynarmic plus Accurate: Auto previously disabled guest-address bounds checks by setting fastmem_address_space_bits=64. This correctness policy is not attribution of the observed heap corruption; recorded crashes already ran Dynarmic and the original writer is unknown. Retains offline guest policy, docked mode, fractional VI correction bounded to +/-0.75 percent, session/surface epochs and GPU-owner lifecycle ordering. Whole-guest/audio timing and image authority remain unqualified. See the CPU bounds checkpoint for executable ARM64 emitter evidence and current runtime status. 2026-09-07 local multiplayer: adapter_describe() now reports max_controllers = kMaxLocalControllers (8), matching Settings::values.players[0..7] (NpadIdType::Player1..Player8 -- the underlying InputSetting array has 10 slots, but 8 and 9 back Handheld and Other, which Lucent never routes local controllers onto). adapter_load() connects and sets ControllerType::ProController on all 8 of those player slots before InitializeEmulation reloads HID devices (previously only players[0]), so a multiplayer session finds every controller_index adapter_set_control() will honor already connected at boot. adapter_set_control() gained the ABI v2 controller_index parameter (uint32_t, ahead of the control enum, matching the v2 header) and now calls VirtualGamepad::SetButtonState/SetStickPosition with that index instead of a hardcoded constexpr kPlayerOne = 0; any controller_index >= kMaxLocalControllers is a fail-closed no-op (dropped, never aliased onto player 0). The two file-scope stick_state globals (g_left_stick/g_right_stick) that reconstructed the paired axis for SetStickPosition became fixed-size arrays of stick_state indexed by controller_index, so a second player's stick input can no longer stomp the first player's retained partner-axis value. No change to load's CPU backend/accuracy selection, docked-mode default, airplane-mode/LDN policy, or any timing/image-diagnostics code -- those are out of scope for this edit and were left untouched. Rebuilt via `ninja -C engines/build/switch-src/eden/build-android -j6 yuzu-android` against the pinned c0ffc900cdf19b9373549c59a7e6b22c33615ea4 checkout; see the artifact note below for the resulting library measurement. Prior sha256 1fd55eef828de8d2d6d6612f22349319805a53676f00b0219156e7affed750a5 (45094 bytes) is preserved in engines/build/candidates/eden-multiplayer-2026-09-07/rollback-bcf042f3381deece0439f0af48e6c76a3bc909874cbca17a2543e10934d7619b/ alongside the pre-edit artifact and this lock file, for rollback.",
+      "sizeBytes": 47437
+    },
+    {
+      "path": "src/common/android/id_cache.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "a2cf40feb5f562d3e99e48e06ae36de6a2b4462aaac79728a87b1d783a772131",
+      "role": "local-source-patch",
+      "note": "Local patch to the vendored Eden tree, NOT an upstream contribution. java.lang.{Double,Integer,Boolean}.value are private fields carrying the max-target-p hidden-API restriction, so Android denies GetFieldID by JNI for any app targeting above API 28; Lucent targets 30. The denial leaves a pending NoSuchFieldError that JNI_OnLoad never clears, so ART aborts the process before a title can boot. The patch clears that specific pending exception and logs it. Boxing still works because the constructors are public; only unboxing through the cached field is lost, and Lucent never drives Eden's Java settings path. Behaviour on API<=28 is unchanged, since the lookup succeeds there and there is nothing to clear.",
+      "sizeBytes": 25199
+    },
+    {
+      "path": "src/audio_core/sink/sink_details.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "d3494ca8dcaec7d414c76e1c8c83f6306b2187137f01710b8e7cdd341958270f",
+      "role": "local-source-patch",
+      "note": "Local patch to the vendored Eden tree, NOT an upstream contribution. Lucent owns the audio device: the adapter ABI hands every engine an audio_sink backed by a Lucent AudioTrack, so Eden must render into that and must NOT open a device of its own. Eden picks its backend from a constexpr table keyed on Settings::AudioEngine, and there is no enumerator meaning 'the embedding host owns the device'; adding one would have to touch the enum, its canonicalizations, its metadata specializations and the Qt settings UI. The patch instead adds a single file-local factory pointer plus SetLucentSinkFactory(), consulted at the top of CreateSinkFromID. The adapter installs it before InitializeEmulation and clears it on stop; when it is null the file behaves exactly as upstream. Taking over the sink rather than tapping it is deliberate: it keeps Eden's own down-mix, volume and buffer-release accounting, and it stops OboeSink from being constructed at all -- OboeSinkStream is destroyed through Sink::CloseStream while its OpenSL ES buffer-queue callback is still registered, and neither Oboe's destructors nor Eden ever call oboe::AudioStream::close(), which is a use-after-free on a platform audio thread every time a guest ends an audio session.",
+      "sizeBytes": 7612
+    },
+    {
+      "path": "src/core/core_timing.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "00d4ec51f7a805659ddf9e354f2c896a95924302353732ad939577df2e904e3e",
+      "role": "local-source-patch",
+      "note": "Local defensive replacement in the vendored Eden tree, NOT an upstream contribution and NOT yet a device-proven fix. AArch64 DWARF for the prior object places Event::handle at 0x28 (the weak_ptr begins at 0x10 and its control pointer is at 0x18), correcting the earlier lock note. The retained stacks prove an invalid/damaged fibonacci-heap node but lack the faulting PC/registers needed to prove whether the 0x28 fault was the Event handle load or an inlined null Boost-node access. The old source did retain const Event& across basic_lock.unlock(), but its sequence-number guard handles the direct same-type-unschedule path, so that alone is not a complete causal explanation. This replacement makes the invariant structural: Advance copies and pops the due node before unlocking, no queue reference or handle survives the callback window, a looping event is freshly emplaced only when its sequence is unchanged, and Event no longer stores a self-referential handle at all (UnscheduleEvent derives handles from locked iterators through Boost's public s_handle_from_iterator API). Expired weak events are popped as well, avoiding the upstream infinite loop. Deterministic native tests cover concurrent NoWait cancellation during a blocked callback, removal of 256 same-type entries, and expired-event consumption; the required device gate remains three consecutive clean ten-minute gameplay runs.",
+      "sizeBytes": 11398
+    },
+    {
+      "path": "src/core/core.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "42d301e412e39054a26742deee1eaa26e709f909d419916c1f32a7a1f50dd228",
+      "role": "local-source-patch",
+      "note": "Local patch to the vendored Eden tree, NOT an upstream contribution. System::Impl::ShutdownMainProcess closed the HLE services AFTER suspending emulation. Eden's services are not host threads: Services' constructor starts each one through KernelCore::RunOnGuestCoreProcess, which creates a KProcess and a KThread pinned to guest core 3 and runs ServerManager::LoopProcess on it. KernelCore::SuspendEmulation walks GetProcessList() and requests SuspendType::System on every thread of every process, so it parks those service threads, and KernelCore::CloseServices then destroys the ServerManagers, whose destructor does an unbounded m_stopped.Wait() for the thread it just parked to run its loop out. That is suspend-then-wait-for-the-suspended. It is intermittent because KThread::TrySuspend declines to park a thread that still has kernel waiters, so whether a given service thread is parked in time is a race -- which is why most Switch exits tear down in under a second and some wedge forever with kernel.CloseServices as the last step reached. The patch closes the services first and suspends afterwards; nothing between the two relies on the guest being parked, and the following ShutdownCores/TerminateAllProcesses force-clears suspension itself. After the kernel and every guest-memory owner have shut down, it also resets DeviceMemory: upstream expects the Android process to end after a title, while EmuFusion keeps one process alive and otherwise retained more than 4 GiB of committed guest memory plus a stale address-space tracker after held Stop. ReinitializeIfNecessary recreates DeviceMemory for the next title. The file also carries LOG_INFO teardown step markers through ShutdownMainProcess, which localised both problems and keeps the next teardown failure diagnosable from logcat alone.",
+      "sizeBytes": 34030,
+      "failedLoadNote": "October 4: release the local Service::Process before failed Load unwinds the kernel and DeviceMemory, and shut down the initialized kernel on the no-loader branch. Preserves previous teardown edits. Reproduced by eden-process-load-unwind.patch; simulator recovery and successful-start/normal-exit smoke checks recorded in failedLoadCheckpoint. Not gameplay/performance qualification."
+    },
+    {
+      "path": "src/common/host_memory.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "cf5a5d9d11a77839e4af9d16fb5d992b94d1ef4b3458dde8d2b6e09b634d2388",
+      "role": "local-source-patch",
+      "note": "Android's ASSERT is logging-only in this tree. The old HostMemory Map/Unmap/Protect code asserted that virtual_offset + length fit, then continued into the placeholder tracker and MAP_FIXED even when teardown supplied an already-retired range beyond the 39-bit reservation. Every held-Stop therefore emitted a second invalid mmap and an Out of memory critical line. This patch uses overflow-safe subtraction bounds and returns before touching the placeholder map or mmap/mprotect. Guest-memory lifetime itself is handled by the System::Impl DeviceMemory reset recorded in core.cpp, instead of layering a partial page-discard operation onto HostMemory.",
+      "sizeBytes": 31484
+    },
+    {
+      "path": "src/video_core/buffer_cache/memory_tracker_base.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "abc738437263b15556b51ea2b76f2c4567f7a0a16100f0f88c55f17f8c99f996",
+      "role": "local-source-patch",
+      "note": "Local fail-closed bounds patch, source-proven from the Thor Blasphemous II tombstone. Maxwell's tracker owns exactly a 34-bit top_tier table, but both range walkers derived page_index from a caller-provided DAddr and indexed top_tier before checking the aperture. Android logging assertions do not stop execution, so a stale or malformed range produced an arbitrary Manager pointer and crashed in WordManager::IsRegionModified. Both walkers now stop before any out-of-aperture access; this rejects the invalid suffix without relaxing GPU accuracy or masking an in-range tracker defect.",
+      "sizeBytes": 12460
+    },
+    {
+      "path": "src/android/app/src/main/jni/CMakeLists.txt",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "eedfcccf01842bf0d1cc917739ad4fe093858bb31e769a95747e5ea20379c469",
+      "role": "local-source-patch",
+      "note": "Allows the embedded Android adapter to build with ENABLE_WEB_SERVICE=OFF by linking cpp-jwt only when the web service or update checker is enabled. The upstream Android target linked that optional target unconditionally, making the offline configuration fail at CMake generation.",
+      "sizeBytes": 1717
+    },
+    {
+      "path": "src/video_core/vulkan_common/vulkan_device.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "fef86a525e5a68f9e460b852f82198dd5ee6290caad5f0172704a9425836aa16",
+      "role": "local-source-patch",
+      "note": "Loads optional VK_GOOGLE_display_timing for submission diagnostics, not physical proof. 2026-09-05: tracked eden-lucent-adreno-descriptors.patch disables push descriptors only for Qualcomm proprietary driver 512.676.53 after a hardware watchpoint caught its push-template path writing freed driver scratch storage. Existing regular descriptor-set fallback retained; other versions unchanged. Workaround built, not yet device-qualified.",
+      "sizeBytes": 76789
+    },
+    {
+      "path": "src/video_core/vulkan_common/vulkan_device.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "32d1ee1ba322183e3a2aac7bdb5cbd44234bbffb771aa6e9cfbe0b69dc2cb7c2",
+      "role": "local-source-patch",
+      "note": "2026-09-01 Lucent: lucent_display_timing flag + HasLucentDisplayTiming().",
+      "sizeBytes": 53884
+    },
+    {
+      "path": "src/video_core/renderer_vulkan/vk_swapchain.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "a26dced833d921bddfc6615c84c0aa5cb5d52d0c08e82a0e1ae6da12a224e73d",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source rebuilt: removes fabricated wall-time 60-Hz stamp lattice; VK_GOOGLE_display_timing desiredPresentTime carries actual monotonic submission timestamp only. Submission attempt counters and sampled VI counters explicitly report sourceIdentity=unjoined and physicalPresent=unverified. Reproduced by engines/patches/eden-lucent-clock.patch. Current rebuild records exact submitted Frame provenance in a bounded nonblocking sideband and adds bounded/error-safe acquisition and old-swapchain retirement.",
+      "sizeBytes": 16809
+    },
+    {
+      "path": "src/common/lucent_pacing.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "c30825b53608bc6aa53b5fc0dbd286908dd77a46e84f0e622a466d066e9e636d",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source rebuilt: canonical engines/patches/eden-lucent-pacing.h. Atomic fractional VI base correction is finite and bounded to +/-0.75 percent of 60 Hz. Shared high-precision period helper preserves normalized swap interval and composition speed scale. VI callback and submission-attempt counters are diagnostics, not image identity or physical-present evidence.",
+      "sizeBytes": 3346
+    },
+    {
+      "path": "src/core/hle/service/vi/conductor.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "00b6553938718c5129d922031c00ed237c4086ad740afd7327a8d48cea661cf6",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source rebuilt: applies bounded fractional base VI Hz through the common helper, preserving composition swap interval and original speed scale, and logs callback-only diagnostics. Does not establish whole-guest/audio clock synchronization or image identity. Reproduced by engines/patches/eden-lucent-clock.patch.",
+      "sizeBytes": 5898
+    },
+    {
+      "path": "engines/patches/eden-lucent-pacing.h",
+      "sha256": "c30825b53608bc6aa53b5fc0dbd286908dd77a46e84f0e622a466d066e9e636d",
+      "sizeBytes": 3346,
+      "role": "timing-source-reproduction",
+      "note": "2026-09-04 native source rebuilt. Tracked timing subset reproduction input; default apply script checks without edits. Not a complete Eden dependency closure."
+    },
+    {
+      "path": "engines/patches/eden-lucent-clock.patch",
+      "sha256": "78f1f27ee463fdc193429bb1bbd320f3e8a20eac745bf310c229317715fdd731",
+      "sizeBytes": 33782,
+      "role": "timing-source-reproduction",
+      "note": "2026-09-04 native source rebuilt. Tracked timing subset reproduction input; default apply script checks without edits. Not a complete Eden dependency closure."
+    },
+    {
+      "path": "engines/tools/apply_eden_timing_patch.py",
+      "sha256": "5b50811984ddb091915ff79be8134a67994bc85622492ac8deb6521b0cac7697",
+      "sizeBytes": 3429,
+      "role": "timing-source-reproduction",
+      "note": "2026-09-04 native source rebuilt. Tracked timing subset reproduction input; default apply script checks without edits. Not a complete Eden dependency closure."
+    },
+    {
+      "path": "src/core/hle/service/nvdrv/devices/nvdisp_disp0.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "735ab3a98afda1ec1517dfaafc8217031c7b1c16ca92471451e6f2640bdb83d1",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Copies full layer provenance into the existing by-value FramebufferConfig vector. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 3914
+    },
+    {
+      "path": "src/core/hle/service/nvnflinger/display.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "b138a13f11d2c621eb8290ab07442fb8e036a4cb46a14e551a9c9df8ed619e79",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Stable layer/queue-lifetime epoch; reusable consumer IDs alone are not identity. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 1635
+    },
+    {
+      "path": "src/core/hle/service/nvnflinger/hardware_composer.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "8e66c24f73fabbf157e8d27cdd3ae901280b2e8cf6e28b365bc05d4bd6fc8c94",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Preserves original BufferItem identity/acquisition/hold/swap metadata through the visible sorted composition. Retains the existing guest swap-interval acquisition semantics. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 10739
+    },
+    {
+      "path": "src/core/hle/service/nvnflinger/hwc_layer.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "b65eef3e4533abd1f85e5f5036253a3944399235a757e3c573f2ccc22975e2a1",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Appends value-owned per-layer and composition provenance. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 1113
+    },
+    {
+      "path": "src/video_core/framebuffer_config.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "1074fa42be6eb53b3db0d7bbc77c24222326e51da04d4eee4a4f20f3558d0be7",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Carries copied provenance through existing asynchronous GPU composition callbacks. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 1123
+    },
+    {
+      "path": "src/video_core/gpu.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "783e718c5bf6dfcc57dcb1920bf8d4698572ec5f48f20e5e5e29a76d03aa7760",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Explicit GPU-owner suspension barrier is woken even when guest timing is paused; no renderer Scheduler mutation from Java. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 16643
+    },
+    {
+      "path": "src/video_core/gpu.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "7c46e52926093e9b2015d60b257d1e55c89d4ae3e7fc06c3a8d09f7368cb6d81",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Declares GPU-owner presentation suspension API. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 7628
+    },
+    {
+      "path": "src/video_core/renderer_base.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "7aaf7bfb59c050e8ba62f20cb002877d2f5c54ed8f0b4b8be00aec87ca76f89c",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Explicit presentation-suspend/failure interface for the Vulkan lifecycle barrier. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 3459
+    },
+    {
+      "path": "src/video_core/renderer_vulkan/renderer_vulkan.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "354ad586e86be86d11e6c92082d04fb2fd0a7a2c43e2a3c07a7af4117f2a6b4c",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Attaches copied provenance to the actual Frame; serializes composite admission and drains worker/presenter/GPU before window rebinding. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 13880
+    },
+    {
+      "path": "src/video_core/renderer_vulkan/renderer_vulkan.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "4f0aed889728f5be4335bfacdf317cd23578b589c46294045974a1b3cd07ccc2",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Owns presentation admission mutex and suspension state. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 3764
+    },
+    {
+      "path": "src/video_core/renderer_vulkan/vk_present_manager.cpp",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "013231c6a035ad63bc5123ddf5a5f0dc7e8a65882992d0a89a855f8a05c008c6",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Carries actual Frame metadata into queue present; retires old swapchain before old surface, bounds acquire/surface retries, prevents consumed semaphore/fence resubmission and latches unrecoverable errors. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 21049
+    },
+    {
+      "path": "src/video_core/renderer_vulkan/vk_present_manager.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "ca98b1e820c3231d5d44aeb35a3be99726cc123c4b2632eeae420df05d87d382",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Frame-owned metadata and copy-submitted state plus explicit lifecycle failure/recreation state. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 3124
+    },
+    {
+      "path": "src/video_core/renderer_vulkan/vk_swapchain.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "7e06de3f2368a95f64824c9615b729bab6afd1d91fc5b0a3cc474ed925a9e3e2",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Declares value-provenance present argument and dependency-ordered old-swapchain retirement. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 3635
+    },
+    {
+      "path": "src/common/lucent_source_image.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "6230ede67321e0395d6dfd3f4b51c5dc9c0dada2d155498efd91a55d06aa9554",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Installed exact canonical bounded try-lock value-only ledger. Exact timestamp queries never confer guest-clock, changing-pixel or physical-display authority. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 8459
+    },
+    {
+      "path": "src/common/lucent_source_image_types.h",
+      "pathIsRelativeTo": "engines/build/switch-src/eden",
+      "sha256": "8212fa605a8d931ad45367c149742d74cab51b8af33fcf178b27c4250ae4dcbb",
+      "role": "local-source-patch",
+      "note": "2026-09-04 source-image/lifecycle rebuild: Installed exact versioned C metadata ABI; fixed-width value records contain no pointers. Reproduced by the tracked Eden patch/helper installer; device-unverified.",
+      "sizeBytes": 3157
+    },
+    {
+      "path": "engines/patches/eden-lucent-source-image.h",
+      "sha256": "6230ede67321e0395d6dfd3f4b51c5dc9c0dada2d155498efd91a55d06aa9554",
+      "role": "source-image-reproduction",
+      "note": "2026-09-04 bounded exact-key source-image metadata reproduction input; no source authority is enabled.",
+      "sizeBytes": 8459
+    },
+    {
+      "path": "unified-android/native/include/lucent_native_source_image.h",
+      "sha256": "8212fa605a8d931ad45367c149742d74cab51b8af33fcf178b27c4250ae4dcbb",
+      "role": "source-image-reproduction",
+      "note": "2026-09-04 bounded exact-key source-image metadata reproduction input; no source authority is enabled.",
+      "sizeBytes": 3157
     }
   ],
+  "audioObservationCheckpoint": {
+    "date": "2026-09-05",
+    "status": "rebuilt-device-unverified",
+    "deviceEvidenceStatus": "UNVERIFIED",
+    "stagedArtifactContainsChanges": true,
+    "buildEvidencePath": "docs/EDEN-AUDIO-OBSERVATION-BUILD-2026-09-05.json",
+    "runtimeObservationStatus": "FAIL_QT_ADRENO_NATIVE_CRASH_BEFORE_GAMEPLAY_CONFIRMED",
+    "runtimeEvidencePath": "docs/qa/frame-generation-v2-switch-audio-observation-2026-09-05/README.md",
+    "installedDiagnosticRolledBack": true,
+    "note": "Local owner-authorized observation only. Counts PCM samples actually popped separately from queue-frame accounting and host callback acceptance. CoreTiming read is bracketed by monotonic host reads, not treated as guest-work or physical playback proof. No new clock scaling, resampling, authority flag, or FG admission relaxation.",
+    "sourceInputs": [
+      {
+        "path": "engines/patches/eden-lucent-audio-observation.h",
+        "sha256": "3bd8b12cae97c125a9cb853d09c02f62d0019db8fa761098b6501ade109dbb05",
+        "sizeBytes": 1598
+      },
+      {
+        "path": "engines/patches/eden-lucent-audio-observation.patch",
+        "sha256": "3801c50e3d28f173885e0031d6ec06f563dd157ab2018dbfc81463cb6833d224",
+        "sizeBytes": 3728
+      },
+      {
+        "path": "engines/build/switch-src/eden/src/audio_core/sink/sink_stream.cpp",
+        "sha256": "363a313b919c61cd1487a94da7ead2c942ecafa93f7c02a30a47604bb833f058",
+        "sizeBytes": 10355
+      },
+      {
+        "path": "engines/build/switch-src/eden/src/audio_core/sink/sink_stream.h",
+        "sha256": "81fc64a11ec83ce13cd817a8e22579fb6675d8bb65827abd40110b1cd934eef8",
+        "sizeBytes": 7889
+      }
+    ]
+  },
   "artifact": {
     "fileName": "liblucent_native_adapter_eden.so",
     "stagedPath": "engines/build/arm64-v8a/liblucent_native_adapter_eden.so",
-    "sha256": "86eaf8a8c90e3f9adafc88ed7aa3f20d0a335892712f9c2dc54ab06349bae7f7",
-    "sizeBytes": 35707296,
+    "sha256": "a8623b66d853e2d025eab1135b2fa9a5820f32656329c9efb8aab176c09a4416",
+    "sizeBytes": 35559464,
     "elfMachine": "AARCH64",
     "ptLoadAlignment": "0x4000",
     "stripped": true,
     "soname": "libyuzu-android.so",
     "requiredExports": [
       "lucent_native_adapter_entry",
-      "lucent_eden_average_game_fps"
+      "lucent_eden_average_game_fps",
+      "lucent_native_adapter_declared_video_hz",
+      "lucent_native_adapter_set_paced_video_hz",
+      "lucent_native_adapter_timing_capabilities_v1",
+      "lucent_native_adapter_source_image_binding_v1",
+      "lucent_native_adapter_query_source_image_v1",
+      "lucent_native_adapter_set_fg_presentation_v1"
     ],
     "exportsOnlyTheAdapterEntry": false,
-    "definedDynamicSymbolCount": 52782,
-    "note": "MEASURED, not asserted. Both required exports are present and the PT_LOAD segments are 16 KiB aligned, but the library is NOT reduced to the adapter entry: it is Eden's whole native library (SONAME libyuzu-android.so) with the adapter compiled in, so it still exports Eden's, OpenSSL's, and FFmpeg's symbol tables. Lucent dlopens it by absolute path from the app-private native library directory, so the SONAME/filename difference does not affect loading, but -fvisibility=hidden plus --exclude-libs,ALL has NOT been applied and this artifact does not meet the one-exported-symbol goal recorded in engines/build_native_adapter.sh."
+    "definedDynamicSymbolCount": 52639,
+    "note": "MEASURED, not asserted. Rebuilt with ENABLE_WEB_SERVICE=OFF, guest airplane mode, the overflow-safe host-memory teardown guard, and complete post-kernel DeviceMemory release for safe same-process relaunch. All required exports are present and the PT_LOAD segments are 16 KiB aligned, but the library is NOT reduced to the adapter entry: it is Eden's whole native library (SONAME libyuzu-android.so) with the adapter compiled in, so it still exports Eden's, OpenSSL's, and FFmpeg's symbol tables. EmuFusion dlopens it by absolute path from the app-private native library directory, so the SONAME/filename difference does not affect loading, but -fvisibility=hidden plus --exclude-libs,ALL has NOT been applied and this artifact does not meet the one-exported-symbol goal recorded in engines/build_native_adapter.sh. 2026-09-04: native timing subset rebuilt, stripped with configured NDK 28.2.13676358, staged and inspected; see docs/EDEN-TIMING-BUILD-2026-09-04.json. This proves packaging/source compilation, not device cadence, actual guest clock or image quality. Subsequent 2026-09-04 image/lifecycle rebuild measured separately in docs/EDEN-SOURCE-IMAGE-LIFECYCLE-BUILD-2026-09-04.json; no device lifecycle or exact consumed-image join PASS is claimed. 2026-09-07 local multiplayer rebuild: MEASURED, not asserted. Rebuilt engines/patches/eden-lucent-adapter.cpp for ABI v2 controller_index routing and max_controllers=8 (see the patches[] entry above for the exact source change) via `ninja -C engines/build/switch-src/eden/build-android -j6 yuzu-android` against the still-pinned c0ffc900cdf19b9373549c59a7e6b22c33615ea4 checkout -- HEAD was verified unchanged before building. Ninja recompiled roughly half the object graph (861 of 1582 pre-existing .o outputs touched within the first ~10 minutes, 1739 total build steps to completion) despite only one translation unit's source actually changing; this matches the broad-rebuild behavior already recorded for this tree in docs/EDEN-SOURCE-IMAGE-JOIN-CHECKPOINT-2026-09-04.md's Rebuild boundary section (there attributed to a value-type change cascading through video_core; here the likely cause is checkout/working-tree mtimes sitting newer than the previously-built object files, which is an environmental property of this tree, not evidence the adapter edit itself touched unrelated code -- git diff of engines/patches/eden-lucent-adapter.cpp against its pre-edit content confirms the change is limited to adapter_describe/adapter_load/adapter_set_control and the new kMaxLocalControllers constant). ninja exited 0; the final step was `Linking CXX shared library src/android/app/src/main/jni/libyuzu-android.so`. Stripped with the same configured NDK 28.2.13676358 llvm-strip (--strip-all) immediately after, into an isolated temporary path before inspection, exactly as this checkpoint's Rebuild boundary describes. All eight required exports above were confirmed present via llvm-nm -D --defined-only (llvm-nm -gU, used previously, reports zero symbols against this llvm-nm build and was not a valid check here -- -D is the form that actually lists the library's dynamic symbol table). ELF64/AArch64 and 16 KiB PT_LOAD alignment on all four LOAD segments confirmed via llvm-readelf -h/-l. Defined dynamic symbol count moved 52637 -> 52639 and the artifact sha256/sizeBytes both changed from the prior entry (bcf042f3381deece0439f0af48e6c76a3bc909874cbca17a2543e10934d7619b, 35559680 bytes) to the values above -- a small, non-trivial difference consistent with one changed translation unit's code plus the rebuilt scm_rev.cpp version/timestamp string that is regenerated on every invocation of this build regardless of source changes. Full on-device testing was explicitly out of scope for this rebuild and is not claimed. Prior artifact and this lock file's pre-edit content are preserved for rollback in engines/build/candidates/eden-multiplayer-2026-09-07/rollback-bcf042f3381deece0439f0af48e6c76a3bc909874cbca17a2543e10934d7619b/README.md."
   },
   "runtimeInputs": {
     "keysAndFirmwareBundled": false,
@@ -84,5 +413,44 @@
     {
       "note": "Dependency closure stub. The build configured with YUZU_USE_CPM=ON and CPMUTIL_FORCE_BUNDLED=ON, so CPM fetched Eden's third-party sources at configure time. Each fetched package's repository/commit/archiveSha256 must be pinned here (mirroring engines/dolphin-source-lock.json) before this lock can claim a reproducible closure. Left populated with this note deliberately: no dependency has been audited or pinned yet."
     }
-  ]
+  ],
+  "timingSourceCheckpoint": {
+    "date": "2026-09-05",
+    "status": "rebuilt-device-unverified",
+    "previousArtifactSha256": "3027891b0eae0f87923b275e7d396fe9748e71141b58fe9cc1c27cb63cc32d51",
+    "deviceEvidenceStatus": "UNVERIFIED",
+    "contract": "docs/EDEN-TIMING-CONTRACT-2026-09-04.md",
+    "note": "Off/native surface restores automatic Vulkan presentation timestamps. Explicit submission timestamp tagging is only enabled for an attached FG consumer and reconfigured on surface recreation. Whole-guest/audio clock synchronization and pacing remain unqualified.",
+    "rebuiltArtifactSha256": "bcf042f3381deece0439f0af48e6c76a3bc909874cbca17a2543e10934d7619b",
+    "buildEvidencePath": "docs/qa/switch-direct-native-timestamps-2026-09-05/README.md"
+  },
+  "sourceImageLifecycleCheckpoint": {
+    "date": "2026-09-04",
+    "status": "rebuilt-device-unverified",
+    "previousArtifactSha256": "d597932f0111349f341fdb8be13f5e6ddfb68bdee92c29246d8716be5bfd7004",
+    "rebuiltArtifactSha256": "74efdc7a95e63f5434ee4cd0a27b1200d66f141f128dbfb7a66fe4797d30a8d4",
+    "buildEvidencePath": "docs/EDEN-SOURCE-IMAGE-LIFECYCLE-BUILD-2026-09-04.json",
+    "contract": "docs/EDEN-SOURCE-IMAGE-JOIN-CHECKPOINT-2026-09-04.md",
+    "deviceEvidenceStatus": "UNVERIFIED",
+    "sourceAuthorityEnabled": false,
+    "note": "Value-owned image metadata and reviewed Vulkan/Android window lifetime corrections compile in the staged artifact. Renderer consumed-image query integration, pixel association and physical/guest clock evidence are still pending."
+  },
+  "adrenoDescriptorCheckpoint": {
+    "date": "2026-09-05",
+    "status": "BOUNDED_OFF_CRASH_TESTS_PASS_FULL_QUALIFICATION_PENDING",
+    "previousArtifactSha256": "426e3ece00ea856ba349f4f02457c22b63a36cfb75a93aeb16bd791aed06bfc6",
+    "rebuiltArtifactSha256": "e165d9681862e397a6133977466ae3846d010bf65b7efa870974d200176d7966",
+    "buildId": "9485c90aa98bce5feee054c6773d4d114273c44b",
+    "evidencePath": "docs/qa/frame-generation-v2-switch-watchpoint-2026-09-05/README.md",
+    "note": "Hardware watchpoint identified the freed-storage write inside the push-descriptor-template driver path. Existing descriptor sets selected only for the observed proprietary driver version; no qualification gates changed. Diagnostic b5d3 survived 524 seconds at title; normal dc49 survived 328 seconds including save continuation and movement. No captured fatal/corruption marker. Pacing has a 33.34ms hold; FG/lifecycle/full-system qualification remains pending. Both tests rolled back to09dd with panels off."
+  },
+  "cpuMemoryPolicyCheckpoint": {
+    "date": "2026-09-05",
+    "status": "BUILT_NOT_DEVICE_QUALIFIED",
+    "previousArtifactSha256": "e985d749defc73c773c9678a212ce0522d31cea0c1dda43d6c4c80b2e1c6ae3a",
+    "rebuiltArtifactSha256": "426e3ece00ea856ba349f4f02457c22b63a36cfb75a93aeb16bd791aed06bfc6",
+    "buildId": "91a1b25be391a91d304c466ad5143d4011382b13",
+    "evidencePath": "docs/qa/frame-generation-v2-switch-cpu-bounds-2026-09-05/README.md",
+    "note": "Bounds-checked translated CPU policy; no change to timing, FG admission or qualification gates. Actual ARM64 lookup instructions tested on host with controlled read/write canaries. This does not establish the Thor heap writer or device performance."
+  }
 }

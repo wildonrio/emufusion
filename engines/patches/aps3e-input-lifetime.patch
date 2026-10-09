@@ -1,0 +1,75 @@
+--- a/app/src/main/cpp/aps3e_emu.cpp
++++ b/app/src/main/cpp/aps3e_emu.cpp
+@@ -1,3 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+-#include <atomic>
++#include <atomic>
++#include <memory>
++#include <mutex>
+ #include "aps3e_rp3_impl.h"
+@@ -98,14 +100,20 @@
+ 
+-    void key_event(int key_code,bool pressed,int value){
+-        pthread_mutex_lock(&key_event_mutex);
+-        {
+-            auto* pad_thr=g_fxo->try_get<named_thread<pad_thread>>();
+-            if(pad_thr){
+-                auto xx=pad_thr->get_handlers().at(pad_handler::keyboard);
+-                std::shared_ptr<AndroidVirtualPadHandler> padh=std::dynamic_pointer_cast<AndroidVirtualPadHandler>(xx);
+-                padh->Key(static_cast<u32>(key_code), static_cast<bool>(pressed),value);
+-            }
+-        }
+-        pthread_mutex_unlock(&key_event_mutex);
+-    }
++    void key_event(int key_code,bool pressed,int value){
++        // Init rebuilds the handlers under this same lock. Keep the published
++        // pad and its handler alive until the input write has finished.
++        std::lock_guard pad_lock(pad::g_pad_mutex);
++        auto* pad_thr = pad::get_current_handler(true);
++        if (!pad_thr) return;
++        auto& handlers = pad_thr->get_handlers();
++        const auto found = handlers.find(pad_handler::keyboard);
++        if (found == handlers.end()) return;
++        auto padh = std::dynamic_pointer_cast<AndroidVirtualPadHandler>(found->second);
++        if (!padh) return;
++
++        pthread_mutex_lock(&key_event_mutex);
++        // Non-allocating RAII; an exception must not strand the pad worker.
++        const std::unique_ptr<pthread_mutex_t, decltype(&pthread_mutex_unlock)>
++            unlock(&key_event_mutex, &pthread_mutex_unlock);
++        padh->Key(static_cast<u32>(key_code), static_cast<bool>(pressed),value);
++    }
+     bool is_running(){
+--- a/app/src/main/cpp/aps3e_rp3_impl.cpp
++++ b/app/src/main/cpp/aps3e_rp3_impl.cpp
+@@ -1994,14 +1994,19 @@
+ 
+-pad_thread::pad_thread(void* curthread, void* curwindow, std::string_view title_id) : m_curthread(curthread), m_curwindow(curwindow)
+-{
+-    pad::g_title_id = title_id;
+-    pad::g_current = this;
+-    pad::g_started = false;
+-}
+-
+-pad_thread::~pad_thread()
+-{
+-    pad::g_current = nullptr;
+-}
++pad_thread::pad_thread(void* curthread, void* curwindow, std::string_view title_id) : m_curthread(curthread), m_curwindow(curwindow)
++{
++    std::lock_guard lock(pad::g_pad_mutex);
++    pad::g_title_id = title_id;
++    pad::g_started = false;
++    pad::g_current = this;
++}
++
++pad_thread::~pad_thread()
++{
++    // Wait for in-flight input before members are destroyed. A retired pad
++    // must not unpublish a newer handler during an internal game restart.
++    std::lock_guard lock(pad::g_pad_mutex);
++    if (pad::g_current.observe() == this)
++        pad::g_current = nullptr;
++}
+ 
+ void pad_thread::Init()

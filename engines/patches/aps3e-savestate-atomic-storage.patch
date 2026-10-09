@@ -1,0 +1,44 @@
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/lv2/sys_sync.h
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/lv2/sys_sync.h
+@@ -449,7 +449,7 @@
+ 	static std::function<void(void*)> load_func(shared_ptr<T> make, u64 pshared = umax)
+ 	{
+ 		const u64 key = make->key;
+-		return [ptr = load<T>(key, make, pshared)](void* storage) { *static_cast<shared_ptr<Storage>*>(storage) = ptr; };
++		return [ptr = load<T>(key, make, pshared)](void* storage) { *static_cast<atomic_ptr<Storage>*>(storage) = ptr; };
+ 	}
+ 
+ 	static bool wait_timeout(u64 usec, ppu_thread* cpu = {}, bool scale = true, bool is_usleep = false);
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/lv2/sys_memory.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/lv2/sys_memory.cpp
+@@ -33,7 +33,7 @@
+ 	// Use idm::last_id() only for the instances at IDM
+ 	return [ptr = make_shared<lv2_memory_container>(stx::exact_t<utils::serial&>(ar), true)](void* storage)
+ 	{
+-		*static_cast<shared_ptr<lv2_memory_container>*>(storage) = ptr;
++		*static_cast<atomic_ptr<lv2_memory_container>*>(storage) = ptr;
+ 	};
+ }
+ 
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/lv2/sys_event.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/lv2/sys_event.cpp
+@@ -38,7 +38,7 @@
+ std::function<void(void*)> lv2_event_queue::load(utils::serial& ar)
+ {
+ 	auto queue = make_shared<lv2_event_queue>(ar);
+-	return [ptr = lv2_obj::load(queue->key, queue)](void* storage) { *static_cast<shared_ptr<lv2_obj>*>(storage) = ptr; };
++	return [ptr = lv2_obj::load(queue->key, queue)](void* storage) { *static_cast<atomic_ptr<lv2_obj>*>(storage) = ptr; };
+ }
+ 
+ void lv2_event_queue::save(utils::serial& ar)
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/lv2/sys_net.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/lv2/sys_net.cpp
+@@ -293,7 +293,7 @@
+ 		sock_lv2->bind(sock_lv2->last_bound_addr);
+ 	}
+ 
+-	return [ptr = sock_lv2](void* storage) { *static_cast<shared_ptr<lv2_socket>*>(storage) = ptr; };;
++	return [ptr = sock_lv2](void* storage) { *static_cast<atomic_ptr<lv2_socket>*>(storage) = ptr; };;
+ }
+ 
+ void lv2_socket::save(utils::serial& ar, bool save_only_this_class)

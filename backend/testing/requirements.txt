@@ -1,0 +1,6 @@
+# Pinned dependencies for backend/testing/fake_peer.py. Install into a
+# venv (never system Python):
+#   python3 -m venv backend/testing/.venv
+#   backend/testing/.venv/bin/pip install -r backend/testing/requirements.txt
+websockets==17.1
+aiortc==1.15.0

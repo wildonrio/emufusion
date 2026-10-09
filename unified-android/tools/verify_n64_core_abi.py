@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed APK ABI audit for Lucent's Mupen64Plus-Next core.
+"""Fail-closed APK ABI audit for EmuFusion's Mupen64Plus-Next core.
 
 This verifier intentionally does not execute the APK or use a connected device.
 It inspects the exact bytes packaged in the APK and rejects the regression where

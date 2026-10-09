@@ -1,6 +1,6 @@
 """retro_reset and the controller port device on both engine paths.
 
-Two device bugs share one root cause: Lucent's native host resolved
+Two device bugs share one root cause: EmuFusion's native host resolved
 ``retro_reset`` but never called it, and the hardware (GLES) session never
 selected a controller port device. Wii and GameCube run on the hardware path,
 so Super Mario Galaxy 2 took no input until the Nunchuk device was attached
@@ -190,10 +190,11 @@ class RenderLoopMarshallingTest(unittest.TestCase):
         self.assertIn("nativeHost.setControllerPortDevice(port, device);", self.source)
         self.assertIn("@Override public void reset() { nativeHost.reset(); }", self.source)
 
-    def test_the_vulkan_host_refuses_rather_than_silently_doing_nothing(self):
+    def test_the_vulkan_host_delegates_port_device_and_reset(self):
         vulkan = self.source.split("public static ExperimentalGlesRenderLoop createVulkan", 1)[1]
-        self.assertIn("Vulkan session exposes no controller port device", vulkan)
-        self.assertIn("Vulkan session exposes no reset", vulkan)
+        self.assertIn("nativeHost.setControllerPortDevice(port, device);", vulkan)
+        self.assertIn("@Override public void reset() { nativeHost.reset(); }", vulkan)
+        self.assertNotIn("Vulkan session exposes no reset", vulkan)
 
     def test_both_calls_are_marshalled_onto_the_render_owner_thread(self):
         # call() runs on the render thread and waits (bounded), unlike post()

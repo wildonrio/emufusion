@@ -1,0 +1,52 @@
+--- a/app/src/main/cpp/aps3e_emu.cpp
++++ b/app/src/main/cpp/aps3e_emu.cpp
+@@ -31,12 +31,14 @@
+         STATUS_REQUEST_STOP,
+     };
+ 
+-    pthread_mutex_t key_event_mutex;
++    // Process-lifetime synchronization: quit() must reacquire emu_mutex
++    // after the worker signals it. Worker exit must not destroy it first.
++    pthread_mutex_t key_event_mutex = PTHREAD_MUTEX_INITIALIZER;
+ 
+-    pthread_mutex_t emu_mutex;
+-    pthread_cond_t emu_cond;
++    pthread_mutex_t emu_mutex = PTHREAD_MUTEX_INITIALIZER;
++    pthread_cond_t emu_cond = PTHREAD_COND_INITIALIZER;
+ 
+-    int emu_status=-1;
++    std::atomic<int> emu_status{-1};
+ 
+ 
+ 
+@@ -51,10 +53,7 @@
+             return ss.str();
+         }();
+         LOGW("new thr: %s",tid.c_str());
+-        pthread_mutex_init(&key_event_mutex, NULL);
+ 
+-        pthread_mutex_init(&emu_mutex, NULL);
+-        pthread_cond_init(&emu_cond, NULL);
+ 
+         init();
+ 
+@@ -62,9 +61,6 @@
+ 
+         if (!boot_ok) {
+             emu_status = STATUS_STOPPED;
+-            pthread_mutex_destroy(&key_event_mutex);
+-            pthread_mutex_destroy(&emu_mutex);
+-            pthread_cond_destroy(&emu_cond);
+             return;
+         }
+ 
+@@ -98,9 +94,6 @@
+             usleep(10);
+         }
+ 
+-        pthread_mutex_destroy(&key_event_mutex);
+-        pthread_mutex_destroy(&emu_mutex);
+-        pthread_cond_destroy(&emu_cond);
+     }
+ 
+     void key_event(int key_code,bool pressed,int value){

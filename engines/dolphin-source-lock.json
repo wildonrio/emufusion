@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-07",
+  "verifiedAt": "2026-10-05",
   "buildProfile": "android-arm64-libretro-in-process-gles-vulkan",
   "closureScope": "exact-staged-source-and-gitlink-closure-for-this-build-profile",
   "sourceDateEpoch": 1785987178,
@@ -26,9 +26,9 @@
     "ENABLE_QT": false,
     "androidMaxPageSize": 16384,
     "normalizedByRemovingSection": ".note.gnu.build-id",
-    "normalizedArtifactSha256": "c071d3810f74db7a38c499a9725021b62992417177c80a7b6074692b14864ced",
+    "normalizedArtifactSha256": "12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6",
     "rawBuildIds": [
-      "9c20eeb796f8d53149ffe216be7756c0330dd430"
+      "e48dde89c6c5a1a07bcfa11ee1252c669ed420db"
     ]
   },
   "patches": [
@@ -36,6 +36,16 @@
       "path": "engines/patches/dolphin-libretro-submit-rendered-duplicate-xfb.patch",
       "sha256": "5dd844b8546eea62706a4dd84304077cddaf83c68987459a532f6055f2f5919b",
       "purpose": "Submit the OpenGL framebuffer rendered for duplicate XFB presentation instead of incorrectly reporting a null duplicate frame to Lucent."
+    },
+    {
+      "path": "engines/patches/dolphin-libretro-own-signal-stack.patch",
+      "sha256": "68c853fa395b8c87c41729355c2149dbb83f024b9cb851123b21cfc575ac074b",
+      "purpose": "Do not free Android's existing alternate signal stack on aborted startup; release only Dolphin's allocation and restore the previous stack on normal unload."
+    },
+    {
+      "path": "engines/patches/dolphin-libretro-descriptor-errors.patch",
+      "sha256": "d508e5c96869b925a8a1c01139c76ee2ae13abcd74a0475c4f5281aded85cbcd",
+      "purpose": "Reject non-null output handles on failed Vulkan descriptor allocation, retry exhausted pools and bound fresh-pool failure without recursion."
     }
   ],
   "dependencies": [

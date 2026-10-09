@@ -91,7 +91,7 @@
         "gamecube",
         "wii"
       ],
-      "runtime": "gles-libretro"
+      "runtime": "vulkan-libretro"
     },
     {
       "id": "ppsspp",

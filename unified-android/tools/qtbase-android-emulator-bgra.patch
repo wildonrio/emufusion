@@ -1,0 +1,15 @@
+--- a/src/gui/opengl/qopenglfunctions.cpp
++++ b/src/gui/opengl/qopenglfunctions.cpp
+@@ -426,6 +426,11 @@
+                                                         && (deviceName->compare(QLatin1String("samsung SM-T211"), Qt::CaseInsensitive) == 0
+                                                             || deviceName->compare(QLatin1String("samsung SM-T210"), Qt::CaseInsensitive) == 0
+                                                             || deviceName->compare(QLatin1String("samsung SM-T215"), Qt::CaseInsensitive) == 0);
++        // The host-backed Android Emulator translator advertises BGRA but
++        // samples it as black (and rejects BGRA mipmap generation). Keep the
++        // existing RGBA/swizzle fallback; do not disable image filtering.
++        const char *renderer = reinterpret_cast<const char *>(ctx->functions()->glGetString(GL_RENDERER));
++        const bool brokenEmulatorBgra = renderer && strstr(renderer, "Android Emulator OpenGL ES Translator");
+-        if (wrongfullyReportsBgra8888Support)
++        if (wrongfullyReportsBgra8888Support || brokenEmulatorBgra)
+             extensions &= ~QOpenGLExtensions::BGRATextureFormat;
+ #endif

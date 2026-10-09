@@ -28,7 +28,7 @@ package com.thorium.lucent.metadata;
  *     harmonious, and choosing between the two variants by distance keeps it
  *     distinct on artwork that is already two-toned.
  *  5. Clamp saturation and lightness into a band that reads as UI accent text
- *     on Lucent's dark chrome, then raise lightness (and, if a deep blue still
+ *     on EmuFusion's dark chrome, then raise lightness (and, if a deep blue still
  *     falls short, lower saturation) until the accent clears
  *     {@link #MIN_CONTRAST} against {@link #UI_BACKGROUND_HEX}.
  *

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Keep the pinned Pegasus QML engine warm for Lucent's in-window games.
+"""Keep the pinned Pegasus QML engine warm for EmuFusion's in-window games.
 
 Pegasus's Android launcher emits ``processLaunchOk`` after Java accepts an
 ``am start`` command.  Its second signal subscriber normally tears down the
 entire QML engine and stops the gamepad, then rebuilds both as soon as Android
-reports the Activity launch.  Lucent intercepts its one internal command in
+reports the Activity launch.  EmuFusion intercepts its one internal command in
 the existing MainActivity, so that external-process lifecycle is both wrong
 and the source of a visible startup splash plus lost selection state.
 

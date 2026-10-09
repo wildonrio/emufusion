@@ -19,7 +19,19 @@
     "commit": "d4fc0774107c4c307346b469499b9303a6ca0ffa",
     "archiveSha256": "fb19f122cb1c8bb9eae302c0e97ef75df168dacc2807da53a3af829cd6a98e71"
   },
-  "patches": [],
+  "patches": [
+    {
+      "path": "engines/patches/flycast-libretro-cheat-support.patch",
+      "sha256": "058b22158921a14d0bd965449e8fd4c25235ac27db379bfd4cb865748aad54d6",
+      "purpose": "Wire retro_cheat_reset/retro_cheat_set to the existing (non-LIBRETRO-gated) CheatManager::addGameSharkCheat/enableCheat instead of the disk .cht loader that core/cheats.cpp compiles out under LIBRETRO.",
+      "note": "Updated retro_cheat_set to enable every Cheat entry addGameSharkCheat() pushed for the call, not just the last one. One retro_cheat_set() call carries a whole cheat's code verbatim, and Lucent's '+'-joined multi-line cheat convention can make addGameSharkCheat() push several independent Cheat entries from a single call (e.g. two GameShark write pairs). Each freshly pushed Cheat defaults to enabled=false, and CheatManager::apply() skips disabled entries individually, so enabling only the final index left every earlier write in a multi-write cheat permanently inert even though the UI showed it on. The fix loops enableCheat() over the full range of indices added by this call. Also fixed resetLiveCheats() to only erase frontend-added (builtIn=false) entries: CheatManager::reset(gameId) seeds mandatory builtIn=true boot/compat fixups for ~19 titles, and the prior cheats.clear() silently and permanently stripped those the first time a user toggled any live cheat on such a title."
+    },
+    {
+      "path": "engines/patches/flycast-android-shared-memory.patch",
+      "sha256": "61335599add3e70cbaab2e8a3dad8062eb0cae97df2cf15c54935b87e8c95f62",
+      "purpose": "Resolve the public ASharedMemory_create API from libandroid when the API-24 libretro core's weak reference is null; retain the pre-26 fallback and descriptor ownership."
+    }
+  ],
   "dependencies": [
     {
       "path": "core/deps/libchdr",

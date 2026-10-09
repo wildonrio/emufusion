@@ -6,7 +6,7 @@ import java.util.Locale;
  * Update-availability logic for installed external emulators.
  *
  * Install and update stay a user decision: this class never installs or forces
- * anything. It answers "is a newer release available?" for an emulator Lucent
+ * anything. It answers "is a newer release available?" for an emulator EmuFusion
  * knows a release source for (a {@code github} or {@code official-api} option in
  * {@link EmulatorCatalog}), and builds the same non-silent install/update offer
  * that opens the emulator's official source.

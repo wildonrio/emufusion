@@ -1,0 +1,18 @@
+diff --git a/app/src/main/cpp/aps3e_emu.cpp b/app/src/main/cpp/aps3e_emu.cpp
+--- a/app/src/main/cpp/aps3e_emu.cpp
++++ b/app/src/main/cpp/aps3e_emu.cpp
+@@ -56,6 +56,14 @@ namespace ae{
+ 
+         bool boot_ok=boot_game();
+ 
++        if (!boot_ok) {
++            emu_status = STATUS_STOPPED;
++            pthread_mutex_destroy(&key_event_mutex);
++            pthread_mutex_destroy(&emu_mutex);
++            pthread_cond_destroy(&emu_cond);
++            return;
++        }
++
+         emu_status=STATUS_RUNNING;
+         while (true){
+ 

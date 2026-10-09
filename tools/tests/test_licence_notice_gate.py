@@ -1,6 +1,6 @@
 """Licence gate: no bundled third-party library may ship undocumented.
 
-Qt 5.15.10 and OpenSSL 1.1.1t were packaged in every Lucent APK for several
+Qt 5.15.10 and OpenSSL 1.1.1t were packaged in every EmuFusion APK for several
 releases while being named nowhere in `LICENSE`, `LICENSING.md`,
 `SOURCE_OFFER.md`, `THIRD_PARTY_NOTICES.md` or `README.md`. Nothing tied the
 set of libraries actually packaged to the set of libraries actually documented,
@@ -79,7 +79,7 @@ def notice_rules() -> "list[tuple[list[str], str]]":
 
 
 def exempt_patterns() -> "list[str]":
-    """Library families the gate deliberately skips (Lucent's own, Pegasus)."""
+    """Library families the gate deliberately skips (EmuFusion's own, Pegasus)."""
     match = re.search(r"^\s*([^)\n]+)\)\s*continue ;;", gate_block(), re.M)
     assert match is not None, "the build gate no longer exempts any library"
     return [pattern.strip() for pattern in match.group(1).split("|")]

@@ -1,0 +1,51 @@
+{
+  "status": "isolated_source_build_not_packaged_or_runtime_qualified",
+  "qt_version": "5.15.10",
+  "qt_archive_base_url": "https://download.qt.io/archive/qt/5.15/5.15.10/submodules/",
+  "qt_archive_suffix": "-everywhere-opensource-src-5.15.10.tar.xz",
+  "qt_modules": {
+    "qtbase": "c0d06cb18d20f10bf7ad53552099e097ec39362d30a5d6f104724f55fa1c8fb9",
+    "qtdeclarative": "239b4c3c4cc49b174391445ad4b8320c11c8655300977955febd5dde69d33df4",
+    "qtandroidextras": "7fc48c32da711d03d3eeed0010df03fb273686ed9f427f5fc52c9e2544a29294",
+    "qtgamepad": "6808beb2d78a4346793043358afbfd46a064fce3fe11f79491347434c48a6a76",
+    "qtgraphicaleffects": "ab2cb196b2f4da5a415daa364691c474700c07bbaabae6282da990c31e7dc005",
+    "qtmultimedia": "1106e0bd8ec65b2c0a89170e452ea104ca9431050f507da5e874be2cb54f29b6",
+    "qtsvg": "cf13e3835b8a767779d041e556b0942c2d5aeb3b5a5d325ae5d2028c37004ae8",
+    "qtimageformats": "4f248a48c467d684cecedf36c6fd7d1f0edb47748fd7854c24a178b41154d1b2",
+    "qtquicktimeline": "a0effcbf39c68591e5b788edb96ba3f1315df0eb6bd6f0c6b43594b32b640011",
+    "qttools": "66f46c9729c831dce431778a9c561cca32daceaede1c7e58568d7a5898167dae"
+  },
+  "openssl": {
+    "version": "1.1.1t",
+    "url": "https://www.openssl.org/source/old/1.1.1/openssl-1.1.1t.tar.gz",
+    "sha256": "8dee9b24bdb1dcbf0c3d1e9b02fb8f6bf22165e807f45adeb7c9677536859d3b"
+  },
+  "pegasus": {
+    "commit": "6b322063a036db60cba5810fda82a3ce38f1e62f",
+    "url": "https://codeload.github.com/mmatyas/pegasus-frontend/tar.gz/6b322063a036db60cba5810fda82a3ce38f1e62f",
+    "sha256": "383a4da42fb0f586cdb46bdc0761a4feada1e4cb0d66e4e1d2949ebe8f7cd5c3",
+    "submodules_pinned": true,
+    "submodules": [
+      {"path": "lang", "commit": "bf710f689c52f88ee13fe834acbbc05c38210d8b", "archive": "pegasus-translations-bf710f68.tar.gz", "url": "https://codeload.github.com/mmatyas/pegasus-frontend-translations/tar.gz/bf710f689c52f88ee13fe834acbbc05c38210d8b", "sha256": "4b79227a7b8087b8d4928f2585ea9c47502f319a0909737cc86c423459b676bc"},
+      {"path": "src/themes/pegasus-theme-grid", "commit": "5951db6f2a4fe0db6a4fd6f00da1f280cadfa536", "archive": "pegasus-grid-5951db6f.tar.gz", "url": "https://codeload.github.com/mmatyas/pegasus-theme-grid/tar.gz/5951db6f2a4fe0db6a4fd6f00da1f280cadfa536", "sha256": "e9403370bb10a0d3f429d3653f0a0e1ee384bd85aaf747eccc54c9dcbf3c5db2"},
+      {"path": "thirdparty/SortFilterProxyModel", "commit": "2061f8136ba372fd06c1928a610258b7d88cb144", "archive": "sortfilter-2061f813.tar.gz", "url": "https://codeload.github.com/mmatyas/SortFilterProxyModel/tar.gz/2061f8136ba372fd06c1928a610258b7d88cb144", "sha256": "16a6438803014aebcb70342b72ad15eaf39c39db0ed766d397b3acbc0c7f8215"}
+    ]
+  },
+  "toolchain": {"android_ndk": "27.0.12077973", "abi": "arm64-v8a", "api": 23},
+  "frontend_apng": {
+    "version": "1.6.37",
+    "archive": "libpng-1.6.37.tar.xz",
+    "url": "https://downloads.sourceforge.net/project/libpng/libpng16/older-releases/1.6.37/libpng-1.6.37.tar.xz",
+    "sha256": "505e70834d35383537b6491e7ae8641f1a4bed1876dbfe361201fc80868d88ca",
+    "patch_archive": "libpng-1.6.37-apng.patch.gz",
+    "patch_url": "https://downloads.sourceforge.net/project/libpng-apng/libpng16/1.6.37/libpng-1.6.37-apng.patch.gz",
+    "patch_sha256": "823bb2d1f09dc7dae4f91ff56d6c22b4b533e912cbd6c64e8762255e411100b6",
+    "scope": "Frontend static APNG decoder, same libpng version observed in baseline ELF; does not change QtGui's own PNG decoder."
+  },
+  "required_before_packaging": [
+    "Build all matching Qt/QML plugins and Pegasus frontend, preserving SONAMEs and deployed resources.",
+    "Preserve Android gamepad null guard, in-window launch lifecycle, branding, window theme and terminal-retirement integration.",
+    "Verify ELF layout, dynamic symbol closure, native and Java compatibility; update verifier only for the explicitly source-built candidate.",
+    "Verify clean first launch and game launch/input/exit/resume on 4 KiB and 16 KiB landscape Android before replacing normal payloads."
+  ]
+}

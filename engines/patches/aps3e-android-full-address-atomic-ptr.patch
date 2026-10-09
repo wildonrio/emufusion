@@ -1,0 +1,299 @@
+--- a/app/src/main/cpp/rpcs3/rpcs3/util/types.hpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/util/types.hpp
+@@ -135,27 +135,23 @@
+ #if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
+ namespace utils::android_tagged_ptr
+ {
+-	// Android arm64 malloc pointers use the top byte as an allocator tag. The
+-	// RPCS3 lock-free layouts retain their original low 16 metadata bits, so
+-	// the packed form is: [8-bit tag][40-bit heap VA][16-bit metadata].
+-	constexpr uptr tag_mask = 0xff00000000000000ull;
+-	constexpr uptr middle_address_mask = 0x00ffff0000000000ull;
+-	constexpr uptr low_address_mask = 0x000000ffffffffffull;
++	// Keep the complete pointer, including its allocator tag, in the high half.
++	// Low 16 bits retain the original borrowed-reference counter. Bit 32 is a
++	// non-empty marker: existing 32-bit wait/notify operations watch that word.
++	// Pointer and marker are published together by one 128-bit atomic operation.
++	using packed_type = __uint128_t;
+ 	constexpr uint metadata_bits = 16;
+-
+-	constexpr bool can_pack(uptr raw) noexcept
+-	{
+-		return !(raw & middle_address_mask);
+-	}
+-
+-	constexpr uptr pack(uptr raw) noexcept
+-	{
+-		return (raw & tag_mask) | ((raw & low_address_mask) << metadata_bits);
+-	}
+-
+-	constexpr uptr unpack(uptr packed) noexcept
+-	{
+-		return (packed & tag_mask) | ((packed >> metadata_bits) & low_address_mask);
++	constexpr packed_type presence_bit = packed_type{1} << 32;
++	static_assert(std::endian::native == std::endian::little);
++
++	constexpr packed_type pack(uptr raw) noexcept
++	{
++		return (packed_type{raw} << 64) | (raw ? presence_bit : 0);
++	}
++
++	constexpr uptr unpack(packed_type packed) noexcept
++	{
++		return static_cast<uptr>(packed >> 64);
+ 	}
+ }
+ #endif
+--- a/app/src/main/cpp/rpcs3/rpcs3/util/shared_ptr.hpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/util/shared_ptr.hpp
+@@ -571,25 +571,30 @@
+ 	template <typename T>
+ 	class atomic_ptr
+ 	{
+-		mutable atomic_t<uptr> m_val{0};
+-
+-		static uptr pointer_bits(uptr val) noexcept
+-		{
+-			return val & c_ptr_mask;
+-		}
+-
+-		static uptr encode_pointer(const volatile void* ptr) noexcept
++	#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++		using packed_type = utils::android_tagged_ptr::packed_type;
++	#else
++		using packed_type = uptr;
++	#endif
++
++		mutable atomic_t<packed_type> m_val{0};
++
++		static packed_type pointer_bits(packed_type val) noexcept
++		{
++			return val & (static_cast<packed_type>(-1) << c_ref_size);
++		}
++
++		static packed_type encode_pointer(const volatile void* ptr) noexcept
+ 		{
+ 			const uptr raw = reinterpret_cast<uptr>(ptr);
+ 		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
+-			ensure(utils::android_tagged_ptr::can_pack(raw));
+ 			return utils::android_tagged_ptr::pack(raw);
+ 		#else
+ 			return raw << c_ref_size;
+ 		#endif
+ 		}
+ 
+-		static uptr decode_pointer(uptr val) noexcept
++		static uptr decode_pointer(packed_type val) noexcept
+ 		{
+ 		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
+ 			return utils::android_tagged_ptr::unpack(val);
+@@ -598,12 +603,12 @@
+ 		#endif
+ 		}
+ 
+-		static bool same_pointer(uptr lhs, uptr rhs) noexcept
++		static bool same_pointer(packed_type lhs, packed_type rhs) noexcept
+ 		{
+ 			return pointer_bits(lhs) == pointer_bits(rhs);
+ 		}
+ 
+-		static shared_counter* d(uptr val) noexcept
++		static shared_counter* d(packed_type val) noexcept
+ 		{
+ 			return std::launder(reinterpret_cast<shared_counter*>(decode_pointer(val) - sizeof(shared_counter)));
+ 		}
+@@ -613,12 +618,12 @@
+ 			return d(m_val);
+ 		}
+ 
+-		static uptr to_val(const volatile std::remove_extent_t<T>* ptr) noexcept
++		static packed_type to_val(const volatile std::remove_extent_t<T>* ptr) noexcept
+ 		{
+ 			return encode_pointer(ptr);
+ 		}
+ 
+-		static std::remove_extent_t<T>* ptr_to(uptr val) noexcept
++		static std::remove_extent_t<T>* ptr_to(packed_type val) noexcept
+ 		{
+ 			return reinterpret_cast<std::remove_extent_t<T>*>(decode_pointer(val));
+ 		}
+@@ -663,7 +668,7 @@
+ 		atomic_ptr(const shared_ptr<U>& r) noexcept
+ 		{
+ 			// Obtain a ref + as many refs as an atomic_ptr can additionally reference
+-			if (uptr rval = to_val(r.m_ptr))
++			if (packed_type rval = to_val(r.m_ptr))
+ 			{
+ 				m_val.raw() = rval;
+ 				d(rval)->refs += c_ref_mask + 1;
+@@ -673,7 +678,7 @@
+ 		template <typename U> requires same_ptr_implicit_v<T, U>
+ 		atomic_ptr(shared_ptr<U>&& r) noexcept
+ 		{
+-			if (uptr rval = to_val(r.m_ptr))
++			if (packed_type rval = to_val(r.m_ptr))
+ 			{
+ 				m_val.raw() = rval;
+ 				d(rval)->refs += c_ref_mask;
+@@ -685,7 +690,7 @@
+ 		template <typename U> requires same_ptr_implicit_v<T, U>
+ 		atomic_ptr(single_ptr<U>&& r) noexcept
+ 		{
+-			if (uptr rval = to_val(r.m_ptr))
++			if (packed_type rval = to_val(r.m_ptr))
+ 			{
+ 				m_val.raw() = rval;
+ 				d(rval)->refs += c_ref_mask;
+@@ -696,7 +701,7 @@
+ 
+ 		~atomic_ptr() noexcept
+ 		{
+-			const uptr v = m_val.raw();
++			const packed_type v = m_val.raw();
+ 
+ 			if (pointer_bits(v))
+ 			{
+@@ -751,7 +756,7 @@
+ 			shared_type r;
+ 
+ 			// Add reference
+-			const auto [prev, did_ref] = m_val.fetch_op([](uptr& val)
++			const auto [prev, did_ref] = m_val.fetch_op([](packed_type& val)
+ 			{
+ 				if (pointer_bits(val))
+ 				{
+@@ -774,7 +779,7 @@
+ 			r.d()->refs++;
+ 
+ 			// Dereference if still the same pointer
+-			const auto [_, did_deref] = m_val.fetch_op([prev = prev](uptr& val)
++			const auto [_, did_deref] = m_val.fetch_op([prev = prev](packed_type& val)
+ 			{
+ 				if (same_pointer(val, prev))
+ 				{
+@@ -801,7 +806,7 @@
+ 			shared_type r;
+ 
+ 			// Add reference
+-			const auto [prev, did_ref] = m_val.fetch_op([](uptr& val)
++			const auto [prev, did_ref] = m_val.fetch_op([](packed_type& val)
+ 			{
+ 				if (pointer_bits(val))
+ 				{
+@@ -843,7 +848,7 @@
+ 			}
+ 
+ 			// Dereference if still the same pointer
+-			const auto [_, did_deref] = m_val.fetch_op([prev = prev](uptr& val)
++			const auto [_, did_deref] = m_val.fetch_op([prev = prev](packed_type& val)
+ 			{
+ 				if (same_pointer(val, prev))
+ 				{
+@@ -933,8 +938,8 @@
+ 		// Ineffective
+ 		[[nodiscard]] bool compare_exchange(shared_type& cmp_and_old, shared_type exch)
+ 		{
+-			const uptr _old = to_val(cmp_and_old.m_ptr);
+-			const uptr _new = to_val(exch.m_ptr);
++			const packed_type _old = to_val(cmp_and_old.m_ptr);
++			const packed_type _new = to_val(exch.m_ptr);
+ 
+ 			if (exch.m_ptr)
+ 			{
+@@ -943,7 +948,7 @@
+ 
+ 			atomic_ptr old;
+ 
+-			const uptr _val = m_val.fetch_op([&](uptr& val)
++			const packed_type _val = m_val.fetch_op([&](packed_type& val)
+ 			{
+ 				if (same_pointer(val, _old))
+ 				{
+@@ -987,7 +992,7 @@
+ 			cmp_and_old.d()->refs++;
+ 
+ 			// Dereference if still the same pointer
+-			const auto [_, did_deref] = m_val.fetch_op([_val](uptr& val)
++			const auto [_, did_deref] = m_val.fetch_op([_val](packed_type& val)
+ 			{
+ 				if (same_pointer(val, _val))
+ 				{
+@@ -1020,8 +1025,8 @@
+ 		template <typename U> requires same_ptr_implicit_v<T, U>
+ 		bool compare_and_swap_test(const shared_ptr<U>& cmp, shared_type exch)
+ 		{
+-			const uptr _old = to_val(cmp.m_ptr);
+-			const uptr _new = to_val(exch.m_ptr);
++			const packed_type _old = to_val(cmp.m_ptr);
++			const packed_type _new = to_val(exch.m_ptr);
+ 
+ 			if (exch.m_ptr)
+ 			{
+@@ -1030,7 +1035,7 @@
+ 
+ 			atomic_ptr old;
+ 
+-			const auto [_val, ok] = m_val.fetch_op([&](uptr& val)
++			const auto [_val, ok] = m_val.fetch_op([&](packed_type& val)
+ 			{
+ 				if (same_pointer(val, _old))
+ 				{
+--- a/app/src/main/cpp/rpcs3/rpcs3/util/atomic.hpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/util/atomic.hpp
+@@ -205,7 +205,11 @@
+ 		constexpr void set(lf_queue<T2>& var, std::nullptr_t = nullptr)
+ 		{
+ 			static_assert(Index < Max);
++		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++			static_assert(sizeof(var) == sizeof(utils::android_tagged_ptr::packed_type));
++		#else
+ 			static_assert(sizeof(var) == sizeof(uptr));
++		#endif
+ 
+ 			m_info[Index].data = reinterpret_cast<char*>(&var) + sizeof(u32);
+ 			m_info[Index].old = 0;
+@@ -215,7 +219,11 @@
+ 		constexpr void set(stx::atomic_ptr<T2>& var, std::nullptr_t = nullptr)
+ 		{
+ 			static_assert(Index < Max);
++		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++			static_assert(sizeof(var) == sizeof(utils::android_tagged_ptr::packed_type));
++		#else
+ 			static_assert(sizeof(var) == sizeof(uptr));
++		#endif
+ 
+ 			m_info[Index].data = reinterpret_cast<char*>(&var) + sizeof(u32);
+ 			m_info[Index].old = 0;
+--- a/app/src/main/cpp/rpcs3/Utilities/lockless.h
++++ b/app/src/main/cpp/rpcs3/Utilities/lockless.h
+@@ -384,9 +384,14 @@
+ template <typename T>
+ class lf_queue final
+ {
+-	atomic_t<u64> m_head{0};
+-
+-	lf_queue_item<T>* load(u64 value) const noexcept
++#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
++	using packed_type = utils::android_tagged_ptr::packed_type;
++#else
++	using packed_type = u64;
++#endif
++	atomic_t<packed_type> m_head{0};
++
++	lf_queue_item<T>* load(packed_type value) const noexcept
+ 	{
+ 		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
+ 		return reinterpret_cast<lf_queue_item<T>*>(utils::android_tagged_ptr::unpack(value));
+@@ -395,11 +400,10 @@
+ 		#endif
+ 	}
+ 
+-	static u64 store(const lf_queue_item<T>* item) noexcept
++	static packed_type store(const lf_queue_item<T>* item) noexcept
+ 	{
+ 		#if defined(__ANDROID__) && UINTPTR_MAX == UINT64_MAX
+ 		const uptr raw = reinterpret_cast<uptr>(item);
+-		ensure(utils::android_tagged_ptr::can_pack(raw));
+ 		return utils::android_tagged_ptr::pack(raw);
+ 		#else
+ 		return reinterpret_cast<u64>(item) << 16;

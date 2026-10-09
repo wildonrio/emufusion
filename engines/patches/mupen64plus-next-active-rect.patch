@@ -1,0 +1,89 @@
+--- a/GLideN64/src/FrameBuffer.cpp
++++ b/GLideN64/src/FrameBuffer.cpp
+@@ -2,6 +2,7 @@
+ #include <math.h>
+ #include <algorithm>
+ #include <vector>
++#include <cstring>
+ #include "FrameBuffer.h"
+ #include "DepthBuffer.h"
+ #include "N64.h"
+@@ -31,6 +32,40 @@
+ using namespace std;
+ using namespace graphics;
+ 
++// Optional EmuFusion final-video geometry. Render-thread only, queried after
++// retro_run. Keep black source pixels (including cutscene bands) inside the
++// copied VI rectangle; do not infer geometry from framebuffer colors.
++static u32 lucentActiveRect[7] = {};
++extern "C" __attribute__((visibility("default")))
++bool retro_lucent_get_hw_active_rect(u32 *out, unsigned count)
++{
++	if (out == nullptr || count != 7 || lucentActiveRect[0] != 1)
++		return false;
++	std::memcpy(out, lucentActiveRect, sizeof(lucentActiveRect));
++	return true;
++}
++
++static void lucentSetActiveRect(s32 x0, s32 y0, s32 x1, s32 y1,
++								u32 width, u32 height, bool invertY)
++{
++	lucentActiveRect[0] = 0;
++	if (invertY) {
++		const s32 bottom = static_cast<s32>(height) - y1;
++		y1 = static_cast<s32>(height) - y0;
++		y0 = bottom;
++	}
++	if (x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0 ||
++		static_cast<u32>(x1) > width || static_cast<u32>(y1) > height)
++		return;
++	lucentActiveRect[1] = static_cast<u32>(x0);
++	lucentActiveRect[2] = static_cast<u32>(y0);
++	lucentActiveRect[3] = static_cast<u32>(x1 - x0);
++	lucentActiveRect[4] = static_cast<u32>(y1 - y0);
++	lucentActiveRect[5] = width;
++	lucentActiveRect[6] = height;
++	lucentActiveRect[0] = 1;
++}
++
+ FrameBuffer::FrameBuffer()
+ 	: m_copyFBO(ObjectHandle::defaultFramebuffer)
+ 	, m_ColorBufferFBO(0)
+@@ -1051,6 +1086,7 @@
+ 
+ void FrameBuffer_Init()
+ {
++	lucentActiveRect[0] = 0;
+ 	frameBufferList().init();
+ 	if (config.frameBufferEmulation.enable != 0) {
+ 	ColorBufferToRDRAM::get().init();
+@@ -1061,6 +1097,7 @@
+ 
+ void FrameBuffer_Destroy()
+ {
++	lucentActiveRect[0] = 0;
+ 	RDRAMtoColorBuffer::get().destroy();
+ 	DepthBufferToRDRAM::get().destroy();
+ 	ColorBufferToRDRAM::get().destroy();
+@@ -1464,6 +1501,7 @@
+ 
+ void FrameBufferList::renderBuffer()
+ {
++	lucentActiveRect[0] = 0;
+ 	if (g_debugger.isDebugMode()) {
+ 		g_debugger.draw();
+ 		return;
+@@ -1668,6 +1706,13 @@
+ 
+ 	gfxContext.bindFramebuffer(bufferTarget::READ_FRAMEBUFFER, ObjectHandle::defaultFramebuffer);
+ 	m_overscan.draw(vFullHeight, rdpRes.vi_ispal);
++	if (config.frameBufferEmulation.enableOverscan == 0) {
++		// The optional second VI buffer follows the first vertically. Publish
++		// their union in the final target's bottom-left pixel coordinates.
++		lucentSetActiveRect(dstCoord[0], min(dstCoord[1], blitParams.dstY0),
++			dstCoord[2], max(dstCoord[3], blitParams.dstY1),
++			blitParams.dstWidth, blitParams.dstHeight, true);
++	}
+ 
+ 	wnd.swapBuffers();
+ 	if (m_pCurrent != nullptr) {

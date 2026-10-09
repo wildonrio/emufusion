@@ -76,7 +76,7 @@ and sustained audio all worked. Its reported telemetry failure was a QA-parser
 false negative because the real-menu route emits `Health`, not the older
 qualification-only `Runtime telemetry` marker.
 
-The corrected r2 harness then exposed a separate held-Stop race. Lucent restored
+The corrected r2 harness then exposed a separate held-Stop race. EmuFusion restored
 the library in 2 ms, but `detachViews()` abandoned the TextureView Surface while
 a scheduled render-thread frame was still inside EGL swap. The swap returned
 `EGL_BAD_SURFACE` (`0x300d`), the renderer error callback cleared `prepared`, and

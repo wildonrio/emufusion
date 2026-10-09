@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -55,7 +56,7 @@ I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen sys
         result = MODULE.audit(log, {
             "return-01.png": "Nintendo Entertainment System 10-Yard Fight",
             "return-02.png": "Nintendo Entertainment System 1943",
-        })
+        }, visible_return_upper_bounds_ms=(23,))
         self.assertTrue(result.passed, result.errors)
 
     def test_missing_return_marker_is_not_inferred_from_clean_screen(self):
@@ -65,6 +66,21 @@ I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen sys
         )
         self.assertFalse(result.passed)
         self.assertIn("no in-window return marker was captured", result.errors)
+
+    def test_host_or_visible_latency_over_five_hundred_ms_fails(self):
+        host = MODULE.audit(
+            "Returned to Lucent immediately in same window latencyMs=501",
+            {"return.png": "SYSTEM VIEW"},
+            visible_return_upper_bounds_ms=(20,),
+        )
+        self.assertTrue(any("in-process" in error for error in host.errors))
+        visible = MODULE.audit(
+            "Returned to Lucent immediately in same window latencyMs=5",
+            {"return.png": "SYSTEM VIEW"},
+            visible_return_upper_bounds_ms=(501,),
+        )
+        self.assertTrue(any("composed-pixel" in error
+                            for error in visible.errors))
 
     def test_expected_apk_sha256_is_required_on_the_command_line(self):
         completed = subprocess.run(
@@ -104,9 +120,10 @@ I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen sys
                 }],
             }}]}],
         }), encoding="utf-8")
-        ocr, latencies = MODULE.stored_result_evidence(path)
+        ocr, latencies, reports = MODULE.stored_result_evidence(path)
         self.assertEqual(ocr, {"megadrive-return-02.png": "G<_ LUCENT"})
         self.assertEqual(latencies, (3,))
+        self.assertEqual(reports, ())
         result = MODULE.audit(
             "I/LucentInWindow: Returned to Lucent immediately in same window "
             "latencyMs=3",
@@ -115,6 +132,33 @@ I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen sys
         self.assertFalse(result.passed)
         self.assertEqual(result.visible_reset_frames,
                          ("megadrive-return-02.png",))
+
+    def test_visible_video_report_is_recomputed_from_winscope_mp4(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        evidence = Path(temporary.name)
+        timestamps = [10_000_000_000, 10_010_000_000, 10_020_000_001]
+        video = evidence / "gc-return-visible.mp4"
+        video.write_bytes(
+            b"prefix" + MODULE.return_video.WINSC0PE_V2_MAGIC +
+            struct.pack("<IqI", 2, 0, len(timestamps)) +
+            struct.pack(f"<{len(timestamps)}Q", *timestamps) + b"suffix"
+        )
+        reports = ({
+            "method": "screenrecord-winscope-v2-device-clock-upper-bound",
+            "thresholdLowerBoundElapsedNs": 10_000_000_000,
+            "firstMenuFrameIndex": 2,
+            "firstMenuElapsedNs": 10_020_000_001,
+            "visibleReturnLatencyUpperBoundMs": 21,
+            "videoPath": "/old/path/gc-return-visible.mp4",
+        },)
+        bounds, errors = MODULE.validate_visible_video_reports(evidence, reports)
+        self.assertEqual(bounds, (21,))
+        self.assertEqual(errors, ())
+        forged = (dict(reports[0], visibleReturnLatencyUpperBoundMs=1),)
+        bounds, errors = MODULE.validate_visible_video_reports(evidence, forged)
+        self.assertEqual(bounds, ())
+        self.assertTrue(any("upward-rounded" in error for error in errors))
 
 
 if __name__ == "__main__":

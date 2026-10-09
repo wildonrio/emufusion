@@ -28,7 +28,14 @@
 extern "C" {
 #endif
 
-#define LUCENT_NATIVE_ADAPTER_ABI_VERSION 1u
+#define LUCENT_NATIVE_ADAPTER_ABI_VERSION 2u
+
+/* Optional lucent_native_adapter_timing_capabilities_v1() export bits. These
+ * extend discovery without changing the v1 vtable or requiring old adapters
+ * to implement new entry points. Submission timing alone is not content ID. */
+#define LUCENT_NATIVE_TIMING_BASE_CLOCK_CORRECTION 1u
+#define LUCENT_NATIVE_TIMING_SUBMISSION_TIMESTAMPS 2u
+#define LUCENT_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE 4u
 
 /* Opaque per-session engine instance owned by the adapter. */
 typedef struct lucent_native_engine lucent_native_engine;
@@ -52,6 +59,12 @@ typedef struct {
     bool has_persistent_save;      /* normal game-save flush is supported */
     bool dual_screen;              /* Wii U GamePad / Switch handheld second view */
     uint32_t required_firmware;    /* count of user-supplied firmware/key blobs */
+    uint32_t max_controllers;      /* how many set_control() controller_index
+                                     * values 0..max_controllers-1 this engine
+                                     * actually honors. Never advertised above
+                                     * what the engine truly supports; an
+                                     * adapter with no multi-controller support
+                                     * reports exactly 1, never 0. */
 } lucent_native_capabilities;
 
 /* User-supplied, hash-validated firmware/keys/content. Lucent validates and
@@ -86,7 +99,14 @@ typedef enum {
     LUCENT_PAD_DPAD_UP, LUCENT_PAD_DPAD_DOWN, LUCENT_PAD_DPAD_LEFT, LUCENT_PAD_DPAD_RIGHT,
     LUCENT_PAD_START, LUCENT_PAD_SELECT, LUCENT_PAD_HOME,
     LUCENT_PAD_LSTICK_X, LUCENT_PAD_LSTICK_Y, LUCENT_PAD_RSTICK_X, LUCENT_PAD_RSTICK_Y,
-    LUCENT_PAD_TOUCH_X, LUCENT_PAD_TOUCH_Y, LUCENT_PAD_TOUCH_PRESSED
+    LUCENT_PAD_TOUCH_X, LUCENT_PAD_TOUCH_Y, LUCENT_PAD_TOUCH_PRESSED,
+    /* Local Cemu presentation control, not guest input or a netplay control.
+     * On a single-screen host: 0 = TV, 1 = GamePad. Existing ordinals and the
+     * vtable are unchanged; only the updated, pinned Cemu adapter uses this. */
+    LUCENT_PAD_SCREEN_VIEW,
+    /* Stick clicks are independent digital buttons, not axis movement.
+     * Append only: ordinals 0..22 remain compatible with existing adapters. */
+    LUCENT_PAD_L3, LUCENT_PAD_R3
 } lucent_native_control;
 
 /* The adapter vtable. Every function is required; a no-op is expressed by a
@@ -117,7 +137,12 @@ typedef struct {
      * error (Lucent then fails the session rather than hiding a black screen). */
     bool (*run_frame)(lucent_native_engine *engine);
 
-    void (*set_control)(lucent_native_engine *engine,
+    /* controller_index selects which local/remote player this value belongs
+     * to (0 is always the primary/local player). An adapter whose describe()
+     * reports max_controllers == 1 must ignore any index other than 0 (fail
+     * closed by treating it as a no-op, never by aliasing it onto player 0's
+     * state). */
+    void (*set_control)(lucent_native_engine *engine, uint32_t controller_index,
                         lucent_native_control control, float value);
 
     void (*pause)(lucent_native_engine *engine);

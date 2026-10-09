@@ -1,8 +1,8 @@
 /*
- * Lucent Phase 1A libretro operability probe.
+ * EmuFusion Phase 1A libretro operability probe.
  *
  * This is a deliberately small, non-interactive frontend used only by QA. It
- * loads the exact Android ARM64 core artifact that Lucent would load and
+ * loads the exact Android ARM64 core artifact that EmuFusion would load and
  * exercises video, audio, input, save RAM, and state serialization callbacks.
  */
 #include "libretro.h"

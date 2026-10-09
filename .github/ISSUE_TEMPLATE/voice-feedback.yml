@@ -1,0 +1,19 @@
+name: Device voice feedback
+description: Reviewed feedback captured from an EmuFusion device
+title: "[Device feedback] "
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Voice feedback
+      description: Paste or review the transcription produced by EmuFusion.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: EmuFusion diagnostics
+      description: App version and emulated system only. Do not include device identifiers, personal information, game names, file paths, or raw logs. GitHub issues identify your GitHub account.
+      render: text
+    validations:
+      required: true

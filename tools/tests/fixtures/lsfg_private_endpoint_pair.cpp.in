@@ -1,0 +1,404 @@
+// Extracted production state/methods; no real Vulkan, Android or compositor.
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
+#include <fcntl.h>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <optional>
+#include <poll.h>
+#include <stdexcept>
+#include <string>
+#include <unistd.h>
+#include <vector>
+#define LOGE(...) do {} while (0)
+using VkResult=int;using VkCommandBuffer=int;using VkFence=int;using VkSemaphore=int;
+using VkImage=int;using VkDeviceMemory=int;using VkBuffer=int;
+using VkDeviceSize=uint64_t;using VkPipelineStageFlags=uint32_t;
+constexpr int VK_SUCCESS=0,VK_NOT_READY=1,VK_NULL_HANDLE=0;
+constexpr int VK_STRUCTURE_TYPE_SUBMIT_INFO=4,VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR=5;
+constexpr int VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT=6;
+constexpr int VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR=7,VK_SEMAPHORE_IMPORT_TEMPORARY_BIT=1;
+constexpr int VK_PIPELINE_STAGE_TRANSFER_BIT=8,VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE=9;
+constexpr uint64_t VK_WHOLE_SIZE=UINT64_MAX;
+struct VkExtent2D {uint32_t width=0,height=0;};
+struct VkSubmitInfo {
+    int sType;uint32_t waitSemaphoreCount;const VkSemaphore* pWaitSemaphores;
+    const VkPipelineStageFlags* pWaitDstStageMask;uint32_t commandBufferCount;
+    const VkCommandBuffer* pCommandBuffers;uint32_t signalSemaphoreCount;
+    const VkSemaphore* pSignalSemaphores;
+};
+struct VkSemaphoreGetFdInfoKHR {int sType;VkSemaphore semaphore;int handleType;};
+struct VkImportSemaphoreFdInfoKHR {int sType;VkSemaphore semaphore;int flags,handleType,fd;};
+struct VkMappedMemoryRange {int sType;VkDeviceMemory memory;uint64_t offset,size;};
+struct VkPastPresentationTimingGOOGLE {
+    uint32_t presentID;uint64_t desiredPresentTime,actualPresentTime,earliestPresentTime,presentMargin;
+};
+struct AHardwareBuffer {int identity;};
+@CONSTANTS@
+uint64_t fakeNow=100;
+uint64_t monotonicNs(){return fakeNow;}
+void requireSuccess(int status,const char* operation){if(status!=VK_SUCCESS)throw std::runtime_error(operation);}
+bool openFd(int fd){return fd>=0 && ::fcntl(fd,F_GETFD)>=0;}
+std::vector<int> ownedFds;
+int readyFd(){
+    int pipeFds[2];assert(::pipe(pipeFds)==0);
+    const char byte='x';assert(::write(pipeFds[1],&byte,1)==1);::close(pipeFds[1]);
+    ownedFds.push_back(pipeFds[0]);return pipeFds[0];
+}
+struct sync_fence_info {int status=1;uint64_t timestamp_ns=500;};
+struct sync_file_info {int status=1;uint32_t num_fences=2;std::array<sync_fence_info,2> children;};
+struct sync_file_info configured;
+bool missingInfo=false;int infoCalls=0;
+bool failDup=false;
+int controlledDup(int fd){if(failDup){errno=EMFILE;return -1;}return ::dup(fd);}
+#define dup controlledDup
+struct sync_file_info* sync_file_info(int fd){
+    assert(openFd(fd));infoCalls++;return missingInfo?nullptr:new struct sync_file_info(configured);
+}
+void sync_file_info_free(struct sync_file_info* info){delete info;}
+const sync_fence_info* sync_get_fence_info(struct sync_file_info* info){return info->children.data();}
+@READY@
+struct Device {
+    int submits=0,exports=0,imports=0,resets=0,queries=0,invalidates=0;
+    uint32_t lastWaitCount=0;int lastWaitSemaphore=0,lastImportSemaphore=0;
+    VkPipelineStageFlags lastWaitStage=0;
+    bool failExport=false;
+    std::map<int,int> status;
+    int vkResetFences(int,uint32_t,const VkFence* fence){resets++;status[*fence]=VK_NOT_READY;return VK_SUCCESS;}
+    int vkResetCommandBuffer(int,int){resets++;return VK_SUCCESS;}
+    int vkQueueSubmit(int,uint32_t,const VkSubmitInfo* request,VkFence){
+        submits++;lastWaitCount=request->waitSemaphoreCount;
+        if(lastWaitCount){lastWaitSemaphore=*request->pWaitSemaphores;lastWaitStage=*request->pWaitDstStageMask;}
+        return VK_SUCCESS;
+    }
+    int vkGetSemaphoreFdKHR(int,const VkSemaphoreGetFdInfoKHR*,int* fd){
+        exports++;if(failExport)return -4;*fd=readyFd();return VK_SUCCESS;
+    }
+    int vkImportSemaphoreFdKHR(int,const VkImportSemaphoreFdInfoKHR* request){
+        imports++;lastImportSemaphore=request->semaphore;
+        assert(request->flags==VK_SEMAPHORE_IMPORT_TEMPORARY_BIT);
+        assert(request->handleType==VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT);
+        assert(openFd(request->fd));::close(request->fd);return VK_SUCCESS;
+    }
+    int vkGetFenceStatus(int,VkFence fence){queries++;return status.at(fence);}
+    int vkInvalidateMappedMemoryRanges(int,uint32_t,const VkMappedMemoryRange*){invalidates++;return VK_SUCCESS;}
+};
+struct Writer {void discard(uint64_t,const char*){}};
+struct Fixture {
+    @SLOT_COUNT@
+    @DECLARATIONS@
+    bool fatal_=false;
+    struct {bool liveResourcesReady=true;} capabilities_;
+    uint64_t presentationEpoch_=1;
+    uint32_t nextLiveSlot_=0,pendingPresentations_=0;
+    uint32_t inferenceSlot_=UINT32_MAX;
+    int device_=1,queue_=1,copyRecords=0,proofRecords=0,captures=0;
+    Device deviceFunctions_;
+    std::array<LiveSlot,kFixedSlotCount> live_{};
+    std::array<ImportedSlot,kFixedSlotCount> imported_{};
+    std::array<ImportedImage,4> sources{};
+    std::array<AHardwareBuffer,kFixedSlotCount*3> fixedBuffers{};
+    std::array<std::array<uint8_t,kProofRgbaBytes>,kFixedSlotCount> atlas{};
+    std::unique_ptr<Writer> tripletWriter_;
+    Fixture(){
+        fakeNow=100;configured={};missingInfo=false;failDup=false;infoCalls=0;ownedFds.clear();
+        for(uint32_t i=0;i<kFixedSlotCount;i++){
+            auto& slot=live_[i];slot.copyFence=100+i*2;slot.presentFence=101+i*2;
+            slot.copyCommand=200+i*2;slot.presentCommand=201+i*2;
+            slot.inputReady=300+i*3;slot.acquire=301+i*3;slot.render=302+i*3;
+            slot.proofMapped=atlas[i].data();slot.proofCoherent=true;
+            deviceFunctions_.status[slot.copyFence]=VK_NOT_READY;
+            deviceFunctions_.status[slot.presentFence]=VK_NOT_READY;
+            imported_[i].left.buffer=&fixedBuffers[i*3];
+            imported_[i].right.buffer=&fixedBuffers[i*3+1];
+            imported_[i].output.buffer=&fixedBuffers[i*3+2];
+            // Three deliberately distinct fixture tiles. Command recording is
+            // not a hardware pixel proof; actual analyzeCompletion chooses one.
+            for(uint32_t tile=0;tile<3;tile++)for(uint32_t j=0;j<kProofWidth*kProofHeight*4;j++)
+                atlas[i][tile*kProofWidth*kProofHeight*4+j]=static_cast<uint8_t>(tile*100+j%17);
+        }
+    }
+    ~Fixture(){
+        for(auto& slot:live_){
+            if(openFd(slot.readySyncFd))::close(slot.readySyncFd);
+            if(openFd(slot.proofTimestampSyncFd))::close(slot.proofTimestampSyncFd);
+        }
+        for(int fd:ownedFds)if(openFd(fd))::close(fd);
+    }
+    ImportedImage& cachedSourceImage(AHardwareBuffer* buffer){
+        for(auto& image:sources)if(image.buffer==buffer)return image;
+        for(auto& image:sources)if(image.buffer==nullptr){image.buffer=buffer;return image;}
+        throw std::logic_error("fixture cache full");
+    }
+    void recordEndpointCopy(uint32_t index,LiveSlot& slot){
+        assert(index<kFixedSlotCount && slot.sourceLeft && slot.sourceRight);copyRecords++;
+    }
+    void recordSurfaceProof(LiveSlot&){proofRecords++;}
+    void markSurfaceCutoffDrop(LiveSlot&,uint64_t,uint32_t){
+        throw std::logic_error("fixture must not reach excluded post-activation cutoff");
+    }
+    void completeTripletCapture(LiveSlot&,const Completion&){captures++;}
+    @METHODS@
+};
+using State=Fixture::LiveSlotState;
+using Prepared=Fixture::PreparedPresentation;
+using Request=Fixture::LiveRequest;
+AHardwareBuffer left{1},right{2},other{3};
+template<typename F> void rejects(F operation){
+    try{operation();}catch(const std::exception&){return;}
+    throw std::logic_error("expected production rejection");
+}
+Request request(bool generated=false,bool presentRight=false){
+    return Request{.left=&left,.right=&right,.presentId=77,
+        .physicalPresentTimeNs=2000,.desiredPresentTimeNs=1800,
+        .completionDeadlineNs=1000,.refreshDurationNs=8333333,
+        .generated=generated,.presentRight=presentRight,
+        .sessionEpoch=3,.presentationEpoch=4,.leftSequence=10,.rightSequence=11,
+        .leftTimestampNs=100,.rightTimestampNs=200,
+        .contentTimestampNs=generated?150U:(presentRight?200U:100U)};
+}
+Prepared begin(Fixture& f,bool generated=false){
+    auto prepared=generated?f.tryPreparePrivateGenerated(&left,&right):f.tryPreparePrivateEndpointPair(&left,&right);
+    assert(prepared && f.pendingPresentations_==0);
+    auto& slot=f.live_[prepared->slotIndex];
+    assert(slot.state==State::CopyQueued && slot.request.presentId==0);
+    assert(slot.request.generated==generated && slot.request.left==&left && slot.request.right==&right);
+    assert(slot.sourceLeft->buffer==&left && slot.sourceRight->buffer==&right);
+    f.holdPrivatePrepared(*prepared,prepared->inputReadySyncFd);
+    return *prepared;
+}
+void queueProof(Fixture& f,const Prepared& p){
+    auto& slot=f.live_[p.slotIndex];
+    assert(f.privatePreparedPairStatus(p)==0);
+    assert(slot.state==State::PrivateProofQueued && slot.privateProofPrepared);
+    assert(openFd(slot.readySyncFd) && openFd(slot.proofTimestampSyncFd));
+    assert(f.deviceFunctions_.submits==2 && f.copyRecords==1 && f.proofRecords==1);
+}
+void ready(Fixture& f,const Prepared& p){
+    queueProof(f,p);auto& slot=f.live_[p.slotIndex];
+    f.deviceFunctions_.status[slot.copyFence]=VK_SUCCESS;
+    f.deviceFunctions_.status[slot.presentFence]=VK_SUCCESS;
+    configured.children[0].timestamp_ns=450;configured.children[1].timestamp_ns=500;
+    fakeNow=600;f.privatePreparedPairStatus(p);
+    assert(slot.state==State::PrivateReady && slot.gpuCompletionObservedNs==500);
+    assert(slot.proofTimestampSyncFd==-1 && f.pendingPresentations_==0);
+}
+void isolation(){
+    for(bool generated:{false,true}){
+        Fixture f;const auto p=begin(f,generated);ready(f,p);
+        const auto& slot=f.live_[p.slotIndex];
+        // Fixture A/B differ enough to be a scene cut. Only generation is
+        // rejected by that assessment; an exact real endpoint remains ready.
+        assert(f.analyzePrivatePairStatus(f.live_[p.slotIndex])==kPairUnsafe);
+        assert(slot.privatePairStatus==(generated?kPairUnsafe:kPairReady));
+        const auto fd=slot.readySyncFd;const auto submits=f.deviceFunctions_.submits;
+        auto wrong=request(!generated);rejects([&]{f.activatePrivatePrepared(p,wrong);});
+        wrong=request(generated);wrong.right=&other;rejects([&]{f.activatePrivatePrepared(p,wrong);});
+        wrong=request(generated);std::swap(wrong.left,wrong.right);rejects([&]{f.activatePrivatePrepared(p,wrong);});
+        f.live_[p.slotIndex].privateProofPrepared=false;
+        rejects([&]{f.activatePrivatePrepared(p,request(generated));});
+        f.live_[p.slotIndex].privateProofPrepared=true;
+        f.live_[p.slotIndex].gpuCompletionObservedNs=0;
+        rejects([&]{f.activatePrivatePrepared(p,request(generated));});
+        f.live_[p.slotIndex].gpuCompletionObservedNs=500;
+        assert(slot.state==State::PrivateReady && slot.request.presentId==0 && slot.readySyncFd==fd);
+        assert(f.pendingPresentations_==0 && f.deviceFunctions_.submits==submits);
+    }
+}
+void selection(){
+    for(bool generated:{false,true})for(bool side:{false,true}){
+        if(generated && side)continue;
+        Fixture f;const auto p=begin(f,generated);ready(f,p);
+        auto& slot=f.live_[p.slotIndex];auto r=request(generated,side);
+        const int submits=f.deviceFunctions_.submits,proofs=f.proofRecords,reads=infoCalls;
+        const int resets=f.deviceFunctions_.resets,exports=f.deviceFunctions_.exports;
+        assert(f.activatePrivatePrepared(p,r));
+        assert(f.pendingPresentations_==1 && slot.request.presentId==77);
+        const auto submission=f.pollSurfaceSubmission();assert(submission);
+        const auto& fixed=f.imported_[p.slotIndex];
+        assert(submission->buffer==(generated?fixed.output.buffer:(side?fixed.right.buffer:fixed.left.buffer)));
+        assert(submission->buffer!=&left && submission->buffer!=&right);
+        assert(submission->physicalPresentTimeNs==r.physicalPresentTimeNs);
+        assert(submission->desiredPresentTimeNs==r.desiredPresentTimeNs && submission->presentId==77);
+        assert(slot.readySyncFd==-1 && openFd(submission->proofReadySyncFd));
+        // The physical completion poll occurs later than the original deadline,
+        // but uses the exact signal captured BEFORE choosing that deadline.
+        fakeNow=3000;missingInfo=true;
+        auto completion=f.pollSurfaceCompletion(77,1800,1500,2000);assert(completion);
+        assert(completion->gpuCompletionNs==500 && completion->gpuWorkNs==400);
+        if(generated){
+            assert(completion->outputChecksum!=completion->leftChecksum);
+            assert(completion->outputChecksum!=completion->rightChecksum);
+        }else{
+            assert(completion->outputChecksum==(side?completion->rightChecksum:completion->leftChecksum));
+            assert((side?completion->outputRightMadPpm:completion->outputLeftMadPpm)==0);
+            assert((side?completion->outputLeftMadPpm:completion->outputRightMadPpm)>0);
+        }
+        assert(f.deviceFunctions_.submits==submits && f.proofRecords==proofs);
+        assert(f.deviceFunctions_.resets==resets && f.deviceFunctions_.exports==exports && infoCalls==reads);
+        assert(slot.state==State::SurfaceDeliveredAwaitingRelease);
+        assert(!f.referencesSourceImage(&left) && !f.referencesSourceImage(&right));
+        rejects([&]{f.activatePrivatePrepared(p,r);});
+        ::close(submission->proofReadySyncFd);
+    }
+}
+void expiry(){
+    for(bool generated:{false,true}){
+        Fixture f;const auto p=begin(f,generated);ready(f,p);
+        auto& slot=f.live_[p.slotIndex];const auto original=slot.request;
+        const int fd=slot.readySyncFd,submits=f.deviceFunctions_.submits,resets=f.deviceFunctions_.resets;
+        auto r=request(generated);
+        for(uint64_t now:std::array<uint64_t,3>{1000,1001,UINT64_MAX}){
+            fakeNow=now;assert(!f.activatePrivatePrepared(p,r));
+            assert(slot.state==State::PrivateReady && slot.request.presentId==original.presentId);
+            assert(slot.request.left==original.left && slot.request.right==original.right);
+            assert(slot.readySyncFd==fd && openFd(fd) && slot.gpuCompletionObservedNs==500);
+            assert(f.pendingPresentations_==0 && f.deviceFunctions_.submits==submits);
+        }
+        fakeNow=400;r.completionDeadlineNs=499;assert(!f.activatePrivatePrepared(p,r));
+        r.completionDeadlineNs=500;assert(f.activatePrivatePrepared(p,r));
+        assert(f.pendingPresentations_==1 && f.deviceFunctions_.resets==resets);
+        rejects([&]{f.activatePrivatePrepared(p,r);});
+    }
+}
+void readiness(){
+    Fixture f;const auto p=begin(f);queueProof(f,p);auto& slot=f.live_[p.slotIndex];
+    const int fd=slot.proofTimestampSyncFd,reads=infoCalls;
+    assert(f.privatePreparedPairStatus(p)==0 && f.privatePreparedPairStatus(p)==0);
+    assert(slot.gpuCompletionObservedNs==0 && openFd(fd) && infoCalls==reads);
+    f.deviceFunctions_.status[slot.presentFence]=VK_SUCCESS;
+    // Vulkan completion alone does not turn an unsignaled exported ready FD
+    // into permission to publish. Neither FD is consumed on this NOT_READY.
+    const int readyFd=slot.readySyncFd;int pipeFds[2];assert(::pipe(pipeFds)==0);
+    slot.readySyncFd=pipeFds[0];assert(f.privatePreparedPairStatus(p)==0);
+    assert(slot.gpuCompletionObservedNs==0 && openFd(fd) && infoCalls==reads);
+    ::close(pipeFds[0]);::close(pipeFds[1]);slot.readySyncFd=readyFd;
+    configured.children[1].timestamp_ns=777;fakeNow=900;
+    assert(f.privatePreparedPairStatus(p)==kPairReady && slot.gpuCompletionObservedNs==777);
+    assert(!openFd(fd) && slot.proofTimestampSyncFd==-1);
+    const int completeReads=infoCalls;missingInfo=true;fakeNow=9000;
+    assert(f.privatePreparedPairStatus(p)==kPairReady && infoCalls==completeReads);
+    assert(slot.gpuCompletionObservedNs==777);
+    Fixture invalid;const auto bad=begin(invalid);queueProof(invalid,bad);
+    auto& badSlot=invalid.live_[bad.slotIndex];const int badFd=badSlot.proofTimestampSyncFd;
+    invalid.deviceFunctions_.status[badSlot.presentFence]=VK_SUCCESS;
+    configured.children[1].timestamp_ns=0;rejects([&]{invalid.privatePreparedPairStatus(bad);});
+    assert(invalid.fatal_ && badSlot.state==State::PrivateProofQueued);
+    assert(badSlot.gpuCompletionObservedNs==0 && openFd(badFd));
+    rejects([&]{invalid.referencesSourceImage(&left);});
+}
+void queued_dependency(){
+    for(bool generated:{false,true}){
+        Fixture f;const auto p=begin(f,generated);auto& slot=f.live_[p.slotIndex];
+        ::close(slot.readySyncFd);int pipeFds[2];assert(::pipe(pipeFds)==0);
+        slot.readySyncFd=pipeFds[0];
+        const int queries=infoCalls;
+        assert(f.privatePreparedPairStatus(p)==0);
+        if(generated){
+            assert(slot.state==State::PrivateAwaitingReady && f.proofRecords==0);
+            assert(f.deviceFunctions_.imports==0 && openFd(pipeFds[0]));
+        }else{
+            // The COPY need not have signaled on the CPU. GPU proof must wait
+            // on its exact imported semaphore and still cannot become visible.
+            assert(slot.state==State::PrivateProofQueued && f.proofRecords==1);
+            assert(f.deviceFunctions_.imports==1);
+            assert(f.deviceFunctions_.lastImportSemaphore==slot.acquire);
+            assert(f.deviceFunctions_.lastWaitCount==1 && f.deviceFunctions_.lastWaitSemaphore==slot.acquire);
+            assert(f.deviceFunctions_.lastWaitStage==VK_PIPELINE_STAGE_TRANSFER_BIT);
+            assert(f.pendingPresentations_==0 && slot.request.presentId==0 && slot.gpuCompletionObservedNs==0);
+            assert(infoCalls==queries);
+            assert(f.privatePreparedPairStatus(p)==0 && f.deviceFunctions_.submits==2);
+            assert(f.referencesSourceImage(&left) && f.referencesSourceImage(&right));
+        }
+        ::close(pipeFds[1]);
+    }
+}
+void retirement(){
+    for(bool proof:{false,true}){
+        Fixture f;const auto p=begin(f);if(proof)queueProof(f,p);
+        auto& slot=f.live_[p.slotIndex];const int fd=slot.readySyncFd;
+        f.abandonPrivatePrepared(p);
+        assert(slot.state==State::Abandoned && f.referencesSourceImage(&left) && f.referencesSourceImage(&right));
+        assert(!f.referencesSourceImage(&other) && openFd(fd));
+        f.deviceFunctions_.status[slot.copyFence]=VK_SUCCESS;
+        if(proof){
+            assert(!f.referencesSourceImage(&left) && !f.referencesSourceImage(&right));
+            assert(slot.state==State::Abandoned && openFd(fd));
+            f.deviceFunctions_.status[slot.presentFence]=VK_SUCCESS;
+        }
+        assert(!f.referencesSourceImage(&left) && !f.referencesSourceImage(&right));
+        assert(slot.state==State::Idle && !slot.sourceLeft && !slot.sourceRight);
+        assert(!openFd(fd) && slot.proofTimestampSyncFd==-1 && f.pendingPresentations_==0);
+    }
+    // Output readiness is an independent dependency even when both Vulkan
+    // fences report success. A real empty pipe provides POLL NOT_READY.
+    Fixture f;const auto p=begin(f);queueProof(f,p);auto& slot=f.live_[p.slotIndex];
+    f.deviceFunctions_.status[slot.copyFence]=VK_SUCCESS;
+    f.deviceFunctions_.status[slot.presentFence]=VK_SUCCESS;
+    int pipeFds[2];assert(::pipe(pipeFds)==0);::close(slot.readySyncFd);slot.readySyncFd=pipeFds[0];
+    f.abandonPrivatePrepared(p);assert(!f.referencesSourceImage(&right));
+    assert(slot.state==State::Abandoned && openFd(pipeFds[0]));
+    const char byte='x';assert(::write(pipeFds[1],&byte,1)==1);
+    assert(!f.referencesSourceImage(&right) && !openFd(pipeFds[0]));::close(pipeFds[1]);
+}
+void invalid_retirement(){
+    for(int kind=0;kind<4;kind++){
+        Fixture f;const auto p=begin(f);queueProof(f,p);auto& slot=f.live_[p.slotIndex];
+        f.deviceFunctions_.status[slot.copyFence]=VK_SUCCESS;
+        f.deviceFunctions_.status[slot.presentFence]=VK_SUCCESS;
+        if(kind==0)slot.readySyncFd=-2;
+        if(kind==1)configured.status=-1;
+        if(kind==2)f.deviceFunctions_.status[slot.presentFence]=-4;
+        if(kind==3)f.deviceFunctions_.status[slot.copyFence]=-4;
+        rejects([&]{f.abandonPrivatePrepared(p);});
+        assert(slot.state==State::Abandoned && slot.sourceLeft->buffer==&left && slot.sourceRight->buffer==&right);
+        rejects([&]{f.referencesSourceImage(&left);});
+        assert(slot.state==State::Abandoned && slot.sourceLeft && slot.sourceRight);
+        assert(f.pendingPresentations_==0);
+    }
+}
+void export_failure(){
+    for(bool dupFailure:{false,true}){
+        Fixture f;const auto p=begin(f);auto& slot=f.live_[p.slotIndex];
+        f.deviceFunctions_.status[slot.copyFence]=VK_SUCCESS;
+        if(dupFailure)failDup=true;else f.deviceFunctions_.failExport=true;
+        rejects([&]{f.privatePreparedPairStatus(p);});
+        assert(f.deviceFunctions_.submits==2 && f.fatal_);
+        assert(slot.privateProofPrepared && slot.state==State::PrivateProofQueued);
+        assert(slot.sourceLeft->buffer==&left && slot.sourceRight->buffer==&right);
+        assert(f.deviceFunctions_.status[slot.presentFence]==VK_NOT_READY);
+        assert(f.pendingPresentations_==0 && slot.request.presentId==0);
+        rejects([&]{f.abandonPrivatePrepared(p);});
+        rejects([&]{f.referencesSourceImage(&left);});
+        assert(slot.state==State::PrivateProofQueued && slot.sourceLeft && slot.sourceRight);
+    }
+}
+void reserved_inference_capacity(){
+    Fixture f;
+    f.inferenceSlot_=0;
+    // One displayed buffer and its queued successor may both be held by
+    // SurfaceFlinger. Preparation must not wait for either to be released.
+    f.live_[1].state=State::SurfaceDeliveredAwaitingRelease;
+    f.live_[2].state=State::SurfaceDeliveredAwaitingRelease;
+    auto p=f.tryPreparePrivateEndpointPair(&left,&right);
+    assert(p && p->slotIndex!=0 && p->slotIndex!=1 && p->slotIndex!=2);
+    assert(f.live_[0].state==State::Idle);
+    assert(f.live_[1].state==State::SurfaceDeliveredAwaitingRelease);
+    assert(f.live_[2].state==State::SurfaceDeliveredAwaitingRelease);
+    assert(!f.tryPreparePrivateEndpointPair(&left,&right));
+}
+int main(int argc,char** argv){
+    assert(argc==2);const std::string name=argv[1];
+    if(name=="reserved_inference_capacity")reserved_inference_capacity();
+    else if(name=="isolation")isolation();else if(name=="selection")selection();
+    else if(name=="expiry")expiry();else if(name=="readiness")readiness();
+    else if(name=="queued_dependency")queued_dependency();
+    else if(name=="retirement")retirement();else if(name=="invalid_retirement")invalid_retirement();
+    else if(name=="export_failure")export_failure();else assert(false);
+    std::cout<<"PASS "<<name<<'\n';
+}

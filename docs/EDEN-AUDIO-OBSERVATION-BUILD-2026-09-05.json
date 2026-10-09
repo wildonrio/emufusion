@@ -1,0 +1,23 @@
+{
+  "status": "BUILT_NOT_DEVICE_QUALIFIED",
+  "date": "2026-09-05",
+  "buildCommand": "/Users/tyleryoung/Code/cemu/Cemu-0.5/android-sdk/cmake/3.31.6/bin/ninja -j4 yuzu-android",
+  "buildDirectory": "engines/build/switch-src/eden/build-android",
+  "buildExitCode": 0,
+  "buildLog": "docs/qa/frame-generation-v2-switch-audio-observation-2026-09-05/android-build.log",
+  "hostRegressionCount": 98,
+  "hostRegressionResult": "PASS",
+  "unstrippedSha256": "6088c0529dcaa106d4765f9eab16a196fead49a276de2cc260fb822eb39876de",
+  "unstrippedSizeBytes": 387862968,
+  "strippedSha256": "e985d749defc73c773c9678a212ce0522d31cea0c1dda43d6c4c80b2e1c6ae3a",
+  "strippedSizeBytes": 35558464,
+  "machine": "AArch64",
+  "loadAlignments": ["0x4000", "0x4000", "0x4000", "0x4000"],
+  "soname": "libyuzu-android.so",
+  "buildId": "8321a01ced5445cd209c1c3f043746862f8e7148",
+  "runtimeResult": "FAIL_QT_ADRENO_NATIVE_CRASH_BEFORE_GAMEPLAY_CONFIRMED",
+  "runtimeEvidence": "docs/qa/frame-generation-v2-switch-audio-observation-2026-09-05/README.md",
+  "diagnosticApkSha256": "013473bec23c9f27523e77a075842d80185814e9183ec01881416957cbbc913e",
+  "deviceRolledBackToApkSha256": "09ddfb954af5162ff33ec08aa642c2ccd377677b3290354433100c2d177297bf",
+  "note": "Actual PCM-pull and callback-acceptance diagnostics only. No guest speed or audio resampling change. Not proof of hardware playback, useful generated frames, image retirement time, or smooth presentation. Source patch reproduction verified separately; full dependency reproducibility remains false."
+}

@@ -1,0 +1,20 @@
+Subject: [CANDIDATE] SPU: map guest thread number to its argument slot
+Upstream: https://github.com/RPCS3/rpcs3/pull/17516
+Commit: 9d020a3e5956134bd55d610082d82228bdfa0a96
+Source: aenu1/aps3e b5ae1af50d5e2f3b705506e7380a4504e086840b
+Scope: Backport only the applicable cpu_task hunk. This older source does not
+have the newer notify_spus array addressed by the other upstream hunk.
+Status: Local qualification candidate, not yet integrated or an ICO repair claim.
+
+diff --git a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp
+@@ -1888,7 +1888,7 @@ void spu_thread::cpu_task()
+ 		}
+ 		else
+ 		{
+-			const u32 arg = static_cast<u32>(group->args[index][1]);
++			const u32 arg = static_cast<u32>(group->args[group->threads_map[index]][1]);
+ 
+ 			if (group->name.ends_with("CellSpursKernelGroup"sv) && vm::check_addr(arg))
+ 			{

@@ -25,10 +25,24 @@ static lucent_vulkan_jni_session *from_handle(jlong handle) {
     return (lucent_vulkan_jni_session *)(intptr_t)handle;
 }
 
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeSetFgTimestampVulkan(
+        JNIEnv *env, jclass type, jlong handle, jboolean secondary, jboolean enabled) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_vulkan_jni_session *session = from_handle(handle);
+    if ((!session || !session->backend ||
+            !lucent_android_vulkan_set_fg_timestamp(session->backend,
+                    secondary == JNI_TRUE, enabled == JNI_TRUE,
+                    error, sizeof(error))) && !(*env)->ExceptionCheck(env))
+        throw_state(env, error);
+}
+
 JNIEXPORT jlong JNICALL
 Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeCreateVulkan(
         JNIEnv *env, jclass type, jstring core_path, jstring trusted_root,
-        jstring system_directory, jstring save_directory) {
+        jstring system_directory, jstring save_directory,
+        jboolean widescreen_enhancements_enabled) {
     (void)type;
     char error[ERROR_SIZE] = {0};
     const char *core = NULL;
@@ -54,8 +68,10 @@ Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeCreateVulkan(
     session->backend = lucent_android_vulkan_create(error, sizeof(error));
     if (!session->backend || !lucent_android_vulkan_get_host_options(
             session->backend, &options, error, sizeof(error))) goto done;
-    session->host = lucent_retro_create_with_options(
-            core, root, system, save, &options, error, sizeof(error));
+    session->host = lucent_retro_create_with_preferences(
+            core, root, system, save, &options,
+            widescreen_enhancements_enabled == JNI_TRUE,
+            error, sizeof(error));
 done:
     if (core) (*env)->ReleaseStringUTFChars(env, core_path, core);
     if (root) (*env)->ReleaseStringUTFChars(env, trusted_root, root);
@@ -85,6 +101,31 @@ Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeLoadGameVulkan(
     if (success) session->game_loaded = true;
     if (path) (*env)->ReleaseStringUTFChars(env, game_path, path);
     if (!success && !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeSetPresentationAspectVulkan(
+        JNIEnv *env, jclass type, jlong handle, jfloat aspect) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_vulkan_jni_session *session = from_handle(handle);
+    if ((!session || !session->backend ||
+            !lucent_android_vulkan_set_presentation_aspect(
+                    session->backend, aspect, error, sizeof(error))) &&
+            !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeSetSecondaryPresentationRotationVulkan(
+        JNIEnv *env, jclass type, jlong handle, jint clockwise_degrees) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_vulkan_jni_session *session = from_handle(handle);
+    if ((!session || !session->backend ||
+            !lucent_android_vulkan_set_secondary_rotation(
+                    session->backend, (unsigned)clockwise_degrees,
+                    error, sizeof(error))) && !(*env)->ExceptionCheck(env))
+        throw_state(env, error);
 }
 
 static bool attach_surface(JNIEnv *env, lucent_vulkan_jni_session *session,
@@ -236,6 +277,61 @@ Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeSetPointerVulkan(
         throw_state(env, "invalid Vulkan pointer input");
 }
 
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeSetControllerPortDeviceVulkan(
+        JNIEnv *env, jclass type, jlong handle, jint port, jint device) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_vulkan_jni_session *session = from_handle(handle);
+    if (!session || port < 0 || device < 0 ||
+            !lucent_retro_set_controller_port_device(session->host,
+                    (unsigned)port, (unsigned)device,
+                    error, sizeof(error))) {
+        if (!(*env)->ExceptionCheck(env)) throw_state(env, error);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeResetVulkan(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_vulkan_jni_session *session = from_handle(handle);
+    bool success = session && session->host &&
+            lucent_retro_reset(session->host, error, sizeof(error));
+    if (!success && !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeCheatResetVulkan(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_vulkan_jni_session *session = from_handle(handle);
+    bool success = session && session->host &&
+            lucent_retro_cheat_reset(session->host, error, sizeof(error));
+    if (!success && !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeCheatSetVulkan(
+        JNIEnv *env, jclass type, jlong handle, jint index, jboolean enabled,
+        jstring code) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_vulkan_jni_session *session = from_handle(handle);
+    if (!session || !session->host || index < 0 || code == NULL) {
+        throw_state(env, "a loaded Vulkan session, nonnegative slot and cheat code are required");
+        return;
+    }
+    const char *native_code = (*env)->GetStringUTFChars(env, code, NULL);
+    if (native_code == NULL) return;
+    bool success = lucent_retro_cheat_set(session->host, (unsigned)index,
+            enabled == JNI_TRUE, native_code, error, sizeof(error));
+    (*env)->ReleaseStringUTFChars(env, code, native_code);
+    if (!success && !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
 JNIEXPORT jshortArray JNICALL
 Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeDrainAudioVulkan(
         JNIEnv *env, jclass type, jlong handle, jint max_frames) {
@@ -281,6 +377,19 @@ Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeAvInfoVulkan(
     result = (*env)->NewDoubleArray(env, 5);
     if (result) (*env)->SetDoubleArrayRegion(env, result, 0, 5, values);
     return result;
+}
+
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeSetSynchronizedVideoRateVulkan(
+        JNIEnv *env, jclass type, jlong handle, jdouble declared_hz,
+        jdouble synchronized_hz) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    lucent_vulkan_jni_session *session = from_handle(handle);
+    if (!session || !session->host ||
+            !lucent_retro_set_synchronized_video_rate(
+                    session->host, declared_hz, synchronized_hz,
+                    error, sizeof(error))) throw_state(env, error);
 }
 
 JNIEXPORT jbyteArray JNICALL

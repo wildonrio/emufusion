@@ -6,7 +6,7 @@ This is the checked-in research baseline for every target named in
 `docs/in-process-emulation-plan.md` section 8. It is deliberately fail-closed:
 no row is approved, shipped, renderer-qualified, state-qualified, or
 device-qualified. Some rows now have an off-device compiler/linker proof; that
-evidence does not claim the engine runs or may be distributed in Lucent.
+evidence does not claim the engine runs or may be distributed in EmuFusion.
 
 The machine-readable authority is `engines/phase2-registry.json`; the policy
 validator is `tools/validate_phase2_registry.py`.
@@ -19,18 +19,19 @@ is evidence-based rather than a compatibility guess:
 - official PPSSPP tag `v1.20.4` peels to a pinned commit;
 - Android ARM64, Vulkan, libretro, JIT, and save-state source paths exist;
 - the PSP path does not require a proprietary console BIOS;
-- Lucent has checked in a source-only CC0 smoke fixture; a pinned PSPSDK source
+- EmuFusion has checked in a source-only CC0 smoke fixture; a pinned PSPSDK source
   archive is candidate SDK provenance for the later deterministic toolchain;
-- the initial proof can omit FFmpeg and therefore reduce the dependency and
-  notice closure.
+- PPSSPP's exact FFmpeg gitlink, Android ARM64 archives, corresponding source,
+  and license closure are pinned and audited.
 
 This designation selects the first qualification job. PPSSPP remains
 `experimental`; its checked-in, toolchain-locked recipe has produced two
-byte-identical FFmpeg-off Android AArch64 compiler/linker proofs and its exact
-hardened APK passes a one-window AYN Thor gameplay/audio/input/Stop-return and
-process-death restore checkpoint. That bounded device checkpoint does not
-replace the still-open legal-content, dependency, 100-cycle, migration,
-Vulkan, sustained-performance, or broader-device release gates.
+byte-identical normalized FFmpeg-enabled Android AArch64 compiler/linker
+proofs. An earlier FFmpeg-off APK passed a bounded one-window AYN Thor
+gameplay/audio/input/Stop-return and process-death restore checkpoint, but that
+does not qualify the current binary or replace the still-open FMV transition,
+legal-content, 100-cycle, migration, Vulkan, sustained-performance,
+distribution, or broader-device release gates.
 
 ## Qualification matrix
 
@@ -48,8 +49,8 @@ means the qualification work has not run.
 | YabaSanshiro | Saturn | benchmark | **blocked**: official source URL unavailable | **blocked**: no primary source to audit | historical app only; unverified | blocked | unverified | unverified | shared Saturn candidate only | source-blocked |
 | Flycast | Dreamcast, Naomi, Atomiswave | libretro | locked | GPL-2.0-or-later primary; deps open | exact ARM64 build; hardened Dreamcast one-window checkpoint passed | Dreamcast HLE candidate; **Naomi/Atomiswave blocked** | one Dreamcast process-death restore passed; matrix open | physical GLES Dreamcast passed; Vulkan/loss open | KallistiOS 240pSuite user fixture passed; arcade fixtures absent | experimental |
 | Play! | PlayStation 2 | in-process libretro; native route remains a later benchmark | locked | BSD-3-Clause primary; exact staged closure pinned, dependency audit open | **two byte-identical patched Android ARM64 builds; hardened runtime performance failed** | no BIOS required for target route | historical process-death restore; current full state gate not reached | GLES renders but 33–48 FPS and increasing underruns; Vulkan/context-loss open | PS2SDK sample candidate; artifact unpinned | experimental / performance failed |
-| Dolphin | GameCube, Wii | in-process libretro | locked, including 30-input staged closure | GPL-2.0-or-later aggregate candidate; dependency SPDX audit open | exact normalized ARM64 build; qualification-packaged in Lucent's single-Activity host | no GameCube BIOS; Wii NAND feature-gated | serialize works; final three-title/process-death matrix open | GLES/FBO integration works; final visual/lifecycle matrix open | user-owned Thor titles available for device qualification; distributable fixture still open | experimental / qualification only |
-| **PPSSPP** | **PSP** | **libretro** | **locked** | GPL-2.0-or-later; exact dependencies pinned, audit open | **byte-identical AArch64 build and exact Thor one-window runtime checkpoint passed** | **no BIOS required** | one process-death restore passed; 100-cycle/migration open | physical GLES passed; Vulkan/loss open | **Lucent-owned CC0 source-only fixture; no PBP yet** | **experimental / first candidate** |
+| Dolphin | GameCube, Wii | in-process libretro | locked, including 30-input staged closure | GPL-2.0-or-later aggregate candidate; dependency SPDX audit open | exact normalized ARM64 build; qualification-packaged in EmuFusion's single-Activity host | no GameCube BIOS; Wii NAND feature-gated | serialize works; final three-title/process-death matrix open | GLES/FBO integration works; final visual/lifecycle matrix open | user-owned Thor titles available for device qualification; distributable fixture still open | experimental / qualification only |
+| **PPSSPP** | **PSP** | **libretro** | **locked including FFmpeg** | combined GPL-3.0-only; exact compiled-source/FFmpeg audit complete, final distribution review open | **byte-identical normalized FFmpeg-enabled AArch64 build; current binary not device-tested** | **no BIOS required** | earlier-profile restore only; 100-cycle/migration open | earlier-profile physical GLES only; current GLES/FMV and Vulkan/loss open | **Lucent-owned CC0 source-only fixture; no PBP yet** | **experimental / first candidate** |
 | Azahar | Nintendo 3DS | libretro | locked | GPL-2.0-or-later primary; dependency audit open | checksum-pinned official 2125.1.3 ARM64 core; source reproduction open; **hardened Thor first-frame test fails** | **blocked**: keys/system-data policy and identities | serialize exports; runtime blocked | Vulkan and GLES both stall before first frame in MainActivity | devkitPro 3DS example candidate; artifact unpinned | experimental / runtime failed |
 | ScummVM | ScummVM | in-process libretro | exact core/dependency closure locked | GPL-3.0-or-later plus exact 15-component/337-object notice bundle | exact reproducible, 16 KiB-aligned ARM64 core; qualification-packaged | no firmware | held-Stop engine-native autosave is fail-closed; generic serialize/history unavailable | GLES host; device matrix open | official Flight of the Amazon Queen freeware download pinned, never bundled | experimental / qualification only |
 | Virtual Jaguar | Atari Jaguar | libretro | locked | GPL-3.0 primary; bundled data audit open | **two byte-identical Android ARM64 proof builds** | **blocked**: embedded BIOS provenance | serialize source; open | software; open | Jaguar SDK candidate; artifact unpinned | experimental |
@@ -83,19 +84,20 @@ archives and verify these hashes offline.
 
 The official annotated tag `v1.20.4` peels to
 commit `fa50bb1976065c4f8b1b47af227d367fe9771555`; the full annotated tag
-object is `3a31057b7e44270b4d5cef8c31b6559d51802a3b`. The initial Android ARM64
-libretro proof disables FFmpeg, but the following staged gitlinks are still
-compile inputs and are therefore exact registry data. This is the exact staged
-compile-input closure for this profile, not a claim about every upstream
-submodule:
+object is `3a31057b7e44270b4d5cef8c31b6559d51802a3b`. The Android ARM64 libretro
+production profile enables the exact pinned FFmpeg gitlink. The following
+staged gitlinks are compile inputs and therefore exact registry data. This is
+the exact staged compile-input closure for this profile, not a claim about
+every unused upstream submodule:
 
 The staged dependency repositories, commits, and archive SHA-256 values are
-machine-readable in `engines/ppsspp-source-lock.json`. Two fresh epoch-fixed
-builds of this limited profile matched byte-for-byte: Android AArch64 ELF
-SHA-256 `734ba9e0c1e7040b16b0a1e6d2183914e8f9e203b9c3102899427425a925c3ba`,
-BuildID `f791f34db0009b16b9a1b0e6713c90c115db10a1`, and zero embedded absolute
-builder paths. That proves reproducibility only for the FFmpeg-off
-compiler/linker profile. The production candidate remains
+machine-readable in `engines/ppsspp-source-lock.json`. Two isolated
+epoch-fixed builds matched byte-for-byte after removing only LLD's
+absolute-root-sensitive GNU build-ID note: normalized Android AArch64 ELF
+SHA-256 `1c1b192451375445badc7b69c917b82058d411fd94d66bd6bc00bc781e205487`,
+no retained build-ID note, and zero embedded absolute builder paths. That
+proves reproducibility only for the FFmpeg-enabled compiler/linker profile.
+The production candidate remains
 `reproducible=false` and is not legal-content-, gameplay-, renderer-, state-,
 performance-, device-, or distribution-qualified.
 
@@ -117,6 +119,7 @@ performance-, device-, or distribution-qualified.
 | `ext/rapidjson` | `73063f5002612c6bf64fe24f851cd5cc0d83eef9` |
 | `ext/rcheevos` | `ebfe8ca1bf944358e27200d66964fcb4e00e2487` |
 | `ext/zstd` | `f8745da6ff1ad1e7bab384bd1f9d742439278e99` |
+| `ffmpeg` | `1e3b4965632f60b1d85360261d1b9dd45444bc71` |
 | `libretro/libretro-common` | `76a3d54feb0ee0ce9d59b90aa24694f3782063d3` |
 
 `ext/OpenXR-SDK` remains a header compile input with `OPENXR=OFF`; its commit
@@ -138,10 +141,9 @@ placeholder license text is not a redistribution grant.
 
 ## Required qualification sequence
 
-1. Repeat the coordinated PPSSPP offline Android ARM64 build with the exact
-   top-level and staged compile-input pins above; normalize and compare the outputs, and
-   finish every notice.
-2. Build the Lucent CC0 fixture using a completely pinned source-built
+1. Physically validate the exact FFmpeg-enabled artifact through FMV-to-game
+   transitions with non-black video callbacks, stable audio, and clean return.
+2. Build the EmuFusion CC0 fixture using a completely pinned source-built
    PSPDEV/PSPSDK toolchain and record all source/toolchain/artifact hashes.
 3. Run the normal and sanitizer hardware-render host suites without a physical
    device, then execute callback/state probes on an Android ARM64 emulator.
@@ -167,12 +169,12 @@ Play! now has an exact-pin Android ARM64 compiler/linker proof as well. The
 official top-level archive plus all six direct and six nested gitlinks used by
 the Android libretro profile are locked in `engines/play-source-lock.json`.
 Two fresh archive restagings with pinned NDK 27.0.12077973, CMake 3.31.6, and
-Ninja 1.12.1, plus Lucent's reviewed host/audio/state patches, produced the
+Ninja 1.12.1, plus EmuFusion's reviewed host/audio/state patches, produced the
 byte-identical stripped AArch64 ELF SHA-256
 `a90adf7f06c12c8a7505420a18b18bfaca812737a7612436b69041a89fb86843`
 through `engines/build_core.sh play`. On the authorized AYN Thor, the exact
 artifact booted a user-owned God of War disc inside `LucentGameActivity`,
-accepted controller input, returned to Lucent, and restored the exact
+accepted controller input, returned to EmuFusion, and restored the exact
 difficulty menu after process death with live graphics and audio. A later
 strict gameplay run exposed sustained ~38 FPS throughput and accumulating
 AudioTrack underruns, so the performance gate explicitly fails. This passes

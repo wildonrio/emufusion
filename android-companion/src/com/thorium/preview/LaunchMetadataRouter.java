@@ -18,7 +18,7 @@ import java.util.Set;
 
 import com.thorium.lucent.metadata.MetadataLaunchNormalizer;
 
-/** Replaces stale launch commands with Lucent's sole in-window route. */
+/** Replaces stale launch commands with EmuFusion's sole in-window route. */
 final class LaunchMetadataRouter {
     private static final String TAG = "LucentLaunchMetadata";
     static int normalize(Context context) {
@@ -33,7 +33,7 @@ final class LaunchMetadataRouter {
             for (File directory : Arrays.asList(root, new File(root, "metadata"),
                     new File(root, "metafiles"), new File(root, "metadata-systems"))) {
                 File[] files = directory.listFiles((parent, name) ->
-                        // Lucent has historically emitted both
+                        // EmuFusion has historically emitted both
                         // <system>.metadata.pegasus.txt and aggregate names
                         // such as metadata.complete.pegasus.txt. Normalize all
                         // Pegasus metadata variants so a later copy/restore

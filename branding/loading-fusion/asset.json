@@ -1,0 +1,14 @@
+{
+  "description": "Looping 'fusion' boot animation made from the EmuFusion app icon. The icon is separated by colour (six rainbow arms of the swirl, the dark D-pad body, the light button body); the layers circle as twisted rings of liquid light, contract and unwind, and lock into the exact icon in a flash with a chromatic shockwave. The icon then floats in god rays with orbiting comets and the wordmark, and finally spins into a point of light that seeds the next loop.",
+  "source": "unified-android/res/drawable/lucent_icon.png",
+  "renderScript": "render.py (deterministic; Homebrew python3 + numpy + Pillow + OpenCV, ffmpeg/libx264). render_all.sh renders lossless segments in parallel and encodes ../../loading.mp4.",
+  "wordmarkFont": "Roboto Light (Apache 2.0) from the Android SDK platform fonts",
+  "output": "../../loading.mp4",
+  "videoSha256": "3e50fc5965c1f7adc7a4e3e3b43a6fb8eaeb386f9414a014a3f5d93b24dd5098",
+  "video": {"codec": "h264", "profile": "High", "pixelFormat": "yuv420p", "width": 1920, "height": 1080, "framesPerSecond": 60, "frameCount": 360, "durationSeconds": 6, "audioStreams": 0},
+  "loop": "Seamless: mean absolute change from the last frame to the first is 1.75, below the median consecutive-frame change of 2.0. The largest change is the intended fusion flash at frame 101.",
+  "preview": "preview.jpg (one frame every 0.25 s)",
+  "previousVideoBackup": "previous-loading.mp4",
+  "previousVideoSha256": "5d54f134d6a373b2d623b6ffc33c3cdf9ce0c4e468aeb7705147a75e291e0ccc",
+  "runtimeBehavior": "Unchanged: BootVideoOverlay extracts the content-addressed asset, loops it, fits it without cropping, and dismisses it when the library is ready."
+}

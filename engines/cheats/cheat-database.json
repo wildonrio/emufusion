@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "note": "EmuFusion cheat catalogue. Matched on (system, title); the title is normalised so regional and revision variants of one dump resolve to the same entry -- see CheatDatabase.normalise. Codes are passed to the core VERBATIM because only the core knows its own dialect: Game Genie for NES/SNES/GB, raw address:value for Mesen2 and Snes9x, '+' joining the lines of one multi-line cheat. A user file at files/cheats/cheats.json replaces any game here wholesale.",
+  "games": [
+    {
+      "system": "nes",
+      "title": "Super Mario Bros.",
+      "cheats": [
+        { "id": "infinite-lives", "name": "Infinite lives", "description": "Lives never decrease.", "code": "AATOZE" },
+        { "id": "start-with-9-lives", "name": "Start with 9 lives", "description": "Applies at the title screen.", "code": "PIGOAP" },
+        { "id": "invincible", "name": "Invincibility", "description": "Enemies and pits still push Mario back.", "code": "GZUXNGEI" }
+      ]
+    },
+    {
+      "system": "nes",
+      "title": "Contra",
+      "cheats": [
+        { "id": "infinite-lives", "name": "Infinite lives", "description": "Lives never decrease.", "code": "SXIOPO" },
+        { "id": "start-with-10-lives", "name": "Start with 10 lives", "description": "Applies on a new game.", "code": "PEUQLI" }
+      ]
+    },
+    {
+      "system": "nes",
+      "title": "Lucent Callback Test",
+      "cheats": [
+        { "id": "qualification-red-border", "name": "Qualification red border", "description": "EmuFusion's original QA ROM only (SHA-256 42019e9ca4a3a11815a9e13b7c60734a73fb7ae3cb06a140915daa4605ee8508). Changes the four-edge border from white to red immediately and reverses when disabled.", "code": "6000:3F" }
+      ]
+    },
+    {
+      "system": "snes",
+      "title": "Super Mario World",
+      "cheats": [
+        { "id": "infinite-lives", "name": "Infinite lives", "description": "Holds the life counter at 99.", "code": "7E0DBE:63" },
+        { "id": "all-yoshi-colours", "name": "Keep Yoshi", "description": "Yoshi is not lost on damage.", "code": "7E13C6:01" }
+      ]
+    },
+    {
+      "system": "snes",
+      "title": "The Legend of Zelda: A Link to the Past",
+      "cheats": [
+        { "id": "infinite-health", "name": "Infinite health", "description": "Hearts stay full.", "code": "7EF36D:A0" },
+        { "id": "infinite-magic", "name": "Infinite magic", "description": "Magic meter stays full.", "code": "7EF36E:80" },
+        { "id": "infinite-rupees", "name": "999 rupees", "description": "Sets the rupee counter.", "code": "7EF360:03+7EF361:E7" }
+      ]
+    },
+    {
+      "system": "gb",
+      "title": "Pokemon Red",
+      "cheats": [
+        { "id": "infinite-money", "name": "Infinite money", "description": "Sets the money counter high.", "code": "019973D3+019974D3+019975D3" },
+        { "id": "walk-through-walls", "name": "Walk through walls", "description": "Can strand you in unreachable areas; save first.", "code": "010138CD" }
+      ]
+    },
+    {
+      "system": "genesis",
+      "title": "Sonic the Hedgehog",
+      "cheats": [
+        { "id": "infinite-lives", "name": "Infinite lives", "description": "Lives never decrease.", "code": "AJWA-AA6Y" },
+        { "id": "infinite-rings", "name": "Keep rings", "description": "Rings are not lost on damage.", "code": "ACLA-ATC2" }
+      ]
+    }
+  ]
+}

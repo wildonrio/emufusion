@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[2]
 RECIPE = ROOT / "engines" / "build_core.sh"
 FIXTURE = ROOT / "engines" / "qa" / "fixtures" / "ppsspp-minimal"
 LOCK = ROOT / "engines" / "ppsspp-source-lock.json"
+AUDIT = ROOT / "engines" / "ppsspp-dependency-audit.json"
+ARTIFACT = ROOT / "engines" / "build" / "arm64-v8a" / "ppsspp_libretro.so"
 SESSION = ROOT / "unified-android" / "src" / "com" / "thorium" / \
     "preview" / "game" / "PpssppGlesEngineSession.java"
 
@@ -41,17 +43,32 @@ class PhaseTwoPpssppTest(unittest.TestCase):
         ):
             self.assertIn(path, self.recipe)
 
-    def test_default_proof_is_limited_and_ffmpeg_candidate_is_isolated(self):
+    def test_production_recipe_requires_pinned_ffmpeg_and_atomic_publication(self):
         for flag in ("-DLIBRETRO=ON", "-DOPENXR=OFF", "-DUSE_MINIUPNPC=OFF"):
             self.assertIn(flag, self.recipe)
-        self.assertIn("ppsspp_use_ffmpeg=OFF", self.recipe)
-        self.assertIn('LUCENT_PPSSPP_FFMPEG_CANDIDATE:-0', self.recipe)
-        self.assertIn("ppsspp_use_ffmpeg=ON", self.recipe)
-        self.assertIn(
-            "FFmpeg candidate builds require an isolated LUCENT_ENGINE_BUILD_DIR",
-            self.recipe,
+        ppsspp_case = self.recipe.split("    ppsspp)", 1)[1].split("    mame)", 1)[0]
+        self.assertNotIn("ppsspp_use_ffmpeg=OFF", ppsspp_case)
+        self.assertNotIn("LUCENT_PPSSPP_FFMPEG_CANDIDATE", ppsspp_case)
+        for token in (
+            "ppsspp_use_ffmpeg=ON",
+            '-DUSE_FFMPEG="$ppsspp_use_ffmpeg"',
+            "fetch_ppsspp_ffmpeg_fresh",
+            "1e3b4965632f60b1d85360261d1b9dd45444bc71",
+            "93b942daa799dedf4f7a1a3f143c081c1945f2a67b7d13717f9fbb5c0ef4dd51",
+            "--remove-section=.note.gnu.build-id",
+            "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
+            "PPSSPP DT_NEEDED closure changed",
+            "PPSSPP core is missing required export",
+            'defined_symbols_file="$ppsspp_candidate_dir/ppsspp-defined-symbols.txt"',
+            'grep -qx "$required_symbol" "$defined_symbols_file"',
+            '--lock "$ROOT/engines/ppsspp-source-lock.json"',
+            'mv "$normalized_core" "$OUTPUT_DIR/ppsspp_libretro.so"',
+        ):
+            self.assertIn(token, ppsspp_case)
+        self.assertLess(
+            ppsspp_case.index("generate_ppsspp_compliance_bundle.py"),
+            ppsspp_case.index('mv "$normalized_core" "$OUTPUT_DIR/ppsspp_libretro.so"'),
         )
-        self.assertIn('-DUSE_FFMPEG="$ppsspp_use_ffmpeg"', self.recipe)
 
     def test_recipe_locks_toolchain_patch_paths_and_concurrency(self):
         ppsspp_case = self.recipe.split("    ppsspp)", 1)[1].split("    mame)", 1)[0]
@@ -117,23 +134,48 @@ class PhaseTwoPpssppTest(unittest.TestCase):
         )
         self.assertEqual("27.0.12077973", lock["toolchain"]["ndkVersion"])
         self.assertEqual("3.31.6-g38307f9", lock["toolchain"]["cmakeVersion"])
-        proof = lock["limitedProfileReproducibilityProof"]
+        self.assertEqual("android-arm64-libretro-ffmpeg", lock["buildProfile"])
+        proof = lock["productionProfileReproducibilityProof"]
         self.assertEqual(2, proof["freshBuildCount"])
         self.assertTrue(proof["byteIdentical"])
         self.assertEqual(
-            "734ba9e0c1e7040b16b0a1e6d2183914e8f9e203b9c3102899427425a925c3ba",
+            "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
             proof["artifactSha256"],
         )
-        self.assertEqual(
-            "f791f34db0009b16b9a1b0e6713c90c115db10a1",
-            proof["gnuBuildId"],
-        )
+        self.assertIsNone(proof["gnuBuildId"])
+        self.assertIn(".note.gnu.build-id", proof["normalization"])
         self.assertEqual(0, proof["absoluteBuilderPathMatches"])
         paths = {row["path"] for row in lock["dependencies"]}
         self.assertIn("ext/OpenXR-SDK", paths)
         self.assertIn("ext/miniupnp", paths)
         self.assertIn("ext/armips/ext/filesystem", paths)
         self.assertIn("ext/libadrenotools/lib/linkernsbypass", paths)
+        ffmpeg = lock["ffmpeg"]
+        self.assertEqual(
+            "1e3b4965632f60b1d85360261d1b9dd45444bc71",
+            ffmpeg["commit"],
+        )
+        self.assertEqual(3381, ffmpeg["sparseFileCount"])
+        self.assertEqual(
+            "93b942daa799dedf4f7a1a3f143c081c1945f2a67b7d13717f9fbb5c0ef4dd51",
+            ffmpeg["sparseClosureSha256"],
+        )
+        self.assertFalse(ffmpeg["embeddedConfiguration"]["gplEnabled"])
+        self.assertFalse(ffmpeg["embeddedConfiguration"]["nonfreeEnabled"])
+        self.assertFalse(ffmpeg["embeddedConfiguration"]["version3Enabled"])
+        self.assertEqual(5, len(ffmpeg["androidArm64Archives"]))
+        self.assertEqual("LGPL-2.1-or-later AND IJG", ffmpeg["licenseConcluded"])
+        for archive in ffmpeg["androidArm64Archives"]:
+            self.assertIn(Path(archive["path"]).name, self.recipe)
+            self.assertIn(archive["sha256"], self.recipe)
+        for tool_key in (
+            "llvmStripExecutableSha256",
+            "llvmObjcopyExecutableSha256",
+            "llvmReadelfExecutableSha256",
+            "llvmNmExecutableSha256",
+        ):
+            self.assertIn(lock["toolchain"][tool_key], self.recipe)
+        self.assertNotIn("ffmpeg", {row["path"] for row in lock["excluded"]})
         patch = ROOT / lock["recipePatch"]["path"]
         self.assertTrue(patch.is_file())
         self.assertIn("v1.20.4-fa50bb1", patch.read_text(encoding="utf-8"))
@@ -146,6 +188,13 @@ class PhaseTwoPpssppTest(unittest.TestCase):
             self.assertRegex(row["archiveSha256"], r"^[0-9a-f]{64}$")
             self.assertIn(row["commit"], self.recipe)
             self.assertIn(row["archiveSha256"], self.recipe)
+
+    def test_dependency_audit_and_staged_artifact_use_normalized_identity(self):
+        expected = "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d"
+        audit = json.loads(AUDIT.read_text(encoding="utf-8"))
+        self.assertEqual(expected, audit["artifactSha256"])
+        if ARTIFACT.is_file():
+            self.assertEqual(expected, hashlib.sha256(ARTIFACT.read_bytes()).hexdigest())
 
     def test_state_readiness_is_only_probed_for_a_pending_restore(self):
         session = SESSION.read_text(encoding="utf-8")

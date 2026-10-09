@@ -1,0 +1,80 @@
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index 4f6640f..bb298ff 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -1820,12 +1820,50 @@ size_t retro_get_memory_size(unsigned type)
+     return size;
+ }
+ 
++/* Lucent: apply one live cheat line (GameShark or Game Genie, the same
++ * dialect RetroArchChtParser/CwCheatParser already store for gb/gbc rows) to
++ * a single GB_gameboy_t instance. Multi-line codes arrive joined with '+',
++ * the same separator every other libretro core in this build treats as
++ * "one cheat, several lines" (see mgba's retro_cheat_set for precedent). */
++static void lucent_gb_apply_cheat_lines(GB_gameboy_t *gb, const char *code, bool enabled)
++{
++    if (!code || !*code) return;
++    GB_set_cheats_enabled(gb, true);
++    char *buffer = strdup(code);
++    if (!buffer) return;
++    char *cursor = buffer;
++    while (*cursor) {
++        char *split = strchr(cursor, '+');
++        if (split) *split = 0;
++        char *start = cursor;
++        while (*start == ' ' || *start == '\t' || *start == '\r' || *start == '\n') start++;
++        char *stop = start + strlen(start);
++        while (stop > start && (stop[-1] == ' ' || stop[-1] == '\t' ||
++                                 stop[-1] == '\r' || stop[-1] == '\n')) {
++            *(--stop) = 0;
++        }
++        if (*start) {
++            GB_import_cheat(gb, start, "Lucent cheat", enabled);
++        }
++        if (!split) break;
++        cursor = split + 1;
++    }
++    free(buffer);
++}
++
+ void retro_cheat_reset(void)
+-{}
++{
++    GB_remove_all_cheats(&gameboy[0]);
++    if (emulated_devices == 2) {
++        GB_remove_all_cheats(&gameboy[1]);
++    }
++}
+ 
+ void retro_cheat_set(unsigned index, bool enabled, const char *code)
+ {
+     (void)index;
+-    (void)enabled;
+-    (void)code;
++    lucent_gb_apply_cheat_lines(&gameboy[0], code, enabled);
++    if (emulated_devices == 2) {
++        lucent_gb_apply_cheat_lines(&gameboy[1], code, enabled);
++    }
+ }
+
+diff --git a/libretro/Makefile.common b/libretro/Makefile.common
+index 0000000..0000000 100644
+--- a/libretro/Makefile.common
++++ b/libretro/Makefile.common
+@@ -15,6 +15,7 @@
+                $(CORE_DIR)/Core/save_state.c \
+                $(CORE_DIR)/Core/random.c \
+                $(CORE_DIR)/Core/rumble.c \
++               $(CORE_DIR)/Core/cheats.c \
+                $(CORE_DIR)/libretro/agb_boot.c \
+                $(CORE_DIR)/libretro/cgb_boot.c \
+                $(CORE_DIR)/libretro/cgb0_boot.c \
+@@ -24,7 +25,7 @@
+                $(CORE_DIR)/libretro/sgb2_boot.c \
+                $(CORE_DIR)/libretro/libretro.c
+ 
+-CFLAGS += -DGB_DISABLE_TIMEKEEPING -DGB_DISABLE_REWIND -DGB_DISABLE_DEBUGGER -DGB_DISABLE_CHEATS
++CFLAGS += -DGB_DISABLE_TIMEKEEPING -DGB_DISABLE_REWIND -DGB_DISABLE_DEBUGGER
+ 
+ 
+ SOURCES_CXX :=	

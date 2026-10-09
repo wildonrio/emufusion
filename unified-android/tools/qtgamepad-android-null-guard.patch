@@ -1,0 +1,13 @@
+--- a/src/plugins/gamepads/android/src/qandroidgamepadbackend.cpp
++++ b/src/plugins/gamepads/android/src/qandroidgamepadbackend.cpp
+@@ -63,6 +63,10 @@
+         {}
+         inline void call() { m_function(); }
+         static inline void runOnQtThread(QObject *receiver, const Function &func) {
++            // Android may deliver input after Qt application teardown.
++            // Preserve EmuFusion's existing pinned-binary late-event guard.
++            if (!qApp)
++                return;
+             if (qApp->thread() == QThread::currentThread())
+                 func();
+             else

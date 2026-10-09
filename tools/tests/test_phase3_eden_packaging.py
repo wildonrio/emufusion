@@ -23,10 +23,35 @@ ROOT = Path(__file__).resolve().parents[2]
 
 EDEN_COMMIT = "c0ffc900cdf19b9373549c59a7e6b22c33615ea4"
 SUPERSEDED_COMMIT = "5ec94b19714f75489cdfc62d890d2f94d45514ce"
-ADAPTER_SHA256 = "86eaf8a8c90e3f9adafc88ed7aa3f20d0a335892712f9c2dc54ab06349bae7f7"
+# Current staged artifact rebuilt 2026-09-04; the historical 2026-08-08 build
+# already contained three changes since the first artifact (86eaf8a8…):
+# the local id_cache.cpp hidden-API patch recorded in eden-source-lock.json,
+# then routing set_control into Eden's VirtualGamepad so input reaches the guest,
+# then routing audio out through the ABI's audio_sink — an AudioCore sink in the
+# adapter plus the sink_details.cpp factory hook that selects it, so Eden feeds
+# EmuFusion's AudioTrack instead of opening its own OpenSL ES device. The current
+# artifact additionally includes the defensive CoreTiming queue-lifetime
+# replacement and bounded fractional timing diagnostics pinned in
+# eden-source-lock.json. The subsequent Sept 4 rebuild additionally contains
+# exact-key image-sideband diagnostics and the reviewed surface-lifecycle
+# changes; this packaging pin does not imply device qualification.
+# Sept 5 adds actual audio-pull/host-acceptance observations. Its device run
+# crashed in Qt/Adreno and was rolled back on Thor; this is the LOCAL staged
+# diagnostic identity only, never a runtime qualification assertion.
+# Subsequent rebuild selects Accurate CPU mode to retain fastmem bounds checks.
+# This is a host-tested memory policy, not a device crash/pacing qualification.
+# Exact-driver descriptor workaround follows the captured stale-write watchpoint.
+# October 4 preserves the September 7 multiplayer build and fixes failed-load
+# process lifetime. Exact simulator crash-recovery evidence is in the lock;
+# successful gameplay/performance and physical-device qualification remain open.
+# Follow-up preserves that fix and explains Vulkan startup failures in-app.
+# October7 adds previously missing stick-click routes; runtime acceptance pending.
+ADAPTER_SHA256 = "a8623b66d853e2d025eab1135b2fa9a5820f32656329c9efb8aab176c09a4416"
 ADAPTER_LIBRARY = "liblucent_native_adapter_eden.so"
 STAGED_ADAPTER = ROOT / "engines" / "build" / "arm64-v8a" / ADAPTER_LIBRARY
 ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-lucent-adapter.cpp"
+MEMORY_TRACKER = (ROOT / "engines" / "build" / "switch-src" / "eden" / "src" /
+                  "video_core" / "buffer_cache" / "memory_tracker_base.h")
 
 MANIFEST_TOOL = ROOT / "unified-android" / "tools" / "generate_engine_artifact_manifest.py"
 APK_VERIFIER = ROOT / "unified-android" / "tools" / "verify_phase3_apk.py"
@@ -118,7 +143,10 @@ class Phase3EdenIdentityTest(unittest.TestCase):
         self.assertEqual("16.5.0", toolchain["glslangValidator"]["version"])
         options = SOURCE_LOCK["cmakeOptions"]
         self.assertEqual(0, options["ENABLE_QT"])
-        self.assertEqual(1, options["ENABLE_WEB_SERVICE"])
+        # The embedded frontend neither signs in nor exposes Eden's online UI.
+        # Keeping web services enabled starts needless sockets in Lucent's
+        # process and increases load/relocation work.
+        self.assertEqual(0, options["ENABLE_WEB_SERVICE"])
         self.assertIs(True, options["ANDROID_ARM_NEON"])
         self.assertEqual("ON", options["YUZU_USE_CPM"])
         self.assertEqual("ON", options["CPMUTIL_FORCE_BUNDLED"])
@@ -131,12 +159,48 @@ class Phase3EdenIdentityTest(unittest.TestCase):
 
     def test_source_lock_pins_the_adapter_translation_unit_it_compiled_in(self):
         patches = SOURCE_LOCK["patches"]
-        self.assertEqual(1, len(patches))
-        self.assertEqual("engines/patches/eden-lucent-adapter.cpp",
-                         patches[0]["path"])
+        adapter = [entry for entry in patches
+                   if entry["path"] == "engines/patches/eden-lucent-adapter.cpp"]
+        self.assertEqual(1, len(adapter), "exactly one adapter TU is compiled in")
         self.assertEqual(
             hashlib.sha256(ADAPTER_PATCH.read_bytes()).hexdigest(),
-            patches[0]["sha256"])
+            adapter[0]["sha256"])
+
+    def test_internal_switch_runtime_is_explicitly_offline(self):
+        # EmuFusion exposes no Switch network-account or multiplayer UI. Eden's
+        # partially configured guest network path caused Odyssey to terminate
+        # itself with 2010-0212, so the zero-configuration runtime must not
+        # advertise connectivity it cannot support.
+        adapter = ADAPTER_PATCH.read_text(encoding="utf-8")
+        self.assertIn("Settings::values.airplane_mode.SetValue(true);", adapter)
+
+    def test_gpu_memory_tracker_rejects_out_of_aperture_ranges_before_indexing(self):
+        tracker = MEMORY_TRACKER.read_text(encoding="utf-8")
+        walkers = tracker.split("while (remaining_size > 0) {")[1:3]
+        self.assertEqual(2, len(walkers))
+        for walker in walkers:
+            self.assertLess(walker.index("page_index >= NUM_HIGH_PAGES"),
+                            walker.index("top_tier[page_index]"))
+
+    def test_every_local_source_patch_is_pinned_and_still_matches(self):
+        """A patch to the vendored tree must be recorded and hash-checked.
+
+        The build compiles whatever is on disk, so an unrecorded edit would
+        silently change the artifact. Each entry is re-hashed here so that
+        editing the tree without updating the lock fails.
+        """
+        local = [entry for entry in SOURCE_LOCK["patches"]
+                 if entry.get("role") == "local-source-patch"]
+        for entry in local:
+            base = ROOT / entry["pathIsRelativeTo"]
+            target = base / entry["path"]
+            self.assertTrue(target.is_file(), f"missing patched file {target}")
+            self.assertEqual(
+                hashlib.sha256(target.read_bytes()).hexdigest(),
+                entry["sha256"],
+                f"{entry['path']} changed without updating eden-source-lock.json")
+            self.assertTrue(entry.get("note"),
+                            "a local patch must record why it exists")
 
     def test_source_lock_does_not_overstate_the_artifact(self):
         artifact = SOURCE_LOCK["artifact"]
@@ -147,6 +211,17 @@ class Phase3EdenIdentityTest(unittest.TestCase):
         self.assertIs(False, artifact["exportsOnlyTheAdapterEntry"])
         self.assertIn("lucent_native_adapter_entry", artifact["requiredExports"])
         self.assertIn("lucent_eden_average_game_fps", artifact["requiredExports"])
+        # The rebuilt staged artifact has bounded clock/capability hooks;
+        # packaging is distinct from installation and device timing proof.
+        self.assertIn("lucent_native_adapter_set_paced_video_hz", artifact["requiredExports"])
+        self.assertIn("lucent_native_adapter_declared_video_hz", artifact["requiredExports"])
+        self.assertIn("lucent_native_adapter_source_image_binding_v1", artifact["requiredExports"])
+        self.assertIn("lucent_native_adapter_query_source_image_v1", artifact["requiredExports"])
+        adapter = _read(ADAPTER_PATCH)
+        self.assertIn("return Lucent::SetPacedVsyncHz(hz);", adapter)
+        conductor = _read(ROOT / "engines" / "build" / "switch-src" / "eden" / "src" /
+                          "core" / "hle" / "service" / "vi" / "conductor.cpp")
+        self.assertIn("Lucent::PacedVsyncHz()", conductor)
         self.assertEqual("0x4000", artifact["ptLoadAlignment"])
 
     def test_no_keys_or_firmware_are_ever_claimed_as_bundled(self):
@@ -158,8 +233,15 @@ class Phase3EdenIdentityTest(unittest.TestCase):
         self.assertEqual(1, OPT_IN["schemaVersion"])
         self.assertIs(True, OPT_IN["qualificationOnly"])
         self.assertIs(False, OPT_IN["autoSelect"])
-        self.assertEqual(1, len(OPT_IN["engines"]))
-        engine = OPT_IN["engines"][0]
+        # Eden (Switch) and Cemu (Wii U) both live here now. The protective
+        # property is not "exactly one engine" but that every listed engine is
+        # a real, pinned, non-auto-selected native adapter.
+        listed = {row["id"] for row in OPT_IN["engines"]}
+        self.assertEqual({"eden", "cemu", "aps3e"}, listed)
+        for row in OPT_IN["engines"]:
+            self.assertEqual("native-adapter", row["runtime"])
+            self.assertIs(False, row["userSuppliedRuntimeInputs"]["bundledInApk"])
+        engine = [row for row in OPT_IN["engines"] if row["id"] == "eden"][0]
         self.assertEqual("eden", engine["id"])
         self.assertEqual(EDEN_COMMIT, engine["commit"])
         self.assertEqual(ADAPTER_LIBRARY, engine["libraryName"])
@@ -391,7 +473,14 @@ class Phase3BuildFlagTest(unittest.TestCase):
         # ...and the LUCENT_ allowlist must accept the real flag so the guard
         # does not reject a legitimate Phase 3 build.
         self.assertIn("LUCENT_INCLUDE_PHASE3_EDEN) ;;", BUILD)
-        self.assertIn("LUCENT_REUSE_PHASE2_PPSSPP LUCENT_INCLUDE_PHASE3_EDEN)", BUILD)
+        # The message that lists the known flags must name EVERY flag the build
+        # actually reads. It omitted LUCENT_INCLUDE_PHASE3_CEMU, so an operator
+        # reading it built Wii U out of the APK without noticing.
+        self.assertIn(
+            "LUCENT_INCLUDE_PHASE3_EDEN LUCENT_INCLUDE_PHASE3_CEMU "
+            "LUCENT_INCLUDE_PHASE3_APS3E LUCENT_INCLUDE_RIFE_FRAMEGEN "
+            "LUCENT_INCLUDE_LSFG_FRAMEGEN)",
+                      BUILD)
 
     def test_the_flag_defaults_to_off(self):
         self.assertIn("INCLUDE_PHASE3_EDEN=${LUCENT_INCLUDE_PHASE3_EDEN:-0}", BUILD)
@@ -412,7 +501,12 @@ class Phase3BuildFlagTest(unittest.TestCase):
                        '"$DECODED/assets/phase3-eden-source-lock.json"',
                        '"$DECODED/assets/phase3-engine-artifacts.json"'):
             self.assertIn(staged, block)
-            self.assertEqual(1, BUILD.count(staged), staged)
+            # The shared assets (opt-in, artifact manifest) are staged once per
+            # Phase 3 engine block, so the count tracks the number of engine
+            # blocks rather than being fixed at one. What must stay true is
+            # that every occurrence sits inside a flag-guarded block, which the
+            # assertIn above establishes.
+            self.assertGreaterEqual(BUILD.count(staged), 1, staged)
 
     def test_the_manifest_is_count_gated_like_phase_1_and_2(self):
         self.assertIn("PHASE3_STAGED_ADAPTER_COUNT=0", BUILD)
@@ -435,6 +529,16 @@ class Phase3BuildFlagTest(unittest.TestCase):
         self.assertIn("lucent-$VERSION_NAME-phase3-qualification.apk", BUILD)
         self.assertIn("lucent-$VERSION_NAME-phase2-phase3-qualification.apk", BUILD)
         self.assertIn("phase3-qualification-$OUTPUT_SHA.apk", BUILD)
+        # EITHER adapter makes the artifact a qualification build. Naming this
+        # off Eden alone gave a Cemu-only build the plain release filename
+        # while it still carried an unshipped, debug-signed native adapter.
+        self.assertIn(
+            'if [ "$INCLUDE_PHASE3_EDEN" = 1 ] || [ "$INCLUDE_PHASE3_CEMU" = 1 ] || [ "$INCLUDE_PHASE3_APS3E" = 1 ]',
+            BUILD)
+        self.assertIn('[ "$INCLUDE_PHASE3_ANY" = 1 ]', BUILD)
+        self.assertNotIn(
+            '[ "$INCLUDE_PHASE2_PPSSPP" = 1 ] && [ "$INCLUDE_PHASE3_EDEN" = 1 ]',
+            BUILD)
 
     def test_the_release_registry_asset_is_unconditional(self):
         # phase3-engine-registry.json ships in EVERY build; it is the authority
@@ -469,16 +573,18 @@ class Phase3RoutingTest(unittest.TestCase):
             block.index("Phase2QualificationCatalog.libraryEngineIdForSystem"),
             block.index("NativeAdapterCatalog.libraryEngineIdForSystem"))
 
-    def test_internal_is_preferred_when_present_and_external_otherwise(self):
-        self.assertIn("return internalAvailable ? INTERNAL : EXTERNAL;", ROUTE_STORE)
-        # An explicit INTERNAL choice still degrades to EXTERNAL with no engine.
-        self.assertIn("if (INTERNAL.equals(stored)) return internalAvailable ? INTERNAL : EXTERNAL;",
-                      ROUTE_STORE)
+    def test_internal_never_silently_changes_to_external(self):
+        resolve = ROUTE_STORE[ROUTE_STORE.index('public static String resolve('):
+                              ROUTE_STORE.index('public static String chosenEmulator(')]
+        self.assertIn('if (EXTERNAL.equals(stored)) return EXTERNAL;', resolve)
+        self.assertIn('return INTERNAL;', resolve)
+        self.assertNotIn('internalAvailable', resolve)
+        self.assertNotIn('hasInternalEngine', resolve)
         self.assertIn("if (INTERNAL.equals(normalized) && !hasInternalEngine(context, canonical)) return false;",
                       ROUTE_STORE)
 
     def test_launch_command_emits_the_internal_am_start_when_internal_wins(self):
-        self.assertIn("return GameLaunchRouter.metadataCommand(context, canonical);",
+        self.assertIn("? GameLaunchRouter.metadataCommand(context, canonical) : \"\";",
                       ROUTE_STORE)
         self.assertIn("InWindowGameHost.ACTION_LAUNCH", ROUTER)
         # ImportManager is what actually writes launch: lines into metadata, and
@@ -486,7 +592,7 @@ class Phase3RoutingTest(unittest.TestCase):
         self.assertIn("return EngineRouteStore.launchCommand(context, system);",
                       IMPORT_MANAGER)
 
-    def test_switch_keeps_a_real_external_route_when_no_adapter_is_bundled(self):
+    def test_switch_keeps_a_real_explicit_external_route(self):
         self.assertIn('put("switch", contentUri("eden", "Eden"', EMULATOR_CATALOG)
         self.assertIn("EmulatorCatalog.externalLaunchCommand(", ROUTE_STORE)
 
@@ -504,7 +610,8 @@ class Phase3SystemDirectoryTest(unittest.TestCase):
 
     def test_the_session_resolves_the_directory_from_reported_capabilities(self):
         self.assertIn("NativeAdapterSystemDirectory.resolve(appContext,", SESSION)
-        self.assertIn("entry.id, request.systemId, capabilities.requiredFirmware)",
+        self.assertIn("entry.id, request.systemId, capabilities.requiredFirmware,\n"
+                      "                        request.qualificationSession, game);",
                       SESSION)
         # describe() must run before the resolve so requiredFirmware is real.
         self.assertLess(SESSION.index("capabilities = created.describe();"),
@@ -514,22 +621,35 @@ class Phase3SystemDirectoryTest(unittest.TestCase):
                       SESSION)
 
     def test_the_root_is_the_app_private_per_engine_directory(self):
-        self.assertIn('context.getDir("engine-system", Context.MODE_PRIVATE), engine)',
+        self.assertIn('context.getDir(systemDirectoryName(qualificationSession),\n'
+                      '                Context.MODE_PRIVATE), engine)',
+                      SYSTEM_DIR)
+        self.assertIn('return namespace.isEmpty() ? "engine-system" : "engine-system-qa-" + namespace;',
                       SYSTEM_DIR)
 
     def test_an_engine_without_declared_firmware_gets_only_the_empty_root(self):
         self.assertIn("if (requiredFirmware <= 0) return root;", SYSTEM_DIR)
 
     def test_an_engine_with_no_audited_profile_fails_closed(self):
-        self.assertIn("No user firmware profile is available for", SYSTEM_DIR)
+        self.assertIn(
+            'new IllegalStateException("Internal emulator prerequisites are unavailable")',
+            SYSTEM_DIR)
 
     def test_missing_user_keys_or_firmware_fail_closed(self):
-        self.assertIn('"A user-supplied " + REQUIRED_KEY + " is required', SYSTEM_DIR)
-        self.assertIn("A user-supplied Switch firmware archive is required",
+        # Installation details remain internal; the launch boundary converts
+        # every missing/invalid case to the same generic user-facing failure.
+        self.assertIn('"A user-supplied " + file.sourceName +', SYSTEM_DIR)
+        self.assertIn('" is required; place it in " + file.placementHint +',
                       SYSTEM_DIR)
         self.assertIn(
-            "Switch keys and system firmware are required but were not installed",
+            "Switch production keys were not installed",
             SYSTEM_DIR)
+        self.assertIn("Wii U disc keys are required but were not installed",
+                      SYSTEM_DIR)
+        # ...and the incomplete-root check is the layout's, not Eden's.
+        self.assertIn("throw new IllegalStateException(layout.incompleteMessage);",
+                      SYSTEM_DIR)
+        self.assertIn("throw unavailable(context, systemId);", SYSTEM_DIR)
 
     def test_the_eden_layout_matches_what_the_adapter_reads(self):
         # Common::FS::SetAppDirectory(root) makes Eden read keys/ and
@@ -545,8 +665,56 @@ class Phase3SystemDirectoryTest(unittest.TestCase):
 
     def test_user_files_are_read_from_storage_and_never_from_assets(self):
         self.assertIn("Environment.getExternalStorageDirectory()", SYSTEM_DIR)
-        self.assertIn('addDirectory(result, volume, "Games/switch");', SYSTEM_DIR)
+        # The scanned directories are the layout's, and the console-specific
+        # ones come before the generic library roots so a stray key elsewhere
+        # under Games/ cannot win.
+        self.assertIn('"Games/switch", "ROMs/switch", "BIOS/switch", "Games", "ROMs"',
+                      SYSTEM_DIR)
+        self.assertIn("for (String relative : directories) "
+                      "addDirectory(result, volume, relative);", SYSTEM_DIR)
         self.assertNotIn("getAssets()", SYSTEM_DIR)
+
+    def test_wiiu_has_its_own_layout_rather_than_the_switch_shape(self):
+        # Cemu reads ONE file, keys.txt, from the ROOT of the engine directory
+        # (ActiveSettings::GetUserDataPath("keys.txt")), and has no firmware
+        # archive at all. Forcing Eden's keys/ + Firmware*.zip shape onto it
+        # would install nothing Cemu ever looks at.
+        self.assertIn('WIIU_KEY = "keys.txt"', SYSTEM_DIR)
+        self.assertIn('new RuntimeFile(WIIU_KEY, WIIU_KEY, true, "Games/wiiu/Keys")',
+                      SYSTEM_DIR)
+        self.assertIn('"Games/wiiu", "ROMs/wiiu", "BIOS/wiiu", "Games", "ROMs"',
+                      SYSTEM_DIR)
+        # Wii U reaches EmuFusion under both ids, exactly as the dual-screen router
+        # and the session's own isWiiUSystem already accept; a layout that knew
+        # only one of them would fail closed on a valid launch.
+        self.assertIn('"cemu", new String[] {"wiiu", "wii-u"}', SYSTEM_DIR)
+        # false = no firmware archive; the Switch layout is the only true one.
+        wiiu = SYSTEM_DIR[SYSTEM_DIR.index("WIIU_LAYOUT = new Layout("):]
+        self.assertIn("false,", wiiu[:wiiu.index("LAYOUTS =")])
+        self.assertIn("if (layout.installsFirmwareArchive) installFirmware(root, layout);",
+                      SYSTEM_DIR)
+
+    def test_the_cemu_adapter_declares_and_reads_the_wiiu_key(self):
+        cemu = (ROOT / "engines" / "patches" /
+                "cemu-lucent-adapter.cpp").read_text(encoding="utf-8")
+        # Declaring 0 was the bug: the resolver uses the count as its gate, so
+        # Cemu was handed an empty root and rejected every encrypted disc.
+        self.assertIn("out->required_firmware = 1;", cemu)
+        # Cemu's OWN key path, loaded from EmuFusion's validated directory before
+        # any title parse can latch KeyCache's one-shot flag.
+        self.assertIn('#include "Cafe/Filesystem/FST/KeyCache.h"', cemu)
+        self.assertIn("KeyCache_Prepare();", cemu)
+        self.assertLess(cemu.index("CemuCommonInit();"),
+                        cemu.index("KeyCache_Prepare();"))
+        self.assertLess(cemu.index("KeyCache_Prepare();"),
+                        cemu.index("TitleInfo launchTitle{launchPath};"))
+        # The fail-closed diagnostic is unchanged and still accurate.
+        self.assertIn("this disc image is encrypted and no disc key was supplied",
+                      cemu)
+
+    def test_eden_still_declares_two_user_supplied_blobs(self):
+        eden = ADAPTER_PATCH.read_text(encoding="utf-8")
+        self.assertIn("out->required_firmware = 2;", eden)
 
     def test_firmware_extraction_cannot_escape_the_private_directory(self):
         # Only the entry's base name is ever used, and the parent is re-checked.

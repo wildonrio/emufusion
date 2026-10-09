@@ -9,14 +9,14 @@ import java.util.Locale;
 
 /**
  * Per-canonical-system launch-route preference and the single source of truth
- * for the metadata {@code launch:} command Lucent emits for a system.
+ * for the metadata {@code launch:} command EmuFusion emits for a system.
  *
  * Product rule (supersedes the old "internal only" policy): internal emulation
  * is the DEFAULT for every system that has a bundled, release-qualified
  * in-process engine. External emulators are a per-system user choice and are
- * never selected automatically for a system that can run internally. A system
- * with no internal engine resolves to EXTERNAL so its games can still launch
- * through a standalone app. Choosing External installs nothing on its own; the
+ * never selected automatically, even if an engine or its prerequisites are
+ * unavailable. Missing setup must not redirect a game into a browser or other
+ * app. Choosing External installs nothing on its own; the
  * external route only opens the emulator's install source when a matching ROM
  * is present and the emulator is missing.
  */
@@ -52,18 +52,22 @@ public final class EngineRouteStore {
                 ROUTE_PREFIX + EngineSystemIdResolver.canonical(system), "");
     }
 
+    private static boolean isInternalOnly(String system) {
+        return "ps3".equals(EngineSystemIdResolver.canonical(system));
+    }
+
     /**
-     * Resolves the effective route: the explicit user choice when set (an
-     * INTERNAL choice degrades to EXTERNAL if no internal engine is available),
-     * otherwise INTERNAL when an internal engine exists, otherwise EXTERNAL.
+     * Internal is the default on every device. Only an explicit External choice
+     * may leave EmuFusion; engine availability is validated separately.
      */
     public static String resolve(Context context, String system) {
         String canonical = EngineSystemIdResolver.canonical(system);
+        // aPS3e is bundled into EmuFusion. A stale preference from an older
+        // build must never hand PS3 content to the separate aPS3e package.
+        if (isInternalOnly(canonical)) return INTERNAL;
         String stored = storedRoute(context, canonical);
         if (EXTERNAL.equals(stored)) return EXTERNAL;
-        boolean internalAvailable = hasInternalEngine(context, canonical);
-        if (INTERNAL.equals(stored)) return internalAvailable ? INTERNAL : EXTERNAL;
-        return internalAvailable ? INTERNAL : EXTERNAL;
+        return INTERNAL;
     }
 
     /** The user's chosen external emulator id for a system, or "" for default order. */
@@ -84,15 +88,26 @@ public final class EngineRouteStore {
         String normalized = route == null ? "" :
                 route.trim().toLowerCase(Locale.US);
         if (!INTERNAL.equals(normalized) && !EXTERNAL.equals(normalized)) return false;
+        if (isInternalOnly(canonical) && !INTERNAL.equals(normalized)) return false;
         if (INTERNAL.equals(normalized) && !hasInternalEngine(context, canonical)) return false;
-        if (EXTERNAL.equals(normalized) && !EmulatorCatalog.hasExternalOption(canonical))
+        // A user-defined custom target is a valid external option in its own
+        // right, which is what lets a system the curated catalog cannot serve
+        // at all still be pointed somewhere by hand.
+        if (EXTERNAL.equals(normalized) && !EmulatorCatalog.hasExternalOption(canonical)
+                && !CustomEmulatorStore.has(context, canonical))
             return false;
 
         SharedPreferences.Editor editor = prefs(context).edit();
         editor.putString(ROUTE_PREFIX + canonical, normalized);
         if (EXTERNAL.equals(normalized)) {
             String trimmed = emulatorId == null ? "" : emulatorId.trim();
-            if (!trimmed.isEmpty()) {
+            if (CustomEmulatorStore.ID.equalsIgnoreCase(trimmed)) {
+                // Only storable once the guided setup has proved the target
+                // resolves on this device, so "Custom" can never be selected
+                // into a state where launching quietly does nothing.
+                if (CustomEmulatorStore.option(context, canonical) == null) return false;
+                editor.putString(EMULATOR_PREFIX + canonical, CustomEmulatorStore.ID);
+            } else if (!trimmed.isEmpty()) {
                 if (EmulatorCatalog.optionForId(canonical, trimmed) == null) return false;
                 editor.putString(EMULATOR_PREFIX + canonical, trimmed);
             } else {
@@ -123,14 +138,18 @@ public final class EngineRouteStore {
      * INTERNAL reuses the stable in-process runtime router (Pegasus runs the
      * {@code am start} that MainActivity intercepts). EXTERNAL emits a normal
      * {@code am start} recipe that Pegasus executes to open the chosen
-     * standalone emulator directly into gameplay. Returns "" only when neither
-     * an internal engine nor a supported external option exists (fail closed).
+     * standalone emulator directly into gameplay. An unavailable engine on the
+     * chosen route returns ""; it never grants permission to change that route.
      */
     public static String launchCommand(Context context, String system) {
         String canonical = EngineSystemIdResolver.canonical(system);
-        if (INTERNAL.equals(resolve(context, canonical)) &&
-                GameLaunchRouter.supportsSystem(context, canonical)) {
-            return GameLaunchRouter.metadataCommand(context, canonical);
+        if (isInternalOnly(canonical)) {
+            return GameLaunchRouter.supportsSystem(context, canonical)
+                    ? GameLaunchRouter.metadataCommand(context, canonical) : "";
+        }
+        if (INTERNAL.equals(resolve(context, canonical))) {
+            return GameLaunchRouter.supportsSystem(context, canonical)
+                    ? GameLaunchRouter.metadataCommand(context, canonical) : "";
         }
         return EmulatorCatalog.externalLaunchCommand(
                 context, canonical, chosenEmulator(context, canonical));

@@ -1,15 +1,17 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-07",
+  "verifiedAt": "2026-08-10",
   "buildProfile": "android-arm64-libretro-ffmpeg",
-  "baseLock": "engines/ppsspp-source-lock.json",
+  "canonicalSourceLock": "engines/ppsspp-source-lock.json",
+  "status": "superseded-by-canonical-source-lock",
   "productionProfileReproducibilityProof": {
     "freshBuildCount": 2,
     "byteIdentical": true,
-    "artifactSha256": "aec7dba8070f3a3840333ae2eed592ffc06e6f852b21a22c7ab87b0235bfb1fd",
-    "gnuBuildId": "5fac3cb56ae9d8869aafcf673528148582250bf4",
+    "artifactSha256": "1c1b192451375445badc7b69c917b82058d411fd94d66bd6bc00bc781e205487",
+    "gnuBuildId": null,
+    "normalization": "llvm-strip --strip-unneeded followed by llvm-objcopy --remove-section=.note.gnu.build-id",
     "absoluteLucentBuilderPathMatches": 0,
-    "scope": "isolated host compiler/linker and exact FFmpeg-enabled candidate reproducibility; not canonical or shipped"
+    "scope": "historical candidate record; canonical lock and recipe now live in engines/ppsspp-source-lock.json"
   },
   "ffmpeg": {
     "repository": "https://github.com/hrydgard/ppsspp-ffmpeg.git",

@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Builds compact, native-speed per-system indexes for Lucent's game rails. */
+/** Builds compact, native-speed per-system indexes for EmuFusion's game rails. */
 final class LibraryIndexManager {
     private static final File CONFIG = new File(Environment.getExternalStorageDirectory(),
             "Android/data/com.thorium.preview/files/pegasus-frontend");

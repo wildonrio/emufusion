@@ -6,7 +6,8 @@ public final class MetadataLaunchNormalizerTest {
     public static void main(String[] arguments) {
         restoresMissingLaunchPerCollection();
         replacesAndDeduplicatesCollectionLaunches();
-        removesUnsupportedRouteWithoutTouchingGameLaunch();
+        removesUnsupportedCollectionAndGameRoutes();
+        removesStaleGameOverrideWhenInternalRouteWins();
     }
 
     private static String route(String system) {
@@ -42,15 +43,30 @@ public final class MetadataLaunchNormalizerTest {
                 "stale routes must be gone");
     }
 
-    private static void removesUnsupportedRouteWithoutTouchingGameLaunch() {
+    private static void removesUnsupportedCollectionAndGameRoutes() {
         String input = "collection: Saturn\nshortname: saturn\nlaunch: external\n" +
                 "game: One\nlaunch: game-specific\nfile: one.chd\n";
         String output = MetadataLaunchNormalizer.rewrite(
                 input, MetadataLaunchNormalizerTest::route);
         TestSupport.truth(!output.contains("launch: external"),
                 "unsupported collection route must be removed");
-        TestSupport.truth(output.contains("launch: game-specific"),
-                "game-level launch metadata must be preserved");
+        TestSupport.truth(!output.contains("launch: game-specific"),
+                "unsupported game-level route must be removed");
+    }
+
+    private static void removesStaleGameOverrideWhenInternalRouteWins() {
+        String input = "collection: PSP\nshortname: psp\nlaunch: old-external\n" +
+                "game: One\nlaunch: standalone-one\nfile: one.iso\n" +
+                "game: Two\nlaunch: standalone-two\nfile: two.iso\n";
+        String output = MetadataLaunchNormalizer.rewrite(
+                input, MetadataLaunchNormalizerTest::route);
+        TestSupport.equal(1, count(output, "launch:"),
+                "only the authoritative collection route may remain");
+        TestSupport.truth(output.contains("launch: lucent --system psp"),
+                "internal collection route must win");
+        TestSupport.truth(!output.contains("standalone-one") &&
+                        !output.contains("standalone-two"),
+                "stale per-game external overrides must be gone");
     }
 
     private static int count(String value, String needle) {

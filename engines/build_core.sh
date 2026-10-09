@@ -226,14 +226,14 @@ build_mednafen_software_core() {
             CXX="$core_toolchain/$core_target$API-clang++" \
             LD="$core_toolchain/$core_target$API-clang++" \
             GIT_VERSION="$core_commit" \
-            LDFLAGS="-fPIC -shared -Wl,--no-undefined -Wl,--version-script=link.T -Wl,--build-id=none"
+            LDFLAGS="-fPIC -shared -Wl,--no-undefined -Wl,--version-script=link.T -Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
     else
         /usr/bin/make -C "$core_stage" -j"${LUCENT_BUILD_JOBS:-4}" \
             platform=unix CC="$core_toolchain/$core_target$API-clang" \
             CXX="$core_toolchain/$core_target$API-clang++" \
             LD="$core_toolchain/$core_target$API-clang++" \
             GIT_VERSION="$core_commit" \
-            SHARED="-shared -Wl,--no-undefined -Wl,--version-script=link.T -Wl,--build-id=none"
+            SHARED="-shared -Wl,--no-undefined -Wl,--version-script=link.T -Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
     fi
     cp "$core_stage/$upstream_output" "$OUTPUT_DIR/${core_id}_libretro.so"
     cp "$core_stage/COPYING" "$OUTPUT_DIR/${core_id}-LICENSE.txt"
@@ -269,7 +269,8 @@ case "$ENGINE" in
             -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBRETRO=ON \
             -DBUILD_APPLEN=OFF -DBUILD_QAPPLE=OFF -DBUILD_SA2=OFF \
             -DENABLE_NETWORKING=OFF \
-            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--build-id=none"
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+            -DCMAKE_MODULE_LINKER_FLAGS="-Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
         SOURCE_DATE_EPOCH=0 "$CMAKE" --build "$stage" --target applewin_libretro \
             -j"${LUCENT_BUILD_JOBS:-4}"
         cp "$stage/source/frontends/libretro/applewin_libretro.so" \
@@ -306,7 +307,7 @@ case "$ENGINE" in
             platform=unix CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" AR="$toolchain/llvm-ar" \
             LD="$toolchain/$target$API-clang++" TARGET=puae_libretro.so \
-            LDFLAGS='-lm -ldl' \
+            LDFLAGS='-lm -ldl -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
             SHARED='-shared -Wl,--version-script=libretro/link.T -Wl,--no-undefined -Wl,--build-id=none' \
             GIT_VERSION="$commit"
         cp "$stage/puae_libretro.so" "$OUTPUT_DIR/puae_libretro.so"
@@ -373,7 +374,7 @@ case "$ENGINE" in
         /usr/bin/make -C "$staged_source" -j"${LUCENT_BUILD_JOBS:-4}" \
             platform=unix CC="$toolchain/$target$API-clang" \
             LD="$toolchain/$target$API-clang" GIT_VERSION="$commit" \
-            LDFLAGS="-shared -Wl,--no-undefined -Wl,--version-script=link.T -Wl,--build-id=none"
+            LDFLAGS="-shared -Wl,--no-undefined -Wl,--version-script=link.T -Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
         cp "$staged_source/prosystem_libretro.so" \
             "$OUTPUT_DIR/prosystem_libretro.so"
         cp "$staged_source/License.txt" "$OUTPUT_DIR/prosystem-LICENSE.txt"
@@ -471,6 +472,8 @@ case "$ENGINE" in
             -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
             -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+            -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
             -DENABLE_OPENGL=OFF -DENABLE_NETWORKING=ON -DENABLE_JIT=OFF \
             -DENABLE_THREADED_RENDERER=OFF -DBUILD_TESTING=OFF
         "$CMAKE" --build "$build" --target melondsds_libretro \
@@ -507,6 +510,8 @@ case "$ENGINE" in
             -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
             -DCMAKE_BUILD_TYPE=Release \
             -DLUCENT_DISABLE_IPO=ON -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+            -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
             -DCMAKE_C_FLAGS="-ffile-prefix-map=$source=/usr/src/lucent/swanstation -fmacro-prefix-map=$source=/usr/src/lucent/swanstation -ffile-prefix-map=$canonical_source=/usr/src/lucent/swanstation -fmacro-prefix-map=$canonical_source=/usr/src/lucent/swanstation -ffile-prefix-map=$build=/usr/src/lucent/swanstation-build -fmacro-prefix-map=$build=/usr/src/lucent/swanstation-build" \
             -DCMAKE_CXX_FLAGS="-ffile-prefix-map=$source=/usr/src/lucent/swanstation -fmacro-prefix-map=$source=/usr/src/lucent/swanstation -ffile-prefix-map=$canonical_source=/usr/src/lucent/swanstation -fmacro-prefix-map=$canonical_source=/usr/src/lucent/swanstation -ffile-prefix-map=$build=/usr/src/lucent/swanstation-build -fmacro-prefix-map=$build=/usr/src/lucent/swanstation-build"
         "$CMAKE" --build "$build" -j"${LUCENT_BUILD_JOBS:-4}"
@@ -520,15 +525,23 @@ case "$ENGINE" in
             https://github.com/mgba-emu/mgba)
         build="$BUILD_ROOT/work/mgba-$ABI"
         rm -rf "$build"
+        # Keep source-location strings stable across clean build roots. Archive
+        # sources must not inherit the enclosing EmuFusion checkout's Git version.
+        mgba_path_flags="-ffile-prefix-map=$source=/usr/src/mgba -fdebug-prefix-map=$source=/usr/src/mgba -fmacro-prefix-map=$source=/usr/src/mgba -ffile-prefix-map=$build=/usr/src/mgba-build -fdebug-prefix-map=$build=/usr/src/mgba-build -fmacro-prefix-map=$build=/usr/src/mgba-build"
+        GIT_CEILING_DIRECTORIES="$SOURCE_DIR" \
         "$CMAKE" -S "$source" -B "$build" -G Ninja \
             -DCMAKE_MAKE_PROGRAM="$NINJA" \
             -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
             -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBRETRO=ON -DSKIP_LIBRARY=ON \
+            -DCMAKE_C_FLAGS="$mgba_path_flags" -DCMAKE_CXX_FLAGS="$mgba_path_flags" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+            -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
             -DBUILD_QT=OFF -DBUILD_SDL=OFF -DBUILD_SHARED=OFF \
             -DBUILD_STATIC=OFF -DBUILD_TEST=OFF -DBUILD_SUITE=OFF \
             -DBUILD_CINEMA=OFF -DBUILD_EXAMPLE=OFF -DBUILD_PYTHON=OFF
-        "$CMAKE" --build "$build" --target mgba_libretro
+        GIT_CEILING_DIRECTORIES="$SOURCE_DIR" \
+        "$CMAKE" --build "$build" --target mgba_libretro -j"${LUCENT_BUILD_JOBS:-4}"
         cp "$build/mgba_libretro.so" "$OUTPUT_DIR/mgba_libretro.so"
         ;;
     mesen)
@@ -549,7 +562,7 @@ case "$ENGINE" in
             CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" \
             AR="$toolchain/llvm-ar" STRIP="$toolchain/llvm-strip" \
-            LDFLAGS=-static-libstdc++
+            LDFLAGS='-static-libstdc++ -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384'
         cp "$source/Libretro/mesen_libretro.so" "$OUTPUT_DIR/mesen_libretro.so"
         ;;
     mesen-s)
@@ -557,6 +570,13 @@ case "$ENGINE" in
         source=$(fetch_source mesen-s "$commit" \
             9dc6b2762769cae40ff2d008562fa0f8883d89906a693b44f1fbe8d8cfaedbd4 \
             https://github.com/libretro/Mesen-S)
+        # Build a fresh, patched copy without modifying a developer's cached
+        # checkout. fetch_source has verified this archive's exact checksum.
+        patched_source=$(mktemp -d "$BUILD_ROOT/mesen-s-dsp1.XXXXXX")
+        tar -xzf "$SOURCE_DIR/mesen-s-$commit.tar.gz" --strip-components=1 -C "$patched_source"
+        source="$patched_source"
+        apply_locked_patch "$source" engines/patches/mesen-s-dsp1-fallback.patch \
+            70da6abc56814107dcef11b8a2e58c0205673f59cf67f6808bc4f9e549cee5a3
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'Mesen-S recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;
@@ -570,7 +590,7 @@ case "$ENGINE" in
             CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" \
             AR="$toolchain/llvm-ar" STRIP="$toolchain/llvm-strip" \
-            LDFLAGS=-static-libstdc++
+            LDFLAGS='-static-libstdc++ -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384'
         cp "$source/Libretro/mesen-s_libretro.so" "$OUTPUT_DIR/mesen-s_libretro.so"
         ;;
     sameboy)
@@ -578,6 +598,17 @@ case "$ENGINE" in
         source=$(fetch_source sameboy "$commit" \
             21f5f230268808d9a2d17d1a8e01d3763891a2a8240b9459fa61e005fff56aa1 \
             https://github.com/LIJI32/SameBoy)
+        # fetch_source reuses the cached checkout across builds (unlike
+        # fetch_source_fresh), so patch a throwaway copy -- mirrors
+        # gearcoleco's build-dir copy below -- rather than the shared source.
+        build="$BUILD_ROOT/work/sameboy-$ABI"
+        rm -rf "$build"
+        mkdir -p "$build"
+        cp -R "$source/." "$build/"
+        apply_locked_patch "$build" \
+            engines/patches/sameboy-libretro-cheat-support.patch \
+            546c488029fcf7e7817aa8cf120236c1d3e3ea83a3e96f7421a6849a2fa258c7
+        source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'SameBoy recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;
@@ -608,6 +639,7 @@ case "$ENGINE" in
         fi
         /usr/bin/make -C "$source" bootroms RGBDS="$rgbds_dir/" GIT_VERSION="$commit"
         /usr/bin/make -C "$source/libretro" clean
+        LDFLAGS='-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
         /usr/bin/make -C "$source/libretro" -j"${LUCENT_BUILD_JOBS:-4}" \
             platform=unix ARCHFLAGS=-march=armv8-a GIT_VERSION="$commit" \
             BOOTROMS_DIR="$source/build/bin/BootROMs" BIN="$source/build/bin" \
@@ -652,7 +684,7 @@ case "$ENGINE" in
             CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" \
             AR="$toolchain/llvm-ar" STRIP="$toolchain/llvm-strip" \
-            LDFLAGS=-static-libstdc++
+            LDFLAGS='-static-libstdc++ -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384'
         cp "$make_dir/${ENGINE}_libretro.so" "$OUTPUT_DIR/${ENGINE}_libretro.so"
         ;;
     freeintv)
@@ -688,6 +720,7 @@ case "$ENGINE" in
         [ "$(uname -s)" = Linux ] && host=linux-x86_64
         toolchain="$NDK_DIR/toolchains/llvm/prebuilt/$host/bin"
         /usr/bin/make -C "$source" clean platform=unix
+        LDFLAGS='-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
         /usr/bin/make -C "$source" -j"${LUCENT_BUILD_JOBS:-4}" \
             platform=unix ARCHFLAGS=-march=armv8-a GIT_VERSION="$commit" \
             CC="$toolchain/$target$API-clang" \
@@ -703,6 +736,9 @@ case "$ENGINE" in
         apply_locked_patch "$source" \
             engines/patches/blastem-libretro-android-portability.patch \
             4966522359464467f8b9f150356fdc03ba7f056a12f24ca822f71a9c8b173eed
+        apply_locked_patch "$source" \
+            engines/patches/blastem-new-core-frame-end-rebase-hang.patch \
+            d899b13fe0728e5e927e30736e1c1c7c57d2906a6814c6150823e911cc73686c
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'BlastEm recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;
@@ -731,7 +767,16 @@ case "$ENGINE" in
             https://github.com/libretro/mupen64plus-libretro-nx)
         apply_locked_patch "$source" \
             engines/patches/mupen64plus-next-android-arm64.patch \
-            4ba736f7d9b0406d901ff3565bc1f526fc2edebb7f282dc47cffbc9ba4839d8a
+            751a6ace68e14da2562210e20ee5c88ac9f5c4616dd5c8ae5c51160071c30b35
+        apply_locked_patch "$source" \
+            engines/patches/mupen64plus-next-context-setup.patch \
+            8396947b663386db0eb1358dd201c2bcc3005e6faf3fd64d010a1287ea7be066
+        apply_locked_patch "$source" \
+            engines/patches/mupen64plus-next-host-page-protection.patch \
+            d1562bd10b82830ccb1524401354c5360b5aaf7745b9122eb7d5d41134ae6d67
+        apply_locked_patch "$source" \
+            engines/patches/mupen64plus-next-egl-reader-capability.patch \
+            611c2d214989ebfc985258bb12d9cadf61c8248cd0bbf3bfedf18ea00ab1530e
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'Mupen64Plus-Next recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;
@@ -748,7 +793,7 @@ case "$ENGINE" in
         # an unresolved basic_stringstream VTT on the Thor. Link the exact NDK
         # libc++ statically into the core so Lucent does not replace or depend
         # on Qt's C++ runtime.
-        LDFLAGS='-Wl,--build-id=none -Wl,-z,max-page-size=16384 -static-libstdc++' \
+        LDFLAGS='-Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -static-libstdc++' \
             /usr/bin/make -C "$stage" -j"${LUCENT_BUILD_JOBS:-4}" \
             platform=android-arm64-gles3 ANDROID_GRAPHIC_BUFFER=0 \
             ARCH=aarch64 GIT_VERSION="$commit" \
@@ -764,6 +809,20 @@ case "$ENGINE" in
         } > "$OUTPUT_DIR/mupen64plus-next-LICENSE.txt"
         ;;
     armsx2)
+        # PCSX2 has compile-time host-page geometry. Keep both variants in the
+        # same APK and select the matching one at runtime; do not waive its
+        # hardware check or replace the working 4 KiB core with a 16 KiB build.
+        armsx2_host_page_size=${LUCENT_ARMSX2_HOST_PAGE_SIZE:-0x1000}
+        armsx2_variant_suffix=
+        armsx2_link_flags='-Wl,--build-id=none'
+        case "$armsx2_host_page_size" in
+            0x1000) ;;
+            0x4000)
+                armsx2_variant_suffix=_16k
+                armsx2_link_flags="$armsx2_link_flags -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
+                ;;
+            *) printf 'Unsupported ARMSX2 host page size: %s\n' "$armsx2_host_page_size" >&2; exit 1 ;;
+        esac
         if [ "$ABI" != arm64-v8a ]; then
             printf 'ARMSX2 proof requires ABI arm64-v8a\n' >&2
             exit 1
@@ -805,12 +864,18 @@ case "$ENGINE" in
             92d1ba1042df2a2dcaa1946d12751c18c7c0e6bc71618dc9988ede838c13021e \
             https://github.com/KhronosGroup/SPIRV-Tools)
 
-        build="$BUILD_ROOT/work/armsx2-$ABI"
+        build="$BUILD_ROOT/work/armsx2${armsx2_variant_suffix}-$ABI"
         staged_source="$build/source"
         shaderc_deps="$staged_source/platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party"
         rm -rf "$build"
         mkdir -p "$staged_source" "$shaderc_deps"
-        cp -R "$source/." "$staged_source/"
+        "${PYTHON:-python3}" "$ROOT/engines/tools/armsx2_build_identity.py" begin \
+            --root "$ROOT" --pages "$armsx2_host_page_size" \
+            --snapshot "$build/build-inputs.json"
+        # This recipe is Darwin-only. APFS clones keep isolated source staging
+        # cheap without sharing mutable files; other filesystems use full copies.
+        cp -cR "$source/." "$staged_source/" 2>/dev/null || \
+            cp -R "$source/." "$staged_source/"
         for dependency in \
             "$abseil:abseil_cpp" "$effcee:effcee" "$glslang:glslang" \
             "$googletest:googletest" "$re2:re2" \
@@ -818,11 +883,21 @@ case "$ENGINE" in
             dependency_source=${dependency%%:*}
             dependency_name=${dependency#*:}
             mkdir -p "$shaderc_deps/$dependency_name"
-            cp -R "$dependency_source/." "$shaderc_deps/$dependency_name/"
+            cp -cR "$dependency_source/." "$shaderc_deps/$dependency_name/" 2>/dev/null || \
+                cp -R "$dependency_source/." "$shaderc_deps/$dependency_name/"
         done
         apply_locked_patch "$staged_source" \
             engines/patches/armsx2-libretro-android-build.patch \
             f8d1f6c46125ab953c9333eb57400a8f4ff339ea91ebc3221ab8638514bded78
+        apply_locked_patch "$staged_source" \
+            engines/patches/armsx2-libretro-frame-clock.patch \
+            c94ef2e4fc1440fbbfceef124433343df8f1bbddd320307dc6719effd838d49f
+        apply_locked_patch "$staged_source" \
+            engines/patches/armsx2-libretro-descriptor-batch.patch \
+            d7e781701ad7c05494310aebcc1750cc9f816289048b00d85ffbc1db9a95ff61
+        apply_locked_patch "$staged_source" \
+            engines/patches/armsx2-libretro-input-attachment.patch \
+            0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4
 
         armsx2_ndk_dir="$SDK_DIR/ndk/27.0.12077973"
         armsx2_cmake="$SDK_DIR/cmake/3.31.6/bin/cmake"
@@ -862,17 +937,20 @@ case "$ENGINE" in
             -DCMAKE_TOOLCHAIN_FILE="$armsx2_ndk_dir/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-26 \
             -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release \
-            -DLTO_PCSX2_CORE=ON -DARMSX2_ANDROID_HOST_PAGE_SIZE=0x1000 \
-            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--build-id=none" \
+            -DLTO_PCSX2_CORE=ON -DARMSX2_ANDROID_HOST_PAGE_SIZE="$armsx2_host_page_size" \
+            -DCMAKE_SHARED_LINKER_FLAGS="$armsx2_link_flags" \
             -DCMAKE_C_FLAGS="$path_map_flags" \
             -DCMAKE_CXX_FLAGS="$path_map_flags"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH="$source_date_epoch" \
         "$armsx2_cmake" --build "$build/out" --target pcsx2-libretro \
             -j"${LUCENT_BUILD_JOBS:-4}"
-        cp "$build/out/pcsx2-libretro/armsx2_libretro.so" \
-            "$OUTPUT_DIR/armsx2_libretro.so"
         "$armsx2_ndk_dir/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip" \
-            --strip-unneeded "$OUTPUT_DIR/armsx2_libretro.so"
+            --strip-unneeded "$build/out/pcsx2-libretro/armsx2_libretro.so" \
+            -o "$OUTPUT_DIR/armsx2${armsx2_variant_suffix}_libretro.so"
+        "${PYTHON:-python3}" "$ROOT/engines/tools/armsx2_build_identity.py" finish \
+            --root "$ROOT" --pages "$armsx2_host_page_size" \
+            --snapshot "$build/build-inputs.json" \
+            --core "$OUTPUT_DIR/armsx2${armsx2_variant_suffix}_libretro.so"
         cp "$staged_source/COPYING.GPLv3" "$OUTPUT_DIR/armsx2-LICENSE.txt"
         rm -rf "$OUTPUT_DIR/armsx2-system"
         mkdir -p "$OUTPUT_DIR/armsx2-system/pcsx2/resources"
@@ -882,34 +960,16 @@ case "$ENGINE" in
             "$OUTPUT_DIR/armsx2-system/pcsx2/resources/patches.zip"
         ;;
     azahar)
-        # Qualification uses Azahar's checksum-pinned official-release Android
-        # ARM64 libretro artifact inside Lucent's Vulkan host. No upstream
-        # binary signature is claimed, and this is not a local
-        # reproducible-build claim: the full upstream submodule/toolchain
-        # closure remains a separate release gate.
-        if [ "$ABI" != arm64-v8a ]; then
-            printf 'Azahar qualification requires ABI arm64-v8a\n' >&2
+        # The older official binary is only 4 KiB aligned. Build the same
+        # pinned source with its locked submodules and Android 16 KiB fix.
+        if [ "$ABI" != arm64-v8a ] || [ "$API" != 23 ]; then
+            printf 'Azahar source build requires ABI arm64-v8a and API 23\n' >&2
             exit 1
         fi
-        commit=b42d0916ba9799297ae0e27c07d56801da1b5de5
-        source=$(fetch_source_fresh azahar "$commit" \
-            8da46436e9d4cd937af2dba5ed39a33c2102e4f833c9051a9bb6e2711831e065 \
-            https://github.com/azahar-emu/azahar)
-        release=$(fetch_file azahar-libretro-android-arm64-v8a-2125.1.3.zip \
-            4946db52ba9a559834cb3db075544480ac71fa4ae08b090a6708825a012a7b1b \
-            https://github.com/azahar-emu/azahar/releases/download/2125.1.3/azahar-libretro-android-arm64-v8a-2125.1.3.zip)
-        pending="$OUTPUT_DIR/azahar_libretro.so.pending"
-        /usr/bin/unzip -p "$release" azahar_libretro.so > "$pending"
-        actual_core_sha=$(shasum -a 256 "$pending" | awk '{print $1}')
-        if [ "$actual_core_sha" != \
-                d723066fa7c812618b5695d94b0fd85594e6c196e9e08ca9ba7134371a8da645 ]; then
-            rm -f "$pending"
-            printf 'Azahar release member checksum mismatch: %s\n' \
-                "$actual_core_sha" >&2
-            exit 1
-        fi
-        mv "$pending" "$OUTPUT_DIR/azahar_libretro.so"
-        cp "$source/license.txt" "$OUTPUT_DIR/azahar-LICENSE.txt"
+        "${PYTHON:-python3}" "$ROOT/engines/tools/build_azahar.py" \
+            --sdk "$SDK_DIR" \
+            --work "${LUCENT_AZAHAR_WORK_DIR:-$BUILD_ROOT/azahar-source-arm64}" \
+            --output "$OUTPUT_DIR" --jobs "${LUCENT_BUILD_JOBS:-4}"
         ;;
     play)
         # Phase 2 compiler/linker proof for Play!'s upstream Android libretro
@@ -1070,6 +1130,8 @@ case "$ENGINE" in
                 -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
                 -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBRETRO_CORE=ON \
                 -DBUILD_PLAY=OFF -DBUILD_TESTS=OFF \
+                -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+                -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
                 -DCMAKE_C_FLAGS="$path_map_flags" \
                 -DCMAKE_CXX_FLAGS="$path_map_flags"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1783783385 \
@@ -1170,6 +1232,14 @@ case "$ENGINE" in
         mkdir -p "$staged_source/core/deps/tinygettext/external/tinycmmc"
         cp -R "$flycast_tinycmmc/." \
             "$staged_source/core/deps/tinygettext/external/tinycmmc/"
+        # The exact source/dependency closure and locked patches are mirrored
+        # in flycast-source-lock.json.
+        apply_locked_patch "$staged_source" \
+            engines/patches/flycast-libretro-cheat-support.patch \
+            058b22158921a14d0bd965449e8fd4c25235ac27db379bfd4cb865748aad54d6
+        apply_locked_patch "$staged_source" \
+            engines/patches/flycast-android-shared-memory.patch \
+            61335599add3e70cbaab2e8a3dad8062eb0cae97df2cf15c54935b87e8c95f62
 
         path_map_flags="-ffile-prefix-map=$ROOT=. -fdebug-prefix-map=$ROOT=. -fmacro-prefix-map=$ROOT=. -ffile-prefix-map=$build=flycast-build -fdebug-prefix-map=$build=flycast-build -fmacro-prefix-map=$build=flycast-build -ffile-prefix-map=$staged_source=flycast-source -fdebug-prefix-map=$staged_source=flycast-source -fmacro-prefix-map=$staged_source=flycast-source"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1750281767 \
@@ -1181,6 +1251,8 @@ case "$ENGINE" in
                 -DCMAKE_BUILD_TYPE=Release -DLIBRETRO=ON \
                 -DUSE_OPENGL=ON -DUSE_VULKAN=OFF -DUSE_OPENMP=OFF \
                 -DUSE_LUA=OFF -DUSE_BREAKPAD=OFF -DENABLE_CTEST=OFF \
+                -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+                -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
                 -DCMAKE_C_FLAGS="$path_map_flags" \
                 -DCMAKE_CXX_FLAGS="$path_map_flags"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1750281767 \
@@ -1217,7 +1289,9 @@ case "$ENGINE" in
             "$NDK_DIR/ndk-build" -C "$staged_source" \
                 NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk \
                 NDK_APPLICATION_MK=jni/Application.mk APP_ABI="$ABI" \
-                APP_PLATFORM="android-$API" -j"${LUCENT_BUILD_JOBS:-4}"
+                APP_PLATFORM="android-$API" \
+                APP_LDFLAGS='-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
+                -j"${LUCENT_BUILD_JOBS:-4}"
         built="$staged_source/libs/$ABI/libretro.so"
         if [ ! -f "$built" ]; then
             printf 'Virtual Jaguar build completed without an Android ARM64 core\n' >&2
@@ -1290,6 +1364,12 @@ case "$ENGINE" in
         apply_locked_patch "$staged_source" \
             engines/patches/dolphin-libretro-submit-rendered-duplicate-xfb.patch \
             5dd844b8546eea62706a4dd84304077cddaf83c68987459a532f6055f2f5919b
+        apply_locked_patch "$staged_source" \
+            engines/patches/dolphin-libretro-own-signal-stack.patch \
+            68c853fa395b8c87c41729355c2149dbb83f024b9cb851123b21cfc575ac074b
+        apply_locked_patch "$staged_source" \
+            engines/patches/dolphin-libretro-descriptor-errors.patch \
+            d508e5c96869b925a8a1c01139c76ee2ae13abcd74a0475c4f5281aded85cbcd
 
         while IFS='|' read -r dep_path dep_repository dep_commit dep_sha; do
             [ -n "$dep_path" ] || continue
@@ -1338,7 +1418,7 @@ Externals/SFML/SFML|https://github.com/SFML/SFML|0fa201c969e48ecc253581c5841ce73
 DOLPHIN_DEPENDENCIES
 
         dolphin_git_shim="$ROOT/engines/tools/dolphin-git-shim/git"
-        expected_dolphin_git_shim_sha=131517d95843d4cb23d50623faa078b7b4cf6db0c5b6824785e9cfeb2e2a91a3
+        expected_dolphin_git_shim_sha=7f0591b727b7961b72092778de867b3c4498b1fe3eb935fa38bb47a9cf6a462c
         actual_dolphin_git_shim_sha=$(shasum -a 256 "$dolphin_git_shim" | awk '{print $1}')
         if [ "$actual_dolphin_git_shim_sha" != "$expected_dolphin_git_shim_sha" ]; then
             printf 'Dolphin Git identity shim mismatch: %s\n' \
@@ -1377,7 +1457,7 @@ DOLPHIN_DEPENDENCIES
         rm -f "$stripped_core"
         normalized_sha=$(shasum -a 256 "$normalized_core" | awk '{print $1}')
         if [ "$normalized_sha" != \
-                c071d3810f74db7a38c499a9725021b62992417177c80a7b6074692b14864ced ]; then
+                12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6 ]; then
             printf 'Normalized Dolphin core checksum mismatch: %s\n' \
                 "$normalized_sha" >&2
             rm -rf "$candidate_dir"
@@ -1446,6 +1526,7 @@ DOLPHIN_DEPENDENCIES
         # remove one another's staged inputs.  Callers may instead provide a
         # distinct LUCENT_ENGINE_BUILD_DIR for an isolated build root.
         ppsspp_lock_dir="$BUILD_ROOT/locks/ppsspp"
+        ppsspp_candidate_dir=
         mkdir -p "$BUILD_ROOT/locks"
         if ! mkdir "$ppsspp_lock_dir" 2>/dev/null; then
             printf 'Another PPSSPP build owns %s; use a unique LUCENT_ENGINE_BUILD_DIR or wait\n' \
@@ -1454,6 +1535,9 @@ DOLPHIN_DEPENDENCIES
         fi
         printf '%s\n' "$$" > "$ppsspp_lock_dir/pid"
         cleanup_ppsspp_lock() {
+            if [ -n "$ppsspp_candidate_dir" ]; then
+                rm -rf "$ppsspp_candidate_dir"
+            fi
             rm -f "$ppsspp_lock_dir/pid"
             rmdir "$ppsspp_lock_dir" 2>/dev/null || true
         }
@@ -1534,40 +1618,50 @@ DOLPHIN_DEPENDENCIES
             76a3d54feb0ee0ce9d59b90aa24694f3782063d3 \
             da3c61d2d47df12536a7977443387c1c3d7a750fe8c916c943860788b590db7e \
             https://github.com/libretro/libretro-common)
-        ppsspp_use_ffmpeg=OFF
-        ppsspp_ffmpeg_candidate=0
-        if [ "${LUCENT_PPSSPP_FFMPEG_CANDIDATE:-0}" = 1 ]; then
-            if [ "$BUILD_ROOT" = "$ROOT/engines/build" ]; then
-                printf 'FFmpeg candidate builds require an isolated LUCENT_ENGINE_BUILD_DIR\n' >&2
-                exit 1
-            fi
-            ppsspp_ffmpeg_candidate=1
-            ppsspp_use_ffmpeg=ON
-            ffmpeg_commit=1e3b4965632f60b1d85360261d1b9dd45444bc71
-            ffmpeg=$(fetch_ppsspp_ffmpeg_fresh "$ffmpeg_commit" 3381 \
+        ppsspp_use_ffmpeg=ON
+        ffmpeg_commit=1e3b4965632f60b1d85360261d1b9dd45444bc71
+        ffmpeg=$(fetch_ppsspp_ffmpeg_fresh "$ffmpeg_commit" 3381 \
             93b942daa799dedf4f7a1a3f143c081c1945f2a67b7d13717f9fbb5c0ef4dd51 \
             https://github.com/hrydgard/ppsspp-ffmpeg.git)
-            for ffmpeg_input in \
+        for ffmpeg_input in \
             libavcodec.a:12932e1719efb45ce1298841b3f65b7e99fff07cad8f7403efba4a7fdcf1948d \
             libavformat.a:d00ec5483c7049032c86a3d293dc23d3440b454eb93c8e7e6662481821ba5b60 \
             libavutil.a:876e4c820646f5de1de63fcc6f362c57049de9837bc00d05b12dc6a57954ccca \
             libswresample.a:d5480c4b18b4fc1aeb537af8934ddae52e167e5b8b6bdec8f67176beebced162 \
             libswscale.a:7cfc492242f0ddccdc7a9cd60fe5809070a41b719c7c0d98132e15d31d07e03c
-            do
-                ffmpeg_name=${ffmpeg_input%%:*}
-                expected_ffmpeg_sha=${ffmpeg_input#*:}
-                actual_ffmpeg_sha=$(shasum -a 256 \
+        do
+            ffmpeg_name=${ffmpeg_input%%:*}
+            expected_ffmpeg_sha=${ffmpeg_input#*:}
+            actual_ffmpeg_sha=$(shasum -a 256 \
                 "$ffmpeg/android/arm64/lib/$ffmpeg_name" | awk '{print $1}')
-                if [ "$actual_ffmpeg_sha" != "$expected_ffmpeg_sha" ]; then
-                    printf 'PPSSPP FFmpeg input mismatch for %s: %s\n' \
+            if [ "$actual_ffmpeg_sha" != "$expected_ffmpeg_sha" ]; then
+                printf 'PPSSPP FFmpeg input mismatch for %s: %s\n' \
                     "$ffmpeg_name" "$actual_ffmpeg_sha" >&2
-                    exit 1
-                fi
-            done
-        fi
+                exit 1
+            fi
+        done
 
         host=darwin-x86_64
-        strip="$ppsspp_ndk_dir/toolchains/llvm/prebuilt/$host/bin/llvm-strip"
+        ppsspp_tool_bin="$ppsspp_ndk_dir/toolchains/llvm/prebuilt/$host/bin"
+        strip="$ppsspp_tool_bin/llvm-strip"
+        objcopy="$ppsspp_tool_bin/llvm-objcopy"
+        readelf="$ppsspp_tool_bin/llvm-readelf"
+        nm="$ppsspp_tool_bin/llvm-nm"
+        for locked_tool in \
+            "$strip:ee9c7fafc3fa353fa2720450921aafa124a00d5074d348d72e216eb47e52befa" \
+            "$objcopy:ee9c7fafc3fa353fa2720450921aafa124a00d5074d348d72e216eb47e52befa" \
+            "$readelf:412cf6d6533d64fc098af2ad69c5b12574b675289efd3d30a1a8701c83f164d2" \
+            "$nm:84da402b6e155ab5979a070bdfa9e4fe840cacc6a092b302a08f68d9b3e1966d"
+        do
+            locked_tool_path=${locked_tool%%:*}
+            locked_tool_sha=${locked_tool#*:}
+            actual_tool_sha=$(shasum -a 256 "$locked_tool_path" | awk '{print $1}')
+            if [ "$actual_tool_sha" != "$locked_tool_sha" ]; then
+                printf 'PPSSPP ELF tool identity mismatch for %s: %s\n' \
+                    "$locked_tool_path" "$actual_tool_sha" >&2
+                exit 1
+            fi
+        done
         source_date_epoch=1778934711
         build="$BUILD_ROOT/work/ppsspp-$ABI"
         staged_source="$build/source"
@@ -1613,10 +1707,8 @@ DOLPHIN_DEPENDENCIES
         rm -rf "$staged_source/ext/libadrenotools/lib/linkernsbypass"
         cp -R "$linkernsbypass" \
             "$staged_source/ext/libadrenotools/lib/linkernsbypass"
-        if [ "$ppsspp_ffmpeg_candidate" = 1 ]; then
-            rm -rf "$staged_source/ffmpeg"
-            cp -R "$ffmpeg" "$staged_source/ffmpeg"
-        fi
+        rm -rf "$staged_source/ffmpeg"
+        cp -R "$ffmpeg" "$staged_source/ffmpeg"
 
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH="$source_date_epoch" \
         "$ppsspp_cmake" -S "$staged_source" -B "$build" -G Ninja \
@@ -1624,6 +1716,8 @@ DOLPHIN_DEPENDENCIES
             -DCMAKE_TOOLCHAIN_FILE="$ppsspp_ndk_dir/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
             -DCMAKE_BUILD_TYPE=Release -DLIBRETRO=ON -DHEADLESS=OFF \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
+            -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
             -DCMAKE_C_FLAGS="$path_map_flags" \
             -DCMAKE_CXX_FLAGS="$path_map_flags" \
             -DATLAS_TOOL=OFF -DUNITTEST=OFF -DUSE_FFMPEG="$ppsspp_use_ffmpeg" \
@@ -1634,25 +1728,82 @@ DOLPHIN_DEPENDENCIES
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH="$source_date_epoch" \
         "$ppsspp_cmake" --build "$build" --target ppsspp_libretro \
             -j"${LUCENT_BUILD_JOBS:-4}"
-        cp "$build/ppsspp_libretro_android.so" \
-            "$OUTPUT_DIR/ppsspp_libretro.so"
-        "$strip" --strip-unneeded "$OUTPUT_DIR/ppsspp_libretro.so"
-        cp "$staged_source/LICENSE.TXT" "$OUTPUT_DIR/ppsspp-LICENSE.txt"
-        rm -rf "$OUTPUT_DIR/ppsspp-system"
-        mkdir -p "$OUTPUT_DIR/ppsspp-system/PPSSPP"
-        cp -R "$staged_source/assets/." "$OUTPUT_DIR/ppsspp-system/PPSSPP/"
-        if [ "$ppsspp_ffmpeg_candidate" = 1 ]; then
-            python3 "$ROOT/tools/generate_ppsspp_compliance_bundle.py" \
+        # LLD's default build-ID note varies with the absolute build root even
+        # when the linked payload is byte-identical.  Remove only that note,
+        # then gate the normalized ELF before publishing any canonical file.
+        ppsspp_candidate_dir=$(mktemp -d "$OUTPUT_DIR/.ppsspp-candidate.XXXXXX")
+        stripped_core="$ppsspp_candidate_dir/ppsspp_libretro.stripped.so"
+        normalized_core="$ppsspp_candidate_dir/ppsspp_libretro.so"
+        "$strip" --strip-unneeded "$build/ppsspp_libretro_android.so" \
+            -o "$stripped_core"
+        "$objcopy" --remove-section=.note.gnu.build-id \
+            "$stripped_core" "$normalized_core"
+        rm -f "$stripped_core"
+        normalized_sha=$(shasum -a 256 "$normalized_core" | awk '{print $1}')
+        expected_normalized_sha=376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d
+        if [ "$normalized_sha" != "$expected_normalized_sha" ]; then
+            printf 'Normalized FFmpeg-enabled PPSSPP checksum mismatch: %s\n' \
+                "$normalized_sha" >&2
+            exit 1
+        fi
+        elf_header=$("$readelf" -h "$normalized_core")
+        printf '%s\n' "$elf_header" | grep -q 'Class:.*ELF64'
+        printf '%s\n' "$elf_header" | grep -q 'Type:.*DYN (Shared object file)'
+        printf '%s\n' "$elf_header" | grep -q 'Machine:.*AArch64'
+        if "$readelf" -S "$normalized_core" | grep -q '\.note\.gnu\.build-id'; then
+            printf 'Normalized PPSSPP core still contains a GNU build-ID note\n' >&2
+            exit 1
+        fi
+        actual_needed=$("$readelf" -d "$normalized_core" | \
+            sed -n 's/.*Shared library: \[\([^]]*\)\].*/\1/p' | LC_ALL=C sort)
+        expected_needed=$(printf '%s\n' libc.so libdl.so libEGL.so libGLESv2.so \
+            liblog.so libm.so libOpenSLES.so libandroid.so | LC_ALL=C sort)
+        if [ "$actual_needed" != "$expected_needed" ]; then
+            printf 'PPSSPP DT_NEEDED closure changed:\n%s\n' "$actual_needed" >&2
+            exit 1
+        fi
+        defined_symbols_file="$ppsspp_candidate_dir/ppsspp-defined-symbols.txt"
+        "$nm" -D --defined-only "$normalized_core" | awk '{print $3}' > \
+            "$defined_symbols_file"
+        for required_symbol in retro_api_version retro_deinit retro_get_system_av_info \
+            retro_get_system_info retro_init retro_load_game retro_run \
+            retro_serialize retro_serialize_size retro_set_audio_sample_batch \
+            retro_set_environment retro_set_input_poll retro_set_input_state \
+            retro_set_video_refresh retro_unload_game retro_unserialize
+        do
+            grep -qx "$required_symbol" "$defined_symbols_file" || {
+                printf 'PPSSPP core is missing required export: %s\n' \
+                    "$required_symbol" >&2
+                exit 1
+            }
+        done
+        rm -f "$defined_symbols_file"
+        cp "$staged_source/LICENSE.TXT" \
+            "$ppsspp_candidate_dir/ppsspp-LICENSE.txt"
+        mkdir -p "$ppsspp_candidate_dir/ppsspp-system/PPSSPP"
+        cp -R "$staged_source/assets/." \
+            "$ppsspp_candidate_dir/ppsspp-system/PPSSPP/"
+        python3 "$ROOT/tools/generate_ppsspp_compliance_bundle.py" \
             --source "$staged_source" \
             --build "$build" \
-            --artifact "$OUTPUT_DIR/ppsspp_libretro.so" \
+            --artifact "$normalized_core" \
             --audit "$ROOT/engines/ppsspp-dependency-audit.json" \
-            --lock "$ROOT/engines/ppsspp-ffmpeg-candidate-lock.json" \
+            --lock "$ROOT/engines/ppsspp-source-lock.json" \
             --repository "$ROOT" \
             --ninja "$ppsspp_ninja" \
-            --ar "$ppsspp_ndk_dir/toolchains/llvm/prebuilt/$host/bin/llvm-ar" \
-            --output "$OUTPUT_DIR/ppsspp-compliance"
-        fi
+            --ar "$ppsspp_tool_bin/llvm-ar" \
+            --output "$ppsspp_candidate_dir/ppsspp-compliance"
+        rm -rf "$OUTPUT_DIR/ppsspp-compliance" "$OUTPUT_DIR/ppsspp-system"
+        mv "$ppsspp_candidate_dir/ppsspp-compliance" \
+            "$OUTPUT_DIR/ppsspp-compliance"
+        mv "$ppsspp_candidate_dir/ppsspp-system" "$OUTPUT_DIR/ppsspp-system"
+        mv "$ppsspp_candidate_dir/ppsspp-LICENSE.txt" \
+            "$OUTPUT_DIR/ppsspp-LICENSE.txt"
+        # Publish the core last.  Every identity, ABI, dependency, export, and
+        # corresponding-source gate above has succeeded at this point.
+        mv "$normalized_core" "$OUTPUT_DIR/ppsspp_libretro.so"
+        rmdir "$ppsspp_candidate_dir"
+        ppsspp_candidate_dir=
         ;;
     mame)
         commit=85eaed9c22242206b68eaca8310cf0dbde331b43
@@ -1676,7 +1827,7 @@ DOLPHIN_DEPENDENCIES
         # A stale or locally modified binary can therefore never enter cache.
         expected_makefile_sha=08e3e6f9e21ea6ec1c9d9b0882f576a9abb03aa5aeeeefb3ad8bc4a3f13d96de
         expected_ndk_sha=1c4a54b31c5ed242a901b4a472d412819b5e08405df1c58066bd555f9dd52515
-        expected_core_sha=8e099718b1ccbcd2505433e5060cb6d16828911e96e05e3a44a9949283225bd0
+        expected_core_sha=1160d48a52f0271e3a83bb57498fe5f86069336be6eb175be9d3842795fc0d07
         actual_makefile_sha=$(shasum -a 256 "$source/Makefile.libretro" | awk '{print $1}')
         actual_ndk_sha=$(shasum -a 256 "$NDK_DIR/source.properties" | awk '{print $1}')
         if [ "$actual_makefile_sha" != "$expected_makefile_sha" ]; then
@@ -1697,7 +1848,9 @@ DOLPHIN_DEPENDENCIES
             "platform=$platform" \
             "subtarget=$subtarget" \
             "sources=$sources" \
-            "recipeRevision=2" | shasum -a 256 | awk '{print $1}')
+            "recipeRevision=3" \
+            "elfMaxPageSize=16384" \
+            "elfCommonPageSize=16384" | shasum -a 256 | awk '{print $1}')
         cache_dir="$BUILD_ROOT/cache/mame/$identity"
         cache_core="$cache_dir/mame_libretro.so"
         cache_identity="$cache_dir/build-fingerprint.sha256"
@@ -1729,6 +1882,7 @@ DOLPHIN_DEPENDENCIES
                 -j"${LUCENT_BUILD_JOBS:-4}" platform="$platform" \
                 ARCHITECTURE= \
                 SUBTARGET="$subtarget" SOURCES="$sources" \
+                LDOPTS='-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
                 PYTHON_EXECUTABLE=python3
         # Makefile.libretro inherits the host suffix on macOS even though the
         # linker target and resulting file are Android AArch64 ELF. Accept the
@@ -1758,4 +1912,8 @@ DOLPHIN_DEPENDENCIES
         ;;
 esac
 
-printf '%s\n' "$OUTPUT_DIR/${ENGINE}_libretro.so"
+if [ "$ENGINE" = armsx2 ]; then
+    printf '%s\n' "$OUTPUT_DIR/armsx2${armsx2_variant_suffix}_libretro.so"
+else
+    printf '%s\n' "$OUTPUT_DIR/${ENGINE}_libretro.so"
+fi

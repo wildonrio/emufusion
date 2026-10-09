@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -14,6 +15,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.zip.CRC32;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -154,6 +156,24 @@ public final class StateVault {
         }
     }
 
+    /**
+     * Drops the Quick Resume reference (and its recovery backup) so the next
+     * launch cold-boots. Used when a restored state proves defective at
+     * runtime — a resumed melonDS session whose gameplay screen stayed black
+     * and ignored input relaunched into the same zombie forever
+     * (2026-08-19, Thor). The snapshot files themselves stay for manual
+     * recovery; only the automatic-resume pointer is removed.
+     */
+    public void discardQuickResume(StateIdentity identity) {
+        synchronized (monitor) {
+            File game = gameDirectory(identity);
+            File reference = new File(game, QUICK_REF);
+            File backup = new File(game, QUICK_REF + ".previous");
+            if (reference.isFile()) reference.delete();
+            if (backup.isFile()) backup.delete();
+        }
+    }
+
     public StateLoadResult loadQuickResume(StateIdentity expected) {
         synchronized (monitor) {
             File game = gameDirectory(expected);
@@ -289,10 +309,29 @@ public final class StateVault {
         SnapshotMetadata metadata = readMetadata(directory);
         if (metadata.uncompressedBytes <= 0 || metadata.uncompressedBytes > MAX_UNCOMPRESSED_STATE)
             throw new IOException("Invalid state size");
-        byte[] state = gunzip(new File(directory, STATE), metadata.uncompressedBytes);
-        if (state.length != metadata.uncompressedBytes ||
-                !metadata.stateSha256.equals(Digests.sha256(state)) ||
-                metadata.stateCrc32 != Digests.crc32(state))
+        // The caller still owns the original serialized state. A second full
+        // expansion here made Wii checkpoints exceed Android's Java heap.
+        // Verify every durable byte (including the gzip trailer) without
+        // retaining another state-sized array.
+        MessageDigest sha256 = Digests.newDigest();
+        CRC32 crc32 = new CRC32();
+        long total = 0;
+        try (InputStream file = new FileInputStream(new File(directory, STATE));
+                InputStream input = new GZIPInputStream(file, 32 * 1024)) {
+            byte[] buffer = new byte[32 * 1024];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                if (count == 0) continue;
+                total += count;
+                if (total > metadata.uncompressedBytes)
+                    throw new IOException("Expanded state exceeds manifest size");
+                sha256.update(buffer, 0, count);
+                crc32.update(buffer, 0, count);
+            }
+        }
+        if (total != metadata.uncompressedBytes ||
+                !metadata.stateSha256.equals(Digests.hex(sha256.digest())) ||
+                metadata.stateCrc32 != crc32.getValue())
             throw new IOException("State checksum mismatch");
     }
 
@@ -368,21 +407,26 @@ public final class StateVault {
     }
 
     private static byte[] gunzip(File file, long expectedBytes) throws IOException {
-        InputStream input = new GZIPInputStream(new FileInputStream(file), 32 * 1024);
-        try {
-            ByteArrayOutputStream output = new ByteArrayOutputStream((int) Math.min(expectedBytes, 1024 * 1024));
-            byte[] buffer = new byte[32 * 1024];
-            long total = 0;
-            int count;
-            while ((count = input.read(buffer)) >= 0) {
+        if (expectedBytes <= 0 || expectedBytes > MAX_UNCOMPRESSED_STATE)
+            throw new IOException("Invalid state size");
+        try (InputStream source = new FileInputStream(file);
+                InputStream input = new GZIPInputStream(source, 32 * 1024)) {
+            // Loading needs one contiguous array for the native unserializer,
+            // but no geometric growth or toByteArray copy of that array.
+            byte[] state = new byte[(int) expectedBytes];
+            int total = 0;
+            while (total < state.length) {
+                int count = input.read(state, total, Math.min(32 * 1024, state.length - total));
+                if (count == -1) throw new IOException("Expanded state is shorter than manifest size");
                 if (count == 0) continue;
                 total += count;
-                if (total > expectedBytes || total > MAX_UNCOMPRESSED_STATE)
-                    throw new IOException("Expanded state exceeds manifest size");
-                output.write(buffer, 0, count);
             }
-            return output.toByteArray();
-        } finally { input.close(); }
+            // Read through EOF so oversized data and a damaged/truncated gzip
+            // trailer cannot pass just because the expected prefix matched.
+            if (input.read() != -1)
+                throw new IOException("Expanded state exceeds manifest size");
+            return state;
+        }
     }
 
     private static String readQuickId(File game) {

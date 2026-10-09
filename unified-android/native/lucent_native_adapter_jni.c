@@ -33,6 +33,11 @@ typedef struct lucent_adapter_jni_session {
     lucent_native_adapter_host *host;
     ANativeWindow *primary_window;
     ANativeWindow *lower_window;
+    /* One failed rebind can leave an adapter borrowing either old or new IO.
+     * Retain both sets until adapter destruction, and reject further binds. */
+    ANativeWindow *failed_previous_primary;
+    ANativeWindow *failed_previous_lower;
+    bool window_binding_failed;
     pthread_mutex_t audio_lock;
     int16_t audio_ring[ADAPTER_AUDIO_RING_SAMPLES];
     size_t audio_read;
@@ -94,7 +99,58 @@ static bool bind_window(JNIEnv *env, ANativeWindow **slot, jobject surface,
     return true;
 }
 
+/* Acquire the complete replacement before publishing either window. The old
+ * host references stay alive through the adapter notification. A Vulkan
+ * adapter must also retain its old VkSurface until every old swapchain is
+ * retired: that loader surface owns the GPU-side ANativeWindow reference. */
+static bool bind_replacement_windows(JNIEnv *env,
+        lucent_adapter_jni_session *session, jobject primary, jobject lower,
+        ANativeWindow **old_primary, ANativeWindow **old_lower,
+        char *error, size_t error_size) {
+    if (session->window_binding_failed) {
+        snprintf(error, error_size, "render window binding failed; restart required");
+        return false;
+    }
+    ANativeWindow *new_primary = NULL;
+    ANativeWindow *new_lower = NULL;
+    if (!bind_window(env, &new_primary, primary, error, error_size) ||
+            !bind_window(env, &new_lower, lower, error, error_size)) {
+        if (new_primary) ANativeWindow_release(new_primary);
+        if (new_lower) ANativeWindow_release(new_lower);
+        return false;
+    }
+    *old_primary = session->primary_window;
+    *old_lower = session->lower_window;
+    session->primary_window = new_primary;
+    session->lower_window = new_lower;
+    return true;
+}
+
+static void release_replaced_windows(ANativeWindow *primary, ANativeWindow *lower) {
+    if (primary) ANativeWindow_release(primary);
+    if (lower) ANativeWindow_release(lower);
+}
+
+static void finish_window_binding(lucent_adapter_jni_session *session,
+        ANativeWindow *old_primary, ANativeWindow *old_lower, bool success) {
+    if (success) {
+        release_replaced_windows(old_primary, old_lower);
+        return;
+    }
+    /* A failed adapter callback is not a rollback guarantee. Its render
+     * thread may still borrow the old windows, or may have adopted the new
+     * ones partially. Keep exactly this one previous pair until destroy has
+     * joined/retired the adapter; the failure latch prevents accumulating any
+     * further pairs. Throwing a Java exception alone does not stop native work. */
+    session->failed_previous_primary = old_primary;
+    session->failed_previous_lower = old_lower;
+    session->window_binding_failed = true;
+}
+
 static void release_windows(lucent_adapter_jni_session *session) {
+    release_replaced_windows(session->failed_previous_primary, session->failed_previous_lower);
+    session->failed_previous_primary = NULL;
+    session->failed_previous_lower = NULL;
     if (session->primary_window) {
         ANativeWindow_release(session->primary_window);
         session->primary_window = NULL;
@@ -112,6 +168,16 @@ static void build_io(lucent_adapter_jni_session *session, lucent_native_io *io) 
     io->lower_window = session->lower_window;
     io->audio_sink = adapter_audio_sink;
     io->audio_sink_ctx = session;
+}
+
+/* Android calls this because Java reaches this library through
+ * System.loadLibrary. An adapter is opened with dlopen instead, which never
+ * triggers its JNI_OnLoad, so we hand the VM to the host and it performs that
+ * call itself once the adapter is mapped. */
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
+    (void)reserved;
+    lucent_native_adapter_supply_java_vm(vm);
+    return JNI_VERSION_1_6;
 }
 
 JNIEXPORT jlong JNICALL
@@ -161,7 +227,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeDescribe(
     char error[ERROR_SIZE] = {0};
     lucent_adapter_jni_session *session = from_handle(handle);
     lucent_native_capabilities caps;
-    jint values[5];
+    jint values[6];
     jintArray result;
     if (!session || !lucent_native_adapter_describe(
             session->host, &caps, error, sizeof(error))) {
@@ -173,8 +239,9 @@ Java_com_thorium_preview_NativeAdapterHost_nativeDescribe(
     values[2] = caps.has_persistent_save ? 1 : 0;
     values[3] = caps.dual_screen ? 1 : 0;
     values[4] = (jint)caps.required_firmware;
-    result = (*env)->NewIntArray(env, 5);
-    if (result) (*env)->SetIntArrayRegion(env, result, 0, 5, values);
+    values[5] = (jint)caps.max_controllers;
+    result = (*env)->NewIntArray(env, 6);
+    if (result) (*env)->SetIntArrayRegion(env, result, 0, 6, values);
     return result;
 }
 
@@ -191,6 +258,107 @@ Java_com_thorium_preview_NativeAdapterHost_nativeEngineId(
         return NULL;
     }
     return (*env)->NewStringUTF(env, caps.engine_id ? caps.engine_id : "");
+}
+
+/* Reports the engine's averaged emulated-frame rate, or a negative value when
+ * the adapter publishes no measurement hook. Deliberately does not throw on an
+ * absent hook: a missing measurement is a normal state, not a session error. */
+JNIEXPORT jdouble JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeAverageFps(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)env;
+    (void)type;
+    lucent_adapter_jni_session *session = from_handle(handle);
+    if (!session) return LUCENT_NATIVE_ADAPTER_FPS_UNSUPPORTED;
+    return lucent_native_adapter_average_fps(session->host);
+}
+
+/* Optional clock and timeline capabilities; missing hooks never fabricate evidence. */
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeSetFgPresentation(
+        JNIEnv *env, jclass type, jlong handle, jboolean enabled) {
+    (void)env;
+    (void)type;
+    lucent_adapter_jni_session *session = from_handle(handle);
+    return session && lucent_native_adapter_set_fg_presentation(
+            session->host, enabled == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeTimingCapabilities(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)env;
+    (void)type;
+    lucent_adapter_jni_session *session = from_handle(handle);
+    return session ? (jint)lucent_native_adapter_timing_capabilities(session->host) : 0;
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeProducerTimelineHz(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)env;
+    (void)type;
+    lucent_adapter_jni_session *session = from_handle(handle);
+    return session ? lucent_native_adapter_producer_timeline_hz(session->host) : 0.0;
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeDeclaredVideoHz(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)env;
+    (void)type;
+    lucent_adapter_jni_session *session = from_handle(handle);
+    if (!session) return 0.0;
+    return lucent_native_adapter_declared_video_hz(session->host);
+}
+
+/* Java owns a try-read session lease until this bounded copy returns. Use a
+ * stack record and memcpy so sliced direct buffers need no alignment promises. */
+JNIEXPORT jint JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeSourceImageBinding(
+        JNIEnv *env, jclass type, jlong handle, jobject output) {
+    (void)type;
+    lucent_adapter_jni_session *session = from_handle(handle);
+    if (!session) return LUCENT_SOURCE_CLOSED;
+    if (!output) return LUCENT_SOURCE_BAD_ARGUMENT;
+    void *bytes = (*env)->GetDirectBufferAddress(env, output);
+    jlong capacity = (*env)->GetDirectBufferCapacity(env, output);
+    if (!bytes || capacity < (jlong)sizeof(lucent_source_binding_v1)) return LUCENT_SOURCE_BAD_ARGUMENT;
+    lucent_source_binding_v1 value = {0};
+    uint32_t result = lucent_native_adapter_source_image_binding(session->host, &value, sizeof(value));
+    memcpy(bytes, &value, sizeof(value));
+    return (jint)result;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeQuerySourceImage(
+        JNIEnv *env, jclass type, jlong handle, jlong session_epoch,
+        jlong surface_epoch, jlong timestamp_ns, jobject output) {
+    (void)type;
+    lucent_adapter_jni_session *session = from_handle(handle);
+    if (!session) return LUCENT_SOURCE_CLOSED;
+    if (!output || session_epoch <= 0 || surface_epoch <= 0 || timestamp_ns <= 0)
+        return LUCENT_SOURCE_BAD_ARGUMENT;
+    void *bytes = (*env)->GetDirectBufferAddress(env, output);
+    jlong capacity = (*env)->GetDirectBufferCapacity(env, output);
+    if (!bytes || capacity < (jlong)sizeof(lucent_source_image_v1)) return LUCENT_SOURCE_BAD_ARGUMENT;
+    lucent_source_image_v1 value = {0};
+    uint32_t result = lucent_native_adapter_query_source_image(session->host,
+            (uint64_t)session_epoch, (uint64_t)surface_epoch, (uint64_t)timestamp_ns,
+            &value, sizeof(value));
+    memcpy(bytes, &value, sizeof(value));
+    return (jint)result;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeSetPacedVideoHz(
+        JNIEnv *env, jclass type, jlong handle, jdouble hz) {
+    (void)env;
+    (void)type;
+    lucent_adapter_jni_session *session = from_handle(handle);
+    if (!session) return JNI_FALSE;
+    return lucent_native_adapter_set_paced_video_hz(session->host, hz) ?
+            JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL
@@ -239,19 +407,22 @@ Java_com_thorium_preview_NativeAdapterHost_nativeStart(
     char error[ERROR_SIZE] = {0};
     lucent_adapter_jni_session *session = from_handle(handle);
     lucent_native_io io;
+    ANativeWindow *old_primary = NULL;
+    ANativeWindow *old_lower = NULL;
     if (!session) {
         throw_state(env, "adapter session is unavailable");
         return;
     }
-    if (!bind_window(env, &session->primary_window, primary_surface,
-                     error, sizeof(error)) ||
-            !bind_window(env, &session->lower_window, lower_surface,
-                         error, sizeof(error))) {
+    if (!bind_replacement_windows(env, session, primary_surface, lower_surface,
+                                  &old_primary, &old_lower, error, sizeof(error))) {
         throw_state(env, error);
         return;
     }
     build_io(session, &io);
-    if (!lucent_native_adapter_start(session->host, &io, error, sizeof(error)))
+    const bool started = lucent_native_adapter_start(
+            session->host, &io, error, sizeof(error));
+    finish_window_binding(session, old_primary, old_lower, started);
+    if (!started)
         throw_state(env, error);
 }
 
@@ -263,20 +434,22 @@ Java_com_thorium_preview_NativeAdapterHost_nativeSurfaceRecreated(
     char error[ERROR_SIZE] = {0};
     lucent_adapter_jni_session *session = from_handle(handle);
     lucent_native_io io;
+    ANativeWindow *old_primary = NULL;
+    ANativeWindow *old_lower = NULL;
     if (!session) {
         throw_state(env, "adapter session is unavailable");
         return;
     }
-    if (!bind_window(env, &session->primary_window, primary_surface,
-                     error, sizeof(error)) ||
-            !bind_window(env, &session->lower_window, lower_surface,
-                         error, sizeof(error))) {
+    if (!bind_replacement_windows(env, session, primary_surface, lower_surface,
+                                  &old_primary, &old_lower, error, sizeof(error))) {
         throw_state(env, error);
         return;
     }
     build_io(session, &io);
-    if (!lucent_native_adapter_surface_recreated(
-            session->host, &io, error, sizeof(error)))
+    const bool rebound = lucent_native_adapter_surface_recreated(
+            session->host, &io, error, sizeof(error));
+    finish_window_binding(session, old_primary, old_lower, rebound);
+    if (!rebound)
         throw_state(env, error);
 }
 
@@ -293,12 +466,15 @@ Java_com_thorium_preview_NativeAdapterHost_nativeRunFrame(
 
 JNIEXPORT void JNICALL
 Java_com_thorium_preview_NativeAdapterHost_nativeSetControl(
-        JNIEnv *env, jclass type, jlong handle, jint control, jfloat value) {
+        JNIEnv *env, jclass type, jlong handle, jint controllerIndex,
+        jint control, jfloat value) {
     (void)type;
     char error[ERROR_SIZE] = {0};
     lucent_adapter_jni_session *session = from_handle(handle);
-    if (control < 0 || !session || !lucent_native_adapter_set_control(
-            session->host, (lucent_native_control)control, (float)value,
+    if (control < 0 || controllerIndex < 0 || !session ||
+            !lucent_native_adapter_set_control(
+            session->host, (uint32_t)controllerIndex,
+            (lucent_native_control)control, (float)value,
             error, sizeof(error)))
         throw_state(env, "invalid adapter control input");
 }

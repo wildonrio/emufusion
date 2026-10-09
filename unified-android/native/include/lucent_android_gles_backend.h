@@ -36,6 +36,14 @@ bool lucent_android_gles_set_presentation_policy(
         lucent_android_gles_backend *backend,
         unsigned policy,
         char *error, size_t error_size);
+/* Sets the resolved display aspect (width / height) before a Surface is
+ * attached. The frontend resolves fixed console aspects in Java; native
+ * presentation uses this value for both frontend-FBO and direct-window cores.
+ */
+bool lucent_android_gles_set_presentation_aspect(
+        lucent_android_gles_backend *backend,
+        float aspect,
+        char *error, size_t error_size);
 bool lucent_android_gles_get_host_options(
         lucent_android_gles_backend *backend,
         lucent_retro_hw_options *options,
@@ -53,9 +61,28 @@ bool lucent_android_gles_attach(
 bool lucent_android_gles_make_current(
         lucent_android_gles_backend *backend,
         char *error, size_t error_size);
+/* One cancellable render-loop step before retro_run on a resumed direct
+ * Surface. ready=false means only a temporary black frame was submitted;
+ * no guest execution, audio drain or genuine-frame accounting is allowed.
+ * Cold launch, FG-owned surfaces and unsupported drivers retain their path. */
+bool lucent_android_gles_prepare_resume(
+        lucent_android_gles_backend *backend, bool *ready,
+        char *error, size_t error_size);
+/* Render-thread-affine. Default false; detach clears ownership. Set AFTER
+ * attach/recreate using actual FG input-Surface ownership, never a preference.
+ * Each call resets the source timestamp epoch without altering core timing. */
+bool lucent_android_gles_set_fg_timestamp(
+        lucent_android_gles_backend *backend, bool enabled,
+        char *error, size_t error_size);
 bool lucent_android_gles_present_if_ready(
         lucent_android_gles_backend *backend,
         bool *presented,
+        char *error, size_t error_size);
+/* Refreshes presentation geometry after the live Surface's buffer geometry
+ * changed. Same Surface identity: never destroys the EGL surface/context and
+ * never invokes the core's context_destroy/context_reset callbacks. */
+bool lucent_android_gles_surface_resized(
+        lucent_android_gles_backend *backend,
         char *error, size_t error_size);
 bool lucent_android_gles_detach(
         lucent_android_gles_backend *backend,

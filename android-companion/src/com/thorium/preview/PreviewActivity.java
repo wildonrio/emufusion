@@ -8,6 +8,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
@@ -15,10 +16,15 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.GestureDetector;
 import android.view.Display;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.Surface;
+import android.view.SurfaceControl;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.TextureView;
@@ -31,16 +37,31 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.thorium.lucent.cheats.CheatPanelSnapshot;
+import com.thorium.preview.cheats.CheatPanelView;
+import com.thorium.preview.game.FrameGenerationRenderer;
+import com.thorium.preview.game.FrameGenerationRendererFactory;
+import com.thorium.preview.game.FrameGenerationSettings;
+import com.thorium.preview.game.SurfaceOwnershipException;
+import com.thorium.lucent.video.FrameGenerationBackendPolicy;
+import com.thorium.lucent.video.DualScreenLayout;
+
+import org.json.JSONObject;
+
 import java.io.File;
 import android.util.Log;
 
-public final class PreviewActivity extends Activity {
+public final class PreviewActivity extends Activity
+        implements SecondaryCheatPanelRouter.Panel,
+        SecondaryGameplaySurfaceRouter.Host {
     private static volatile boolean running;
     private static volatile boolean resumed;
+    private static final PreviewWindowState windowState = new PreviewWindowState();
     // True only while a dual-screen (DS/3DS/Wii U) session is rendering into
     // this Activity's SurfaceView. Anything that would take the lower display
     // — the in-app browser above all — has to yield while this is set.
     private static volatile boolean gameplaySurfaceActive;
+    private static volatile PreviewActivity visibleInstance;
     private FrameLayout root;
     private ImageView artwork;
     private TextView titleView;
@@ -49,6 +70,18 @@ public final class PreviewActivity extends Activity {
     private TextView launchButton;
     private View blackout;
     private SurfaceView gameplaySurface;
+    private Surface gameplayEngineSurface;
+    private FrameGenerationRenderer gameplayFrameGenerator;
+    private long gameplayGeneratorGeneration;
+    // A failed retirement cannot authorize reuse of this game's holder on a
+    // subsequent surfaceChanged callback. Only a new routed game may retry.
+    private long gameplayQuarantinedGeneration = -1L;
+    /** Owner mode frozen for this lower-display Surface generation. */
+    private FrameGenerationSettings.Mode gameplayFrameGenerationMode =
+            FrameGenerationSettings.Mode.OFF;
+    private boolean gameplayClockwiseQuarterTurn;
+    private int gameplayTouchDiagnosticCount;
+    private CheatPanelView cheatPanel;
     private long gameplayGeneration;
     private PlayerSlot[] slots;
     // The primary-display reject path finishes before any of the setup below
@@ -58,14 +91,23 @@ public final class PreviewActivity extends Activity {
     private boolean ownsVisibilityFlags;
     private int activeSlot = -1;
     private boolean soundEnabled;
+    private float appVolumeGain = 1f;
+    private final AppVolumeController.Listener appVolumeListener = gain -> {
+        appVolumeGain = gain;
+        applyPlayerVolumes();
+    };
     // A "browser break": every decoder is held paused and silent while
-    // Lucent's browser is open, then started again where it stopped.
+    // EmuFusion's browser is open, then started again where it stopped.
     private boolean playersPaused;
     private long selectionGeneration;
     private long currentSequence;
     private boolean advanceOnCompletion;
     private GestureDetector gestures;
     private static final long CROSSFADE_MS = 85L;
+    private volatile long lastLowerVisualChangeMs;
+    private volatile String renderedVideoSource = "";
+    private volatile int renderedVideoPositionMs;
+    private volatile boolean renderedVideoAdvancing;
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
@@ -107,7 +149,7 @@ public final class PreviewActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // This Activity is only Lucent's private Thor lower-display surface.
+        // This Activity is only EmuFusion's private Thor lower-display surface.
         // Fail closed if a malformed internal launch ever lands it on the
         // primary display; gameplay and the library both belong to the one
         // MainActivity window there.
@@ -118,7 +160,10 @@ public final class PreviewActivity extends Activity {
             return;
         }
         running = true;
+        visibleInstance = this;
+        lastLowerVisualChangeMs = SystemClock.elapsedRealtime();
         ownsVisibilityFlags = true;
+        windowState.created(this);
         // Preview audio is STREAM_MUSIC (MediaPlayer's USAGE_MEDIA attributes
         // below), the same stream the engines play on. Bind the hardware volume
         // keys to it here as well as in LucentApplication so this Activity can
@@ -133,9 +178,19 @@ public final class PreviewActivity extends Activity {
                 .getBoolean(PreviewService.EXTRA_BROWSER_ACTIVE, false);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         // The lower-screen movie must never steal controller focus from
-        // Pegasus on the upper display.
+        // Pegasus on the upper display. This also stops a GamePad touch down
+        // here from pulling focus across displays, because Android only moves
+        // focus to a tapped window that can receive keys.
+        //
+        // On its own the flag is not enough, and is in fact half of the trap:
+        // it guarantees this display has no focused window while the Activity
+        // still gives it a focused *app*, which is the combination Android
+        // reads as "top-focused display" with nothing to dispatch to. See
+        // PrimaryDisplayFocusGuard, which is what actually keeps display 0 on
+        // top; the two belong together.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
         buildUi();
+        AppVolumeController.registerListener(this, appVolumeListener);
         hideSystemUi();
         // LucentApplication starts the process-wide foreground service before
         // any Activity. This visible secondary Activity only needs to deliver
@@ -175,6 +230,10 @@ public final class PreviewActivity extends Activity {
                 getIntent().getAction())) {
             showGameplaySurface(getIntent().getLongExtra(
                     SecondaryGameplaySurfaceRouter.EXTRA_GENERATION, 0L));
+        } else if (SecondaryCheatPanelRouter.ACTION_SECONDARY_CHEATS.equals(
+                getIntent().getAction())) {
+            attachCheatPanel(getIntent().getLongExtra(
+                    SecondaryCheatPanelRouter.EXTRA_GENERATION, 0L));
         } else if (PreviewService.ACTION_BLANK.equals(getIntent().getAction())) {
             blankScreen();
         } else {
@@ -212,10 +271,21 @@ public final class PreviewActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        // A redelivery to an already-resumed singleTop Activity skips onResume,
+        // but the Activity start that carried it still moved this display to
+        // the top of the display order, so top focus has to be handed back here
+        // too.
+        if (ownsVisibilityFlags) yieldTopFocusToPrimaryDisplay();
         if (SecondaryGameplaySurfaceRouter.ACTION_SECONDARY_GAMEPLAY.equals(
                 intent.getAction())) {
             showGameplaySurface(intent.getLongExtra(
                     SecondaryGameplaySurfaceRouter.EXTRA_GENERATION, 0L));
+            return;
+        }
+        if (SecondaryCheatPanelRouter.ACTION_SECONDARY_CHEATS.equals(
+                intent.getAction())) {
+            attachCheatPanel(intent.getLongExtra(
+                    SecondaryCheatPanelRouter.EXTRA_GENERATION, 0L));
             return;
         }
         if (PreviewService.ACTION_BLANK.equals(intent.getAction())) {
@@ -322,6 +392,22 @@ public final class PreviewActivity extends Activity {
         blackout.setBackgroundColor(Color.BLACK);
         blackout.setVisibility(View.GONE);
         root.addView(blackout, fill());
+
+        // Added last so it covers the blackout a running game leaves behind:
+        // this panel is only ever shown while a game owns the upper display,
+        // which is exactly when the blackout is up.
+        cheatPanel = new CheatPanelView(this);
+        cheatPanel.setVisibility(View.GONE);
+        cheatPanel.setListener(new CheatPanelView.Listener() {
+            @Override public void onCheatRowTapped(int index) {
+                SecondaryCheatPanelRouter.toggled(index);
+            }
+
+            @Override public void onCloseTapped() {
+                SecondaryCheatPanelRouter.closedFromPanel();
+            }
+        });
+        root.addView(cheatPanel, fill());
     }
 
     private FrameLayout.LayoutParams fill() {
@@ -346,6 +432,10 @@ public final class PreviewActivity extends Activity {
         // already persisted, so the session's own teardown (ACTION_BLANK from
         // SecondaryGameplaySurfaceRouter.release) shows it a moment later.
         if (gameplaySurface != null) return;
+        // Same rule for the cheat panel, for the same reason and one more: the
+        // panel is opaque, so a selection arriving underneath it would start a
+        // preview movie nobody can see while its audio plays over the game.
+        if (cheatPanel != null && cheatPanel.getVisibility() == View.VISIBLE) return;
         leaveGameplaySurface(true);
         final long generation = ++selectionGeneration;
         video = safe(video);
@@ -358,6 +448,10 @@ public final class PreviewActivity extends Activity {
         preloadPrev = safe(preloadPrev);
         preloadNext = safe(preloadNext);
         preloadAux = safe(preloadAux);
+        renderedVideoSource = video;
+        renderedVideoPositionMs = 0;
+        renderedVideoAdvancing = false;
+        lastLowerVisualChangeMs = SystemClock.elapsedRealtime();
         eyebrow.setText(system);
         titleView.setText(title);
         scoreView.setText(score);
@@ -378,6 +472,7 @@ public final class PreviewActivity extends Activity {
         ensurePreload(preloadAux, incomingIndex, outgoingIndex);
 
         if (video.isEmpty() || incomingIndex < 0) {
+            renderedVideoSource = "";
             activeSlot = -1;
             applyPlayerVolumes();
             for (PlayerSlot slot : slots) slot.view.setAlpha(0f);
@@ -519,6 +614,10 @@ public final class PreviewActivity extends Activity {
         if (slots == null) return;
         for (PlayerSlot slot : slots) slot.release();
         activeSlot = -1;
+        renderedVideoSource = "";
+        renderedVideoPositionMs = 0;
+        renderedVideoAdvancing = false;
+        lastLowerVisualChangeMs = SystemClock.elapsedRealtime();
     }
 
     private void applySoundEnabled(boolean enabled) {
@@ -537,6 +636,7 @@ public final class PreviewActivity extends Activity {
     private void pausePlayers() {
         if (playersPaused) return;
         playersPaused = true;
+        renderedVideoAdvancing = false;
         // Mute first: a decoder that pause() refuses (an unprepared warm
         // neighbour, say) must still not be audible under the browser.
         applyPlayerVolumes();
@@ -557,7 +657,8 @@ public final class PreviewActivity extends Activity {
         for (int index = 0; index < slots.length; ++index) {
             MediaPlayer player = slots[index].player;
             if (player == null) continue;
-            float volume = soundEnabled && !playersPaused && index == activeSlot ? 1f : 0f;
+            float volume = soundEnabled && !playersPaused && index == activeSlot
+                    ? appVolumeGain : 0f;
             try {
                 player.setVolume(volume, volume);
             } catch (RuntimeException ignored) {
@@ -565,8 +666,61 @@ public final class PreviewActivity extends Activity {
         }
     }
 
+    /**
+     * Takes the cheat panel: this Activity draws it, the game host owns it.
+     *
+     * <p>The registration is what closes the gap between the launch and the
+     * first frame — the router replays the snapshot it was given at request
+     * time, so the panel never appears blank while it waits to be told what to
+     * show.
+     */
+    private void attachCheatPanel(long generation) {
+        if (cheatPanel == null) return;
+        // The lower display is blank during single-screen gameplay, which is
+        // when this opens; the movie views underneath are already stopped.
+        ++selectionGeneration;
+        stopPlayers();
+        blackout.setVisibility(View.VISIBLE);
+        SecondaryCheatPanelRouter.attach(generation, this);
+    }
+
+    @Override public void showCheatPanel(CheatPanelSnapshot snapshot) {
+        runOnUiThread(() -> {
+            if (cheatPanel == null) return;
+            cheatPanel.render(snapshot);
+            cheatPanel.setVisibility(View.VISIBLE);
+            cheatPanel.bringToFront();
+        });
+    }
+
+    @Override public void hideCheatPanel() {
+        runOnUiThread(() -> {
+            if (cheatPanel == null) return;
+            cheatPanel.setVisibility(View.GONE);
+            // Back to the black the game left here. The library restores the
+            // real preview when it comes back, via its own ACTION_UPDATE.
+            blackout.setVisibility(View.VISIBLE);
+            blackout.bringToFront();
+        });
+    }
+
     private void blankScreen() {
+        // Starting an in-window game and hiding the ordinary preview are two
+        // independently posted operations.  For a dual-screen system the
+        // gameplay request can win that race and install its Surface before
+        // the older preview HIDE/BLANK broadcast reaches this Activity.  Do
+        // not let that stale preview command tear down the current lower
+        // screen.  SecondaryGameplaySurfaceRouter.release() invalidates the
+        // generation before sending its own BLANK, so real game teardown
+        // still follows the normal path below.
+        if (gameplaySurface != null &&
+                SecondaryGameplaySurfaceRouter.isCurrent(gameplayGeneration)) {
+            Log.i("LucentPreview", "Ignoring preview blank while gameplay owns generation=" +
+                    gameplayGeneration);
+            return;
+        }
         leaveGameplaySurface(false);
+        if (cheatPanel != null) cheatPanel.setVisibility(View.GONE);
         ++selectionGeneration;
         stopPlayers();
         artwork.setImageDrawable(null);
@@ -595,10 +749,31 @@ public final class PreviewActivity extends Activity {
         launchButton.setVisibility(View.GONE);
         blackout.setVisibility(View.GONE);
         gameplayGeneration = generation;
+        // FG is primary-only until secondary retirement/recovery is qualified.
+        // A failed lower generator otherwise freezes touch-screen content even
+        // after the primary recovers to Direct. Preserve the native lower path
+        // and leave the owner's primary FG selection unchanged.
+        gameplayFrameGenerationMode = FrameGenerationSettings.Mode.OFF;
+        final long surfaceGeneration = generation;
         gameplaySurfaceActive = true;
+        gameplayClockwiseQuarterTurn =
+                SecondaryGameplaySurfaceRouter.isClockwiseQuarterTurn(generation);
         Log.i("LucentPreview", "showGameplaySurface generation=" + generation +
-                " displayId=" + (getDisplay() == null ? -1 : getDisplay().getDisplayId()));
+                " displayId=" + (getDisplay() == null ? -1 : getDisplay().getDisplayId()) +
+                " clockwiseQuarterTurn=" + gameplayClockwiseQuarterTurn);
+        if (gameplayClockwiseQuarterTurn) {
+            showClockwiseGameplaySurface();
+            return;
+        }
         gameplaySurface = new SurfaceView(this);
+        // DisplayFrameGenerator deliberately selects an 8-bit RGBA EGLConfig.
+        // SurfaceView otherwise defaults to the Thor's RGB565 buffer format on
+        // display 4.  That mismatch still permits successful swaps and a live
+        // SurfaceFlinger cadence while the hardware composer scans out black,
+        // which is precisely what the DS qualification evidence recorded.
+        // Fix the BufferQueue format before attachment/surface creation so the
+        // EGL producer and the physical lower-display consumer agree.
+        gameplaySurface.getHolder().setFormat(PixelFormat.RGBA_8888);
         // Compose this Surface ABOVE the window, and give it no View background.
         //
         // Both halves are load-bearing, and either one alone renders a
@@ -626,28 +801,39 @@ public final class PreviewActivity extends Activity {
         gameplaySurface.setFocusableInTouchMode(false);
         gameplaySurface.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder holder) {
-                Log.i("LucentPreview", "gameplay surfaceCreated generation=" + gameplayGeneration +
+                if (surfaceGeneration != gameplayGeneration ||
+                        gameplayQuarantinedGeneration == surfaceGeneration) return;
+                ensureGameplayGenerator(holder.getSurface(),
+                        gameplaySurface.getWidth(), gameplaySurface.getHeight());
+                Log.i("LucentPreview", "gameplay surfaceCreated generation=" + surfaceGeneration +
                         " size=" + gameplaySurface.getWidth() + "x" + gameplaySurface.getHeight() +
                         " valid=" + holder.getSurface().isValid() + " -> surfaceAvailable");
-                SecondaryGameplaySurfaceRouter.surfaceAvailable(gameplayGeneration,
-                        holder.getSurface(), gameplaySurface.getWidth(),
+                SecondaryGameplaySurfaceRouter.surfaceAvailable(surfaceGeneration,
+                        gameplayEngineSurface, gameplaySurface.getWidth(),
                         gameplaySurface.getHeight());
             }
 
             @Override public void surfaceChanged(
                     SurfaceHolder holder, int format, int width, int height) {
-                Log.i("LucentPreview", "gameplay surfaceChanged generation=" + gameplayGeneration +
+                if (surfaceGeneration != gameplayGeneration ||
+                        gameplayQuarantinedGeneration == surfaceGeneration) return;
+                if (gameplayFrameGenerator == null)
+                    ensureGameplayGenerator(holder.getSurface(), width, height);
+                else gameplayFrameGenerator.resize(width, height, width, height,
+                        displayRefreshRate());
+                Log.i("LucentPreview", "gameplay surfaceChanged generation=" + surfaceGeneration +
                         " size=" + width + "x" + height +
                         " valid=" + holder.getSurface().isValid() + " -> surfaceAvailable");
-                SecondaryGameplaySurfaceRouter.surfaceAvailable(gameplayGeneration,
-                        holder.getSurface(), width, height);
+                SecondaryGameplaySurfaceRouter.surfaceAvailable(surfaceGeneration,
+                        gameplayEngineSurface, width, height);
             }
 
             @Override public void surfaceDestroyed(SurfaceHolder holder) {
                 // Synchronous and bounded: the Surface dies when this
                 // callback returns, so the engine must detach first.
-                Log.i("LucentPreview", "gameplay surfaceDestroyed generation=" + gameplayGeneration);
-                SecondaryGameplaySurfaceRouter.surfaceDestroyed(gameplayGeneration);
+                Log.i("LucentPreview", "gameplay surfaceDestroyed generation=" + surfaceGeneration);
+                SecondaryGameplaySurfaceRouter.surfaceDestroyed(surfaceGeneration);
+                releaseGameplayGenerator(surfaceGeneration);
             }
         });
         gameplaySurface.setOnTouchListener((view, event) -> {
@@ -656,15 +842,308 @@ public final class PreviewActivity extends Activity {
             int action = event.getActionMasked();
             boolean pressed = action != MotionEvent.ACTION_UP &&
                     action != MotionEvent.ACTION_CANCEL;
-            SecondaryGameplaySurfaceRouter.touch(gameplayGeneration,
-                    event.getX() / width, event.getY() / height, pressed);
+            float normalizedX = event.getX() / width;
+            float normalizedY = event.getY() / height;
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP)
+                Log.i("LucentPreview", "Secondary gameplay touch view=" + width +
+                        "x" + height + " normalized=" + normalizedX + "," +
+                        normalizedY + " pressed=" + pressed);
+            SecondaryGameplaySurfaceRouter.touch(surfaceGeneration,
+                    normalizedX, normalizedY, pressed);
             return true;
         });
         root.addView(gameplaySurface, fill());
         gameplaySurface.bringToFront();
     }
 
+    private void showClockwiseGameplaySurface() {
+        final long surfaceGeneration = gameplayGeneration;
+        /*
+         * SurfaceView.setRotation() only transforms the View hierarchy on the
+         * Thor; the independently composed SurfaceControl buffer remains
+         * sideways.  Give SurfaceFlinger a portrait producer buffer and apply
+         * BUFFER_TRANSFORM_ROTATE_90 to that buffer itself.  The layer remains
+         * a normal full-display landscape View, so its transformed 1240x1080
+         * buffer covers display 4 exactly.
+         */
+        gameplaySurface = new SurfaceView(this);
+        gameplaySurface.getHolder().setFormat(PixelFormat.RGBA_8888);
+        Display display = getDisplay();
+        int panelWidth = display == null ? Math.max(1, root.getWidth()) :
+                display.getMode().getPhysicalWidth();
+        int panelHeight = display == null ? Math.max(1, root.getHeight()) :
+                display.getMode().getPhysicalHeight();
+        // The Thor reports display 4's physical mode as 1080x1240 (the panel
+        // is mounted portrait and Android rotates it to a 1240x1080 logical
+        // landscape display), so swapping "width" and "height" produced the
+        // landscape 1240x1080 buffer the harness rejected (n3ds-b50b,
+        // 2026-09-02).  The producer buffer must be portrait whichever way
+        // the mode is reported: shorter edge wide, longer edge tall.
+        int portraitWidth = Math.min(panelWidth, panelHeight);
+        int portraitHeight = Math.max(panelWidth, panelHeight);
+        gameplaySurface.getHolder().setFixedSize(portraitWidth, portraitHeight);
+        gameplaySurface.setZOrderOnTop(true);
+        gameplaySurface.setFocusable(false);
+        gameplaySurface.setFocusableInTouchMode(false);
+        final SurfaceView surfaceOwner = gameplaySurface;
+        gameplaySurface.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override public void surfaceCreated(SurfaceHolder holder) {
+                if (surfaceGeneration != gameplayGeneration ||
+                        gameplayQuarantinedGeneration == surfaceGeneration) return;
+                if (Build.VERSION.SDK_INT >= 29) {
+                    // SurfaceView applies its own geometry transaction after
+                    // surfaceCreated. Queue ours behind it; applying here is
+                    // deterministically overwritten on Thor's Android 13.
+                    postClockwiseSurfaceTransform(surfaceOwner, surfaceGeneration);
+                }
+                int width = Math.max(1, holder.getSurfaceFrame().width());
+                int height = Math.max(1, holder.getSurfaceFrame().height());
+                ensureGameplayGenerator(holder.getSurface(), width, height);
+                Log.i("LucentPreview", "clockwise gameplay surfaceCreated generation=" +
+                        surfaceGeneration + " buffer=" + width + "x" + height);
+                SecondaryGameplaySurfaceRouter.surfaceAvailable(surfaceGeneration,
+                        gameplayEngineSurface, width, height);
+            }
+
+            @Override public void surfaceChanged(
+                    SurfaceHolder holder, int format, int width, int height) {
+                if (surfaceGeneration != gameplayGeneration ||
+                        gameplayQuarantinedGeneration == surfaceGeneration) return;
+                if (gameplayFrameGenerator == null)
+                    ensureGameplayGenerator(holder.getSurface(), width, height);
+                else gameplayFrameGenerator.resize(width, height, width, height,
+                        displayRefreshRate());
+                SecondaryGameplaySurfaceRouter.surfaceAvailable(surfaceGeneration,
+                        gameplayEngineSurface, width, height);
+            }
+
+            @Override public void surfaceDestroyed(SurfaceHolder holder) {
+                SecondaryGameplaySurfaceRouter.surfaceDestroyed(surfaceGeneration);
+                releaseGameplayGenerator(surfaceGeneration);
+            }
+        });
+        gameplaySurface.setOnTouchListener((view, event) -> {
+            int width = Math.max(1, view.getWidth());
+            int height = Math.max(1, view.getHeight());
+            // The visible 4:3 image is contained in the logical landscape
+            // display, independently of the portrait producer buffer. Exclude
+            // its bars before mapping into Azahar's SideScreen touch region.
+            DualScreenLayout.TouchPoint point = DualScreenLayout.threeDsTouchPoint(
+                    event.getX(), event.getY(), width, height);
+            int action = event.getActionMasked();
+            boolean pressed = point.inside && action != MotionEvent.ACTION_UP &&
+                    action != MotionEvent.ACTION_CANCEL;
+            if (gameplayTouchDiagnosticCount < 12 &&
+                    (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP ||
+                            action == MotionEvent.ACTION_CANCEL)) {
+                gameplayTouchDiagnosticCount++;
+                Log.i("LucentPreview", "3DS touch action=" + action + " view=" +
+                        width + "x" + height + " raw=" + event.getX() + "," + event.getY() +
+                        " normalized=" + point.x + "," + point.y + " pressed=" + pressed);
+            }
+            SecondaryGameplaySurfaceRouter.touch(surfaceGeneration,
+                    point.x, point.y, pressed);
+            return true;
+        });
+        FrameLayout.LayoutParams params = fill();
+        params.gravity = Gravity.CENTER;
+        root.addView(gameplaySurface, params);
+        gameplaySurface.bringToFront();
+    }
+
+    private void postClockwiseSurfaceTransform(SurfaceView owner, long generation) {
+        owner.post(() -> {
+            // Sleep/recreation can retire this View before its posted geometry
+            // transaction runs. Never dereference the mutable current holder,
+            // nor apply an old transaction to a replacement from the same game.
+            if (gameplaySurface != owner || gameplayGeneration != generation ||
+                    gameplayQuarantinedGeneration == generation ||
+                    !SecondaryGameplaySurfaceRouter.isCurrent(generation) ||
+                    !owner.isAttachedToWindow()) return;
+            SurfaceControl control = owner.getSurfaceControl();
+            if (control == null || !control.isValid()) return;
+            try (SurfaceControl.Transaction transaction = new SurfaceControl.Transaction()) {
+                transaction.setBufferTransform(control,
+                        SurfaceControl.BUFFER_TRANSFORM_ROTATE_90).apply();
+            }
+        });
+    }
+
+    private void ensureGameplayGenerator(Surface output, int width, int height) {
+        ensureGameplayGenerator(output, width, height, width, height);
+    }
+
+    private void ensureGameplayGenerator(Surface output, int inputWidth, int inputHeight,
+                                         int outputWidth, int outputHeight) {
+        if (gameplayQuarantinedGeneration == gameplayGeneration) return;
+        // SurfaceView normally reports surfaceChanged immediately after
+        // surfaceCreated with the same dimensions. Replacing the generator in
+        // that second callback releases gameplayEngineSurface after the first
+        // callback has already handed it to the engine. The Wii U session then
+        // waits for a lower target which we ourselves destroyed. Preserve one
+        // producer surface for one holder generation; surfaceChanged resizes
+        // the existing generator through the branch above.
+        if (gameplayFrameGenerator != null || gameplayEngineSurface != null) return;
+        FrameGenerationBackendPolicy.Selection selection =
+                FrameGenerationSettings.selectBackendForSession(
+                        this, gameplayFrameGenerationMode);
+        if (selection.backend == FrameGenerationBackendPolicy.Backend.DIRECT) {
+            Log.i("LucentPreview",
+                    "Lower display uses Direct; frame generation is primary-only");
+            gameplayEngineSurface = output;
+            gameplayGeneratorGeneration = gameplayGeneration;
+            return;
+        }
+        try {
+            // The secondary generator must carry the SAME dense/variant
+            // switches as the primary: the one-switch constructor hardwires
+            // the dense pyramid off, so the lower screen could never emit
+            // schema-39 evidence and dual-screen qualification had no
+            // secondary records (physically hit on DS/melonDS runs,
+            // 2026-08-15/16).
+            gameplayFrameGenerator = FrameGenerationRendererFactory.create(selection, output,
+                    inputWidth, inputHeight, outputWidth, outputHeight,
+                    displayRefreshRate(), "secondary", displayId(),
+                    this::qualificationProofEnabled,
+                    this::densePyramidEnabled,
+                    this::denseV27ReducedAnalysisEnabled,
+                    this::denseV28ReducedAnalysisEnabled);
+            gameplayEngineSurface = gameplayFrameGenerator.inputSurface();
+            gameplayGeneratorGeneration = gameplayGeneration;
+            bindGameplayRuntimeErrorListener(gameplayFrameGenerator, gameplayGeneration);
+        } catch (RuntimeException failure) {
+            FrameGenerationRenderer partial = gameplayFrameGenerator;
+            gameplayFrameGenerator = null;
+            if (partial != null) {
+                try { partial.close(); }
+                catch (RuntimeException cleanupFailure) {
+                    failure.addSuppressed(new SurfaceOwnershipException(
+                            "Lower-screen generator did not release its output", cleanupFailure));
+                }
+            }
+            if (SurfaceOwnershipException.isUnsafe(failure)) {
+                quarantineGameplayGenerator(gameplayGeneration, failure);
+                return;
+            }
+            Log.e("LucentPreview",
+                    "Lower-screen frame generation unavailable; using direct presentation",
+                    failure);
+            gameplayEngineSurface = output;
+            gameplayGeneratorGeneration = gameplayGeneration;
+        }
+    }
+
+    private void quarantineGameplayGenerator(long failedGeneration, Throwable failure) {
+        boolean firstFailure = gameplayQuarantinedGeneration != failedGeneration;
+        gameplayQuarantinedGeneration = failedGeneration;
+        gameplayFrameGenerator = null;
+        gameplayEngineSurface = null;
+        gameplayGeneratorGeneration = failedGeneration;
+        Log.e("LucentPreview", "Lower-screen output ownership is unresolved; no Surface handoff" +
+                " generation=" + failedGeneration, failure);
+        if (firstFailure)
+            SecondaryGameplaySurfaceRouter.surfaceFailed(failedGeneration, failure);
+    }
+
+    private void bindGameplayRuntimeErrorListener(FrameGenerationRenderer renderer,
+                                                  long ownerGeneration) {
+        renderer.setRuntimeErrorListener((message, cause) -> runOnUiThread(() -> {
+            if (renderer != gameplayFrameGenerator || ownerGeneration != gameplayGeneration ||
+                    ownerGeneration != gameplayGeneratorGeneration ||
+                    gameplayQuarantinedGeneration == ownerGeneration) return;
+            gameplayQuarantinedGeneration = ownerGeneration;
+            // Preserve the renderer reference until the existing generation-
+            // checked retirement path drains it. Never reuse this output as Direct.
+            Log.e("LucentPreview", "Lower-screen runtime display failed generation=" +
+                    ownerGeneration, cause);
+            SecondaryGameplaySurfaceRouter.surfaceFailed(ownerGeneration, cause);
+        }));
+    }
+
+    private void releaseGameplayGenerator(long ownerGeneration) {
+        if (ownerGeneration != gameplayGeneratorGeneration) {
+            Log.i("LucentPreview", "Ignoring stale gameplay surface destruction candidate=" +
+                    ownerGeneration + " owner=" + gameplayGeneratorGeneration);
+            return;
+        }
+        releaseGameplayGenerator();
+    }
+
+    private void releaseGameplayGenerator() {
+        long retiringGeneration = gameplayGeneratorGeneration;
+        FrameGenerationRenderer generator = gameplayFrameGenerator;
+        gameplayFrameGenerator = null;
+        gameplayEngineSurface = null;
+        if (generator != null) {
+            try { generator.close(); }
+            catch (RuntimeException failure) {
+                quarantineGameplayGenerator(retiringGeneration, new SurfaceOwnershipException(
+                        "Lower-screen generator retirement failed", failure));
+                return;
+            }
+        }
+        gameplayGeneratorGeneration = 0L;
+    }
+
+    private float displayRefreshRate() {
+        Display display = getDisplay();
+        return display == null ? 60f : display.getRefreshRate();
+    }
+
+    private int displayId() {
+        Display display = getDisplay();
+        return display == null ? Display.DEFAULT_DISPLAY : display.getDisplayId();
+    }
+
+    /** Shell-only qualification instrumentation; never a user-facing option. */
+    private boolean qualificationProofEnabled() {
+        try {
+            return Settings.Global.getInt(getContentResolver(),
+                    "emufusion_framegen_proof", 0) == 1;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private boolean densePyramidEnabled() {
+        if (!qualificationProofEnabled()) return false;
+        return rawDensePyramidRequested();
+    }
+
+    /** Raw shell preselection used only before the generator allocates resources. */
+    private boolean rawDensePyramidRequested() {
+        try {
+            return Settings.Global.getInt(getContentResolver(),
+                    "emufusion_framegen_dense_pyramid", 0) == 1;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    /** Pre-launch-only v27 qualification arm; default and v26 stay unchanged. */
+    private boolean denseV27ReducedAnalysisEnabled() {
+        if (!rawDensePyramidRequested()) return false;
+        try {
+            return Settings.Global.getInt(getContentResolver(),
+                    "emufusion_framegen_dense_v27_192", 0) == 1;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    /** Pre-launch-only v28 qualification arm; default/v26/v27 stay unchanged. */
+    private boolean denseV28ReducedAnalysisEnabled() {
+        if (!rawDensePyramidRequested()) return false;
+        try {
+            return Settings.Global.getInt(getContentResolver(),
+                    "emufusion_framegen_dense_v28_160", 0) == 1;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private void leaveGameplaySurface(boolean restorePreviewViews) {
+        boolean heldGameplaySurface = false;
         SurfaceView existing = gameplaySurface;
         if (existing != null) {
             // The router notification is synchronous and bounded: the
@@ -673,12 +1152,14 @@ public final class PreviewActivity extends Activity {
             SecondaryGameplaySurfaceRouter.surfaceDestroyed(gameplayGeneration);
             root.removeView(existing);
             gameplaySurface = null;
-            // Only an instance that actually held the Surface clears the flag.
-            // The primary-display reject path also reaches onDestroy, and
-            // clearing it from there would tell the browser that a live
-            // dual-screen session had ended.
-            gameplaySurfaceActive = false;
+            gameplayClockwiseQuarterTurn = false;
+            heldGameplaySurface = true;
         }
+        // Only an instance that actually held either gameplay surface clears
+        // the flag. The primary-display reject path also reaches onDestroy,
+        // and clearing it from there would tell the browser that a live
+        // dual-screen session had ended.
+        if (heldGameplaySurface) gameplaySurfaceActive = false;
         gameplayGeneration = 0L;
         if (restorePreviewViews) {
             artwork.setVisibility(View.VISIBLE);
@@ -716,16 +1197,82 @@ public final class PreviewActivity extends Activity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (ownsVisibilityFlags) windowState.started(this);
+    }
+
+    @Override
+    protected void onStop() {
+        if (ownsVisibilityFlags) windowState.stopped(this);
+        super.onStop();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         resumed = true;
         hideSystemUi();
+        if (!ownsVisibilityFlags) return;
+        // Only a resumed instance is worth handing a lower-display window to
+        // in-process; anything else has to go through a real Activity start.
+        SecondaryGameplaySurfaceRouter.attachHost(this);
+        SecondaryCheatPanelRouter.attachPanel(this);
+        yieldTopFocusToPrimaryDisplay();
     }
 
     @Override
     protected void onPause() {
         resumed = false;
+        SecondaryGameplaySurfaceRouter.detachHost(this);
+        // Keep router handoff limited to resumed instances. Pause alone does
+        // not mean this window disappeared: yielding focus to display 0 also
+        // pauses it on the Thor. Only onStop retires preview window presence.
+        SecondaryCheatPanelRouter.detach(this);
         super.onPause();
+    }
+
+    /**
+     * Gives the top-focused display back to the frontend.
+     *
+     * <p>Reaching onResume/onNewIntent means Android has already finished
+     * putting this display on top of the display order — the move happens
+     * inside the Activity start, before the resume is scheduled — so this is
+     * correctly ordered after it rather than racing it. The delayed second
+     * attempt covers a launch that is still settling (a cold start bringing up
+     * both displays at once), and re-checks {@code resumed} first so it cannot
+     * pull focus away from the in-app browser, which legitimately takes the
+     * lower display and pauses this Activity while it is open.
+     */
+    private void yieldTopFocusToPrimaryDisplay() {
+        PrimaryDisplayFocusGuard.restorePrimaryTopFocus(this);
+        if (root == null) return;
+        root.removeCallbacks(deferredFocusYield);
+        root.postDelayed(deferredFocusYield, 400L);
+    }
+
+    private final Runnable deferredFocusYield = new Runnable() {
+        @Override
+        public void run() {
+            if (!resumed || isFinishing()) return;
+            PrimaryDisplayFocusGuard.restorePrimaryTopFocus(PreviewActivity.this);
+        }
+    };
+
+    /**
+     * Takes a dual-screen game's lower surface without an Activity start.
+     *
+     * <p>Called from the engine's lifecycle thread, so the view work is posted.
+     */
+    @Override public void showSecondaryGameplaySurface(long generation) {
+        runOnUiThread(() -> {
+            // A queued handoff can outlive its game. Resume of an existing
+            // host must also leave its current holder/producer intact; Android
+            // recreates that holder itself after ordinary surface loss.
+            if (!SecondaryGameplaySurfaceRouter.isCurrent(generation)) return;
+            if (gameplaySurface != null && gameplayGeneration == generation) return;
+            showGameplaySurface(generation);
+        });
     }
 
     @Override
@@ -734,10 +1281,21 @@ public final class PreviewActivity extends Activity {
         // clearing them here would blind the watchdog to the real secondary
         // instance and make it relaunch playback it never lost.
         if (ownsVisibilityFlags) {
-            running = false;
-            resumed = false;
-            gameplaySurfaceActive = false;
+            windowState.destroyed(this);
+            if (visibleInstance == this) {
+                running = false;
+                resumed = false;
+                gameplaySurfaceActive = false;
+                visibleInstance = null;
+            }
         }
+        // The routers keep static references to this instance; a destroyed
+        // Activity left registered would swallow the next panel's frames, or
+        // be handed a gameplay surface it can no longer draw.
+        SecondaryCheatPanelRouter.detach(this);
+        SecondaryGameplaySurfaceRouter.detachHost(this);
+        AppVolumeController.unregisterListener(appVolumeListener);
+        if (root != null) root.removeCallbacks(deferredFocusYield);
         try {
             if (receiverRegistered) unregisterReceiver(receiver);
         } finally {
@@ -825,7 +1383,7 @@ public final class PreviewActivity extends Activity {
                 player = new MediaPlayer();
                 // State the stream instead of inheriting it. USAGE_MEDIA maps
                 // to STREAM_MUSIC, which is what the engines' AudioTracks and
-                // Lucent's menu sounds use, so one hardware volume control
+                // EmuFusion's menu sounds use, so one hardware volume control
                 // governs every sound the app makes.
                 player.setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -954,7 +1512,42 @@ public final class PreviewActivity extends Activity {
 
         @Override
         public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+            if (activeSlot < 0 || activeSlot >= slots.length || slots[activeSlot] != this ||
+                    player == null || !prepared || playersPaused) return;
+            lastLowerVisualChangeMs = SystemClock.elapsedRealtime();
+            renderedVideoSource = source;
+            renderedVideoAdvancing = true;
+            try {
+                renderedVideoPositionMs = player.getCurrentPosition();
+            } catch (RuntimeException ignored) {
+            }
         }
+    }
+
+    /** Read-only lower-display evidence used by the QML screensaver timer. */
+    static JSONObject screensaverStatus() {
+        JSONObject result = new JSONObject();
+        long now = SystemClock.elapsedRealtime();
+        PreviewActivity activity = visibleInstance;
+        try {
+            result.put("available", activity != null && running && resumed);
+            result.put("capturedAtEpochMs", System.currentTimeMillis());
+            if (activity == null) {
+                result.put("video", "");
+                result.put("positionMs", 0);
+                result.put("videoAdvancing", false);
+                result.put("visualIdleMs", 0);
+                return result;
+            }
+            long idle = Math.max(0L, now - activity.lastLowerVisualChangeMs);
+            boolean advancing = activity.renderedVideoAdvancing && idle < 1500L;
+            result.put("video", activity.renderedVideoSource);
+            result.put("positionMs", Math.max(0, activity.renderedVideoPositionMs));
+            result.put("videoAdvancing", advancing);
+            result.put("visualIdleMs", idle);
+        } catch (Exception ignored) {
+        }
+        return result;
     }
 
     static boolean isRunning() {
@@ -962,7 +1555,7 @@ public final class PreviewActivity extends Activity {
     }
 
     static boolean isVisible() {
-        return running && resumed;
+        return windowState.isVisible();
     }
 
     /** True while a dual-screen game owns this Activity's lower-display

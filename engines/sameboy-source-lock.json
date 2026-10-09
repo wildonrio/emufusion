@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-09-06",
+  "buildProfile": "android-arm64-libretro-in-process-software",
+  "closureScope": "exact-pinned-source-plus-live-cheat-support-patch",
+  "core": {
+    "repository": "https://github.com/LIJI32/SameBoy",
+    "commit": "213a12ce93d66b105a113debd9396306066a7cfc",
+    "archiveSha256": "21f5f230268808d9a2d17d1a8e01d3763891a2a8240b9459fa61e005fff56aa1"
+  },
+  "toolchain": {
+    "androidAbi": "arm64-v8a",
+    "androidApi": 23
+  },
+  "patches": [
+    {
+      "path": "engines/patches/sameboy-libretro-cheat-support.patch",
+      "sha256": "546c488029fcf7e7817aa8cf120236c1d3e3ea83a3e96f7421a6849a2fa258c7",
+      "purpose": "Implement retro_cheat_reset/retro_cheat_set for real using the Core's own GB_import_cheat/GB_remove_all_cheats/GB_set_cheats_enabled (GameShark and Game Genie codes), instead of the empty stubs libretro.c shipped with. The libretro build compiles the Core with -DGB_DISABLE_CHEATS and excludes Core/cheats.c entirely (libretro/Makefile.common), so the patch also drops that define and adds cheats.c to SOURCES_C -- otherwise the added calls fail to compile/link."
+    }
+  ],
+  "dependencies": []
+}

@@ -1,0 +1,21 @@
+--- a/src/quick/scenegraph/util/qsgopenglatlastexture.cpp
++++ b/src/quick/scenegraph/util/qsgopenglatlastexture.cpp
+@@ -303,4 +303,4 @@
+     QString *deviceName =
+             static_cast<QString *>(QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("AndroidDeviceName"));
+-    static bool wrongfullyReportsBgra8888Support = deviceName != 0
++    bool wrongfullyReportsBgra8888Support = deviceName != 0
+                                                     && (deviceName->compare(QLatin1String("samsung SM-T211"), Qt::CaseInsensitive) == 0
+@@ -306,6 +306,12 @@
+                                                     && (deviceName->compare(QLatin1String("samsung SM-T211"), Qt::CaseInsensitive) == 0
+                                                         || deviceName->compare(QLatin1String("samsung SM-T210"), Qt::CaseInsensitive) == 0
+                                                         || deviceName->compare(QLatin1String("samsung SM-T215"), Qt::CaseInsensitive) == 0);
++    // Match the uploader workaround: atlas textures must use RGBA too.
++    // The translator accepts BGRA uploads but samples black, so checking
++    // only glTexImage2D errors does not detect this driver defect.
++    const char *renderer = reinterpret_cast<const char *>(QOpenGLContext::currentContext()->functions()->glGetString(GL_RENDERER));
++    const bool brokenEmulatorBgra = renderer && strstr(renderer, "Android Emulator OpenGL ES Translator");
++    wrongfullyReportsBgra8888Support = wrongfullyReportsBgra8888Support || brokenEmulatorBgra;
+ #else
+     static bool wrongfullyReportsBgra8888Support = false;
+     // The Raspberry Pi (both 1 and 2) GPU refuses framebuffers with BGRA color attachments.

@@ -1,8 +1,19 @@
 # Phase 2 Play! integration checkpoint
 
+## October 4, 2026: Android 16 KiB loader repair
+
+The existing source recipe now aligns shared/module libraries to 16 KiB. Two
+clean different-path builds match SHA-256
+`911fad87e54c22fa328347fc908e7af8fa7fd7e8d10c272d620171d4681f5bc4`.
+The old core is rejected by the actual Android16/16KiB loader; the new core
+loads and reports Play! 0.30. The verified artifact is promoted, preserving
+source pins/assets/licenses. This is loader/API proof only: **no new Play ROM
+or gameplay test**. Historical runtime evidence below is not reassigned to it.
+See `docs/qa/android-portability-2026-10-04-highend-pages/outcome.json`.
+
 Date: 2026-08-07
 
-Play! is Lucent's BIOS-free PlayStation 2 Phase 2 candidate. This checkpoint
+Play! is EmuFusion's BIOS-free PlayStation 2 Phase 2 candidate. This checkpoint
 now establishes exact source/build evidence plus the first in-process AYN Thor
 runtime and process-death state proof. It remains a qualification candidate,
 not an approved or auto-selected release engine.
@@ -32,7 +43,7 @@ The proof uses the official upstream libretro adapter with:
 - the separate Play! application and upstream tests disabled;
 - upstream OpenGL/GLES hardware rendering; and
 - deterministic epoch and path mapping followed by NDK `llvm-strip`;
-- Lucent's narrow JavaVM, frontend output-size, and Android ART/JIT host hooks;
+- EmuFusion's narrow JavaVM, frontend output-size, and Android ART/JIT host hooks;
 - a bounded audio FIFO for Play!'s asynchronous VM thread, with explicit
   overflow-drop telemetry rather than silent replacement; and
 - a VM-paused state boundary that drains pending GS work without destroying or
@@ -61,13 +72,13 @@ establish release reproducibility.
 An earlier qualification APK loaded the exact artifact above with God of War
 from the user's library in the now-retired separate `LucentGameActivity`.
 That historical result proved basic rendering, input, and state behavior but
-does not satisfy Lucent's current one-`MainActivity` product contract.
+does not satisfy EmuFusion's current one-`MainActivity` product contract.
 
 - Output was aspect-fit to the Thor's 1920x1080 upper display.
 - A-button input advanced New Game to the difficulty menu.
 - Once warm in the menu, Play! delivered the complete 44.1 kHz stereo stream
-  to Lucent and sustained a derived 60 FPS interval after JIT warm-up.
-- Stop-menu exit committed compatibility-v4 Quick Resume, returned to Lucent,
+  to EmuFusion and sustained a derived 60 FPS interval after JIT warm-up.
+- Stop-menu exit committed compatibility-v4 Quick Resume, returned to EmuFusion,
   and a forced process death followed by a cold launch restored the exact
   difficulty menu with live rendering and audio.
 - Health telemetry continued after restore, proving the successful state call
@@ -75,7 +86,7 @@ does not satisfy Lucent's current one-`MainActivity` product contract.
 
 The stricter gameplay run did **not** pass the sustained-performance gate.
 After the saved God of War session entered gameplay, current throughput settled
-near 38 FPS and `AudioTrack` underruns accumulated. Lucent therefore keeps the
+near 38 FPS and `AudioTrack` underruns accumulated. EmuFusion therefore keeps the
 PS2 route experimental and does not auto-select or ship it. Menu-speed evidence
 must not be represented as game-speed qualification.
 

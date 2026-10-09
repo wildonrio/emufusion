@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-07",
+  "verifiedAt": "2026-10-05",
   "buildProfile": "android-arm64-libretro-in-process-software",
   "closureScope": "exact-pinned-source-plus-external-firmware-integration-patch",
   "sourceDateEpoch": 1786118400,
@@ -28,9 +28,12 @@
     "sha256": "126b7613d19df73fc7734fc92809bedfe2c4176fd4e8f6c43b3f007f1f6fa37f"
   },
   "artifact": {
-    "sha256": "89d220448e3de1796d176708b9b19ef03d12d64aedd1db1b3a689e9096eb4aae",
-    "firstCleanBuildSha256": "89d220448e3de1796d176708b9b19ef03d12d64aedd1db1b3a689e9096eb4aae",
-    "secondCleanBuildSha256": "89d220448e3de1796d176708b9b19ef03d12d64aedd1db1b3a689e9096eb4aae",
+    "path": "engines/build/arm64-v8a/applewin_libretro.so",
+    "size": 19644528,
+    "sha256": "e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84",
+    "firstCleanBuildSha256": "e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84",
+    "secondCleanBuildSha256": "e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84",
+    "proofScope": "Two consecutive clean builds at the same isolated path; not path-independent. Recipe firmware checks pass in both logs.",
     "embeddedUpstreamFirmwareByteMatches": 0
   }
 }

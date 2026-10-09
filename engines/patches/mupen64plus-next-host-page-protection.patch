@@ -1,0 +1,82 @@
+--- a/mupen64plus-core/src/device/r4300/new_dynarec/new_dynarec.c
++++ b/mupen64plus-core/src/device/r4300/new_dynarec/new_dynarec.c
+@@ -51,6 +51,7 @@
+ #else
+ #include "../../../../../switch/mman.h"
+ #endif // HAVE_LIBNX
++#include "host_memory.h"
+ #endif
+ 
+ #if defined(RECOMPILER_DEBUG) && !defined(RECOMP_DBG)
+@@ -8683,7 +8684,7 @@
+   close(fd);
+ #endif // HAVE_LIBNX
+ #elif CACHE_ADDR==FIXED_CACHE_ADDR
+-  mprotect ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
++  protect_jit_cache ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
+             PROT_READ | PROT_WRITE | PROT_EXEC);
+   base_addr = g_dev.r4300.extra_memory;
+   base_addr_rx = base_addr;
+@@ -8695,7 +8696,7 @@
+   base_addr_rx = base_addr;
+ #endif
+ #elif NEW_DYNAREC == NEW_DYNAREC_ARM
+-  mprotect ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
++  protect_jit_cache ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
+             PROT_READ | PROT_WRITE | PROT_EXEC);
+   base_addr = g_dev.r4300.extra_memory;
+   base_addr_rx = base_addr;
+@@ -8706,7 +8707,7 @@
+   assert(res!=0);
+   base_addr = base_addr_rx = (void*)g_dev.r4300.extra_memory;
+ #else
+-  mprotect ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
++  protect_jit_cache ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
+             PROT_READ | PROT_WRITE | PROT_EXEC);
+   base_addr = g_dev.r4300.extra_memory;
+   base_addr_rx = base_addr;
+@@ -8773,7 +8774,7 @@
+   #elif NEW_DYNAREC == NEW_DYNAREC_ARM64 && CACHE_ADDR!=FIXED_CACHE_ADDR
+     if (munmap (base_addr_rx, 1<<TARGET_SIZE_2) < 0) {DebugMessage(M64MSG_ERROR, "munmap() failed");}
+   #else
+-    mprotect(base_addr, 1<<TARGET_SIZE_2, PROT_READ | PROT_WRITE);
++    protect_jit_cache(base_addr, 1<<TARGET_SIZE_2, PROT_READ | PROT_WRITE);
+   #endif
+ #endif
+ #ifdef ROM_COPY
+--- /dev/null
++++ b/mupen64plus-core/src/device/r4300/new_dynarec/host_memory.h
+@@ -0,0 +1,33 @@
++#ifndef M64P_NEW_DYNAREC_HOST_MEMORY_H
++#define M64P_NEW_DYNAREC_HOST_MEMORY_H
++
++#if defined(__ANDROID__)
++#include <stdint.h>
++#include <sys/mman.h>
++#include <unistd.h>
++
++/* extra_memory is aligned to a guest-era 4 KiB boundary, not necessarily
++ * an Android host page. Keep its address/layout unchanged (assembly uses
++ * those offsets), but cover whole host pages when changing permissions. */
++static int protect_jit_cache(void *address, size_t length, int protection)
++{
++    const long page_size = sysconf(_SC_PAGESIZE);
++    if (page_size <= 0) return -1;
++    const uintptr_t start = (uintptr_t)address;
++    const uintptr_t aligned = start - start % (uintptr_t)page_size;
++    const size_t prefix = (size_t)(start - aligned);
++    if (length > SIZE_MAX - prefix) return -1;
++    size_t span = prefix + length;
++    const size_t tail = span % (size_t)page_size;
++    if (tail != 0) {
++        const size_t padding = (size_t)page_size - tail;
++        if (span > SIZE_MAX - padding) return -1;
++        span += padding;
++    }
++    return mprotect((void *)aligned, span, protection);
++}
++#else
++#define protect_jit_cache mprotect
++#endif
++
++#endif

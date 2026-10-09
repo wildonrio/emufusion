@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lucent Phase 4 console-coverage research registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "phase", "generatedAt", "oneAppContract",
+    "distributionLicense", "licensePolicy", "intent", "categories",
+    "expectedSystems", "engines"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schemaVersion": {"const": 1},
+    "phase": {"const": 4},
+    "generatedAt": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "oneAppContract": {"const": true},
+    "distributionLicense": {"const": "GPL-3.0-only"},
+    "licensePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compatible", "incompatible", "note"],
+      "properties": {
+        "compatible": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "string"}
+        },
+        "incompatible": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "string"}
+        },
+        "note": {"type": "string", "minLength": 20}
+      }
+    },
+    "intent": {"type": "string", "minLength": 40},
+    "categories": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "misaudited", "blocked-replacement", "unpackaged", "unadvertised",
+        "missing"
+      ],
+      "properties": {
+        "misaudited": {"type": "string", "minLength": 20},
+        "blocked-replacement": {"type": "string", "minLength": 20},
+        "unpackaged": {"type": "string", "minLength": 20},
+        "unadvertised": {"type": "string", "minLength": 20},
+        "missing": {"type": "string", "minLength": 20}
+      }
+    },
+    "expectedSystems": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9]+$"}
+    },
+    "engines": {
+      "type": "array", "minItems": 1,
+      "items": {"$ref": "#/$defs/engine"}
+    }
+  },
+  "$defs": {
+    "rejectedAlternative": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "license", "reason"],
+      "properties": {
+        "name": {"type": "string", "minLength": 2},
+        "repository": {"type": "string", "pattern": "^https://"},
+        "license": {"type": "string", "minLength": 3},
+        "reason": {"type": "string", "minLength": 20}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "repository", "license", "androidArm64", "rationale",
+        "rejectedAlternatives"
+      ],
+      "properties": {
+        "name": {"type": "string", "minLength": 2},
+        "repository": {"type": "string", "pattern": "^https://"},
+        "license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spdx", "distributionGate", "evidence"],
+          "properties": {
+            "spdx": {"type": "string", "minLength": 3},
+            "distributionGate": {"enum": ["compatible-candidate", "audit-required"]},
+            "evidence": {"type": "string", "minLength": 30},
+            "evidenceUrl": {"type": "string", "pattern": "^https://"},
+            "auditRef": {"type": "string", "pattern": "^engines/audits/[a-z0-9-]+\\.json$"},
+            "correctsRecordedSpdx": {"type": "string", "minLength": 3}
+          }
+        },
+        "androidArm64": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["route", "evidence"],
+          "properties": {
+            "route": {"enum": ["libretro-core", "native-adapter", "unproven"]},
+            "evidence": {"type": "string", "minLength": 30}
+          }
+        },
+        "firmware": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "note"],
+          "properties": {
+            "required": {"type": "boolean"},
+            "freeReplacement": {"type": "string", "minLength": 3},
+            "note": {"type": "string", "minLength": 20}
+          }
+        },
+        "rationale": {"type": "string", "minLength": 40},
+        "rejectedAlternatives": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/rejectedAlternative"}
+        }
+      }
+    },
+    "noCompatibleCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "productDecision", "rejectedAlternatives"],
+      "properties": {
+        "reason": {"type": "string", "minLength": 40},
+        "productDecision": {
+          "enum": [
+            "drop-system",
+            "needs-product-decision",
+            "defer-pending-upstream",
+            "user-supplied-firmware-only"
+          ]
+        },
+        "rejectedAlternatives": {
+          "type": "array", "minItems": 1,
+          "items": {"$ref": "#/$defs/rejectedAlternative"}
+        }
+      }
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "systems", "category", "blocker", "status", "gates", "shipped"],
+      "oneOf": [
+        {"required": ["candidate"], "not": {"required": ["noCompatibleCandidate"]}},
+        {"required": ["noCompatibleCandidate"], "not": {"required": ["candidate"]}}
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "systems": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9]+$"}
+        },
+        "category": {
+          "enum": [
+            "misaudited", "blocked-replacement", "unpackaged", "unadvertised",
+            "missing"
+          ]
+        },
+        "priorEngine": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "priorPhase": {"enum": [1, 2, 3]},
+        "blocker": {"type": "string", "minLength": 30},
+        "note": {"type": "string", "minLength": 20},
+        "status": {"const": "research"},
+        "candidate": {"$ref": "#/$defs/candidate"},
+        "noCompatibleCandidate": {"$ref": "#/$defs/noCompatibleCandidate"},
+        "gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source", "license", "dependencies", "androidArm64", "firmware",
+            "legalContent", "renderer", "state", "performance", "device"
+          ],
+          "properties": {
+            "source": {"type": "boolean"},
+            "license": {"type": "boolean"},
+            "dependencies": {"type": "boolean"},
+            "androidArm64": {"type": "boolean"},
+            "firmware": {"type": "boolean"},
+            "legalContent": {"type": "boolean"},
+            "renderer": {"type": "boolean"},
+            "state": {"type": "boolean"},
+            "performance": {"type": "boolean"},
+            "device": {"type": "boolean"}
+          }
+        },
+        "shipped": {"const": false}
+      }
+    }
+  }
+}

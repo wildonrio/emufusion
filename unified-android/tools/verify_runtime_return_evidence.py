@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline verifier for Lucent's same-window launch/return evidence.
+"""Offline verifier for EmuFusion's same-window launch/return evidence.
 
 This gate is deliberately independent of the in-process host's latency log.
 An implementation can remove its gameplay overlay in one millisecond while
@@ -14,8 +14,12 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import visible_return_video as return_video
 
 
 LAUNCH_ACTION = "com.thorium.preview.LAUNCH_INTERNAL_GAME"
@@ -39,6 +43,7 @@ class Audit:
     activity_launch_count: int
     lifecycle_resume_count: int
     visible_reset_frames: tuple[str, ...]
+    visible_return_upper_bounds_ms: tuple[int, ...]
 
     @property
     def passed(self) -> bool:
@@ -46,7 +51,8 @@ class Audit:
 
 
 def audit(log_text: str, frame_ocr: dict[str, str],
-          evidence_errors: tuple[str, ...] = ()) -> Audit:
+          evidence_errors: tuple[str, ...] = (),
+          visible_return_upper_bounds_ms: tuple[int, ...] = ()) -> Audit:
     """Return deterministic findings from already-collected evidence."""
     activity_launches = []
     lifecycle_resumes = []
@@ -86,6 +92,21 @@ def audit(log_text: str, frame_ocr: dict[str, str],
         )
     if not latencies:
         errors.append("no in-window return marker was captured")
+    elif any(value < 0 or value > 500 for value in latencies):
+        errors.append(
+            "in-process return marker exceeded 500 ms: " +
+            ", ".join(str(value) for value in latencies)
+        )
+    if not visible_return_upper_bounds_ms:
+        errors.append(
+            "no device-clocked Winscope visible-return latency proof was captured"
+        )
+    elif any(value < 0 or value > 500
+             for value in visible_return_upper_bounds_ms):
+        errors.append(
+            "visible composed-pixel return exceeded 500 ms: " +
+            ", ".join(str(value) for value in visible_return_upper_bounds_ms)
+        )
 
     return Audit(
         errors=tuple(errors),
@@ -93,6 +114,7 @@ def audit(log_text: str, frame_ocr: dict[str, str],
         activity_launch_count=len(activity_launches),
         lifecycle_resume_count=len(lifecycle_resumes),
         visible_reset_frames=visible,
+        visible_return_upper_bounds_ms=visible_return_upper_bounds_ms,
     )
 
 
@@ -110,13 +132,15 @@ def ocr_frame(path: Path, tesseract: Path) -> str:
     return " ".join(completed.stdout.split())
 
 
-def stored_result_evidence(path: Path) -> tuple[dict[str, str], tuple[int, ...]]:
+def stored_result_evidence(
+        path: Path) -> tuple[dict[str, str], tuple[int, ...], tuple[dict, ...]]:
     """Extract captured OCR/latencies even from a prematurely marked PASS."""
     if not path.is_file():
-        return {}, ()
+        return {}, (), ()
     root = json.loads(path.read_text(encoding="utf-8"))
     ocr: dict[str, str] = {}
     latencies: list[int] = []
+    video_reports: list[dict] = []
 
     def visit(value: object) -> None:
         if isinstance(value, dict):
@@ -132,6 +156,9 @@ def stored_result_evidence(path: Path) -> tuple[dict[str, str], tuple[int, ...]]
                         continue
                     name = Path(str(row.get("path", "unknown"))).name
                     ocr[name] = str(row.get("ocr", ""))
+            video = value.get("visibleReturnVideo")
+            if isinstance(video, dict):
+                video_reports.append(video)
             for child in value.values():
                 visit(child)
         elif isinstance(value, list):
@@ -139,15 +166,67 @@ def stored_result_evidence(path: Path) -> tuple[dict[str, str], tuple[int, ...]]
                 visit(child)
 
     visit(root)
-    return ocr, tuple(latencies)
+    return ocr, tuple(latencies), tuple(video_reports)
+
+
+def validate_visible_video_reports(
+        evidence: Path, reports: tuple[dict, ...]) -> tuple[tuple[int, ...],
+                                                            tuple[str, ...]]:
+    """Bind stored latency claims back to their immutable MP4 timestamps."""
+    upper_bounds: list[int] = []
+    errors: list[str] = []
+    if not reports:
+        return (), ("no stored visible-return video report",)
+    for index, report in enumerate(reports, 1):
+        label = f"visible-return report {index}"
+        if report.get("method") != \
+                "screenrecord-winscope-v2-device-clock-upper-bound":
+            errors.append(f"{label} has an unrecognized timing method")
+            continue
+        try:
+            threshold = int(report["thresholdLowerBoundElapsedNs"])
+            frame_index = int(report["firstMenuFrameIndex"])
+            first_menu = int(report["firstMenuElapsedNs"])
+            upper = int(report["visibleReturnLatencyUpperBoundMs"])
+            path = evidence / Path(str(report["videoPath"])).name
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"{label} is incomplete")
+            continue
+        if not path.is_file():
+            errors.append(f"{label} MP4 is missing: {path.name}")
+            continue
+        try:
+            timestamps = return_video.parse_winscope_frame_timestamps(
+                path.read_bytes()
+            )
+        except ValueError as error:
+            errors.append(f"{label} has invalid Winscope evidence: {error}")
+            continue
+        if frame_index < 0 or frame_index >= len(timestamps):
+            errors.append(f"{label} first-menu frame index is out of range")
+            continue
+        if timestamps[frame_index] != first_menu:
+            errors.append(f"{label} first-menu timestamp does not match its MP4")
+            continue
+        recomputed = (first_menu - threshold + 999_999) // 1_000_000
+        if recomputed != upper:
+            errors.append(
+                f"{label} latency is not the upward-rounded device-clock bound"
+            )
+            continue
+        upper_bounds.append(upper)
+    return tuple(upper_bounds), tuple(errors)
 
 
 def verify_directory(evidence: Path, tesseract: Path) -> Audit:
     logs = sorted(evidence.glob("*logcat*.txt"))
     log_text = "\n".join(path.read_text(
         encoding="utf-8", errors="replace") for path in logs)
-    stored_ocr, stored_latencies = stored_result_evidence(
+    stored_ocr, stored_latencies, video_reports = stored_result_evidence(
         evidence / "results.json"
+    )
+    visible_bounds, video_errors = validate_visible_video_reports(
+        evidence, video_reports
     )
     if not logs:
         # Preserve independently recorded latency markers, but fail closed on
@@ -163,11 +242,13 @@ def verify_directory(evidence: Path, tesseract: Path) -> Audit:
         raise RuntimeError(f"no captured return frames in {evidence}")
     frame_ocr = dict(stored_ocr)
     frame_ocr.update({path.name: ocr_frame(path, tesseract) for path in frames})
-    evidence_errors = () if logs else (
-        "no raw logcat lifecycle trace was preserved; Activity restart/resume "
-        "cannot be excluded",
-    )
-    return audit(log_text, frame_ocr, evidence_errors)
+    evidence_errors = list(video_errors)
+    if not logs:
+        evidence_errors.append(
+            "no raw logcat lifecycle trace was preserved; Activity restart/resume "
+            "cannot be excluded"
+        )
+    return audit(log_text, frame_ocr, tuple(evidence_errors), visible_bounds)
 
 
 def recorded_apk_sha256(evidence: Path) -> str | None:
@@ -255,6 +336,9 @@ def main() -> int:
         "activityLaunchCount": result.activity_launch_count,
         "lifecycleResumeCount": result.lifecycle_resume_count,
         "visibleResetFrames": list(result.visible_reset_frames),
+        "visibleReturnLatencyUpperBoundsMs": list(
+            result.visible_return_upper_bounds_ms
+        ),
     }
     payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.output:

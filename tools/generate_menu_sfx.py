@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Lucent's menu sound effects as small 16-bit PCM WAV assets.
+"""Generate EmuFusion's menu sound effects as small 16-bit PCM WAV assets.
 
 The four blips are deliberately plain: a sine with a little second and third
 harmonic for warmth, a raised-cosine attack so nothing clicks, and an

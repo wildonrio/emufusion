@@ -28,6 +28,11 @@ class DosboxPurePhase1Test(unittest.TestCase):
         self.assertFalse(self.row["shipped"])
         self.assertFalse(self.row["firmware"]["required"])
 
+    def test_one_internal_core_owns_dos_and_windows_pc(self):
+        self.assertEqual(["dos", "windows"], self.row["systems"])
+        self.assertIn("Windows 3.x/9x", self.row["statusReason"])
+        self.assertIn("user-supplied", self.row["firmware"]["notes"])
+
     def test_configuration_audit_covers_known_embedded_components(self):
         self.assertEqual(self.row["source"]["commit"], self.audit["sourceCommit"])
         self.assertEqual(

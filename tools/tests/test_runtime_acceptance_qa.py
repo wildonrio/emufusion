@@ -25,9 +25,59 @@ MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+# Physical Thor display-4 captures from the 2026-09-01 Portrait of Ruin run
+# that motivated the text-on-black lower-panel classifier.
+B57_FIXTURES = (
+    ROOT / "unified-android" / "build" /
+    "runtime-acceptance-qa-2026-09-01-nds-b57"
+)
 
 
 class RuntimeAcceptanceQaTest(unittest.TestCase):
+    def test_plus_apk_uses_plus_identity_verifier_mode(self):
+        verifier = Path("/tmp/verify.py")
+        aapt = Path("/tmp/aapt")
+        base = MODULE.one_app_verifier_command(
+            verifier, aapt, Path("/tmp/emufusion.apk")
+        )
+        plus = MODULE.one_app_verifier_command(
+            verifier, aapt,
+            Path("/tmp/lucent-3.2.16-emufusion-plus-lsfg-internal-deadbeef.apk"),
+        )
+        self.assertNotIn("--internal-lsfg-plus", base)
+        self.assertIn("--internal-lsfg-plus", plus)
+
+    def test_thor_usb_chooser_requires_exact_visible_cancel_geometry(self):
+        exact = """
+Window #7 Window{abc u0 com.odin.settings/com.odin.settings.UsbDialog}:
+  appop=SYSTEM_ALERT_WINDOW
+  Requested w=1248 h=545
+  frame=[336,267][1584,812]
+  isOnScreen=true
+  isVisible=true
+Window #8 Window{def u0 com.thorium.preview/MainActivity}:
+  isOnScreen=true
+  isVisible=true
+"""
+        self.assertIn(
+            "com.odin.settings", MODULE._thor_usb_chooser_window(exact)
+        )
+        self.assertIsNone(MODULE._thor_usb_chooser_window(
+            exact.replace("isVisible=true", "isVisible=false", 1)
+        ))
+        harmless_overlay = exact.replace(
+            "appop=SYSTEM_ALERT_WINDOW", "appop=NONE"
+        ).replace(
+            "Requested w=1248 h=545", "Requested w=1 h=1"
+        ).replace(
+            "frame=[336,267][1584,812]", "frame=[0,0][1,1]"
+        )
+        self.assertIsNone(MODULE._thor_usb_chooser_window(harmless_overlay))
+        with self.assertRaisesRegex(RuntimeError, "safe Cancel geometry"):
+            MODULE._thor_usb_chooser_window(
+                exact.replace("frame=[336,267][1584,812]", "frame=[0,0][1,1]")
+            )
+
     @staticmethod
     def _framegen_health_match(*, contract, schema, workload=None,
                                missing_required=None, malformed=None):
@@ -322,11 +372,873 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         # chooser matches the measured empty-slot flow.
         self.assertEqual(named["wii"],
                          ("Super Mario Galaxy 2", "Super Mario Galaxy"))
-        self.assertEqual(named["nds"], ("Metroid Prime: Hunters",))
+        # Castlevania: PoR replaced Hunters (2026-08-17). Hunters' only
+        # button-reachable scene is the dark morph-ball training room
+        # (content-starved ~30 Hz); DoS's SIGN YOUR NAME canvas is
+        # stylus-only; OoE threads on buttons but its dialogue+cutscene
+        # intro outlasts the capture cap (runs nds10-13). PoR reaches
+        # CONTROLLABLE 60 fps side-scrolling gameplay on the touch screen
+        # within ~4 button presses of the title (verified by hand on the
+        # Thor, 2026-08-17).
+        self.assertEqual(named["nds"], ("Castlevania: Portrait of Ruin",))
         self.assertEqual(named["n3ds"],
                          ("The Legend of Zelda: A Link Between Worlds",))
+        # N64 qualification is rate-family coverage, not a single fast-game
+        # smoke test. Ocarina exercises the common 20->40 path, TWINE the
+        # common 30->60 path, and F-Zero X the 60->120 ceiling. Every title
+        # still has to satisfy the same max-2x, cadence, content and truthful
+        # presentation evidence gates.
+        self.assertEqual(named["n64"], (
+            "The Legend of Zelda: Ocarina of Time",
+            "007: The World Is Not Enough",
+            "F-Zero X",
+        ))
+        n64 = next(case for case in matrix if case.folder == "n64")
+        self.assertEqual(n64.required_source_tiers, (20, 30, 60))
         touched = {case.folder for case in matrix if case.lower_touch}
         self.assertEqual(touched, {"nds", "n3ds"})
+
+    def test_named_rate_family_title_must_prove_its_expected_tier(self):
+        game = {
+            "frameGeneration": {
+                "qualification": {
+                    "segment": {"expectedLockedFps": 30},
+                },
+            },
+        }
+        MODULE.require_frame_generation_source_tier(
+            game, 30, "n64", "007: The World Is Not Enough"
+        )
+        self.assertEqual(game["requiredSourceTier"], 30)
+        with self.assertRaisesRegex(RuntimeError, "must prove source tier 20"):
+            MODULE.require_frame_generation_source_tier(
+                game, 20, "n64", "The Legend of Zelda: Ocarina of Time"
+            )
+        with self.assertRaisesRegex(RuntimeError, "observed -1"):
+            MODULE.require_frame_generation_source_tier(
+                {}, 60, "n64", "F-Zero X"
+            )
+
+    def test_n64_navigation_uses_console_a_position_not_thor_a_label(self):
+        class Controller:
+            A = 304  # printed/right Thor A; canonical EAST -> N64 B
+            B = 305  # printed/bottom Thor B; canonical SOUTH -> N64 A
+
+        self.assertEqual(MODULE.n64_console_a_key(Controller()), 305)
+
+    def test_n64_start_is_authorized_only_by_title_or_pause_state(self):
+        path = Path("n64-state.png")
+        states = {
+            "PRESS START": 1,
+            "PUSH START BUTTON": 1,
+            "MAP Return Save Decide": 1,
+            "Kokiri Forest PutAway Navi": 0,
+            "Mission Briefing Select": 0,
+            "": 0,
+        }
+        for text, expected in states.items():
+            with self.subTest(text=text), \
+                    mock.patch.object(MODULE, "ocr", return_value=text):
+                self.assertEqual(
+                    MODULE.n64_start_entry_presses(path), expected
+                )
+
+    def test_n64_start_samples_title_animation_until_prompt_is_visible(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot") as capture, \
+                mock.patch.object(
+                    MODULE, "ocr", side_effect=["", "", "PRESS START"]
+                ), \
+                mock.patch.object(MODULE.time, "sleep") as sleep:
+            presses = MODULE.capture_n64_start_entry_presses(
+                Path("adb"), "serial", Path(directory), "n64-title-02",
+            )
+        self.assertEqual(presses, 1)
+        self.assertEqual(capture.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_n64_start_sampling_never_authorizes_unowned_gameplay(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot") as capture, \
+                mock.patch.object(MODULE, "ocr", return_value="Kokiri Forest"), \
+                mock.patch.object(MODULE.time, "sleep"):
+            presses = MODULE.capture_n64_start_entry_presses(
+                Path("adb"), "serial", Path(directory), "n64-title-01",
+                sample_count=4,
+            )
+        self.assertEqual(presses, 0)
+        self.assertEqual(capture.call_count, 4)
+
+    def test_n64_ocarina_gameplay_requires_hearts_and_action_cluster(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ocarina.png"
+            image = Image.new("RGB", (480, 270), (40, 35, 28))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((86, 21, 100, 35), fill=(210, 25, 25))
+            draw.rectangle((106, 21, 120, 35), fill=(210, 25, 25))
+            image.save(path)
+            self.assertFalse(MODULE.n64_ocarina_gameplay_hud(path))
+
+            draw.ellipse((244, 22, 264, 42), fill=(20, 170, 30))
+            draw.ellipse((276, 22, 296, 42), fill=(25, 40, 190))
+            draw.ellipse((330, 22, 350, 42), fill=(220, 130, 20))
+            image.save(path)
+            self.assertTrue(MODULE.n64_ocarina_gameplay_hud(path))
+
+            # An animated close-up can contain saturated world colours but no
+            # hearts, and therefore remains unqualified for gameplay proof.
+            draw.rectangle((86, 21, 120, 35), fill=(40, 35, 28))
+            image.save(path)
+            self.assertFalse(MODULE.n64_ocarina_gameplay_hud(path))
+
+    def test_n64_ocarina_dialogue_colours_outside_hud_boxes_do_not_arm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ocarina-dialogue.png"
+            image = Image.new("RGB", (480, 270), (40, 35, 28))
+            draw = ImageDraw.Draw(image)
+            # These deliberately satisfy the former broad top-strip scans:
+            # red dialogue at upper-left and saturated prompt colours at the
+            # far top edge.  Neither lies in Ocarina's physical HUD boxes.
+            draw.rectangle((20, 14, 58, 30), fill=(210, 25, 25))
+            draw.ellipse((246, 15, 276, 45), fill=(20, 170, 30))
+            draw.ellipse((430, 12, 466, 48), fill=(25, 40, 190))
+            image.save(path)
+            self.assertFalse(MODULE.n64_ocarina_gameplay_hud(path))
+
+    def test_n64_ocarina_name_entry_requires_owned_editor_labels(self):
+        path = Path("n64-ocarina-name.png")
+        states = {
+            "Name? Link END A-Decide B-Cancel": True,
+            "Name ? 1aNA1aaa END A - Decide": True,
+            # Exact OCR from the physical Thor r69e capture.  END was not
+            # legible, but both independent action labels were present.
+            "Nase ? GWA ANA 4 Decca *0.Carce": True,
+            "Nure ? alphabet 4 Oecce *0.Carce": True,
+            "PRESS START": False,
+            "Name? Link A-Decide": False,
+            "Nase ? 4 Decca": False,
+            "Nase ? 0.Carce": False,
+            "END A-Decide": False,
+            "Name? END": False,
+        }
+        for text, expected in states.items():
+            with self.subTest(text=text), \
+                    mock.patch.object(MODULE, "ocr", return_value=text):
+                self.assertIs(
+                    MODULE.n64_ocarina_name_entry(path), expected
+                )
+
+    def test_n64_ocarina_file_menus_have_only_state_owned_actions(self):
+        path = Path("n64-ocarina-file-menu.png")
+        states = {
+            "Please select a file. File 1 File 2 Copy Erase Options": "select",
+            "Erase which file? File 1 File 2 Quit": "cancel",
+            "Copy which file? File 1 File 2 Quit": "cancel",
+            "Options Sound Stereo Z Targeting Switch": "cancel",
+            "Open this file? Yes Quit": "confirm",
+            "Start with this file? Yes Quit": "confirm",
+            "The Great Deku Tree wants to talk": None,
+        }
+        for text, expected in states.items():
+            with self.subTest(text=text), \
+                    mock.patch.object(MODULE, "ocr", return_value=text):
+                self.assertEqual(
+                    MODULE.n64_ocarina_file_menu_action(path), expected
+                )
+
+    def test_ocarina_name_editor_is_confirmed_before_generic_a_progress(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        wait = source.split("def wait_n64_ocarina_gameplay_hud", 1)[1] \
+            .split("def n64_fzero_single_player_race_hud", 1)[0]
+        owned = wait.index("if n64_ocarina_name_entry(path):")
+        generic = wait.index("elif n64_start_entry_presses(path):")
+        self.assertLess(owned, generic)
+        character = wait.index("physical-n64-a-ocarina-name-character")
+        end = wait.index("physical-start-n64-ocarina-name-end")
+        confirm = wait.index("physical-n64-a-ocarina-name-confirm")
+        self.assertLess(character, end)
+        self.assertLess(end, confirm)
+        self.assertIn("physical-start-n64-ocarina-name-end", wait)
+        self.assertIn("physical-n64-a-ocarina-name-confirm", wait)
+        self.assertIn("physical-n64-b-ocarina-safe-cancel", wait)
+        self.assertIn("physical-up-ocarina-safe-file-recovery", wait)
+        self.assertIn("physical-n64-a-ocarina-file-confirm", wait)
+        self.assertIn("timeout: float = 420.0", wait)
+
+    def test_ocarina_unsafe_file_menu_cancels_then_moves_toward_a_slot(self):
+        controller = mock.Mock(A=304, B=305, START=315)
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot", return_value={}), \
+                mock.patch.object(
+                    MODULE, "n64_ocarina_gameplay_hud",
+                    side_effect=[False, False, True],
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_ocarina_file_menu_action",
+                    side_effect=["cancel", "select"],
+                ), \
+                mock.patch.object(MODULE, "n64_ocarina_name_entry",
+                                  return_value=False), \
+                mock.patch.object(MODULE, "n64_start_entry_presses",
+                                  return_value=0), \
+                mock.patch.object(MODULE.time, "sleep"):
+            result = MODULE.wait_n64_ocarina_gameplay_hud(
+                Path("adb"), "serial", controller, Path(directory), "n64",
+                timeout=10.0, poll_seconds=0.0,
+            )
+        self.assertTrue(result["gameplayHudVisible"])
+        controller.key.assert_any_call(
+            304, "physical-n64-b-ocarina-safe-cancel", hold=0.055,
+        )
+        controller.hat.assert_called_once_with(
+            "up", "physical-up-ocarina-safe-file-recovery",
+        )
+        controller.key.assert_any_call(
+            305, "physical-n64-a-ocarina-file-confirm", hold=0.055,
+        )
+
+    def test_ocarina_skips_the_generic_blind_a_navigation_loop(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        run = source.split("def run_game_from_system_menu", 1)[1]
+        generic = run.split("ps2_gameplay_readiness =", 1)[1] \
+            .split("if n64_fzero_entry is not None:", 1)[0]
+        self.assertIn(
+            'normalized_n64_title !=\n          normalize("The Legend of Zelda: Ocarina of Time")',
+            generic,
+        )
+
+    def test_ocarina_hud_gate_runs_before_frame_generation_proof(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        run = source.split("def run_game_from_system_menu", 1)[1]
+        gate = run.index("wait_n64_ocarina_gameplay_hud(")
+        arm = run.index('"emufusion_framegen_proof", "1"')
+        self.assertLess(gate, arm)
+        self.assertIn('ps2_gameplay_readiness["ocarinaGameplay"]', run)
+
+    def test_n64_twine_actions_are_visible_state_owned(self):
+        states = {
+            "Press Start": "start",
+            "If Rumble Paks are to be used PRESS START": "start",
+            "Main Menu Start Game Multiplayer Load/Save Game": "accept",
+            "Main Vien Start Game Multiplayer Options": "accept",
+            "Load/Save Menu Load Save -Empty- Pages Free": "save",
+            "oad Save len -Empty- Pages Free 123 Save": "save",
+            "Mission Selection Courier": "accept",
+            "Mission Briefing Objectives": "accept",
+            "Select Difficulty Agent": "accept",
+            "Agent Secret Agent 00 Agent Back Select": "accept",
+            "Health 100 Ammo 12": None,
+            "": None,
+        }
+        for text, expected in states.items():
+            with self.subTest(text=text):
+                self.assertEqual(MODULE.n64_twine_owned_action(text), expected)
+
+    def test_n64_twine_gameplay_requires_both_health_hud_colours(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "twine.png"
+            image = Image.new("RGB", (1920, 1080), "black")
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((150, 720, 210, 790), fill=(220, 10, 10))
+            image.save(path)
+            self.assertFalse(MODULE.n64_twine_gameplay_hud(path))
+            draw.rectangle((170, 700, 400, 730), fill=(10, 180, 10))
+            image.save(path)
+            self.assertTrue(MODULE.n64_twine_gameplay_hud(path))
+
+    def test_n64_twine_visual_menu_requires_gold_cyan_yellow_and_no_hud(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "twine-menu.png"
+            image = Image.new("RGB", (200, 100), "black")
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((0, 0, 79, 29), fill=(180, 70, 20))
+            draw.rectangle((80, 0, 139, 69), fill=(10, 120, 150))
+            draw.rectangle((140, 0, 199, 99), fill=(180, 145, 20))
+            image.save(path)
+            self.assertTrue(MODULE.n64_twine_front_menu_visual(path))
+            # A live first-person HUD must not be reclassified as a menu even
+            # if scene art happens to contain the three menu colours.
+            draw.rectangle((0, 80, 199, 99), fill=(10, 180, 10))
+            image.save(path)
+            self.assertFalse(MODULE.n64_twine_front_menu_visual(path))
+
+    def test_n64_twine_visual_title_requires_blinking_black_prompt_on_white_art(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "twine-title.png"
+            image = Image.new("RGB", (200, 100), "black")
+            draw = ImageDraw.Draw(image)
+            # Function crop: x48..67, y22..49. White title art alone is the
+            # prompt's blink-off phase and must not own a Start press.
+            draw.rectangle((48, 22, 67, 49), fill=(225, 225, 225))
+            image.save(path)
+            self.assertFalse(MODULE.n64_twine_title_start_visual(path))
+            self.assertTrue(MODULE.n64_twine_title_art_visual(path))
+            # The physical prompt is vertical after the current Mupen/Thor
+            # orientation. A narrow black glyph cluster is sufficient only
+            # while at least 85% of that title crop remains bright.
+            draw.rectangle((56, 24, 57, 28), fill=(15, 15, 15))
+            image.save(path)
+            self.assertTrue(MODULE.n64_twine_title_start_visual(path))
+            draw.rectangle((48, 22, 67, 49), fill=(35, 35, 35))
+            image.save(path)
+            self.assertFalse(MODULE.n64_twine_title_start_visual(path))
+            self.assertFalse(MODULE.n64_twine_title_art_visual(path))
+
+    def test_n64_twine_blue_selection_requires_owned_grid_colours(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "twine-profile.png"
+            image = Image.new("RGB", (200, 100), "black")
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((0, 0, 29, 9), fill=(10, 110, 145))
+            draw.rectangle((30, 0, 149, 84), fill=(8, 15, 100))
+            draw.rectangle((150, 0, 189, 49), fill=(190, 190, 190))
+            draw.rectangle((150, 50, 199, 99), fill=(180, 145, 20))
+            image.save(path)
+            self.assertTrue(MODULE.n64_twine_blue_selection_visual(path))
+            # Green first-person HUD population prevents scene art with blue
+            # and yellow accents from owning a menu select.
+            draw.rectangle((0, 80, 199, 99), fill=(10, 180, 10))
+            image.save(path)
+            self.assertFalse(MODULE.n64_twine_blue_selection_visual(path))
+
+    def test_n64_twine_mission_selection_requires_complete_owned_notebook(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "twine-mission.png"
+            image = Image.new("RGB", (200, 100), "black")
+            draw = ImageDraw.Draw(image)
+            # Four cyan edge populations reproduce the r157 mission notebook.
+            draw.rectangle((30, 16, 47, 81), fill=(10, 110, 145))
+            draw.rectangle((156, 16, 167, 81), fill=(10, 110, 145))
+            draw.rectangle((30, 16, 167, 23), fill=(10, 110, 145))
+            draw.rectangle((30, 71, 167, 81), fill=(10, 110, 145))
+            draw.rectangle((60, 30, 89, 49), fill=(190, 190, 190))
+            draw.rectangle((100, 30, 139, 49), fill=(100, 100, 100))
+            draw.rectangle((60, 55, 89, 64), fill=(180, 145, 20))
+            image.save(path)
+            self.assertTrue(MODULE.n64_twine_mission_selection_visual(path))
+            # A partial/grid-like cyan layout does not own a mission select.
+            draw.rectangle((156, 16, 167, 81), fill="black")
+            image.save(path)
+            self.assertFalse(MODULE.n64_twine_mission_selection_visual(path))
+
+    def test_n64_twine_mission_briefing_requires_owned_action_palette(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "twine-briefing.png"
+            image = Image.new("RGB", (200, 100), "black")
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((0, 0, 29, 19), fill=(10, 120, 145))
+            draw.rectangle((30, 0, 59, 19), fill=(8, 15, 100))
+            draw.rectangle((60, 0, 79, 19), fill=(190, 190, 190))
+            draw.rectangle((80, 0, 99, 5), fill=(180, 145, 20))
+            draw.rectangle((100, 0, 109, 3), fill=(190, 10, 10))
+            image.save(path)
+            self.assertTrue(MODULE.n64_twine_mission_briefing_visual(path))
+            # A green first-person HUD population cannot own briefing A.
+            draw.rectangle((110, 0, 119, 9), fill=(10, 180, 10))
+            image.save(path)
+            self.assertFalse(MODULE.n64_twine_mission_briefing_visual(path))
+
+    def test_n64_twine_rejects_attract_hud_until_owned_menu_progress(self):
+        controller = mock.Mock()
+        controller.B = 305
+        # The first two HUD frames are the title's uncontrolled attract demo.
+        # Only after Main Menu owns one A press may two later HUD frames prove
+        # the mission that the harness deliberately entered.
+        hud = [True, True, False, True, True]
+        # OCR is intentionally skipped for recognized gameplay HUD samples;
+        # it runs only on the intervening unknown/menu frame.
+        text = ["Main Menu Start Game Multiplayer Load/Save Game"]
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE.time, "monotonic", return_value=0.0), \
+                mock.patch.object(MODULE.time, "sleep"), \
+                mock.patch.object(MODULE, "screenshot"), \
+                mock.patch.object(MODULE, "ocr", side_effect=text), \
+                mock.patch.object(
+                    MODULE, "n64_twine_title_start_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_title_art_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_front_menu_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_mission_selection_visual",
+                    return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_mission_briefing_visual",
+                    return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_blue_selection_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_gameplay_hud", side_effect=hud
+                ):
+            result = MODULE.prepare_n64_twine_gameplay(
+                Path("adb"), "thor", controller, Path(directory), "twine",
+            )
+        self.assertEqual(result["actions"], ["accept"])
+        self.assertEqual(result["sceneProvenance"], "owned-menu-to-mission")
+        self.assertEqual(controller.key.call_args_list, [
+            mock.call(305, "physical-a-n64-twine-owned", hold=0.08),
+        ])
+
+    def test_n64_twine_repolls_title_blink_without_slow_ocr(self):
+        controller = mock.Mock()
+        controller.START = 304
+        # First sample is known title art with the prompt blinked off. The
+        # next fast sample sees PRESS START, then two owned gameplay HUDs.
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE.time, "monotonic", return_value=0.0), \
+                mock.patch.object(MODULE.time, "sleep"), \
+                mock.patch.object(MODULE, "screenshot"), \
+                mock.patch.object(MODULE, "ocr") as ocr, \
+                mock.patch.object(
+                    MODULE, "n64_twine_title_start_visual",
+                    side_effect=[False, True, False, False]
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_title_art_visual",
+                    side_effect=[True, False, False]
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_mission_selection_visual",
+                    return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_mission_briefing_visual",
+                    return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_front_menu_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_blue_selection_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_gameplay_hud",
+                    side_effect=[False, True, True]
+                ):
+            result = MODULE.prepare_n64_twine_gameplay(
+                Path("adb"), "thor", controller, Path(directory), "twine",
+            )
+        ocr.assert_not_called()
+        self.assertEqual(result["actions"], ["start"])
+        controller.key.assert_called_once_with(
+            304, "physical-start-n64-twine-owned", hold=0.08
+        )
+
+    def test_n64_twine_briefing_owns_start_not_a(self):
+        controller = mock.Mock()
+        controller.START = 304
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE.time, "monotonic", return_value=0.0), \
+                mock.patch.object(MODULE.time, "sleep"), \
+                mock.patch.object(MODULE, "screenshot"), \
+                mock.patch.object(MODULE, "ocr") as ocr, \
+                mock.patch.object(
+                    MODULE, "n64_twine_title_start_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_title_art_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_mission_selection_visual",
+                    return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_mission_briefing_visual",
+                    side_effect=[True, False, False]
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_front_menu_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_blue_selection_visual", return_value=False
+                ), \
+                mock.patch.object(
+                    MODULE, "n64_twine_gameplay_hud",
+                    side_effect=[False, True, True]
+                ):
+            result = MODULE.prepare_n64_twine_gameplay(
+                Path("adb"), "thor", controller, Path(directory), "twine",
+            )
+        ocr.assert_not_called()
+        self.assertEqual(result["actions"], ["start"])
+        controller.key.assert_called_once_with(
+            304, "physical-start-n64-twine-owned", hold=0.08
+        )
+
+    def test_n64_fzero_fullscreen_race_rejects_split_and_menu_layouts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fzero.png"
+            image = Image.new("RGB", (1920, 1080), (45, 45, 45))
+            draw = ImageDraw.Draw(image)
+            # Match the physical centred 4:3 composition: saturated rank/time
+            # glyphs at upper middle and the green ENERGY bar at upper right.
+            # Dark-track lighting can turn yellow rank digits olive, so the
+            # predicate recognizes saturation rather than one fixed hue.
+            draw.rectangle((700, 90, 1000, 250), fill=(145, 130, 20))
+            draw.rectangle((1220, 100, 1500, 190), fill=(15, 190, 25))
+            image.save(path)
+            self.assertTrue(MODULE.n64_fzero_single_player_race_hud(path))
+
+            # The physical r42j one-player Mute City capture had a dark track
+            # running down the centre column.  A vertical seam alone is scene
+            # content, not the two-axis divider signature of a four-way view.
+            draw.rectangle((955, 300, 965, 1079), fill="black")
+            image.save(path)
+            self.assertTrue(MODULE.n64_fzero_single_player_race_hud(path))
+
+            # The physical r42k two-player attract has a horizontal divider
+            # but no reliable vertical one. Rebuild the race HUD, then prove
+            # that horizontal split alone is rejected.
+            image = Image.new("RGB", (1920, 1080), (45, 45, 45))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((700, 90, 1000, 250), fill=(145, 130, 20))
+            draw.rectangle((1220, 100, 1500, 190), fill=(15, 190, 25))
+            draw.rectangle((290, 525, 1630, 531), fill="black")
+            image.save(path)
+            self.assertFalse(MODULE.n64_fzero_single_player_race_hud(path))
+
+            # A four-player view has both viewport dividers even though its
+            # duplicated HUDs still contain plenty of yellow and green.
+            # Physical r36 placed the horizontal seam eight pixels above the
+            # exact centre, so the classifier must scan a band rather than
+            # sample only y=height/2.
+            draw.rectangle((955, 40, 965, 1030), fill="black")
+            image.save(path)
+            self.assertFalse(MODULE.n64_fzero_single_player_race_hud(path))
+
+            # SELECT MODE has bright yellow headings but no green ENERGY bar.
+            image = Image.new("RGB", (1920, 1080), "black")
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((500, 60, 1450, 260), fill=(240, 220, 20))
+            image.save(path)
+            self.assertFalse(MODULE.n64_fzero_single_player_race_hud(path))
+
+    def test_n64_fzero_actions_are_visible_state_owned(self):
+        states = {
+            "PUSH START": "start",
+            "SELECT MODE GP RACE NOVICE STANDARD EXPERT": "select-gp",
+            "SELECT COURSE JACK CUP": "accept",
+            "BLUE FALCON ACCELERATION MAX SPEED BODY BOOST GRIP": "accept",
+            "GP RACE NOVICE FIRE FIELD LAP 1/3": None,
+            "": None,
+        }
+        for text, expected in states.items():
+            with self.subTest(text=text):
+                self.assertEqual(MODULE.n64_fzero_owned_action(text), expected)
+
+    def test_n64_fzero_owned_accept_rearms_continuous_throttle(self):
+        controller = mock.Mock()
+        controller.B = 305
+        self.assertTrue(
+            MODULE.rearm_n64_fzero_accelerator_on_owned_accept(
+                controller, "accept"))
+        self.assertEqual(
+            controller.method_calls,
+            [
+                mock.call.key_up(
+                    305, "physical-n64-a-fzero-owned-rearm-release"),
+                mock.call.key(
+                    305, "physical-n64-a-fzero-owned-rearm-accept",
+                    hold=0.08),
+                mock.call.key_down(
+                    305, "physical-n64-a-fzero-owned-rearm-throttle"),
+            ],
+        )
+
+        controller.reset_mock()
+        for action in (None, "start", "select-gp"):
+            with self.subTest(action=action):
+                self.assertFalse(
+                    MODULE.rearm_n64_fzero_accelerator_on_owned_accept(
+                        controller, action))
+        controller.assert_not_called()
+
+    def test_n64_fzero_attract_cold_resets_then_requires_moving_hud(self):
+        controller = mock.Mock()
+        controller.STOP = 314
+        controller.START = 315
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot") as capture, \
+                mock.patch.object(
+                    MODULE, "n64_fzero_single_player_race_hud",
+                    # The first isolated False is a transient dropout and
+                    # must not finish warm-up.  Only the later run of eight
+                    # consecutive non-race captures establishes a cycle.
+                    side_effect=(
+                        [False, True, False, True] + [False] * 8 +
+                        [True, True]
+                    ),
+                ), \
+                mock.patch.object(
+                    MODULE, "mean_absolute_difference", return_value=12.5,
+                ) as difference, \
+                mock.patch.object(MODULE.time, "sleep"):
+            result = MODULE.prepare_n64_fzero_attract_race(
+                Path("adb"), "serial", controller, Path(directory),
+                "n64-title-03",
+            )
+        self.assertEqual(capture.call_count, 14)
+        self.assertEqual(result["samples"], 14)
+        self.assertEqual(result["stableHudSamples"], 2)
+        self.assertEqual(result["movingPairMeanAbsDiff"], 12.5)
+        self.assertEqual(result["warmupRaceCycles"], 1)
+        self.assertEqual(result["sceneProvenance"],
+                         "single-player-attract-race")
+        self.assertEqual(result["gameplayInputs"], [])
+        controller.chord.assert_called_once_with(
+            (314, 315), "physical-n64-fzero-host-reset-for-attract",
+            hold=2.20,
+        )
+        difference.assert_called_once()
+        controller.key.assert_not_called()
+        controller.hat.assert_not_called()
+        controller.motion_left.assert_not_called()
+        controller.motion_pair.assert_not_called()
+
+    def test_n64_fzero_rife_warmup_can_arm_on_first_moving_race(self):
+        controller = mock.Mock()
+        controller.STOP = 314
+        controller.START = 315
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot"), \
+                mock.patch.object(
+                    MODULE, "n64_fzero_single_player_race_hud",
+                    side_effect=[True, True],
+                ), \
+                mock.patch.object(
+                    MODULE, "mean_absolute_difference", return_value=9.0,
+                ), \
+                mock.patch.object(MODULE.time, "sleep"):
+            result = MODULE.prepare_n64_fzero_attract_race(
+                Path("adb"), "serial", controller, Path(directory),
+                "n64-title-03", warmup_cycles=0,
+            )
+        self.assertEqual(result["samples"], 2)
+        self.assertEqual(result["warmupRaceCycles"], 0)
+
+    def test_n64_fzero_post_timing_wait_is_input_free_and_moving(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot") as capture, \
+                mock.patch.object(
+                    MODULE, "n64_fzero_single_player_race_hud",
+                    side_effect=[False, True, True],
+                ), \
+                mock.patch.object(
+                    MODULE, "mean_absolute_difference", return_value=7.5,
+                ) as difference, \
+                mock.patch.object(MODULE.time, "sleep"):
+            result = MODULE.wait_n64_fzero_moving_attract_race(
+                Path("adb"), "serial", Path(directory), "n64-title-03",
+            )
+        self.assertEqual(capture.call_count, 3)
+        self.assertEqual(result["samples"], 3)
+        self.assertEqual(result["stableHudSamples"], 2)
+        self.assertEqual(result["movingPairMeanAbsDiff"], 7.5)
+        self.assertEqual(result["gameplayInputs"], [])
+        difference.assert_called_once()
+
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        recovery = source.split(
+            "if n64_fzero_qualification:", 2
+        )[-1].split(
+            "# A slow JIT warm-up", 1
+        )[0]
+        self.assertIn("wait_n64_fzero_moving_attract_race(", recovery)
+        self.assertNotIn('n64_fzero_entry["postTimingRace"]', recovery)
+        self.assertRegex(
+            recovery,
+            r"wait_n64_fzero_moving_attract_race\([\s\S]+?continue",
+        )
+
+    def test_n64_fzero_proof_is_input_free_and_requires_active_attract_race(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        motion = source.split(
+            "def sustain_physical_motion() -> None:", 1
+        )[1].split(
+            "motion_thread = threading.Thread", 1
+        )[0]
+        self.assertIn("n64_fzero_qualification", motion)
+        attract_branch = motion.split("if n64_fzero_qualification:", 1)[1] \
+            .split("if n64_ocarina_qualification:", 1)[0]
+        self.assertIn("motion_stop.wait(0.25)", attract_branch)
+        self.assertNotIn("controller.", attract_branch)
+        self.assertNotIn("physical-n64-a-fzero", motion)
+
+        capture = source.split(
+            "def collect_latency_records(", 1
+        )[1].split(
+            "motion_thread.start()", 1
+        )[0]
+        self.assertIn("n64-fzero-proof-race-checkpoint", capture)
+        self.assertIn("n64_fzero_single_player_race_hud(checkpoint)", capture)
+        checkpoint_block = capture.split(
+            "n64-fzero-proof-race-checkpoint", 1
+        )[1].split(
+            "# A slow JIT warm-up", 1
+        )[0]
+        # 2026-09-01: a lost attract race is retried (bounded), not failed.
+        self.assertIn("wait_n64_fzero_moving_attract_race(", checkpoint_block)
+        self.assertNotIn(
+            "single-player race before compositor capture", checkpoint_block)
+        self.assertNotIn("controller.", checkpoint_block)
+        final = source.split(
+            "visible_outputs: dict", 1
+        )[1].split("if case.dual_screen:", 1)[0]
+        self.assertIn("n64_fzero_single_player_race_hud(final_fzero)", final)
+        self.assertIn(
+            'case.folder == "n64" and n64_fzero_entry is None', source
+        )
+        self.assertIn(
+            "ps2_gameplay_readiness = n64_fzero_entry", source
+        )
+        self.assertIn('"n64FzeroScene": n64_fzero_entry', source)
+
+    def test_ocarina_proof_uses_c_up_camera_orbit_without_dialogue_input(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        motion = source.split(
+            "def sustain_physical_motion() -> None:", 1
+        )[1].split("motion_thread = threading.Thread", 1)[0]
+        branch = motion.split("if n64_ocarina_qualification:", 1)[1].split(
+            'if case.folder == "n64":', 1
+        )[0]
+        self.assertIn("physical-n64-c-up-camera-orbit", branch)
+        self.assertIn("physical-n64-first-person-camera-orbit", branch)
+        self.assertIn("controller.set_right_stick_vector", branch)
+        self.assertIn("controller.center_right_stick", branch)
+        self.assertIn("controller.set_left_stick_vector", branch)
+        self.assertIn("controller.center_left_stick", branch)
+        self.assertIn("(-0.720, 0.000)", branch)
+        self.assertIn("(0.720, 0.720)", branch)
+        self.assertNotIn("controller.START", branch)
+        self.assertNotIn("dialogue-or-action", branch)
+        self.assertNotIn("n64_console_a_key", branch)
+        self.assertLess(
+            branch.index("controller.set_right_stick_vector"),
+            branch.index("controller.set_left_stick_vector"),
+        )
+        self.assertLess(
+            branch.index("controller.set_left_stick_vector"),
+            branch.index("controller.center_right_stick"),
+        )
+
+    def test_ocarina_clears_owned_dialogue_before_proof_activation(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        preproof = source.split(
+            'if (not smoke_no_framegen and case.folder == "n64" and', 1
+        )[1].split("# Proof is armed exactly once", 1)[0]
+        self.assertIn("physical-n64-ocarina-preproof-exit", preproof)
+        self.assertIn("physical-n64-a-preproof-dialogue", preproof)
+        self.assertIn("range(12)", preproof)
+        self.assertIn("range(20)", preproof)
+        self.assertIn("n64-ocarina-motion-ready-", preproof)
+        self.assertIn("physical-n64-a-preproof-settle", preproof)
+        self.assertIn("n64_ocarina_gameplay_hud(staged_ocarina)", preproof)
+        self.assertIn("raise RuntimeError", preproof)
+        self.assertNotIn("controller.START", preproof)
+        proof_put = source.index(
+            'qa.adb(adb, serial, "shell", "settings", "put", "global",\n'
+            '           "emufusion_framegen_proof", "1")'
+        )
+        self.assertLess(
+            source.index(
+                'if (not smoke_no_framegen and case.folder == "n64" and'
+            ),
+            proof_put,
+        )
+
+    def test_other_non_fzero_n64_proof_uses_long_camera_traversal(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        motion = source.split(
+            "def sustain_physical_motion() -> None:", 1
+        )[1].split("motion_thread = threading.Thread", 1)[0]
+        branch = motion.split('if case.folder == "n64":', 1)[1].split(
+            "# Galaxy's", 1
+        )[0]
+        self.assertIn("physical-n64-continuous-traversal", branch)
+        self.assertIn("(-0.720, -0.720, 4.0)", branch)
+        self.assertIn("(-0.720, 0.000, 3.0)", branch)
+        self.assertIn("hold=hold", branch)
+        self.assertNotIn("hold=0.45", branch)
+        self.assertIn("controller.set_left_stick_vector", branch)
+        self.assertIn("controller.center_left_stick", branch)
+        self.assertNotIn("controller.motion_pair", branch)
+        self.assertIn("controller.key", branch)
+        self.assertIn("n64_console_a_key(controller)", branch)
+        self.assertIn("physical-n64-a-dialogue-or-action", branch)
+        self.assertNotIn("controller.START", branch)
+        self.assertNotIn("controller.C", branch)
+        self.assertLess(
+            branch.index("controller.set_left_stick_vector"),
+            branch.index("physical-n64-a-dialogue-or-action"),
+        )
+        self.assertLess(
+            branch.index("physical-n64-a-dialogue-or-action"),
+            branch.index("controller.center_left_stick"),
+        )
+
+    def test_ocarina_uses_one_bounded_content_attempt(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        attempts = source.split("scene_attempts = 7", 1)[1].split(
+            "generated = None", 1
+        )[0]
+        self.assertIn('case.folder == "n64"', attempts)
+        self.assertIn(
+            'normalize("The Legend of Zelda: Ocarina of Time")', attempts
+        )
+        self.assertIn("scene_attempts = 1", attempts)
+        self.assertIn("OLED", attempts)
+
+    def test_scaled_left_motion_stays_inside_physical_axis_range(self):
+        controller = object.__new__(MODULE.PhysicalController)
+        controller.axes = {"ABS_X": (-100, 100, 0), "ABS_Y": (-80, 120, 20)}
+        controller.left_horizontal = "ABS_X"
+        controller.left_vertical = "ABS_Y"
+        controller.trace = []
+        controller.event = mock.Mock()
+        controller.sync = mock.Mock()
+        with mock.patch.object(MODULE.time, "sleep"):
+            controller.motion_left("left", hold=1.2, scale=0.30)
+        self.assertEqual(controller.event.call_args_list[0].args,
+                         (controller.EV_ABS, controller.AXIS_CODES["ABS_X"], -30))
+        self.assertEqual(controller.event.call_args_list[-1].args,
+                         (controller.EV_ABS, controller.AXIS_CODES["ABS_X"], 0))
+        with self.assertRaisesRegex(ValueError, "left-stick scale"):
+            controller.motion_left("right", scale=0.0)
+
+    def test_n64_runtime_has_no_blind_start_sequence(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        n64_branch = source.split(
+            "# 007: The World Is Not Enough", 1
+        )[1].split('case.folder == "n64"', 1)[0]
+        self.assertIn("entry_presses=n64_entry_presses", n64_branch)
+        self.assertNotIn("entry_presses=2", n64_branch)
+        self.assertIn('"n64": n64_console_a_key(controller)', source)
 
     def test_framegen_health_decoder_preserves_legacy_v22_optional_absence(self):
         match = self._framegen_health_match(
@@ -2248,6 +3160,9 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             "permission", "scanning", "discovering", "identified",
             "transferring", "artwork", "video", "scores", "writing",
             "artless",
+            # "cheats": the per-game cheat download pass added 2026-09-06
+            # (docs/cheats-everywhere-and-widescreen-design.md §6).
+            "cheats",
         }
         terminal = {"idle", "complete", "error"}
         self.assertEqual(MODULE.IMPORT_ACTIVE_STATES, active)
@@ -2569,7 +3484,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertLess(confirmation, restore)
         self.assertIn("selected_header_ocr(moved)", body)
         self.assertIn("not selected_title_matches", body)
-        self.assertIn("restore_deadline = time.monotonic() + 1.50", body)
+        self.assertIn("restore_deadline = time.monotonic() + 5.0", body)
 
     def test_wii_framegen_motion_uses_lateral_screen_space_sweep(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
@@ -2743,7 +3658,17 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             'elif case.folder in {"switch", "wiiu", "nds"}:', 1
         )[1].split('elif case.folder == "ps2":', 1)[0]
         self.assertIn('hold=(3.5 if left == "left" else 1.2)', branch)
-        self.assertNotIn("controller.A", branch)
+        # A is allowed ONLY inside the nds-guarded sub-block (PoR's
+        # dialogue advances on A and Switch never enters it); the
+        # switch-reachable remainder must still never press A.
+        nds_guard = 'if case.folder == "nds":'
+        self.assertIn(nds_guard, branch)
+        before, nds_block = branch.split(nds_guard, 1)
+        switch_guard = 'if case.folder == "switch":'
+        nds_only, after = nds_block.split(switch_guard, 1)
+        self.assertNotIn("controller.A", before)
+        self.assertNotIn("controller.A", after)
+        self.assertIn("controller.A", nds_only)
         self.assertIn('"physical-switch-b-advance"', branch)
         self.assertNotIn("motion_pair", branch)
 
@@ -2977,6 +3902,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn('chord_codes=(controller.B,)', proof)
         self.assertNotIn('chord_codes=(controller.A, controller.B)', proof)
         self.assertIn('"physical-wii-a-gameplay-action"', proof)
+        self.assertIn('hold=2.5', proof)
         self.assertIn('right_scale=0.30', proof)
 
     def test_wii_launch_aims_slot_and_play_instead_of_repeating_cancel_chord(self):
@@ -2989,7 +3915,10 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn('if attempt == 0:', navigation)
         self.assertIn('(controller.A, controller.B)', navigation)
         self.assertIn('visible, prompt_text = wii_galaxy_title_prompt(', navigation)
-        self.assertIn('prompt_deadline = time.monotonic() + 25.0', navigation)
+        # 2026-09-01: Galaxy 1's strap warning plus space intro outran a
+        # 25 s appearance window on the Thor (run wii-b32); the wait for the
+        # prompt to APPEAR is now 90 s while clearance keeps its own bound.
+        self.assertIn('prompt_deadline = time.monotonic() + 90.0', navigation)
         self.assertIn('time.monotonic() + 12.0', navigation)
         self.assertIn('if not prompt_seen or not prompt_cleared:', navigation)
         self.assertIn('visible = True', navigation)
@@ -3086,11 +4015,15 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             {"visible": True},
             {"visible": True},
         ))
+        rendered = iter((False, True, True))
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         with mock.patch.object(MODULE, "secondary_token", return_value="local:4"), \
                 mock.patch.object(MODULE, "screenshot",
                                   side_effect=lambda *_args: next(frames)), \
+                mock.patch.object(MODULE, "lower_panel_rendered",
+                                  side_effect=lambda _path: next(rendered)), \
+                mock.patch.object(MODULE, "changed_pixels", return_value=0), \
                 mock.patch.object(MODULE.time, "sleep"):
             report = MODULE.navigate_handheld_dual_screen_to_visible_ui(
                 Path("adb"), "serial", controller, case,
@@ -3098,9 +4031,144 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             )
         self.assertEqual(report["rounds"], 3)
         self.assertEqual(report["consecutiveVisibleFrames"], 2)
+        self.assertEqual(report["stableChangedPixels"], 0)
         self.assertEqual(report["physicalControls"], ["START", "A"])
         self.assertEqual([event[0] for event in controller.events],
                          [315, 304, 315, 304, 315, 304])
+
+    @staticmethod
+    def _dual_navigation_controller():
+        class Controller:
+            START = 315
+            A = 304
+
+            def __init__(self):
+                self.events = []
+
+            def key(self, code, label, hold):
+                self.events.append((code, label, hold))
+
+        return Controller()
+
+    def test_dual_navigation_rejects_animating_boot_logo_until_stable(self):
+        # b57: the KONAMI card (ready-02 vs ready-03) was bright in both
+        # captures yet differed on ~100 % of pixels. Brightness alone must
+        # not hand off; a rendered pair has to be static as well.
+        case = MODULE.SystemCase(
+            "nds", ("nds", "ds"), ("melonds-ds",), 2,
+            dual_screen=True, lower_touch=True,
+        )
+        controller = self._dual_navigation_controller()
+        deltas = iter((57_000, 57_000, 12))
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        with mock.patch.object(MODULE, "secondary_token", return_value="local:4"), \
+                mock.patch.object(MODULE, "screenshot",
+                                  return_value={"visible": True}), \
+                mock.patch.object(MODULE, "lower_panel_rendered",
+                                  return_value=True), \
+                mock.patch.object(MODULE, "changed_pixels",
+                                  side_effect=lambda *_a, **_k: next(deltas)), \
+                mock.patch.object(MODULE.time, "sleep"):
+            report = MODULE.navigate_handheld_dual_screen_to_visible_ui(
+                Path("adb"), "serial", controller, case,
+                Path(temporary.name), "nds-title-01",
+            )
+        self.assertEqual(report["rounds"], 4)
+        self.assertEqual(report["stableChangedPixels"], 12)
+        self.assertEqual(
+            [row["changedPixels"] for row in report["observations"]],
+            [None, 57_000, 57_000, 12],
+        )
+        with mock.patch.object(MODULE, "secondary_token", return_value="local:4"), \
+                mock.patch.object(MODULE, "screenshot",
+                                  return_value={"visible": True}), \
+                mock.patch.object(MODULE, "lower_panel_rendered",
+                                  return_value=True), \
+                mock.patch.object(MODULE, "changed_pixels",
+                                  return_value=57_000), \
+                mock.patch.object(MODULE.time, "sleep"):
+            with self.assertRaisesRegex(RuntimeError, "never settled"):
+                MODULE.navigate_handheld_dual_screen_to_visible_ui(
+                    Path("adb"), "serial", controller, case,
+                    Path(temporary.name), "nds-title-01",
+                )
+
+    def test_dual_navigation_presses_start_only_for_portrait_of_ruin(self):
+        # A on PoR's SELECT DATA opens slot one and resumes an old save; the
+        # generic readiness rounds may only send START for that title.
+        case = MODULE.SystemCase(
+            "nds", ("nds", "ds"), ("melonds-ds",), 2,
+            dual_screen=True, lower_touch=True,
+        )
+        controller = self._dual_navigation_controller()
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        with mock.patch.object(MODULE, "secondary_token", return_value="local:4"), \
+                mock.patch.object(MODULE, "screenshot",
+                                  return_value={"visible": True}), \
+                mock.patch.object(MODULE, "lower_panel_rendered",
+                                  return_value=True), \
+                mock.patch.object(MODULE, "changed_pixels", return_value=0), \
+                mock.patch.object(MODULE.time, "sleep"):
+            report = MODULE.navigate_handheld_dual_screen_to_visible_ui(
+                Path("adb"), "serial", controller, case,
+                Path(temporary.name), "nds-title-01",
+                expected_title="Castlevania - Portrait of Ruin (USA)",
+            )
+        self.assertEqual(report["physicalControls"], ["START"])
+        self.assertEqual(report["rounds"], 2)
+        self.assertEqual([event[0] for event in controller.events], [315, 315])
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        run = source.split("def run_game_from_system_menu", 1)[1].split(
+            "def main_activity_surface_layers", 1
+        )[0]
+        self.assertIn(
+            "navigate_handheld_dual_screen_to_visible_ui(\n"
+            "        adb, serial, controller, case, output, prefix,\n"
+            "        expected_title=expected_title,",
+            run,
+        )
+
+    def test_lower_panel_rendered_accepts_legible_text_on_black(self):
+        # Physical b57 captures: both are deliberately rendered, legible
+        # frames that image_metrics classifies as not visible (7.83 % and
+        # 2.92 % bright against its 8 % floor).
+        fixtures = {
+            "nds-title-01-nds-por-slot-result.png": 0.0783,   # ESRB notice
+            "nds-title-01-dual-gameplay-ready-01.png": 0.0292,  # Licensed by
+        }
+        for name, visible_fraction in fixtures.items():
+            path = B57_FIXTURES / name
+            if not path.is_file():
+                self.skipTest(f"physical b57 fixture missing: {path}")
+            metrics = MODULE.image_metrics(Image.open(path), path)
+            self.assertFalse(metrics["visible"], name)
+            self.assertAlmostEqual(
+                float(metrics["visibleFraction"]), visible_fraction, places=4,
+            )
+            self.assertGreaterEqual(int(metrics["distinctColors"]), 48)
+            self.assertTrue(MODULE.lower_panel_rendered(path), name)
+
+    def test_lower_panel_rendered_rejects_black_and_narrow_panels(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        black = Path(temporary.name) / "black.png"
+        Image.new("RGB", (1240, 1080)).save(black)
+        self.assertFalse(MODULE.lower_panel_rendered(black))
+        # An 80-column noisy vertical tear (6.5 % bright, dozens of colours)
+        # clears the sparse-text floors but spans only 6.5 % of the width.
+        tear = Image.new("RGB", (1240, 1080))
+        tear.paste(Image.effect_noise((80, 1080), 64).convert("RGB"),
+                   (580, 0))
+        tear_path = Path(temporary.name) / "tear.png"
+        tear.save(tear_path)
+        metrics = MODULE.image_metrics(tear, tear_path)
+        self.assertFalse(metrics["visible"])
+        self.assertGreaterEqual(int(metrics["distinctColors"]), 48)
+        self.assertFalse(MODULE.lower_panel_rendered(tear_path))
 
     def test_nds_hunters_driver_taps_touch_to_start_and_skip(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
@@ -3161,6 +4229,272 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn((1193, 1032), {point[:2] for point in taps})
         self.assertTrue(controller.events)
 
+    def test_nds_por_setup_uses_empty_slot_and_mandatory_emblem(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        run = source.split("def run_game_from_system_menu", 1)[1].split(
+            "def main_activity_surface_layers", 1
+        )[0]
+        self.assertIn("drive_nds_portrait_of_ruin_new_game_setup(", run)
+        self.assertLess(
+            run.index("navigate_handheld_dual_screen_to_visible_ui("),
+            run.index("drive_nds_portrait_of_ruin_new_game_setup("),
+        )
+        self.assertLess(
+            run.index("drive_nds_portrait_of_ruin_new_game_setup("),
+            run.index("frame_generation_evidence("),
+        )
+        self.assertIn('"ndsPortraitOfRuinNavigation": nds_por_navigation', run)
+        self.assertEqual(MODULE.NDS_POR_EMBLEM_STROKE, (520, 400, 700, 520))
+        self.assertEqual(MODULE.NDS_POR_EMBLEM_OK, (620, 742))
+
+        class Controller:
+            A = 304
+            START = 315
+            STOP = 314
+
+            def __init__(self):
+                self.events = []
+
+            def key(self, code, label, hold):
+                self.events.append(("key", code, label, hold))
+
+            def hat(self, direction, label, hold):
+                self.events.append(("hat", direction, label, hold))
+
+            def chord(self, codes, label, hold):
+                self.events.append(("chord", codes, label, hold))
+
+        taps = []
+        strokes = []
+        reset_log = "Reset applied engine=melonds-ds system=nds marker=reset\n"
+        logs = iter(("",))
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        controller = Controller()
+        with mock.patch.object(MODULE, "secondary_token", return_value="token"), \
+                mock.patch.object(MODULE.qa, "logs",
+                                  side_effect=lambda *_a: next(logs, reset_log)), \
+                mock.patch.object(MODULE, "screenshot",
+                                  return_value={"visible": True}), \
+                mock.patch.object(MODULE, "lower_panel_rendered",
+                                  return_value=True), \
+                mock.patch.object(MODULE, "nds_por_name_keyboard_visible",
+                                  return_value=True), \
+                mock.patch.object(MODULE, "changed_pixels",
+                                  side_effect=self._por_changed_pixels), \
+                mock.patch.object(MODULE, "nds_por_dialogue_visible",
+                                  return_value=False), \
+                mock.patch.object(MODULE, "mean_absolute_difference",
+                                  return_value=2.0), \
+                mock.patch.object(MODULE, "inject_display4_tap",
+                                  side_effect=lambda *args, **kwargs:
+                                  taps.append((args, kwargs))), \
+                mock.patch.object(MODULE, "inject_display4_swipe",
+                                  side_effect=lambda *args, **kwargs:
+                                  strokes.append((args, kwargs))), \
+                mock.patch.object(MODULE.time, "sleep"):
+            report = MODULE.drive_nds_portrait_of_ruin_new_game_setup(
+                Path("adb"), "serial", controller,
+                Path(temporary.name), "nds-title-01",
+            )
+        self.assertTrue(report["newGameSetup"])
+        self.assertEqual(report["selectedSlot"], 6)
+        self.assertEqual(report["emblemAttempts"], 1)
+        self.assertGreaterEqual(report["storyPresses"], 48)
+        self.assertEqual(report["consecutiveGameplayObservations"], 2)
+        self.assertEqual(report["exitMotionMeanDiff"], 2.0)
+        # Deterministic entry: host reset chord first, acknowledged by
+        # melonDS, then a settled title frame, START, a settled SELECT DATA
+        # frame, and only then A.
+        self.assertEqual(report["hostActions"], ["select-start-core-reset"])
+        self.assertEqual(controller.events[0],
+                         ("chord", (314, 315), "physical-nds-por-host-reset", 2.20))
+        self.assertEqual(report["titleSettle"]["samples"], 2)
+        self.assertEqual(report["selectDataSettle"]["samples"], 2)
+        self.assertEqual(report["slotGate"]["changedPixels"], 9000)
+        labels = [event[2] for event in controller.events]
+        self.assertLess(labels.index("physical-nds-por-host-reset"),
+                        labels.index("physical-nds-por-title-start"))
+        self.assertLess(labels.index("physical-nds-por-title-start"),
+                        labels.index("physical-nds-por-select-data"))
+        self.assertEqual(
+            [event[1] for event in controller.events
+             if event[0] == "hat" and event[1] == "down"],
+            ["down"] * 5,
+        )
+        self.assertEqual(
+            [event[1] for event in controller.events
+             if event[0] == "hat" and event[1] == "right"],
+            ["right"] * 2,
+        )
+        self.assertEqual(strokes[0][0][2:6], (520, 400, 700, 520))
+        self.assertEqual(taps[0][0][2:4], (620, 742))
+
+    @staticmethod
+    def _por_changed_pixels(left, right, threshold=18):
+        # Settle polls compare consecutive lower-panel frames and must read
+        # as static; every other comparison (slot gate, emblem result) is a
+        # full-screen transition.
+        return 0 if "settle" in Path(right).name else 9000
+
+    @staticmethod
+    def _por_controller():
+        class Controller:
+            A = 304
+            START = 315
+            STOP = 314
+
+            def __init__(self):
+                self.events = []
+
+            def key(self, code, label, hold):
+                self.events.append(("key", code, label, hold))
+
+            def hat(self, direction, label, hold):
+                self.events.append(("hat", direction, label, hold))
+
+            def chord(self, codes, label, hold):
+                self.events.append(("chord", codes, label, hold))
+
+        return Controller()
+
+    def _por_fake_clock(self):
+        clock = [0.0]
+
+        def advance(delay):
+            clock[0] += float(delay)
+
+        monotonic = mock.patch.object(MODULE.time, "monotonic",
+                                      side_effect=lambda: clock[0])
+        sleep = mock.patch.object(MODULE.time, "sleep", side_effect=advance)
+        return monotonic, sleep
+
+    def test_nds_por_setup_fails_when_melonds_never_acknowledges_reset(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        monotonic, sleep = self._por_fake_clock()
+        with mock.patch.object(MODULE, "secondary_token", return_value="token"), \
+                mock.patch.object(MODULE.qa, "logs", return_value="no reset\n"), \
+                mock.patch.object(MODULE, "screenshot") as screenshot, \
+                monotonic, sleep:
+            with self.assertRaisesRegex(
+                    RuntimeError, "host reset was not applied by melonds-ds"):
+                MODULE.drive_nds_portrait_of_ruin_new_game_setup(
+                    Path("adb"), "serial", self._por_controller(),
+                    Path(temporary.name), "nds-title-01",
+                )
+        screenshot.assert_not_called()
+
+    def test_nds_por_slot_gate_names_unrendered_and_unreached_misses(self):
+        reset_log = "Reset applied engine=melonds-ds system=nds marker=reset\n"
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+
+        def drive(rendered_for, changed_for):
+            logs = iter(("",))
+            monotonic, sleep = self._por_fake_clock()
+            with mock.patch.object(MODULE, "secondary_token",
+                                   return_value="token"), \
+                    mock.patch.object(MODULE.qa, "logs",
+                                      side_effect=lambda *_a: next(logs, reset_log)), \
+                    mock.patch.object(MODULE, "screenshot",
+                                      return_value={"visible": True}), \
+                    mock.patch.object(MODULE, "lower_panel_rendered",
+                                      side_effect=rendered_for), \
+                    mock.patch.object(MODULE, "changed_pixels",
+                                      side_effect=changed_for), \
+                    monotonic, sleep:
+                MODULE.drive_nds_portrait_of_ruin_new_game_setup(
+                    Path("adb"), "serial", self._por_controller(),
+                    Path(temporary.name), "nds-title-01",
+                )
+
+        # Every slot-poll frame black: the historical message survives.
+        with self.assertRaisesRegex(
+                RuntimeError, "slot selection rendered no lower UI"):
+            drive(lambda path: "slot-poll" not in Path(path).name,
+                  self._por_changed_pixels)
+        # Rendered but pixel-identical to SELECT DATA for the whole bound:
+        # the lower panel works and the navigation itself missed.
+        with self.assertRaisesRegex(
+                RuntimeError,
+                "lower panel rendered but did not reach the slot list / "
+                "name keyboard"):
+            drive(lambda path: True, lambda left, right, threshold=18: 0)
+
+    def test_dual_screen_lower_generator_must_swap_after_primary_proof(self):
+        attach = ("I/EmuFusionFrameGen(1): Frame generator attached "
+                  "generator={0} role=secondary displayId=4 output=1240x1080\n")
+        swap = ("I/EmuFusionFrameGen(1): Requested game display cadence "
+                "generator={0} reason=first-successful-swap frameRate=60.0\n")
+        stall = ("W/EmuFusionFrameGen(1): Presentation stalled generator={0} "
+                 "presents=0 source=60 output=60 epoch=4 unavailable={1}\n")
+        healthy = attach.format(2) + swap.format(1) + swap.format(2)
+        with mock.patch.object(MODULE.time, "sleep") as sleep:
+            report = MODULE.require_dual_screen_lower_presentation(
+                lambda: healthy, timeout=10.0,
+            )
+        self.assertEqual(report["generator"], 2)
+        self.assertTrue(report["secondaryAttached"])
+        sleep.assert_not_called()
+        # A process that re-attached after an earlier title numbers its
+        # secondary generator 4; the gate follows the attach line.
+        reattached = attach.format(4) + swap.format(1) + swap.format(3) + \
+            swap.format(4)
+        self.assertEqual(
+            MODULE.require_dual_screen_lower_presentation(lambda: reattached)
+            ["generator"],
+            4,
+        )
+        # b57: the top screen presented while generator=2 never swapped.
+        stalled = (attach.format(2) + swap.format(1) + stall.format(2, 60) +
+                   stall.format(1, 5) + stall.format(2, 120))
+        monotonic, sleep = self._por_fake_clock()
+        with monotonic, sleep:
+            with self.assertRaisesRegex(
+                    RuntimeError,
+                    r"dual-screen lower generator presented nothing "
+                    r"\(presents=0\) after the top screen presented.*"
+                    r"Presentation stalled generator=2 presents=0 source=60 "
+                    r"output=60 epoch=4 unavailable=120"):
+                MODULE.require_dual_screen_lower_presentation(
+                    lambda: stalled, timeout=10.0,
+                )
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        run = source.split("def run_game_from_system_menu", 1)[1].split(
+            "def main_activity_surface_layers", 1
+        )[0]
+        self.assertIn(
+            "require_dual_screen_lower_presentation(\n"
+            "        lambda: qa.logs(adb, serial)\n"
+            "    ) if case.dual_screen else None",
+            run,
+        )
+        self.assertLess(run.index("presented = wait_presented_frame("),
+                        run.index("require_dual_screen_lower_presentation("))
+        self.assertLess(run.index("require_dual_screen_lower_presentation("),
+                        run.index("navigate_handheld_dual_screen_to_visible_ui("))
+        self.assertIn(
+            '"dualScreenLowerPresentation": dual_screen_lower_presentation',
+            run,
+        )
+
+    def test_n3ds_file_confirmation_selects_begin_before_proof(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        branch = source.split('skip_label="physical-start-n3ds"', 1)[1].split(
+            'case.folder == "n3ds"', 1
+        )[0]
+        self.assertIn('skip_cycle=(\n            "down", controller.A', branch)
+        self.assertLess(branch.index('"down"'), branch.index('controller.START'))
+        self.assertIn('probe_motion=("right", "right")', branch)
+        self.assertIn('("lower-tap", 620, 720)', branch)
+
     def test_preproof_schema22_is_not_a_steady_qualification_run(self):
         ready = [self._segment_health(index) for index in range(1, 14)]
         for row in ready:
@@ -3181,77 +4515,6 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
                     lambda: "schema22-log", [("primary", 0)],
                     deadline=0.05, poll_seconds=0.1,
                 )
-
-    def test_handheld_primary_two_x_requires_locked_times_two(self):
-        records = [self._segment_health(index) for index in range(1, 14)]
-        for row in records:
-            row["output"] = int(row["locked"]) * 2
-        with mock.patch.object(
-                MODULE, "_framegen_health_records", return_value=records):
-            report = MODULE.handheld_primary_two_x_evidence("primary-log")
-        self.assertTrue(report["passed"])
-        self.assertEqual(report["lockedFps"], 60)
-        self.assertEqual(report["outputFps"], 120)
-        self.assertTrue(report["handheldPrimaryTwoX"])
-        for row in records:
-            row["output"] = 90
-        with mock.patch.object(
-                MODULE, "_framegen_health_records", return_value=records):
-            with self.assertRaisesRegex(RuntimeError, "not 2x"):
-                MODULE.handheld_primary_two_x_evidence("bad-log")
-
-    def test_handheld_primary_two_x_accepts_nds10_device_log(self):
-        path = (ROOT / "unified-android" / "build" /
-                "runtime-acceptance-qa-2026-08-16-nds10" /
-                "nds-title-01-framegen-logcat.txt")
-        if not path.is_file():
-            self.skipTest("nds10 device log is not on disk")
-        report = MODULE.handheld_primary_two_x_evidence(
-            path.read_text(encoding="utf-8", errors="replace")
-        )
-        self.assertTrue(report["passed"])
-        self.assertIn(report["lockedFps"], {20, 30, 40, 50, 60})
-        self.assertEqual(report["outputFps"], int(report["lockedFps"]) * 2)
-
-    def test_ps3_accepts_any_primary_two_x_segment(self):
-        two_x = [self._segment_health(index, locked=20) for index in range(1, 15)]
-        for row in two_x:
-            row["output"] = 40
-        drop = [self._segment_health(index, locked=15) for index in range(15, 21)]
-        for row in drop:
-            row["output"] = 15
-        records = two_x + drop
-        with mock.patch.object(
-                MODULE, "_framegen_health_records", return_value=records):
-            with self.assertRaisesRegex(RuntimeError, "not steady"):
-                MODULE.handheld_primary_two_x_evidence("trailing-drop")
-            report = MODULE.primary_two_x_any_segment("any-segment")
-        self.assertTrue(report["passed"])
-        self.assertEqual(report["lockedFps"], 20)
-        self.assertEqual(report["outputFps"], 40)
-        self.assertTrue(report["primaryTwoXAnySegment"])
-        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
-            encoding="utf-8"
-        )
-        evidence = source.split("def frame_generation_evidence", 1)[1]
-        self.assertIn("primary_two_x_any_segment(", evidence)
-        self.assertIn('if case.folder not in {"ps3", "nds", "n3ds"}:', evidence)
-        self.assertIn('if case.folder in {"ps3", "nds", "n3ds"}:', evidence)
-        self.assertIn('case.folder == "ps3"', evidence)
-
-    def test_nds12_device_log_has_a_primary_two_x_segment(self):
-        path = (ROOT / "unified-android" / "build" /
-                "runtime-acceptance-qa-2026-08-16-nds12" /
-                "nds-failure-logcat.txt")
-        if not path.is_file():
-            self.skipTest("nds12 device log is not on disk")
-        text = path.read_text(encoding="utf-8", errors="replace")
-        with self.assertRaisesRegex(RuntimeError, "impossible|not 2x|not steady"):
-            MODULE.handheld_primary_two_x_evidence(text)
-        report = MODULE.primary_two_x_any_segment(text)
-        self.assertTrue(report["passed"])
-        self.assertIn(report["lockedFps"], {20, 30, 40, 50, 60})
-        self.assertEqual(report["outputFps"], int(report["lockedFps"]) * 2)
 
     def test_ds_lower_touch_does_not_require_dense_motion(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
@@ -3662,6 +4925,173 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertIn("deadline=deadline", collect[wait_at:sf_at])
         self.assertIn("timeout=remaining", collect)
         self.assertIn("_framegen_bounded_capture", collect)
+        self.assertIn('"EmuFusionFrameGen:V", "*:S"', collect)
+        self.assertIn(
+            "_wait_for_current_framegen_steady(\n"
+            "                    bounded_health_log",
+            collect,
+        )
+        self.assertIn(
+            "_wait_for_current_rife_steady(\n"
+            "                    bounded_health_log",
+            collect,
+        )
+
+    def test_rife_current_steady_poll_is_bounded_and_recovers(self):
+        clock = [0.0]
+
+        def advance(delay):
+            clock[0] += delay
+
+        with mock.patch.object(
+                MODULE.rife_timing, "verify_timing",
+                side_effect=[
+                    RuntimeError("too short"),
+                    {"timingPassed": True, "generator": 7,
+                     "presentationEpoch": 11, "timingWindow": 13},
+                ]
+        ) as verify, mock.patch.object(
+                MODULE.time, "monotonic", side_effect=lambda: clock[0]
+        ), mock.patch.object(
+                MODULE.time, "sleep", side_effect=advance
+        ):
+            self.assertEqual(MODULE._wait_for_current_rife_steady(
+                lambda: "rife-log", "primary", 0,
+                deadline=1.0, poll_seconds=0.1,
+            ), "rife-log")
+        self.assertEqual(verify.call_count, 2)
+        for call in verify.call_args_list:
+            self.assertEqual(call.kwargs["minimum_span_ns"],
+                             MODULE.rife_timing.MIN_RUNTIME_SPAN_NS)
+            self.assertEqual(call.kwargs["role"], "primary")
+            self.assertEqual(call.kwargs["display_id"], 0)
+
+    def test_rife_current_steady_skips_captured_timing_identity(self):
+        clock = [0.0]
+        reports = [
+            {"timingPassed": True, "generator": 7,
+             "presentationEpoch": 11, "timingWindow": 13},
+            {"timingPassed": True, "generator": 7,
+             "presentationEpoch": 12, "timingWindow": 14},
+        ]
+
+        def advance(delay):
+            clock[0] += delay
+
+        with mock.patch.object(
+                MODULE.rife_timing, "verify_timing", side_effect=reports
+        ) as verify, mock.patch.object(
+                MODULE.time, "monotonic", side_effect=lambda: clock[0]
+        ), mock.patch.object(
+                MODULE.time, "sleep", side_effect=advance
+        ):
+            self.assertEqual(MODULE._wait_for_current_rife_steady(
+                lambda: "rife-log", "primary", 0,
+                deadline=1.0, poll_seconds=0.1,
+                excluded_identities=frozenset({(7, 11, 13)}),
+            ), "rife-log")
+        self.assertEqual(verify.call_count, 2)
+        self.assertEqual(clock[0], 0.1)
+
+    def test_rife_campaign_proof_boundary_observes_false_then_true(self):
+        marker = lambda enabled: (
+            "I/EmuFusionFrameGen(4321): Qualification proof generator=7 "
+            f"enabled={str(enabled).lower()} proofContract="
+            "native-pixel-refined-regional-flow-v22-x2-presented "
+            "proofSchemaVersion=22"
+        )
+        clock = [0.0]
+
+        def advance(delay):
+            clock[0] += delay
+
+        with mock.patch.object(
+                MODULE.time, "monotonic", side_effect=lambda: clock[0]
+        ), mock.patch.object(
+                MODULE.time, "sleep", side_effect=advance
+        ), mock.patch.object(MODULE.qa, "adb") as adb:
+            disabled = MODULE._set_rife_campaign_proof_state(
+                Path("/adb"), "serial",
+                mock.Mock(side_effect=[marker(True),
+                                       "\n".join((marker(True), marker(False)))]),
+                7, False, deadline=1.0,
+            )
+            enabled = MODULE._set_rife_campaign_proof_state(
+                Path("/adb"), "serial",
+                mock.Mock(side_effect=[marker(False),
+                                       "\n".join((marker(False), marker(True)))]),
+                7, True, deadline=1.0,
+            )
+        self.assertFalse(disabled["enabled"])
+        self.assertTrue(enabled["enabled"])
+        self.assertEqual(disabled["pid"], 4321)
+        self.assertEqual(enabled["generator"], 7)
+        self.assertEqual([call.args[3:] for call in adb.call_args_list], [
+            ("settings", "delete", "global", "emufusion_framegen_proof"),
+            ("settings", "put", "global", "emufusion_framegen_proof", "1"),
+        ])
+
+    def test_fzero_rife_campaign_runner_preserves_independent_artifacts(self):
+        source = inspect.getsource(MODULE.frame_generation_evidence)
+        collect = source.split("def collect_latency_records", 1)[1].split(
+            "motion_thread.start()", 1)[0]
+        self.assertIn("rife_captured_identities", collect)
+        self.assertIn("excluded_identities=frozenset", collect)
+        self.assertIn("MIN_CAMPAIGN_SEGMENTS", collect)
+        self.assertIn("MIN_CAMPAIGN_SPAN_NS", collect)
+        self.assertIn("verify_campaign", collect)
+        self.assertIn("rife-campaign-attempt-", collect)
+        self.assertIn("logSha256", collect)
+        self.assertIn("latencySha256", collect)
+        self.assertIn("raceCheckpointSha256", collect)
+        self.assertIn("FRAMEGEN_TOTAL_CAPTURE_CAP_SECONDS", collect)
+        self.assertIn("FZERO_RIFE_CAMPAIGN_TOTAL_CAPTURE_CAP_SECONDS", collect)
+        self.assertIn("prepare_n64_fzero_attract_race(", collect)
+        self.assertIn("warmup_cycles=0", collect)
+        self.assertIn("_set_rife_campaign_proof_state(", collect)
+        self.assertLess(
+            collect.index("identity[0], False"),
+            collect.index("prepare_n64_fzero_attract_race("))
+        self.assertLess(
+            collect.index("prepare_n64_fzero_attract_race("),
+            collect.index("identity[0], True"))
+        self.assertIn("preSegmentRearm", collect)
+        self.assertEqual(
+            MODULE.FZERO_RIFE_CAMPAIGN_TOTAL_CAPTURE_CAP_SECONDS, 690.0)
+
+    def test_rife_latency_join_selects_unique_raw_overlap(self):
+        records = [
+            ("stale", Path("stale.txt"), "primary", 0),
+            ("active", Path("active.txt"), "primary", 0),
+            ("lower", Path("lower.txt"), "secondary", 4),
+        ]
+        parsed = [
+            {"actualPresentTimestamps": [1, 2, 3]},
+            {"actualPresentTimestamps": [4, 5, 6]},
+        ]
+        reports = [
+            RuntimeError("no overlap"),
+            {"role": "primary", "displayId": 0,
+             "surfaceFlingerRawOverlapFrames": 96},
+        ]
+        with mock.patch.object(MODULE.frame_gen, "parse_latency",
+                               side_effect=parsed), mock.patch.object(
+                MODULE.rife_timing, "verify_timing", side_effect=reports):
+            layer, latency, report = MODULE._require_rife_latency_coverage(
+                "captured", records)
+        self.assertEqual(layer, "active")
+        self.assertEqual(latency, Path("active.txt"))
+        self.assertEqual(report["surfaceFlingerRawOverlapFrames"], 96)
+
+    def test_rife_runtime_path_remains_timing_only_until_manual_visual_proof(self):
+        source = inspect.getsource(MODULE.frame_generation_evidence)
+        self.assertIn("emufusion_framegen_rife_qualification", source)
+        self.assertIn("_require_rife_latency_coverage", source)
+        self.assertIn("_rife_latency_candidates", source)
+        self.assertIn(
+            '"qualification requires moving-game visual inspection; report="',
+            source,
+        )
 
     def test_framegen_qualification_session_binds_raw_sf_endpoints(self):
         temporary = tempfile.TemporaryDirectory()
@@ -3737,13 +5167,13 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             MODULE.require_safe_motion_bound("", report)
         log = (
             "Motion bounds generator=9 role=secondary displayId=4 "
-            "source=256x192 maxFlowPixels=19.2 maxFlowFraction=0.1"
+            "source=256x192 maxFlowPixels=38.4 maxFlowFraction=0.2"
         )
         bound = MODULE.require_safe_motion_bound(log, report)
-        self.assertEqual(bound["maxFlowPixels"], 19.2)
+        self.assertEqual(bound["maxFlowPixels"], 38.4)
         self.assertEqual(bound["sourceHeight"], 192)
-        unsafe = log.replace("maxFlowPixels=19.2", "maxFlowPixels=80.0").replace(
-            "maxFlowFraction=0.1", "maxFlowFraction=0.4166667"
+        unsafe = log.replace("maxFlowPixels=38.4", "maxFlowPixels=80.0").replace(
+            "maxFlowFraction=0.2", "maxFlowFraction=0.4166667"
         )
         with self.assertRaisesRegex(RuntimeError, "source-relative limit"):
             MODULE.require_safe_motion_bound(unsafe, report)
@@ -3908,7 +5338,8 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
                 mock.patch.object(MODULE, "go_to_cover_system") as origin, \
                 mock.patch.object(MODULE, "screenshot"), \
                 mock.patch.object(MODULE, "assert_cover_system") as cover, \
-                mock.patch.object(MODULE, "force_alpha_list") as force, \
+                mock.patch.object(MODULE, "force_alpha_list",
+                                  return_value=(Path("restored.png"), 1)) as force, \
                 mock.patch.object(MODULE, "library_index", return_value={
                     "systems": {"nes": {"alpha": keys}}
                 }), mock.patch.object(MODULE.time, "sleep"):
@@ -3922,7 +5353,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         cover.assert_called_once()
         force.assert_called_once()
         self.assertEqual(controller.keys, [(304, "physical-a-reopen-system")])
-        self.assertEqual(move.call_args_list[1].args[3], 0)
+        self.assertEqual(move.call_args_list[1].args[3], 1)
 
     def test_alpha_navigation_rejects_stale_index_during_recovery(self):
         case = MODULE.SystemCase("nes", (), ("mesen",), 1)
@@ -4038,6 +5469,26 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
                 require_list_layout=False,
             ), 1083)
         footer.assert_not_called()
+
+    def test_psp_blue_platform_label_recovers_busy_wallpaper_identity(self):
+        identity = {"aggregate": False, "folder": None, "current": None,
+                    "total": None, "systemOcr": "busy artwork glyph noise",
+                    "counterOcr": ""}
+        with mock.patch.object(MODULE, "game_list_identity",
+                               return_value=identity), \
+                mock.patch.object(MODULE, "current_game_view",
+                                  return_value="list"), \
+                mock.patch.object(MODULE, "expected_system_label_ocr",
+                                  return_value="PLAYSTATION PORTABLE"), \
+                mock.patch.object(MODULE, "selected_header_ocr",
+                                  return_value=
+                                  "Castlevania: The Dracula X Chronicles"):
+            self.assertEqual(MODULE.assert_game_list_checkpoint(
+                Path("psp-castlevania.png"), "psp", 1, 3,
+                {"psp": "playstationportable"},
+                expected_title="Castlevania: The Dracula X Chronicles",
+                require_counter=False,
+            ), 3)
 
     def test_r19_unique_two_row_offset_is_physically_corrected_and_rechecked(self):
         class Controller:
@@ -4269,6 +5720,181 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         image.save(path)
         self.assertEqual(MODULE.active_sort_index(path), 2)
 
+    def test_force_alpha_checks_the_frame_after_its_final_press(self):
+        class Controller:
+            R1 = 311
+            Y = 307
+
+            def __init__(self):
+                self.events = []
+
+            def key(self, code, label, hold):
+                self.events.append((code, label, hold))
+
+        controller = Controller()
+        # The second transition returns one stale capture before it visibly
+        # settles.  No additional R1 may be sent during that stale interval.
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot"), \
+                mock.patch.object(MODULE, "active_sort_index",
+                                  side_effect=[3, 0, 0, 1, 2, 2]), \
+                mock.patch.object(MODULE, "current_game_view",
+                                  return_value="list"), \
+                mock.patch.object(MODULE, "game_list_identity",
+                                  return_value={
+                                      "aggregate": False, "folder": "n64",
+                                      "current": 104, "total": 299,
+                                  }), \
+                mock.patch.object(MODULE, "selected_header_ocr",
+                                  return_value="Title 103"), \
+                mock.patch.object(MODULE, "selected_title_matches",
+                                  return_value=True), \
+                mock.patch.object(MODULE.time, "sleep"):
+            frame, position = MODULE.force_alpha_list(
+                Path("adb"), "serial", controller,
+                Path(directory), "n64", "n64", {"n64": "Nintendo 64"},
+                [f"n64|Title {index}" for index in range(299)],
+            )
+        self.assertTrue(str(frame).endswith("n64-alpha-origin-settled.png"))
+        self.assertEqual(position, 103)
+        self.assertEqual(
+            [event[1] for event in controller.events],
+            ["physical-r1-next-sort"] * 3,
+        )
+
+    def test_force_alpha_list_uses_unique_header_when_counter_is_unreadable(self):
+        class Controller:
+            R1 = 311
+            Y = 307
+
+            def key(self, _code, _label, hold=0.0):
+                pass
+
+        keys = ["n64|007: The World Is Not Enough", "n64|Banjo-Kazooie"]
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot"), \
+                mock.patch.object(MODULE, "active_sort_index",
+                                  side_effect=[3, 0, 1, 2, 2]), \
+                mock.patch.object(MODULE, "current_game_view",
+                                  return_value="list"), \
+                mock.patch.object(MODULE, "game_list_identity",
+                                  return_value={
+                                      "aggregate": False, "folder": "n64",
+                                      "current": None, "total": None,
+                                  }), \
+                mock.patch.object(MODULE, "selected_header_ocr",
+                                  return_value="007: The World Is Not Enough"), \
+                mock.patch.object(MODULE.time, "sleep"):
+            _frame, position = MODULE.force_alpha_list(
+                Path("adb"), "serial", Controller(), Path(directory),
+                "n64", "n64", {"n64": "Nintendo 64"}, keys,
+            )
+        self.assertEqual(position, 0)
+
+    def test_short_title_contained_by_the_header_cannot_block_a_verbatim_match(self):
+        """Run e2-nes (2026-09-04): the frozen header OCR proved "10-Yard Fight"
+        verbatim, yet the two-letter row "Ys" also passed exact containment
+        because "ys" sits inside SYSTEM, so resolution raised for a
+        perfectly unique title."""
+        keys = ["nes|10-yard fight", "nes|mighty final fight", "nes|renegade",
+                "nes|ys", "nes|zen: intergalactic ninja"]
+        observed = ("NINTENDO ENTERTAINMENT SYSTEM e P i 10-Yard Fight | "
+                    "CRITICS N/A USERS N/A RELEASE N/A")
+        self.assertEqual(MODULE.resolve_alpha_header_position(observed, keys), 0)
+        # Two verbatim rows of the same length remain ambiguous.
+        with self.assertRaises(MODULE.AlphaNavigationDrift):
+            MODULE.resolve_alpha_header_position(
+                observed, ["nes|10-yard fight", "nes|10-yard fight", "nes|ys"])
+
+    def test_force_alpha_list_requires_counter_for_duplicate_titles(self):
+        class Controller:
+            R1 = 311
+            Y = 307
+
+            def key(self, _code, _label, hold=0.0):
+                pass
+
+        keys = ["n64|WCW Nitro", "n64|WCW Nitro"]
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(MODULE, "screenshot"), \
+                mock.patch.object(MODULE, "active_sort_index",
+                                  side_effect=[3, 0, 1, 2, 2]), \
+                mock.patch.object(MODULE, "current_game_view",
+                                  return_value="list"), \
+                mock.patch.object(MODULE, "game_list_identity",
+                                  return_value={
+                                      "aggregate": False, "folder": "n64",
+                                      "current": None, "total": None,
+                                  }), \
+                mock.patch.object(MODULE, "selected_header_ocr",
+                                  return_value="WCW Nitro"), \
+                mock.patch.object(MODULE.time, "sleep"):
+            with self.assertRaisesRegex(MODULE.AlphaNavigationDrift,
+                                        "does not resolve uniquely"):
+                MODULE.force_alpha_list(
+                    Path("adb"), "serial", Controller(), Path(directory),
+                    "n64", "n64", {"n64": "Nintendo 64"}, keys,
+                )
+
+    def test_runtime_resolves_slow_metadata_before_opening_alpha_list(self):
+        source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(
+            encoding="utf-8"
+        )
+        run = source.split("def run_system", 1)[1].split(
+            "def _runtime_main", 1
+        )[0]
+        self.assertLess(
+            run.index("playable_keys = playable_alpha_keys("),
+            run.index("force_alpha_list("),
+        )
+        self.assertLess(
+            run.index("core_hashes = {normalize(engine)"),
+            run.index("force_alpha_list("),
+        )
+        self.assertNotIn("current_position = 0", run)
+        self.assertIn("_, current_position = force_alpha_list(", run)
+        recovery = source.split("def select_title_alpha", 1)[1].split(
+            "def assert_no_interstitial", 1
+        )[0]
+        self.assertLess(
+            recovery.index("refreshed_keys = alpha_keys(library_index("),
+            recovery.index("go_to_cover_system(controller"),
+        )
+        self.assertIn("_, recovered_position = force_alpha_list(", recovery)
+        self.assertIn("controller, recovered_position, target", recovery)
+
+    def test_controller_neutralize_is_one_atomic_remote_transaction(self):
+        controller = object.__new__(MODULE.PhysicalController)
+        controller.adb = Path("/adb")
+        controller.serial = "serial"
+        controller.node = "/dev/input/event9"
+        controller.axes = {
+            "ABS_X": (-32767, 32767, 0),
+            "ABS_Y": (-32767, 32767, 0),
+            "ABS_Z": (-32767, 32767, 0),
+            "ABS_RZ": (-32767, 32767, 0),
+        }
+        controller.trace = []
+        completed = mock.Mock(returncode=0, stdout="")
+        with mock.patch.object(MODULE.subprocess, "run",
+                               return_value=completed) as run, \
+                mock.patch.object(MODULE.time, "sleep"):
+            controller.neutralize("test-neutral")
+        run.assert_called_once()
+        script = run.call_args.kwargs["input"]
+        self.assertIn("sendevent /dev/input/event9 3 0 0", script)
+        self.assertIn("sendevent /dev/input/event9 3 16 0", script)
+        self.assertIn("sendevent /dev/input/event9 3 17 0", script)
+        self.assertIn("sendevent /dev/input/event9 1 311 0", script)
+        self.assertIn("sendevent /dev/input/event9 1 312 0", script)
+        self.assertTrue(script.rstrip().endswith(
+            "sendevent /dev/input/event9 0 0 0"
+        ))
+        self.assertEqual(
+            controller.trace[0].action,
+            "test-neutral:all-axes-and-buttons",
+        )
+
     def test_game_view_reader_combines_tight_footer_crops(self):
         path = Path("unused.png")
         with mock.patch.object(
@@ -4342,6 +5968,31 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.assertEqual(violations, [])
         # Corroborated by a resume on a non-primary display.
         self.assertIsNotNone(MODULE.SECONDARY_GAMEPLAY_RESUME.search(routed))
+
+    def test_3ds_secondary_layer_is_the_latched_blast_surface_not_parent_window(self):
+        listing = "\n".join((
+            "ae4f26d ActivityRecordInputSink com.thorium.preview/.PreviewActivity#172",
+            "ActivityRecord{ff402ee u0 com.thorium.preview/.PreviewActivity}#167",
+            "ab374c0 com.thorium.preview/com.thorium.preview.PreviewActivity#175",
+            "com.thorium.preview/com.thorium.preview.PreviewActivity#176",
+            "Bounds for - com.thorium.preview/com.thorium.preview.PreviewActivity#202",
+            "SurfaceView[com.thorium.preview/com.thorium.preview.PreviewActivity]#203",
+            "SurfaceView[com.thorium.preview/com.thorium.preview.PreviewActivity](BLAST)#204",
+        ))
+        response = mock.Mock(stdout=listing)
+        with mock.patch.object(MODULE.qa, "adb", return_value=response):
+            expected = [
+                "SurfaceView[com.thorium.preview/"
+                "com.thorium.preview.PreviewActivity](BLAST)#204"
+            ]
+            self.assertEqual(
+                MODULE.secondary_gameplay_layers(Path("adb"), "thor", True),
+                expected,
+            )
+            self.assertEqual(
+                MODULE.secondary_gameplay_layers(Path("adb"), "thor", False),
+                expected,
+            )
 
     def test_dual_screen_accepts_reused_resumed_lower_window_with_surface(self):
         routed = "\n".join([
@@ -4845,7 +6496,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             MODULE._framegen_health_transport_records(
                 prefix + base + "\n" + prefix + mixed_extension)
 
-    def test_runner_parses_only_complete_schema39_present_timed_transport(self):
+    def test_runner_parses_only_complete_schema39_through_51_present_timed_transport(self):
         def materialize(pattern, overrides):
             def replace(match):
                 name = match.group(1)
@@ -4861,48 +6512,201 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
                     return "packed-nearest-bf-v1"
                 if name == "presentation_timing_mode":
                     return "egl-android-next-vsync"
+                if name == "source_clock_kind":
+                    return "pts"
                 return "1"
             return re.sub(
                 r"\(\?P<([a-z0-9_]+)>[^)]*\)", replace, pattern
-            ).replace(".*?", "producerHz=50.00 ")
+            ).replace(".*?", "producerHz=50.00 ").removesuffix("$")
 
-        common = {
-            "generator": 7, "display_id": 0, "proof_schema_version": 39,
-            "health_sequence": 9, "presents": 120,
-            "window_start_ns": 1_000_000_000,
-            "window_end_ns": 2_000_000_000,
-            "proof_evidence_presentation_epoch": 4,
-            "proof_evidence_enqueued_in_epoch": 2,
-            "endpoint_fifo_coalesced": 0,
-            "endpoint_timestamp_corrections": 0,
-            "dense_diagnostic_last_target_source_ns": 1_500_000_000,
-            "presentation_timing_mode": "egl-android-next-vsync",
-            "cadence_reject_consecutive_windows": 3,
-        }
-        base = materialize(MODULE.frame_gen.HEALTH_BASE_V39.pattern, common)
-        extension = materialize(
-            MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V39.pattern, common)
         prefix = "08-14 12:00:00.000  4321  4322 I EmuFusionFrameGen: "
-        with mock.patch.object(
-                MODULE.frame_gen, "_v37_diagnostic_hierarchy", return_value=[]), \
-                mock.patch.object(
-                    MODULE.frame_gen, "_v37_output_accounting_hierarchy",
-                    return_value=[]):
-            records = MODULE._framegen_health_transport_records(
-                prefix + base + "\n" + prefix + extension)
-        self.assertEqual(39, records[0]["proof_schema_version"])
-        self.assertEqual("egl-android-next-vsync",
-                         records[0]["presentation_timing_mode"])
-        self.assertEqual(3, records[0]["cadence_reject_consecutive_windows"])
-        for field in ("presentationTimingMode",
-                      "cadenceRejectConsecutiveWindows"):
-            with self.subTest(field=field), self.assertRaisesRegex(
-                    RuntimeError, "malformed or truncated"):
-                truncated = re.sub(
-                    rf" {field}=[a-z0-9-]+", "", base, count=1)
-                self.assertNotEqual(base, truncated)
-                MODULE._framegen_health_transport_records(
-                    prefix + truncated + "\n" + prefix + extension)
+        cases = (
+            (39, MODULE._FRAMEGEN_V39_CONTRACT,
+             "fragment-128x72-v39-present-timed-vector-trajectory",
+             MODULE.frame_gen.HEALTH_BASE_V39,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V39),
+            (40, MODULE._FRAMEGEN_V40_CONTRACT,
+             "fragment-128x72-v40-temporal-flow-guidance-present-timed-vector-trajectory",
+             MODULE.frame_gen.HEALTH_BASE_V40,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V40),
+            (41, MODULE._FRAMEGEN_V41_CONTRACT,
+             "fragment-128x72-v41-strict-temporal-flow-guidance-present-timed-vector-trajectory",
+             MODULE.frame_gen.HEALTH_BASE_V41,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V41),
+            (42, MODULE._FRAMEGEN_V42_CONTRACT,
+             "fragment-128x72-v42-uniform-timestamp-resample-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V42,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V42),
+            (43, MODULE._FRAMEGEN_V43_CONTRACT,
+             "fragment-128x72-v43-rational-source-panel-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V43,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V43),
+            (44, MODULE._FRAMEGEN_V44_CONTRACT,
+             "fragment-128x72-v44-unique-endpoint-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V44,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V44),
+            (45, MODULE._FRAMEGEN_V45_CONTRACT,
+             "fragment-128x72-v45-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V45,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V45),
+            (46, MODULE._FRAMEGEN_V46_CONTRACT,
+             "fragment-128x72-v46-independent-bidirectional-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V46,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V46),
+            (47, MODULE._FRAMEGEN_V47_CONTRACT,
+             "fragment-128x72-v47-stamped-pts-loss-bound-independent-bidirectional-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V47,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V47),
+            (48, MODULE._FRAMEGEN_V48_CONTRACT,
+             "fragment-128x72-v48-reciprocal-proposal-stamped-pts-loss-bound-bidirectional-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V48,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V48),
+            (49, MODULE._FRAMEGEN_V49_CONTRACT,
+             "fragment-128x72-v49-multilevel-reciprocal-proposal-stamped-pts-loss-bound-bidirectional-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V49,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V49),
+            (50, MODULE._FRAMEGEN_V50_CONTRACT,
+             "fragment-128x72-v50-iterated-multilevel-reciprocal-proposal-stamped-pts-loss-bound-bidirectional-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V50,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V50),
+            (51, MODULE._FRAMEGEN_V51_CONTRACT,
+             "fragment-128x72-v51-cost-tested-bidirectional-refinement-stamped-pts-loss-bound-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V51,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V51),
+            (54, MODULE._FRAMEGEN_V54_CONTRACT,
+             "fragment-128x72-v54-cycle-aware-cost-tested-bidirectional-refinement-stamped-pts-loss-bound-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V54,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V54),
+            (55, MODULE._FRAMEGEN_V55_CONTRACT,
+             "fragment-128x72-v55-cycle-regularized-cost-tested-bidirectional-refinement-stamped-pts-loss-bound-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V55,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V55),
+            (56, MODULE._FRAMEGEN_V56_CONTRACT,
+             "fragment-128x72-v56-strong-cycle-regularized-cost-tested-bidirectional-refinement-stamped-pts-loss-bound-spatial-consensus-rational-clock-strict-flow",
+             MODULE.frame_gen.HEALTH_BASE_V56,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V56),
+            (57, MODULE._FRAMEGEN_V57_CONTRACT,
+             "fragment-v57-joint-cycle",
+             MODULE.frame_gen.HEALTH_BASE_V57,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V57),
+            (58, MODULE._FRAMEGEN_V58_CONTRACT,
+             "fragment-v58-joint-cycle",
+             MODULE.frame_gen.HEALTH_BASE_V58,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V58),
+            (59, MODULE._FRAMEGEN_V59_CONTRACT,
+             "fragment-v59-edge-aware-neighbor",
+             MODULE.frame_gen.HEALTH_BASE_V59,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V59),
+            (60, MODULE._FRAMEGEN_V60_CONTRACT,
+             "fragment-v60-independent-global-seed",
+             MODULE.frame_gen.HEALTH_BASE_V60,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V60),
+            (61, MODULE._FRAMEGEN_V61_CONTRACT,
+             "fragment-v61-parallel-global-seed",
+             MODULE.frame_gen.HEALTH_BASE_V61,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V61),
+            (62, MODULE._FRAMEGEN_V62_CONTRACT,
+             "fragment-v62-parallel-global-seed",
+             MODULE.frame_gen.HEALTH_BASE_V62,
+             MODULE.frame_gen.HEALTH_DENSE_EXTENSION_V62),
+        )
+        for schema, contract, variant, base_pattern, extension_pattern in cases:
+            common = {
+                "generator": 7, "display_id": 0,
+                "proof_schema_version": schema,
+                "proof_contract": contract, "dense_variant": variant,
+                "health_sequence": 9, "presents": 120,
+                "window_start_ns": 1_000_000_000,
+                "window_end_ns": 2_000_000_000,
+                "proof_evidence_presentation_epoch": 4,
+                "proof_evidence_enqueued_in_epoch": 2,
+                "endpoint_fifo_coalesced": 0,
+                "endpoint_timestamp_corrections": 0,
+                "dense_diagnostic_last_target_source_ns": 1_500_000_000,
+                "presentation_timing_mode": "egl-android-next-vsync",
+                "cadence_reject_consecutive_windows": 3,
+                "source_millihz": 50_000,
+                "target_millihz": 60_000,
+                "panel_millihz": 120_000,
+                "panel_scans_per_output": 2,
+                "uniform_output_qualified": 1,
+                "window_swap_millihz": 120_000,
+                "source_clock_kind": "pts",
+            }
+            base = materialize(base_pattern.pattern, common)
+            extension = materialize(extension_pattern.pattern, common)
+            clock_pattern = (
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V62 if schema == 62 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V61 if schema == 61 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V60 if schema == 60 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V59 if schema == 59 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V58 if schema == 58 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V57 if schema == 57 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V56 if schema == 56 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V55 if schema == 55 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V54 if schema == 54 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V51 if schema == 51 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V50 if schema == 50 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V49 if schema == 49 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V48 if schema == 48 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V47 if schema == 47 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V46 if schema == 46 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V45 if schema == 45 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V44 if schema == 44 else
+                MODULE.frame_gen.HEALTH_RATIONAL_CLOCK_V43)
+            clock = (materialize(clock_pattern.pattern, common)
+                     if schema in MODULE._FRAMEGEN_RATIONAL_SCHEMA_VERSIONS else None)
+            with self.subTest(schema=schema), mock.patch.object(
+                    MODULE.frame_gen, "_v37_diagnostic_hierarchy",
+                    return_value=[]), mock.patch.object(
+                        MODULE.frame_gen, "_v37_output_accounting_hierarchy",
+                        return_value=[]), mock.patch.object(
+                        MODULE.frame_gen, "_v43_rational_clock_hierarchy",
+                        return_value=[]):
+                records = MODULE._framegen_health_transport_records(
+                    prefix + base + "\n" + prefix + extension +
+                    (("\n" + prefix + clock) if clock is not None else ""))
+                self.assertEqual(schema, records[0]["proof_schema_version"])
+                self.assertEqual(contract, records[0]["proof_contract"])
+                self.assertEqual("egl-android-next-vsync",
+                                 records[0]["presentation_timing_mode"])
+                self.assertEqual(
+                    3, records[0]["cadence_reject_consecutive_windows"])
+            for field in ("presentationTimingMode",
+                          "cadenceRejectConsecutiveWindows"):
+                with self.subTest(schema=schema, field=field), \
+                        self.assertRaisesRegex(
+                            RuntimeError, "malformed or truncated"):
+                    truncated = re.sub(
+                        rf" {field}=[a-z0-9-]+", "", base, count=1)
+                    self.assertNotEqual(base, truncated)
+                    MODULE._framegen_health_transport_records(
+                        prefix + truncated + "\n" + prefix + extension)
+            if schema in MODULE._FRAMEGEN_RATIONAL_SCHEMA_VERSIONS:
+                with self.assertRaisesRegex(RuntimeError, "completion"):
+                    MODULE._framegen_health_transport_records(
+                        prefix + base + "\n" + prefix + extension)
+                with self.assertRaisesRegex(RuntimeError, "identity mismatch"):
+                    MODULE._framegen_health_transport_records(
+                        prefix + base + "\n" + prefix + extension + "\n" +
+                        prefix + clock.replace(
+                            "healthSequence=9", "healthSequence=10", 1))
+                malformed_clocks = (
+                    re.sub(r" rClock=[^ ]+", "", clock, count=1),
+                    clock.replace("rClock=50000/", "rClock=x/", 1),
+                    clock.replace("/2/1/120000/pts", "/0/1/120000/pts", 1),
+                    clock.replace("/2/1/120000/pts", "/2/2/120000/pts", 1),
+                    clock.replace("/2/1/120000/pts", "/2/1/120000/callback", 1),
+                )
+                for truncated in malformed_clocks:
+                    with self.subTest(schema=schema, clock=truncated), \
+                            self.assertRaisesRegex(
+                                RuntimeError,
+                                "malformed or truncated|rational-clock HEALTH is impossible"):
+                        self.assertNotEqual(clock, truncated)
+                        MODULE._framegen_health_transport_records(
+                            prefix + base + "\n" + prefix + extension +
+                            "\n" + prefix + truncated)
 
     def test_nes_every_title_uses_device_clocked_launch_and_runtime_geometry(self):
         source = (TOOLS / "run_runtime_acceptance_qa.py").read_text(encoding="utf-8")

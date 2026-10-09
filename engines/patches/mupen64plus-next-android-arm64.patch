@@ -39,3 +39,67 @@ index 72aef3a..d7dc767 100644
  		SOURCES_CXX += $(VIDEODIR_GLIDEN64)/src/Graphics/OpenGLContext/GraphicBuffer/GraphicBufferWrapper.cpp \
  		               $(VIDEODIR_GLIDEN64)/src/Graphics/OpenGLContext/GraphicBuffer/PublicApi/android_hardware_buffer_compat.cpp
  	endif
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index 7665666..e3e58fb 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -193,6 +193,18 @@ uint32_t EnableShadersStorage = 0;
+ uint32_t EnableTextureCache = 0;
+ uint32_t EnableFBEmulation = 0;
+ uint32_t EnableFrameDuping = 0;
++static bool lucent_mupen_vi_origin_changed = false;
++
++void lucent_mupen_note_vi_origin_change(void)
++{
++   lucent_mupen_vi_origin_changed = true;
++}
++
++RETRO_API bool retro_lucent_mupen_current_run_has_vi_origin_change(void)
++{
++   return lucent_mupen_vi_origin_changed;
++}
++
+ uint32_t EnableLODEmulation = 0;
+ uint32_t BackgroundMode = 0; // 0 is bgOnePiece
+ uint32_t EnableEnhancedTextureStorage = 0;
+@@ -2050,6 +2062,7 @@ void retro_unload_game(void)
+ 
+ void retro_run (void)
+ {
++    lucent_mupen_vi_origin_changed = false;
+     libretro_swap_buffer = false;
+     static bool updated = false;
+ 
+diff --git a/custom/mupen64plus-next_common.h b/custom/mupen64plus-next_common.h
+index 1ce8b90..73721f5 100644
+--- a/custom/mupen64plus-next_common.h
++++ b/custom/mupen64plus-next_common.h
+@@ -54,6 +54,8 @@ extern enum rsp_plugin_type current_rsp_type;
+ extern retro_environment_t environ_cb;
+ extern bool libretro_swap_buffer;
+ 
++void lucent_mupen_note_vi_origin_change(void);
++RETRO_API bool retro_lucent_mupen_current_run_has_vi_origin_change(void);
+ // Misc Globals
+ extern CONTROL Controls[4];
+ extern struct xoshiro256pp_state l_mpk_idgen;
+diff --git a/GLideN64/src/VI.cpp b/GLideN64/src/VI.cpp
+index 559f031..89cb6ab 100644
+--- a/GLideN64/src/VI.cpp
++++ b/GLideN64/src/VI.cpp
+@@ -17,6 +17,7 @@
+ #include "TextureFilterHandler.h"
+ #include "GLideNHQ/TxFilterExport.h"
+ #include <Graphics/Context.h>
++#include <mupen64plus-next_common.h>
+ 
+ using namespace std;
+ 
+@@ -266,6 +267,7 @@ void VI_UpdateScreen()
+ 	bool bVIUpdated = false;
+ 	if (*REG.VI_ORIGIN != VI.lastOrigin) {
+ 		VI_UpdateSize();
++		lucent_mupen_note_vi_origin_change();
+ 		bVIUpdated = true;
+ 		wnd.updateScale();
+ 		perf.increaseFramesCount();

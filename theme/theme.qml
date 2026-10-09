@@ -9,7 +9,48 @@ FocusScope {
     width: 1920
     height: 1080
 
-    readonly property string lucentVersion: "3.2.15"
+    readonly property string lucentVersion: "3.2.17"
+
+    // ---- Vertical envelope ------------------------------------------------
+    // Android used to reserve the bottom 55 px of the panel for its navigation
+    // bar, so every view was authored against a 1025 px floor. The theme now
+    // owns the whole display. The floor is stated once, here, and each view
+    // measures against it instead of carrying its own copy: if the usable
+    // height moves again the views re-proportion rather than leaving a dead
+    // band under the last row.
+    // One inset, used on every edge. The header bar sits 34px down from the
+    // top, so 34 is what the bottom owes as well: an 11px bottom against a
+    // 34px top is the mismatch that made the reclaimed strip read as a
+    // leftover gap rather than as margin. Anything that wants to hug an edge
+    // measures from here, so the frame stays even the whole way round.
+    readonly property real screenMargin: 34
+    readonly property real footerFontSize: 15
+    // The legend is the bottom edge's counterpart to the clock and battery at
+    // the top, so it is toned against the same wash rather than darker than it.
+    // At #7f899c it measured 137 luma against a 128 luma wallpaper -- 1.08:1,
+    // which is not a reading contrast, it is camouflage. The top bar reads at
+    // 209 luma over the same wash; this lands between the two, bright enough to
+    // read on light artwork and still plainly secondary to the titles.
+    readonly property color footerColor: "#b6bfd0"
+    // Legends line up with the header bar rather than sitting 6 px further in.
+    readonly property real footerSideMargin: 56
+    readonly property real footerLineHeight: Math.round(footerFontSize * 1.4)
+    // The instruction strip is drawn straight onto the wallpaper -- no plate,
+    // and no opaque gradient behind it either -- exactly like the clock and
+    // battery at the top, which is the treatment this has to match.
+    readonly property real footerY: height - footerLineHeight - screenMargin
+    // Right edge of the labels at the left end of the footer line. The button
+    // legends are right-aligned and only shrink when they would run into
+    // these (narrow phone windows); where they fit they render unchanged.
+    readonly property real footerLegendLeft: Math.max(
+            footerViewName.visible ? footerViewName.x + footerViewName.paintedWidth : 0,
+            coverNavigationHint.visible ?
+                coverNavigationHint.x + coverNavigationHint.paintedWidth : 0) + 36
+    // Nothing that scrolls, or that grows under selection, may cross this.
+    // The content-to-footer gap is deliberately tighter than the outer margin:
+    // the footer is a label on the frame, not a panel, so crowding it slightly
+    // costs nothing and hands the difference back to the artwork.
+    readonly property real contentBottom: footerY - Math.round(screenMargin * 0.4)
 
     property string page: "home"
     // 0 systems; 1 continue; 2 most played; 3 recently added;
@@ -21,12 +62,68 @@ FocusScope {
     property var currentBottomPreviewGame: null
     property bool launchPollPending: false
     property bool applicationWasActive: false
+    // True while a game owns the screen. The frontend cannot work this out on
+    // its own: in-window gameplay adds its view to the SAME Activity and keeps
+    // the Qt window warm, so Qt.application.state stays ApplicationActive. The
+    // companion reports it on /heartbeat instead. Every poller below stands
+    // down while this is set -- each poll is a fresh TCP connection (the
+    // companion answers Connection: close), and thousands of them during a
+    // session both steal CPU from the emulator and, at ~10 sockets/second,
+    // crashed the process in Qt's own network thread mid-game.
+    property bool gameplayActive: false
+    property int previewHeartbeatSequence: 0
+    property int previewHeartbeatAppliedSequence: 0
+    onGameplayActiveChanged: handleGameplayActiveChanged()
+
+    function handleGameplayActiveChanged() {
+        console.warn("EmuFusion frontend gameplay=" + gameplayActive +
+                     " qtApplicationState=" + Qt.application.state)
+        if (gameplayActive) {
+            // Clearing ordinary PIP sources is insufficient: an already-active
+            // screensaver owns two other Qt video textures and queued callbacks.
+            stopScreensaver(false)
+        } else {
+            screensaverTopStillSince = Date.now()
+            Qt.callLater(function() { root.refreshCurrentPreview() })
+        }
+    }
     // Capability detection keeps physical lower-display playback exclusive to
     // dual-screen hardware. Single-screen devices use the in-theme PIP below.
     property bool dualScreenDevice: true
     property string previewPlacementMode: "auto" // auto, bottom, top, off
-    property bool previewSoundEnabled: true
+    // Preview movies are silent until the user explicitly enables their sound
+    // in Settings. This does not affect menu sound effects or game audio.
+    property bool previewSoundEnabled: false
+    property bool privateDiagnosticsConfigured: false
+    property bool privateDiagnosticsEnabled: false
+    property bool privateDiagnosticsPending: false
     property bool soundEffectsEnabled: true
+    // Explicit and fail-closed. No legacy Boolean is allowed to silently turn
+    // an experimental renderer back on after an update.
+    property string frameGenerationMode: "off"
+    // The displayed value is committed Android state, never an optimistic UI
+    // guess. A launch requested while a write/status read is in flight waits
+    // for the service acknowledgement.
+    property bool frameGenerationModePending: false
+    property bool frameGenerationModeConfirmed: false
+    property string frameGenerationRequestedMode: "off"
+    property int frameGenerationRequestSequence: 0
+    property var frameGenerationPendingLaunch: null
+    property bool screensaverEnabled: true
+    property bool screensaverActive: false
+    property bool screensaverRequestPending: false
+    property var screensaverDeck: []
+    property int screensaverDeckIndex: 0
+    property var screensaverGame: null
+    property var screensaverPendingGame: null
+    property string screensaverSourceA: ""
+    property string screensaverSourceB: ""
+    property int screensaverCurrentSlot: -1
+    property int screensaverPendingSlot: -1
+    property int screensaverGeneration: 0
+    property double screensaverTopStillSince: Date.now()
+    readonly property int screensaverStillTimeoutMs: 120000
+    readonly property int screensaverCrossfadeMs: 500
     // Single-screen devices can exchange the PIP and box-art columns. The
     // preference may persist across hardware, but is never applied or exposed
     // while a physical lower display is available.
@@ -39,11 +136,76 @@ FocusScope {
     property var coverRowOrder: [0, 1, 2, 3, 4, 5, 6, 7]
     property bool coverOrderEditorOpen: false
     property int coverOrderEditorIndex: 0
-    readonly property real coverContentTop: 330
-    readonly property real coverContentHeight: 710
+
+    // ---- Missing box art review -------------------------------------------
+    // The companion searches every platform catalog during a maintenance scan
+    // and lists the games it could find no box art for. It never acts on that
+    // list: the owner answers once per game here, and the answer is stored
+    // beside the media so a rescan or a reinstall never asks again. Deleting
+    // the ROM is the only destructive answer and is the only one that asks
+    // for a second press.
+    property bool artworkReviewOpen: false
+    property var artworkReviewGames: []
+    property int artworkReviewIndex: 0
+    // 0 leave as is, 1 remove from the menus, 2 delete the ROM file.
+    property int artworkReviewChoice: 0
+    property bool artworkReviewConfirming: false
+    property bool artworkReviewBusy: false
+    property bool artworkReviewLoaded: false
+    property string artworkReviewMessage: ""
+    property int artworkReviewCount: 0
+
+    readonly property real coverContentTop: 314
+    readonly property real coverContentHeight: contentBottom - coverContentTop
     readonly property real coverRowSlotHeight: coverContentHeight / coverViewRowCount
-    readonly property real coverShelfCardWidth: coverViewRowCount === 1 ? 330 :
-                                                  (coverViewRowCount === 2 ? 238 : 196)
+    // A shelf slot pays for its heading and its caption; whatever remains is
+    // artwork. Stating both here keeps the package scale below honest about
+    // how much room a cover actually has.
+    readonly property real coverShelfLabelHeight: coverViewRowCount === 3 ? 34 : 44
+    readonly property real coverShelfCaptionHeight: coverViewRowCount === 1 ? 104 :
+                                                      (coverViewRowCount === 2 ? 84 : 66)
+    // Centering reference for the shelf rails. Derived from the same formula
+    // the delegate uses for the commonest package (a 135 mm case) so the
+    // selected cover really lands on the middle of the display.
+    readonly property real coverShelfCardWidth: Math.max(
+            coverViewRowCount === 1 ? 180 : (coverViewRowCount === 2 ? 150 : 130),
+            135 * coverShelfPixelsPerMillimetre() + 22)
+    // System cards are the one shelf whose contents are not packages, so they
+    // are sized from the slot rather than from a package dimension. They used
+    // to be stated as constants -- 440x330 for a single row -- against a slot
+    // that is now 697 px tall, which left a 239 px band of wallpaper under the
+    // shelf: the single largest dead space on any screen, and the "awkward
+    // large gap on the bottom" exactly. Height therefore comes from the slot,
+    // so the shelf bottoms out on the content floor whatever the row count is.
+    // The band a system shelf may occupy. One row starts below the hardware
+    // photograph (which ends at y=438) and runs to the content floor; two or
+    // three share the slot they are given.
+    readonly property real coverSystemSelectedScale: 1.10
+    readonly property real coverSystemBandTop: coverContentTop +
+            (coverViewRowCount === 1 ? 128 : 0)
+    readonly property real coverSystemBandHeight: coverViewRowCount === 1 ?
+            contentBottom - coverSystemBandTop :
+            coverRowSlotHeight - (coverViewRowCount === 2 ? 20 : 14)
+    // Sized so the SELECTED card -- the one that grows -- is what lands on the
+    // content floor. Dividing the band by the selection scale first is the
+    // whole trick: sizing the nominal card to the band instead made the grown
+    // card overhang the floor by 28 px and print itself over the legend.
+    readonly property real coverSystemCardHeight:
+            Math.floor(coverSystemBandHeight / coverSystemSelectedScale)
+    // Centre the nominal card in the band, so the grown card fills it exactly.
+    readonly property real coverSystemRailTop: coverSystemBandTop +
+            Math.round((coverSystemBandHeight - coverSystemCardHeight) / 2)
+    // Width follows height at the card's original 4:3 proportion, but is capped
+    // so a hero shelf still reads as a rail of several systems rather than one
+    // card and two slivers. Past the cap the card simply becomes squarer, which
+    // the delegate handles: the wordmark is aspect-fitted inside it.
+    readonly property real coverSystemCardWidth: Math.min(
+            coverViewRowCount === 1 ? 540 : (coverViewRowCount === 2 ? 400 : 290),
+            Math.round(coverSystemCardHeight * 4 / 3))
+    // Games view cover width. Widened with the taller rail so a 135x190 mm
+    // case still fills the card edge to edge at the new artwork height; one
+    // fewer card is visible per screen and each is a fifth larger.
+    readonly property real gameCardWidth: 296
     // System identity is intentionally static while selected. Every system
     // owns one decoded wallpaper and receives its next random wallpaper only
     // after the user leaves it. The experimental motion layer was removed
@@ -77,13 +239,119 @@ FocusScope {
     // Read only by the hidden pre-3.0.40 settings markup retained below.
     property bool systemLedUseDeviceBrightness: false
     property string startViewPreference: "cover"
+    property bool widescreenEnhancementsEnabled: true
+    property bool widescreenEnhancementsPending: false
+    // The geometry-expanding per-system hack (/settings/widescreen-hack);
+    // off by default, independent of the native 16:9 flag above.
+    property bool widescreenHackEnabled: false
+    property bool widescreenHackPending: false
     readonly property int baseSettingsOptionCount: dualScreenDevice ? 16 : 17
-    // Lucent's unified build has one in-window engine policy. Standalone
-    // emulator selection would break the one-app/one-window contract, so the
-    // legacy per-system external controls are not part of the visible settings.
-    readonly property int settingsOptionCount: baseSettingsOptionCount
-    readonly property int settingsPageSize: 6
+    // Three rows live below the historic block, and the legal notice must stay
+    // at the very bottom. The single-screen-only PIP row (slot 16) sits
+    // between them and the rest, so an absolute index is no longer the same
+    // thing as a slot -- settingSlot() is the one place that difference is
+    // resolved, and the tail order is written down here rather than implied by
+    // the slot numbers so a new row can be inserted without renumbering.
+    readonly property var settingsTailSlots: [17, 21, 22, 23, 20, 19, 24, 18]
+    readonly property int settingsTailCount: settingsTailSlots.length
+    readonly property int settingsOptionCount:
+            baseSettingsOptionCount + settingsTailCount
+    // Reclaimed panel height buys another ROW, not padding: listRowCount and
+    // listRowHeight decide the page size and the row stride together, so the
+    // page always bottoms out flush instead of leaving a band under the last
+    // row. 102 is the smallest row that still holds a title over a description
+    // at a comfortable touch size.
+    readonly property real settingsListTop: 152
+    readonly property real settingsListSpacing: 12
+    readonly property real settingsPanelHeight: root.height - 80
+    readonly property real settingsListAvailable: settingsPanelHeight -
+            settingsListTop - (footerLineHeight + 40)
+    readonly property int settingsPageSize:
+            listRowCount(settingsListAvailable, 102, settingsListSpacing)
+    readonly property real settingsRowHeight:
+            listRowHeight(settingsListAvailable, 102, 132, settingsListSpacing)
     readonly property int settingsPage: Math.floor(settingsIndex / settingsPageSize)
+
+    // ---- Per-system emulator routing (Settings) ---------------------------
+    // Internal is the default wherever a bundled engine exists; External is a
+    // per-system choice. All state below is a cache of what /route/* reports --
+    // the Java side stays the single source of truth, and every mutation is
+    // followed by a re-read rather than a local guess.
+    property bool emulatorRoutesOpen: false
+    property int emulatorRoutesIndex: 0
+    property var emulatorRouteSystems: []
+    property bool emulatorRoutesLoading: false
+    property string emulatorRoutesNotice: ""
+
+    property bool emulatorPickerOpen: false
+    property string emulatorPickerSystem: ""
+    property string emulatorPickerLabel: ""
+    property int emulatorPickerIndex: 0
+    property var emulatorPickerData: null
+    property var emulatorPickerRowList: []
+    property string emulatorPickerNotice: ""
+    property bool emulatorPickerLoading: false
+    property bool emulatorPickerBusy: false
+
+    // Both sub-screens reuse the settings panel's envelope so the three read as
+    // one surface, and both size their rows with listRowHeight so the last row
+    // lands on the panel floor instead of leaving a band under it.
+    readonly property real routesListAvailable: settingsPanelHeight -
+            settingsListTop - (footerLineHeight + 40)
+    readonly property int routesRowMinimum: 92
+    readonly property real routesRowHeight: listRowHeight(
+            routesListAvailable, routesRowMinimum, 118, settingsListSpacing)
+    readonly property int routesPageSize: listRowCount(
+            routesListAvailable, routesRowMinimum, settingsListSpacing)
+    readonly property int routesPage: Math.floor(emulatorRoutesIndex / routesPageSize)
+
+    // The option and custom-setup sheets show every row at once, so their row
+    // count is fixed and it is the HEIGHT that absorbs the panel: each row
+    // takes an equal share, capped so a three-item list does not become three
+    // slabs. When the cap bites, the block is centred rather than left hanging
+    // -- a short list with even margins reads as deliberate, which a list
+    // pinned to the top with a dead band beneath it does not.
+    function shareRowHeight(available, count, minimum, maximum, spacing) {
+        return Math.max(minimum, Math.min(maximum,
+                Math.floor((available + spacing) / Math.max(1, count)) - spacing))
+    }
+
+    function centredListTop(available, count, rowHeight, spacing) {
+        var block = count * rowHeight + Math.max(0, count - 1) * spacing
+        return settingsListTop + Math.max(0, Math.round((available - block) / 2))
+    }
+
+    readonly property int pickerRowCount: emulatorPickerRowList.length
+    readonly property real pickerRowHeight:
+            shareRowHeight(routesListAvailable, pickerRowCount, 88, 150, 12)
+    readonly property real pickerListTop: centredListTop(
+            routesListAvailable, pickerRowCount, pickerRowHeight, 12)
+
+    readonly property real customFormAvailable: settingsPanelHeight - 150 -
+            (footerLineHeight + 40)
+    readonly property int customFormRowCount: customEmulatorRowCount()
+    readonly property real customRowHeight:
+            shareRowHeight(customFormAvailable, customFormRowCount, 88, 132, 10)
+    readonly property real customFormTop: 150 + Math.max(0, Math.round(
+            (customFormAvailable - (customFormRowCount * customRowHeight +
+             Math.max(0, customFormRowCount - 1) * 10)) / 2))
+
+    property bool customEmulatorOpen: false
+    property int customEmulatorIndex: 0
+    property string customEmulatorPackage: ""
+    property string customEmulatorActivity: ""
+    property string customEmulatorDelivery: "file-path"
+    property string customEmulatorKey: ""
+    property var customEmulatorProblems: []
+    property string customEmulatorNotice: ""
+    property bool customEmulatorConfigured: false
+
+    property bool legalOpen: false
+    property string legalTitle: "Legal Notice"
+    property var legalParagraphs: []
+    property real legalScroll: 0
+    property real legalBodyHeight: 0
+    readonly property real legalViewportHeight: settingsPanelHeight - 250
     property bool searchOpen: false
     property string searchQuery: ""
     property bool searchKeyboardAccepting: false
@@ -92,6 +360,19 @@ FocusScope {
     property int gameActionIndex: 0
     property var gameActionGame: null
     property string gameActionMessage: ""
+    // Fetched once per opening of the game options, never polled: a cheat
+    // catalogue only changes when the user edits their own file, and the
+    // answer is what decides whether the Cheats row is offered at all.
+    property var gameActionCheats: []
+    property int gameActionCheatIndex: 0
+    property string gameActionCheatState: "idle"
+    // Multiplayer (alpha): the roster is fetched fresh each time the panel
+    // opens, and the want toggle writes optimistically -- both follow the
+    // same demand-driven, never-polled rule as the cheat catalogue above.
+    property bool gameActionMultiplayerWant: false
+    property bool gameActionMultiplayerPending: false
+    property string gameActionMultiplayerState: "idle"
+    property var gameActionMultiplayerRoster: []
     property var renamedGameTitles: ({})
     property var hiddenGameIds: ({})
     // These are deliberately category-specific. Removing a behavioral item
@@ -118,6 +399,12 @@ FocusScope {
     property int homeListCategory: 1
     property int homeListFocusColumn: 1 // 0 systems, 1 category/game list
     property var homeListEntries: []
+    // The row the video preview is showcasing while the system column owns
+    // focus. This is deliberately NOT homeListRail.currentIndex: that property
+    // also drives the list's scroll position, so storing a random showcase pick
+    // in it scrolled the visible games to a different place on every system
+    // change. The list must always start at the top of the selected sort.
+    property int homeListPreviewIndex: -1
     property var homeListCache: ({})
     property var availableBrandSlugs: []
     property var collectionFolderMap: ({})
@@ -129,6 +416,12 @@ FocusScope {
     property var pendingLibraryGameMap: ({})
     property int libraryIndexBuildPosition: 0
     property bool updatePromptOpen: false
+    property bool voiceFeedbackOpen: false
+    property string voiceFeedbackState: "idle"
+    property string voiceFeedbackTranscript: ""
+    property string voiceFeedbackMessage: ""
+    property int voiceFeedbackChoice: 0
+    property bool voiceFeedbackGithubOpened: false
     property bool aboutOpen: false
     property int updatePromptChoice: 0
     property bool updatePromptDismissed: false
@@ -231,7 +524,7 @@ FocusScope {
         if (page === "games" && activeGameCount > 0)
             return gameAtDisplayIndex(gameRail.currentIndex)
         if (page === "home" && homeViewMode === "list")
-            return homeListGameAt(homeListRail.currentIndex)
+            return homeListGameAt(homeListPreviewRow())
         if (page === "home" && homeZone > 0)
             return homeShelfGame(homeZone)
         return homePreviewGame
@@ -250,6 +543,14 @@ FocusScope {
     }
     onAccentChanged: {
         if (systemLedEnabled) systemLedCommit.restart()
+    }
+    // Settings has ten entry points and no single opener, so the missing-art
+    // count is fetched from the panel's own visibility. Once per launch: the
+    // list only changes when a maintenance scan runs or a row is answered,
+    // and both of those re-read it themselves.
+    onSettingsOpenChanged: {
+        if (settingsOpen) refreshPrivateDiagnostics()
+        if (settingsOpen && !artworkReviewLoaded) loadArtworkReview(null)
     }
     property string clockText: ""
 
@@ -757,6 +1058,10 @@ FocusScope {
         pendingLibraryIndex = null
         pendingLibraryGameMap = ({})
         libraryIndexReady = true
+        // The startup screen lives in Java (it has to cover the
+        // frontend's own splash, which exists before any QML does), so
+        // this is the only way to tell it the wait is over.
+        requestPreviewEndpoint("frontend/ready")
         homeListCache = ({})
         activateCachedSystemSort()
         if (page === "home" && homeViewMode === "list")
@@ -934,7 +1239,12 @@ FocusScope {
         // A random item from the active category drives only the video preview;
         // the upper display stays on the selected console's hardware artwork.
         // Pressing A locks the system and deliberately selects row 0.
-        homeListRail.currentIndex = homeListEntries.length > 0 ?
+        //
+        // The list itself always starts at row 0 so switching systems or
+        // categories shows the top of that sort every time. The random
+        // showcase pick lives in homeListPreviewIndex, which no view reads.
+        homeListRail.currentIndex = homeListEntries.length > 0 ? 0 : -1
+        homeListPreviewIndex = homeListEntries.length > 0 ?
                 (homeListFocusColumn === 0 ?
                  Math.floor(Math.random() * homeListEntries.length) : 0) : -1
         // Row zero is the deterministic A-button destination. Warm its cover
@@ -944,8 +1254,8 @@ FocusScope {
         upperArtworkPreloadEntry.source = artwork(homeListGameAt(0))
         Qt.callLater(function() {
             if (root.homeViewMode !== "list" || root.page !== "home") return
-            if (homeListRail.currentIndex >= 0)
-                homeListRail.positionViewAtIndex(homeListRail.currentIndex, ListView.Center)
+            // Always the top of the list, never a remembered or random offset.
+            homeListRail.positionViewAtBeginning()
             root.activateHomeListPreview()
             root.forceActiveFocus()
         })
@@ -969,6 +1279,8 @@ FocusScope {
         homeListFocusColumn = 1
         if (homeListEntries.length > 0)
             homeListRail.currentIndex = 0
+        // The showcase pick stops applying the moment a real row is selected.
+        homeListPreviewIndex = homeListEntries.length > 0 ? 0 : -1
         activateHomeListPreview()
         root.forceActiveFocus()
     }
@@ -1036,10 +1348,14 @@ FocusScope {
         return packageDimensionsForSystem(systemIndexForGame(game))
     }
 
+    // Millimetres of real packaging per pixel of screen. Raised across the
+    // board once the navigation-bar inset was reclaimed: a 190 mm case now
+    // fits the taller shelf slot, and cards that were leaving a third of
+    // their artwork area unused are drawn at the size the slot can carry.
     function coverShelfPixelsPerMillimetre() {
-        if (coverViewRowCount === 1) return 2.45
-        if (coverViewRowCount === 2) return 1.05
-        return 0.56
+        if (coverViewRowCount === 1) return 2.90
+        if (coverViewRowCount === 2) return 1.18
+        return 0.64
     }
 
     function isLucentLibraryGame(game) {
@@ -1326,6 +1642,10 @@ FocusScope {
     }
 
     function positionGameListAtIndex(index) {
+        // A conservative floor, not a measurement: the viewport quantises
+        // itself to whole strides and may now hold more rows than this.
+        // Paging from the smaller number only means the last page overlaps by
+        // a row, which is harmless; overstating it would skip games.
         var visibleRows = 8
         var leadingRows = 3
         var maximumStart = Math.max(0, activeGameCount - visibleRows)
@@ -1389,18 +1709,43 @@ FocusScope {
     }
 
     function gameActionOptionCount() {
+        return gameActionAllowsRemoveFromList() ? 5 : 4
+    }
+
+    // Cheats keeps a fixed slot even for a game that has none. The list is
+    // fetched asynchronously, so a row that appeared on arrival would renumber
+    // the options under the user -- and the row it would push down is DELETE.
+    function gameActionCheatsOptionIndex() { return 1 }
+
+    function gameActionRemoveOptionIndex() { return 2 }
+
+    function gameActionDeleteOptionIndex() {
         return gameActionAllowsRemoveFromList() ? 3 : 2
     }
 
+    // Always the new last row -- appended after DELETE so every existing
+    // option index above stays exactly as it was before this feature.
+    function gameActionMultiplayerOptionIndex() {
+        return gameActionDeleteOptionIndex() + 1
+    }
+
+    function gameActionHasCheats() { return gameActionCheats.length > 0 }
+
     function moveGameActionSelection(direction) {
         var count = gameActionOptionCount()
-        gameActionIndex = (gameActionIndex + direction + count) % count
+        var next = gameActionIndex
+        for (var step = 0; step < count; ++step) {
+            next = (next + direction + count) % count
+            if (next !== gameActionCheatsOptionIndex() || gameActionHasCheats()) break
+        }
+        gameActionIndex = next
     }
 
     function openGameActions(game, index) {
         if (!game) return
         gameRail.currentIndex = index
         gameActionGame = game
+        loadGameActionCheats(game)
         gameActionCategory = page === "home" ?
                     (homeViewMode === "list" ? homeListCategory : homeZone) : 0
         gameActionIndex = 0
@@ -1418,12 +1763,194 @@ FocusScope {
         gameActionGame = null
         gameActionCategory = 0
         gameActionMode = "menu"
+        gameActionCheats = []
+        gameActionCheatIndex = 0
+        gameActionCheatState = "idle"
+        gameActionMultiplayerRoster = []
+        gameActionMultiplayerState = "idle"
+        gameActionMultiplayerWant = false
+        gameActionMultiplayerPending = false
         root.forceActiveFocus()
+    }
+
+    // The engine keys a game's cheats by the ROM file it launches, so send
+    // that when Pegasus exposes it. A scraped display title that differs from
+    // the file name would otherwise offer cheats here that the launch could
+    // never find. CheatDatabase.normalise drops the directory and extension.
+    function cheatGameKeyForGame(game) {
+        if (!game) return ""
+        try {
+            if (game.files && game.files.count > 0) {
+                var path = String(game.files.get(0).path || "")
+                if (path !== "") return path
+            }
+        } catch (unavailable) {
+        }
+        return String(game.title || "")
+    }
+
+    function cheatSystemForGame(game) {
+        var index = systemIndexForGame(game)
+        return index > 0 && index < systemModel.count ?
+                    String(systemModel.get(index).folder) : ""
+    }
+
+    // PLACEHOLDER gameKey: there is no cross-device-stable game identity
+    // reachable from QML yet (that lives Java-side as CheatGameIdentity and
+    // is not exposed here today). This deliberately sends the raw TITLE,
+    // not cheatGameKeyForGame's file path -- a path is per-device and
+    // would never match between two different players' copies of the same
+    // game, or match the in-game overlay's own key at all (MultiplayerOverlay
+    // computes CheatDatabase.key(system, title) from the launch request, so
+    // both sides must feed it the same (system, title) pair to land on the
+    // same string). The companion endpoint normalizes this the same way via
+    // CheatDatabase.key(system, title) server-side -- this wire field is
+    // named "gameKey" for the API contract but carries a raw title.
+    function multiplayerGameKeyForGame(game) {
+        if (!game) return ""
+        return String(game.title || "")
+    }
+
+    function multiplayerSystemForGame(game) { return cheatSystemForGame(game) }
+
+    function loadGameActionCheats(game) {
+        gameActionCheats = []
+        gameActionCheatIndex = 0
+        var system = cheatSystemForGame(game)
+        var key = cheatGameKeyForGame(game)
+        if (system === "" || key === "") {
+            gameActionCheatState = "ready"
+            return
+        }
+        gameActionCheatState = "loading"
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            // The overlay may already have moved to another game; a late reply
+            // must never list one game's cheats against another.
+            if (root.gameActionGame !== game) return
+            if (request.status !== 200) {
+                root.gameActionCheatState = "error"
+                return
+            }
+            try {
+                var payload = JSON.parse(request.responseText)
+                root.gameActionCheats = payload.cheats || []
+                root.gameActionCheatState = "ready"
+            } catch (malformed) {
+                root.gameActionCheatState = "error"
+            }
+        }
+        request.open("GET", "http://127.0.0.1:43821/cheats/list?system=" +
+                     encodeURIComponent(system) + "&title=" +
+                     encodeURIComponent(key), true)
+        request.send()
+    }
+
+    function gameActionCheatsLabel() {
+        if (gameActionCheatState === "loading") return "CHEATS  •  CHECKING"
+        if (gameActionCheatState === "error") return "CHEATS  •  UNAVAILABLE"
+        if (!gameActionHasCheats()) return "CHEATS  •  NONE FOR THIS GAME"
+        return "CHEATS  •  " + gameActionCheats.length
+    }
+
+    function openGameActionCheats() {
+        if (!gameActionHasCheats()) return
+        gameActionCheatIndex = 0
+        cheatList.currentIndex = 0
+        gameActionMode = "cheats"
+    }
+
+    function moveGameActionCheatSelection(direction) {
+        var count = gameActionCheats.length
+        if (count <= 0) return
+        gameActionCheatIndex = (gameActionCheatIndex + direction + count) % count
+        cheatList.currentIndex = gameActionCheatIndex
+    }
+
+    // The row is redrawn from the service's answer rather than from what was
+    // asked for, so a rejected write cannot leave a switch showing a position
+    // the stored selection is not in.
+    function toggleGameActionCheat(index) {
+        if (index < 0 || index >= gameActionCheats.length) return
+        var game = gameActionGame
+        var entry = gameActionCheats[index]
+        var system = cheatSystemForGame(game)
+        var key = cheatGameKeyForGame(game)
+        if (system === "" || key === "" || !entry) return
+        var wanted = !entry.enabled
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            if (root.gameActionGame !== game || request.status !== 200) return
+            // Reassigned wholesale: mutating an element in place changes no
+            // property QML is watching, and the row would keep its old label.
+            var updated = root.gameActionCheats.slice()
+            updated[index] = { "id": entry.id, "name": entry.name,
+                               "description": entry.description,
+                               "enabled": wanted }
+            root.gameActionCheats = updated
+        }
+        request.open("GET", "http://127.0.0.1:43821/cheats/set?system=" +
+                     encodeURIComponent(system) + "&title=" +
+                     encodeURIComponent(key) + "&id=" +
+                     encodeURIComponent(entry.id) + "&enabled=" +
+                     (wanted ? "1" : "0"), true)
+        request.send()
+    }
+
+    // Fetched fresh every time the panel opens -- see the property comment
+    // above for why this is never polled while the sheet stays open.
+    function openGameActionMultiplayer() {
+        gameActionMultiplayerRoster = []
+        gameActionMultiplayerState = "loading"
+        gameActionMode = "multiplayer"
+        var game = gameActionGame
+        var key = multiplayerGameKeyForGame(game)
+        var system = multiplayerSystemForGame(game)
+        requestPreviewJson("multiplayer/roster?gameKey=" + encodeURIComponent(key) +
+                     "&system=" + encodeURIComponent(system),
+                function(payload) {
+                    // The sheet may already have moved to another game by the
+                    // time this answer arrives.
+                    if (root.gameActionGame !== game) return
+                    if (!payload || !payload.entries) {
+                        root.gameActionMultiplayerState = "error"
+                        return
+                    }
+                    root.gameActionMultiplayerRoster = payload.entries
+                    root.gameActionMultiplayerState = "ready"
+                })
+    }
+
+    // Optimistic write, same shape as setWidescreenHack above: flip locally,
+    // send the request, and only revert if the companion actually refused it.
+    // Min/max players are hardcoded to 2/2 for this pass -- a real
+    // min/max-player picker UI is deferred, not solved here.
+    function setGameActionMultiplayerWant(wanted) {
+        if (gameActionMultiplayerPending) return
+        var game = gameActionGame
+        var key = multiplayerGameKeyForGame(game)
+        var system = multiplayerSystemForGame(game)
+        var previous = gameActionMultiplayerWant
+        gameActionMultiplayerWant = wanted
+        gameActionMultiplayerPending = true
+        requestPreviewJson("multiplayer/want?gameKey=" + encodeURIComponent(key) +
+                     "&system=" + encodeURIComponent(system) + "&want=" +
+                     (wanted ? "1" : "0") + "&minPlayers=2&maxPlayers=2",
+                function(payload) {
+                    root.gameActionMultiplayerPending = false
+                    if (root.gameActionGame !== game) return
+                    if (!payload || payload.ok !== true) {
+                        root.gameActionMultiplayerWant = previous
+                        root.requestPreviewEndpoint("sfx?name=error")
+                    }
+                })
     }
 
     function beginRenameGame() {
         if (!gameActionGame || gameIdentifier(gameActionGame) === "") {
-            gameActionMessage = "This game must be imported by Lucent before it can be renamed."
+            gameActionMessage = "This game must be imported by EmuFusion before it can be renamed."
             gameActionMode = "error"
             return
         }
@@ -1467,7 +1994,7 @@ FocusScope {
     function submitDeleteGame() {
         var identity = gameIdentifier(gameActionGame)
         if (identity === "") {
-            gameActionMessage = "This game must be imported by Lucent before it can be deleted."
+            gameActionMessage = "This game must be imported by EmuFusion before it can be deleted."
             gameActionMode = "error"
             return
         }
@@ -1559,6 +2086,7 @@ FocusScope {
     }
 
     function sendBottomPreview(game, previousGame, nextGame, auxiliaryGame) {
+        if (gameplayActive) return
         if (previewPlacementMode === "off") {
             currentBottomPreviewGame = null
             currentBottomPreviewSequence = 0
@@ -1581,23 +2109,49 @@ FocusScope {
         request.send()
     }
 
+    // The row the preview is showing: the random showcase pick while the system
+    // column owns focus, otherwise the highlighted row itself. Keeping this
+    // separate from the rail's currentIndex is what lets the visible list stay
+    // pinned to the top of the sort while the preview still rotates.
+    function homeListPreviewRow() {
+        if (homeListFocusColumn === 0 && homeListPreviewIndex >= 0 &&
+                homeListPreviewIndex < homeListEntries.length)
+            return homeListPreviewIndex
+        return homeListRail.currentIndex
+    }
+
+    /**
+     * Keys that belong to Android, never to the theme.
+     *
+     * Qt maps the hardware rocker to Qt.Key_VolumeUp/Down, but the Thor's two
+     * volume buttons sit on different input devices and some builds surface
+     * them only by native scan code (115 up, 114 down), so both are checked.
+     */
+    function isPlatformVolumeKey(event) {
+        return event.key === Qt.Key_VolumeUp || event.key === Qt.Key_VolumeDown ||
+                event.key === Qt.Key_VolumeMute ||
+                event.nativeScanCode === 114 || event.nativeScanCode === 115
+    }
+
     function randomHomePreviewActive() {
-        return page === "home" &&
+        return !gameplayActive && page === "home" &&
                 ((homeViewMode === "covers" && homeZone === 0) ||
                  (homeViewMode === "list" && homeListFocusColumn === 0))
     }
 
     function advanceRandomHomePreview() {
-        if (page !== "home") return
+        if (gameplayActive || page !== "home") return
         if (homeViewMode === "list" && homeListFocusColumn === 0) {
             if (homeListEntries.length <= 1) {
                 activateHomeListPreview()
                 return
             }
-            var previous = homeListRail.currentIndex
+            // Advance the showcase pick only. Moving the rail here is what made
+            // the visible list drift while the user was still on the systems.
+            var previous = homeListPreviewRow()
             var next = Math.floor(Math.random() * (homeListEntries.length - 1))
             if (next >= previous) ++next
-            homeListRail.currentIndex = next
+            homeListPreviewIndex = next
             activateHomeListPreview()
         } else if (homeViewMode === "covers" && homeZone === 0) {
             activateHomePreview(true)
@@ -1616,7 +2170,7 @@ FocusScope {
     }
 
     function pollBottomLaunchRequest() {
-        if (launchPollPending || !useBottomPreview() || !currentBottomPreviewGame)
+        if (gameplayActive || launchPollPending || !useBottomPreview() || !currentBottomPreviewGame)
             return
         launchPollPending = true
         var request = new XMLHttpRequest()
@@ -1624,6 +2178,7 @@ FocusScope {
             if (request.readyState !== XMLHttpRequest.DONE)
                 return
             root.launchPollPending = false
+            if (root.gameplayActive) return
             if (request.status !== 200)
                 return
             try {
@@ -1647,6 +2202,7 @@ FocusScope {
     }
 
     function refreshCurrentPreview() {
+        if (gameplayActive || Qt.application.state !== Qt.ApplicationActive) return
         if (previewPlacementMode === "off") {
             singleCurrentSlot = -1
             currentBottomPreviewGame = null
@@ -1685,6 +2241,347 @@ FocusScope {
                 (previewSoundEnabled ? "1" : "0"))
     }
 
+    function applyWidescreenStatus(payload) {
+        if (!payload || payload.widescreenEnhancements === undefined) return false
+        widescreenEnhancementsEnabled = Boolean(payload.widescreenEnhancements)
+        api.memory.set("emufusionWidescreenEnhancements",
+                widescreenEnhancementsEnabled)
+        return true
+    }
+
+    function refreshWidescreenEnhancements() {
+        requestPreviewJson("settings/widescreen", function(payload) {
+            root.widescreenEnhancementsPending = false
+            root.applyWidescreenStatus(payload)
+        })
+    }
+
+    function setWidescreenEnhancements(enabled) {
+        if (widescreenEnhancementsPending) return
+        widescreenEnhancementsPending = true
+        requestPreviewJson("settings/widescreen?enabled=" + (enabled ? "1" : "0"),
+                function(payload) {
+                    root.widescreenEnhancementsPending = false
+                    if (!root.applyWidescreenStatus(payload))
+                        root.requestPreviewEndpoint("sfx?name=error")
+                })
+    }
+
+    function applyWidescreenHackStatus(payload) {
+        if (!payload || payload.hackEnabled === undefined) return false
+        widescreenHackEnabled = Boolean(payload.hackEnabled)
+        api.memory.set("emufusionWidescreenHack", widescreenHackEnabled)
+        return true
+    }
+
+    function refreshWidescreenHack() {
+        requestPreviewJson("settings/widescreen-hack", function(payload) {
+            root.widescreenHackPending = false
+            root.applyWidescreenHackStatus(payload)
+        })
+    }
+
+    function setWidescreenHack(enabled) {
+        if (widescreenHackPending) return
+        widescreenHackPending = true
+        requestPreviewJson("settings/widescreen-hack?enabled=" + (enabled ? "1" : "0"),
+                function(payload) {
+                    root.widescreenHackPending = false
+                    if (!root.applyWidescreenHackStatus(payload))
+                        root.requestPreviewEndpoint("sfx?name=error")
+                })
+    }
+
+    function normalizedFrameGenerationMode(value) {
+        value = String(value || "").toLowerCase()
+        return value === "built-in-alpha" || value === "lsfg" ? value : "off"
+    }
+
+    function frameGenerationModeLabel() {
+        if (frameGenerationMode === "built-in-alpha") return "BUILT-IN (ALPHA)"
+        if (frameGenerationMode === "lsfg") return "LSFG"
+        return "OFF"
+    }
+
+    function setFrameGenerationMode(mode) {
+        var requested = normalizedFrameGenerationMode(mode)
+        frameGenerationRequestSequence += 1
+        var sequence = frameGenerationRequestSequence
+        frameGenerationModePending = true
+        frameGenerationModeConfirmed = false
+        frameGenerationRequestedMode = requested
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE ||
+                    sequence !== root.frameGenerationRequestSequence)
+                return
+            var confirmed = ""
+            if (request.status === 200) {
+                try {
+                    var status = JSON.parse(request.responseText)
+                    confirmed = normalizedFrameGenerationMode(
+                            status.frameGenerationMode)
+                } catch (error) {
+                    confirmed = ""
+                }
+            }
+            root.frameGenerationModePending = false
+            if (confirmed !== requested) {
+                root.frameGenerationModeConfirmed = false
+                root.frameGenerationPendingLaunch = null
+                root.requestPreviewEndpoint("sfx?name=error")
+                root.refreshFrameGenerationStatus()
+                return
+            }
+            root.frameGenerationMode = confirmed
+            root.frameGenerationModeConfirmed = true
+            api.memory.set("lucentFrameGenerationModeV3", confirmed)
+            api.memory.set("lucentFrameGenerationThreeModeV3", true)
+            var pendingGame = root.frameGenerationPendingLaunch
+            root.frameGenerationPendingLaunch = null
+            if (pendingGame) root.launchConfirmed(pendingGame)
+        }
+        request.open("GET", "http://127.0.0.1:43821/settings/frame-generation?mode=" +
+                     requested, true)
+        request.send()
+    }
+
+    function cycleFrameGenerationMode(direction) {
+        if (frameGenerationModePending) return
+        var modes = ["off", "built-in-alpha", "lsfg"]
+        var current = modes.indexOf(frameGenerationMode)
+        if (current < 0) current = 0
+        var step = direction < 0 ? -1 : 1
+        setFrameGenerationMode(modes[(current + step + modes.length) % modes.length])
+    }
+
+    function refreshFrameGenerationStatus() {
+        frameGenerationRequestSequence += 1
+        var sequence = frameGenerationRequestSequence
+        frameGenerationModePending = true
+        frameGenerationModeConfirmed = false
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE ||
+                    sequence !== root.frameGenerationRequestSequence)
+                return
+            root.frameGenerationModePending = false
+            if (request.status !== 200) {
+                root.frameGenerationModeConfirmed = false
+                root.frameGenerationPendingLaunch = null
+                return
+            }
+            try {
+                var status = JSON.parse(request.responseText)
+                if (status.frameGenerationMode === undefined) return
+                var confirmed = normalizedFrameGenerationMode(
+                        status.frameGenerationMode)
+                root.frameGenerationMode = confirmed
+                root.frameGenerationModeConfirmed = true
+                api.memory.set("lucentFrameGenerationModeV3", confirmed)
+                var pendingGame = root.frameGenerationPendingLaunch
+                root.frameGenerationPendingLaunch = null
+                if (pendingGame) root.launchConfirmed(pendingGame)
+            } catch (error) {
+                root.frameGenerationModeConfirmed = false
+                root.frameGenerationPendingLaunch = null
+            }
+        }
+        request.open("GET", "http://127.0.0.1:43821/settings/frame-generation", true)
+        request.send()
+    }
+
+    function setScreensaverEnabled(enabled) {
+        screensaverEnabled = Boolean(enabled)
+        api.memory.set("lucentScreensaverEnabled", screensaverEnabled)
+        if (!screensaverEnabled && screensaverActive)
+            stopScreensaver()
+        screensaverTopStillSince = Date.now()
+    }
+
+    function noteScreensaverVisualChange() {
+        screensaverTopStillSince = Date.now()
+    }
+
+    function shuffledScreensaverGames() {
+        // Build from the complete video library, not the current system or the
+        // lower screen's current selection. A source is included once even if
+        // duplicate metadata rows point at the same file.
+        var games = []
+        var seen = ({})
+        for (var index = 0; index < api.allGames.count; ++index) {
+            var game = api.allGames.get(index)
+            var source = videoSource(game)
+            if (source === "" || seen[source]) continue
+            seen[source] = true
+            games.push(game)
+        }
+        // Fisher-Yates gives every ordering the same probability. Picking one
+        // random start and scanning forward made the same nearby title recur.
+        for (var remaining = games.length - 1; remaining > 0; --remaining) {
+            var chosen = Math.floor(Math.random() * (remaining + 1))
+            var swap = games[remaining]
+            games[remaining] = games[chosen]
+            games[chosen] = swap
+        }
+        var last = api.memory.has("lucentScreensaverLastVideo") ?
+                String(api.memory.get("lucentScreensaverLastVideo")) : ""
+        if (games.length > 1 && videoSource(games[0]) === last) {
+            var replacement = 1 + Math.floor(Math.random() * (games.length - 1))
+            var first = games[0]
+            games[0] = games[replacement]
+            games[replacement] = first
+        }
+        return games
+    }
+
+    function nextScreensaverGame(newActivation) {
+        if (newActivation || screensaverDeckIndex >= screensaverDeck.length) {
+            screensaverDeck = shuffledScreensaverGames()
+            screensaverDeckIndex = 0
+        }
+        if (screensaverDeckIndex >= screensaverDeck.length) return null
+        return screensaverDeck[screensaverDeckIndex++]
+    }
+
+    function peekScreensaverVideo() {
+        return screensaverDeckIndex < screensaverDeck.length ?
+                    videoSource(screensaverDeck[screensaverDeckIndex]) : ""
+    }
+
+    function screensaverSystemName(game) {
+        var index = systemIndexForGame(game)
+        return index >= 0 && index < systemModel.count ?
+                    String(systemModel.get(index).name || "") : ""
+    }
+
+    function requestScreensaverGame(game, initial, generation) {
+        if (gameplayActive || !game || screensaverRequestPending) return
+        var source = videoSource(game)
+        if (source === "") return
+        var title = displayTitle(game)
+        var system = screensaverSystemName(game)
+        var score = scoreText(game)
+        var art = artwork(game)
+        var preloadNext = peekScreensaverVideo()
+        screensaverRequestPending = true
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            if (generation !== root.screensaverGeneration) return
+            root.screensaverRequestPending = false
+            if (request.status !== 200 || !root.screensaverEnabled || root.gameplayActive) {
+                if (!root.gameplayActive && !initial && root.screensaverActive)
+                    screensaverAdvanceRetry.restart()
+                return
+            }
+            root.screensaverPendingGame = game
+            root.screensaverPendingSlot = root.screensaverCurrentSlot === 0 ? 1 : 0
+            if (root.screensaverPendingSlot === 0)
+                root.screensaverSourceA = source
+            else
+                root.screensaverSourceB = source
+            root.screensaverActive = true
+        }
+        request.open("GET", "http://127.0.0.1:43821/screensaver/play?video=" +
+                     encodeURIComponent(source) +
+                     "&art=" + encodeURIComponent(art) +
+                     "&title=" + encodeURIComponent(title) +
+                     "&system=" + encodeURIComponent(system) +
+                     "&score=" + encodeURIComponent(score) +
+                     "&preload_next=" + encodeURIComponent(preloadNext), true)
+        request.send()
+    }
+
+    function promoteScreensaverSlot(slot) {
+        if (!screensaverActive || slot !== screensaverPendingSlot ||
+                !screensaverPendingGame) return
+        screensaverCurrentSlot = slot
+        screensaverGame = screensaverPendingGame
+        screensaverPendingGame = null
+        screensaverPendingSlot = -1
+        api.memory.set("lucentScreensaverLastVideo", videoSource(screensaverGame))
+    }
+
+    function advanceScreensaverVideo() {
+        if (gameplayActive || !screensaverActive || screensaverRequestPending ||
+                screensaverPendingSlot >= 0) return
+        var game = nextScreensaverGame(false)
+        if (!game) return
+        requestScreensaverGame(game, false, screensaverGeneration)
+    }
+
+    function screensaverPlaybackFinished() {
+        if (gameplayActive || !screensaverActive || screensaverRequestPending ||
+                screensaverPendingSlot >= 0 || screensaverCurrentSlot < 0)
+            return false
+        var player = screensaverCurrentSlot === 0 ?
+                    screensaverVideoA : screensaverVideoB
+        if (!player || player.source === "") return false
+        // Some Qt/Android media backends reach EndOfMedia and retain the final
+        // decoded frame without delivering Video.onStopped. Position is an
+        // independent bounded fallback for those backends. Never use a generic
+        // Stopped state here: a decoder preparing or buffering the next random
+        // item is not evidence that the current item completed.
+        if (player.status === MediaPlayer.EndOfMedia) return true
+        return player.duration > 0 && player.position >= player.duration - 250
+    }
+
+    function beginScreensaver(payload) {
+        if (!screensaverEnabled || screensaverActive || screensaverRequestPending ||
+                gameplayActive || Qt.application.state !== Qt.ApplicationActive)
+            return
+        if (!payload || payload.browserActive || payload.gameplay || !payload.available)
+            return
+        var topStill = Date.now() - screensaverTopStillSince
+        var lowerStill = Number(payload.visualIdleMs || 0)
+        // A dual-screen session is idle only when BOTH displays have been
+        // still for the full timeout.  Using && here meant one stale lower
+        // panel defeated fresh top-panel input: the five-second watchdog could
+        // immediately restart the screensaver and randomize the active game
+        // row while the user was navigating on top (physical N64 r5-r7).
+        if (topStill < screensaverStillTimeoutMs || lowerStill < screensaverStillTimeoutMs)
+            return
+
+        // Every activation starts a freshly shuffled deck. It intentionally
+        // ignores payload.video: mirroring the current lower preview is what
+        // made the screensaver start on the same selected game every time.
+        var game = nextScreensaverGame(true)
+        if (!game) return
+        ++screensaverGeneration
+        requestScreensaverGame(game, true, screensaverGeneration)
+    }
+
+    function stopScreensaver(resumePreview) {
+        if (!screensaverActive && !screensaverRequestPending) return
+        screensaverActive = false
+        screensaverRequestPending = false
+        ++screensaverGeneration
+        screensaverDeck = []
+        screensaverDeckIndex = 0
+        screensaverGame = null
+        screensaverPendingGame = null
+        screensaverCurrentSlot = -1
+        screensaverPendingSlot = -1
+        screensaverSourceA = ""
+        screensaverSourceB = ""
+        screensaverTopStillSince = Date.now()
+        // Restore the current library selection and the user's normal preview
+        // placement. Off returns the lower display to black; Bottom/Automatic
+        // restores its title chrome and warm neighbours.
+        if (resumePreview !== false && !gameplayActive)
+            Qt.callLater(function() { root.refreshCurrentPreview() })
+    }
+
+    function pollScreensaverStatus() {
+        if (!screensaverEnabled || screensaverActive || screensaverRequestPending ||
+                gameplayActive || Qt.application.state !== Qt.ApplicationActive)
+            return
+        requestPreviewJson("screensaver/status", function(payload) {
+            root.beginScreensaver(payload)
+        })
+    }
+
     function setSoundEffectsEnabled(enabled) {
         soundEffectsEnabled = Boolean(enabled)
         api.memory.set("lucentSoundEffects", soundEffectsEnabled)
@@ -1714,6 +2611,22 @@ FocusScope {
             if (output.indexOf(missing) < 0) output.push(missing)
         }
         return output
+    }
+
+    // Lists must show whole rows only: a half-drawn row at a viewport edge
+    // reads as a rendering fault. These two answer "how many rows fit" and
+    // "how tall may they then be", so reclaimed height becomes another row --
+    // or taller rows once no further row fits -- and never a gap beneath the
+    // last one. A list whose stride is fixed by a paging contract passes the
+    // same value for minimum and maximum, so only its row count adapts.
+    function listRowCount(available, minimum, spacing) {
+        return Math.max(1, Math.floor((available + spacing) / (minimum + spacing)))
+    }
+
+    function listRowHeight(available, minimum, maximum, spacing) {
+        var rows = listRowCount(available, minimum, spacing)
+        return Math.max(minimum, Math.min(maximum,
+                Math.floor((available + spacing) / rows) - spacing))
     }
 
     function setCoverViewRowCount(value) {
@@ -1817,6 +2730,100 @@ FocusScope {
     function dismissReadyUpdate() {
         updatePromptDismissed = true
         updatePromptOpen = false
+        root.forceActiveFocus()
+    }
+
+    function voiceFeedbackContextTitle() {
+        return root.activeGame ? root.displayTitle(root.activeGame) : ""
+    }
+
+    function voiceFeedbackContextSystem() {
+        if (root.displaySystemIndex < 0 || root.displaySystemIndex >= systemModel.count)
+            return ""
+        return String(systemModel.get(root.displaySystemIndex).name || "")
+    }
+
+    function startVoiceFeedback() {
+        root.endSearch()
+        root.voiceFeedbackOpen = true
+        root.voiceFeedbackState = "requesting-permission"
+        root.voiceFeedbackTranscript = ""
+        root.voiceFeedbackMessage = "Waiting for microphone permission…"
+        root.voiceFeedbackGithubOpened = false
+        root.voiceFeedbackChoice = 0
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            if (request.status !== 202) {
+                root.voiceFeedbackState = "error"
+                root.voiceFeedbackMessage = "Voice recording could not start. Tap Redo to try again."
+            }
+            root.pollVoiceFeedback()
+        }
+        request.open("GET", "http://127.0.0.1:43821/feedback/record?title=" +
+                     encodeURIComponent(voiceFeedbackContextTitle()) + "&system=" +
+                     encodeURIComponent(voiceFeedbackContextSystem()) + "&page=" +
+                     encodeURIComponent(String(root.page || "library")), true)
+        request.send()
+        voiceFeedbackStatusPoll.restart()
+        root.forceActiveFocus()
+    }
+
+    function pollVoiceFeedback() {
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE || request.status !== 200)
+                return
+            try {
+                var payload = JSON.parse(request.responseText)
+                root.voiceFeedbackState = String(payload.state || "idle")
+                root.voiceFeedbackTranscript = String(payload.transcript || "")
+                root.voiceFeedbackMessage = String(payload.message || "")
+                root.voiceFeedbackGithubOpened = Boolean(payload.githubComposerOpened)
+                if (root.voiceFeedbackState === "requesting-permission" ||
+                        root.voiceFeedbackState === "listening")
+                    voiceFeedbackStatusPoll.restart()
+            } catch (error) {
+                root.voiceFeedbackState = "error"
+                root.voiceFeedbackMessage = "The feedback service returned an invalid response."
+            }
+        }
+        request.open("GET", "http://127.0.0.1:43821/feedback/status", true)
+        request.send()
+    }
+
+    function sendVoiceFeedback() {
+        if (root.voiceFeedbackState !== "ready" &&
+                root.voiceFeedbackState !== "github-review") return
+        root.voiceFeedbackMessage = "Opening GitHub's secure issue review…"
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            try {
+                var payload = JSON.parse(request.responseText)
+                root.voiceFeedbackState = String(payload.state ||
+                        (request.status === 202 ? "github-review" : "error"))
+                root.voiceFeedbackMessage = String(payload.message ||
+                        (request.status === 202 ? "GitHub opened for final confirmation." :
+                         "GitHub could not be opened."))
+                root.voiceFeedbackGithubOpened = Boolean(payload.githubComposerOpened)
+            } catch (error) {
+                root.voiceFeedbackState = "error"
+                root.voiceFeedbackMessage = "GitHub could not be opened. The transcription is still here."
+            }
+        }
+        request.open("GET", "http://127.0.0.1:43821/feedback/send?transcript=" +
+                     encodeURIComponent(root.voiceFeedbackTranscript), true)
+        request.send()
+    }
+
+    function closeVoiceFeedback() {
+        if (root.voiceFeedbackState === "requesting-permission" ||
+                root.voiceFeedbackState === "listening")
+            requestPreviewEndpoint("feedback/cancel")
+        root.voiceFeedbackOpen = false
+        voiceFeedbackStatusPoll.stop()
+        Qt.inputMethod.hide()
         root.forceActiveFocus()
     }
 
@@ -1948,10 +2955,17 @@ FocusScope {
 
     function useWhiteBrandLogo(index) {
         if (brandSlugForSystem(index) !== "nintendo") return false
+        // The red wordmark only needs replacing when it would actually vanish,
+        // so measure the distance to it rather than testing a hand-tuned box.
+        // The old r>0.62 && g<0.42 && b<0.42 test caught accents that merely
+        // leaned warm -- the NES sat inside it and lost its red mark while
+        // every other Nintendo system kept one, which read as a bug rather
+        // than as contrast protection.
         var color = root.accent
-        // Nintendo's official red wordmark loses contrast against a red user
-        // accent. Preserve the identity mark by rendering that PNG in white.
-        return color.r > 0.62 && color.g < 0.42 && color.b < 0.42
+        var dr = color.r - 0.90   // Nintendo red, #e60012
+        var dg = color.g - 0.00
+        var db = color.b - 0.07
+        return Math.sqrt(dr * dr + dg * dg + db * db) < 0.30
     }
 
     function setRightStickViewSwitching(enabled) {
@@ -2028,6 +3042,15 @@ FocusScope {
                 homeListRail.currentIndex + (direction < 0 ? -gamePage : gamePage)))
     }
 
+    // Absolute row index -> slot. Slots 0-15 are common, slot 16 is the
+    // single-screen-only PIP row, and slots 17+ are the tail that must stay at
+    // the bottom on both device types. Without this the tail would land on top
+    // of the PIP row on a dual-screen device.
+    function settingSlot(index) {
+        if (index < baseSettingsOptionCount) return index
+        return Number(settingsTailSlots[index - baseSettingsOptionCount])
+    }
+
     function settingTitle(index) {
         var titles = ["SYSTEM WALLPAPER MODE", "GAME PREVIEW PLACEMENT",
                 "PREVIEW VIDEO SOUND", "LIQUID GLASS",
@@ -2035,12 +3058,18 @@ FocusScope {
                 "SYSTEM-MATCHED STICK LEDS", "STICK LED BRIGHTNESS",
                 "START VIEW", "COVER VIEW ROWS", "COVER ROW ORDER",
                 "RIGHT STICK VIEW SWITCHING", "VIEW TRANSITIONS",
-                "SOUND EFFECTS", "ABOUT LUCENT", "UPDATE LIBRARY & LUCENT",
-                "PIP / BOX ART ORDER"]
-        return titles[index]
+                "SOUND EFFECTS", "ABOUT EMUFUSION", "UPDATE LIBRARY & EMUFUSION",
+                "PIP / BOX ART ORDER", "EMULATOR FOR EACH SYSTEM",
+                "LEGAL NOTICE", "GAMES WITH NO BOX ART", "VIDEO SCREENSAVER",
+                "FRAME GENERATION", "WIDESCREEN ENHANCEMENTS",
+                "WIDESCREEN HACK", "PRIVATE DIAGNOSTICS"]
+        return titles[settingSlot(index)]
     }
 
     function settingDescription(index) {
+        if (settingSlot(index) === 24) return privateDiagnosticsConfigured ?
+                "Opt in: share build, system and error categories; no device IDs or raw logs. Off clears unsent reports." :
+                "Private receiver not configured. No reports are collected or sent."
         var descriptions = [
             "Preloaded static angle; rerolls only after you leave",
             "Automatic detects the screen count; choose PIP or Off manually",
@@ -2054,16 +3083,38 @@ FocusScope {
             "Show one large shelf by default, or expose two or three at once",
             "Reorder Systems, Continue, Most Played, Recently Added, and score shelves",
             "Up: Cover  •  Down: List  •  Left/Right: All Systems then systems",
-            "Optional slide, fade, and scale motion when changing Lucent views",
+            "Optional slide, fade, and scale motion when changing EmuFusion views",
             "Quiet blips while moving, choosing, and going back in menus",
-            "Pegasus attribution, licenses, trademarks, and Lucent version",
+            "Pegasus attribution, licenses, trademarks, and EmuFusion version",
             "Scan games and check GitHub for app and theme updates",
-            "Swap the video and box-art positions on single-screen devices"
+            "Swap the video and box-art positions on single-screen devices",
+            "Run each system built in, or hand it to a standalone emulator",
+            "Trademarks, third-party content, and your responsibilities",
+            "Choose once per game: keep it, hide it, or delete the ROM",
+            "After two still minutes, play one synchronized preview on both screens",
+            "Off is a true direct bypass; Built-in is experimental; LSFG is the private beta",
+            "Use verified built-in emulator 16:9 options; unsupported systems are unchanged",
+            "Off by default: true 16:9 geometry for N64, PS1, PS2, GC, Wii, Dreamcast, PSP"
         ]
-        return descriptions[index]
+        return descriptions[settingSlot(index)]
     }
 
     function settingValue(index) {
+        index = settingSlot(index)
+        if (index === 17) return emulatorRoutesSummary()
+        if (index === 24) return privateDiagnosticsPending ? "SAVING…" :
+                (!privateDiagnosticsConfigured ? "UNAVAILABLE" :
+                 (privateDiagnosticsEnabled ? "ON" : "OFF"))
+        if (index === 18) return "READ"
+        if (index === 19) return artworkReviewCount > 0 ?
+                artworkReviewCount + (artworkReviewCount === 1 ? " GAME" : " GAMES") :
+                (artworkReviewLoaded ? "NONE" : "CHECK")
+        if (index === 20) return screensaverEnabled ? "ON" : "OFF"
+        if (index === 21) return frameGenerationModeLabel()
+        if (index === 22) return widescreenEnhancementsPending ? "SAVING…" :
+                (widescreenEnhancementsEnabled ? "ON" : "OFF")
+        if (index === 23) return widescreenHackPending ? "SAVING…" :
+                (widescreenHackEnabled ? "ON" : "OFF")
         if (index === 0) return "STATIC"
         if (index === 1) return previewPlacementLabel()
         if (index === 2) return previewSoundEnabled ? "ON" : "OFF"
@@ -2088,6 +3139,39 @@ FocusScope {
     }
 
     function activateSetting(direction) {
+        var slot = settingSlot(settingsIndex)
+        if (slot === 24) {
+            togglePrivateDiagnostics()
+            return
+        }
+        if (slot === 17) {
+            openEmulatorRoutes()
+            return
+        }
+        if (slot === 18) {
+            openLegalNotice()
+            return
+        }
+        if (slot === 19) {
+            openArtworkReview()
+            return
+        }
+        if (slot === 20) {
+            setScreensaverEnabled(!screensaverEnabled)
+            return
+        }
+        if (slot === 21) {
+            cycleFrameGenerationMode(direction)
+            return
+        }
+        if (slot === 22) {
+            setWidescreenEnhancements(!widescreenEnhancementsEnabled)
+            return
+        }
+        if (slot === 23) {
+            setWidescreenHack(!widescreenHackEnabled)
+            return
+        }
         if (settingsIndex === 0) {
             // Static, predecoded system artwork is the sole supported mode.
             systemMotionEnabled = false
@@ -2132,6 +3216,588 @@ FocusScope {
         } else if (settingsIndex === 16 && !dualScreenDevice) {
             setSingleScreenMediaSwapped(!singleScreenMediaSwapped)
         }
+    }
+
+    // ---- Emulator routing, legal notice -----------------------------------
+    function refreshPrivateDiagnostics() {
+        requestPreviewJson("private-diagnostics/status", function(status) {
+            root.privateDiagnosticsConfigured = !!status && status.configured === true
+            root.privateDiagnosticsEnabled = root.privateDiagnosticsConfigured && status.enabled === true
+        })
+    }
+
+    function togglePrivateDiagnostics() {
+        if (privateDiagnosticsPending || !privateDiagnosticsConfigured) return
+        privateDiagnosticsPending = true
+        requestPreviewJson("settings/private-diagnostics?enabled=" +
+                (privateDiagnosticsEnabled ? "0" : "1"), function(status) {
+            root.privateDiagnosticsPending = false
+            root.privateDiagnosticsConfigured = !!status && status.configured === true
+            root.privateDiagnosticsEnabled = root.privateDiagnosticsConfigured && status.enabled === true
+        })
+    }
+
+    // Every one of these is demand-driven: opened on a key press, re-read after
+    // a change. Nothing here polls. The companion's control port is on the same
+    // device as the frontend, and a timer against it is what previously wedged
+    // Qt's network thread during gameplay.
+
+    function requestPreviewJson(endpoint, handler) {
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            var parsed = null
+            if (request.status === 200) {
+                try { parsed = JSON.parse(request.responseText) }
+                catch (error) { parsed = null }
+            }
+            handler(parsed)
+        }
+        request.open("GET", "http://127.0.0.1:43821/" + endpoint, true)
+        request.send()
+    }
+
+    // ---- Missing box art review -------------------------------------------
+    // Read on demand, exactly like the emulator routes above: the list only
+    // changes when a maintenance scan runs or the owner answers a row, and a
+    // timer against the companion's port is what once wedged Qt's network
+    // thread during gameplay.
+
+    function loadArtworkReview(handler) {
+        requestPreviewJson("artwork/missing", function(payload) {
+            var games = payload && payload.games ? payload.games : []
+            root.artworkReviewGames = games
+            root.artworkReviewCount = games.length
+            root.artworkReviewLoaded = true
+            root.artworkReviewIndex = Math.max(0,
+                    Math.min(root.artworkReviewIndex, games.length - 1))
+            if (handler) handler(games.length)
+        })
+    }
+
+    function openArtworkReview() {
+        artworkReviewIndex = 0
+        artworkReviewChoice = 0
+        artworkReviewConfirming = false
+        artworkReviewBusy = false
+        artworkReviewMessage = ""
+        artworkReviewOpen = true
+        loadArtworkReview(null)
+    }
+
+    function closeArtworkReview() {
+        artworkReviewOpen = false
+        artworkReviewConfirming = false
+        artworkReviewBusy = false
+    }
+
+    function artworkReviewGame(index) {
+        if (index < 0 || index >= artworkReviewGames.length) return null
+        return artworkReviewGames[index]
+    }
+
+    function artworkReviewChoiceKey(choice) {
+        if (choice === 1) return "hide"
+        if (choice === 2) return "delete-rom"
+        return "leave"
+    }
+
+    function artworkReviewChoiceLabel(choice) {
+        if (choice === 1) return "REMOVE FROM MENUS"
+        if (choice === 2) return "DELETE ROM FILE"
+        return "LEAVE AS IS"
+    }
+
+    function artworkReviewChoiceDetail(choice) {
+        if (choice === 1)
+            return "Hidden from every EmuFusion menu. The ROM file stays on storage."
+        if (choice === 2)
+            return "Permanently erases the ROM file from storage. This cannot be undone."
+        return "Stays in the library with a blank cover. You will not be asked again."
+    }
+
+    function artworkReviewMoveChoice(direction) {
+        if (artworkReviewBusy) return
+        // Stepping away from the destructive option must also drop the armed
+        // confirmation, so a second A press can never land on it by accident.
+        artworkReviewConfirming = false
+        artworkReviewChoice = Math.max(0, Math.min(2, artworkReviewChoice + direction))
+    }
+
+    function artworkReviewMoveRow(direction) {
+        if (artworkReviewBusy) return
+        var target = Math.max(0, Math.min(artworkReviewGames.length - 1,
+                                          artworkReviewIndex + direction))
+        if (target === artworkReviewIndex) return
+        artworkReviewIndex = target
+        artworkReviewChoice = 0
+        artworkReviewConfirming = false
+        artworkReviewMessage = ""
+    }
+
+    function submitArtworkChoice() {
+        if (artworkReviewBusy) return
+        var game = artworkReviewGame(artworkReviewIndex)
+        if (!game) return
+        // Deleting a ROM is the only answer that destroys data, so it is the
+        // only one that has to be pressed twice.
+        if (artworkReviewChoice === 2 && !artworkReviewConfirming) {
+            artworkReviewConfirming = true
+            artworkReviewMessage = "PRESS A AGAIN TO PERMANENTLY DELETE THIS ROM"
+            return
+        }
+        var choice = artworkReviewChoiceKey(artworkReviewChoice)
+        var key = String(game.key || "")
+        if (key === "") return
+        artworkReviewBusy = true
+        artworkReviewConfirming = false
+        artworkReviewMessage = choice === "delete-rom" ? "DELETING ROM FILE…" : "SAVING CHOICE…"
+        var request = new XMLHttpRequest()
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            root.artworkReviewBusy = false
+            if (request.status !== 200) {
+                root.artworkReviewMessage = "THAT CHOICE COULD NOT BE SAVED"
+                return
+            }
+            root.artworkReviewMessage = choice === "delete-rom" ? "ROM FILE DELETED" :
+                    (choice === "hide" ? "REMOVED FROM THE MENUS" : "LEFT AS IS")
+            root.artworkReviewChoice = 0
+            // The companion has already dropped the row, so re-reading is what
+            // keeps this list and the library in step.
+            root.loadArtworkReview(function(remaining) {
+                if (choice !== "leave") {
+                    root.libraryMutationRevision += 1
+                    root.libraryIndexReady = false
+                    root.loadLibraryIndex()
+                }
+                if (remaining === 0) root.artworkReviewMessage = "NOTHING LEFT TO REVIEW"
+            })
+        }
+        request.open("GET", "http://127.0.0.1:43821/artwork/decide?key=" +
+                     encodeURIComponent(key) + "&choice=" + encodeURIComponent(choice), true)
+        request.send()
+    }
+
+    function emulatorRoutesSummary() {
+        if (!emulatorRouteSystems || emulatorRouteSystems.length === 0) return "NO GAMES YET"
+        var internal = 0
+        var external = 0
+        for (var index = 0; index < emulatorRouteSystems.length; ++index) {
+            if (emulatorRouteSystems[index].route === "external") external += 1
+            else internal += 1
+        }
+        return internal + " BUILT-IN  •  " + external + " EXTERNAL"
+    }
+
+    function openEmulatorRoutes() {
+        settingsOpen = false
+        emulatorRoutesOpen = true
+        emulatorRoutesIndex = 0
+        emulatorRoutesNotice = ""
+        loadEmulatorRoutes()
+    }
+
+    function loadEmulatorRoutes() {
+        emulatorRoutesLoading = true
+        requestPreviewJson("route/systems", function(data) {
+            root.emulatorRoutesLoading = false
+            if (!data || !data.systems) {
+                root.emulatorRoutesNotice = "Could not read the emulator list."
+                return
+            }
+            // The service deliberately returns only systems represented by an
+            // indexed game. Keep the same fail-closed filter here so an older
+            // companion cannot repopulate Settings with catalog-only rows.
+            var visible = []
+            for (var index = 0; index < data.systems.length; ++index) {
+                var row = data.systems[index]
+                if (row.active === true) visible.push(row)
+            }
+            root.emulatorRouteSystems = visible
+            root.emulatorRoutesIndex = Math.max(0, Math.min(
+                    root.emulatorRouteSystems.length - 1, root.emulatorRoutesIndex))
+        })
+    }
+
+    function currentRouteSystem() {
+        if (!emulatorRouteSystems || emulatorRoutesIndex < 0 ||
+                emulatorRoutesIndex >= emulatorRouteSystems.length) return null
+        return emulatorRouteSystems[emulatorRoutesIndex]
+    }
+
+    // Left/Right on the list is the fast path: flip a system between built-in
+    // and external without opening its picker. It is refused, out loud, when
+    // there is no built-in engine -- silently doing nothing is the behaviour
+    // this whole screen exists to replace.
+    function toggleEmulatorRoute(direction) {
+        var system = currentRouteSystem()
+        if (!system || emulatorRoutesLoading) return
+        var wantInternal = direction < 0
+        if (wantInternal && !system.internalAvailable) {
+            emulatorRoutesNotice = system.collection +
+                    " has no built-in engine yet, so it runs externally."
+            requestPreviewEndpoint("sfx?name=error")
+            return
+        }
+        if (!wantInternal && system.route === "external") {
+            // Already external: open the picker rather than no-op.
+            openEmulatorPicker(system.system, system.collection)
+            return
+        }
+        if (wantInternal && system.route === "internal") return
+        emulatorRoutesNotice = ""
+        requestPreviewJson("route/set?system=" + encodeURIComponent(system.system) +
+                "&route=" + (wantInternal ? "internal" : "external"), function(data) {
+            if (!data)
+                root.emulatorRoutesNotice = "Could not reach the emulator service."
+            else if (data.ok === false)
+                root.emulatorRoutesNotice = data.reason ? data.reason :
+                        "That route could not be selected."
+            root.loadEmulatorRoutes()
+        })
+    }
+
+    function openEmulatorPicker(system, label) {
+        emulatorPickerSystem = system
+        emulatorPickerLabel = label
+        emulatorPickerIndex = 0
+        emulatorPickerNotice = ""
+        emulatorPickerBusy = false
+        emulatorPickerOpen = true
+        loadEmulatorPicker()
+    }
+
+    function loadEmulatorPicker() {
+        emulatorPickerLoading = true
+        requestPreviewJson("route/options?system=" +
+                encodeURIComponent(emulatorPickerSystem), function(data) {
+            root.emulatorPickerLoading = false
+            if (!data) {
+                root.emulatorPickerNotice =
+                        "Could not read this system's emulator settings."
+                root.emulatorPickerData = null
+                root.emulatorPickerRowList = []
+                return
+            }
+            root.emulatorPickerData = data
+            root.rebuildEmulatorPickerRows()
+        })
+    }
+
+    // One flat list so a D-pad only ever moves up and down: automatic default,
+    // the built-in row (when there is an engine), catalogued emulators in
+    // catalog order, then Custom. The order is fixed so a learned row does not
+    // move under the user between visits.
+    function rebuildEmulatorPickerRows() {
+        var rows = []
+        var data = emulatorPickerData
+        if (!data) { emulatorPickerRowList = rows; return }
+        rows.push({
+            kind: "default",
+            id: "",
+            name: "Automatic default",
+            detail: data.internalAvailable ?
+                    "Uses EmuFusion's built-in engine unless you choose otherwise" :
+                    "Uses the first available external emulator for this system",
+            state: data.explicit ? "RESTORE" : "",
+            selected: data.explicit !== true
+        })
+        if (data.internalAvailable) {
+            rows.push({
+                kind: "internal",
+                id: "",
+                name: "Built-in engine",
+                detail: "Runs inside EmuFusion. Recommended.",
+                state: "",
+                selected: data.explicit === true && data.route === "internal"
+            })
+        }
+        var options = data.options ? data.options : []
+        for (var index = 0; index < options.length; ++index) {
+            var option = options[index]
+            rows.push({
+                kind: "option",
+                id: option.id,
+                name: option.name,
+                detail: option.installed ?
+                        (option.deliveryLabel ? option.deliveryLabel : "Installed") :
+                        (option.install && option.install.kind === "play" ?
+                         "Not installed — opens the Play Store" :
+                         "Not installed — opens its download page"),
+                state: option.installed ? "INSTALLED" : "GET",
+                selected: data.route === "external" && option.selected
+            })
+        }
+        var custom = data.custom ? data.custom : {}
+        rows.push({
+            kind: "custom",
+            id: "custom",
+            name: custom.configured && custom.name ?
+                    ("Custom — " + custom.name) : "Custom emulator",
+            detail: custom.configured ?
+                    (custom.resolves ? custom.package :
+                     "Set up, but that app is no longer installed") :
+                    "Point EmuFusion at an emulator that is not listed",
+            state: custom.configured ? (custom.resolves ? "EDIT" : "FIX") : "SET UP",
+            selected: data.route === "external" && custom.selected === true
+        })
+        emulatorPickerRowList = rows
+        emulatorPickerIndex = Math.max(0, Math.min(rows.length - 1, emulatorPickerIndex))
+    }
+
+    function currentPickerRow() {
+        if (!emulatorPickerRowList || emulatorPickerIndex < 0 ||
+                emulatorPickerIndex >= emulatorPickerRowList.length) return null
+        return emulatorPickerRowList[emulatorPickerIndex]
+    }
+
+    function restoredRouteDescription(data) {
+        if (!data || !data.route) return ""
+        if (data.route === "internal") return "Built-in engine"
+        if (data.emulatorName) return "External — " + data.emulatorName
+        return "External"
+    }
+
+    // "Automatic" is not another route value. It removes this system's
+    // explicit override and then asks /route/resolve what the backend chose.
+    // The read-back matters: systems without an internal engine default to an
+    // external emulator, while qualified systems default back to built-in.
+    function restoreAutomaticEmulatorRoute() {
+        if (emulatorPickerBusy || emulatorPickerSystem === "") return
+        emulatorPickerBusy = true
+        emulatorPickerNotice = "Restoring the automatic default…"
+        requestPreviewJson("route/clear?system=" +
+                encodeURIComponent(emulatorPickerSystem), function(cleared) {
+            if (!cleared || cleared.ok !== true) {
+                root.emulatorPickerBusy = false
+                root.emulatorPickerNotice = cleared && cleared.reason ?
+                        cleared.reason : "The automatic route could not be restored."
+                requestPreviewEndpoint("sfx?name=error")
+                return
+            }
+            requestPreviewJson("route/resolve?system=" +
+                    encodeURIComponent(root.emulatorPickerSystem), function(resolved) {
+                root.emulatorPickerBusy = false
+                var description = root.restoredRouteDescription(resolved)
+                if (description === "") {
+                    root.emulatorPickerNotice =
+                            "The route was reset, but its default could not be read."
+                    requestPreviewEndpoint("sfx?name=error")
+                } else {
+                    root.emulatorPickerNotice =
+                            "Automatic default restored — " + description + "."
+                }
+                root.loadEmulatorPicker()
+                root.loadEmulatorRoutes()
+            })
+        })
+    }
+
+    // The tap. Java decides what it means: an installed emulator gets bound to
+    // this system, a missing one opens its store or download page and binds
+    // nothing, so pressing A again after installing is what links it.
+    function activateEmulatorPickerRow() {
+        if (emulatorPickerBusy) return
+        var row = currentPickerRow()
+        if (!row) return
+        if (row.kind === "default") {
+            restoreAutomaticEmulatorRoute()
+            return
+        }
+        if (row.kind === "internal") {
+            emulatorPickerNotice = ""
+            requestPreviewJson("route/set?system=" +
+                    encodeURIComponent(emulatorPickerSystem) + "&route=internal",
+                    function(data) {
+                if (!data)
+                    root.emulatorPickerNotice =
+                            "Could not reach the emulator service."
+                else if (data.ok === false)
+                    root.emulatorPickerNotice = data.reason ? data.reason :
+                            "The built-in engine could not be selected."
+                root.loadEmulatorPicker()
+                root.loadEmulatorRoutes()
+            })
+            return
+        }
+        if (row.kind === "custom") {
+            openCustomEmulator()
+            return
+        }
+        emulatorPickerNotice = "Checking " + row.name + "…"
+        requestPreviewJson("route/link?system=" +
+                encodeURIComponent(emulatorPickerSystem) +
+                "&emulator=" + encodeURIComponent(row.id), function(data) {
+            if (!data) {
+                root.emulatorPickerNotice = "Could not reach the emulator service."
+                return
+            }
+            if (data.authorizationRequired) {
+                root.emulatorPickerNotice = data.authorizationOpened ?
+                        "Enable EmuFusion external game return in Android Accessibility, then come back and press A again." :
+                        "Open Android Accessibility settings, enable EmuFusion external game return, then press A again."
+            } else if (data.linked) {
+                root.emulatorPickerNotice = data.name +
+                        " now runs this system."
+            } else if (data.ok && data.opened) {
+                root.emulatorPickerNotice = "Install " + data.name +
+                        ", then come back and press A on it again."
+            } else if (data.ok) {
+                root.emulatorPickerNotice = data.name +
+                        " is not installed, and its download page could not be opened."
+            } else {
+                root.emulatorPickerNotice = data.reason ? data.reason :
+                        "That emulator could not be selected."
+            }
+            root.loadEmulatorPicker()
+            root.loadEmulatorRoutes()
+        })
+    }
+
+    function openCustomEmulator() {
+        var custom = emulatorPickerData && emulatorPickerData.custom ?
+                emulatorPickerData.custom : {}
+        customEmulatorPackage = custom.package ? custom.package : ""
+        customEmulatorActivity = custom.component ? custom.component : ""
+        customEmulatorDelivery = custom.delivery ? custom.delivery : "file-path"
+        customEmulatorKey = custom.romExtraKey ? custom.romExtraKey : ""
+        customEmulatorConfigured = custom.configured === true
+        customEmulatorProblems = []
+        customEmulatorNotice = ""
+        customEmulatorIndex = 0
+        customEmulatorOpen = true
+    }
+
+    function customEmulatorNeedsKey() {
+        return customEmulatorDelivery === "file-path"
+    }
+
+    function customEmulatorRowCount() {
+        // package, screen, delivery, [value name], save, [remove]
+        return 4 + (customEmulatorNeedsKey() ? 1 : 0) +
+                (customEmulatorConfigured ? 1 : 0)
+    }
+
+    // Row index -> field id, so an absent "value name" row does not shift the
+    // meaning of the rows under it.
+    function customEmulatorField(index) {
+        var fields = ["package", "activity", "delivery"]
+        if (customEmulatorNeedsKey()) fields.push("romExtraKey")
+        fields.push("save")
+        if (customEmulatorConfigured) fields.push("remove")
+        return index >= 0 && index < fields.length ? fields[index] : ""
+    }
+
+    function customEmulatorProblemFor(field) {
+        var problems = customEmulatorProblems
+        if (!problems) return ""
+        for (var index = 0; index < problems.length; ++index)
+            if (problems[index].field === field) return problems[index].message
+        return ""
+    }
+
+    function cycleCustomEmulatorDelivery(direction) {
+        var kinds = ["file-path", "action-view", "content-uri"]
+        var current = kinds.indexOf(customEmulatorDelivery)
+        if (current < 0) current = 0
+        customEmulatorDelivery = kinds[
+                (current + (direction < 0 ? -1 : 1) + kinds.length) % kinds.length]
+        customEmulatorIndex = Math.min(customEmulatorIndex,
+                                       customEmulatorRowCount() - 1)
+    }
+
+    function customEmulatorDeliveryLabel() {
+        if (customEmulatorDelivery === "action-view") return "OPENS THE FILE"
+        if (customEmulatorDelivery === "content-uri") return "SHARED LINK"
+        return "FILE PATH"
+    }
+
+    function customEmulatorDeliveryHelp() {
+        if (customEmulatorDelivery === "action-view")
+            return "EmuFusion asks the app to open the game file. Most simple emulators."
+        if (customEmulatorDelivery === "content-uri")
+            return "For emulators that cannot read storage directly, such as Switch and Wii U."
+        return "EmuFusion sends the file path under a name the emulator expects."
+    }
+
+    function saveCustomEmulator() {
+        customEmulatorNotice = "Checking…"
+        requestPreviewJson("route/custom?system=" +
+                encodeURIComponent(emulatorPickerSystem) +
+                "&package=" + encodeURIComponent(customEmulatorPackage) +
+                "&activity=" + encodeURIComponent(customEmulatorActivity) +
+                "&delivery=" + encodeURIComponent(customEmulatorDelivery) +
+                "&romExtraKey=" + encodeURIComponent(customEmulatorKey),
+                function(data) {
+            if (!data) {
+                root.customEmulatorNotice = "Could not reach the emulator service."
+                return
+            }
+            root.customEmulatorProblems = data.problems ? data.problems : []
+            if (data.ok && data.authorizationRequired) {
+                root.customEmulatorNotice = data.authorizationOpened ?
+                        "Enable EmuFusion external game return in Android Accessibility, then come back and save again." :
+                        "Open Android Accessibility settings, enable EmuFusion external game return, then save again."
+            } else if (data.ok) {
+                root.customEmulatorNotice = ""
+                root.customEmulatorOpen = false
+                root.emulatorPickerNotice =
+                        "Your custom emulator now runs this system."
+                root.loadEmulatorPicker()
+                root.loadEmulatorRoutes()
+            } else {
+                root.customEmulatorNotice = root.customEmulatorProblems.length > 0 ?
+                        "Fix the highlighted fields." :
+                        "That emulator could not be set up."
+                requestPreviewEndpoint("sfx?name=error")
+            }
+        })
+    }
+
+    function clearCustomEmulator() {
+        requestPreviewJson("route/custom?clear=1&system=" +
+                encodeURIComponent(emulatorPickerSystem), function(data) {
+            if (!data || data.ok !== true) {
+                root.customEmulatorNotice = data && data.reason ? data.reason :
+                        "The custom emulator could not be removed."
+                requestPreviewEndpoint("sfx?name=error")
+                return
+            }
+            root.customEmulatorOpen = false
+            root.emulatorPickerNotice = "Custom emulator removed."
+            root.loadEmulatorPicker()
+            root.loadEmulatorRoutes()
+        })
+    }
+
+    function activateCustomEmulatorRow() {
+        var field = customEmulatorField(customEmulatorIndex)
+        if (field === "save") saveCustomEmulator()
+        else if (field === "remove") clearCustomEmulator()
+        else if (field === "delivery") cycleCustomEmulatorDelivery(1)
+        else customEmulatorEditor.beginEditing(field)
+    }
+
+    function openLegalNotice() {
+        settingsOpen = false
+        legalOpen = true
+        legalScroll = 0
+        // Always re-read: the wording lives in one place on the Java side, and
+        // a cached copy in QML is exactly the drift this is meant to prevent.
+        requestPreviewJson("legal/notice", function(data) {
+            if (!data || !data.paragraphs) {
+                root.legalParagraphs = ["The legal notice could not be loaded."]
+                return
+            }
+            root.legalTitle = data.title ? data.title : "Legal Notice"
+            root.legalParagraphs = data.paragraphs
+        })
+    }
+
+    function scrollLegalNotice(direction) {
+        var maximum = Math.max(0, legalBodyHeight - legalViewportHeight)
+        legalScroll = Math.max(0, Math.min(maximum, legalScroll + direction * 90))
     }
 
     function detectPreviewCapabilities() {
@@ -2253,8 +3919,32 @@ FocusScope {
     }
 
     function sendPreviewHeartbeat() {
+        if (Qt.application.state !== Qt.ApplicationActive &&
+                Qt.application.state !== Qt.ApplicationInactive) return
+        var sequence = ++previewHeartbeatSequence
         var request = new XMLHttpRequest()
-        request.open("GET", "http://127.0.0.1:43821/heartbeat", true)
+        // The heartbeat is the one poll that must survive gameplay, because it
+        // is how the frontend learns gameplay has ended. Reading its reply adds
+        // no extra request and drives every other poller's gate.
+        request.onreadystatechange = function() {
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            if (request.status !== 200) return
+            try {
+                var payload = JSON.parse(request.responseText)
+                if (sequence <= root.previewHeartbeatAppliedSequence ||
+                        typeof payload.gameplay !== "boolean") return
+                root.previewHeartbeatAppliedSequence = sequence
+                root.gameplayActive = payload.gameplay
+            } catch (error) {
+                // A malformed reply is not evidence that the game has ended.
+            }
+        }
+        // Qt can be inactive while the same Android process hosts a game.
+        // The inactive query must be read-only: /heartbeat can resurrect the
+        // lower preview when no game is active, including over Android Home.
+        var endpoint = Qt.application.state === Qt.ApplicationActive ?
+                    "heartbeat" : "screensaver/status"
+        request.open("GET", "http://127.0.0.1:43821/" + endpoint, true)
         request.send()
     }
 
@@ -2338,7 +4028,7 @@ FocusScope {
         importState = "scanning"
         importProgress = 0.01
         importMessage = "Starting full library maintenance…"
-        importDetail = "Checking storage, Downloads, game media, and Lucent updates"
+        importDetail = "Checking storage, Downloads, game media, and EmuFusion updates"
         importStatusInitialized = true
         importToastVisible = true
 
@@ -2374,13 +4064,15 @@ FocusScope {
     }
 
     function stopBottomPreviewForLaunch(game) {
-        // Wait for the companion to acknowledge the transition before Pegasus
-        // yields the foreground. An asynchronous request could be suspended as
-        // the emulator opened, leaving the previous game's movie playing.
+        // Never block the Qt input/render thread at launch. The old synchronous
+        // localhost request froze the selected menu frame until PreviewService
+        // answered, which made even a fast core look hung. ACTION_GAMEPLAY is a
+        // second authoritative blank request when the Android game layer
+        // attaches, so this early request can be best-effort and asynchronous.
         var endpoint = usesBottomScreen(game) ? "hide" : "blank"
         var request = new XMLHttpRequest()
         try {
-            request.open("GET", "http://127.0.0.1:43821/" + endpoint, false)
+            request.open("GET", "http://127.0.0.1:43821/" + endpoint, true)
             request.send()
         } catch (error) {
             // Launching the game is still preferable if the optional preview
@@ -2625,14 +4317,14 @@ FocusScope {
 
     function activateHomeListPreview() {
         if (!previewReady || page !== "home" || homeViewMode !== "list") return
-        if (homeListEntries.length <= 0 || homeListRail.currentIndex < 0) {
+        if (homeListEntries.length <= 0 || homeListPreviewRow() < 0) {
             homePreviewGame = null
             currentBottomPreviewGame = null
             currentBottomPreviewSequence = 0
             requestPreviewEndpoint("blank")
             return
         }
-        var selectedIndex = homeListRail.currentIndex
+        var selectedIndex = homeListPreviewRow()
         var game = homeListGameAt(selectedIndex)
         var slot = freeSlot(null, null)
         assignSlot(slot, "home-list-" + homeListCategory,
@@ -2652,10 +4344,30 @@ FocusScope {
 
     function launch(game) {
         if (!game) return
+        if (frameGenerationModePending || !frameGenerationModeConfirmed) {
+            frameGenerationPendingLaunch = game
+            if (!frameGenerationModePending) refreshFrameGenerationStatus()
+            return
+        }
+        launchConfirmed(game)
+    }
+
+    function launchConfirmed(game) {
+        if (!game) return
         navigationPersistence.stop()
         api.memory.set("thoriumSystem", page === "games" ? activeSystemIndex : systemRail.currentIndex)
         api.memory.set("thoriumGame", gameRail.currentIndex)
         api.memory.set("thoriumPage", page)
+        // launch() deliberately cancels the delayed persistence timer.  The
+        // sort/view tuple must therefore be committed here as part of the
+        // same atomic navigation snapshot.  Otherwise a fast launch after a
+        // sort change stores the selected row under the PREVIOUS sort; when
+        // the QML scene reconstructs on in-window return, index 0 can name a
+        // completely different game (physical N64 QA returned from TWINE to
+        // Ocarina for exactly this reason).
+        api.memory.set("thoriumSortMode", sortMode)
+        api.memory.set("thoriumGameView", gameViewMode)
+        api.memory.set("thoriumHomeView", homeViewMode)
         // Qt reconstructs this scene when some emulators release the display.
         // Persisting this one-shot marker distinguishes that return from a
         // genuine Pegasus startup, where the Downloads scan should run.
@@ -2924,18 +4636,47 @@ FocusScope {
         }
         startViewPreference = api.memory.has("lucentStartView") ?
                 String(api.memory.get("lucentStartView")) : "cover"
-        // Sound is on by default.  Migrate existing installs once because the
-        // original theme persisted OFF even though the requested default is ON.
-        if (!api.memory.has("parallaxPreviewSoundDefaultV1")) {
-            previewSoundEnabled = true
-            api.memory.set("thoriumPreviewSound", true)
-            api.memory.set("parallaxPreviewSoundDefaultV1", true)
+        // Reset the former default-ON behavior once on upgrade. The marker is
+        // separate from the preference so a user who subsequently enables
+        // preview sound keeps that choice across every later launch/update.
+        if (!api.memory.has("emufusionPreviewSoundDefaultOffV2")) {
+            previewSoundEnabled = false
+            api.memory.set("thoriumPreviewSound", false)
+            api.memory.set("emufusionPreviewSoundDefaultOffV2", true)
         } else {
             previewSoundEnabled = api.memory.has("thoriumPreviewSound") ?
-                    Boolean(api.memory.get("thoriumPreviewSound")) : true
+                    Boolean(api.memory.get("thoriumPreviewSound")) : false
         }
         requestPreviewEndpoint("settings/sound?enabled=" +
                 (previewSoundEnabled ? "1" : "0"))
+        // The companion owns the durable launch preference. Existing and new
+        // installations default to the verified built-in 16:9 profile.
+        widescreenEnhancementsEnabled = api.memory.has(
+                "emufusionWidescreenEnhancements") ?
+                Boolean(api.memory.get("emufusionWidescreenEnhancements")) : true
+        refreshWidescreenEnhancements()
+        // The geometry hack is opt-in on every installation; the companion
+        // stores the durable value and per-system overrides.
+        widescreenHackEnabled = api.memory.has("emufusionWidescreenHack") ?
+                Boolean(api.memory.get("emufusionWidescreenHack")) : false
+        refreshWidescreenHack()
+        // This selector supersedes both old automatic/Boolean settings. Force
+        // one safe OFF migration so an existing install cannot retain a hidden
+        // qualification backend after updating.
+        if (!api.memory.has("lucentFrameGenerationThreeModeV3")) {
+            frameGenerationMode = "off"
+            frameGenerationModeConfirmed = false
+            setFrameGenerationMode("off")
+        } else {
+            frameGenerationMode = api.memory.has("lucentFrameGenerationModeV3") ?
+                    normalizedFrameGenerationMode(
+                            api.memory.get("lucentFrameGenerationModeV3")) : "off"
+            refreshFrameGenerationStatus()
+        }
+        // Burn-in protection is on unless the owner explicitly turned it off.
+        screensaverEnabled = api.memory.has("lucentScreensaverEnabled") ?
+                Boolean(api.memory.get("lucentScreensaverEnabled")) : true
+        screensaverTopStillSince = Date.now()
         // Menu sound effects are on by default; only an explicit OFF persists.
         soundEffectsEnabled = api.memory.has("lucentSoundEffects") ?
                 Boolean(api.memory.get("lucentSoundEffects")) : true
@@ -3009,7 +4750,37 @@ FocusScope {
     }
 
     Keys.onPressed: {
-        if (updatePromptOpen) {
+        // Volume and other platform keys must fall straight through, before any
+        // branch below can run: almost every branch ends in event.accepted =
+        // true regardless of which key arrived, so a volume press was being
+        // swallowed here and Android's own handling never saw it. That is the
+        // whole reason tapping volume did nothing while holding it worked --
+        // only the auto-repeat path escaped. Android raises, unmutes and shows
+        // the slider correctly on its own, so the only job here is to not eat
+        // the key.
+        if (root.isPlatformVolumeKey(event)) {
+            event.accepted = false
+            return
+        }
+        if (root.screensaverActive || root.screensaverRequestPending) {
+            root.stopScreensaver()
+            event.accepted = true
+            return
+        }
+        root.noteScreensaverVisualChange()
+        if (voiceFeedbackOpen) {
+            if (event.key === Qt.Key_Left || event.key === Qt.Key_Right ||
+                    event.key === Qt.Key_Up || event.key === Qt.Key_Down)
+                voiceFeedbackChoice = voiceFeedbackChoice === 0 ? 1 : 0
+            else if (api.keys.isAccept(event)) {
+                if (voiceFeedbackChoice === 0) sendVoiceFeedback()
+                else startVoiceFeedback()
+            } else if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                       event.key === Qt.Key_Escape) {
+                closeVoiceFeedback()
+            }
+            event.accepted = true
+        } else if (updatePromptOpen) {
             if (event.key === Qt.Key_Left || event.key === Qt.Key_Right ||
                     event.key === Qt.Key_Up || event.key === Qt.Key_Down)
                 updatePromptChoice = updatePromptChoice === 0 ? 1 : 0
@@ -3065,9 +4836,24 @@ FocusScope {
                                 event.key === Qt.Key_Up || event.key === Qt.Key_Left ? -1 : 1)
                 } else if (api.keys.isAccept(event)) {
                     if (gameActionIndex === 0) beginRenameGame()
-                    else if (gameActionAllowsRemoveFromList() && gameActionIndex === 1)
+                    else if (gameActionIndex === gameActionCheatsOptionIndex())
+                        openGameActionCheats()
+                    else if (gameActionAllowsRemoveFromList() &&
+                             gameActionIndex === gameActionRemoveOptionIndex())
                         gameActionMode = "confirm-remove"
+                    else if (gameActionIndex === gameActionMultiplayerOptionIndex())
+                        openGameActionMultiplayer()
                     else gameActionMode = "confirm-delete"
+                }
+                event.accepted = true
+            } else if (gameActionMode === "cheats") {
+                if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                        event.key === Qt.Key_Escape) {
+                    gameActionMode = "menu"
+                } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
+                    moveGameActionCheatSelection(event.key === Qt.Key_Up ? -1 : 1)
+                } else if (api.keys.isAccept(event)) {
+                    toggleGameActionCheat(gameActionCheatIndex)
                 }
                 event.accepted = true
             } else if (gameActionMode === "confirm-remove") {
@@ -3077,6 +4863,13 @@ FocusScope {
             } else if (gameActionMode === "confirm-delete") {
                 if (api.keys.isCancel(event) || event.key === Qt.Key_Back || event.key === Qt.Key_Escape) gameActionMode = "menu"
                 else if (api.keys.isAccept(event)) submitDeleteGame()
+                event.accepted = true
+            } else if (gameActionMode === "multiplayer") {
+                if (api.keys.isCancel(event) || event.key === Qt.Key_Back || event.key === Qt.Key_Escape) {
+                    gameActionMode = "menu"
+                } else if (api.keys.isAccept(event)) {
+                    setGameActionMultiplayerWant(!gameActionMultiplayerWant)
+                }
                 event.accepted = true
             } else if (gameActionMode !== "working") {
                 if (api.keys.isAccept(event) || api.keys.isCancel(event) || event.key === Qt.Key_Back || event.key === Qt.Key_Escape) closeGameActions()
@@ -3098,6 +4891,119 @@ FocusScope {
                                   event.key === Qt.Key_Back ||
                                   event.key === Qt.Key_Escape)) {
             endSearch()
+            event.accepted = true
+        } else if (legalOpen) {
+            // Readable, scrollable text. Unlike the first-launch popup there is
+            // no scroll gate and no checkbox here: this copy exists to be
+            // re-read, not to be accepted again.
+            if (event.key === Qt.Key_Up) scrollLegalNotice(-1)
+            else if (event.key === Qt.Key_Down) scrollLegalNotice(1)
+            else if (api.keys.isPrevPage(event)) scrollLegalNotice(-4)
+            else if (api.keys.isNextPage(event)) scrollLegalNotice(4)
+            else if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                     event.key === Qt.Key_Escape || api.keys.isAccept(event) ||
+                     api.keys.isDetails(event)) {
+                legalOpen = false
+                settingsOpen = true
+            }
+            event.accepted = true
+        } else if (customEmulatorOpen) {
+            if (customEmulatorEditor.editing) {
+                // The on-screen keyboard owns the keys while a field is open;
+                // only Back and Accept end the edit.
+                if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                        event.key === Qt.Key_Escape)
+                    customEmulatorEditor.endEditing(false)
+                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                    customEmulatorEditor.endEditing(true)
+                else { event.accepted = false; return }
+                event.accepted = true
+                return
+            }
+            if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                    event.key === Qt.Key_Escape) {
+                customEmulatorOpen = false
+            } else if (event.key === Qt.Key_Up) {
+                customEmulatorIndex = Math.max(0, customEmulatorIndex - 1)
+            } else if (event.key === Qt.Key_Down) {
+                customEmulatorIndex = Math.min(customEmulatorRowCount() - 1,
+                                               customEmulatorIndex + 1)
+            } else if (event.key === Qt.Key_Left) {
+                if (customEmulatorField(customEmulatorIndex) === "delivery")
+                    cycleCustomEmulatorDelivery(-1)
+            } else if (event.key === Qt.Key_Right) {
+                if (customEmulatorField(customEmulatorIndex) === "delivery")
+                    cycleCustomEmulatorDelivery(1)
+            } else if (api.keys.isAccept(event)) {
+                activateCustomEmulatorRow()
+            }
+            event.accepted = true
+        } else if (emulatorPickerOpen) {
+            if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                    event.key === Qt.Key_Escape) {
+                emulatorPickerOpen = false
+                emulatorPickerNotice = ""
+            } else if (event.key === Qt.Key_Up) {
+                emulatorPickerIndex = Math.max(0, emulatorPickerIndex - 1)
+            } else if (event.key === Qt.Key_Down) {
+                emulatorPickerIndex = Math.min(
+                        emulatorPickerRowList.length - 1, emulatorPickerIndex + 1)
+            } else if (api.keys.isAccept(event)) {
+                activateEmulatorPickerRow()
+            }
+            event.accepted = true
+        } else if (emulatorRoutesOpen) {
+            if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                    event.key === Qt.Key_Escape || api.keys.isDetails(event)) {
+                emulatorRoutesOpen = false
+                settingsOpen = true
+            } else if (event.key === Qt.Key_Up) {
+                emulatorRoutesIndex = Math.max(0, emulatorRoutesIndex - 1)
+            } else if (event.key === Qt.Key_Down) {
+                emulatorRoutesIndex = Math.min(emulatorRouteSystems.length - 1,
+                                               emulatorRoutesIndex + 1)
+            } else if (api.keys.isPrevPage(event)) {
+                // Fifty-odd systems is too many to walk one row at a time, and
+                // Left/Right is already spoken for by the route toggle.
+                emulatorRoutesIndex = Math.max(0,
+                        emulatorRoutesIndex - routesPageSize)
+            } else if (api.keys.isNextPage(event)) {
+                emulatorRoutesIndex = Math.min(emulatorRouteSystems.length - 1,
+                        emulatorRoutesIndex + routesPageSize)
+            } else if (event.key === Qt.Key_Left) {
+                toggleEmulatorRoute(-1)
+            } else if (event.key === Qt.Key_Right) {
+                toggleEmulatorRoute(1)
+            } else if (api.keys.isAccept(event)) {
+                var routeSystem = currentRouteSystem()
+                if (routeSystem)
+                    openEmulatorPicker(routeSystem.system, routeSystem.collection)
+            }
+            event.accepted = true
+        } else if (artworkReviewOpen) {
+            if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                    event.key === Qt.Key_Escape || api.keys.isDetails(event)) {
+                // A back press while the delete is armed disarms it instead of
+                // leaving, so the destructive option can always be backed out
+                // of with the same button that backs out of everything else.
+                if (artworkReviewConfirming) {
+                    artworkReviewConfirming = false
+                    artworkReviewMessage = ""
+                } else {
+                    closeArtworkReview()
+                    settingsOpen = true
+                }
+            } else if (event.key === Qt.Key_Up) {
+                artworkReviewMoveRow(-1)
+            } else if (event.key === Qt.Key_Down) {
+                artworkReviewMoveRow(1)
+            } else if (event.key === Qt.Key_Left) {
+                artworkReviewMoveChoice(-1)
+            } else if (event.key === Qt.Key_Right) {
+                artworkReviewMoveChoice(1)
+            } else if (api.keys.isAccept(event)) {
+                submitArtworkChoice()
+            }
             event.accepted = true
         } else if (coverOrderEditorOpen) {
             if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
@@ -3288,6 +5194,12 @@ FocusScope {
     }
 
     Keys.onReleased: {
+        // See Keys.onPressed: the platform owns these, and a swallowed release
+        // leaves Android with a half-delivered key.
+        if (root.isPlatformVolumeKey(event)) {
+            event.accepted = false
+            return
+        }
         if (searchField.activeFocus || root.settingsOpen ||
                 (root.page !== "games" && root.page !== "home"))
             return
@@ -3308,9 +5220,36 @@ FocusScope {
     Timer {
         id: importPollTimer
         interval: 1200
-        running: true
+        // Import progress is frontend chrome; it cannot be seen behind a game.
+        // The scan itself keeps running -- only the polling of it stops.
+        running: !root.gameplayActive
         repeat: true
         onTriggered: root.pollImportStatus()
+    }
+
+    Timer {
+        id: screensaverWatch
+        interval: 5000
+        repeat: true
+        running: root.screensaverEnabled && !root.gameplayActive
+        triggeredOnStart: false
+        onTriggered: root.pollScreensaverStatus()
+    }
+
+    Timer {
+        id: screensaverAdvanceRetry
+        interval: 1000
+        repeat: false
+        onTriggered: root.advanceScreensaverVideo()
+    }
+
+    Timer {
+        id: screensaverCompletionWatch
+        interval: 500
+        repeat: true
+        running: root.screensaverActive && !root.gameplayActive
+        onTriggered: if (root.screensaverPlaybackFinished())
+                         root.advanceScreensaverVideo()
     }
 
     Timer {
@@ -3436,7 +5375,9 @@ FocusScope {
     }
 
     Timer {
-        interval: 700
+        // Never stops: this is the only poll that can observe gameplay ending.
+        // It backs off while a game runs so the emulator keeps the CPU.
+        interval: root.gameplayActive || Qt.application.state !== Qt.ApplicationActive ? 2000 : 700
         repeat: true
         running: true
         triggeredOnStart: true
@@ -3456,8 +5397,8 @@ FocusScope {
                     else
                         root.activateShelfPreview(root.homeZone)
                 }
-                root.sendPreviewHeartbeat()
             }
+            root.sendPreviewHeartbeat()
             root.applicationWasActive = applicationActive
         }
     }
@@ -3465,23 +5406,39 @@ FocusScope {
     Timer {
         interval: 180
         repeat: true
-        running: true
+        // Nothing on the lower display can request a launch while a game is
+        // already running, so this poll has nothing to learn during one.
+        running: !root.gameplayActive
         onTriggered: root.pollBottomLaunchRequest()
     }
 
     Timer {
         interval: 30000
         repeat: true
-        running: true
+        // The clock is the last poller that still dirtied the scene graph
+        // during gameplay, and a scene-graph change is a full Qt Quick render
+        // pass underneath a running emulator. triggeredOnStart puts the real
+        // time back on screen the instant gameplay ends, so nothing is stale
+        // by the time it can be read.
+        running: !root.gameplayActive
+        triggeredOnStart: true
         onTriggered: root.updateClock()
     }
 
     Timer {
         interval: 1800
         repeat: true
-        running: true
+        // An update banner cannot be seen behind a game; poll again on return.
+        running: !root.gameplayActive
         triggeredOnStart: true
         onTriggered: root.pollUpdateStatus()
+    }
+
+    Timer {
+        id: voiceFeedbackStatusPoll
+        interval: 320
+        repeat: false
+        onTriggered: root.pollVoiceFeedback()
     }
 
     Timer {
@@ -3509,7 +5466,11 @@ FocusScope {
     // power-state changes. Reassert the selected system color at low frequency;
     // the companion preserves any externally changed AYN brightness value.
     Timer {
-        interval: 750
+        // Backed off rather than stopped during gameplay: stock firmware can
+        // still reset the LEDs mid-game, and letting them revert to the stock
+        // colour would be a visible regression. A quarter of the poll rate
+        // still reasserts well within a user's notice.
+        interval: root.gameplayActive ? 3000 : 750
         repeat: true
         running: root.systemLedEnabled
         onTriggered: root.applySystemLedColor()
@@ -3915,7 +5876,7 @@ FocusScope {
             property var packageSize: root.packageDimensionsForGame(game)
             property real packageScale: root.coverShelfPixelsPerMillimetre()
             property real coverAreaHeight: Math.max(108, height -
-                    (root.coverViewRowCount === 1 ? 128 : 98))
+                    root.coverShelfCaptionHeight)
             property real desiredCoverWidth: packageSize.width * packageScale
             property real desiredCoverHeight: packageSize.height * packageScale
             property real maximumCoverWidth: root.coverViewRowCount === 1 ? 520 :
@@ -3927,7 +5888,8 @@ FocusScope {
             property real coverHeight: desiredCoverHeight * packageFit
             width: Math.max(root.coverViewRowCount === 1 ? 180 :
                     (root.coverViewRowCount === 2 ? 150 : 130), coverWidth + 22)
-            height: Math.max(184, root.coverRowSlotHeight - 52)
+            height: Math.max(184, root.coverRowSlotHeight -
+                    root.coverShelfLabelHeight - 8)
             // Selection is communicated by the accent frame, not by changing
             // package scale. That keeps every adjacent case in the same real-
             // world proportion even while focus moves across the shelf.
@@ -3965,18 +5927,27 @@ FocusScope {
             Text {
                 id: shelfTitle
                 x: 8
-                y: parent.coverAreaHeight + 10
+                y: parent.coverAreaHeight +
+                   (root.coverViewRowCount === 1 ? 10 :
+                    (root.coverViewRowCount === 2 ? 8 : 6))
                 width: parent.width - 16
-                height: root.coverViewRowCount === 1 ? 48 :
-                        (root.coverViewRowCount === 2 ? 38 : 30)
+                height: root.coverViewRowCount === 1 ? 56 :
+                        (root.coverViewRowCount === 2 ? 44 : 34)
                 text: root.displayTitle(game)
                 color: "#eef1f7"
                 elide: Text.ElideRight
                 wrapMode: Text.Wrap
                 maximumLineCount: 2
+                // Shrink-to-fit rather than truncate. A long name scrolled
+                // past at speed is the case that used to lose its tail, and
+                // an unreadably small name is a worse answer than a slightly
+                // smaller one, so the floor is generous.
+                fontSizeMode: Text.Fit
+                minimumPixelSize: root.coverViewRowCount === 1 ? 17 :
+                                  (root.coverViewRowCount === 2 ? 14 : 11)
                 font.family: global.fonts.sans
-                font.pixelSize: root.coverViewRowCount === 1 ? 22 :
-                                (root.coverViewRowCount === 2 ? 18 : 15)
+                font.pixelSize: root.coverViewRowCount === 1 ? 26 :
+                                (root.coverViewRowCount === 2 ? 21 : 16)
                 font.weight: Font.Bold
                 style: Text.Outline
                 styleColor: "#d0000000"
@@ -3988,9 +5959,11 @@ FocusScope {
                 // This keeps ratings visually paired with the game name in
                 // every Cover View shelf and at every configured row count.
                 y: shelfTitle.y +
-                   Math.min(shelfTitle.height, shelfTitle.paintedHeight) + 4
+                   Math.min(shelfTitle.height, shelfTitle.paintedHeight) +
+                   (root.coverViewRowCount === 3 ? 2 : 4)
                 width: parent.width - 16
-                height: root.coverViewRowCount === 1 ? 34 : 28
+                height: root.coverViewRowCount === 1 ? 34 :
+                        (root.coverViewRowCount === 2 ? 28 : 24)
                 text: root.scoreText(game)
                 color: root.accentForGame(game)
                 wrapMode: Text.NoWrap
@@ -3998,8 +5971,8 @@ FocusScope {
                 fontSizeMode: Text.HorizontalFit
                 minimumPixelSize: 11
                 font.family: global.fonts.sans
-                font.pixelSize: root.coverViewRowCount === 1 ? 16 :
-                                (root.coverViewRowCount === 2 ? 14 : 11)
+                font.pixelSize: root.coverViewRowCount === 1 ? 18 :
+                                (root.coverViewRowCount === 2 ? 15 : 12)
                 font.weight: Font.Bold
                 font.letterSpacing: 0
                 style: Text.Outline
@@ -4246,10 +6219,18 @@ FocusScope {
         height: parent.height - y
         visible: root.showSystemBackdrop
         gradient: Gradient {
+            // Ramps to its darkest well ABOVE the footer line and then eases
+            // back off, so the very bottom of the screen is wallpaper again.
+            // Running this to full opacity at position 1.0 put a hard black
+            // slab across the bottom of every system view -- which reads as a
+            // background bar behind the button legend no matter that no plate
+            // is drawn there. The top of the screen has no such slab behind
+            // the clock and battery, and the two edges have to match.
             GradientStop { position: 0.0; color: "#1207090d" }
-            GradientStop { position: 0.18; color: "#b807090d" }
-            GradientStop { position: 0.50; color: "#f207090d" }
-            GradientStop { position: 1.0; color: "#ff07090d" }
+            GradientStop { position: 0.18; color: "#9807090d" }
+            GradientStop { position: 0.52; color: "#b407090d" }
+            GradientStop { position: 0.82; color: "#5807090d" }
+            GradientStop { position: 1.0; color: "#0c07090d" }
         }
     }
 
@@ -4280,10 +6261,19 @@ FocusScope {
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
+            // Symmetric, and monotonic on each half. What reads as "a
+            // background behind the legend" is an EDGE, not darkness: the old
+            // curve peaked at 0.72 and then released to nearly nothing by the
+            // bottom, which drew a visible seam across the artwork and left the
+            // legend stranded on bare wallpaper at 1.08:1 contrast. The top of
+            // the screen carries its clock and battery over a 60% wash that
+            // nobody reads as a bar, because it fades over 350 px with no edge
+            // anywhere. The bottom now gets exactly the same treatment, mirrored
+            // -- same depth, same ramp length, same absence of an edge.
             GradientStop { position: 0.0; color: "#99070a10" }
-            GradientStop { position: 0.42; color: "#35070a10" }
-            GradientStop { position: 0.72; color: "#d9070a10" }
-            GradientStop { position: 1.0; color: "#ff07090d" }
+            GradientStop { position: 0.34; color: "#30070a10" }
+            GradientStop { position: 0.66; color: "#30070a10" }
+            GradientStop { position: 1.0; color: "#99070a10" }
         }
     }
 
@@ -4338,7 +6328,8 @@ FocusScope {
                (compactGameList ? (swapGameList ? 600 : 624) : 392)
         height: Math.round(width * 9 / 16)
         visible: root.previewPlacementMode !== "off" &&
-                 !root.useBottomPreview() && root.singleCurrentSlot >= 0
+                 !root.useBottomPreview() && root.singleCurrentSlot >= 0 &&
+                 !root.gameplayActive
         clip: true
 
         Rectangle {
@@ -4362,7 +6353,13 @@ FocusScope {
             id: singleVideoA
             anchors.fill: parent
             anchors.margins: 3
-            source: root.singleSourceA
+            // Cleared while a game runs. An unset source stops the decoder
+            // outright; hiding the PIP does not, and a looping preview keeps
+            // calling update() on this item whether or not anything can see
+            // it -- which is a full Qt Quick render pass, at video rate, for
+            // as long as the emulator is on screen. autoPlay restarts it from
+            // the restored source when the library comes back.
+            source: root.gameplayActive ? "" : root.singleSourceA
             fillMode: VideoOutput.PreserveAspectCrop
             muted: !root.previewSoundEnabled || root.singleCurrentSlot !== 0
             loops: root.randomHomePreviewActive() ? 1 : MediaPlayer.Infinite
@@ -4378,7 +6375,7 @@ FocusScope {
             id: singleVideoB
             anchors.fill: parent
             anchors.margins: 3
-            source: root.singleSourceB
+            source: root.gameplayActive ? "" : root.singleSourceB
             fillMode: VideoOutput.PreserveAspectCrop
             muted: !root.previewSoundEnabled || root.singleCurrentSlot !== 1
             loops: root.randomHomePreviewActive() ? 1 : MediaPlayer.Infinite
@@ -4394,7 +6391,7 @@ FocusScope {
             id: singleVideoC
             anchors.fill: parent
             anchors.margins: 3
-            source: root.singleSourceC
+            source: root.gameplayActive ? "" : root.singleSourceC
             fillMode: VideoOutput.PreserveAspectCrop
             muted: !root.previewSoundEnabled || root.singleCurrentSlot !== 2
             loops: root.randomHomePreviewActive() ? 1 : MediaPlayer.Infinite
@@ -4404,6 +6401,115 @@ FocusScope {
             onPositionChanged: if (position > 0) root.promoteSingleVideo(2)
             onStopped: if (root.singleCurrentSlot === 2 && root.randomHomePreviewActive())
                            Qt.callLater(function() { root.advanceRandomHomePreview() })
+        }
+    }
+
+    Rectangle {
+        id: screensaverLayer
+        z: 2000
+        anchors.fill: parent
+        visible: root.screensaverActive && !root.gameplayActive
+        color: "black"
+
+        Video {
+            id: screensaverVideoA
+            anchors.fill: parent
+            source: root.gameplayActive ? "" : root.screensaverSourceA
+            // The Thor upper panel is 16:9. A 16:9 preview therefore displays
+            // its complete wide frame here, while PreviewActivity independently
+            // crops that same source to fill the differently shaped lower panel.
+            fillMode: VideoOutput.PreserveAspectCrop
+            muted: true
+            loops: 1
+            autoPlay: source !== ""
+            opacity: root.screensaverCurrentSlot === 0 ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation { duration: root.screensaverCrossfadeMs }
+            }
+            onPositionChanged: if (position > 0) root.promoteScreensaverSlot(0)
+            onStopped: if (root.screensaverActive &&
+                               root.screensaverCurrentSlot === 0)
+                           Qt.callLater(function() { root.advanceScreensaverVideo() })
+        }
+
+        Video {
+            id: screensaverVideoB
+            anchors.fill: parent
+            source: root.gameplayActive ? "" : root.screensaverSourceB
+            fillMode: VideoOutput.PreserveAspectCrop
+            muted: true
+            loops: 1
+            autoPlay: source !== ""
+            opacity: root.screensaverCurrentSlot === 1 ? 1 : 0
+            Behavior on opacity {
+                NumberAnimation { duration: root.screensaverCrossfadeMs }
+            }
+            onPositionChanged: if (position > 0) root.promoteScreensaverSlot(1)
+            onStopped: if (root.screensaverActive &&
+                               root.screensaverCurrentSlot === 1)
+                           Qt.callLater(function() { root.advanceScreensaverVideo() })
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 184
+            color: "#98000000"
+        }
+
+        Text {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.leftMargin: 54
+            anchors.topMargin: 42
+            visible: root.screensaverGame !== null
+            text: root.screensaverSystemName(root.screensaverGame).toUpperCase()
+            color: "white"
+            font.pixelSize: 26
+            font.bold: true
+            font.letterSpacing: 3
+            style: Text.Outline
+            styleColor: "#b0000000"
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: 54
+            anchors.rightMargin: 54
+            anchors.bottomMargin: 38
+            spacing: 10
+            visible: root.screensaverGame !== null
+
+            Text {
+                width: parent.width
+                text: root.displayTitle(root.screensaverGame)
+                color: "white"
+                font.pixelSize: 42
+                font.bold: true
+                elide: Text.ElideRight
+                style: Text.Outline
+                styleColor: "#b0000000"
+            }
+
+            Text {
+                width: parent.width
+                text: root.scoreText(root.screensaverGame)
+                color: "#f2f5f8"
+                font.pixelSize: 23
+                font.bold: true
+                font.letterSpacing: 1.4
+                elide: Text.ElideRight
+                style: Text.Outline
+                styleColor: "#b0000000"
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.stopScreensaver()
         }
     }
 
@@ -4451,6 +6557,48 @@ FocusScope {
                     visible: root.useWhiteBrandLogo(root.displaySystemIndex)
                     cached: true
                 }
+
+                // Console marks are used nominatively to identify which system
+                // a game belongs to. This states plainly that the trademark
+                // holders neither endorse nor are connected with EmuFusion.
+                //
+                // Positioned from the logo's PAINTED box, not from the Item:
+                // every mark keeps its own aspect inside a fixed 230x64 slot,
+                // so the drawn artwork is a different width and height for each
+                // one. Anchoring to the Item would centre this under empty
+                // space and sit a different distance below Nintendo than below
+                // Sega. paintedWidth/paintedHeight track the artwork itself, so
+                // the line stays centred on the mark and always the same gap
+                // beneath it.
+                Text {
+                    id: brandDisclaimer
+                    x: activeBrandLogo.x +
+                       (activeBrandLogo.paintedWidth - width) / 2
+                    y: activeBrandLogo.y +
+                       (activeBrandLogo.height + activeBrandLogo.paintedHeight) / 2 + 7
+                    text: "No affiliation or endorsement."
+                    color: "#9099a3"
+                    opacity: 0.5
+                    font.family: global.fonts.sans
+                    font.pixelSize: 10
+                    font.letterSpacing: 0.15
+                }
+            }
+
+            // Same disclaimer for the all-systems row. One line under the row
+            // rather than under each mark: repeating it beneath every small
+            // logo would crowd the header without saying anything more.
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: 36
+                text: "No affiliation or endorsement."
+                color: "#9099a3"
+                opacity: 0.5
+                font.family: global.fonts.sans
+                font.pixelSize: 10
+                font.letterSpacing: 0.15
+                visible: root.showAvailableBrandRow
             }
 
             Row {
@@ -4703,7 +6851,10 @@ FocusScope {
                              root.importState !== "error" ? 0.62 : 0.96
 
                     RotationAnimation on rotation {
-                        running: root.importState !== "idle" &&
+                        // Import polling pauses during gameplay, so its last
+                        // busy status can remain stale. Do not keep rendering
+                        // this hidden spinner underneath the emulator.
+                        running: !root.gameplayActive && root.importState !== "idle" &&
                                  root.importState !== "complete" &&
                                  root.importState !== "error"
                         from: 0
@@ -4716,6 +6867,31 @@ FocusScope {
                 MouseArea {
                     anchors.fill: parent
                     onClicked: root.startMaintenanceRescan()
+                }
+            }
+
+            Item {
+                id: voiceFeedbackButton
+                anchors.right: lucentRescanButton.left
+                anchors.rightMargin: 24
+                anchors.verticalCenter: parent.verticalCenter
+                width: 42
+                height: 42
+
+                Image {
+                    anchors.centerIn: parent
+                    width: 31
+                    height: 31
+                    source: Qt.resolvedUrl("assets/raised-hand-white.svg")
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    mipmap: true
+                    opacity: root.voiceFeedbackOpen ? 0.66 : 0.96
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.startVoiceFeedback()
                 }
             }
 
@@ -4859,15 +7035,21 @@ FocusScope {
                 font.letterSpacing: 2
             }
 
+            // Which shelf lies above and below the focused one. This used to
+            // float on its own line inside the shelf band, where tall cards
+            // reached over it; it now shares the footer line with the view
+            // name and the button legend, which costs the shelves nothing.
             Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: 964
+                id: coverNavigationHint
+                z: 90
+                x: 240
+                y: root.footerY
                 visible: root.homeViewMode === "covers" &&
                          !root.settingsOpen && root.coverVerticalNavigationText() !== ""
                 text: root.coverVerticalNavigationText()
                 color: root.accent
                 font.family: global.fonts.sans
-                font.pixelSize: 14
+                font.pixelSize: root.footerFontSize - 1
                 font.weight: Font.DemiBold
                 font.letterSpacing: 1.8
             }
@@ -4876,13 +7058,13 @@ FocusScope {
                 id: systemRail
                 visible: root.coverZoneVisible(0)
                 x: 48
-                y: root.coverContentTop +
+                // Systems have no heading of their own, so the rail is placed
+                // straight from the band computed at the top of the file.
+                y: root.coverSystemRailTop +
                    (root.coverZonePosition(0) - root.coverWindowStart()) *
-                   root.coverRowSlotHeight +
-                   (root.coverViewRowCount === 1 ? 112 :
-                    (root.coverViewRowCount === 2 ? 50 : 34))
+                   root.coverRowSlotHeight
                 width: parent.width - 96
-                height: root.coverRowSlotHeight - 38
+                height: root.coverSystemCardHeight
                 orientation: ListView.Horizontal
                 model: systemModel
                 spacing: 14
@@ -4902,9 +7084,7 @@ FocusScope {
                 // The rail spans the full display. The preferred position is
                 // the selected delegate's leading edge, so offset by half its
                 // width to center it on the physical screen precisely.
-                preferredHighlightBegin: (width -
-                        (root.coverViewRowCount === 1 ? 360 :
-                         (root.coverViewRowCount === 2 ? 250 : 210))) / 2
+                preferredHighlightBegin: (width - root.coverSystemCardWidth) / 2
                 preferredHighlightEnd: preferredHighlightBegin
                 keyNavigationWraps: true
                 keyNavigationEnabled: false
@@ -4928,10 +7108,8 @@ FocusScope {
                 delegate: Item {
                     id: systemCard
                     property bool isSelected: ListView.isCurrentItem && root.homeZone === 0
-                    width: root.coverViewRowCount === 1 ? 360 :
-                           (root.coverViewRowCount === 2 ? 250 : 210)
-                    height: root.coverViewRowCount === 1 ? 250 :
-                            (root.coverViewRowCount === 2 ? 174 : 146)
+                    width: root.coverSystemCardWidth
+                    height: root.coverSystemCardHeight
                     scale: isSelected ? 1.10 : 0.88
                     opacity: isSelected ? 1.0 : 0.46
                     Behavior on scale { NumberAnimation { duration: 145; easing.type: Easing.OutCubic } }
@@ -4949,7 +7127,7 @@ FocusScope {
                     Rectangle {
                         x: 18
                         y: 18
-                        width: root.coverViewRowCount === 1 ? 64 : 46
+                        width: root.coverViewRowCount === 1 ? 80 : 46
                         height: systemCard.isSelected ? 7 : 4
                         color: model.accent
                     }
@@ -4988,19 +7166,19 @@ FocusScope {
                         verticalAlignment: Text.AlignVCenter
                         lineHeight: 0.82
                         font.family: global.fonts.condensed
-                        font.pixelSize: root.coverViewRowCount === 1 ? 52 : 38
+                        font.pixelSize: root.coverViewRowCount === 1 ? 66 : 40
                         font.weight: Font.Black
                         font.letterSpacing: 2
                     }
 
                     Text {
                         x: 18
-                        y: parent.height - 28
+                        y: parent.height - (root.coverViewRowCount === 1 ? 34 : 28)
                         width: parent.width - 34
                         text: model.years
                         color: model.accent
                         font.family: global.fonts.sans
-                        font.pixelSize: root.coverViewRowCount === 1 ? 14 : 12
+                        font.pixelSize: root.coverViewRowCount === 1 ? 17 : 12
                         font.weight: Font.DemiBold
                         font.letterSpacing: 2
                     }
@@ -5065,9 +7243,12 @@ FocusScope {
                             id: recentRail
                             property int zone: 1
                             x: 48
-                            y: 44
+                            y: root.coverShelfLabelHeight
                             width: parent.width - 96
-                            height: parent.parent.height - 46
+                            // Its own slot, not the whole stack: the rail is a
+                            // Flickable, and one eight-slots-tall rail reaches
+                            // over every shelf below it.
+                            height: parent.height - root.coverShelfLabelHeight - 2
                             orientation: ListView.Horizontal
                             model: recentModel
                             delegate: homeShelfCard
@@ -5104,9 +7285,12 @@ FocusScope {
                             id: mostPlayedRail
                             property int zone: 2
                             x: 48
-                            y: 44
+                            y: root.coverShelfLabelHeight
                             width: parent.width - 96
-                            height: parent.parent.height - 46
+                            // Its own slot, not the whole stack: the rail is a
+                            // Flickable, and one eight-slots-tall rail reaches
+                            // over every shelf below it.
+                            height: parent.height - root.coverShelfLabelHeight - 2
                             orientation: ListView.Horizontal
                             model: mostPlayedModel
                             delegate: homeShelfCard
@@ -5143,9 +7327,12 @@ FocusScope {
                             id: recentlyAddedRail
                             property int zone: 3
                             x: 48
-                            y: 44
+                            y: root.coverShelfLabelHeight
                             width: parent.width - 96
-                            height: parent.parent.height - 46
+                            // Its own slot, not the whole stack: the rail is a
+                            // Flickable, and one eight-slots-tall rail reaches
+                            // over every shelf below it.
+                            height: parent.height - root.coverShelfLabelHeight - 2
                             orientation: ListView.Horizontal
                             model: recentlyAddedModel
                             delegate: homeShelfCard
@@ -5182,9 +7369,12 @@ FocusScope {
                             id: criticRail
                             property int zone: 4
                             x: 48
-                            y: 44
+                            y: root.coverShelfLabelHeight
                             width: parent.width - 96
-                            height: parent.parent.height - 46
+                            // Its own slot, not the whole stack: the rail is a
+                            // Flickable, and one eight-slots-tall rail reaches
+                            // over every shelf below it.
+                            height: parent.height - root.coverShelfLabelHeight - 2
                             orientation: ListView.Horizontal
                             model: allCriticSortModel
                             delegate: homeShelfCard
@@ -5219,8 +7409,12 @@ FocusScope {
                         ListView {
                             id: userRail
                             property int zone: 5
-                            x: 48; y: 44
-                            width: parent.width - 96; height: parent.parent.height - 46
+                            x: 48; y: root.coverShelfLabelHeight
+                            width: parent.width - 96
+                            // Its own slot, not the whole stack: the rail is a
+                            // Flickable, and one eight-slots-tall rail reaches
+                            // over every shelf below it.
+                            height: parent.height - root.coverShelfLabelHeight - 2
                             orientation: ListView.Horizontal
                             model: allUserSortModel
                             delegate: homeShelfCard
@@ -5254,8 +7448,12 @@ FocusScope {
                         ListView {
                             id: alphaRail
                             property int zone: 6
-                            x: 48; y: 44
-                            width: parent.width - 96; height: parent.parent.height - 46
+                            x: 48; y: root.coverShelfLabelHeight
+                            width: parent.width - 96
+                            // Its own slot, not the whole stack: the rail is a
+                            // Flickable, and one eight-slots-tall rail reaches
+                            // over every shelf below it.
+                            height: parent.height - root.coverShelfLabelHeight - 2
                             orientation: ListView.Horizontal
                             model: allAlphaSortModel
                             delegate: homeShelfCard
@@ -5289,8 +7487,12 @@ FocusScope {
                         ListView {
                             id: releaseRail
                             property int zone: 7
-                            x: 48; y: 44
-                            width: parent.width - 96; height: parent.parent.height - 46
+                            x: 48; y: root.coverShelfLabelHeight
+                            width: parent.width - 96
+                            // Its own slot, not the whole stack: the rail is a
+                            // Flickable, and one eight-slots-tall rail reaches
+                            // over every shelf below it.
+                            height: parent.height - root.coverShelfLabelHeight - 2
                             orientation: ListView.Horizontal
                             model: allReleaseSortModel
                             delegate: homeShelfCard
@@ -5390,7 +7592,7 @@ FocusScope {
                 x: 48
                 y: 324
                 width: parent.width - 96
-                height: 708
+                height: root.contentBottom - y
                 opacity: root.homeViewMode === "list" ? 1 : 0
                 visible: opacity > 0
                 scale: root.homeViewMode === "list" ? 1 : 0.985
@@ -5415,12 +7617,18 @@ FocusScope {
                         x: 10
                         y: 0
                         width: parent.width - 20
-                        // Exactly nine 70 px rows plus eight 4 px gaps. The
-                        // viewport can never expose a fractional row.
-                        height: 662
+                        // Whole rows only. Nothing else on this page competes
+                        // for the height, so the reclaimed strip is spent on
+                        // taller rows -- and larger logos and labels with them
+                        // -- rather than on a tenth row that would not fit.
+                        property real rowSpacing: 4
+                        property real rowHeight: root.listRowHeight(
+                                parent.height, 70, 80, rowSpacing)
+                        height: root.listRowCount(parent.height, 70, rowSpacing) *
+                                (rowHeight + rowSpacing) - rowSpacing
                         model: systemModel
                         currentIndex: systemRail.currentIndex
-                        spacing: 4
+                        spacing: rowSpacing
                         clip: true
                         cacheBuffer: height * 2
                         snapMode: ListView.SnapToItem
@@ -5428,14 +7636,14 @@ FocusScope {
                         keyNavigationEnabled: false
                         highlightMoveDuration: 110
                         highlightRangeMode: ListView.ApplyRange
-                        preferredHighlightBegin: (height - 70) / 2
-                        preferredHighlightEnd: (height - 70) / 2
+                        preferredHighlightBegin: (height - rowHeight) / 2
+                        preferredHighlightEnd: (height - rowHeight) / 2
 
                         delegate: Rectangle {
                             id: homeSystemRow
                             property bool isSelected: ListView.isCurrentItem
                             width: homeSystemList.width
-                            height: 70
+                            height: homeSystemList.rowHeight
                             color: isSelected ? model.accent :
                                    (index % 2 === 0 ? "#66060a10" : "#76060a10")
                             border.width: 0
@@ -5445,8 +7653,8 @@ FocusScope {
                                 id: homeSystemLogo
                                 x: 14
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: 112
-                                height: 44
+                                width: 122
+                                height: 48
                                 source: model.folder === "all" ?
                                         Qt.resolvedUrl("assets/hardware-cutouts/all/0.png") :
                                         Qt.resolvedUrl("assets/logos-png/" + model.folder + ".png")
@@ -5462,48 +7670,51 @@ FocusScope {
                             Text {
                                 x: 14
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: 112
+                                width: 122
                                 visible: homeSystemLogo.status === Image.Error
                                 text: model.mark
                                 color: homeSystemRow.isSelected ? "#071016" : "white"
                                 horizontalAlignment: Text.AlignHCenter
                                 font.family: global.fonts.condensed
-                                font.pixelSize: model.folder === "all" ? 17 : 25
+                                font.pixelSize: model.folder === "all" ? 18 : 27
                                 font.weight: Font.Black
                             }
 
+                            // Name over years as one block centred on the row,
+                            // so a change in row height moves both together
+                            // instead of stranding them against the top edge.
                             Text {
-                                x: 142
-                                y: 12
-                                width: parent.width - 232
+                                x: 152
+                                y: parent.height / 2 - height - 1
+                                width: parent.width - 252
                                 text: model.name
                                 color: homeSystemRow.isSelected ? "#071016" : "#eef1f6"
                                 fontSizeMode: Text.HorizontalFit
-                                minimumPixelSize: 14
+                                minimumPixelSize: 15
                                 font.family: global.fonts.sans
-                                font.pixelSize: 18
+                                font.pixelSize: 21
                                 font.weight: Font.Bold
                             }
 
                             Text {
-                                x: 142
-                                y: 40
+                                x: 152
+                                y: parent.height / 2 + 3
                                 text: model.years
                                 color: homeSystemRow.isSelected ? "#18251f" : model.accent
                                 font.family: global.fonts.sans
-                                font.pixelSize: 12
+                                font.pixelSize: 13
                                 font.weight: Font.Bold
                                 font.letterSpacing: 1.2
                             }
 
                             Text {
                                 anchors.right: parent.right
-                                anchors.rightMargin: 14
+                                anchors.rightMargin: 16
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: root.systemGameCount(index)
                                 color: homeSystemRow.isSelected ? "#071016" : "#aeb6c8"
                                 font.family: global.fonts.condensed
-                                font.pixelSize: 21
+                                font.pixelSize: 24
                                 font.weight: Font.Bold
                             }
 
@@ -5589,11 +7800,15 @@ FocusScope {
                         x: 0
                         y: 76
                         width: parent.width
-                        // Seven 76 px rows plus six 4 px gaps keeps the chosen
-                        // row centered without clipping the first or last row.
-                        height: 556
+                        // Whole rows only, and the reclaimed height buys an
+                        // eighth game rather than padding under the seventh.
+                        property real rowSpacing: 4
+                        property real rowHeight: root.listRowHeight(
+                                parent.height - y, 76, 88, rowSpacing)
+                        height: root.listRowCount(parent.height - y, 76, rowSpacing) *
+                                (rowHeight + rowSpacing) - rowSpacing
                         model: root.homeListEntries
-                        spacing: 4
+                        spacing: rowSpacing
                         clip: true
                         cacheBuffer: height * 2
                         snapMode: ListView.SnapToItem
@@ -5601,8 +7816,8 @@ FocusScope {
                         keyNavigationEnabled: false
                         highlightMoveDuration: 100
                         highlightRangeMode: ListView.ApplyRange
-                        preferredHighlightBegin: (height - 76) / 2
-                        preferredHighlightEnd: (height - 76) / 2
+                        preferredHighlightBegin: (height - rowHeight) / 2
+                        preferredHighlightEnd: (height - rowHeight) / 2
                         onCurrentIndexChanged: {
                             if (root.previewReady && root.page === "home" &&
                                     root.homeViewMode === "list")
@@ -5615,7 +7830,7 @@ FocusScope {
                                     root.homeListFocusColumn === 1
                             property var game: root.homeListGameAt(index)
                             width: homeListRail.width
-                            height: 76
+                            height: homeListRail.rowHeight
                             color: isSelected ? root.homeListAccentForGame(game) :
                                    (index % 2 === 0 ? "#78060a10" : "#86060a10")
                             border.width: 0
@@ -5638,9 +7853,14 @@ FocusScope {
                                 width: parent.width - 580
                                 text: root.displayTitle(game)
                                 color: homeGameRow.isSelected ? "#03050a" : "#eef1f6"
+                                // Shrink before truncating: a long name read
+                                // at a smaller size beats one whose tail is
+                                // cut off as the list scrolls past it.
                                 elide: Text.ElideRight
+                                fontSizeMode: Text.HorizontalFit
+                                minimumPixelSize: 18
                                 font.family: global.fonts.sans
-                                font.pixelSize: 23
+                                font.pixelSize: 26
                                 font.weight: homeGameRow.isSelected ? Font.Bold : Font.DemiBold
                             }
 
@@ -5891,9 +8111,10 @@ FocusScope {
                 x: 48
                 y: 450
                 width: parent.width - 96
-                // Reserve a real footer safe area. Cards may scale within this
-                // rail, but can never render behind the view label or controls.
-                height: 500
+                // Runs to the content floor. Cards scale under selection, so
+                // the rail keeps a card-and-a-bit of slack at both ends; it
+                // still may not render behind the view label or controls.
+                height: root.contentBottom - y
                 orientation: ListView.Horizontal
                 model: activeGameModel
                 spacing: 22
@@ -5901,8 +8122,8 @@ FocusScope {
                 focus: root.page === "games"
                 highlightMoveDuration: 230
                 highlightRangeMode: ListView.ApplyRange
-                preferredHighlightBegin: (width - 250) / 2
-                preferredHighlightEnd: (width - 250) / 2
+                preferredHighlightBegin: (width - root.gameCardWidth) / 2
+                preferredHighlightEnd: (width - root.gameCardWidth) / 2
                 keyNavigationWraps: true
                 keyNavigationEnabled: false
                 opacity: root.gameViewMode === "covers" ? 1 : 0
@@ -5925,12 +8146,21 @@ FocusScope {
                     property real coverAspect: gameCover.status === Image.Ready &&
                             gameCover.sourceSize.height > 0 ?
                             gameCover.sourceSize.width / gameCover.sourceSize.height : 0.72
-                    // Contain every aspect ratio inside the artwork viewport;
-                    // the selected-card scale must stay below the sort row.
-                    property real boxHeight: Math.min(318, 226 / coverAspect)
+                    // The caption is a fixed block -- accent rule, two title
+                    // lines, two fact lines -- and the artwork viewport is
+                    // whatever the card has left over. Height reclaimed from
+                    // the navigation bar therefore becomes cover art and not
+                    // padding. Contain every aspect ratio inside that
+                    // viewport; the selected-card scale must stay below the
+                    // sort row and above the footer.
+                    property real captionHeight: 138
+                    property real artTop: 12
+                    property real artHeight: height - artTop - captionHeight
+                    property real artWidth: width - 26
+                    property real boxHeight: Math.min(artHeight, artWidth / coverAspect)
                     property real boxWidth: boxHeight * coverAspect
-                    width: 250
-                    height: 478
+                    width: root.gameCardWidth
+                    height: gameRail.height - 46
                     scale: ListView.isCurrentItem ? 1.08 : 0.91
                     opacity: ListView.isCurrentItem ? 1.0 : 0.82
                     Behavior on scale { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
@@ -5939,7 +8169,7 @@ FocusScope {
                     Image {
                         id: gameCover
                         x: (parent.width - parent.boxWidth) / 2
-                        y: 12 + (318 - parent.boxHeight) / 2
+                        y: parent.artTop + (parent.artHeight - parent.boxHeight) / 2
                         width: parent.boxWidth
                         height: parent.boxHeight
                         source: game ? (game.assets.boxFront || "") : ""
@@ -5951,7 +8181,7 @@ FocusScope {
 
                     Rectangle {
                         x: 12
-                        y: 338
+                        y: parent.artTop + parent.artHeight + 14
                         width: 36
                         height: 3
                         color: root.accent
@@ -5959,16 +8189,21 @@ FocusScope {
 
                     Text {
                         x: 12
-                        y: 354
+                        y: parent.artTop + parent.artHeight + 30
                         width: parent.width - 24
-                        height: 46
+                        height: 64
                         text: root.displayTitle(game)
                         color: "#f1f3f8"
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
                         elide: Text.ElideRight
+                        // Two lines at the nominal size cover almost every
+                        // title; anything longer shrinks to fit rather than
+                        // losing its tail while the rail is being scrolled.
+                        fontSizeMode: Text.Fit
+                        minimumPixelSize: 16
                         font.family: global.fonts.sans
-                        font.pixelSize: gameCard.isSelected ? 22 : 19
+                        font.pixelSize: gameCard.isSelected ? 26 : 23
                         font.weight: Font.Bold
                         style: Text.Outline
                         styleColor: "#d0000000"
@@ -5976,9 +8211,9 @@ FocusScope {
 
                     Text {
                         x: 12
-                        y: 416
+                        y: parent.artTop + parent.artHeight + 98
                         width: parent.width - 24
-                        height: 36
+                        height: 40
                         text: root.scoreText(game) + "\nRELEASE  " + root.releaseYear(game)
                         color: root.accent
                         wrapMode: Text.Wrap
@@ -5986,7 +8221,7 @@ FocusScope {
                         fontSizeMode: Text.HorizontalFit
                         minimumPixelSize: 12
                         font.family: global.fonts.sans
-                        font.pixelSize: 15
+                        font.pixelSize: 17
                         font.weight: Font.Bold
                         font.letterSpacing: 0
                         style: Text.Outline
@@ -6009,11 +8244,14 @@ FocusScope {
             Item {
                 id: listViewPanel
                 x: 48
-                y: !root.dualScreenDevice ? 484 : 324
+                // Thor starts just above the sort row, which sits to the left
+                // of the list and never collides with it; a single-screen
+                // device must clear its top-right preview instead.
+                y: !root.dualScreenDevice ? 480 : 316
                 width: parent.width - 96
-                // Show only complete rows and stop above the persistent footer:
-                // eight rows on Thor, six beside a single-screen PIP.
-                height: !root.dualScreenDevice ? 476 : 636
+                // Runs to the content floor. The list quantises itself to
+                // whole rows inside this, and the cover claims the rest.
+                height: root.contentBottom - y
                 opacity: root.gameViewMode === "list" ? 1 : 0
                 visible: opacity > 0
                 Behavior on opacity {
@@ -6029,10 +8267,11 @@ FocusScope {
                     // The Flip's list begins lower to reserve room for PIP,
                     // but its cover should not begin with that list. Give the
                     // single-screen cover its own square viewport between the
-                    // sort controls and Android's usable bottom edge. A square
-                    // cover then receives exactly 18 px on all four sides.
+                    // sort controls and the bottom edge. A square cover then
+                    // receives exactly 18 px on all four sides.
                     // Thor: the sort row ends at y=394 and this parent begins
-                    // at y=324, so 90 px provides a real gap before artwork.
+                    // at y=316, so 90 px clears it, and the cover then runs
+                    // the whole way down to the content floor.
                     // The Flip retains its separate single-screen correction.
                     y: swappedSingleScreen ? 102 - listViewPanel.y :
                        (!root.dualScreenDevice ? -76 : 90)
@@ -6091,11 +8330,25 @@ FocusScope {
                     x: 634
                     y: 0
                     width: parent.width - x
-                    height: parent.height
+                    // Eight rows is what this panel holds: a ninth needs 716 px
+                    // and only 695 are available, so asking for one would have
+                    // to shave the rows below their 76 px floor. The reclaimed
+                    // strip is therefore spent making each row TALLER instead
+                    // of leaving it as a band under the eighth -- the row box
+                    // grows from 76 to 83 px and the list bottoms out on the
+                    // content floor. The stride is no longer a constant: the
+                    // paging jump and highlight band below are both expressed
+                    // in whole strides, so they read it from here.
+                    property real rowSpacing: 4
+                    property real rowHeight: root.listRowHeight(
+                            parent.height, 76, 92, rowSpacing)
+                    readonly property real rowStride: rowHeight + rowSpacing
+                    height: root.listRowCount(parent.height, 76, rowSpacing) *
+                            (rowHeight + rowSpacing) - rowSpacing
                     orientation: ListView.Vertical
                     model: activeGameModel
                     currentIndex: gameRail.currentIndex
-                    spacing: 4
+                    spacing: rowSpacing
                     clip: true
                     cacheBuffer: height * 2
                     snapMode: ListView.SnapToItem
@@ -6104,18 +8357,19 @@ FocusScope {
                     keyNavigationEnabled: false
                     highlightMoveDuration: 100
                     highlightRangeMode: ListView.ApplyRange
-                    // Eight complete 76 px rows plus seven 4 px gaps exactly
-                    // fill this viewport. Put the selected row on a 80 px
-                    // stride so centering can never expose half a row.
-                    preferredHighlightBegin: 240
-                    preferredHighlightEnd: 240
+                    // Three whole strides down from the top of the viewport,
+                    // so centering can never expose half a row. Derived from
+                    // the stride rather than written as a literal, so a taller
+                    // row cannot drift the band off a row boundary.
+                    preferredHighlightBegin: 3 * rowStride
+                    preferredHighlightEnd: 3 * rowStride
 
                     delegate: Rectangle {
                         id: gameListRow
                         property bool isSelected: ListView.isCurrentItem
                         property var game: root.gameAtDisplayIndex(index)
                         width: gameListRail.width
-                        height: 76
+                        height: gameListRail.rowHeight
                         color: "transparent"
                         clip: true
                         border.width: ListView.isCurrentItem ? 2 : 1
@@ -6192,9 +8446,14 @@ FocusScope {
                             width: parent.width - 590
                             text: root.displayTitle(game)
                             color: gameListRow.isSelected ? "#03050a" : "#eef1f6"
+                            // Shrink before truncating: a long name read at a
+                            // smaller size beats one whose tail is cut off as
+                            // the list scrolls past it.
                             elide: Text.ElideRight
+                            fontSizeMode: Text.HorizontalFit
+                            minimumPixelSize: 18
                             font.family: global.fonts.sans
-                            font.pixelSize: 24
+                            font.pixelSize: 27
                             font.weight: gameListRow.isSelected ? Font.Bold : Font.DemiBold
                         }
 
@@ -6227,26 +8486,37 @@ FocusScope {
                 }
             }
 
-            Rectangle {
-                z: 80
-                x: 48
-                y: 966
-                width: parent.width - 96
-                height: 58
-                color: "#dc07090d"
-            }
-
+            // No plate behind the legend, and none needed: the backdrop wash is
+            // symmetric top to bottom, so this sits on exactly the treatment
+            // the clock and battery sit on at the other edge.
             Text {
+                id: gamesLegend
                 z: 81
                 anchors.right: parent.right
-                anchors.rightMargin: 62
-                y: 986
-                text: "L1 / R1  SORT     L2 / R2  SYSTEM     LEFT / RIGHT  PAGE     Y  VIEW: " + root.gameViewMode.toUpperCase() +
-                      "     X  SETTINGS     RIGHT STICK  VIEWS     B  BACK     A  PLAY     HOLD GAME  OPTIONS"
-                color: "#7f899c"
+                anchors.rightMargin: root.footerSideMargin
+                y: root.footerY
+                width: Math.max(0, parent.width - root.footerSideMargin - root.footerLegendLeft)
+                horizontalAlignment: Text.AlignRight
+                fontSizeMode: Text.HorizontalFit
+                minimumPixelSize: 9
+                readonly property string fullLegend:
+                    "L1 / R1  SORT     L2 / R2  SYSTEM     LEFT / RIGHT  PAGE     Y  VIEW: " + root.gameViewMode.toUpperCase() +
+                    "     X  SETTINGS     RIGHT STICK  VIEWS     B  BACK     A  PLAY     HOLD GAME  OPTIONS"
+                // Narrow windows keep the essential controls at a readable size.
+                text: gamesLegendMetrics.advanceWidth <= width ? fullLegend :
+                      "L1 / R1  SORT     Y  VIEW: " + root.gameViewMode.toUpperCase() +
+                      "     X  SETTINGS     B  BACK     A  PLAY     HOLD GAME  OPTIONS"
+                color: root.footerColor
                 font.family: global.fonts.sans
-                font.pixelSize: 15
+                font.pixelSize: root.footerFontSize
                 font.letterSpacing: 1
+
+                // TextMetrics is not an Item: name the legend, "parent" is not it.
+                TextMetrics {
+                    id: gamesLegendMetrics
+                    font: gamesLegend.font
+                    text: gamesLegend.fullLegend
+                }
             }
         }
     }
@@ -6255,20 +8525,39 @@ FocusScope {
         id: displaySettingsHint
         z: 90
         anchors.right: parent.right
-        anchors.rightMargin: 62
-        y: 998
+        anchors.rightMargin: root.footerSideMargin
+        y: root.footerY
+        width: Math.max(0, parent.width - root.footerSideMargin - root.footerLegendLeft)
+        horizontalAlignment: Text.AlignRight
+        fontSizeMode: Text.HorizontalFit
+        minimumPixelSize: 9
         visible: root.page === "home" && !root.settingsOpen
-        text: root.homeViewMode === "list" ?
+        readonly property string fullLegend: root.homeViewMode === "list" ?
               "L1 / R1  CATEGORY     L2 / R2  SYSTEM     LEFT / RIGHT  PAGE     UP / DOWN  SELECT     Y  LAYOUT     X  SETTINGS     RIGHT STICK  VIEWS     B  SYSTEM LIST     A  PLAY" :
               "L1 / R1  CATEGORY     L2 / R2  SYSTEM     Y  LAYOUT     X  SETTINGS     D-PAD  NAVIGATE     RIGHT STICK  VIEWS     A  OPEN"
-        color: "#7f899c"
+        // Narrow windows keep the essential controls at a readable size.
+        text: homeLegendMetrics.advanceWidth <= width ? fullLegend :
+              (root.homeViewMode === "list" ?
+               "L1 / R1  CATEGORY     L2 / R2  SYSTEM     Y  LAYOUT     X  SETTINGS     B  SYSTEM LIST     A  PLAY" :
+               "L1 / R1  CATEGORY     L2 / R2  SYSTEM     Y  LAYOUT     X  SETTINGS     A  OPEN")
+        color: root.footerColor
         font.family: global.fonts.sans
-        font.pixelSize: 15
+        font.pixelSize: root.footerFontSize
         font.letterSpacing: 1
 
+        TextMetrics {
+            id: homeLegendMetrics
+            font: displaySettingsHint.font
+            text: displaySettingsHint.fullLegend
+        }
+
         MouseArea {
-            anchors.fill: parent
-            anchors.margins: -18
+            // Only the painted legend is a tap target, as before it got a width.
+            anchors.right: parent.right
+            anchors.rightMargin: -18
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.paintedWidth + 36
+            height: parent.height + 36
             onClicked: {
                 root.settingsOpen = true
                 root.settingsIndex = 0
@@ -6277,15 +8566,16 @@ FocusScope {
     }
 
     Text {
+        id: footerViewName
         z: 90
         anchors.left: parent.left
-        anchors.leftMargin: 62
-        y: root.page === "games" ? 986 : 998
+        anchors.leftMargin: root.footerSideMargin
+        y: root.footerY
         visible: !root.settingsOpen
         text: root.currentViewName
-        color: "#7f899c"
+        color: root.footerColor
         font.family: global.fonts.sans
-        font.pixelSize: 15
+        font.pixelSize: root.footerFontSize
         font.weight: Font.DemiBold
         font.letterSpacing: 1
     }
@@ -6311,7 +8601,7 @@ FocusScope {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: 54
-                text: "LUCENT UPDATE READY"
+                text: "EMUFUSION UPDATE READY"
                 color: "white"
                 font.family: global.fonts.condensed
                 font.pixelSize: 48
@@ -6324,7 +8614,7 @@ FocusScope {
                 y: 130
                 width: parent.width - 120
                 text: root.updateStatusMessage !== "" ? root.updateStatusMessage :
-                      "A new signed Lucent package has been downloaded."
+                      "A new signed EmuFusion package has been downloaded."
                 color: "#b8c1d1"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
@@ -6383,6 +8673,190 @@ FocusScope {
     }
 
     Rectangle {
+        id: voiceFeedbackOverlay
+        z: 870
+        anchors.fill: parent
+        visible: root.voiceFeedbackOpen
+        color: "#e604070c"
+
+        MouseArea { anchors.fill: parent }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(980, root.width - 120)
+            height: Math.min(700, root.height - 100)
+            color: "#fb0a0e16"
+            border.width: 2
+            border.color: root.accent
+            radius: 12
+
+            Text {
+                x: 52
+                y: 38
+                width: parent.width - 104
+                text: "VOICE FEEDBACK"
+                color: "white"
+                font.family: global.fonts.condensed
+                font.pixelSize: 45
+                font.weight: Font.Bold
+                font.letterSpacing: 1.4
+            }
+
+            Text {
+                x: 54
+                y: 98
+                width: parent.width - 108
+                text: "Only the transcription is kept. Remove personal details before Send. " +
+                      "Only app version and emulated system are attached—no device details or logs. " +
+                      "GitHub issues are public and identify your GitHub account; this is not anonymous diagnostics."
+                color: "#9ba6b8"
+                wrapMode: Text.Wrap
+                font.family: global.fonts.sans
+                font.pixelSize: 17
+                lineHeight: 1.18
+            }
+
+            Rectangle {
+                x: 54
+                y: 174
+                width: parent.width - 108
+                height: parent.height - 370
+                color: "#b60e141e"
+                border.width: 1
+                border.color: "#38ffffff"
+                radius: 8
+
+                TextEdit {
+                    id: voiceFeedbackEditor
+                    anchors.fill: parent
+                    anchors.margins: 24
+                    text: root.voiceFeedbackTranscript
+                    color: "white"
+                    wrapMode: Text.Wrap
+                    font.family: global.fonts.sans
+                    font.pixelSize: 23
+                    selectByMouse: true
+                    activeFocusOnPress: true
+                    selectionColor: root.accent
+                    selectedTextColor: "#05070b"
+                    inputMethodHints: Qt.ImhNone
+                    clip: true
+                    onTextChanged: {
+                        if (!activeFocus || root.voiceFeedbackTranscript === text)
+                            return
+                        root.voiceFeedbackTranscript = text
+                        if (String(text).trim() !== "") {
+                            root.voiceFeedbackState = "ready"
+                            root.voiceFeedbackMessage =
+                                    "Review the edited transcription before sending."
+                        }
+                    }
+                    onActiveFocusChanged: {
+                        if (activeFocus) Qt.inputMethod.show()
+                    }
+                }
+
+                Text {
+                    anchors.fill: parent
+                    anchors.margins: 24
+                    visible: voiceFeedbackEditor.text.length === 0 &&
+                             !voiceFeedbackEditor.activeFocus
+                    text: root.voiceFeedbackState === "listening" ?
+                          "Listening…" : "Your transcription will appear here. Tap to type."
+                    color: "#687487"
+                    wrapMode: Text.Wrap
+                    font.family: global.fonts.sans
+                    font.pixelSize: 23
+                    lineHeight: 1.2
+                }
+            }
+
+            Text {
+                x: 54
+                y: parent.height - 178
+                width: parent.width - 108
+                text: root.voiceFeedbackMessage
+                color: root.voiceFeedbackState === "error" ? "#ff9d91" : root.accent
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                font.family: global.fonts.sans
+                font.pixelSize: 17
+                font.weight: Font.DemiBold
+            }
+
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height - 116
+                spacing: 24
+
+                Repeater {
+                    model: ["SEND", "REDO"]
+                    Rectangle {
+                        property bool sendEnabled: index !== 0 ||
+                                root.voiceFeedbackState === "ready" ||
+                                root.voiceFeedbackState === "github-review"
+                        width: 300
+                        height: 72
+                        color: !sendEnabled ? "#3b414b" :
+                               (root.voiceFeedbackChoice === index ? root.accent : "#7e121925")
+                        border.width: root.voiceFeedbackChoice === index ? 3 : 1
+                        border.color: root.voiceFeedbackChoice === index ?
+                                      Qt.lighter(root.accent, 1.18) : "#42ffffff"
+                        radius: 8
+                        opacity: sendEnabled ? 1 : 0.56
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData
+                            color: parent.sendEnabled && root.voiceFeedbackChoice === index ?
+                                   "#05070b" : "white"
+                            font.family: global.fonts.sans
+                            font.pixelSize: 23
+                            font.weight: Font.Bold
+                            font.letterSpacing: 1.4
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: parent.sendEnabled
+                            onClicked: {
+                                root.voiceFeedbackChoice = index
+                                if (index === 0) root.sendVoiceFeedback()
+                                else root.startVoiceFeedback()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height - 30
+                text: "GitHub provides the final account-authenticated Create confirmation     •     B  CLOSE"
+                color: "#758095"
+                font.family: global.fonts.sans
+                font.pixelSize: 14
+                font.letterSpacing: 0.8
+            }
+
+            MouseArea {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                width: 72
+                height: 72
+                onClicked: root.closeVoiceFeedback()
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "×"
+                    color: "#b8c1d1"
+                    font.pixelSize: 34
+                }
+            }
+        }
+    }
+
+    Rectangle {
         id: gameActionOverlay
         z: 700
         anchors.fill: parent
@@ -6397,8 +8871,14 @@ FocusScope {
         Rectangle {
             id: gameActionPanel
             anchors.centerIn: parent
-            width: 820
-            height: 570
+            // Sized against the panel rather than the old 1025 px floor. The
+            // extra height goes to taller option rows and to the cheat list,
+            // which could previously show barely three of a game's entries.
+            // Grown by one more row-step (108px) to fit the MULTIPLAYER row
+            // appended below DELETE; every other mode just gets extra
+            // bottom padding from the taller shared chrome.
+            width: 880
+            height: 808
             color: "#fb0d121a"
             border.width: 2
             border.color: root.accent
@@ -6410,23 +8890,25 @@ FocusScope {
 
             Text {
                 x: 44
-                y: 38
+                y: 42
                 width: parent.width - 88
                 text: root.displayTitle(root.gameActionGame)
                 color: "white"
                 elide: Text.ElideRight
                 font.family: global.fonts.condensed
-                font.pixelSize: 40
+                font.pixelSize: 42
                 font.weight: Font.Bold
             }
 
             Text {
                 x: 46
-                y: 94
+                y: 100
                 text: root.gameActionMode === "menu" ? "GAME OPTIONS" :
                       root.gameActionMode === "rename" ? "RENAME GAME" :
+                      root.gameActionMode === "cheats" ? "CHEATS" :
+                      root.gameActionMode === "multiplayer" ? "MULTIPLAYER (ALPHA)" :
                       root.gameActionMode === "confirm-remove" ? "CONFIRM REMOVE FROM LIST" :
-                      root.gameActionMode === "confirm-delete" ? "CONFIRM DELETE" : "LUCENT LIBRARY"
+                      root.gameActionMode === "confirm-delete" ? "CONFIRM DELETE" : "EMUFUSION LIBRARY"
                 color: root.accent
                 font.family: global.fonts.sans
                 font.pixelSize: 17
@@ -6440,7 +8922,7 @@ FocusScope {
 
                 Rectangle {
                     x: 44
-                    y: 136
+                    y: 146
                     width: parent.width - 88
                     height: 92
                     color: root.gameActionIndex === 0 ? root.accent : "#b3121822"
@@ -6464,20 +8946,27 @@ FocusScope {
                 }
 
                 Rectangle {
+                    property int cheatsIndex: root.gameActionCheatsOptionIndex()
+                    property bool offered: root.gameActionHasCheats()
                     x: 44
-                    y: 242
+                    y: 254
                     width: parent.width - 88
                     height: 92
-                    visible: root.gameActionAllowsRemoveFromList()
-                    color: root.gameActionIndex === 1 ? root.accent : "#b3121822"
-                    border.width: root.gameActionIndex === 1 ? 2 : 1
-                    border.color: root.gameActionIndex === 1 ? Qt.lighter(root.accent, 1.18) : "#42ffffff"
+                    // Held in place rather than hidden while the answer is
+                    // still in flight, so the options below it never move.
+                    opacity: offered ? 1 : 0.45
+                    color: root.gameActionIndex === cheatsIndex && offered ?
+                               root.accent : "#b3121822"
+                    border.width: root.gameActionIndex === cheatsIndex && offered ? 2 : 1
+                    border.color: root.gameActionIndex === cheatsIndex && offered ?
+                                      Qt.lighter(root.accent, 1.18) : "#42ffffff"
                     radius: 7
 
                     Text {
                         anchors.centerIn: parent
-                        text: "REMOVE FROM " + root.homeShelfName(root.gameActionCategory)
-                        color: root.gameActionIndex === 1 ? "#05070b" : "white"
+                        text: root.gameActionCheatsLabel()
+                        color: root.gameActionIndex === parent.cheatsIndex && parent.offered ?
+                                   "#05070b" : "white"
                         font.family: global.fonts.sans
                         font.pixelSize: 24
                         font.weight: Font.Bold
@@ -6485,14 +8974,48 @@ FocusScope {
                     }
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: { root.gameActionIndex = 1; root.gameActionMode = "confirm-remove" }
+                        enabled: parent.offered
+                        onClicked: {
+                            root.gameActionIndex = parent.cheatsIndex
+                            root.openGameActionCheats()
+                        }
                     }
                 }
 
                 Rectangle {
-                    property int deleteIndex: root.gameActionAllowsRemoveFromList() ? 2 : 1
+                    property int removeIndex: root.gameActionRemoveOptionIndex()
                     x: 44
-                    y: root.gameActionAllowsRemoveFromList() ? 348 : 242
+                    y: 362
+                    width: parent.width - 88
+                    height: 92
+                    visible: root.gameActionAllowsRemoveFromList()
+                    color: root.gameActionIndex === removeIndex ? root.accent : "#b3121822"
+                    border.width: root.gameActionIndex === removeIndex ? 2 : 1
+                    border.color: root.gameActionIndex === removeIndex ? Qt.lighter(root.accent, 1.18) : "#42ffffff"
+                    radius: 7
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "REMOVE FROM " + root.homeShelfName(root.gameActionCategory)
+                        color: root.gameActionIndex === parent.removeIndex ? "#05070b" : "white"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 24
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.2
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            root.gameActionIndex = parent.removeIndex
+                            root.gameActionMode = "confirm-remove"
+                        }
+                    }
+                }
+
+                Rectangle {
+                    property int deleteIndex: root.gameActionDeleteOptionIndex()
+                    x: 44
+                    y: root.gameActionAllowsRemoveFromList() ? 470 : 362
                     width: parent.width - 88
                     height: 92
                     color: root.gameActionIndex === deleteIndex ? "#ff6d70" : "#b3121822"
@@ -6518,10 +9041,263 @@ FocusScope {
                     }
                 }
 
+                Rectangle {
+                    property int multiplayerIndex: root.gameActionMultiplayerOptionIndex()
+                    x: 44
+                    y: root.gameActionAllowsRemoveFromList() ? 578 : 470
+                    width: parent.width - 88
+                    height: 92
+                    color: root.gameActionIndex === multiplayerIndex ? root.accent : "#b3121822"
+                    border.width: root.gameActionIndex === multiplayerIndex ? 2 : 1
+                    border.color: root.gameActionIndex === multiplayerIndex ? Qt.lighter(root.accent, 1.18) : "#42ffffff"
+                    radius: 7
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "MULTIPLAYER (ALPHA)"
+                        color: root.gameActionIndex === parent.multiplayerIndex ? "#05070b" : "white"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 24
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.2
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            root.gameActionIndex = parent.multiplayerIndex
+                            root.openGameActionMultiplayer()
+                        }
+                    }
+                }
+
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    y: 492
+                    y: 758
                     text: "TAP AN OPTION  •  B TO CANCEL"
+                    color: "#8e98aa"
+                    font.family: global.fonts.sans
+                    font.pixelSize: 15
+                    font.letterSpacing: 1.4
+                }
+            }
+
+            Item {
+                anchors.fill: parent
+                visible: root.gameActionMode === "cheats"
+
+                ListView {
+                    id: cheatList
+                    x: 44
+                    y: 146
+                    width: parent.width - 88
+                    // Five whole 76 px rows plus four 10 px gaps.
+                    height: 420
+                    clip: true
+                    spacing: 10
+                    // The delegate draws the selection from gameActionCheatIndex
+                    // directly, so currentIndex exists only to scroll a row
+                    // below the fold into view. It is assigned rather than
+                    // bound because replacing the model after a toggle resets
+                    // it, which would silently drop a binding.
+                    model: root.gameActionCheats
+                    onCurrentIndexChanged: positionViewAtIndex(currentIndex,
+                                                               ListView.Contain)
+
+                    delegate: Rectangle {
+                        width: cheatList.width
+                        height: 76
+                        color: index === root.gameActionCheatIndex ? root.accent : "#b3121822"
+                        border.width: index === root.gameActionCheatIndex ? 2 : 1
+                        border.color: index === root.gameActionCheatIndex ?
+                                          Qt.lighter(root.accent, 1.18) : "#42ffffff"
+                        radius: 7
+
+                        Text {
+                            x: 22
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - 150
+                            elide: Text.ElideRight
+                            text: modelData.name
+                            color: index === root.gameActionCheatIndex ? "#05070b" : "white"
+                            font.family: global.fonts.sans
+                            font.pixelSize: 24
+                            font.weight: Font.Bold
+                        }
+
+                        Text {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 22
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.enabled ? "ON" : "OFF"
+                            color: index === root.gameActionCheatIndex ? "#05070b" :
+                                   modelData.enabled ? root.accent : "#8e98aa"
+                            font.family: global.fonts.sans
+                            font.pixelSize: 22
+                            font.weight: Font.Bold
+                            font.letterSpacing: 1.4
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                root.gameActionCheatIndex = index
+                                root.toggleGameActionCheat(index)
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    x: 46
+                    y: 580
+                    width: parent.width - 92
+                    height: 48
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    text: root.gameActionCheatIndex < root.gameActionCheats.length &&
+                          root.gameActionCheats[root.gameActionCheatIndex] ?
+                              String(root.gameActionCheats[root.gameActionCheatIndex].description || "") : ""
+                    color: "#c3cbd8"
+                    font.family: global.fonts.sans
+                    font.pixelSize: 18
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 650
+                    text: "A TOGGLES  •  B TO GO BACK  •  APPLIES ON LAUNCH"
+                    color: "#8e98aa"
+                    font.family: global.fonts.sans
+                    font.pixelSize: 15
+                    font.letterSpacing: 1.4
+                }
+            }
+
+            Item {
+                anchors.fill: parent
+                visible: root.gameActionMode === "multiplayer"
+
+                Rectangle {
+                    id: multiplayerToggleRow
+                    x: 44
+                    y: 146
+                    width: parent.width - 88
+                    height: 92
+                    opacity: root.gameActionMultiplayerPending ? 0.6 : 1
+                    color: root.gameActionMultiplayerWant ? root.accent : "#b3121822"
+                    border.width: root.gameActionMultiplayerWant ? 2 : 1
+                    border.color: root.gameActionMultiplayerWant ?
+                                      Qt.lighter(root.accent, 1.18) : "#42ffffff"
+                    radius: 7
+
+                    Text {
+                        x: 22
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 150
+                        elide: Text.ElideRight
+                        text: "AVAILABLE FOR MULTIPLAYER (ALPHA)"
+                        color: root.gameActionMultiplayerWant ? "#05070b" : "white"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.1
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 22
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.gameActionMultiplayerPending ? "…" :
+                              (root.gameActionMultiplayerWant ? "ON" : "OFF")
+                        color: root.gameActionMultiplayerWant ? "#05070b" : root.accent
+                        font.family: global.fonts.sans
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.4
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: !root.gameActionMultiplayerPending
+                        onClicked: root.setGameActionMultiplayerWant(!root.gameActionMultiplayerWant)
+                    }
+                }
+
+                Text {
+                    x: 46
+                    y: 258
+                    text: "WHO ELSE WANTS TO PLAY"
+                    color: root.accent
+                    font.family: global.fonts.sans
+                    font.pixelSize: 15
+                    font.weight: Font.Bold
+                    font.letterSpacing: 2
+                }
+
+                ListView {
+                    id: multiplayerRosterList
+                    x: 44
+                    y: 292
+                    width: parent.width - 88
+                    height: 420
+                    clip: true
+                    spacing: 10
+                    // Pre-sorted by the endpoint itself (wants above wanted) --
+                    // rendered in the order the roster answer already gives.
+                    model: root.gameActionMultiplayerRoster
+
+                    delegate: Rectangle {
+                        width: multiplayerRosterList.width
+                        height: 76
+                        color: "#b3121822"
+                        border.width: 1
+                        border.color: "#42ffffff"
+                        radius: 7
+
+                        Text {
+                            x: 22
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - 220
+                            elide: Text.ElideRight
+                            text: String(modelData.nickname || "UNKNOWN PLAYER")
+                            color: "white"
+                            font.family: global.fonts.sans
+                            font.pixelSize: 22
+                            font.weight: Font.Bold
+                        }
+
+                        Text {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 22
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.state === "wants" ? "WANTS" :
+                                  modelData.state === "wanted" ? "WANTED" :
+                                      String(modelData.state || "")
+                            color: modelData.state === "wants" ? root.accent : "#8e98aa"
+                            font.family: global.fonts.sans
+                            font.pixelSize: 20
+                            font.weight: Font.Bold
+                            font.letterSpacing: 1.2
+                        }
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        visible: multiplayerRosterList.count === 0
+                        text: root.gameActionMultiplayerState === "loading" ? "CHECKING…" :
+                              root.gameActionMultiplayerState === "error" ? "ROSTER UNAVAILABLE" :
+                                  "NO ONE ELSE HAS SIGNALED YET"
+                        color: "#8e98aa"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 18
+                    }
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 758
+                    text: "A TOGGLES AVAILABILITY  •  B TO GO BACK  •  2-PLAYER ONLY FOR NOW"
                     color: "#8e98aa"
                     font.family: global.fonts.sans
                     font.pixelSize: 15
@@ -6535,7 +9311,7 @@ FocusScope {
 
                 Text {
                     x: 54
-                    y: 164
+                    y: 190
                     width: parent.width - 108
                     text: "Hide this game from " + root.homeShelfName(root.gameActionCategory) +
                           " only? The ROM file and complete library entries will remain untouched."
@@ -6543,12 +9319,12 @@ FocusScope {
                     wrapMode: Text.Wrap
                     horizontalAlignment: Text.AlignHCenter
                     font.family: global.fonts.sans
-                    font.pixelSize: 24
+                    font.pixelSize: 25
                 }
 
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    y: 324
+                    y: 400
                     spacing: 20
                     Rectangle {
                         width: 330; height: 82; color: "#b3121822"; border.width: 1
@@ -6570,9 +9346,9 @@ FocusScope {
 
                 Rectangle {
                     x: 44
-                    y: 164
+                    y: 196
                     width: parent.width - 88
-                    height: 72
+                    height: 80
                     color: "#d9080c13"
                     border.width: 2
                     border.color: root.accent
@@ -6597,9 +9373,9 @@ FocusScope {
 
                 Rectangle {
                     x: 44
-                    y: 272
+                    y: 324
                     width: parent.width - 88
-                    height: 84
+                    height: 92
                     color: root.accent
                     radius: 7
                     Text {
@@ -6620,19 +9396,19 @@ FocusScope {
 
                 Text {
                     x: 54
-                    y: 164
+                    y: 190
                     width: parent.width - 108
-                    text: "Permanently delete the actual ROM/game file from device storage and remove it from Lucent? This cannot be undone."
+                    text: "Permanently delete the actual ROM/game file from device storage and remove it from EmuFusion? This cannot be undone."
                     color: "#e9edf4"
                     wrapMode: Text.Wrap
                     horizontalAlignment: Text.AlignHCenter
                     font.family: global.fonts.sans
-                    font.pixelSize: 24
+                    font.pixelSize: 25
                 }
 
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    y: 294
+                    y: 400
                     spacing: 20
                     Rectangle {
                         width: 330; height: 82; color: "#b3121822"; border.width: 1
@@ -6712,7 +9488,10 @@ FocusScope {
             z: 2
             anchors.centerIn: parent
             width: 980
-            height: 960
+            // Grows with the panel: the extra height buys taller rows, which
+            // on a handheld means larger touch targets, not more of them --
+            // the page size is what keeps every row spacious.
+            height: root.height - 80
             color: "#f20d121a"
             border.width: 1
             border.color: root.accent
@@ -6737,7 +9516,7 @@ FocusScope {
             Text {
                 x: 50
                 y: 94
-                text: "LUCENT " + root.lucentVersion +
+                text: "EMUFUSION " + root.lucentVersion +
                       "  •  Display changes apply instantly; updates run automatically at startup"
                 color: "#9da7b8"
                 font.family: global.fonts.sans
@@ -7060,7 +9839,7 @@ FocusScope {
                 Text {
                     x: 28
                     y: 22
-                    text: "UPDATE LIBRARY & LUCENT"
+                    text: "UPDATE LIBRARY & EMUFUSION"
                     color: "white"
                     font.family: global.fonts.sans
                     font.pixelSize: 21
@@ -7107,43 +9886,50 @@ FocusScope {
             }
 
             Repeater {
-                // Six spacious rows per page. Up/Down crosses page boundaries
-                // automatically, so touch and controller users get one unified
-                // settings surface without compressed text or tiny targets.
+                // As many spacious rows as the panel actually holds. Up/Down
+                // crosses page boundaries automatically, so touch and
+                // controller users get one unified settings surface without
+                // compressed text or tiny targets. The count and the stride
+                // both come from the shared list helpers, so the reclaimed
+                // height became another row rather than a band under the last.
                 model: root.settingsPageSize
 
                 Rectangle {
                     property int setting: root.settingsPage * root.settingsPageSize + index
                     visible: setting < root.settingsOptionCount
                     x: 44
-                    y: 148 + index * 118
+                    y: root.settingsListTop +
+                       index * (root.settingsRowHeight + root.settingsListSpacing)
                     width: settingsPanel.width - 88
-                    height: 106
+                    height: root.settingsRowHeight
                     color: root.settingsIndex === setting ? "#261f2a38" : "#9b111720"
                     border.width: root.settingsIndex === setting ? 2 : 1
                     border.color: root.settingsIndex === setting ? root.accent : "#30ffffff"
                     radius: 7
 
+                    // The title and its description are centred as a pair, so a
+                    // row that grows or shrinks with the panel keeps them
+                    // optically centred instead of pinned to the top edge.
                     Text {
                         x: 24
-                        y: 18
+                        y: Math.round((parent.height - 62) / 2)
                         text: root.settingTitle(parent.setting)
                         color: "white"
                         font.family: global.fonts.sans
-                        font.pixelSize: 19
+                        font.pixelSize: 21
                         font.weight: Font.Bold
                         font.letterSpacing: 0.9
                     }
 
                     Text {
                         x: 24
-                        y: 57
+                        y: Math.round((parent.height - 62) / 2) + 42
                         width: parent.width - 370
                         text: root.settingDescription(parent.setting)
                         color: "#a7b0c1"
                         elide: Text.ElideRight
                         font.family: global.fonts.sans
-                        font.pixelSize: 14
+                        font.pixelSize: 16
                     }
 
                     Text {
@@ -7156,7 +9942,7 @@ FocusScope {
                         color: root.accent
                         elide: Text.ElideRight
                         font.family: global.fonts.condensed
-                        font.pixelSize: parent.setting === 8 ? 23 : 27
+                        font.pixelSize: parent.setting === 8 ? 25 : 29
                         font.weight: Font.Bold
                     }
 
@@ -7219,11 +10005,11 @@ FocusScope {
 
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: 925
+                y: parent.height - root.footerLineHeight - 24
                 text: "UP / DOWN  SELECT & PAGE     LEFT / RIGHT  CHANGE     B  CLOSE"
                 color: "#7f899c"
                 font.family: global.fonts.sans
-                font.pixelSize: 15
+                font.pixelSize: root.footerFontSize
                 font.letterSpacing: 1
             }
         }
@@ -7331,6 +10117,199 @@ FocusScope {
                 font.pixelSize: 15
                 font.letterSpacing: 1
             }
+        }
+    }
+
+    // ---- Games with no box art --------------------------------------------
+    // One row per game the companion could find no artwork for, and three
+    // answers per row. The answer is sent once and remembered on the device,
+    // so a game only ever appears here until it is answered for.
+    Rectangle {
+        id: artworkReviewOverlay
+        z: 818
+        anchors.fill: parent
+        visible: root.artworkReviewOpen
+        color: "#ec05080d"
+
+        MouseArea { anchors.fill: parent }
+
+        Text {
+            x: root.screenMargin
+            y: 58
+            text: "GAMES WITH NO BOX ART"
+            color: "white"
+            font.family: global.fonts.condensed
+            font.pixelSize: 46
+            font.weight: Font.Bold
+            font.letterSpacing: 2
+        }
+
+        Text {
+            x: root.screenMargin
+            y: 118
+            width: root.width - root.screenMargin * 2
+            text: root.artworkReviewGames.length === 0 ?
+                  "Every game in your library has box art. Nothing to decide." :
+                  "No catalog on any platform has a cover for these. Choose once " +
+                  "per game — your answer is remembered and you will not be asked again."
+            color: "#9da7b8"
+            wrapMode: Text.Wrap
+            font.family: global.fonts.sans
+            font.pixelSize: 18
+            font.letterSpacing: 0.6
+        }
+
+        ListView {
+            id: artworkReviewList
+            x: root.screenMargin
+            y: 178
+            width: root.width - root.screenMargin * 2
+            property real rowSpacing: 10
+            // Same contract as every other list in EmuFusion: the row count and
+            // the stride are decided together from the space available, so the
+            // last row lands on the content floor instead of leaving a band.
+            property real rowHeight: root.listRowHeight(
+                    root.contentBottom - y, 108, 146, rowSpacing)
+            height: root.listRowCount(root.contentBottom - y, 108, rowSpacing) *
+                    (rowHeight + rowSpacing) - rowSpacing
+            spacing: rowSpacing
+            clip: true
+            model: root.artworkReviewGames
+            currentIndex: root.artworkReviewIndex
+            boundsBehavior: Flickable.StopAtBounds
+            snapMode: ListView.SnapToItem
+            highlightMoveDuration: 110
+            highlightRangeMode: ListView.ApplyRange
+            preferredHighlightBegin: rowHeight + rowSpacing
+            preferredHighlightEnd: rowHeight + rowSpacing
+            keyNavigationEnabled: false
+            focus: false
+
+            delegate: Rectangle {
+                id: artworkReviewRow
+                // The choice Repeater below has an index of its own, so the
+                // row's own index is named here rather than reached for from
+                // inside it.
+                property int rowIndex: index
+                property bool isSelected: rowIndex === root.artworkReviewIndex
+                width: ListView.view.width
+                height: ListView.view.rowHeight
+                color: isSelected ? Qt.darker(root.accent, 4.2) : "#9b111720"
+                border.width: isSelected ? 3 : 1
+                border.color: isSelected ? root.accent : "#30ffffff"
+                radius: 6
+
+                Text {
+                    id: artworkReviewTitle
+                    x: 22
+                    y: 14
+                    width: parent.width - 44
+                    text: String(modelData.title || "")
+                    color: "white"
+                    elide: Text.ElideRight
+                    font.family: global.fonts.sans
+                    font.pixelSize: 24
+                    font.weight: Font.Bold
+                }
+
+                Text {
+                    x: 22
+                    y: artworkReviewTitle.y + 30
+                    width: parent.width - 44
+                    text: String(modelData.collection || modelData.system || "") + "   •   " +
+                          String(modelData.romName || "") + "   •   " +
+                          String(modelData.note || "")
+                    color: "#8e98aa"
+                    elide: Text.ElideRight
+                    font.family: global.fonts.sans
+                    font.pixelSize: 15
+                }
+
+                Row {
+                    x: 22
+                    y: artworkReviewRow.height - 40
+                    spacing: 10
+                    visible: artworkReviewRow.isSelected
+
+                    Repeater {
+                        model: 3
+
+                        Rectangle {
+                            id: choicePill
+                            property int choice: index
+                            property bool active: choice === root.artworkReviewChoice
+                            property bool destructive: choice === 2
+                            // Only the destructive answer is ever red, and it
+                            // is red whether or not it is the selected one, so
+                            // the option that erases a file is never a surprise.
+                            readonly property color danger: "#ff5964"
+                            width: choiceLabel.implicitWidth + 30
+                            height: 30
+                            radius: 4
+                            color: active ? (destructive ? danger : root.accent) : "transparent"
+                            border.width: active ? 0 : 1
+                            border.color: destructive ? danger : "#4dffffff"
+
+                            Text {
+                                id: choiceLabel
+                                anchors.centerIn: parent
+                                text: root.artworkReviewChoiceLabel(choicePill.choice)
+                                color: choicePill.active ? "#0a0d14" :
+                                       (choicePill.destructive ? choicePill.danger : "#c3ccdb")
+                                font.family: global.fonts.sans
+                                font.pixelSize: 14
+                                font.weight: Font.Bold
+                                font.letterSpacing: 1
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    root.artworkReviewIndex = artworkReviewRow.rowIndex
+                                    root.artworkReviewChoice = choicePill.choice
+                                    root.artworkReviewConfirming = false
+                                }
+                            }
+                        }
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    z: -1
+                    onClicked: {
+                        root.artworkReviewIndex = artworkReviewRow.rowIndex
+                        root.artworkReviewChoice = 0
+                        root.artworkReviewConfirming = false
+                    }
+                }
+            }
+        }
+
+        Text {
+            x: root.screenMargin
+            y: root.contentBottom + 6
+            width: root.width - root.screenMargin * 2
+            text: root.artworkReviewBusy ? root.artworkReviewMessage :
+                  (root.artworkReviewConfirming ? root.artworkReviewMessage :
+                   (root.artworkReviewMessage !== "" ? root.artworkReviewMessage :
+                    root.artworkReviewChoiceDetail(root.artworkReviewChoice)))
+            color: root.artworkReviewConfirming ? "#ff5964" :
+                   (root.artworkReviewChoice === 2 ? "#ff9aa2" : "#9da7b8")
+            elide: Text.ElideRight
+            font.family: global.fonts.sans
+            font.pixelSize: 17
+            font.weight: root.artworkReviewConfirming ? Font.Bold : Font.Normal
+        }
+
+        Text {
+            x: root.screenMargin
+            y: root.footerY
+            text: "UP / DOWN GAME   •   LEFT / RIGHT CHOICE   •   A CONFIRM   •   B BACK"
+            color: "#7f899c"
+            font.family: global.fonts.sans
+            font.pixelSize: root.footerFontSize
+            font.letterSpacing: 1
         }
     }
 
@@ -7475,7 +10454,7 @@ FocusScope {
 
             Text {
                 x: 56; y: 42
-                text: "LUCENT  " + root.lucentVersion
+                text: "EMUFUSION  " + root.lucentVersion
                 color: "white"
                 font.family: global.fonts.condensed
                 font.pixelSize: 48
@@ -7493,7 +10472,7 @@ FocusScope {
             }
             Text {
                 x: 58; y: 214; width: parent.width - 116
-                text: "PEGASUS FRONTEND\nCreated by Mátyás M. and contributors\nLicensed under GNU GPL version 3\nBase source: github.com/mmatyas/pegasus-frontend/tree/6b322063\n\nLUCENT APP\nModified Pegasus distribution licensed under GPLv3. Complete source and build scripts: github.com/wildonrio/pegasus-lucent\n\nLUCENT THEME\nAlso available independently under the MIT License. Other Pegasus themes remain supported."
+                text: "PEGASUS FRONTEND\nCreated by Mátyás M. and contributors\nLicensed under GNU GPL version 3\nBase source: github.com/mmatyas/pegasus-frontend/tree/6b322063\n\nEMUFUSION APP\nModified Pegasus distribution licensed under GPLv3. Complete source and build scripts are available from the EmuFusion GitHub repository.\n\nEMUFUSION THEME\nAlso available independently under the MIT License. Other Pegasus themes remain supported."
                 wrapMode: Text.WordWrap
                 color: "#aeb7c8"
                 font.family: global.fonts.sans
@@ -7521,5 +10500,765 @@ FocusScope {
             }
         }
     }
+
+    // ---- Emulator for each system -----------------------------------------
+    // Three stacked sheets, all sharing the settings panel's envelope so they
+    // read as one surface: the system list, one system's emulators, and the
+    // guided custom setup. Every row is reachable with the D-pad alone.
+
+    Rectangle {
+        id: emulatorRoutesOverlay
+        z: 840
+        anchors.fill: parent
+        visible: root.emulatorRoutesOpen
+        color: "#e905080d"
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                root.emulatorRoutesOpen = false
+                root.settingsOpen = true
+            }
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 980
+            height: root.settingsPanelHeight
+            color: "#f20d121a"
+            border.width: 1
+            border.color: root.accent
+            radius: 8
+
+            MouseArea { anchors.fill: parent }
+
+            Text {
+                x: 48; y: 38
+                text: "EMULATOR FOR EACH SYSTEM"
+                color: "white"
+                font.family: global.fonts.condensed
+                font.pixelSize: 42
+                font.weight: Font.Bold
+                font.letterSpacing: 2
+            }
+
+            Text {
+                x: 50; y: 94
+                width: parent.width - 380
+                // Kept short enough to sit beside the page counter without
+                // eliding; the footer carries the controls.
+                text: root.emulatorRoutesNotice !== "" ? root.emulatorRoutesNotice :
+                      "Only systems represented in your game library appear here."
+                color: root.emulatorRoutesNotice !== "" ? "#ffb4a2" : "#9da7b8"
+                elide: Text.ElideRight
+                font.family: global.fonts.sans
+                font.pixelSize: 17
+            }
+
+            Text {
+                anchors.right: parent.right
+                anchors.rightMargin: 48
+                y: 44
+                visible: root.emulatorRouteSystems.length > 0
+                text: "PAGE " + (root.routesPage + 1) + " / " +
+                      Math.max(1, Math.ceil(root.emulatorRouteSystems.length /
+                                            root.routesPageSize))
+                color: root.accent
+                font.family: global.fonts.sans
+                font.pixelSize: 16
+                font.weight: Font.Bold
+                font.letterSpacing: 1.2
+            }
+
+            Text {
+                anchors.centerIn: parent
+                visible: root.emulatorRouteSystems.length === 0
+                text: root.emulatorRoutesLoading ? "Reading systems…" :
+                      "Add a game to reveal its emulator settings."
+                color: "#9da7b8"
+                font.family: global.fonts.sans
+                font.pixelSize: 22
+            }
+
+            Repeater {
+                // Row count and stride both come from the shared helpers, so
+                // the last row lands on the panel floor.
+                model: root.routesPageSize
+
+                Rectangle {
+                    property int rowIndex: root.routesPage * root.routesPageSize + index
+                    property var entry: rowIndex >= 0 &&
+                            rowIndex < root.emulatorRouteSystems.length ?
+                            root.emulatorRouteSystems[rowIndex] : null
+                    visible: entry !== null
+                    x: 44
+                    y: root.settingsListTop +
+                       index * (root.routesRowHeight + root.settingsListSpacing)
+                    width: parent.width - 88
+                    height: root.routesRowHeight
+                    color: root.emulatorRoutesIndex === rowIndex ? "#261f2a38" : "#9b111720"
+                    border.width: root.emulatorRoutesIndex === rowIndex ? 2 : 1
+                    border.color: root.emulatorRoutesIndex === rowIndex ?
+                                  root.accent : "#30ffffff"
+                    radius: 7
+
+                    Text {
+                        x: 24
+                        y: Math.round((parent.height - 54) / 2)
+                        width: parent.width - 400
+                        elide: Text.ElideRight
+                        text: parent.entry ? parent.entry.collection : ""
+                        color: "white"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 21
+                        font.weight: Font.Bold
+                        font.letterSpacing: 0.9
+                    }
+
+                    Text {
+                        x: 24
+                        y: Math.round((parent.height - 54) / 2) + 34
+                        width: parent.width - 400
+                        elide: Text.ElideRight
+                        text: !parent.entry ? "" :
+                              (!parent.entry.ready ?
+                               "Emulator not installed — open this system to fix it" :
+                               (!parent.entry.internalAvailable ?
+                                "Runs with an external emulator" : ""))
+                        color: parent.entry && !parent.entry.ready ? "#ffb4a2" : "#8a94a6"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 15
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 24
+                        y: Math.round((parent.height - 54) / 2)
+                        width: 330
+                        horizontalAlignment: Text.AlignRight
+                        text: !parent.entry ? "" :
+                              (parent.entry.route === "internal" ? "BUILT-IN" : "EXTERNAL")
+                        color: root.accent
+                        font.family: global.fonts.condensed
+                        font.pixelSize: 27
+                        font.weight: Font.Bold
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 24
+                        y: Math.round((parent.height - 54) / 2) + 34
+                        width: 330
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                        text: parent.entry && parent.entry.route === "external" ?
+                              (parent.entry.emulatorName ?
+                               parent.entry.emulatorName : "Choose an emulator") : ""
+                        color: "#8a94a6"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 15
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            root.emulatorRoutesIndex = parent.rowIndex
+                            if (parent.entry)
+                                root.openEmulatorPicker(parent.entry.system,
+                                                        parent.entry.collection)
+                        }
+                    }
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height - root.footerLineHeight - 24
+                text: "LEFT  BUILT-IN     RIGHT  EXTERNAL     A  CHOOSE EMULATOR     L / R  PAGE     B  BACK"
+                color: "#7f899c"
+                font.family: global.fonts.sans
+                font.pixelSize: root.footerFontSize
+                font.letterSpacing: 1
+            }
+        }
+    }
+
+    Rectangle {
+        id: emulatorPickerOverlay
+        z: 845
+        anchors.fill: parent
+        visible: root.emulatorPickerOpen
+        color: "#ef05080d"
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.emulatorPickerOpen = false
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 980
+            height: root.settingsPanelHeight
+            color: "#f70d121a"
+            border.width: 2
+            border.color: root.accent
+            radius: 8
+
+            MouseArea { anchors.fill: parent }
+
+            Text {
+                x: 48; y: 38
+                width: parent.width - 96
+                elide: Text.ElideRight
+                text: root.emulatorPickerLabel.toUpperCase()
+                color: "white"
+                font.family: global.fonts.condensed
+                font.pixelSize: 42
+                font.weight: Font.Bold
+                font.letterSpacing: 2
+            }
+
+            Text {
+                x: 50; y: 94
+                width: parent.width - 100
+                wrapMode: Text.NoWrap
+                elide: Text.ElideRight
+                text: root.emulatorPickerNotice !== "" ? root.emulatorPickerNotice :
+                      (root.emulatorPickerData && root.emulatorPickerData.unsupportedReason ?
+                       root.emulatorPickerData.unsupportedReason :
+                       "Press A to use one. Not installed yet? A opens its store page — install it, then press A again.")
+                color: root.emulatorPickerNotice !== "" ? root.accent : "#9da7b8"
+                font.family: global.fonts.sans
+                font.pixelSize: 17
+            }
+
+            Text {
+                anchors.centerIn: parent
+                visible: root.emulatorPickerRowList.length === 0
+                text: root.emulatorPickerLoading ? "Reading emulators…" :
+                      "No emulator is available for this system."
+                color: "#9da7b8"
+                font.family: global.fonts.sans
+                font.pixelSize: 22
+            }
+
+            Repeater {
+                model: root.emulatorPickerRowList.length
+
+                Rectangle {
+                    property var row: root.emulatorPickerRowList[index]
+                    x: 44
+                    y: root.pickerListTop + index * (root.pickerRowHeight + 12)
+                    width: parent.width - 88
+                    height: root.pickerRowHeight
+                    color: root.emulatorPickerIndex === index ? "#2c1f2a38" : "#9b111720"
+                    border.width: root.emulatorPickerIndex === index ? 2 : 1
+                    border.color: root.emulatorPickerIndex === index ?
+                                  root.accent : "#30ffffff"
+                    radius: 7
+
+                    Text {
+                        x: 24
+                        y: Math.round((parent.height - 54) / 2)
+                        width: parent.width - 330
+                        elide: Text.ElideRight
+                        text: parent.row ? parent.row.name : ""
+                        color: "white"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 21
+                        font.weight: Font.Bold
+                    }
+
+                    Text {
+                        x: 24
+                        y: Math.round((parent.height - 54) / 2) + 34
+                        width: parent.width - 330
+                        elide: Text.ElideRight
+                        text: parent.row ? parent.row.detail : ""
+                        color: "#8a94a6"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 15
+                    }
+
+                    // The current choice is stated, not merely highlighted:
+                    // the highlight already means "where the cursor is".
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 24
+                        y: Math.round((parent.height - 54) / 2)
+                        width: 260
+                        horizontalAlignment: Text.AlignRight
+                        text: parent.row && parent.row.selected ? "IN USE" :
+                              (parent.row ? parent.row.state : "")
+                        color: parent.row && parent.row.selected ? root.accent : "#c8d0de"
+                        font.family: global.fonts.condensed
+                        font.pixelSize: 25
+                        font.weight: Font.Bold
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            root.emulatorPickerIndex = index
+                            root.activateEmulatorPickerRow()
+                        }
+                    }
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height - root.footerLineHeight - 24
+                text: "UP / DOWN  SELECT     A  USE, INSTALL, OR RESTORE DEFAULT     B  BACK"
+                color: "#7f899c"
+                font.family: global.fonts.sans
+                font.pixelSize: root.footerFontSize
+                font.letterSpacing: 1
+            }
+        }
+    }
+
+    Rectangle {
+        id: customEmulatorOverlay
+        z: 850
+        anchors.fill: parent
+        visible: root.customEmulatorOpen
+        color: "#f405080d"
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.customEmulatorOpen = false
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 1000
+            height: root.settingsPanelHeight
+            color: "#fa0d121a"
+            border.width: 2
+            border.color: root.accent
+            radius: 8
+
+            MouseArea { anchors.fill: parent }
+
+            Text {
+                x: 48; y: 34
+                text: "CUSTOM EMULATOR"
+                color: "white"
+                font.family: global.fonts.condensed
+                font.pixelSize: 40
+                font.weight: Font.Bold
+                font.letterSpacing: 2
+            }
+
+            Text {
+                x: 50; y: 86
+                width: parent.width - 100
+                wrapMode: Text.WordWrap
+                text: root.customEmulatorNotice !== "" ? root.customEmulatorNotice :
+                      "Point " + root.emulatorPickerLabel + " at an emulator that is not listed. " +
+                      "Install it first — EmuFusion checks it is really there before saving."
+                color: root.customEmulatorNotice !== "" ? "#ffb4a2" : "#9da7b8"
+                font.family: global.fonts.sans
+                font.pixelSize: 17
+                lineHeight: 1.25
+            }
+
+            Repeater {
+                model: root.customEmulatorRowCount()
+
+                Rectangle {
+                    property string field: root.customEmulatorField(index)
+                    property string problem: root.customEmulatorProblemFor(field)
+                    property bool isAction: field === "save" || field === "remove"
+                    x: 44
+                    y: root.customFormTop + index * (root.customRowHeight + 10)
+                    width: parent.width - 88
+                    height: root.customRowHeight
+                    color: root.customEmulatorIndex === index ? "#2c1f2a38" : "#9b111720"
+                    border.width: root.customEmulatorIndex === index ? 2 : 1
+                    border.color: problem !== "" ? "#e8836b" :
+                                  (root.customEmulatorIndex === index ?
+                                   root.accent : "#30ffffff")
+                    radius: 7
+
+                    Text {
+                        x: 22
+                        y: Math.round((parent.height - 52) / 2)
+                        text: parent.field === "package" ? "APP ID" :
+                              parent.field === "activity" ? "SCREEN TO OPEN" :
+                              parent.field === "delivery" ? "HOW IT RECEIVES THE GAME" :
+                              parent.field === "romExtraKey" ? "NAME FOR THE GAME PATH" :
+                              parent.field === "save" ? "SAVE AND USE THIS EMULATOR" :
+                              "REMOVE THIS CUSTOM EMULATOR"
+                        color: "white"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 20
+                        font.weight: Font.Bold
+                        font.letterSpacing: 0.8
+                    }
+
+                    // Every field carries its own worked example. A raw text
+                    // box with no guidance is exactly what this replaces.
+                    Text {
+                        x: 22
+                        y: Math.round((parent.height - 52) / 2) + 30
+                        width: parent.width - 400
+                        // A validation message that is cut off is no better
+                        // than no message, so these wrap rather than elide.
+                        // Two lines is what the row height affords.
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        text: parent.problem !== "" ? parent.problem :
+                              (parent.field === "package" ?
+                               "The emulator's Android app ID, like com.example.emulator" :
+                               parent.field === "activity" ?
+                               "Its launch screen, like .EmulationActivity" :
+                               parent.field === "delivery" ?
+                               root.customEmulatorDeliveryHelp() :
+                               parent.field === "romExtraKey" ?
+                               "The name the emulator expects, like bootPath or ROM" :
+                               parent.field === "save" ?
+                               "Checks the app is installed and the screen can be opened" :
+                               "Puts this system back on the listed emulators")
+                        color: parent.problem !== "" ? "#ffb4a2" : "#8a94a6"
+                        font.family: global.fonts.sans
+                        font.pixelSize: 15
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 22
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 350
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideLeft
+                        text: parent.field === "package" ?
+                              (root.customEmulatorPackage !== "" ?
+                               root.customEmulatorPackage : "NOT SET") :
+                              parent.field === "activity" ?
+                              (root.customEmulatorActivity !== "" ?
+                               root.customEmulatorActivity : "NOT SET") :
+                              parent.field === "delivery" ?
+                              root.customEmulatorDeliveryLabel() :
+                              parent.field === "romExtraKey" ?
+                              (root.customEmulatorKey !== "" ?
+                               root.customEmulatorKey : "NOT SET") :
+                              parent.field === "save" ? "SAVE" : "REMOVE"
+                        color: parent.isAction ? root.accent :
+                               ((parent.field === "package" && root.customEmulatorPackage === "") ||
+                                (parent.field === "activity" && root.customEmulatorActivity === "") ||
+                                (parent.field === "romExtraKey" && root.customEmulatorKey === "") ?
+                                "#6d778a" : "#dfe5f0")
+                        font.family: global.fonts.condensed
+                        font.pixelSize: 24
+                        font.weight: Font.Bold
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            root.customEmulatorIndex = index
+                            root.activateCustomEmulatorRow()
+                        }
+                    }
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height - root.footerLineHeight - 24
+                text: "UP / DOWN  SELECT     A  EDIT OR RUN     LEFT / RIGHT  CHANGE     B  BACK"
+                color: "#7f899c"
+                font.family: global.fonts.sans
+                font.pixelSize: root.footerFontSize
+                font.letterSpacing: 1
+            }
+        }
+
+        // One field at a time, full width, with the platform keyboard. A
+        // per-row inline caret is unusable on a handheld held at arm's length.
+        Item {
+            id: customEmulatorEditor
+            anchors.fill: parent
+            visible: editing
+            z: 5
+
+            property bool editing: false
+            property string field: ""
+
+            function labelFor(name) {
+                if (name === "package") return "APP ID"
+                if (name === "activity") return "SCREEN TO OPEN"
+                if (name === "romExtraKey") return "NAME FOR THE GAME PATH"
+                return ""
+            }
+
+            function exampleFor(name) {
+                if (name === "package") return "com.github.stenzek.duckstation"
+                if (name === "activity") return ".EmulationActivity"
+                if (name === "romExtraKey") return "bootPath"
+                return ""
+            }
+
+            function valueFor(name) {
+                if (name === "package") return root.customEmulatorPackage
+                if (name === "activity") return root.customEmulatorActivity
+                if (name === "romExtraKey") return root.customEmulatorKey
+                return ""
+            }
+
+            function beginEditing(name) {
+                if (name !== "package" && name !== "activity" &&
+                        name !== "romExtraKey") return
+                field = name
+                customEmulatorInput.text = valueFor(name)
+                editing = true
+                customEmulatorInput.forceActiveFocus()
+                customEmulatorInput.cursorPosition = customEmulatorInput.text.length
+                Qt.inputMethod.show()
+            }
+
+            // Same teardown the search field uses, and for the same reason:
+            // the editor has to stay focused until the Enter that closed it has
+            // fully unwound. Releasing focus inside the key handler leaves
+            // Android's input session alive -- Gboard stays up in its
+            // fullscreen extract mode and swallows the D-pad, so the form stops
+            // responding to anything but the on-screen keyboard.
+            property bool closing: false
+
+            function endEditing(commit) {
+                if (!editing || closing) return
+                closing = true
+                var value = customEmulatorInput.text.trim()
+                Qt.inputMethod.hide()
+                Qt.callLater(function() {
+                    customEmulatorInput.focus = false
+                    customEmulatorEditor.editing = false
+                    root.forceActiveFocus()
+                    customEmulatorEditor.closing = false
+                })
+                if (commit) {
+                    if (field === "package") root.customEmulatorPackage = value
+                    else if (field === "activity") root.customEmulatorActivity = value
+                    else if (field === "romExtraKey") root.customEmulatorKey = value
+                    // Clear the stale complaint for the field just edited, so
+                    // the form does not keep accusing a value the user fixed.
+                    var kept = []
+                    var problems = root.customEmulatorProblems
+                    for (var index = 0; index < problems.length; ++index)
+                        if (problems[index].field !== field) kept.push(problems[index])
+                    root.customEmulatorProblems = kept
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: "#e005080d"
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: customEmulatorEditor.endEditing(false)
+                }
+            }
+
+            Connections {
+                target: Qt.inputMethod
+                onVisibleChanged: {
+                    // Closing Gboard by its chevron must hand the D-pad back,
+                    // exactly as the search field does; Android otherwise keeps
+                    // the edit session open with no keyboard to type into.
+                    if (customEmulatorEditor.editing &&
+                            !customEmulatorEditor.closing && !Qt.inputMethod.visible)
+                        customEmulatorEditor.endEditing(true)
+                }
+            }
+
+            Rectangle {
+                // Pinned near the top rather than centred: Gboard claims the
+                // bottom half of a 1080-high panel, and a centred sheet puts
+                // the field and its example under the keys the user is about
+                // to press.
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 70
+                width: 880
+                height: 300
+                color: "#fc0d121a"
+                border.width: 2
+                border.color: root.accent
+                radius: 10
+
+                MouseArea { anchors.fill: parent }
+
+                Text {
+                    x: 44; y: 38
+                    text: customEmulatorEditor.labelFor(customEmulatorEditor.field)
+                    color: "white"
+                    font.family: global.fonts.condensed
+                    font.pixelSize: 32
+                    font.weight: Font.Bold
+                    font.letterSpacing: 1.6
+                }
+
+                Text {
+                    x: 46; y: 84
+                    text: "For example:  " +
+                          customEmulatorEditor.exampleFor(customEmulatorEditor.field)
+                    color: "#8a94a6"
+                    font.family: global.fonts.sans
+                    font.pixelSize: 16
+                }
+
+                Rectangle {
+                    x: 44; y: 126
+                    width: parent.width - 88
+                    height: 72
+                    color: "#22ffffff"
+                    border.width: 2
+                    border.color: root.accent
+                    radius: 6
+
+                    TextInput {
+                        id: customEmulatorInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: "white"
+                        selectionColor: root.accent
+                        font.family: global.fonts.sans
+                        font.pixelSize: 26
+                        clip: true
+                        selectByMouse: true
+                        inputMethodHints: Qt.ImhNoPredictiveText
+                        onAccepted: customEmulatorEditor.endEditing(true)
+                    }
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 232
+                    text: "ENTER  SAVE FIELD     B  CANCEL"
+                    color: root.accent
+                    font.family: global.fonts.sans
+                    font.pixelSize: 15
+                    font.weight: Font.Bold
+                    font.letterSpacing: 1.2
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: legalOverlay
+        z: 855
+        anchors.fill: parent
+        visible: root.legalOpen
+        color: "#f005080d"
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                root.legalOpen = false
+                root.settingsOpen = true
+            }
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 1020
+            height: root.settingsPanelHeight
+            color: "#fa0d121a"
+            border.width: 2
+            border.color: root.accent
+            radius: 10
+
+            MouseArea { anchors.fill: parent }
+
+            Text {
+                x: 56; y: 40
+                // Straight from LegalNotice.TITLE: the wording has exactly one
+                // home, and this screen is a reader for it, not a second copy.
+                text: root.legalTitle.toUpperCase()
+                color: "white"
+                font.family: global.fonts.condensed
+                font.pixelSize: 44
+                font.weight: Font.Bold
+                font.letterSpacing: 2
+            }
+
+            Text {
+                x: 58; y: 98
+                text: "EmuFusion " + root.lucentVersion
+                color: "#8a94a6"
+                font.family: global.fonts.sans
+                font.pixelSize: 16
+            }
+
+            Item {
+                id: legalViewport
+                x: 56
+                y: 140
+                width: parent.width - 112
+                height: root.legalViewportHeight
+                clip: true
+
+                Column {
+                    id: legalColumn
+                    width: parent.width
+                    y: -root.legalScroll
+                    spacing: 22
+                    onHeightChanged: root.legalBodyHeight = height
+
+                    Repeater {
+                        model: root.legalParagraphs.length
+
+                        Text {
+                            width: legalColumn.width
+                            text: root.legalParagraphs[index]
+                            wrapMode: Text.WordWrap
+                            color: "#c8d0de"
+                            font.family: global.fonts.sans
+                            font.pixelSize: 20
+                            lineHeight: 1.35
+                        }
+                    }
+                }
+            }
+
+            // Only drawn when there is something below the fold, so a notice
+            // that already fits is not decorated with a dead scrollbar.
+            Rectangle {
+                visible: root.legalBodyHeight > root.legalViewportHeight
+                x: parent.width - 40
+                y: 140
+                width: 4
+                height: root.legalViewportHeight
+                radius: 2
+                color: "#26ffffff"
+
+                Rectangle {
+                    width: parent.width
+                    radius: 2
+                    color: root.accent
+                    height: Math.max(40, parent.height *
+                            (root.legalViewportHeight / Math.max(1, root.legalBodyHeight)))
+                    y: (parent.height - height) * (root.legalScroll /
+                            Math.max(1, root.legalBodyHeight - root.legalViewportHeight))
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height - root.footerLineHeight - 24
+                text: "UP / DOWN  SCROLL     L / R  PAGE     A / B  CLOSE"
+                color: "#7f899c"
+                font.family: global.fonts.sans
+                font.pixelSize: root.footerFontSize
+                font.letterSpacing: 1
+            }
+        }
+    }
+
 
 }

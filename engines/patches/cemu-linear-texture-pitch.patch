@@ -1,0 +1,30 @@
+--- a/src/Cafe/HW/Latte/Core/LatteTextureLoader.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteTextureLoader.cpp
+@@ -55,7 +55,6 @@
+ 	textureLoader->tileMode = surfaceInfo.hwTileMode;
+ 
+ 	textureLoader->minOffsetOutdated = 0;
+-	textureLoader->maxOffsetOutdated = (sint32)surfaceInfo.surfSize;
+ 
+ 	textureLoader->surfaceInfoHeight = surfaceInfo.height;
+ 	textureLoader->surfaceInfoDepth = surfaceInfo.depth;
+@@ -75,6 +74,19 @@
+ 		surfaceInfo.pitch = std::max<uint32>(1, pitch >> mipIndex);
+ 	}
+ 
++	// The base texture descriptor supplies the actual linear row stride.
++	// AddrLib computes allocation alignment, which need not match a guest
++	// texture reinterpreted as linear (e.g. Bink's 640-byte R8 chroma rows).
++	// Re-aligning those rows to 768 reads into subsequent guest allocations.
++	// Lower mips and compressed/tiled layouts retain their existing rules.
++	if (level == 0 && pitch != 0 && !Latte::IsCompressedFormat(format) &&
++	    (tileMode == Latte::E_HWTILEMODE::TM_LINEAR_ALIGNED ||
++	     tileMode == Latte::E_HWTILEMODE::TM_LINEAR_GENERAL))
++	{
++		surfaceInfo.pitch = pitch;
++		surfaceInfo.surfSize = uint64(pitch) * surfaceInfo.height * surfaceInfo.depth * textureLoader->bpp / 8;
++	}
++	textureLoader->maxOffsetOutdated = (sint32)surfaceInfo.surfSize;
+ 
+ 	textureLoader->width = width >> (mipIndex);
+ 	textureLoader->width = std::max(textureLoader->width, 1);

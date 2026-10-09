@@ -23,6 +23,18 @@
     {
       "path": "engines/patches/armsx2-libretro-android-build.patch",
       "sha256": "f8d1f6c46125ab953c9333eb57400a8f4ff339ea91ebc3221ab8638514bded78"
+    },
+    {
+      "path": "engines/patches/armsx2-libretro-frame-clock.patch",
+      "sha256": "c94ef2e4fc1440fbbfceef124433343df8f1bbddd320307dc6719effd838d49f"
+    },
+    {
+      "path": "engines/patches/armsx2-libretro-descriptor-batch.patch",
+      "sha256": "d7e781701ad7c05494310aebcc1750cc9f816289048b00d85ffbc1db9a95ff61"
+    },
+    {
+      "path": "engines/patches/armsx2-libretro-input-attachment.patch",
+      "sha256": "0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4"
     }
   ],
   "dependencies": [

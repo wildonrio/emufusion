@@ -1,0 +1,76 @@
+diff --git a/src/audio_core/sink/sink_stream.cpp b/src/audio_core/sink/sink_stream.cpp
+index c70020e9d..8d633f546 100644
+--- a/src/audio_core/sink/sink_stream.cpp
++++ b/src/audio_core/sink/sink_stream.cpp
+@@ -164,7 +164,10 @@ void SinkStream::ProcessAudioIn(std::span<const s16> input_buffer, std::size_t n
+     }
+ }
+ 
+-void SinkStream::ProcessAudioOutAndRender(std::span<s16> output_buffer, std::size_t num_frames) {
++void SinkStream::ProcessAudioOutAndRender(std::span<s16> output_buffer, std::size_t num_frames,
++                                        OutputConsumption* observation) {
++    if (observation) *observation = {};
++    if (num_frames == 0) return;
+     const std::size_t num_channels = GetDeviceChannels();
+     const std::size_t frame_size = num_channels;
+     const std::size_t frame_size_bytes = frame_size * sizeof(s16);
+@@ -172,6 +175,7 @@ void SinkStream::ProcessAudioOutAndRender(std::span<s16> output_buffer, std::siz
+     size_t actual_frames_written{0};
+ 
+     if (system.IsPaused() || system.IsShuttingDown()) {
++        if (observation) observation->paused_frames = num_frames;
+         if (system.IsShuttingDown()) {
+             std::scoped_lock lk{release_mutex};
+             queued_buffers.store(0);
+@@ -188,6 +192,7 @@ void SinkStream::ProcessAudioOutAndRender(std::span<s16> output_buffer, std::siz
+ 
+             if (!queue.TryPop(playing_buffer)) {
+                 lk.unlock();
++                if (observation) observation->held_frames += num_frames - frames_written;
+                 for (size_t i = frames_written; i < num_frames; i++)
+                     std::memcpy(&output_buffer[i * frame_size], last_frame.data(), frame_size_bytes);
+                 frames_written = num_frames;
+@@ -201,7 +206,12 @@ void SinkStream::ProcessAudioOutAndRender(std::span<s16> output_buffer, std::siz
+ 
+         const size_t frames_available = std::min<u64>(playing_buffer.frames - playing_buffer.frames_played, num_frames - frames_written);
+ 
+-        samples_buffer.Pop(&output_buffer[frames_written * frame_size], frames_available * frame_size);
++        const auto copied_samples = samples_buffer.Pop(
++            &output_buffer[frames_written * frame_size], frames_available * frame_size);
++        if (observation) {
++            observation->queued_frames += frames_available;
++            observation->copied_samples += copied_samples;
++        }
+ 
+         frames_written += frames_available;
+         actual_frames_written += frames_available;
+diff --git a/src/audio_core/sink/sink_stream.h b/src/audio_core/sink/sink_stream.h
+index acb7537dd..68f80acf9 100644
+--- a/src/audio_core/sink/sink_stream.h
++++ b/src/audio_core/sink/sink_stream.h
+@@ -40,6 +40,15 @@ struct SinkBuffer {
+     bool consumed;
+ };
+ 
++// Per-pull observations, not a hardware playback clock. Queue accounting may
++// advance even when the PCM ring returns fewer samples; keep those distinct.
++struct OutputConsumption {
++    std::size_t queued_frames{};
++    std::size_t copied_samples{};
++    std::size_t held_frames{};
++    std::size_t paused_frames{};
++};
++
+ /**
+  * Contains a real backend stream for outputting samples to hardware,
+  * created only via a Sink (See Sink::AcquireSinkStream).
+@@ -202,7 +211,8 @@ public:
+      * @param output_buffer - Output buffer to be filled with samples.
+      * @param num_frames - Number of frames to be filled.
+      */
+-    void ProcessAudioOutAndRender(std::span<s16> output_buffer, std::size_t num_frames);
++    void ProcessAudioOutAndRender(std::span<s16> output_buffer, std::size_t num_frames,
++                                  OutputConsumption* observation = nullptr);
+ 
+     /**
+      * Get the total number of samples expected to have been played by this stream.

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-07",
-  "buildProfile": "android-arm64-libretro-no-ffmpeg",
+  "verifiedAt": "2026-10-04",
+  "buildProfile": "android-arm64-libretro-ffmpeg",
   "closureScope": "exact-staged-compile-inputs-for-this-build-profile",
   "sourceDateEpoch": 1778934711,
   "toolchain": {
@@ -13,16 +13,22 @@
     "cmakeVersion": "3.31.6-g38307f9",
     "cmakeExecutableSha256": "94d4a3ce9e70cd9dae26e5fc7bb6ff4de67c58759762d4118a96ad2bc1b76be8",
     "ninjaVersion": "1.12.1",
-    "ninjaExecutableSha256": "3d508e91d5c159986bea2a472b1bfa849909da133aa05582a7174d33328af933"
+    "ninjaExecutableSha256": "3d508e91d5c159986bea2a472b1bfa849909da133aa05582a7174d33328af933",
+    "llvmStripExecutableSha256": "ee9c7fafc3fa353fa2720450921aafa124a00d5074d348d72e216eb47e52befa",
+    "llvmObjcopyExecutableSha256": "ee9c7fafc3fa353fa2720450921aafa124a00d5074d348d72e216eb47e52befa",
+    "llvmReadelfExecutableSha256": "412cf6d6533d64fc098af2ad69c5b12574b675289efd3d30a1a8701c83f164d2",
+    "llvmNmExecutableSha256": "84da402b6e155ab5979a070bdfa9e4fe840cacc6a092b302a08f68d9b3e1966d"
   },
-  "limitedProfileReproducibilityProof": {
+  "productionProfileReproducibilityProof": {
     "freshBuildCount": 2,
     "byteIdentical": true,
     "artifactPath": "engines/build/arm64-v8a/ppsspp_libretro.so",
-    "artifactSha256": "734ba9e0c1e7040b16b0a1e6d2183914e8f9e203b9c3102899427425a925c3ba",
-    "gnuBuildId": "f791f34db0009b16b9a1b0e6713c90c115db10a1",
+    "artifactSha256": "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
+    "gnuBuildId": null,
+    "normalization": "llvm-strip --strip-unneeded followed by llvm-objcopy --remove-section=.note.gnu.build-id",
     "absoluteBuilderPathMatches": 0,
-    "scope": "compiler-linker-proof-only; USE_FFMPEG=OFF; not production qualification"
+    "scope": "Two clean different-path Android ARM64 builds with explicit 16 KiB shared/module linker alignment reproduce the normalized ELF. Strict Android 16 KiB loader accepts this binary and rejects the previous 4 KiB-aligned binary. Runtime FMV/gameplay and release qualification remain separate.",
+    "evidence": "docs/qa/android-portability-2026-10-04-highend-pages/build-results.json"
   },
   "recipePatch": {
     "path": "engines/patches/ppsspp-pin-version-without-git.patch",
@@ -54,11 +60,36 @@
     {"path": "ext/zstd", "repository": "https://github.com/facebook/zstd", "commit": "f8745da6ff1ad1e7bab384bd1f9d742439278e99", "archiveSha256": "4b0bd1f0cfb25e61b9103c35f27395530ff5b4c0d2513a00fd745849e85ea52c"},
     {"path": "libretro/libretro-common", "repository": "https://github.com/libretro/libretro-common", "commit": "76a3d54feb0ee0ce9d59b90aa24694f3782063d3", "archiveSha256": "da3c61d2d47df12536a7977443387c1c3d7a750fe8c916c943860788b590db7e"}
   ],
-  "excluded": [
-    {
-      "path": "ffmpeg",
-      "reason": "Disabled for the first compiler/linker proof; production gameplay qualification is blocked until the exact FFmpeg closure and notices are pinned."
+  "ffmpeg": {
+    "repository": "https://github.com/hrydgard/ppsspp-ffmpeg.git",
+    "commit": "1e3b4965632f60b1d85360261d1b9dd45444bc71",
+    "version": "3.0.2",
+    "sparseFileCount": 3381,
+    "sparseClosureSha256": "93b942daa799dedf4f7a1a3f143c081c1945f2a67b7d13717f9fbb5c0ef4dd51",
+    "embeddedConfiguration": {
+      "sha256WithTrailingNewline": "0446f0f71d2552a237a302791bfe54c20c62b128415bd8a9ccfb04bf8f8d1253",
+      "gplEnabled": false,
+      "nonfreeEnabled": false,
+      "version3Enabled": false,
+      "androidApi": 21,
+      "upstreamBuilderNdk": "29.0.14206865",
+      "notes": "These are exact upstream static-archive build identities; the final PPSSPP shared object is linked and gated with Lucent's pinned API 23/NDK 27 toolchain."
     },
+    "androidArm64Archives": [
+      {"path":"android/arm64/lib/libavcodec.a","sha256":"12932e1719efb45ce1298841b3f65b7e99fff07cad8f7403efba4a7fdcf1948d","memberCount":158},
+      {"path":"android/arm64/lib/libavformat.a","sha256":"d00ec5483c7049032c86a3d293dc23d3440b454eb93c8e7e6662481821ba5b60","memberCount":40},
+      {"path":"android/arm64/lib/libavutil.a","sha256":"876e4c820646f5de1de63fcc6f362c57049de9837bc00d05b12dc6a57954ccca","memberCount":68},
+      {"path":"android/arm64/lib/libswresample.a","sha256":"d5480c4b18b4fc1aeb537af8934ddae52e167e5b8b6bdec8f67176beebced162","memberCount":10},
+      {"path":"android/arm64/lib/libswscale.a","sha256":"7cfc492242f0ddccdc7a9cd60fe5809070a41b719c7c0d98132e15d31d07e03c","memberCount":14}
+    ],
+    "licenseConcluded": "LGPL-2.1-or-later AND IJG",
+    "licenseEvidence": [
+      {"path":"LICENSE.md","sha256":"2e06d5375e3ec10363d38f4ba0680d311ff4f2024ee7f9ddb1c7a2e2bb8a5585"},
+      {"path":"COPYING.LGPLv2.1","sha256":"b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe"},
+      {"path":"android_arm64-v8a.sh","sha256":"3a7cf907f16606d16ad727ec0737d7a2ec01434ccc09cc3a96763fe37c632ebd"}
+    ]
+  },
+  "excluded": [
     {
       "path": "pspautotests",
       "reason": "Not built or redistributed because the pinned repository's LICENSE.txt is an unfilled placeholder."

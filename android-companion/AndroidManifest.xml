@@ -6,6 +6,9 @@
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="28" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -17,10 +20,87 @@
          secondary-display player after another lower-screen task covers it. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- BEGIN generated external-emulator queries -->
+    <!-- Package-visibility declarations. An app targeting Android 11
+         (API 30) or later can only see packages it declares here;
+         everything else answers "not installed" silently, which would
+         turn the Settings emulator picker into a dead end. The package
+         list is generated from engines/external-emulators.json by
+         tools/sync_external_emulator_queries.py - do not hand-edit.
+
+         The MAIN/LAUNCHER intent filter is not redundant with the list:
+         it is what makes a user-supplied CUSTOM emulator visible, since
+         a package chosen at runtime cannot appear in a static list.
+         QUERY_ALL_PACKAGES is deliberately not requested - Play treats
+         it as restricted, and these two declarations already answer the
+         only question EmuFusion asks. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <package android:name="bruenor.magicbox" />
+        <package android:name="bruenor.magicbox.free" />
+        <package android:name="com.PceEmu" />
+        <package android:name="com.armsx2" />
+        <package android:name="com.dsemu.drastic" />
+        <package android:name="com.epsxe.ePSXe" />
+        <package android:name="com.explusalpha.A2600Emu" />
+        <package android:name="com.explusalpha.C64Emu" />
+        <package android:name="com.explusalpha.GbaEmu" />
+        <package android:name="com.explusalpha.GbcEmu" />
+        <package android:name="com.explusalpha.MdEmu" />
+        <package android:name="com.explusalpha.MsxEmu" />
+        <package android:name="com.explusalpha.NeoEmu" />
+        <package android:name="com.explusalpha.NesEmu" />
+        <package android:name="com.explusalpha.NgpEmu" />
+        <package android:name="com.explusalpha.SaturnEmu" />
+        <package android:name="com.explusalpha.Snes9xPlus" />
+        <package android:name="com.explusalpha.SwanEmu" />
+        <package android:name="com.fastemulator.gba" />
+        <package android:name="com.fastemulator.gbafree" />
+        <package android:name="com.flycast.emulator" />
+        <package android:name="com.fms.colem" />
+        <package android:name="com.fms.colem.deluxe" />
+        <package android:name="com.fms.speccy" />
+        <package android:name="com.fms.speccy.deluxe" />
+        <package android:name="com.github.stenzek.duckstation" />
+        <package android:name="com.reicast.emulator" />
+        <package android:name="com.retroarch" />
+        <package android:name="com.retroarch.aarch64" />
+        <package android:name="com.seleuco.mame4d2024" />
+        <package android:name="com.winlator" />
+        <package android:name="com.winlator.cmod" />
+        <package android:name="com.winlator.vanilla" />
+        <package android:name="dev.eden.eden_emulator" />
+        <package android:name="dev.legacy.eden_emulator" />
+        <package android:name="info.cemu.cemu" />
+        <package android:name="io.github.lime3ds.android" />
+        <package android:name="io.recompiled.redream" />
+        <package android:name="me.magnum.melonds" />
+        <package android:name="me.magnum.melonds.nightly" />
+        <package android:name="me.magnum.melondualds" />
+        <package android:name="name.nick.jubanka.colleen" />
+        <package android:name="org.azahar_emu.azahar" />
+        <package android:name="org.citra.emu" />
+        <package android:name="org.citron.citron_emu" />
+        <package android:name="org.dolphinemu.dolphinemu" />
+        <package android:name="org.mupen64plusae.v3.fzurita" />
+        <package android:name="org.mupen64plusae.v3.fzurita.amazon" />
+        <package android:name="org.mupen64plusae.v3.fzurita.pro" />
+        <package android:name="org.ppsspp.ppsspp" />
+        <package android:name="org.ppsspp.ppssppgold" />
+        <package android:name="org.scummvm.scummvm" />
+        <package android:name="org.vita3k.emulator" />
+        <package android:name="org.vita3k.emulator.ikhoeyZX" />
+        <package android:name="xyz.aethersx2.android" />
+    </queries>
+    <!-- END generated external-emulator queries -->
+
     <application
         android:allowBackup="false"
         android:largeHeap="true"
-        android:label="Lucent"
+        android:label="EmuFusion"
         android:theme="@style/AppTheme">
 
         <activity
@@ -43,8 +123,21 @@
             android:taskAffinity="com.thorium.preview.preview"
             android:exported="false" />
 
-        <!-- Lucent's own content-URI trampoline for scoped-storage external
-             emulators. Non-exported so only Lucent's own uid (Pegasus's
+        <!-- Qt 5 cannot safely recreate MainActivity inside its existing
+             process. This black, no-history bridge is started while the old
+             frontend is still visible, remains foreground in its own process,
+             ends the old Qt process, and launches one fresh MainActivity. -->
+        <activity
+            android:name=".FrontendRestartActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:process=":frontend_restart"
+            android:screenOrientation="userLandscape"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
+
+        <!-- EmuFusion's own content-URI trampoline for scoped-storage external
+             emulators. Non-exported so only EmuFusion's own uid (Pegasus's
              in-process am start) can reach it; it carries no launcher/home
              category and is not an emulator. -->
         <activity
@@ -52,13 +145,13 @@
             android:excludeFromRecents="true"
             android:exported="false" />
 
-        <!-- Lucent's in-app browser is a lower-display companion window on the
+        <!-- EmuFusion's in-app browser is a lower-display companion window on the
              Thor. Its own taskAffinity keeps it in a separate task so it
              stacks above the resident preview surface instead of replacing it
              (and so the launch display id is honoured), singleTask reuses the
              one window, and excludeFromRecents stops it appearing as a second
-             Lucent entry. Non-exported with no launcher category: only
-             Lucent's own /browser/open opens it. -->
+             EmuFusion entry. Non-exported with no launcher category: only
+             EmuFusion's own /browser/open opens it. -->
         <activity
             android:name=".BrowserActivity"
             android:configChanges="density|keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
@@ -68,9 +161,36 @@
             android:taskAffinity="com.thorium.preview.browser"
             android:exported="false" />
 
+        <!-- Transparent, user-initiated microphone permission and Android
+             SpeechRecognizer owner. Raw audio is never persisted by EmuFusion;
+             the reviewed transcript returns to the QML feedback sheet. -->
+        <activity
+            android:name=".VoiceFeedbackActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:screenOrientation="userLandscape"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".PreviewService"
             android:exported="false" />
+
+        <!-- Same APK/package, but Android requires explicit owner consent
+             before any app may observe hardware keys while another package is
+             foreground. It reads no view text and exists only for held Stop. -->
+        <service
+            android:name=".ExternalStopAccessibilityService"
+            android:exported="true"
+            android:label="EmuFusion external game return"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/external_stop_accessibility" />
+        </service>
 
         <provider
             android:name=".UpdateFileProvider"

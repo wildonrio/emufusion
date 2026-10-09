@@ -39,6 +39,32 @@ SECONDARY = (ROOT / "android-companion" / "src" / "com" / "thorium" /
 
 
 class GameLaunchRouterTest(unittest.TestCase):
+    def test_ps3_is_built_in_and_never_uses_stale_external_routing(self):
+        self.assertNotIn('if ("ps3".equals(normalized)) return "";', ROUTER)
+        self.assertIn('return nativeAdapter;', ROUTER)
+        self.assertNotIn('NativeAdapterPrerequisites.isReady', ROUTER)
+        self.assertIn('if (isInternalOnly(canonical)) return INTERNAL;', ROUTE_STORE)
+        self.assertIn('if (isInternalOnly(canonical)) {', ROUTE_STORE)
+        self.assertIn('LUCENT_INCLUDE_PHASE3_APS3E:-1', BUILD)
+
+    def test_dolphin_is_internal_by_default_and_external_only_when_explicit(self):
+        self.assertNotIn(
+            'if ("gamecube".equals(normalized) || "wii".equals(normalized)) return "";',
+            ROUTER,
+        )
+        resolve = ROUTE_STORE[ROUTE_STORE.index('public static String resolve'):]
+        resolve = resolve[:resolve.index('public static String chosenEmulator')]
+        self.assertIn('return INTERNAL;', resolve)
+        self.assertNotIn('hasInternalEngine', resolve)
+        self.assertIn('if (EXTERNAL.equals(stored)) return EXTERNAL;', ROUTE_STORE)
+        self.assertIn('LUCENT_INCLUDE_PHASE2_PPSSPP:-1', BUILD)
+        self.assertIn('put("gamecube", contentUri("dolphin"',
+                      (ROOT / "android-companion" / "src" / "com" / "thorium" /
+                       "preview" / "EmulatorCatalog.java").read_text(encoding="utf-8"))
+        self.assertIn('put("wii", contentUri("dolphin"',
+                      (ROOT / "android-companion" / "src" / "com" / "thorium" /
+                       "preview" / "EmulatorCatalog.java").read_text(encoding="utf-8"))
+
     def test_imported_metadata_uses_stable_runtime_router(self):
         # The importer now delegates to EngineRouteStore, the single source of
         # truth for a system's launch command. EngineRouteStore preserves the
@@ -108,6 +134,8 @@ class GameLaunchRouterTest(unittest.TestCase):
         self.assertIn('lines[index].startsWith("launch:")', NORMALIZER)
         self.assertIn("firstLaunchIndex < 0", NORMALIZER)
         self.assertIn("!wroteLaunch", NORMALIZER)
+        self.assertIn("Stale per-game", NORMALIZER)
+        self.assertIn('boolean launch = lines[index].startsWith("launch:");', NORMALIZER)
         self.assertNotIn("matcher.find()", MIGRATION)
         migration_block = SERVICE[SERVICE.index("Thread launchMigration"):]
         migration_block = migration_block[:migration_block.index("launchMigration.start()")]
@@ -125,7 +153,7 @@ class GameLaunchRouterTest(unittest.TestCase):
         self.assertIn("if (!desired.isEmpty()", NORMALIZER)
 
     def test_migration_covers_legacy_system_metadata_directory(self):
-        # Older Lucent installs generated per-system metadata here. Leaving it
+        # Older EmuFusion installs generated per-system metadata here. Leaving it
         # out lets Pegasus keep selecting stale external-emulator launch
         # commands even after the current metadata tree has been normalized.
         self.assertIn('new File(root, "metadata-systems")', MIGRATION)

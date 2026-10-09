@@ -12,6 +12,10 @@ import java.util.Map;
 public final class InputRouterTest {
     public static void main(String[] ignored) throws Exception {
         detectsHandheldAndSuppressesTouch();
+        normalizesThorOdinStyleThroughNes();
+        normalizesThorXboxStyleThroughNes();
+        normalizesThorAAndYThroughGameBoy();
+        unknownAynControllerStyleFailsClosed();
         enablesTouchWithoutACompletePad();
         appliesSystemThenGameRemaps();
         acceptsStandardHatAndTriggerAxes();
@@ -32,6 +36,119 @@ public final class InputRouterTest {
         InputRouter router = new InputRouter(catalog, new InMemoryRemapStore(), true);
         router.updateDevices(Collections.singletonList(thor));
         TestSupport.truth(!router.shouldShowOnScreenControls(), "handheld never gets touch overlay");
+    }
+
+    /**
+     * The Thor is printed in Nintendo positions. In Odin Style its Android
+     * button names follow those printed letters, so A is physically EAST and
+     * B is physically SOUTH. Canonicalization must restore positions before
+     * the NES table assigns the console buttons.
+     */
+    private static void normalizesThorOdinStyleThroughNes() throws Exception {
+        GamepadDescriptor pad = completePad("Odin Controller", 0x2020, 0x0111);
+        DeviceCatalog catalog = DeviceCatalog.standard();
+        TestSupport.equal("ayn-odin-style", catalog.match(pad).id,
+                "2020:0111 selects the exact Odin-style profile");
+        TestSupport.equal("ayn-odin-style",
+                catalog.match(completePad("Firmware Renamed Controller", 0x2020, 0x0111)).id,
+                "an Android display-name change cannot defeat the exact hardware identity");
+        InputRouter router = routerForNes(catalog, pad);
+        assertNesPath(router, pad, "right printed A", AndroidInputCodes.BUTTON_A,
+                CanonicalControl.EAST, 8);
+        assertNesPath(router, pad, "bottom printed B", AndroidInputCodes.BUTTON_B,
+                CanonicalControl.SOUTH, 8);
+        assertNesPath(router, pad, "top printed X", AndroidInputCodes.BUTTON_X,
+                CanonicalControl.NORTH, 0);
+        assertNesPath(router, pad, "left printed Y", AndroidInputCodes.BUTTON_Y,
+                CanonicalControl.WEST, 0);
+    }
+
+    /**
+     * Xbox Style changes the product ID and emits Android face-button names by
+     * Xbox position. The same four physical Thor slots must still reach the
+     * same canonical positions and NES controls.
+     */
+    private static void normalizesThorXboxStyleThroughNes() throws Exception {
+        GamepadDescriptor pad = completePad("Odin Controller (Xbox)", 0x2020, 0x0112);
+        DeviceCatalog catalog = DeviceCatalog.standard();
+        TestSupport.equal("ayn-xbox-style", catalog.match(pad).id,
+                "2020:0112 selects the exact Xbox-style profile");
+        InputRouter router = routerForNes(catalog, pad);
+        assertNesPath(router, pad, "right printed A", AndroidInputCodes.BUTTON_B,
+                CanonicalControl.EAST, 8);
+        assertNesPath(router, pad, "bottom printed B", AndroidInputCodes.BUTTON_A,
+                CanonicalControl.SOUTH, 8);
+        assertNesPath(router, pad, "top printed X", AndroidInputCodes.BUTTON_Y,
+                CanonicalControl.NORTH, 0);
+        assertNesPath(router, pad, "left printed Y", AndroidInputCodes.BUTTON_X,
+                CanonicalControl.WEST, 0);
+    }
+
+    /** Both firmware controller styles must preserve the printed A/Y swap. */
+    private static void normalizesThorAAndYThroughGameBoy() throws Exception {
+        DeviceCatalog catalog = DeviceCatalog.standard();
+        GamepadDescriptor odin = completePad("Odin Controller", 0x2020, 0x0111);
+        InputRouter odinRouter = routerForSystem(catalog, odin, "gb");
+        assertGameBoyPath(odinRouter, odin, "Odin-style printed A",
+                AndroidInputCodes.BUTTON_A, CanonicalControl.EAST, 8);
+        assertGameBoyPath(odinRouter, odin, "Odin-style printed Y",
+                AndroidInputCodes.BUTTON_Y, CanonicalControl.WEST, 0);
+
+        GamepadDescriptor xbox = completePad(
+                "Odin Controller (Xbox)", 0x2020, 0x0112);
+        InputRouter xboxRouter = routerForSystem(catalog, xbox, "gb");
+        assertGameBoyPath(xboxRouter, xbox, "Xbox-style printed A",
+                AndroidInputCodes.BUTTON_B, CanonicalControl.EAST, 8);
+        assertGameBoyPath(xboxRouter, xbox, "Xbox-style printed Y",
+                AndroidInputCodes.BUTTON_X, CanonicalControl.WEST, 0);
+    }
+
+    private static void unknownAynControllerStyleFailsClosed() throws Exception {
+        GamepadDescriptor pad = completePad("Odin Controller", 0x2020, 0x0199);
+        DeviceCatalog catalog = DeviceCatalog.standard();
+        TestSupport.equal("ayn-unknown-controller-style", catalog.match(pad).id,
+                "an unknown 2020 style cannot fall through to the guessed AYN profile");
+        InputRouter router = routerForNes(catalog, pad);
+        for (int key : new int[] {AndroidInputCodes.BUTTON_A, AndroidInputCodes.BUTTON_B,
+                AndroidInputCodes.BUTTON_X, AndroidInputCodes.BUTTON_Y})
+            TestSupport.equal(null, router.resolve(pad, InputSignal.key(key)),
+                    "unknown style rejects unqualified face key " + key);
+        TestSupport.equal(CanonicalControl.DPAD_UP,
+                router.resolve(pad, InputSignal.key(AndroidInputCodes.DPAD_UP)),
+                "unknown style keeps unambiguous controls available for remapping");
+    }
+
+    private static InputRouter routerForNes(DeviceCatalog catalog, GamepadDescriptor pad) {
+        return routerForSystem(catalog, pad, "nes");
+    }
+
+    private static InputRouter routerForSystem(DeviceCatalog catalog,
+            GamepadDescriptor pad, String system) {
+        InputRouter router = new InputRouter(catalog, new InMemoryRemapStore(), true);
+        router.updateDevices(Collections.singletonList(pad));
+        router.setGame(system, "thor-controller-style-proof");
+        return router;
+    }
+
+    private static void assertGameBoyPath(InputRouter router, GamepadDescriptor pad,
+            String physicalButton, int androidKey, CanonicalControl canonical,
+            int expectedRetroPadId) throws Exception {
+        CanonicalControl actual = router.resolve(pad, InputSignal.key(androidKey));
+        TestSupport.equal(canonical, actual,
+                physicalButton + " normalizes to its physical position");
+        TestSupport.equal(expectedRetroPadId,
+                LibretroJoypadLayout.idFor("gb", actual),
+                physicalButton + " reaches the intended Game Boy button");
+    }
+
+    private static void assertNesPath(InputRouter router, GamepadDescriptor pad,
+            String physicalSlot, int androidKey, CanonicalControl canonical,
+            int expectedRetroPadId) throws Exception {
+        CanonicalControl actual = router.resolve(pad, InputSignal.key(androidKey));
+        TestSupport.equal(canonical, actual,
+                physicalSlot + " Android key normalizes to its physical position");
+        TestSupport.equal(expectedRetroPadId, LibretroJoypadLayout.idFor("nes", actual),
+                physicalSlot + " reaches the intended NES RetroPad ID");
     }
 
     private static void enablesTouchWithoutACompletePad() {

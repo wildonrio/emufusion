@@ -59,7 +59,7 @@ public final class StopButtonService extends AccessibilityService {
 
         String packageName = event.getPackageName().toString();
         if (packageName.equals(PEGASUS_PACKAGE)) {
-            // In the unified build Lucent and the accessibility service share
+            // In the unified build EmuFusion and the accessibility service share
             // a package. Display 0 is still unambiguous because the preview
             // activity lives on the lower display and was filtered above.
             upperPackage = PEGASUS_PACKAGE;
@@ -83,7 +83,7 @@ public final class StopButtonService extends AccessibilityService {
             ++stopGeneration;
             // A short press is Select everywhere, including standalone
             // emulators. Passing both halves of the original hardware event
-            // through also preserves Lucent's own internal-engine mapping.
+            // through also preserves EmuFusion's own internal-engine mapping.
             return false;
         }
         if (event.getAction() != KeyEvent.ACTION_DOWN)
@@ -139,7 +139,7 @@ public final class StopButtonService extends AccessibilityService {
             }
         }, HOLD_TO_EXIT_MS);
         // Never consume the original key. A tap remains Select; only the
-        // independently scheduled hold action returns to Lucent.
+        // independently scheduled hold action returns to EmuFusion.
         return false;
     }
 

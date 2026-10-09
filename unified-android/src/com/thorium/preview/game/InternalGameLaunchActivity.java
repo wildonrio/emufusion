@@ -9,7 +9,7 @@ import android.util.Log;
 
 import java.io.File;
 
-/** Exported, argument-validating bridge from Pegasus commands to Lucent's private activity. */
+/** Exported, argument-validating bridge from Pegasus commands to EmuFusion's private activity. */
 public final class InternalGameLaunchActivity extends Activity {
     public static final String ACTION_LAUNCH = "com.thorium.preview.LAUNCH_INTERNAL_GAME";
     private static final String AUTHORITY = "com.thorium.preview.roms";
@@ -47,7 +47,9 @@ public final class InternalGameLaunchActivity extends Activity {
                 source.getStringExtra("game_id"),
                 source.getStringExtra("title"),
                 uri,
-                SessionReturnState.from(source));
+                SessionReturnState.from(source),
+                "",
+                FrameGenerationSettings.mode(this));
         if (!request.isValid()) {
             finish();
             return;
