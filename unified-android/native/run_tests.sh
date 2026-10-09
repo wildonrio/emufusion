@@ -100,7 +100,7 @@ mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
     "$NATIVE_DIR/lucent_android_gles_backend.c" \
     "$NATIVE_DIR/tests/fake_android_egl.c" \
     "$NATIVE_DIR/tests/android_gles_backend_test.c" \
-    -ldl $LDFLAGS -o "$TEST_DIR/android_gles_backend_test"
+    -ldl -lm $LDFLAGS -o "$TEST_DIR/android_gles_backend_test"
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
     -I"$NATIVE_DIR/tests/fake-android" \
     "$NATIVE_DIR/tests/input_trace_host_test.c" \
@@ -237,7 +237,7 @@ cp "$SANITIZED/mock_core.so" "$SANITIZED/liblucent_core_puae.so"
     "$NATIVE_DIR/lucent_android_gles_backend.c" \
     "$NATIVE_DIR/tests/fake_android_egl.c" \
     "$NATIVE_DIR/tests/android_gles_backend_test.c" \
-    -ldl $LDFLAGS -o "$SANITIZED/android_gles_backend_test"
+    -ldl -lm $LDFLAGS -o "$SANITIZED/android_gles_backend_test"
 "$CC" -std=c11 -O1 -g -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
     $SANITIZER_FLAGS -shared "$NATIVE_DIR/tests/mock_native_adapter.c" \
     $LDFLAGS -o "$SANITIZED/mock_native_adapter.so"

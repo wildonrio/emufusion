@@ -32,6 +32,6 @@ rm -rf "$BUILD_DIR/classes"/* "$BUILD_DIR/dex"/* "$BUILD_DIR/compiled-res"/*
     --ks "${LUCENT_CONTROLLER_KEYSTORE:-$BUILD_DIR/debug.keystore}" \
     --ks-pass "pass:${LUCENT_CONTROLLER_STORE_PASS:-android}" \
     --key-pass "pass:${LUCENT_CONTROLLER_KEY_PASS:-android}" \
-    --out "$BUILD_DIR/pegasus-lucent-controller.apk" "$BUILD_DIR/aligned.apk"
-"$BUILD_TOOLS/apksigner" verify --verbose "$BUILD_DIR/pegasus-lucent-controller.apk"
-printf '%s\n' "$BUILD_DIR/pegasus-lucent-controller.apk"
+    --out "$BUILD_DIR/emufusion-controller.apk" "$BUILD_DIR/aligned.apk"
+"$BUILD_TOOLS/apksigner" verify --verbose "$BUILD_DIR/emufusion-controller.apk"
+printf '%s\n' "$BUILD_DIR/emufusion-controller.apk"

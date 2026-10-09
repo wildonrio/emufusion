@@ -213,7 +213,7 @@ def generate(registry: dict, lock: dict, artifacts: dict) -> dict:
         "SPDXID": "SPDXRef-DOCUMENT",
         "name": "Lucent Phase 2 qualification SBOM",
         "documentNamespace": (
-            "https://github.com/wildonrio/pegasus-lucent/"
+            "https://github.com/wildonrio/emufusion/"
             f"spdx/phase2/{identity}"
         ),
         "creationInfo": {

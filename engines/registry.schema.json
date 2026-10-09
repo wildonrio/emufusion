@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://wildonrio.github.io/pegasus-lucent/engines/registry.schema.json",
+  "$id": "https://wildonrio.github.io/emufusion/engines/registry.schema.json",
   "title": "Lucent emulation engine registry",
   "type": "object",
   "additionalProperties": false,

@@ -9,7 +9,7 @@ FocusScope {
     width: 1920
     height: 1080
 
-    readonly property string lucentVersion: "3.2.17"
+    readonly property string lucentVersion: "3.2.18"
 
     // ---- Vertical envelope ------------------------------------------------
     // Android used to reserve the bottom 55 px of the panel for its navigation

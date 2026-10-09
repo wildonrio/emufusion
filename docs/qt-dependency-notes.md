@@ -325,7 +325,7 @@ GPL-3.0, so narrowing is permitted.
 
 ### 2. Release repository slug is wildonrio
 
-All three surfaces now agree on `github.com/wildonrio/pegasus-lucent`:
+All three surfaces now agree on `github.com/wildonrio/emufusion`:
 `release-manifest.json` asset URLs, `UpdateManager`'s latest-release API and
 download prefixes, and `README.md`. The former `tyler-bam-ai/pegasus-lucent`
 publish fork is no longer a release channel.

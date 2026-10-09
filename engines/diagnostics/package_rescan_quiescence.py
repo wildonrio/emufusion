@@ -10,8 +10,8 @@ BASE = ROOT / 'engines/build/candidates/switch-isolated-storage-2026-09-09/emufu
 BASE_SHA = '58a72882a598fcb7ec9c36a8e845421adc4904717cc8c453f864d0aee1b67035'
 
 OUT = ROOT / 'engines/build/candidates/frontend-rescan-quiescence-2026-09-09'
-THEME = 'assets/pegasus-lucent-theme.zip'
-FINGERPRINT = 'assets/pegasus-lucent-theme.sha256'
+THEME = 'assets/emufusion-theme.zip'
+FINGERPRINT = 'assets/emufusion-theme.sha256'
 NOTE = 'assets/local-rescan-quiescence.json'
 assert not OUT.exists(), 'Refusing to overwrite an existing candidate'
 assert digest(BASE.read_bytes()) == BASE_SHA

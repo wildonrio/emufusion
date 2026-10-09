@@ -129,7 +129,7 @@ class OneAppApkVerifierTest(unittest.TestCase):
             b"Lcom/thorium/preview/VoiceFeedbackActivity;"
             b"Lcom/thorium/preview/VoiceFeedbackManager;"
             b"Landroid/speech/SpeechRecognizer;"
-            b"wildonrio/pegasus-lucent"
+            b"wildonrio/emufusion"
         )
         self.assertEqual([], MODULE.verify_voice_feedback_payload(complete))
 

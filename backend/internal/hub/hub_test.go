@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pegasus-lucent/multiplayer-backend/internal/protocol"
-	"github.com/pegasus-lucent/multiplayer-backend/internal/store"
+	"github.com/emufusion/multiplayer-backend/internal/protocol"
+	"github.com/emufusion/multiplayer-backend/internal/store"
 )
 
 func newTestHub(t *testing.T) *Hub {

@@ -13,7 +13,7 @@ import java.io.FileNotFoundException;
 
 /** Read-only, exact-file provider used only for Android's package installer. */
 public final class UpdateFileProvider extends ContentProvider {
-    static final String FILE_NAME = "pegasus-lucent-update.apk";
+    static final String FILE_NAME = "emufusion-update.apk";
 
     private File updateFile() {
         File folder = getContext().getExternalFilesDir("updates");

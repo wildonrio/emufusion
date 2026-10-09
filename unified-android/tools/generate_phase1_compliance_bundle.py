@@ -155,7 +155,7 @@ def generate(registry_path: Path, opt_in_path: Path, library_dir: Path) -> tuple
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
         "name": "Lucent-Phase1-qualification-cores",
-        "documentNamespace": f"https://github.com/wildonrio/pegasus-lucent/spdx/{namespace_seed}",
+        "documentNamespace": f"https://github.com/wildonrio/emufusion/spdx/{namespace_seed}",
         "creationInfo": {
             "created": "2026-08-06T00:00:00Z",
             "creators": ["Tool: Lucent-generate_phase1_compliance_bundle"],

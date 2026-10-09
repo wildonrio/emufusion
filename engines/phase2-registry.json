@@ -165,7 +165,7 @@
       },
       "legalTestContent": {
         "status": "blocked",
-        "sourceRepository": "https://github.com/wildonrio/pegasus-lucent",
+        "sourceRepository": "https://github.com/wildonrio/emufusion",
         "sourceCommit": null,
         "sourcePath": "engines/qa/fixtures/puae-minimal",
         "license": "CC0-1.0",

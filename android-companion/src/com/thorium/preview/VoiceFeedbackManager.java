@@ -18,7 +18,7 @@ import java.util.List;
  * authenticated issue composer with a bounded, prefilled draft.
  */
 final class VoiceFeedbackManager {
-    static final String REPOSITORY = "wildonrio/pegasus-lucent";
+    static final String REPOSITORY = "wildonrio/emufusion";
     private static final int MAX_TRANSCRIPT = 4_000;
     private static final Object LOCK = new Object();
 

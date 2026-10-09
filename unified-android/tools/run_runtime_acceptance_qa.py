@@ -375,7 +375,7 @@ def classify_new_activity_starts(
 
 def embedded_theme(apk: Path) -> tuple[bytes, bytes, list[str]]:
     with zipfile.ZipFile(apk) as archive:
-        payload = archive.read("assets/pegasus-lucent-theme.zip")
+        payload = archive.read("assets/emufusion-theme.zip")
     with zipfile.ZipFile(io.BytesIO(payload)) as theme:
         qml_names = [name for name in theme.namelist()
                      if name == "theme.qml" or name.endswith("/theme.qml")]

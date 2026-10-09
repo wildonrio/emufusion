@@ -21,7 +21,7 @@ reliable, release-approved, or compatible with every game.**
 
 The menu is dynamic: a platform card appears only when its named collection
 contains games. **Neither 19, 20, 34 nor 55 proves the device's current visible
-card count.** The APK's nested `assets/pegasus-lucent-theme.zip/theme.qml` was
+card count.** The APK's nested `assets/emufusion-theme.zip/theme.qml` was
 read directly and matches current `theme/theme.qml` SHA-256
 `6357bd273ef7bcb09cac2365724446648cc57678de6de0732e86bfc189ff9920`.
 

@@ -24,12 +24,12 @@ class AutomaticAppUpdateTest(unittest.TestCase):
 
     def test_latest_github_release_is_the_primary_app_channel(self):
         self.assertIn(
-            "https://api.github.com/repos/wildonrio/pegasus-lucent/releases/latest",
+            "https://api.github.com/repos/wildonrio/emufusion/releases/latest",
             UPDATE,
         )
         self.assertNotIn("tyler-bam-ai", UPDATE)
         self.assertIn(
-            "https://github.com/wildonrio/pegasus-lucent/releases/download/",
+            "https://github.com/wildonrio/emufusion/releases/download/",
             UPDATE,
         )
         self.assertIn("for (String apiUrl : RELEASE_API_URLS)", UPDATE)
@@ -39,6 +39,17 @@ class AutomaticAppUpdateTest(unittest.TestCase):
         self.assertIn("RELEASE_DOWNLOAD_PREFIX", UPDATE)
         self.assertLess(UPDATE.index("AppRelease candidate = appRelease(release)"),
                         UPDATE.index("manifest.optInt(\"companionVersionCode\""))
+
+    def test_renamed_repository_keeps_the_legacy_channel_trusted(self):
+        # pegasus-lucent was renamed to emufusion; installs from before the
+        # rename and GitHub's redirects both still use the old name.
+        for name in ("emufusion", "pegasus-lucent"):
+            self.assertIn("https://api.github.com/repos/wildonrio/%s/releases/latest" % name, UPDATE)
+            self.assertIn("https://github.com/wildonrio/%s/releases/download/" % name, UPDATE)
+            self.assertIn("https://raw.githubusercontent.com/wildonrio/%s/main/release-manifest.json" % name,
+                          UPDATE)
+        self.assertIn("for (String url : MANIFEST_URLS)", UPDATE)
+        self.assertNotIn("fetch(MANIFEST_URL,", UPDATE)
 
     def test_verified_download_automatically_opens_installer(self):
         app_branch = UPDATE.split("if (appNew) {", 1)[1].split("} else {", 1)[0]

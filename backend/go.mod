@@ -1,4 +1,4 @@
-module github.com/pegasus-lucent/multiplayer-backend
+module github.com/emufusion/multiplayer-backend
 
 go 1.27.1
 

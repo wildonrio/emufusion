@@ -471,7 +471,7 @@ def verify_voice_feedback_payload(apk: Path) -> list[str]:
         b"Lcom/thorium/preview/VoiceFeedbackActivity;",
         b"Lcom/thorium/preview/VoiceFeedbackManager;",
         b"Landroid/speech/SpeechRecognizer;",
-        b"wildonrio/pegasus-lucent",
+        b"wildonrio/emufusion",
     )
     missing = [value.decode("ascii") for value in required if value not in dex]
     return [] if not missing else [

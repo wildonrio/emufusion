@@ -6,6 +6,8 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+October 9 (latest) **— 3.2.18 (92) `3e0b268f`: renamed pegasus-lucent -> emufusion.** Same natives as 9dd2/25332. Repository, internal APK assets (`emufusion-theme.zip`, `emufusion-version.txt`, `emufusion-update.apk`), Go module and docs use the new name; `UpdateManager` trusts both `wildonrio/emufusion` and the legacy `wildonrio/pegasus-lucent` (API, downloads, manifest) so installs from before the rename keep updating. Order: publish v3.2.18 while the repository still has the old name, let the Thor (3.2.17) update, then rename the repository. The fork-mirror workflow was removed; releases are published by the owner account only (no work account). Clean phone: 3.2.18 installed in place, renamed theme asset installed, library and compact footer verified.
+
 October 9 (later) **— 3.2.17 (91) `9dd272e8`, automatic updates, PSP and Switch.**
 Owner decisions: personal debug-signed builds only (no release signing); every
 install must update itself from GitHub; theme changes limited to polish; the
@@ -29,7 +31,7 @@ there; with `-gpu lavapipe` it boots, menus/New Game work and the in-game tutori
 is reached at ~1 fps (software). On the Thor (Adreno, 3.2.17 installed with data
 preserved, rollback `adb install -r -d` to e8aefd6a possible) Mega Man 11 plays at
 60 fps (run, jump, buster, pause menu). Publication: the signed-in GitHub account
-can push only to the fork; a release on `wildonrio/pegasus-lucent` (the updater's
+can push only to the fork; a release on `wildonrio/emufusion` (the updater's
 channel) needs the owner account.
 
 October 9 **— replacement agent: clean-phone survey, three fixes, candidate 25332.**
@@ -2700,7 +2702,7 @@ but retain manual Check for Updates. Do not promise silent installation or
 compatibility with every existing signing lineage without testing it. Current
 v3.2.16/code90 simulator APK is NOT a newer OTA update for devices already on90.
 
-Read-only GitHub API check October5: wildonrio/pegasus-lucent latest published
+Read-only GitHub API check October5: wildonrio/emufusion latest published
 release is v3.2.0 with **zero assets**. The local legacy manifest points at code74
 v3.2.0. Publishing must attach a complete correctly named, compatible signed APK
 with its digest and refresh the legacy manifest for old clients. Test the actual
@@ -16624,7 +16626,7 @@ Next work, Switch first:
    swapchain-recreation crash is a subsequent explicit blocker.
 
 Historical artifacts are in
-`/private/tmp/claude-501/-Users-tyleryoung-Code-pegasus-lucent/dbc4163e-0cdc-407d-ae4b-717eda19fe64/scratchpad`.
+`/private/tmp/claude-501/-Users-tyleryoung-Code-emufusion/dbc4163e-0cdc-407d-ae4b-717eda19fe64/scratchpad`.
 They may be temporary; preserve needed artifacts with identity manifests before
 depending on them. Inspected latest Switch/Wii U/PS3 results were incomplete, not
 passes. The old screenshot prover guesses LSFG roles and removes duplicates; it

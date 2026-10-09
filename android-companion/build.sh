@@ -12,7 +12,7 @@ DEPS_DIR="$BUILD_DIR/deps"
 COMMONS_COMPRESS_JAR="$DEPS_DIR/commons-compress-1.21.jar"
 XZ_JAR="$DEPS_DIR/xz-1.9.jar"
 THEME_DIR=$(CDPATH= cd -- "$PROJECT_DIR/../theme" && pwd)
-THEME_ARCHIVE="$PROJECT_DIR/assets/pegasus-lucent-theme.zip"
+THEME_ARCHIVE="$PROJECT_DIR/assets/emufusion-theme.zip"
 JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}
 export JAVA_HOME
 PATH="$JAVA_HOME/bin:$PATH"
@@ -78,12 +78,12 @@ KEY_PASS=${LUCENT_KEY_PASS:-$STORE_PASS}
 KEY_ALIAS=${LUCENT_KEY_ALIAS:-androiddebugkey}
 if [ ! -f "$KEYSTORE" ]; then
     "$JAVA_HOME/bin/keytool" -genkeypair -keystore "$KEYSTORE" -storepass "$STORE_PASS" \
-        -keypass "$KEY_PASS" -alias "$KEY_ALIAS" -dname 'CN=Pegasus Lucent,O=WildOnRio,C=US' \
+        -keypass "$KEY_PASS" -alias "$KEY_ALIAS" -dname 'CN=EmuFusion,O=WildOnRio,C=US' \
         -keyalg RSA -keysize 2048 -validity 10000 >/dev/null 2>&1
 fi
 
 "$BUILD_TOOLS/apksigner" sign \
     --ks "$KEYSTORE" --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" \
-    --ks-key-alias "$KEY_ALIAS" --out "$BUILD_DIR/pegasus-lucent.apk" "$BUILD_DIR/aligned.apk"
-"$BUILD_TOOLS/apksigner" verify --verbose "$BUILD_DIR/pegasus-lucent.apk"
-printf '%s\n' "$BUILD_DIR/pegasus-lucent.apk"
+    --ks-key-alias "$KEY_ALIAS" --out "$BUILD_DIR/emufusion.apk" "$BUILD_DIR/aligned.apk"
+"$BUILD_TOOLS/apksigner" verify --verbose "$BUILD_DIR/emufusion.apk"
+printf '%s\n' "$BUILD_DIR/emufusion.apk"

@@ -75,7 +75,7 @@ class VoiceFeedbackIntegrationTest(unittest.TestCase):
 
     def test_github_credentials_are_not_embedded(self):
         combined = MANAGER + ACTIVITY + SERVICE + THEME
-        self.assertIn('REPOSITORY = "wildonrio/pegasus-lucent"', MANAGER)
+        self.assertIn('REPOSITORY = "wildonrio/emufusion"', MANAGER)
         self.assertIn("issues/new?title=", MANAGER)
         self.assertIn("requiresGithubConfirmation", MANAGER)
         for secret_marker in ("ghp_", "github_pat_", "client_secret", "Authorization: token"):
@@ -147,7 +147,7 @@ class VoiceFeedbackBacklogTest(unittest.TestCase):
                 "labels": [],
             },
         ]
-        rendered = self.module.render("wildonrio/pegasus-lucent", issues)
+        rendered = self.module.render("wildonrio/emufusion", issues)
         self.assertIn("## Bugs", rendered)
         self.assertIn("#4 — Game crashes when returning", rendered)
         self.assertIn("## Feature requests", rendered)
@@ -165,8 +165,8 @@ class VoiceFeedbackBacklogTest(unittest.TestCase):
             "labels": [{"name": "bug"}],
         }]
         self.assertEqual(
-            self.module.render("wildonrio/pegasus-lucent", issues),
-            self.module.render("wildonrio/pegasus-lucent", json.loads(json.dumps(issues))),
+            self.module.render("wildonrio/emufusion", issues),
+            self.module.render("wildonrio/emufusion", json.loads(json.dumps(issues))),
         )
 
 

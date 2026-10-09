@@ -41,14 +41,14 @@ after quarantine, final telemetry was direct 20 Hz with
 Qualification-only debug APK:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-e993fc2181b0d84f24c1115322c3231b62f27ea43792472e140a93014764d0ee.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-e993fc2181b0d84f24c1115322c3231b62f27ea43792472e140a93014764d0ee.apk
 SHA-256 e993fc2181b0d84f24c1115322c3231b62f27ea43792472e140a93014764d0ee
 ```
 
 Physical log:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/.evidence-rife-oot-r87-surfacecontrol-drop-recovery/live-logcat.txt
+/Users/tyleryoung/Code/emufusion/.evidence-rife-oot-r87-surfacecontrol-drop-recovery/live-logcat.txt
 ```
 
 Relevant source hashes:

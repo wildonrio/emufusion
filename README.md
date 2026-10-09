@@ -4,7 +4,7 @@ EmuFusion is a single Android game-library and emulation application, with a sta
 
 ## Download
 
-The [latest release](https://github.com/wildonrio/pegasus-lucent/releases/latest) provides two downloads:
+The [latest release](https://github.com/wildonrio/emufusion/releases/latest) provides two downloads:
 
 - **EmuFusion App** — the recommended, complete APK. It contains the EmuFusion frontend, importer and media services, updater, and in-process emulator runtime. No separate Pegasus, theme, controller, companion, or emulator app is required for qualified internal systems.
 - **EmuFusion Theme** — the standalone theme ZIP for people who already use Pegasus and only want EmuFusion's visual experience. Android-only automation and services are not available from a QML theme alone.

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Bounded on-device diagnostic; always restore the exact reviewed entry APK.
 set -eu
-repo=/Users/tyleryoung/Code/pegasus-lucent
+repo=/Users/tyleryoung/Code/emufusion
 adb=/Users/tyleryoung/.codex/tools/android-platform-tools/adb
 # Reviewed retained normal build; reject any different current device identity.
 entry=$repo/engines/build/candidates/aps3e-wrapper-sync-clean-apk-2026-09-09/emufusion-spurs-trace.apk

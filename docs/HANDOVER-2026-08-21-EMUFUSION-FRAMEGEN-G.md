@@ -237,7 +237,7 @@ migrated atomically. Mixed schema-40/schema-41 records reject.
 These passed after the final schema-41 bytes:
 
 ```sh
-cd /Users/tyleryoung/Code/pegasus-lucent
+cd /Users/tyleryoung/Code/emufusion
 python3 -m unittest \
   tools.tests.test_runtime_acceptance_qa \
   tools.tests.test_systemwide_frame_generation \
@@ -398,7 +398,7 @@ unified-android/native/tests/hw_host_test.c
 The exact current APK was built from `unified-android/` with:
 
 ```sh
-cd /Users/tyleryoung/Code/pegasus-lucent/unified-android
+cd /Users/tyleryoung/Code/emufusion/unified-android
 LUCENT_INCLUDE_EXPERIMENTAL_CORES=1 \
 LUCENT_AUTOSELECT_EXPERIMENTAL_CORES=1 \
 LUCENT_REUSE_QUALIFICATION_CORES=1 \
@@ -413,7 +413,7 @@ failure.
 Install or verify the preserved candidate:
 
 ```sh
-cd /Users/tyleryoung/Code/pegasus-lucent
+cd /Users/tyleryoung/Code/emufusion
 ADB=/Users/tyleryoung/.codex/tools/android-platform-tools/adb
 APK=unified-android/build/lucent-3.2.16-phase2-qualification-6ca7e2538789944144d64e1e070368d08f9e8b2b3ae88ae70a9b8f0ca093a34d.apk
 shasum -a 256 "$APK"
@@ -436,7 +436,7 @@ has been cleared.
 The general physical runner pattern remains:
 
 ```sh
-cd /Users/tyleryoung/Code/pegasus-lucent
+cd /Users/tyleryoung/Code/emufusion
 ADB=/Users/tyleryoung/.codex/tools/android-platform-tools/adb
 APK=unified-android/build/lucent-3.2.16-phase2-qualification-6ca7e2538789944144d64e1e070368d08f9e8b2b3ae88ae70a9b8f0ca093a34d.apk
 

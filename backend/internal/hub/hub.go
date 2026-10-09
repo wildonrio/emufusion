@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pegasus-lucent/multiplayer-backend/internal/protocol"
-	"github.com/pegasus-lucent/multiplayer-backend/internal/store"
+	"github.com/emufusion/multiplayer-backend/internal/protocol"
+	"github.com/emufusion/multiplayer-backend/internal/store"
 )
 
 // heartbeatTimeout is how long a device can go without a heartbeat before

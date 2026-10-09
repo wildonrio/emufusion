@@ -3299,7 +3299,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.addCleanup(temporary.cleanup)
         apk = Path(temporary.name) / "test.apk"
         with zipfile.ZipFile(apk, "w") as archive:
-            archive.writestr("assets/pegasus-lucent-theme.zip", nested.getvalue())
+            archive.writestr("assets/emufusion-theme.zip", nested.getvalue())
         _qml, _cfg, order = MODULE.embedded_theme(apk)
         self.assertEqual(order, ["all", "nes", "n64"])
 
@@ -3356,7 +3356,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         self.addCleanup(temporary.cleanup)
         apk = Path(temporary.name) / "test.apk"
         with zipfile.ZipFile(apk, "w") as archive:
-            archive.writestr("assets/pegasus-lucent-theme.zip", nested.getvalue())
+            archive.writestr("assets/emufusion-theme.zip", nested.getvalue())
         self.assertEqual(MODULE.catalog_display_names(apk), {
             "all": "all",
             "gb": "gameboy",

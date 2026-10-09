@@ -27,10 +27,10 @@ import java.util.zip.ZipInputStream;
 /** Installs the bundled or downloaded Pegasus EmuFusion theme without touching ROMs. */
 final class ThemeInstaller {
     private static final String TAG = "LucentThemeInstaller";
-    private static final String ASSET_ZIP = "pegasus-lucent-theme.zip";
-    private static final String ASSET_VERSION = "pegasus-lucent-version.txt";
+    private static final String ASSET_ZIP = "emufusion-theme.zip";
+    private static final String ASSET_VERSION = "emufusion-version.txt";
     private static final String ASSET_BUNDLED_FINGERPRINT =
-            "pegasus-lucent-theme.sha256";
+            "emufusion-theme.sha256";
     private static final File PEGASUS = new File(Environment.getExternalStorageDirectory(),
             "pegasus-frontend");
     private static final File PEGASUS_CONFIG = new File(Environment.getExternalStorageDirectory(),

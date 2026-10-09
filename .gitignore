@@ -3,7 +3,7 @@
 android-companion/build/
 android-launch-bridge/build/
 unified-android/build/
-android-companion/assets/pegasus-lucent-theme.zip
+android-companion/assets/emufusion-theme.zip
 *.apk
 *.idsig
 *.partial

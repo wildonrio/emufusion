@@ -35,15 +35,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** GitHub-backed theme and APK updater with a small JSON status surface. */
 final class UpdateManager {
     private static final String TAG = "LucentUpdater";
-    private static final String MANIFEST_URL =
-            "https://raw.githubusercontent.com/wildonrio/pegasus-lucent/main/release-manifest.json";
+    // The repository was renamed from pegasus-lucent to emufusion. Both names
+    // stay trusted: GitHub redirects the old name, and before the rename only
+    // the old name resolves. Never drop the legacy entries while installs that
+    // predate the rename may still be updating through this one.
+    private static final String[] MANIFEST_URLS = new String[]{
+            "https://raw.githubusercontent.com/wildonrio/emufusion/main/release-manifest.json",
+            "https://raw.githubusercontent.com/wildonrio/pegasus-lucent/main/release-manifest.json"
+    };
     // The publishing repository owns the immutable release assets. Reading its
     // latest-release record means uploading a new GitHub release is sufficient;
     // the app does not wait for somebody to hand-edit release-manifest.json.
     private static final String[] RELEASE_API_URLS = new String[]{
+            "https://api.github.com/repos/wildonrio/emufusion/releases/latest",
             "https://api.github.com/repos/wildonrio/pegasus-lucent/releases/latest"
     };
     private static final String[] RELEASE_DOWNLOAD_PREFIXES = new String[]{
+            "https://github.com/wildonrio/emufusion/releases/download/",
             "https://github.com/wildonrio/pegasus-lucent/releases/download/"
     };
     private static final String UPDATE_PREFERENCES = "updates-ui";
@@ -277,8 +285,7 @@ final class UpdateManager {
         // Fetch the legacy channel only when it might still have an APK or
         // content update to offer. If both channels fail, propagate the error;
         // an offline check is not evidence that the app is up to date.
-        JSONObject manifest = githubNew ? new JSONObject() : new JSONObject(new String(
-                fetch(MANIFEST_URL, 2L * 1024L * 1024L), StandardCharsets.UTF_8));
+        JSONObject manifest = githubNew ? new JSONObject() : fetchManifest();
         latest = manifest;
         int manifestCode = manifest.optInt("companionVersionCode", (int) currentCode);
         boolean manifestNew = !githubNew && manifestCode > currentCode;
@@ -345,7 +352,7 @@ final class UpdateManager {
         if (themeNew) {
             setStatus("theme", 0.18, "Downloading the latest EmuFusion theme…",
                     appNew, false);
-            File theme = new File(context.getCacheDir(), "pegasus-lucent-theme.zip");
+            File theme = new File(context.getCacheDir(), "emufusion-theme.zip");
             download(manifest.optString("themeZipUrl"), theme, MAX_THEME, themeSha);
             setStatus("theme", 0.62, "Installing the theme update…", appNew, false);
             ThemeInstaller.installZip(theme, remoteTheme);
@@ -398,6 +405,20 @@ final class UpdateManager {
             }
         }
         return null;
+    }
+
+    /** First manifest that loads; rethrows the last failure if none does. */
+    private JSONObject fetchManifest() throws Exception {
+        Exception failure = null;
+        for (String url : MANIFEST_URLS) {
+            try {
+                return new JSONObject(new String(fetch(url, 2L * 1024L * 1024L),
+                        StandardCharsets.UTF_8));
+            } catch (Exception error) {
+                failure = error;
+            }
+        }
+        throw failure;
     }
 
     private static boolean trustedReleaseUrl(String url) {

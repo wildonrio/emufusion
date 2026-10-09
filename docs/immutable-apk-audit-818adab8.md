@@ -14,7 +14,7 @@ Ignoring JAR-v1 signature files, only these APK members differ:
 
 - `lib/arm64-v8a/liblucent_libretro_host.so`
 - `lib/arm64-v8a/liblucent_vulkan_host.so`
-- `assets/pegasus-lucent-theme.zip`
+- `assets/emufusion-theme.zip`
 
 Every decompressed file inside the theme archive is byte-identical. Its outer
 ZIP bytes changed only because the APK rebuild regenerated archive metadata.

@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>Nothing here throws to the caller: a failed fetch yields {@code null}.
  */
 public final class CheatSourceFetcher implements CheatFetch {
-    public static final String USER_AGENT = "Lucent-Cheats/1.0 (+https://github.com/wildonrio/pegasus-lucent)";
+    public static final String USER_AGENT = "Lucent-Cheats/1.0 (+https://github.com/wildonrio/emufusion)";
     public static final long REFRESH_MS = 7L * 24L * 60L * 60L * 1000L;
     public static final long MISS_MS = REFRESH_MS;
     static final int CONNECT_TIMEOUT_MS = 15_000;

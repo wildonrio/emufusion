@@ -21,7 +21,7 @@ the existing evidence.
 
 Workspace:
 
-`/Users/tyleryoung/Code/pegasus-lucent`
+`/Users/tyleryoung/Code/emufusion`
 
 The worktree contains a very large set of pre-existing user/agent changes,
 including many untracked source files. **Do not reset, clean, checkout, or
@@ -31,14 +31,14 @@ hashes rather than `git diff` as the ownership boundary.
 
 Latest built but not yet physically installed schema-39 APK:
 
-`/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-phase2-qualification-fc87b82d3ff1d34a58700652bf67b688b0e8db66416567cd40e943304aab0189.apk`
+`/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-phase2-qualification-fc87b82d3ff1d34a58700652bf67b688b0e8db66416567cd40e943304aab0189.apk`
 
 SHA-256: `fc87b82d3ff1d34a58700652bf67b688b0e8db66416567cd40e943304aab0189`
 
 Build command:
 
 ```sh
-cd /Users/tyleryoung/Code/pegasus-lucent/unified-android
+cd /Users/tyleryoung/Code/emufusion/unified-android
 LUCENT_INCLUDE_PHASE2_PPSSPP=1 LUCENT_REUSE_PHASE2_PPSSPP=1 ./build.sh
 ```
 

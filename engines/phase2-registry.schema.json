@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://wildonrio.github.io/pegasus-lucent/engines/phase2-registry.schema.json",
+  "$id": "https://wildonrio.github.io/emufusion/engines/phase2-registry.schema.json",
   "title": "Lucent Phase 2 engine qualification registry",
   "type": "object",
   "additionalProperties": false,

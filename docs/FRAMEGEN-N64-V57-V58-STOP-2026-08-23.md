@@ -43,7 +43,7 @@ These rules supersede older tens-tier and aspirational `50/100` behavior.
 - adb:
   `/Users/tyleryoung/Code/cemu/Cemu-0.5/android-sdk/platform-tools/adb`
 - Installed known v51 APK:
-  `/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-6d3f874883a9fa9ad7e1fab5edbc66a34ebd6f82ac618db47b8238ccb5473a3f.apk`
+  `/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-6d3f874883a9fa9ad7e1fab5edbc66a34ebd6f82ac618db47b8238ccb5473a3f.apk`
 - APK SHA-256:
   `6d3f874883a9fa9ad7e1fab5edbc66a34ebd6f82ac618db47b8238ccb5473a3f`
 - The proof setting was deleted and the app was force-stopped after restoring

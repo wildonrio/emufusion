@@ -188,7 +188,7 @@ not fund that decision.
 The resulting r14 qualification APK was:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-02c06c8330edb37fc1dc306254108ab98970c9410714191d3487cc8658852fa5.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-02c06c8330edb37fc1dc306254108ab98970c9410714191d3487cc8658852fa5.apk
 ```
 
 Evidence directory:
@@ -256,7 +256,7 @@ already handed scan and retains the separate scan-minus-2-ms hard cutoff.
 The resulting r16 qualification APK was:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-3e8d3fc0ae5a818edf39b60bbfac708c69973317fb7de17efc765762970b96eb.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-3e8d3fc0ae5a818edf39b60bbfac708c69973317fb7de17efc765762970b96eb.apk
 ```
 
 Evidence directory:
@@ -311,7 +311,7 @@ mandatory before product qualification.
 r17 used APK:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-d5d0d4ec9f19037ab350cab995cf9e76fd469cc5ba1bab9c9863460c5c8b49d0.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-d5d0d4ec9f19037ab350cab995cf9e76fd469cc5ba1bab9c9863460c5c8b49d0.apk
 ```
 
 The explicit-drop correction worked: the session survived startup and the
@@ -339,7 +339,7 @@ physical test until that distinction is explicit in source and host tests.
 r18 used APK:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-9b3ae9265105205e2e00d4093706e91f250c62397776bf74d063e94d005f70ea.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-9b3ae9265105205e2e00d4093706e91f250c62397776bf74d063e94d005f70ea.apk
 ```
 
 It froze one returned actual-present anchor instead of re-anchoring every row.
@@ -386,7 +386,7 @@ physical question is ready.
 The full-core qualification APK was:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-c9371f9d3582677ff85c96ef370318a57249ca3fe16b36eca8fc37ac411cc7ac.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-c9371f9d3582677ff85c96ef370318a57249ca3fe16b36eca8fc37ac411cc7ac.apk
 ```
 
 Evidence:
@@ -436,7 +436,7 @@ Android reported `mWakefulness=Asleep` with both displays `OFF`.
 The follow-up APK was:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-2f034659626fcc4e3f9d7bfa7bf3dd56c4da37bc57245aaf271f9cfa3cc2b54d.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-2f034659626fcc4e3f9d7bfa7bf3dd56c4da37bc57245aaf271f9cfa3cc2b54d.apk
 ```
 
 Evidence:
@@ -471,7 +471,7 @@ were verified OFF with `mWakefulness=Asleep`.
 The bounded diagnostic APK was:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-beaea87bec7cfef84042dd500e4b1996885b3161b2baba7d3588e3f1cccdaae6.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-beaea87bec7cfef84042dd500e4b1996885b3161b2baba7d3588e3f1cccdaae6.apk
 ```
 
 Evidence:
@@ -569,7 +569,7 @@ qualification APK build: PASS
 Built artifact:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-4a7dd74ecbb628e9375e3a63eb27f3304fc171b562908d4b2e992b3805114575.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-4a7dd74ecbb628e9375e3a63eb27f3304fc171b562908d4b2e992b3805114575.apk
 SHA-256 4a7dd74ecbb628e9375e3a63eb27f3304fc171b562908d4b2e992b3805114575
 ```
 
@@ -660,7 +660,7 @@ qualification APK build: PASS
 Built artifact for the next bounded physical check only:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-093dcfd0a864f26a12639280672668f1a46c110e10275952236117c1016a17ef.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-093dcfd0a864f26a12639280672668f1a46c110e10275952236117c1016a17ef.apk
 SHA-256 093dcfd0a864f26a12639280672668f1a46c110e10275952236117c1016a17ef
 ```
 
@@ -823,7 +823,7 @@ The rebuilt artifact that actually contains the N64 route and was used for r28
 is:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-dd8d6936b3cced782e3800906adb86455d2a22c7bb359a4267389ecb08626e6c.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-dd8d6936b3cced782e3800906adb86455d2a22c7bb359a4267389ecb08626e6c.apk
 SHA-256 dd8d6936b3cced782e3800906adb86455d2a22c7bb359a4267389ecb08626e6c
 ```
 
@@ -898,7 +898,7 @@ Evidence:
 Artifact:
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-fe9ffc2184dddce25ca27b96a2fa0f98c57485cb22ad5b97ab795a6426f4b84f.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-fe9ffc2184dddce25ca27b96a2fa0f98c57485cb22ad5b97ab795a6426f4b84f.apk
 SHA-256 fe9ffc2184dddce25ca27b96a2fa0f98c57485cb22ad5b97ab795a6426f4b84f
 ```
 
@@ -976,7 +976,7 @@ qualification APK build/Javac/package: PASS
 Frozen bounded-test artifact (not installed):
 
 ```text
-/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-rife-framegen-qualification-ca8e62e5f1b07b763e2113ed01cb22cdd5fc432327271ce0c2012ab010da0191.apk
+/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-rife-framegen-qualification-ca8e62e5f1b07b763e2113ed01cb22cdd5fc432327271ce0c2012ab010da0191.apk
 SHA-256 ca8e62e5f1b07b763e2113ed01cb22cdd5fc432327271ce0c2012ab010da0191
 ```
 

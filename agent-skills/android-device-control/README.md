@@ -11,8 +11,8 @@ Clone or update the repository, then copy the complete skill directory into
 your personal Codex skills folder:
 
 ```sh
-git clone https://github.com/wildonrio/pegasus-lucent.git
-cd pegasus-lucent
+git clone https://github.com/wildonrio/emufusion.git
+cd emufusion
 mkdir -p "$HOME/.codex/skills"
 cp -R agent-skills/android-device-control "$HOME/.codex/skills/"
 chmod +x "$HOME/.codex/skills/android-device-control/scripts/androidctl"

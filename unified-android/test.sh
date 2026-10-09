@@ -24,6 +24,8 @@ SOURCES=$(find "$PROJECT_DIR/src/com/thorium/lucent/state" \
     ! -name 'RightStickMotionBridge.java' -print)
 SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/cheats/CheatArchive.java"
 SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/DenseGpuTimer.java"
+SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/FullResolutionFrameReadback.java"
+SOURCES="$SOURCES $PROJECT_DIR/test-stubs/android/opengl/GLES20.java"
 # Downloaded cheat sources: parsers, identity, codec, slicer are pure Java;
 # DownloadedCheatFile is the Android binding and is compiled by build.sh.
 SOURCES="$SOURCES $(find "$PROJECT_DIR/src/com/thorium/preview/cheats/sources" \
@@ -129,6 +131,8 @@ SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/WidescreenHackTable.
     com.thorium.lucent.video.AdaptiveFrameRateControllerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.DenseGpuTimerMathTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.preview.game.FullResolutionFrameReadbackTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.lucent.cheats.CheatModelTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \

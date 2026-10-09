@@ -109,7 +109,7 @@ def render(repository: str, issues: list[dict]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--repo", default="wildonrio/pegasus-lucent")
+    parser.add_argument("--repo", default="wildonrio/emufusion")
     parser.add_argument(
         "--output",
         type=pathlib.Path,

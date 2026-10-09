@@ -34,7 +34,7 @@ Do not publish the debug qualification APK described below.
 
 ## Read first and preserve
 
-Repository: `/Users/tyleryoung/Code/pegasus-lucent`.
+Repository: `/Users/tyleryoung/Code/emufusion`.
 HEAD at handover: `e21215170f5f181e1d4a1f3d4032b2af99ecc003`.
 There were 1,381 dirty/untracked status entries before this handover. HEAD is not
 the complete implementation. Other agents' edits are mixed into the working tree.
@@ -63,7 +63,7 @@ requires the Thor. The outgoing agent is stopped at the owner's request.
 Latest complete normal-source **debug qualification** APK, version 3.2.16,
 versionCode 90, package `com.thorium.preview`:
 
-`/Users/tyleryoung/Code/pegasus-lucent/unified-android/build/lucent-3.2.16-lsfg-framegen-qualification-21a40411b19a22cc928a5d021e337160f79855837fecc19b4828948868eee301.apk`
+`/Users/tyleryoung/Code/emufusion/unified-android/build/lucent-3.2.16-lsfg-framegen-qualification-21a40411b19a22cc928a5d021e337160f79855837fecc19b4828948868eee301.apk`
 
 SHA-256:
 `21a40411b19a22cc928a5d021e337160f79855837fecc19b4828948868eee301`.
@@ -348,7 +348,7 @@ tests; don't replace them with string-only assertions to obtain green results.
 
 ## Prompt for the replacement agent
 
-> Work in /Users/tyleryoung/Code/pegasus-lucent. Read AGENTS.md and
+> Work in /Users/tyleryoung/Code/emufusion. Read AGENTS.md and
 > docs/HANDOVER-2026-10-07-ANDROID-PORTABILITY.md first. Take over the unfinished
 > EmuFusion clean-phone portability goal. Preserve all existing edits. Start by
 > reusing the retained headless landscape Android 16 simulator and the verified

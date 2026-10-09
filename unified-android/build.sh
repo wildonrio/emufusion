@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.17
-VERSION_CODE=91
+VERSION_NAME=3.2.18
+VERSION_CODE=92
 
 case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -495,8 +495,8 @@ if [ "$ACTUAL_BASE_SHA" != "$BASE_SHA256" ]; then
 fi
 
 # Build the exact theme delivered by the unified package.
-THEME_ARCHIVE="$ROOT_DIR/android-companion/assets/pegasus-lucent-theme.zip"
-THEME_FINGERPRINT="$ROOT_DIR/android-companion/assets/pegasus-lucent-theme.sha256"
+THEME_ARCHIVE="$ROOT_DIR/android-companion/assets/emufusion-theme.zip"
+THEME_FINGERPRINT="$ROOT_DIR/android-companion/assets/emufusion-theme.sha256"
 rm -f "$THEME_ARCHIVE.partial.zip"
 (cd "$ROOT_DIR/theme" && /usr/bin/zip -q -r "$THEME_ARCHIVE.partial.zip" .)
 mv "$THEME_ARCHIVE.partial.zip" "$THEME_ARCHIVE"
@@ -667,7 +667,7 @@ cp "$ROOT_DIR/android-companion/res/raw/"* "$DECODED/res/raw/"
 cp "$ROOT_DIR/android-companion/res/xml/"* "$DECODED/res/xml/"
 cp "$APP_ICON_SOURCE" "$DECODED/res/drawable/lucent_icon.png"
 cp "$THEME_ARCHIVE" "$THEME_FINGERPRINT" \
-    "$ROOT_DIR/android-companion/assets/pegasus-lucent-version.txt" \
+    "$ROOT_DIR/android-companion/assets/emufusion-version.txt" \
     "$DECODED/assets/"
 # Cheat catalogue. Data, not code: CheatCatalog reads it at launch and a user
 # file under files/cheats/ overrides any game in it.

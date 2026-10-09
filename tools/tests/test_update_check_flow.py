@@ -26,6 +26,9 @@ import java.util.*;
 public final class UpdateCheckFlowTest {
     static final String TAG = "test";
     static final String MANIFEST_URL = "fixture:manifest";
+    // The renamed repository is tried first; it is absent here, so every
+    // manifest scenario also exercises the fallback to the legacy name.
+    static final String[] MANIFEST_URLS = {"fixture:manifest-renamed", MANIFEST_URL};
     static final String[] RELEASE_API_URLS = {"fixture:release"};
     static final String UPDATE_PREFERENCES = "fixture";
     static final long MAX_THEME=1000, MAX_CHEATS=1000, MAX_APK=1000;
@@ -229,6 +232,8 @@ class UpdateCheckFlowTests(unittest.TestCase):
                        source.index("    private static AppRelease appRelease(")]
         comparison = source[source.index("    private static boolean isVersionNewer("):
                             source.index("    private File updateFile()")]
+        comparison += source[source.index("    /** First manifest that loads;"):
+                             source.index("    private static boolean trustedReleaseUrl(")]
         cls.work = tempfile.TemporaryDirectory(prefix="emufusion-update-flow-")
         cls.addClassCleanup(cls.work.cleanup)
         cls.env = dict(os.environ, JAVA_TOOL_OPTIONS=

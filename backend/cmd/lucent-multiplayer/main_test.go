@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/pegasus-lucent/multiplayer-backend/internal/hub"
-	"github.com/pegasus-lucent/multiplayer-backend/internal/protocol"
-	"github.com/pegasus-lucent/multiplayer-backend/internal/store"
+	"github.com/emufusion/multiplayer-backend/internal/hub"
+	"github.com/emufusion/multiplayer-backend/internal/protocol"
+	"github.com/emufusion/multiplayer-backend/internal/store"
 )
 
 // TestRegisterAndConnectEndToEnd exercises the real HTTP surface a device

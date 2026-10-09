@@ -35,7 +35,7 @@ Two historic claims in handover C were FALSE, discovered by audit:
 ## The standard run command
 
 ```sh
-cd /Users/tyleryoung/Code/pegasus-lucent
+cd /Users/tyleryoung/Code/emufusion
 ADB=/Users/tyleryoung/.codex/tools/android-platform-tools/adb
 APK=$(ls -t unified-android/build/lucent-3.2.16-phase2-phase3-qualification-*.apk | head -1)
 HASH=$(basename $APK | grep -oE "[0-9a-f]{64}")
