@@ -109,6 +109,8 @@ struct ControlledCondition {
 };
 struct FixtureCpuSet {};
 #define cpu_set_t FixtureCpuSet
+#undef CPU_ZERO
+#undef CPU_SET
 #define CPU_ZERO(p) ((void)(p))
 #define CPU_SET(cpu,p) ((void)(cpu),(void)(p))
 #define pthread_self() 0

@@ -1,7 +1,11 @@
 import sys
 from pathlib import Path
 import unittest
-import torch
+
+try:
+    import torch
+except ImportError:  # PyTorch is an optional, very large research dependency.
+    raise unittest.SkipTest("PyTorch is not installed")
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from fold_rife_residual_scale import FoldedResidual
 

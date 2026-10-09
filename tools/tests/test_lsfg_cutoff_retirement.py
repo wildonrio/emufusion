@@ -60,6 +60,11 @@ class LsfgCutoffRetirementTest(unittest.TestCase):
     }
 '''
         source = r'''
+// glibc declares poll() with access(write_only); GCC then flags this mock
+// reading pfd->fd. Clang has no such warning.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include <algorithm>
 #include <array>
 #include <cassert>
