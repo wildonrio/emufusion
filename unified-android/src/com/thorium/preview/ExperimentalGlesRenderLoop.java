@@ -153,6 +153,13 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
     /* Render-thread state. */
     private Host host;
     private boolean ready;
+    /**
+     * Set once initialize() has finished, successfully or not. Until then a
+     * call queues behind the core and game load, which on a slow phone (or a
+     * loaded emulator) can exceed the normal 10 s call budget; timing out
+     * there started teardown while the load was still finishing.
+     */
+    private volatile boolean initializeFinished;
     private boolean resumeRequested;
     private boolean surfaceAttached;
     /** Identity of the Surface that currently owns GL presentation state. */
@@ -1010,8 +1017,10 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
             if (audioPaced) Log.i(TAG,
                     "Render-driven core uses generated PCM duration for guest pacing");
             ready = true;
+            initializeFinished = true;
             listener.onReady();
         } catch (Throwable failure) {
+            initializeFinished = true;
             reportError(failure);
         }
     }
@@ -1341,7 +1350,7 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
         });
         executor.execute(task);
         try {
-            return task.get(10, TimeUnit.SECONDS);
+            return task.get(initializeFinished ? 10 : 60, TimeUnit.SECONDS);
         } catch (TimeoutException timeout) {
             task.cancel(false);
             throw new IllegalStateException("timed out waiting for experimental GLES thread",

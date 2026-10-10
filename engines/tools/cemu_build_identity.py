@@ -33,6 +33,23 @@ def locked_sources(root, lock):
     return sources
 
 
+def relocated(recorded, root, lock):
+    """Receipt hashes keyed by today's paths.
+
+    An input inside this repository that was recorded under an earlier
+    checkout location (the folder was renamed from pegasus-lucent to
+    emufusion) is matched by its repository-relative path. Hashes are not
+    touched, and inputs in external trees (pathIsRelativeTo) must not move.
+    """
+    in_repo = {'/' + row['path']: str((root / row['path']).resolve())
+               for row in lock['patches'] if not row.get('pathIsRelativeTo')}
+    result = {}
+    for key, value in recorded.items():
+        target = next((path for suffix, path in in_repo.items() if key.endswith(suffix)), key)
+        result[target] = value
+    return result
+
+
 def verify(root, core):
     root = root.resolve()
     lock = json.loads((root / 'engines/cemu-source-lock.json').read_text())
@@ -44,7 +61,7 @@ def verify(root, core):
     if (data.get('schemaVersion') != 1 or data.get('sha256') != actual or
             lock['artifact']['sha256'] != actual):
         raise ValueError('Wii U staged binary does not match its build receipt/source lock')
-    if data.get('sourceHashes') != locked_sources(root, lock):
+    if relocated(data.get('sourceHashes') or {}, root, lock) != locked_sources(root, lock):
         raise ValueError('Wii U binary predates the current locked sources; rebuild before packaging')
 
 

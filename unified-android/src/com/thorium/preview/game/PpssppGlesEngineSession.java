@@ -1400,7 +1400,19 @@ final class PpssppGlesEngineSession implements EngineSession,
     private Throwable saveQuickResume(boolean requireCommit) {
         try {
             ExperimentalGlesRenderLoop active = renderLoop;
-            if (!prepared || active == null || vault == null || identity == null) {
+            if (!prepared || active == null) {
+                // No engine is running: preparation failed or never finished
+                // (an invalid disc, an unavailable renderer), or the renderer
+                // already stopped. There is no live state to protect and the
+                // previous Quick Resume is untouched, so a stop must not wait
+                // for a save that cannot exist (as NativeAdapterEngineSession
+                // does for an unstarted guest). Refusing here retained the
+                // failed launch and blocked every later game until restart.
+                Log.i(TAG, "No live engine state to checkpoint engine=" + entry.id +
+                        " marker=unstarted-no-save");
+                return null;
+            }
+            if (vault == null || identity == null) {
                 return requireCommit
                         ? new IllegalStateException("engine state vault is not ready") : null;
             }

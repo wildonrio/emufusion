@@ -64,6 +64,17 @@ class CemuBuildIdentityTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'predates'):
             IDENTITY.verify(self.root, self.core)
 
+    def test_receipt_from_an_earlier_checkout_location(self):
+        # ~/Code/pegasus-lucent became ~/Code/emufusion on 2026-10-09.
+        self.receipt['sourceHashes'] = {'/old/checkout/engine.cpp': IDENTITY.sha256(self.source)}
+        self.save()
+        IDENTITY.verify(self.root, self.core)
+        self.source.write_text('edited after the move')
+        self.lock['patches'][0]['sha256'] = IDENTITY.sha256(self.source)
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'predates'):
+            IDENTITY.verify(self.root, self.core)
+
     def test_external_tree_location_used(self):
         self.lock['patches'][0].update(pathIsRelativeTo=str(self.root))
         self.save()
