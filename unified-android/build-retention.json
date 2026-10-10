@@ -1,25 +1,8 @@
 {
-  "keep_per_flavor": 2,
+  "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "d019484114584eb743999e2e4d465af0e6a126b925011faa2bc6de0533f1c750": "Candidate 3.2.20 (94): a game that fails to start (damaged disc, slow first load) no longer blocks every later launch; GLES-core startup calls wait up to 60 s for the core/game load. Natives = 9ac7 except liblucent_lsfg_qualification.so (rebuilt in the renamed checkout; embedded source paths only).",
-    "9ac79d95a91680388ca73e32cab47eac7ac3b6a15bd568fb7646a32fd0e5e12d": "Candidate 3.2.19 (93): phone-landscape polish (window extends into the display cutout, pause menu fits short screens with a one-line title, folder-game titles from PARAM.SFO, Settings shows the installed app version, aPS3e interface strings), updater retries 10 min after a failed check. Natives identical to 3e0b. Not yet published.",
-    "3e0b268f4d91fa4a851a1b5b50b2b36c2376e9e08b8e4d78dab23d9942710444": "Current candidate 3.2.18 (92): repository renamed pegasus-lucent -> emufusion (updater trusts both names), internal assets emufusion-*, otherwise identical natives to 25332/9dd2. Debug-signed personal build for wildonrio/emufusion releases.",
-    "9dd272e8310922b4cdd1ac9d4c6596b261a25032a53d9f4e200964e6687a910b": "Thor-installed 3.2.17 (91) and rollback for 3e0b: Current complete normal candidate 3.2.17 (91): automatic GitHub app updates on every build (deferred during gameplay), fusion loading video 3e50fc59, footer legend fit for narrow windows. Same natives as 25332 (BlastEm fix vs 21a4); classes2.dex and assets differ. October9 clean-phone PSP/Switch (Thor-owned inputs) checks. 25332 kept as rollback. Debug-signed personal build.",
-    "25332a8dcf03586a0314c456e93465008234d8d24ff7b96497aa30512026aa46": "Rollback for 9dd2: Current complete normal candidate: non-blocking UI-thread LibretroHost input/pause, BlastEm frame-end rebase hang fix (core e479c08d) and bounded wedged-exit frontend restart. Same natives as fda1; classes2.dex only. October9 clean-phone retest; 21a4 kept as rollback. Debug/local qualification, not release.",
-    "2d4e2c1e7f2cd21c9143ba02014bf6232f0d01123d1f7d7ff9d28bb66d404e5f": "Current normal complete portable qualification APK with verified PS3 input-lifetime fix, October7. Fresh single-screen install survey next. Retain155 rollback during qualification; not public release.",
-    "155f9e7fcbbf8bc3f8b4cdd9658b46db72776217ca6c3f72be5e04ba96b94769": "Current complete candidate for missing PS3/Switch/WiiU L3/R3 input wiring; native builds and package gates verified October7, runtime trial pending. Keep0b68 rollback until trial closes. Not a public release.",
-    "18f3043423957378b629ccdae9e2119238605a8c31f8d5036c1082dd7af11f96": "Existing reference required to recover four compressed APK deltas in docs/qa/android-portability-2026-10-05-full-build/archived-apks.json; preserve until those dependent historical archives are retired together. This is not an additional APK copy.",
-    "0b68df393681a1144874befb04a1927426fb23bf0551e7cfba32df312d009120": "Current complete portable qualification APK with Wii U phone TV/GamePad and stylus correction plus PS3 face labels; October7 bounded4KiB WiiU display/touch/gameplay/exit validation passed. Other systems not all retested; no public release.",
-    "9998e201d2bda021c372303a73bd4fbc7a02486f3ef6043377e73898025bac27": "Compressed recovery for 172 removed duplicate decoded libraries from the retired September9 PS3 log-access packaging trial. Exact original paths/member hashes recorded in October7 retired-output-compaction receipt. Keep this 182MiB archive instead of 1.23GiB of extracted duplicates; not a deployment baseline.",
-    "ee7e2abb1e19d9bff3bb64445b04287a844676ffc68b7890e7ea00fcdf779fdb": "Current full portable build with N64 phone C-arrow correction; bounded simulator validation October7. Reuses all normal3f21 emulator natives; qualification only, not public release.",
-    "3f21ad9470f96d4d3a1500f2347fdce9b3c5ca18a38d0e4e6f45a8dcc67adcec": "Latest normal portable full build with tested SPU argument-map fix; bounded16KiB Shadow gameplay/resume/Exit pass, October7",
-    "6cee9fce77b7ebff4f079e8f1a671c9310ef3b5afd8fd1c5f66d4d64783e43b1": "Previous normal full portable candidate and exact pre-argument-map rollback/comparison; onlyPS3 executable differs versus3f21",
-    "59521d8bbff477d03658f54d49b4e2998c6a9272210186ca89c965c531334924": "16KiB simulator rollback and retained narrow-pointer normal build, October 6; local qualification only",
-    "f39419d9b34670dfb9dd96d8c42eb78f18866a76915787f5c164cedbc63f1e07": "4 KiB simulator rollback; PS3 write-watch finished.json",
-    "9be4fbd89c415b398d9dadbc30eacb2651bb15932834286e73b0208d9e6e2dc8": "16 KiB simulator rollback; GC shared-PCM finished.json",
-    "e8aefd6a1485b505eb93ec0e66038751e42d12efb4e81e4388580a655a16fd07": "Last documented physical Thor installation; retain without waking device",
-    "7ba8d787f58e2698f1c3d056e13f0c1eb415be5d063c6e1a3f8e5b1ee37c6591": "Published release-manifest companion APK"
+    "d019484114584eb743999e2e4d465af0e6a126b925011faa2bc6de0533f1c750": "Current release 3.2.20 (94). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
