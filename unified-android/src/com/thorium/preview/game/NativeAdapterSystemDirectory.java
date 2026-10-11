@@ -407,14 +407,15 @@ final class NativeAdapterSystemDirectory {
         }
         if (!missing) return "";
         if (layout == SWITCH_LAYOUT)
-            return "Switch setup is incomplete. Copy your own prod.keys to " +
-                    "ROMs/switch/Keys and any firmware required by this game to " +
-                    "ROMs/switch, then refresh the library and try again.";
+            return "Switch setup is incomplete. Copy your own prod.keys (and any " +
+                    "Firmware zip this game needs) anywhere on internal storage or " +
+                    "the SD card, then refresh the library and try again.";
         if (layout == WIIU_LAYOUT)
-            return "Wii U setup is incomplete. Copy your disc keys.txt to " +
-                    "ROMs/wiiu/Keys, then refresh the library and try again.";
+            return "Wii U setup is incomplete. Copy your disc keys.txt anywhere on " +
+                    "internal storage or the SD card, then refresh the library and try again.";
         return "PlayStation 3 setup is incomplete. Copy your PS3UPDAT.PUP system " +
-                "software to ROMs/ps3/Firmware, then refresh the library and try again.";
+                "software anywhere on internal storage or the SD card, then refresh " +
+                "the library and try again.";
     }
 
     private static Layout layoutFor(String engineId, String systemId) {

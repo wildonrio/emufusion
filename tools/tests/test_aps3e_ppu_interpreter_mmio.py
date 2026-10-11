@@ -36,6 +36,8 @@ class InterpreterMMIOTests(unittest.TestCase):
             self.assertFalse(header.exists())
 
     def test_actual_header_old_failure_new_pass_nonarm_unchanged(self):
+        if not (QA / 'mmio_test.cpp').is_file():
+            self.skipTest('local-only input absent: ' + str(QA / 'mmio_test.cpp'))
         with tempfile.TemporaryDirectory(prefix='aps3e-mmio-code-') as directory:
             for name, flags, expected in (
                 ('old', ['-DARCH_ARM64', '-DOLD_DIRECT_MEMORY'], 2),

@@ -242,7 +242,9 @@ class RuntimeMappingTests(unittest.TestCase):
         for system in ("mastersystem", "gamegear", "sg1000"):
             table = self.tables[system]
             self.assertEqual(("1", 0), table["SOUTH"])
-            self.assertEqual(("2", 8), table["EAST"])
+            self.assertEqual(("1", 0), table["EAST"])
+            self.assertEqual(("2", 8), table["WEST"])
+            self.assertEqual(("2", 8), table["NORTH"])
             self.assertEqual(("RESET", 2), table["L3"])
             self.assertNotIn("SELECT", table)
 
@@ -270,21 +272,21 @@ class RuntimeMappingTests(unittest.TestCase):
         self.assertEqual(("A", 0), self.tables["dreamcast"]["SOUTH"])
         self.assertEqual(("B", 8), self.tables["dreamcast"]["EAST"])
 
-    def test_game_boy_uses_the_thor_a_and_y_buttons(self):
-        for system in ("gb", "gbc"):
+    def test_two_button_systems_put_the_second_button_on_the_left(self):
+        # Owner, 2026-10-10: A under the thumb (bottom, doubled on the right),
+        # the second button on the LEFT face button (Xbox X / Nintendo Y),
+        # doubled on top.
+        for system in ("gb", "gbc", "gba", "gameboyadvance"):
+            self.assertEqual(("A", 8), self.tables[system]["SOUTH"])
             self.assertEqual(("A", 8), self.tables[system]["EAST"])
             self.assertEqual(("B", 0), self.tables[system]["WEST"])
-            self.assertNotIn("SOUTH", self.tables[system])
-        # GBA keeps its established bottom/right pair.
-        for system in ("gba", "gameboyadvance"):
-            self.assertEqual(("A", 8), self.tables[system]["SOUTH"])
-            self.assertEqual(("B", 0), self.tables[system]["EAST"])
+            self.assertEqual(("B", 0), self.tables[system]["NORTH"])
         # Beetle PCE Fast reads I on A(8) and II on B(0).
         self.assertEqual(("I", 8), self.tables["pcengine"]["SOUTH"])
         self.assertEqual(("II", 0), self.tables["pcengine"]["EAST"])
         # Beetle NeoPop reads Neo Geo Pocket A on B(0) and B on A(8).
         self.assertEqual(("A", 0), self.tables["ngp"]["SOUTH"])
-        self.assertEqual(("B", 8), self.tables["ngp"]["EAST"])
+        self.assertEqual(("B", 8), self.tables["ngp"]["WEST"])
         # Fuse reads RetroPad B(0) as joystick Up, not Fire; sending the bottom
         # button there walked the player upwards instead of firing.
         self.assertEqual(("FIRE", 8), self.tables["zxspectrum"]["SOUTH"])
@@ -305,8 +307,8 @@ class RuntimeMappingTests(unittest.TestCase):
         self.assertNotIn("SELECT", gamecube)
         wii = self.tables["wii"]
         self.assertEqual(8, wii["SOUTH"][1])
-        self.assertEqual(0, wii["EAST"][1])
-        self.assertEqual(9, wii["WEST"][1])
+        self.assertEqual(0, wii["WEST"][1])   # Wii B (run) on the left face button
+        self.assertEqual(9, wii["EAST"][1])
         self.assertEqual(1, wii["NORTH"][1])
         self.assertEqual(13, wii["R2"][1])
 
@@ -315,7 +317,8 @@ class RuntimeMappingTests(unittest.TestCase):
         # X/Y are C/Z, Start/Select are 1/2, and L/R remain minus/plus.
         for system in ("wii", "nintendowii"):
             wii = self.tables[system]
-            self.assertEqual(("NUNCHUK_C", 9), wii["WEST"])
+            self.assertEqual(("B", 0), wii["WEST"])
+            self.assertEqual(("NUNCHUK_C", 9), wii["EAST"])
             self.assertEqual(("NUNCHUK_Z", 1), wii["NORTH"])
             self.assertEqual(("1", 3), wii["START"])
             self.assertEqual(("2", 2), wii["SELECT"])

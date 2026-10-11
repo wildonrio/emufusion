@@ -146,8 +146,8 @@ public final class BootVideoOverlay {
         FrameLayout container = new FrameLayout(host);
         container.setBackgroundColor(Color.BLACK);
         TextureView surface = new TextureView(host);
-        // The fitted texture may leave bars; let the black container show
-        // through instead of promising opaque pixels across the whole view.
+        // The filled texture covers the view; the black container only shows
+        // before the first frame arrives.
         surface.setOpaque(false);
         container.addView(surface, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -202,12 +202,17 @@ public final class BootVideoOverlay {
         }
     }
 
-    /** Undo TextureView's default stretch, fitting the entire video without crop. */
+    /**
+     * Undo TextureView's default stretch and fill the whole screen without
+     * distortion, cropping the overflow equally from both sides. Phones are
+     * 16:9 to 22:9 and tablets 16:10, so fitting left black bars on most
+     * devices; the video keeps its subject inside the central safe area.
+     */
     private static void fitVideo(TextureView view, int videoWidth, int videoHeight) {
         int width = view.getWidth();
         int height = view.getHeight();
         if (width <= 0 || height <= 0 || videoWidth <= 0 || videoHeight <= 0) return;
-        float scale = Math.min((float) width / videoWidth, (float) height / videoHeight);
+        float scale = Math.max((float) width / videoWidth, (float) height / videoHeight);
         Matrix transform = new Matrix();
         // TextureView initially maps the decoded buffer to the whole view.
         // These factors undo that nonuniform mapping around the view center.

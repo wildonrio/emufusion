@@ -33,7 +33,9 @@ import java.util.Set;
  *     goes to {@code L1 -> NORTH -> R1}: the Thor has no second face row, and
  *     those three sit up-and-over from their partners.</li>
  * <li>A <b>two-button</b> console puts its primary action on {@code SOUTH},
- *     where the thumb rests, and the secondary on {@code EAST}.</li>
+ *     where the thumb rests (doubled on {@code EAST}, the button printed A on
+ *     Nintendo-style pads), and the secondary on {@code WEST} (doubled on
+ *     {@code NORTH}) — Xbox X / Nintendo Y, where run lives in platformers.</li>
  * <li>Console switches that are not pad buttons at all — Reset, difficulty,
  *     coin — go to controls no thumb rests on, never to {@code SOUTH} or
  *     {@code EAST}.</li>
@@ -139,13 +141,16 @@ public final class SystemControlLayouts {
                 .console("A", "B", "START", "SELECT"),
                 "nes", "famicom");
 
-        // SameBoy (verified): A=8, B=0. On Thor, the printed A button is the
-        // right face button and printed Y is the left face button. Keep those
-        // physical labels meaningful: Thor A presses Game Boy A and Thor Y
-        // presses Game Boy B.
+        // SameBoy (verified): A=8, B=0. Two-button rule (owner, 2026-10-10):
+        // the action button is under the thumb (bottom, and the right button
+        // printed A on Nintendo-style pads) and the second button is on the
+        // LEFT (Xbox X / Nintendo Y), like run in Super Mario Land. The top
+        // button doubles the second so the whole cluster is useful.
         add(out, new Layout().dpad()
+                .put(CanonicalControl.SOUTH, "A", RP_A)
                 .put(CanonicalControl.EAST, "A", RP_A)
                 .put(CanonicalControl.WEST, "B", RP_B)
+                .put(CanonicalControl.NORTH, "B", RP_B)
                 .put(CanonicalControl.START, "START", RP_START)
                 .put(CanonicalControl.SELECT, "SELECT", RP_SELECT)
                 .console("A", "B", "START", "SELECT"),
@@ -153,9 +158,12 @@ public final class SystemControlLayouts {
 
         // mGBA (verified): A=8, B=0, L=10, R=11, and L3/R3 drive the Boktai
         // cartridge's solar sensor, the only other input a GBA accepts.
+        // Two-button rule: A bottom (and right), B on the left (and top).
         add(out, new Layout().dpad()
                 .put(CanonicalControl.SOUTH, "A", RP_A)
-                .put(CanonicalControl.EAST, "B", RP_B)
+                .put(CanonicalControl.EAST, "A", RP_A)
+                .put(CanonicalControl.WEST, "B", RP_B)
+                .put(CanonicalControl.NORTH, "B", RP_B)
                 .put(CanonicalControl.L1, "L", RP_L)
                 .put(CanonicalControl.R1, "R", RP_R)
                 .put(CanonicalControl.L3, "SOLAR_DARKEN", RP_L3)
@@ -188,7 +196,9 @@ public final class SystemControlLayouts {
         // convention and the second D-pad rides the right stick.
         add(out, new Layout().dpad()
                 .put(CanonicalControl.SOUTH, "A", RP_A)
-                .put(CanonicalControl.EAST, "B", RP_B)
+                .put(CanonicalControl.EAST, "A", RP_A)
+                .put(CanonicalControl.WEST, "B", RP_B)
+                .put(CanonicalControl.NORTH, "B", RP_B)
                 .put(CanonicalControl.L1, "L", RP_L)
                 .put(CanonicalControl.R1, "R", RP_R)
                 .put(CanonicalControl.START, "START", RP_START)
@@ -220,9 +230,12 @@ public final class SystemControlLayouts {
         // Gearsystem (verified): B(0)="1", A(8)="2", START(3)="Start" and
         // SELECT(2) is the console's Reset switch, which is why Reset is on the
         // left stick click and EmuFusion's Select tap reaches nothing here.
+        // Two-button rule: 1 bottom (and right), 2 on the left (and top).
         add(out, new Layout().dpad()
                 .put(CanonicalControl.SOUTH, "1", RP_B)
-                .put(CanonicalControl.EAST, "2", RP_A)
+                .put(CanonicalControl.EAST, "1", RP_B)
+                .put(CanonicalControl.WEST, "2", RP_A)
+                .put(CanonicalControl.NORTH, "2", RP_A)
                 .put(CanonicalControl.START, "START", RP_START)
                 .put(CanonicalControl.L3, "RESET", RP_SELECT)
                 .console("1", "2", "START", "RESET"),
@@ -280,7 +293,9 @@ public final class SystemControlLayouts {
         // hardware and is the action button, so the row falls on SOUTH, EAST.
         add(out, new Layout().dpad()
                 .put(CanonicalControl.SOUTH, "A", RP_B)
-                .put(CanonicalControl.EAST, "B", RP_A)
+                .put(CanonicalControl.EAST, "A", RP_B)
+                .put(CanonicalControl.WEST, "B", RP_A)
+                .put(CanonicalControl.NORTH, "B", RP_A)
                 .put(CanonicalControl.START, "OPTION", RP_START)
                 .console("A", "B", "OPTION"),
                 "ngp", "ngpc", "neogeopocket", "neogeopocketcolor");
@@ -291,7 +306,9 @@ public final class SystemControlLayouts {
         // rather than stealing face buttons from A and B.
         add(out, new Layout().dpad()
                 .put(CanonicalControl.SOUTH, "A", RP_A)
-                .put(CanonicalControl.EAST, "B", RP_B)
+                .put(CanonicalControl.EAST, "A", RP_A)
+                .put(CanonicalControl.WEST, "B", RP_B)
+                .put(CanonicalControl.NORTH, "B", RP_B)
                 .put(CanonicalControl.L1, "Y_LEFT", RP_L)
                 .put(CanonicalControl.R1, "Y_RIGHT", RP_R)
                 .put(CanonicalControl.L2, "Y_DOWN", RP_L2)
@@ -378,10 +395,12 @@ public final class SystemControlLayouts {
         // Match the actual WIIMOTE_NUNCHUK device selected by portDeviceFor:
         // A=8, B=0, X(9)=C, Y(1)=Z, Start(3)=1 and Select(2)=2.
         // L(10)/R(11) are -/+; the plain Wiimote has different 1/2 bindings.
+        // Wii B (run/fire in New Super Mario Bros. Wii) is on the LEFT face
+        // button (Xbox X / Nintendo Y), A (jump) stays under the thumb.
         add(out, new Layout().dpadWithAnalogStick("NUNCHUK_STICK")
                 .put(CanonicalControl.SOUTH, "A", RP_A)
-                .put(CanonicalControl.EAST, "B", RP_B)
-                .put(CanonicalControl.WEST, "NUNCHUK_C", RP_X)
+                .put(CanonicalControl.WEST, "B", RP_B)
+                .put(CanonicalControl.EAST, "NUNCHUK_C", RP_X)
                 .put(CanonicalControl.NORTH, "NUNCHUK_Z", RP_Y)
                 .put(CanonicalControl.L1, "MINUS", RP_L)
                 .put(CanonicalControl.R1, "PLUS", RP_R)
@@ -422,7 +441,9 @@ public final class SystemControlLayouts {
         // sit where a thumb never rests; Reset needs a deliberate stick click.
         add(out, new Layout().dpad()
                 .put(CanonicalControl.SOUTH, "1", RP_B)
-                .put(CanonicalControl.EAST, "2", RP_A)
+                .put(CanonicalControl.EAST, "1", RP_B)
+                .put(CanonicalControl.WEST, "2", RP_A)
+                .put(CanonicalControl.NORTH, "2", RP_A)
                 .put(CanonicalControl.L1, "LEFT_DIFFICULTY", RP_L)
                 .put(CanonicalControl.R1, "RIGHT_DIFFICULTY", RP_R)
                 .put(CanonicalControl.L3, "CONSOLE_RESET", RP_X)

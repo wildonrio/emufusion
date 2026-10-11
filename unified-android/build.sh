@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.20
-VERSION_CODE=94
+VERSION_NAME=3.2.21
+VERSION_CODE=95
 
 case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -154,7 +154,9 @@ WEBRTC_AAR_EXTRACTED="$DEPS_DIR/webrtc-android-150.7871.01"
 WEBRTC_CLASSES_JAR="$WEBRTC_AAR_EXTRACTED/classes.jar"
 WEBRTC_NATIVE_SO="$WEBRTC_AAR_EXTRACTED/jni/arm64-v8a/libjingle_peerconnection_so.so"
 BASE_NAME=pegasus-fe_alpha16-105-g6b322063_android64.apk
-BASE_URL="https://raw.githubusercontent.com/mmatyas/pegasus-deploy-staging/continuous-android64/$BASE_NAME"
+# Pinned to the staging commit that published this exact build: the
+# continuous-android64 branch is force-pushed and no longer carries it.
+BASE_URL="https://raw.githubusercontent.com/mmatyas/pegasus-deploy-staging/b902bf8d3c866c355e7c57e4a23b36b84bb99ed9/$BASE_NAME"
 BASE_SHA256=e595be198bfd21c1855eaf563d5af0deae9c9601e6efb195ed299f2065287c67
 BASE_APK=${PEGASUS_BASE_APK:-$BUILD_DIR/$BASE_NAME}
 SOURCE_FRONTEND_DIR=${LUCENT_SOURCE_FRONTEND_DIR:-}

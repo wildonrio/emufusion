@@ -36,6 +36,8 @@ class WidePointerTests(unittest.TestCase):
         self.assertIn('ICO still stalls', build['limitations'])
 
     def test_patch_roundtrip_matches_actual_candidate_headers(self):
+        if not (QA / 'wide-pointer.patch').is_file():
+            self.skipTest('local-only input absent: ' + str(QA / 'wide-pointer.patch'))
         with tempfile.TemporaryDirectory(prefix='aps3e-wide-roundtrip-') as temp:
             root = Path(temp)
             prefix = root / 'app/src/main/cpp/rpcs3'
@@ -54,6 +56,8 @@ class WidePointerTests(unittest.TestCase):
                 self.assertEqual((prefix / name).read_bytes(), (PREPARE.SOURCE / name).read_bytes())
 
     def test_actual_headers_old_failure_wide_pass_nonandroid_regression(self):
+        if not (QA / 'pointer_test.cpp').is_file():
+            self.skipTest('local-only input absent: ' + str(QA / 'pointer_test.cpp'))
         spec = importlib.util.spec_from_file_location('wide_build_test', QA / 'build_test.py')
         module = importlib.util.module_from_spec(spec)
         sys.path.insert(0, str(QA))

@@ -130,6 +130,11 @@ public final class GameSurfaceView extends SurfaceView
                 launchMode;
         setFocusable(false);
         setZOrderMediaOverlay(true);
+        // A SurfaceView defaults to RGB_565. Producers usually replace it, but
+        // on some phones the game layer stayed 16-bit and Wii games showed a
+        // visibly reduced palette (banding) that the Thor did not. Ask for
+        // full 8-bit colour explicitly, as the lower-display player does.
+        getHolder().setFormat(android.graphics.PixelFormat.RGBA_8888);
         getHolder().addCallback(this);
     }
 

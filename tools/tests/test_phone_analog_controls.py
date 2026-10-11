@@ -206,10 +206,14 @@ public class PhoneAnalogTest {
         check(sink.buttons.isEmpty(),"menu release");
       }
     }
-    checkFaceLabels(view,"gba",null,"A",null,"B");
-    checkFaceLabels(view,"gameboyadvance",null,"A",null,"B");
-    checkFaceLabels(view,"gb",null,null,"B","A");
-    check(!view.onTouchEvent(event(0,0,new int[]{6},rx,720*.816f)),
+    // Two-button rule (owner, 2026-10-10): A bottom and right, B left and top.
+    checkFaceLabels(view,"gba","B","A","B","A");
+    checkFaceLabels(view,"gameboyadvance","B","A","B","A");
+    checkFaceLabels(view,"gb","B","A","B","A");
+    // Apple II leaves its left face button unbound; a hidden button must not
+    // capture touches.
+    view.setSystem("apple2");
+    check(!view.onTouchEvent(event(0,0,new int[]{6},1212*.82f-720*.052f*1.65f,720*.73f)),
       "unmapped hidden face button captures touch");
     checkFaceLabels(view,"snes","X","B","Y","A");
     checkFaceLabels(view,"nds","X","B","Y","A");
@@ -295,7 +299,7 @@ public class PhoneAnalogTest {
       }
     }
     checkFaceLabels(view,"megadrive","Y","B","A","C");
-    checkFaceLabels(view,"gamegear",null,"1",null,"2");
+    checkFaceLabels(view,"gamegear","2","1","2","1");
     checkFaceLabels(view,"nes","B","A","B","A");
     checkFaceLabels(view,"unknown","X","B","Y","A");
     checkFaceLabels(view,"switch","X","B","Y","A");

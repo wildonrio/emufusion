@@ -13,11 +13,15 @@ class Ps2PortableBiosTest(unittest.TestCase):
         methods = '\n'.join(method(source, name) for name in (
             'private static void installUserPs2Bios(',
             'private static File findPs2Bios(',
+            'private static boolean looksLikePs2Bios(',
+            'private static boolean skipAnywhereDirectory(',
             'private static boolean validPs2Bios('))
+        methods = 'private static final int ANYWHERE_DEPTH = 8;\n' + methods
         harness = r'''
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.Locale;
 class Environment {
   static File storage;
   static File getExternalStorageDirectory(){return storage;}
@@ -49,6 +53,25 @@ public final class Ps2PortableBiosProbe {
     NativeAdapterPrerequisites.volumes=Collections.emptyList();
     installUserPs2Bios(system); // Does not need the card after valid installation.
     check(installed.isFile(),"private BIOS not reused");
+    // Anywhere on a volume, outside any BIOS folder: a 4 MB Mega Drive .bin
+    // is ignored, the real BIOS (ROMDIR beginning with RESET) is used in place.
+    File card=new File(root,"card");
+    File game=new File(card,"Download/Sonic 3 & Knuckles.bin");
+    game.getParentFile().mkdirs();
+    try(RandomAccessFile f=new RandomAccessFile(game,"rw")){f.setLength(4*1024*1024);f.write(1);}
+    File loose=new File(card,"stuff/keys/ps2/scph39001.bin");
+    loose.getParentFile().mkdirs();
+    try(RandomAccessFile f=new RandomAccessFile(loose,"rw")){
+      f.setLength(4*1024*1024);
+      f.seek(0x2700); f.write("RESET\0\0\0\0\0ROMDIR\0\0\0\0".getBytes("ISO-8859-1"));
+    }
+    NativeAdapterPrerequisites.volumes=Arrays.asList(card);
+    File anywhere=new File(root,"anywhere-system");
+    installUserPs2Bios(anywhere);
+    check(new File(anywhere,"pcsx2/bios/scph39001.bin").isFile(),"BIOS anywhere on the card not found");
+    check(!new File(anywhere,"pcsx2/bios/Sonic 3 & Knuckles.bin").exists(),"a 4 MB game is not a BIOS");
+    check(loose.isFile(),"the user's file stays where it is");
+    NativeAdapterPrerequisites.volumes=Collections.emptyList();
     boolean failed=false;
     try{installUserPs2Bios(new File(root,"missing-system"));}
     catch(IllegalStateException expected){failed=true;}

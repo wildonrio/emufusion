@@ -506,14 +506,17 @@ public final class NativeAdapterPrerequisiteHarness {
                 "aps3e", new IllegalStateException("Vulkan device lost")),
                 "generic aPS3e failure is not mislabeled as firmware");
         for (String[] target : new String[][] {
-                {"eden", "switch", "ROMs/switch/Keys"},
-                {"cemu", "wiiu", "ROMs/wiiu/Keys"},
-                {"aps3e", "ps3", "ROMs/ps3/Firmware"}}) {
+                {"eden", "switch", "prod.keys"},
+                {"cemu", "wiiu", "keys.txt"},
+                {"aps3e", "ps3", "PS3UPDAT.PUP"}}) {
             String help = NativeAdapterSystemDirectory.prerequisiteHelp(
                     target[0], target[1], new IllegalStateException(
                             "Internal emulator prerequisites are unavailable"));
             check(help.contains(target[2]) && help.contains("refresh the library"),
                     "missing setup has actionable, system-specific help");
+            // Files are used wherever they are; no fixed folder is demanded.
+            check(help.contains("anywhere on internal storage or") && !help.contains("ROMs/"),
+                    "help must not demand a specific folder");
             check(!help.contains(base.getAbsolutePath()), "help must not leak private paths");
             check(NativeAdapterSystemDirectory.prerequisiteHelp(target[0], target[1],
                     new IllegalStateException("GPU crash")).isEmpty(),

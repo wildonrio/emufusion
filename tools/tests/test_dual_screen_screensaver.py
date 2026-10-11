@@ -34,7 +34,41 @@ class DualScreenScreensaverTest(unittest.TestCase):
         self.assertIn("renderedVideoPositionMs = player.getCurrentPosition();", ACTIVITY)
         self.assertIn("static JSONObject screensaverStatus()", ACTIVITY)
         self.assertIn('result.put("videoAdvancing", advancing)', ACTIVITY)
-        self.assertIn('result.put("visualIdleMs", idle)', ACTIVITY)
+
+    def test_idle_means_no_user_input_not_a_still_lower_video(self):
+        # October 10: the looping (and auto-advancing) lower preview redrew
+        # every frame, so a frame-based idle clock never reached two minutes
+        # and the screensaver could not start on the Thor.
+        self.assertIn('result.put("visualIdleMs", Math.max(0L, now - activity.lastLowerInteractionMs));',
+                      ACTIVITY)
+        for hook in ('public boolean dispatchTouchEvent(', 'public boolean dispatchKeyEvent('):
+            body = ACTIVITY.split(hook, 1)[1].split('}', 1)[0]
+            self.assertIn('lastLowerInteractionMs = SystemClock.elapsedRealtime();', body)
+        frame = ACTIVITY.split('public void onSurfaceTextureUpdated(SurfaceTexture surface)', 1)[1][:600]
+        self.assertNotIn('lastLowerInteractionMs', frame)
+        # A started lower Activity is available even while the Thor has paused
+        # it for top-screen focus.
+        self.assertIn('result.put("available", activity != null && running);', ACTIVITY)
+
+    def test_screen_stays_awake_long_enough_for_the_screensaver(self):
+        # The Thor and most phones sleep after 30-60 s; the screensaver needs
+        # two idle minutes. Polls (only sent while enabled in the library) and
+        # an active screensaver hold a bounded screen wake lock.
+        self.assertIn('lastScreensaverPollMs = SystemClock.elapsedRealtime();', SERVICE)
+        self.assertIn('PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE', SERVICE)
+        self.assertIn('SCREENSAVER_START_WINDOW_MS = 150_000L', SERVICE)
+        self.assertIn('SCREENSAVER_MAX_AWAKE_MS = 30L * 60L * 1000L', SERVICE)
+        update = SERVICE.split('private void updateScreensaverWakeLock() {', 1)[1].split('\n    }\n', 1)[0]
+        self.assertIn('!gameplayActive', update)
+        self.assertIn('releaseScreensaverWakeLock();', update)
+        self.assertEqual(SERVICE.count('screensaverActive = false;'),
+                         SERVICE.count('screensaverActive = false;\n                screensaverStateChanged();'))
+
+    def test_single_screen_devices_are_idle_by_top_input_alone(self):
+        status = SERVICE.split('} else if ("/screensaver/status".equals(path)) {', 1)[1][:1600]
+        self.assertIn('BootReceiver.secondaryDisplayId(this) < 0', status)
+        self.assertIn('status.put("available", true);', status)
+        self.assertIn('status.put("visualIdleMs", Long.MAX_VALUE / 4);', status)
 
     def test_status_is_read_only_and_play_is_theme_authorized(self):
         self.assertIn('} else if ("/screensaver/status".equals(path)) {', SERVICE)

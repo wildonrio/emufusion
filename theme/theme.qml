@@ -5276,11 +5276,18 @@ FocusScope {
     Rectangle {
         id: importToast
         z: 300
-        anchors.top: parent.top
-        anchors.right: parent.right
+        // Single-screen devices show the game preview in the upper-right
+        // corner (singleScreenPip), exactly where this panel sits; move below
+        // the preview instead of covering it. On the Thor the preview is on
+        // the lower screen and the panel keeps its corner.
+        property bool belowPreview: !root.dualScreenDevice && singleScreenPip.visible
+        anchors.top: belowPreview ? undefined : parent.top
+        anchors.right: belowPreview ? undefined : parent.right
         anchors.topMargin: 108
         anchors.rightMargin: 46
-        width: 430
+        x: belowPreview ? singleScreenPip.x + singleScreenPip.width - width : 0
+        y: belowPreview ? singleScreenPip.y + singleScreenPip.height + 12 : 0
+        width: belowPreview ? Math.min(430, singleScreenPip.width) : 430
         height: root.importDetail !== "" ? 148 : (root.importIdentified > 0 ? 126 : 96)
         visible: root.importToastVisible
         color: "#ee0b0f16"

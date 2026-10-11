@@ -73,11 +73,13 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # label; the version text now prefers the installed versionName from
         # the updater status. Those are library chrome only and do not alter
         # the in-window return flow.
+        # On single-screen devices the library-update panel now sits below the
+        # upper-right preview instead of covering it; library chrome only.
         # The pin exists so unrelated runtime-return work cannot alter the theme
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "3e7f0c8110313d00668a6bd9a6e41d38e36527414d854b972da4f1e683023bfb",
+            "db94ecc2ed85c1a24eac865906371e6bfc1a590af80d7d323ac4c4ff5c2370d0",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):

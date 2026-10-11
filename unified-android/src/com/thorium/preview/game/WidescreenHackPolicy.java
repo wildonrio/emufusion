@@ -99,8 +99,11 @@ public final class WidescreenHackPolicy {
         File root = engineRoot(context, engine);
         if (root == null) return;
         boolean hackOn = isHackEnabledFor(context, system);
-        Map<String, String> overrides = WidescreenHackTable.coreOptionOverrides(
-                system, engine, hackOn, perGameWidescreenCodeSelected);
+        Map<String, String> overrides = new java.util.LinkedHashMap<>(
+                WidescreenHackTable.coreOptionOverrides(
+                        system, engine, hackOn, perGameWidescreenCodeSelected));
+        // Render at the screen's resolution, not the console's (owner request).
+        overrides.putAll(RenderResolutionPolicy.coreOptionOverrides(context, engine));
         File file = CoreOptionOverrideFile.in(root);
         try {
             if (overrides.isEmpty()) {

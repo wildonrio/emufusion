@@ -105,6 +105,13 @@ public final class PreviewActivity extends Activity
     private GestureDetector gestures;
     private static final long CROSSFADE_MS = 85L;
     private volatile long lastLowerVisualChangeMs;
+    /**
+     * Last touch or key on the lower display. The screensaver measures idle
+     * time from user input, not from rendered frames: the lower preview loops
+     * (and auto-advances) its video, so a per-frame clock never went idle and
+     * the screensaver could not start on dual-screen devices.
+     */
+    private volatile long lastLowerInteractionMs;
     private volatile String renderedVideoSource = "";
     private volatile int renderedVideoPositionMs;
     private volatile boolean renderedVideoAdvancing;
@@ -162,6 +169,7 @@ public final class PreviewActivity extends Activity
         running = true;
         visibleInstance = this;
         lastLowerVisualChangeMs = SystemClock.elapsedRealtime();
+        lastLowerInteractionMs = lastLowerVisualChangeMs;
         ownsVisibilityFlags = true;
         windowState.created(this);
         // Preview audio is STREAM_MUSIC (MediaPlayer's USAGE_MEDIA attributes
@@ -1524,13 +1532,26 @@ public final class PreviewActivity extends Activity
         }
     }
 
+    @Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+        lastLowerInteractionMs = SystemClock.elapsedRealtime();
+        return super.dispatchTouchEvent(event);
+    }
+
+    @Override public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        lastLowerInteractionMs = SystemClock.elapsedRealtime();
+        return super.dispatchKeyEvent(event);
+    }
+
     /** Read-only lower-display evidence used by the QML screensaver timer. */
     static JSONObject screensaverStatus() {
         JSONObject result = new JSONObject();
         long now = SystemClock.elapsedRealtime();
         PreviewActivity activity = visibleInstance;
         try {
-            result.put("available", activity != null && running && resumed);
+            // Started is enough: the Thor pauses this lower Activity whenever
+            // focus returns to the top screen, which is exactly when the
+            // library sits idle. The screensaver itself plays on the top panel.
+            result.put("available", activity != null && running);
             result.put("capturedAtEpochMs", System.currentTimeMillis());
             if (activity == null) {
                 result.put("video", "");
@@ -1544,7 +1565,9 @@ public final class PreviewActivity extends Activity
             result.put("video", activity.renderedVideoSource);
             result.put("positionMs", Math.max(0, activity.renderedVideoPositionMs));
             result.put("videoAdvancing", advancing);
-            result.put("visualIdleMs", idle);
+            // The theme's "lower display still" test: time since the user last
+            // touched the lower screen, not since its looping video last drew.
+            result.put("visualIdleMs", Math.max(0L, now - activity.lastLowerInteractionMs));
         } catch (Exception ignored) {
         }
         return result;

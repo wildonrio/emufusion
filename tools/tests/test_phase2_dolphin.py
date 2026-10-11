@@ -233,8 +233,8 @@ class DolphinCompilerProofTests(unittest.TestCase):
         # "2"/Nunchuk Z, L(10)/R(11) are -/+ and L2(12) shakes the Nunchuk.
         wii = tables["wii"]
         self.assertEqual(8, wii["SOUTH"][1])
-        self.assertEqual(0, wii["EAST"][1])
-        self.assertEqual(9, wii["WEST"][1])
+        self.assertEqual(0, wii["WEST"][1])    # Wii B (run) on the left face button
+        self.assertEqual(9, wii["EAST"][1])
         self.assertEqual(1, wii["NORTH"][1])
         self.assertEqual(10, wii["L1"][1])
         self.assertEqual(11, wii["R1"][1])

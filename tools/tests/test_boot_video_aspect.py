@@ -1,4 +1,4 @@
-"""Execute the loading-video fit math and guard all asynchronous size callbacks."""
+"""Execute the loading-video fill math and guard all asynchronous size callbacks."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,7 +10,7 @@ BOOT = ROOT / 'unified-android/src/com/thorium/preview/BootVideoOverlay.java'
 
 
 class BootVideoAspectTest(unittest.TestCase):
-    def test_actual_transform_preserves_aspect_fits_and_centers(self):
+    def test_actual_transform_preserves_aspect_fills_and_centers(self):
         fit = method(BOOT.read_text(), 'private static void fitVideo(')
         harness = r'''
 public final class BootAspectProbe {
@@ -38,25 +38,29 @@ public final class BootAspectProbe {
     Matrix m=view.matrix;
     double w=view.width*m.sx, h=view.height*m.sy;
     close(w/h, (double)vw/vh, "aspect ratio distorted");
-    check(w<=view.width+0.002 && h<=view.height+0.002, "video cropped");
+    check(w>=view.width-0.002 && h>=view.height-0.002, "black bars left on screen");
     check(Math.abs(w-view.width)<0.002 || Math.abs(h-view.height)<0.002,
-          "video not largest possible fit");
+          "video cropped more than needed");
     close((1-m.sx)*m.px, (view.width-w)/2, "not centered horizontally");
     close((1-m.sy)*m.py, (view.height-h)/2, "not centered vertically");
   }
   public static void main(String[] args) {
+    // A 20:9 phone fills its full width and crops top and bottom equally.
     TextureView phone=new TextureView(2400,1080);
     verify(phone,1920,1080);
-    close(phone.matrix.sx,0.8,"wide phone must pillarbox, not stretch");
-    close(phone.matrix.sy,1,"wide phone uses full height");
+    close(phone.matrix.sx,1,"wide phone uses full width");
+    close(phone.matrix.sy,1.25,"wide phone must crop, not letterbox or stretch");
+    TextureView ultra=new TextureView(3168,1296);   // 22:9
+    verify(ultra,1920,1080);
+    close(ultra.matrix.sx,1,"22:9 phone uses full width");
     TextureView thor=new TextureView(1920,1080);
     verify(thor,1920,1080);
     close(thor.matrix.sx,1,"16:9 remains full screen");
     close(thor.matrix.sy,1,"16:9 remains full screen");
     TextureView tablet=new TextureView(1920,1200);
     verify(tablet,1920,1080);
-    close(tablet.matrix.sx,1,"16:10 uses full width");
-    close(tablet.matrix.sy,0.9,"16:10 must letterbox, not stretch");
+    close(tablet.matrix.sx,1.0/0.9,"16:10 must crop the sides, not letterbox");
+    close(tablet.matrix.sy,1,"16:10 uses full height");
     // Insets/window resizing and a later decoder size report must replace
     // the old transform instead of accumulating scales.
     phone.width=2200; phone.height=1000; verify(phone,1920,1080);

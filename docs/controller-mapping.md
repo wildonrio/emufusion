@@ -199,13 +199,15 @@ Console roster: `UP` `DOWN` `LEFT` `RIGHT` `A` `B` `START` `SELECT`
 
 ### `gameboy` `gameboycolor` `gb` `gbc`
 
-*SameBoy (built), verified: A=8, B=0.* Thor's printed `A` and `Y` buttons map
-directly to Game Boy `A` and `B`, respectively.
+*SameBoy (built), verified: A=8, B=0.* Two-button rule: `A` under the thumb
+(doubled on the right, printed `A`), `B` on the left face button (doubled on top).
 
 | Thor control | RetroPad ID | Console control |
 | --- | --- | --- |
-| `EAST` right face button (printed `A`) | 8 | `A` |
-| `WEST` left face button (printed `Y`) | 0 | `B` |
+| `SOUTH` bottom face button | 8 | `A` |
+| `EAST` right face button | 8 | `A` |
+| `WEST` left face button | 0 | `B` |
+| `NORTH` top face button | 0 | `B` |
 | `START` Start | 3 | `START` |
 | `SELECT` Select (tap) | 2 | `SELECT` |
 | D-pad and left stick | 4-7 | `UP` `DOWN` `LEFT` `RIGHT` |
@@ -221,7 +223,9 @@ reach the Boktai cartridge's solar sensor, the only other input a GBA accepts.
 | Thor control | RetroPad ID | Console control |
 | --- | --- | --- |
 | `SOUTH` bottom face button | 8 | `A` |
-| `EAST` right face button | 0 | `B` |
+| `EAST` right face button | 8 | `A` |
+| `WEST` left face button | 0 | `B` |
+| `NORTH` top face button | 0 | `B` |
 | `L1` left shoulder | 10 | `L` |
 | `R1` right shoulder | 11 | `R` |
 | `L3` left stick click | 14 | `SOLAR_DARKEN` |
@@ -294,7 +298,9 @@ as they do on the hardware, with A under the thumb.
 | Thor control | RetroPad ID | Console control |
 | --- | --- | --- |
 | `SOUTH` bottom face button | 8 | `A` |
-| `EAST` right face button | 0 | `B` |
+| `EAST` right face button | 8 | `A` |
+| `WEST` left face button | 0 | `B` |
+| `NORTH` top face button | 0 | `B` |
 | `L1` left shoulder | 10 | `L` |
 | `R1` right shoulder | 11 | `R` |
 | `START` Start | 3 | `START` |
@@ -344,7 +350,7 @@ Console roster: `UP` `DOWN` `LEFT` `RIGHT` `A` `B` `C` `X` `Y` `Z` `START` `MODE
 
 *Gearsystem (built), verified: button 1=B(0), button 2=A(8), Start=3, and
 **RetroPad Select(2) is the console's Reset switch**.* Two buttons in a row, so
-button 1 goes under the thumb and button 2 to its right. Reset is a switch on
+button 1 goes under the thumb (doubled on the right) and button 2 on the left face button (doubled on top). Reset is a switch on
 the console, not a pad button, so it is deliberately parked on the left stick
 click and EmuFusion's Select tap reaches nothing here — the old mapping sent Select
 straight at Reset, so tapping it restarted the game.
@@ -352,7 +358,9 @@ straight at Reset, so tapping it restarted the game.
 | Thor control | RetroPad ID | Console control |
 | --- | --- | --- |
 | `SOUTH` bottom face button | 0 | `1` |
-| `EAST` right face button | 8 | `2` |
+| `EAST` right face button | 0 | `1` |
+| `WEST` left face button | 8 | `2` |
+| `NORTH` top face button | 8 | `2` |
 | `L3` left stick click | 2 | `RESET` |
 | `START` Start | 3 | `START` |
 | D-pad and left stick | 4-7 | `UP` `DOWN` `LEFT` `RIGHT` |
@@ -441,7 +449,9 @@ bottom-then-right arc with no reordering. The Neo Geo Pocket has no Select.
 | Thor control | RetroPad ID | Console control |
 | --- | --- | --- |
 | `SOUTH` bottom face button | 0 | `A` |
-| `EAST` right face button | 8 | `B` |
+| `EAST` right face button | 0 | `A` |
+| `WEST` left face button | 8 | `B` |
+| `NORTH` top face button | 8 | `B` |
 | `START` Start | 3 | `OPTION` |
 | D-pad and left stick | 4-7 | `UP` `DOWN` `LEFT` `RIGHT` |
 
@@ -459,7 +469,9 @@ the core's screen-rotate, which is how the machine switches orientation.
 | Thor control | RetroPad ID | Console control |
 | --- | --- | --- |
 | `SOUTH` bottom face button | 8 | `A` |
-| `EAST` right face button | 0 | `B` |
+| `EAST` right face button | 8 | `A` |
+| `WEST` left face button | 0 | `B` |
+| `NORTH` top face button | 0 | `B` |
 | `L1` left shoulder | 10 | `Y_LEFT` |
 | `R1` right shoulder | 11 | `Y_RIGHT` |
 | `L2` left trigger | 12 | `Y_DOWN` |
@@ -625,8 +637,8 @@ active.
 | Thor control | RetroPad ID | Console control |
 | --- | --- | --- |
 | `SOUTH` bottom face button | 8 | `A` |
-| `EAST` right face button | 0 | `B` |
-| `WEST` left face button | 9 | `NUNCHUK_C` |
+| `WEST` left face button | 0 | `B` |
+| `EAST` right face button | 9 | `NUNCHUK_C` |
 | `NORTH` top face button | 1 | `NUNCHUK_Z` |
 | `L1` left shoulder | 10 | `MINUS` |
 | `R1` right shoulder | 11 | `PLUS` |
@@ -730,7 +742,9 @@ stick click** so it cannot be hit mid-game.
 | Thor control | RetroPad ID | Console control |
 | --- | --- | --- |
 | `SOUTH` bottom face button | 0 | `1` |
-| `EAST` right face button | 8 | `2` |
+| `EAST` right face button | 0 | `1` |
+| `WEST` left face button | 8 | `2` |
+| `NORTH` top face button | 8 | `2` |
 | `L1` left shoulder | 10 | `LEFT_DIFFICULTY` |
 | `R1` right shoulder | 11 | `RIGHT_DIFFICULTY` |
 | `L3` left stick click | 9 | `CONSOLE_RESET` |

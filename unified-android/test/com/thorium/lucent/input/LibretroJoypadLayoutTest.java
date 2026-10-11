@@ -131,8 +131,10 @@ public final class LibretroJoypadLayoutTest {
         for (String system : new String[] {"mastersystem", "gamegear", "sg1000"}) {
             TestSupport.equal(0, LibretroJoypadLayout.idFor(system, CanonicalControl.SOUTH),
                     system + " button 1 is RetroPad B(0)");
-            TestSupport.equal(8, LibretroJoypadLayout.idFor(system, CanonicalControl.EAST),
-                    system + " button 2 is RetroPad A(8)");
+            TestSupport.equal(8, LibretroJoypadLayout.idFor(system, CanonicalControl.WEST),
+                    system + " button 2 is RetroPad A(8) on the left face button");
+            TestSupport.equal(0, LibretroJoypadLayout.idFor(system, CanonicalControl.EAST),
+                    system + " the right face button doubles button 1");
             TestSupport.equal(-1, LibretroJoypadLayout.idFor(system, CanonicalControl.SELECT),
                     system + " Select must not reach the console Reset switch");
             TestSupport.equal(2, LibretroJoypadLayout.idFor(system, CanonicalControl.L3),
@@ -199,25 +201,20 @@ public final class LibretroJoypadLayoutTest {
     private static void twoButtonConsolesPutTheActionUnderTheThumb() {
         // NES and Famicom deliberately duplicate their two buttons across the
         // four-button face cluster; see nesPlacesItsButtonsByName().
-        // The Thor's printed A/right and Y/left buttons are the Game Boy's A/B.
-        for (String system : new String[] {"gb", "gbc"}) {
-            TestSupport.equal(8, LibretroJoypadLayout.idFor(system, CanonicalControl.EAST),
-                    system + " printed A is Game Boy A");
-            TestSupport.equal(0, LibretroJoypadLayout.idFor(system, CanonicalControl.WEST),
-                    system + " printed Y is Game Boy B");
-            TestSupport.equal(-1, LibretroJoypadLayout.idFor(system, CanonicalControl.SOUTH),
-                    system + " printed B is intentionally unbound");
-            TestSupport.equal("A", SystemControlLayouts.forSystem(system)
-                    .get(CanonicalControl.EAST), system + " labels printed A correctly");
-        }
-        // GBA retains its established bottom/right pair.
-        for (String system : new String[] {"gba"}) {
+        // Two-button rule (owner, 2026-10-10): A under the thumb (bottom, and
+        // the right button printed A on Nintendo-style pads), B on the LEFT
+        // face button (Xbox X / Nintendo Y), doubled on top.
+        for (String system : new String[] {"gb", "gbc", "gba"}) {
             TestSupport.equal(8, LibretroJoypadLayout.idFor(system, CanonicalControl.SOUTH),
                     system + " bottom is A");
-            TestSupport.equal(0, LibretroJoypadLayout.idFor(system, CanonicalControl.EAST),
-                    system + " right is B");
-            TestSupport.equal("A", SystemControlLayouts.forSystem(system)
-                    .get(CanonicalControl.SOUTH), system + " labels the bottom button A");
+            TestSupport.equal(8, LibretroJoypadLayout.idFor(system, CanonicalControl.EAST),
+                    system + " right doubles A");
+            TestSupport.equal(0, LibretroJoypadLayout.idFor(system, CanonicalControl.WEST),
+                    system + " left is B");
+            TestSupport.equal(0, LibretroJoypadLayout.idFor(system, CanonicalControl.NORTH),
+                    system + " top doubles B");
+            TestSupport.equal("B", SystemControlLayouts.forSystem(system)
+                    .get(CanonicalControl.WEST), system + " labels the left button B");
         }
         TestSupport.equal(10, LibretroJoypadLayout.idFor("gba", CanonicalControl.L1),
                 "the GBA keeps its shoulders");
@@ -233,8 +230,8 @@ public final class LibretroJoypadLayoutTest {
         // which is also their left-to-right order on the hardware.
         TestSupport.equal(0, LibretroJoypadLayout.idFor("ngp", CanonicalControl.SOUTH),
                 "Neo Geo Pocket A is RetroPad B(0)");
-        TestSupport.equal(8, LibretroJoypadLayout.idFor("ngp", CanonicalControl.EAST),
-                "Neo Geo Pocket B is RetroPad A(8)");
+        TestSupport.equal(8, LibretroJoypadLayout.idFor("ngp", CanonicalControl.WEST),
+                "Neo Geo Pocket B is RetroPad A(8) on the left face button");
         TestSupport.equal("A", SystemControlLayouts.forSystem("ngp")
                 .get(CanonicalControl.SOUTH), "the Neo Geo Pocket label follows the ID");
         // Fuse reads RetroPad B(0) as joystick Up, not Fire. Sending the bottom
@@ -302,10 +299,10 @@ public final class LibretroJoypadLayoutTest {
                 .get(CanonicalControl.L2), "GameCube remap label exposes L on the trigger");
         TestSupport.equal(8, LibretroJoypadLayout.idFor("wii", CanonicalControl.SOUTH),
                 "Wii primary south is A");
-        TestSupport.equal(0, LibretroJoypadLayout.idFor("wii", CanonicalControl.EAST),
-                "Wii secondary east is B");
-        TestSupport.equal(9, LibretroJoypadLayout.idFor("wii", CanonicalControl.WEST),
-                "Wii west is Nunchuk C under the active controller device");
+        TestSupport.equal(0, LibretroJoypadLayout.idFor("wii", CanonicalControl.WEST),
+                "Wii B (run) is the left face button");
+        TestSupport.equal(9, LibretroJoypadLayout.idFor("wii", CanonicalControl.EAST),
+                "Wii east is Nunchuk C under the active controller device");
         TestSupport.equal(1, LibretroJoypadLayout.idFor("wii", CanonicalControl.NORTH),
                 "Wii north is Nunchuk Z under the active controller device");
         TestSupport.equal(10, LibretroJoypadLayout.idFor("wii", CanonicalControl.L1),
@@ -321,8 +318,8 @@ public final class LibretroJoypadLayoutTest {
                 "Wii asks for Dolphin's Wiimote+Nunchuk port device");
         for (String system : new String[] {"wii", "nintendowii"}) {
             Map<CanonicalControl, String> names = SystemControlLayouts.forSystem(system);
-            TestSupport.equal("NUNCHUK_C", names.get(CanonicalControl.WEST),
-                    system + " west label does not claim to press remote 1");
+            TestSupport.equal("NUNCHUK_C", names.get(CanonicalControl.EAST),
+                    system + " east label does not claim to press remote 1");
             TestSupport.equal("NUNCHUK_Z", names.get(CanonicalControl.NORTH),
                     system + " north label does not claim to press remote 2");
             TestSupport.equal("1", names.get(CanonicalControl.START),
@@ -373,8 +370,8 @@ public final class LibretroJoypadLayoutTest {
         TestSupport.equal("SELECT — 2",
                 SystemControlLayouts.controlLabel("nintendowii", CanonicalControl.SELECT),
                 "Wii picker describes remote 2 rather than Minus");
-        TestSupport.equal("WEST — NUNCHUK C",
-                SystemControlLayouts.controlLabel("wii", CanonicalControl.WEST),
+        TestSupport.equal("EAST — NUNCHUK C",
+                SystemControlLayouts.controlLabel("wii", CanonicalControl.EAST),
                 "Wii picker describes the active Nunchuk device");
         TestSupport.equal("SOUTH — B",
                 SystemControlLayouts.controlLabel("snes", CanonicalControl.SOUTH),

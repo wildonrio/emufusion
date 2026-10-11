@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
@@ -347,6 +348,7 @@ public final class PreviewService extends Service {
             boolean alreadyActive = gameplayActive;
             gameplayActive = true;
             screensaverActive = false;
+                screensaverStateChanged();
             placementBlank = false;
             previewActive = false;
             // A game started; closing the browser later must not put a movie
@@ -384,6 +386,7 @@ public final class PreviewService extends Service {
             updateManager.onLibraryVisible();
         } else if (intent != null && ACTION_SUSPEND.equals(intent.getAction())) {
             screensaverActive = false;
+                screensaverStateChanged();
             placementBlank = true;
             previewActive = false;
             resumePreviewAfterBrowser = false;
@@ -534,6 +537,7 @@ public final class PreviewService extends Service {
                 }
                 placementBlank = false;
                 screensaverActive = false;
+                screensaverStateChanged();
                 Map<String, String> values = parseQuery(query);
                 long sequence = parseLong(values.get("seq"));
                 if (sequence > 0L && sequence <= lastPreviewSequence) {
@@ -550,6 +554,7 @@ public final class PreviewService extends Service {
                 String preloadNext = values.getOrDefault("preload_next", "");
                 String preloadAux = values.getOrDefault("preload_aux", "");
                 boolean advance = "1".equals(values.getOrDefault("advance", "0"));
+                if (!advance) lastLibraryInteractionMs = SystemClock.elapsedRealtime();
                 getSharedPreferences("preview", MODE_PRIVATE).edit()
                         .putString(EXTRA_VIDEO, video)
                         .putString(EXTRA_ART, art)
@@ -592,7 +597,9 @@ public final class PreviewService extends Service {
                             "{\"ok\":false,\"suppressed\":true}");
                     return;
                 }
+                if (!screensaverActive) screensaverStartedMs = SystemClock.elapsedRealtime();
                 screensaverActive = true;
+                screensaverStateChanged();
                 placementBlank = false;
                 previewActive = true;
                 lastPegasusHeartbeat = SystemClock.elapsedRealtime();
@@ -668,6 +675,7 @@ public final class PreviewService extends Service {
                         + gameplayActive + "}");
             } else if ("/hide".equals(path)) {
                 screensaverActive = false;
+                screensaverStateChanged();
                 suppressPlayUntil = SystemClock.elapsedRealtime() + 1500L;
                 previewActive = false;
                 resumePreviewAfterBrowser = false;
@@ -675,6 +683,7 @@ public final class PreviewService extends Service {
                 respond(writer, "200 OK", "{\"ok\":true}");
             } else if ("/transition".equals(path)) {
                 screensaverActive = false;
+                screensaverStateChanged();
                 Map<String, String> values = parseQuery(query);
                 long sequence = parseLong(values.get("seq"));
                 if (sequence > 0L && sequence <= lastPreviewSequence) {
@@ -708,7 +717,21 @@ public final class PreviewService extends Service {
                         + ",\"soundEffects\":" + MenuSoundPlayer.isEnabled(this)
                         + "}");
             } else if ("/screensaver/status".equals(path)) {
+                // The theme polls only while the screensaver is enabled and the
+                // library is in front: hold the screen awake long enough for
+                // the two-minute idle start (see updateScreensaverWakeLock).
+                lastScreensaverPollMs = SystemClock.elapsedRealtime();
+                mainHandler.post(this::updateScreensaverWakeLock);
                 JSONObject status = PreviewActivity.screensaverStatus();
+                if (BootReceiver.secondaryDisplayId(this) < 0) {
+                    // Single-screen phones have no lower Activity: the preview
+                    // is a QML picture-in-picture. Only top-panel input decides
+                    // idleness there; reporting "unavailable" disabled the
+                    // screensaver on every single-screen device.
+                    status.put("available", true);
+                    status.put("visualIdleMs", Long.MAX_VALUE / 4);
+                    status.put("singleScreen", true);
+                }
                 status.put("gameplay", gameplayActive);
                 status.put("browserActive", browserActive);
                 status.put("screensaverActive", screensaverActive);
@@ -864,6 +887,7 @@ public final class PreviewService extends Service {
                         thorLedManager.rememberedDeviceBrightness() + "}");
             } else if ("/blank".equals(path)) {
                 screensaverActive = false;
+                screensaverStateChanged();
                 placementBlank = true;
                 suppressPlayUntil = SystemClock.elapsedRealtime() + 1500L;
                 previewActive = false;
@@ -1446,9 +1470,64 @@ public final class PreviewService extends Service {
         writer.flush();
     }
 
+    /*
+     * Screensaver keep-awake (owner, 2026-10-10: "the screensaver no longer
+     * works"). The screensaver starts after two idle minutes, but phones and
+     * the Thor turn the screen off after 30-60 s, so the device always slept
+     * first. While the library is idle with the screensaver enabled, hold the
+     * screen on until the screensaver has had its chance to start; while it
+     * plays, keep the screen on for up to 30 minutes, then let Android sleep
+     * normally. Gameplay keeps its own idle-sleep prevention.
+     */
+    private static final long SCREENSAVER_POLL_GRACE_MS = 15_000L;
+    private static final long SCREENSAVER_START_WINDOW_MS = 150_000L;
+    private static final long SCREENSAVER_MAX_AWAKE_MS = 30L * 60L * 1000L;
+    private PowerManager.WakeLock screensaverWakeLock;
+    private volatile long lastScreensaverPollMs;
+    private volatile long lastLibraryInteractionMs = SystemClock.elapsedRealtime();
+    private volatile long screensaverStartedMs;
+    private final Runnable screensaverAwakeCheck = this::updateScreensaverWakeLock;
+
+    private void screensaverStateChanged() {
+        mainHandler.post(this::updateScreensaverWakeLock);
+    }
+
+    private void updateScreensaverWakeLock() {
+        long now = SystemClock.elapsedRealtime();
+        boolean waitingToStart = !gameplayActive && !browserActive && !screensaverActive &&
+                now - lastScreensaverPollMs < SCREENSAVER_POLL_GRACE_MS &&
+                now - lastLibraryInteractionMs < SCREENSAVER_START_WINDOW_MS;
+        boolean playing = screensaverActive && !gameplayActive &&
+                now - screensaverStartedMs < SCREENSAVER_MAX_AWAKE_MS;
+        mainHandler.removeCallbacks(screensaverAwakeCheck);
+        if (waitingToStart || playing) {
+            if (screensaverWakeLock == null) {
+                PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
+                if (power == null) return;
+                @SuppressWarnings("deprecation")
+                PowerManager.WakeLock lock = power.newWakeLock(
+                        PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE,
+                        "EmuFusion:screensaver");
+                lock.setReferenceCounted(false);
+                screensaverWakeLock = lock;
+            }
+            if (!screensaverWakeLock.isHeld()) screensaverWakeLock.acquire(SCREENSAVER_MAX_AWAKE_MS);
+            mainHandler.postDelayed(screensaverAwakeCheck, 5_000L);
+        } else {
+            releaseScreensaverWakeLock();
+        }
+    }
+
+    private void releaseScreensaverWakeLock() {
+        if (screensaverWakeLock != null && screensaverWakeLock.isHeld())
+            screensaverWakeLock.release();
+    }
+
     @Override
     public void onDestroy() {
         running = false;
+        mainHandler.removeCallbacks(screensaverAwakeCheck);
+        releaseScreensaverWakeLock();
         if (importManager != null) importManager.close();
         previewActive = false;
         mainHandler.removeCallbacks(pegasusWatchdog);

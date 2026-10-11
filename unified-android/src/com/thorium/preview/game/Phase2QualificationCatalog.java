@@ -193,7 +193,15 @@ public final class Phase2QualificationCatalog {
         private static File findUserFirmware(String systemId, FirmwareFile expected)
                 throws Exception {
             for (File root : firmwareSearchRoots(systemId)) {
-                File match = findMatchingFirmware(root, expected, 0);
+                File match = findMatchingFirmware(root, expected, 0, 2);
+                if (match != null) return match;
+            }
+            // Owner requirement (2026-10-10): firmware is used wherever it
+            // is, on internal storage or any SD/USB volume. The documented
+            // folders only make the common case fast; size is checked before
+            // any hash, so the whole-volume pass reads almost nothing.
+            for (File volume : NativeAdapterPrerequisites.permittedVolumeRoots()) {
+                File match = findMatchingFirmware(volume, expected, 0, ANYWHERE_DEPTH);
                 if (match != null) return match;
             }
             return null;
@@ -221,16 +229,17 @@ public final class Phase2QualificationCatalog {
             return result;
         }
 
-        private static File findMatchingFirmware(File root, FirmwareFile expected, int depth)
-                throws Exception {
-            if (root == null || depth > 2 || !root.isDirectory()) return null;
+        private static File findMatchingFirmware(File root, FirmwareFile expected, int depth,
+                                                 int maxDepth) throws Exception {
+            if (root == null || depth > maxDepth || !root.isDirectory() ||
+                    (depth > 0 && skipAnywhereDirectory(root))) return null;
             File[] entries = root.listFiles();
             if (entries == null) return null;
             java.util.Arrays.sort(entries, (left, right) ->
                     left.getName().compareToIgnoreCase(right.getName()));
             for (File entry : entries) if (validFirmware(entry, expected)) return entry;
             for (File entry : entries) if (entry.isDirectory()) {
-                File match = findMatchingFirmware(entry, expected, depth + 1);
+                File match = findMatchingFirmware(entry, expected, depth + 1, maxDepth);
                 if (match != null) return match;
             }
             return null;
@@ -268,29 +277,69 @@ public final class Phase2QualificationCatalog {
             }
             File source = null;
             for (File root : roots) {
-                source = findPs2Bios(root, 0);
+                source = findPs2Bios(root, 0, 2, false);
+                if (source != null) break;
+            }
+            // Anywhere else on internal or removable storage. Outside a BIOS
+            // folder a 4-8 MB .bin could be a Mega Drive game, so the
+            // contents must also look like a PS2 BIOS (ROMDIR with RESET).
+            if (source == null) for (File volume : NativeAdapterPrerequisites.permittedVolumeRoots()) {
+                source = findPs2Bios(volume, 0, ANYWHERE_DEPTH, true);
                 if (source != null) break;
             }
             if (source == null)
                 throw new MissingFirmwareException("A user-dumped PS2 BIOS is required. " +
-                        "Place it in ROMs/ps2/BIOS on internal or removable storage, then try again.");
+                        "Copy it anywhere on internal storage or the SD card, then try again.");
             if (!destination.isDirectory() && !destination.mkdirs())
                 throw new IllegalStateException("Cannot create private PS2 BIOS directory");
             copyFile(source, new File(destination, source.getName()));
         }
 
-        private static File findPs2Bios(File root, int depth) {
-            if (root == null || depth > 2 || !root.isDirectory()) return null;
+        private static File findPs2Bios(File root, int depth, int maxDepth, boolean checkContents) {
+            if (root == null || depth > maxDepth || !root.isDirectory() ||
+                    (depth > 0 && skipAnywhereDirectory(root))) return null;
             File[] entries = root.listFiles();
             if (entries == null) return null;
             java.util.Arrays.sort(entries, (left, right) ->
                     left.getName().compareToIgnoreCase(right.getName()));
-            for (File entry : entries) if (validPs2Bios(entry)) return entry;
+            for (File entry : entries)
+                if (validPs2Bios(entry) && (!checkContents || looksLikePs2Bios(entry))) return entry;
             for (File entry : entries) if (entry.isDirectory()) {
-                File found = findPs2Bios(entry, depth + 1);
+                File found = findPs2Bios(entry, depth + 1, maxDepth, checkContents);
                 if (found != null) return found;
             }
             return null;
+        }
+
+        /** A PS2 BIOS image begins with its ROMDIR table, whose first entry is RESET. */
+        private static boolean looksLikePs2Bios(File file) {
+            byte[] head = new byte[64 * 1024];
+            int read = 0;
+            try (java.io.FileInputStream input = new java.io.FileInputStream(file)) {
+                while (read < head.length) {
+                    int count = input.read(head, read, head.length - read);
+                    if (count < 0) break;
+                    read += count;
+                }
+            } catch (java.io.IOException unreadable) {
+                return false;
+            }
+            String text = new String(head, 0, read, java.nio.charset.StandardCharsets.ISO_8859_1);
+            int reset = text.indexOf("RESET\0");
+            return reset >= 0 && text.indexOf("ROMDIR", reset) > reset;
+        }
+
+        /** Whole-volume search depth; matches the native adapters' key search. */
+        private static final int ANYWHERE_DEPTH = 8;
+
+        /** Hidden folders, caches and other apps' private Android/data and obb. */
+        private static boolean skipAnywhereDirectory(File directory) {
+            String name = directory.getName().toLowerCase(Locale.US);
+            if (name.startsWith(".") || "cache".equals(name) || "caches".equals(name))
+                return true;
+            File parent = directory.getParentFile();
+            return parent != null && "android".equalsIgnoreCase(parent.getName()) &&
+                    ("data".equals(name) || "obb".equals(name));
         }
 
         private static boolean validPs2Bios(File file) {
