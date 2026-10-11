@@ -216,6 +216,11 @@ public final class GameSurfaceView extends SurfaceView
         if (generator != null) generator.onCoreClockLocked();
     }
 
+    /** True while a frame generator owns this Surface's input. */
+    public boolean ownsFrameGenerator() {
+        return frameGenerator != null;
+    }
+
     public void setFrameRateListener(FrameGenerationRenderer.StatsListener value) {
         frameRateListener = value;
         if (frameGenerator != null) frameGenerator.setStatsListener(value);

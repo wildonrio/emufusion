@@ -799,6 +799,26 @@ final class PpssppGlesEngineSession implements EngineSession,
                 " system=" + (request == null ? "" : request.systemId));
     }
 
+    /**
+     * After an exit checkpoint the generator is retired last (the host keeps
+     * its Surface until the save is written, because detaching destroys the
+     * core's GL context). The loop is paused or already closed by then, so
+     * releasing the generator's input is safe; detach if it is still open.
+     */
+    @Override public boolean quiesceForSurfaceRetirement() {
+        if (!stopping.get() && !released.get()) return quiesceForPresentationRecovery();
+        ExperimentalGlesRenderLoop active = renderLoop;
+        if (active != null) {
+            try {
+                active.pauseAndDetachForPresentationRecovery();
+            } catch (RuntimeException closed) {
+                // A closed loop renders nothing; the input may be released.
+            }
+        }
+        surface = null;
+        return true;
+    }
+
     @Override public boolean quiesceForPresentationRecovery() {
         resumeRequested = false;
         synchronized (this) { activeFrameTickMillis = 0L; }
@@ -1267,6 +1287,14 @@ final class PpssppGlesEngineSession implements EngineSession,
             if (setPacedVideoHz(target)) {
                 physicalFgClockApplied = true;
                 physicalFgClockOwner = renderer;
+                // The native PTS are now stamped at the paced clock; keep the
+                // trusted timeline on it instead of the synchronized 60.000
+                // installed at session start. Repeated each check (no-op when
+                // unchanged) so a recreated renderer converges within 1 s.
+                if (usesStampedProducerTimeline()) {
+                    double paced = pacedVideoHz();
+                    renderer.retimeProducerTimeline(paced > 0.0 ? paced : target);
+                }
             }
         } else if (physicalFgClockApplied && renderer != physicalFgClockOwner &&
                 setPacedVideoHz(0.0)) {

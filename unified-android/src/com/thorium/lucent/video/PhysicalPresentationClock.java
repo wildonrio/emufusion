@@ -43,6 +43,11 @@ public final class PhysicalPresentationClock {
     private long sustainedScans;
     private static final long TRIM_WINDOW_NS = 20_000_000_000L;
     private static final long TRIM_SAMPLE_NS = 250_000_000L;
+    // Present gaps shorter than this keep the sustained window: one 383-ms
+    // allocation stall restarted the full 20-s admission. The bridged scans
+    // are still counted from the physical rows, and longer idles restart.
+    public static final long SUSTAINED_GAP_BRIDGE_NS = 1_000_000_000L;
+    private static final long SUSTAINED_CONTIGUOUS_GAP_NS = 250_000_000L;
     // Sparse endpoints bound storage without sampling callback clocks. Keep
     // the endpoint just before the window boundary, so evidence is >=20s.
     private final long[] trimTimes = new long[128];
@@ -162,7 +167,13 @@ public final class PhysicalPresentationClock {
         }
         // Long gaps may retain a useful planning oscillator estimate, but
         // cannot earn continuous evidence for changing guest/audio speed.
-        if (deltaNs > 250_000_000L || sustainedAnchorNs == 0L ||
+        // A sub-second stall is bridged only when the measured period counts
+        // the same whole scans as the nominal one (no off-by-one over 120).
+        boolean bridgedGap = deltaNs > SUSTAINED_CONTIGUOUS_GAP_NS &&
+                deltaNs < SUSTAINED_GAP_BRIDGE_NS &&
+                roundedPositiveQuotient(deltaNs, estimatedPeriodNs) == scans;
+        if ((deltaNs > SUSTAINED_CONTIGUOUS_GAP_NS && !bridgedGap) ||
+                sustainedAnchorNs == 0L ||
                 sustainedScans > Long.MAX_VALUE - scans) {
             sustainedAnchorNs = actualPresentNs;
             sustainedScans = 0L;

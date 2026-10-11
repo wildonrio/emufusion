@@ -1241,6 +1241,14 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
             return false;
         if (Math.abs(target - pacedCoreHz) < 1.0e-4) return true;
         double clock = target > 0.0 ? target : synchronizedHz;
+        double previousClock = pacedCoreHz > 0.0 ? pacedCoreHz : synchronizedHz;
+        // A panel-divisor trim (60.000 -> 59.975, or a later refinement) only
+        // changes the period. Keep the absolute deadline: rebasing it to
+        // "now" discards deadline debt and shifts real arrival against the
+        // sequence-stamped PTS lattice the frame generator is anchored to.
+        // Releasing the trim (zero) keeps the original full reset.
+        boolean rebaseDeadline = target == 0.0 ||
+                Math.abs(clock / previousClock - 1.0) >= 0.001;
         pacedCoreHz = target;
         post(() -> {
             if (!ready || host == null) return;
@@ -1248,7 +1256,7 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
             displayAudioClockHz = clock;
             displayAudioClockUpdatedNs = 0L;
             frameDelayNanos = frameDelayNanos(clock);
-            resetFrameClock();
+            if (rebaseDeadline) resetFrameClock();
             Log.i(TAG, String.format(Locale.ROOT,
                     "Tier pacing hardware core declaredHz=%.6f " +
                     "synchronizedHz=%.6f pacedHz=%.3f coreClockHz=%.6f",

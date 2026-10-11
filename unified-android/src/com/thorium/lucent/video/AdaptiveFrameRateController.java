@@ -123,6 +123,10 @@ public final class AdaptiveFrameRateController {
     // 119.88-Hz rational mode cannot be rounded to120.
     private static final double PANEL_CANONICAL_MEAN_TOLERANCE_HZ = 0.055;
     private static final double PANEL_CANONICAL_NEAREST_MARGIN_HZ = 0.045;
+    // Once the physical panel is qualified, a source within 100 ppm of one of
+    // its divisors is that divisor (the host paces it there); see
+    // panelLatticeSourceHz. Also bounds physical-mode clock retention.
+    private static final double PANEL_LATTICE_SNAP_FRACTION = 1.0e-4;
     private static final double CANONICAL_PERIOD_RMS_FRACTION = 0.006;
     private static final double CANONICAL_PERIOD_MAX_FRACTION = 0.03;
     // Some emulator bridges expose an exact source grid through immutable
@@ -249,7 +253,18 @@ public final class AdaptiveFrameRateController {
     // SurfaceTexture delivered every intervening producer buffer. A mismatch
     // discards that interpolation interval while preserving source evidence.
     private double producerTimelineHz;
+    // Trust boundary installed by setProducerTimelineHz; retimes stay near it.
+    private double installedProducerTimelineHz;
     private long producerTimelineDiscontinuityCount;
+    // Residual budget per stamped core tick. Native PTS sit on an exact
+    // lattice rounded once to nanoseconds, so the real residual is far below
+    // this; scaling by the ticks spanned keeps a timeline a few hundred ppm
+    // from the stamp clock valid on multi-tick gaps (Thor: 60.000 timeline,
+    // 59.975 panel-paced stamps failed every 3+-tick gap and reset).
+    private static final double PRODUCER_TIMELINE_RESIDUAL_PER_TICK = 0.001;
+    // A retime follows the host's panel pacing (<1% by DisplaySyncPolicy);
+    // anything larger is a new trust boundary for setProducerTimelineHz.
+    private static final double MAX_PRODUCER_TIMELINE_RETIME_FRACTION = 0.005;
     // Rendering capability is an independent contract from source-rate
     // measurement.  If the qualified generator rejects itself, presentation
     // must become endpoint-only immediately; it may not silently fall through
@@ -692,7 +707,8 @@ public final class AdaptiveFrameRateController {
                         1_000_000_000.0;
                 long timelinePeriods = Math.round(exactPeriods);
                 if (timelinePeriods >= 2L && timelinePeriods <= 3L &&
-                        Math.abs(exactPeriods - timelinePeriods) <= 0.001)
+                        producerTimelineResidualFits(exactPeriods,
+                                timelinePeriods))
                     submissionGap = (int) timelinePeriods;
             }
             if (producerTimelineHz > 0.0 && submissionGap > 0 &&
@@ -757,11 +773,17 @@ public final class AdaptiveFrameRateController {
         long timelinePeriods = Math.round(exactPeriods);
         // Native timestamps are rounded once to integer nanoseconds, so the
         // residual is normally below one millionth of a period. One tenth of
-        // one percent remains far below any real cadence distinction while
-        // rejecting an arrival-time or driver-authored timestamp.
+        // one percent per tick remains far below any real cadence distinction
+        // while rejecting an arrival-time or driver-authored timestamp.
         return timelinePeriods >= 1L && timelinePeriods <= 120L &&
-                Math.abs(exactPeriods - timelinePeriods) <= 0.001 &&
+                producerTimelineResidualFits(exactPeriods, timelinePeriods) &&
                 timelinePeriods == deliveredSubmissionGap;
+    }
+
+    private static boolean producerTimelineResidualFits(
+            double exactPeriods, long timelinePeriods) {
+        return Math.abs(exactPeriods - timelinePeriods) <=
+                PRODUCER_TIMELINE_RESIDUAL_PER_TICK * timelinePeriods;
     }
 
     /**
@@ -2705,14 +2727,39 @@ public final class AdaptiveFrameRateController {
         double measured = decisionRateHz(sampleCount);
         if (!Double.isFinite(measured) ||
                 measured < MIN_GENERATION_SOURCE_HZ) return 0.0;
-        if (physicalDisplayClockQualified)
+        if (physicalDisplayClockQualified) {
+            // A core paced to the measured panel stamps panelHz/k exactly. A
+            // window still holding a few pre-pace periods averages a little
+            // off it, and the strict 1e-5-Hz plan then refuses it; snap it.
+            double lattice = panelLatticeSourceHz(measured);
+            if (lattice > 0.0 && decisionTimestampPeriodsMatch(lattice, sampleCount))
+                return lattice;
             return decisionTimestampPeriodsMatch(measured, sampleCount) ? measured : 0.0;
+        }
         double canonical = nearestCanonicalTimestampSourceHz(measured);
         if (canonical > 0.0 &&
                 decisionTimestampPeriodsMatch(canonical, sampleCount))
             return canonical;
         return decisionTimestampPeriodsMatch(measured, sampleCount) ?
                 measured : 0.0;
+    }
+
+    /**
+     * The measured panel's divisor nearest a measured source clock, or zero.
+     *
+     * <p>The band is the host's own re-pace threshold (refinements under
+     * 100 ppm are not republished), so a correctly paced source always lands
+     * inside it, while an unpaced nominal 60.000 on the Thor's 119.95-Hz
+     * panel (417 ppm off its divisor) stays an honest unqualified clock.</p>
+     */
+    private double panelLatticeSourceHz(double measuredHz) {
+        if (!physicalDisplayClockQualified || !(displayRefreshHz > 0.0) ||
+                !Double.isFinite(measuredHz) || measuredHz <= 0.0) return 0.0;
+        long divisor = Math.round(displayRefreshHz / measuredHz);
+        if (divisor < 1L || divisor > 8L) return 0.0;
+        double latticeHz = displayRefreshHz / divisor;
+        return Math.abs(measuredHz / latticeHz - 1.0) <=
+                PANEL_LATTICE_SNAP_FRACTION ? latticeHz : 0.0;
     }
 
     /**
@@ -2758,11 +2805,23 @@ public final class AdaptiveFrameRateController {
         // 30-second re-acquisition every time the clock qualified.
         return decisionTimestampPeriodsMatchWithProvenDuplicates(
                 rateHz, count, retentionOrdinaryPercent(),
-                CANONICAL_RETENTION_MEAN_TOLERANCE_HZ) ||
+                retentionMeanToleranceHz(rateHz)) ||
                 decisionTimestampPeriodsRetainAcrossSparseMissingEndpoints(
                         rateHz, count) ||
                 decisionTimestampPeriodsRetainAcrossSparsePhaseCorrection(
                         rateHz, count);
+    }
+
+    /**
+     * Mean band for retaining an already proven clock. A canonical clock keeps
+     * TWINE's bounded N64 bias (0.060 Hz). A physical-panel clock is a measured
+     * divisor the host paces the core onto: 0.060 Hz (1000 ppm) would retain
+     * the old clock after a re-pace, so it gets the 100-ppm lattice band.
+     */
+    private double retentionMeanToleranceHz(double rateHz) {
+        return physicalDisplayClockQualified ?
+                rateHz * PANEL_LATTICE_SNAP_FRACTION :
+                CANONICAL_RETENTION_MEAN_TOLERANCE_HZ;
     }
 
     /**
@@ -2850,7 +2909,7 @@ public final class AdaptiveFrameRateController {
         double rmsFraction = Math.sqrt(
                 squaredFractionSum / ordinaryCount);
         return Math.abs(ordinaryRateHz - rateHz) <=
-                        CANONICAL_RETENTION_MEAN_TOLERANCE_HZ &&
+                        retentionMeanToleranceHz(rateHz) &&
                 rmsFraction <= CANONICAL_PERIOD_RMS_FRACTION &&
                 maximumFraction <= CANONICAL_PERIOD_MAX_FRACTION;
     }
@@ -3000,7 +3059,7 @@ public final class AdaptiveFrameRateController {
                 ordinaryElapsedNs;
         double rmsFraction = Math.sqrt(squaredFractionSum / ordinary);
         return Math.abs(ordinaryRateHz - rateHz) <=
-                        CANONICAL_RETENTION_MEAN_TOLERANCE_HZ &&
+                        retentionMeanToleranceHz(rateHz) &&
                 rmsFraction <= CANONICAL_PERIOD_RMS_FRACTION &&
                 maximumFraction <= CANONICAL_PERIOD_MAX_FRACTION;
     }
@@ -3350,6 +3409,26 @@ public final class AdaptiveFrameRateController {
                             qualifiedUniqueTimestampSourceHz;
                     canonicalReacquireEvidenceNs = 0L;
                     canonicalReacquireCandidateHz = 0.0;
+                    return;
+                }
+                if (uniqueClock > 0.0 &&
+                        uniqueClock == panelLatticeSourceHz(uniqueClock)) {
+                    // A real clock change whose complete window already
+                    // proves another panel divisor (a re-pace, or a 90-period
+                    // bootstrap that averaged the pre-pace clock): re-latch
+                    // at one boundary instead of revoking into the slow
+                    // reacquisition. Divisors are >=12% apart, so a sliding
+                    // mean cannot alternate between two of them.
+                    qualifiedUniqueTimestampSourceHz = uniqueClock;
+                    lastRejectedQualifiedTimestampSourceHz = 0.0;
+                    lastRejectedQualifiedTimestampProof = "none";
+                    qualifiedUniqueTimestampClockRejected = false;
+                    replacementUniqueClockHz = 0.0;
+                    replacementUniqueClockSinceNs = 0L;
+                    provenTimestampSourceHz = uniqueClock;
+                    canonicalReacquireEvidenceNs = 0L;
+                    canonicalReacquireCandidateHz = 0.0;
+                    resetPresentation();
                     return;
                 }
                 lastRejectedQualifiedTimestampSourceHz =
@@ -3884,9 +3963,11 @@ public final class AdaptiveFrameRateController {
     public void setProducerTimelineHz(double value) {
         double sanitized = Double.isFinite(value) && value >= 1.0 &&
                 value <= 1000.0 ? value : 0.0;
+        // Re-installing the same boundary keeps any retime the host applied.
         if (Double.doubleToLongBits(sanitized) ==
-                Double.doubleToLongBits(producerTimelineHz)) return;
+                Double.doubleToLongBits(installedProducerTimelineHz)) return;
         producerTimelineHz = sanitized;
+        installedProducerTimelineHz = sanitized;
         producerTimelineDiscontinuityCount = 0L;
         provenTimestampSourceHz = 0.0;
         qualifiedUniqueTimestampSourceHz = 0.0;
@@ -3909,6 +3990,23 @@ public final class AdaptiveFrameRateController {
         worstSecondBucketIndex = 0;
         worstSecondFilled = 0;
         resetPresentation();
+    }
+
+    /**
+     * Follows the host re-pacing an already trusted stamped clock (for example
+     * onto the measured 59.975-Hz panel divisor). Unlike
+     * {@link #setProducerTimelineHz} this keeps every rate proof and the
+     * presentation epoch: the stamps stay one exact lattice, only its period
+     * moved by a few hundred ppm. Returns false, changing nothing, when no
+     * timeline is installed or the retime is not small.
+     */
+    public boolean retimeProducerTimeline(double value) {
+        if (!(installedProducerTimelineHz > 0.0) || !Double.isFinite(value) ||
+                value < 1.0 || value > 1000.0 ||
+                Math.abs(value / installedProducerTimelineHz - 1.0) >
+                        MAX_PRODUCER_TIMELINE_RETIME_FRACTION) return false;
+        producerTimelineHz = value;
+        return true;
     }
 
     /**

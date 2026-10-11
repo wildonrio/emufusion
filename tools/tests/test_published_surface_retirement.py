@@ -30,17 +30,19 @@ class PublishedSurfaceRetirementTest(unittest.TestCase):
     static class Request {String engineId="native";}
     static class Host {
         String TAG="test";Request request=new Request();boolean surfaceAvailable=true,presentationRecoveryPending;
-        EngineSession session=new EngineSession(),retiringSession;
+        EngineSession session=new EngineSession(),retiringSession,checkpointRetainedProducer;
         Queue RETIREMENT_RELEASES=new Queue(),mainHandler=new Queue();int updates;
         void updateGameplayScreenOn(){updates++;}
 ''' + bodies + r'''
     }
     public static void main(String[] args){
-        for(int mode=0;mode<5;mode++){
+        for(int mode=0;mode<6;mode++){
             Host h=new Host();FrameGenerationRenderer r=new FrameGenerationRenderer();r.owner=h.session;
             if(mode==1)r.owner.ack=false;if(mode==2)r.fail=true;
             if(mode==3){h.retiringSession=h.session;h.session=null;}
             if(mode==4)h.session=null;
+            // FG exit: the stopped session kept its Surface through the checkpoint.
+            if(mode==5){h.checkpointRetainedProducer=h.session;h.session=null;}
             int[] completions={0},stops={0};Throwable[] result={null};
             h.retireSurfaceRenderer(r,f->{completions[0]++;result[0]=f;});
             assert !h.surfaceAvailable&&h.presentationRecoveryPending&&h.updates==1;
@@ -51,7 +53,8 @@ class PublishedSurfaceRetirementTest(unittest.TestCase):
             h.RETIREMENT_RELEASES.flush();assert stops[0]==1&&completions[0]==0;
             assert r.closes==((mode==1||mode==4)?0:1);
             h.mainHandler.flush();assert completions[0]==1&&!h.presentationRecoveryPending;
-            assert (result[0]==null)==(mode==0||mode==3);
+            assert (result[0]==null)==(mode==0||mode==3||mode==5);
+            assert h.checkpointRetainedProducer==null;
         }
     }
 ''')

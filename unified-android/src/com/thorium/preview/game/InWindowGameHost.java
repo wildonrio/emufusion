@@ -2131,7 +2131,22 @@ public final class InWindowGameHost
         // removed before serialization and the separately composed gameplay
         // layer cannot cover the library for the duration of the save. If the
         // bounded barrier failed, retain the Surface as the fail-closed path.
-        returnToLibraryUi(returnStartedUptimeMs, renderQuiesced);
+        //
+        // Frame generation is the exception: removing the SurfaceView retires
+        // the generator, whose quiesce detaches the hardware core and destroys
+        // its GL context, and core stop is ordered after that retirement, so
+        // every exit save failed ("hardware context is not ready for state
+        // capture", Thor N64 with Built-in FG). Keep that Surface alive but
+        // invisible until the checkpoint has been written.
+        boolean retainForCheckpoint = renderQuiesced &&
+                ending instanceof PpssppGlesEngineSession &&
+                gameSurface instanceof GameSurfaceView &&
+                ((GameSurfaceView) gameSurface).ownsFrameGenerator();
+        if (retainForCheckpoint) {
+            ((View) gameSurface).setAlpha(0f);
+            checkpointRetainedProducer = ending;
+        }
+        returnToLibraryUi(returnStartedUptimeMs, renderQuiesced && !retainForCheckpoint);
         if (ending != null && !renderQuiesced)
             mainHandler.postDelayed(() -> restartFrontendIfExitWedged(ending),
                     WEDGED_EXIT_RESTART_MS);
@@ -2458,9 +2473,14 @@ public final class InWindowGameHost
         });
     }
 
+    /** The stopped session whose FG Surface was kept through its exit checkpoint. */
+    private volatile EngineSession checkpointRetainedProducer;
+
     @Override public void retireSurfaceRenderer(FrameGenerationRenderer renderer,
             GameSurface.RetirementCompletion completion) {
-        final EngineSession producer = session != null ? session : retiringSession;
+        final EngineSession producer = session != null ? session :
+                retiringSession != null ? retiringSession : checkpointRetainedProducer;
+        checkpointRetainedProducer = null;
         surfaceAvailable = false;
         updateGameplayScreenOn();
         presentationRecoveryPending = true;

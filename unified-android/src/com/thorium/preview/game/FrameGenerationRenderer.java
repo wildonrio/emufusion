@@ -103,6 +103,13 @@ public interface FrameGenerationRenderer extends AutoCloseable {
     /** Hardware-core PTS clock; transport provenance, never source authority. */
     void setProducerTimelineHz(double timelineHz);
 
+    /**
+     * The host re-paced the stamped core clock by a small amount (the
+     * measured-panel divisor). Follows it without discarding rate evidence;
+     * a large change is ignored and still needs setProducerTimelineHz.
+     */
+    default void retimeProducerTimeline(double timelineHz) {}
+
     /** Optional exact-host image observer, never timing/generation authority.
      * The renderer owns provider-generation and retained-image invalidation. */
     default void setNativeSourceImageProvider(NativeSourceImageProvider provider) {}

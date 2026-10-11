@@ -55,6 +55,11 @@ public final class AdaptiveFrameRateControllerTest {
         classifiedDuplicateMustOccupyExactProvenSourceSlot();
         physicalTwentyOrdinalGridProvesCanonicalTwenty();
         stampedCoreTimelineDetectsTransportLossWithoutBecomingSourceAuthority();
+        panelPacedStampsStayContinuousOnNominalOrRetimedTimeline();
+        slotLatticeCreditsPanelPacedTripleSpan();
+        physicalBootstrapSnapsPrePaceMeanToPanelDivisor();
+        physicalRepaceRelatchesWithoutSlowReacquisition();
+        physicalRetentionRevokesRepacedClockDespiteHeldFrames();
         unstableNearThirtyMeanIsNotCanonicalized();
         fractionalAuthoritativeSourceRemainsExact();
         unmatchedFractionalSourcePreservesDirectEndpoints();
@@ -5198,6 +5203,223 @@ public final class AdaptiveFrameRateControllerTest {
                 0.001, "core60 transport clock does not relabel game30 as60");
         eq(0, (int) thirty.producerTimelineDiscontinuityCountForDiagnostics(),
                 "ordinary duplicate frames are not transport loss");
+    }
+
+    /** Native GLES/Vulkan stamp: base + sequence / stamp clock, rounded once. */
+    private static long latticeStamp(long baseNs, long tick, double stampHz) {
+        return baseNs + Math.round(tick * 1_000_000_000.0 / stampHz);
+    }
+
+    private static void panelPacedStampsStayContinuousOnNominalOrRetimedTimeline() {
+        // Thor: hardware cores are paced to the measured 119.95-Hz panel
+        // divisor and stamp that exact 59.975-Hz lattice, while the trusted
+        // timeline was installed at the synchronized 60.000. A fixed
+        // 0.001-period residual failed every 3+-tick span (3 x 417 ppm) and
+        // reset the presentation epoch.
+        double stampHz = 119.95 / 2.0;
+        int[] ticksPerImage = {1, 2, 3, 4, 3, 1, 4, 2};
+        for (int retimed = 0; retimed < 2; ++retimed) {
+            AdaptiveFrameRateController value =
+                    new AdaptiveFrameRateController(120.0);
+            value.setProducerTimelineHz(60.0);
+            long base = 510_000_000_000L;
+            long tick = 0L;
+            long ordinal = 1L;
+            value.onProducerFrame(latticeStamp(base, tick, stampHz), ordinal);
+            for (int frame = 0; frame < 900; ++frame) {
+                tick += 1L;
+                ordinal += 1L;
+                check(value.onProducerFrame(latticeStamp(base, tick, stampHz),
+                        ordinal), "one-tick 59.975 stamps stay continuous");
+            }
+            if (retimed == 1) {
+                int decisions = value.decisionPeriodsForDiagnostics();
+                boolean acquired = value.tierAcquiredForDiagnostics();
+                double clock = value.qualifiedUniqueTimestampSourceHzForDiagnostics();
+                long epoch = value.presentationEpoch();
+                check(value.retimeProducerTimeline(stampHz),
+                        "small panel retime is accepted");
+                check(value.producerTimelineHzForDiagnostics() == stampHz,
+                        "retime installs the paced clock");
+                eq(decisions, value.decisionPeriodsForDiagnostics(),
+                        "retime keeps rate evidence");
+                check(acquired == value.tierAcquiredForDiagnostics() &&
+                                clock == value.qualifiedUniqueTimestampSourceHzForDiagnostics(),
+                        "retime keeps the acquired tier and proven clock");
+                eq(epoch, value.presentationEpoch(),
+                        "retime keeps the presentation epoch");
+                value.setProducerTimelineHz(60.0);
+                check(value.producerTimelineHzForDiagnostics() == stampHz &&
+                                value.decisionPeriodsForDiagnostics() == decisions,
+                        "re-installing the same boundary keeps the retime");
+            }
+            for (int frame = 0; frame < 400; ++frame) {
+                int ticks = ticksPerImage[frame % ticksPerImage.length];
+                tick += ticks;
+                ordinal += ticks;
+                check(value.onProducerFrame(latticeStamp(base, tick, stampHz),
+                                ordinal),
+                        "panel-paced " + ticks + "-tick span stays continuous" +
+                                " retimed=" + retimed);
+            }
+            eq(0, (int) value.producerTimelineDiscontinuityCountForDiagnostics(),
+                    "no transport loss on an exact paced lattice retimed=" + retimed);
+
+            long epoch = value.presentationEpoch();
+            tick += 2L;
+            ordinal += 1L; // Two ticks elapsed, one buffer delivered.
+            check(!value.onProducerFrame(latticeStamp(base, tick, stampHz), ordinal),
+                    "submission gap different from timeline ticks still resets");
+            eq(1, (int) value.producerTimelineDiscontinuityCountForDiagnostics(),
+                    "coalesced carrier buffer is counted retimed=" + retimed);
+            check(value.presentationEpoch() > epoch,
+                    "coalesced carrier buffer publishes a re-prime boundary");
+            tick += 1L;
+            ordinal += 1L;
+            check(value.onProducerFrame(latticeStamp(base, tick, stampHz), ordinal),
+                    "the next exact tick starts a continuous chain");
+
+            // A tenth of a period off-lattice (an arrival-time stamp) on a
+            // three-tick span exceeds the 0.003-period budget.
+            tick += 3L;
+            ordinal += 3L;
+            long offLattice = latticeStamp(base, tick, stampHz) +
+                    Math.round(0.1e9 / stampHz);
+            check(!value.onProducerFrame(offLattice, ordinal),
+                    "residual beyond the per-tick budget still resets");
+            eq(2, (int) value.producerTimelineDiscontinuityCountForDiagnostics(),
+                    "off-lattice span is counted retimed=" + retimed);
+        }
+
+        AdaptiveFrameRateController value = new AdaptiveFrameRateController(120.0);
+        check(!value.retimeProducerTimeline(59.975),
+                "no installed timeline: nothing to retime");
+        check(value.producerTimelineHzForDiagnostics() == 0.0,
+                "a refused retime cannot install a timeline");
+        value.setProducerTimelineHz(60.0);
+        check(!value.retimeProducerTimeline(59.0),
+                "a 1.7 percent change is a new trust boundary, not a retime");
+        check(!value.retimeProducerTimeline(Double.NaN), "invalid retime refused");
+        check(value.producerTimelineHzForDiagnostics() == 60.0,
+                "refused retimes keep the installed timeline");
+    }
+
+    private static void slotLatticeCreditsPanelPacedTripleSpan() {
+        // Native adapters stamp real-time slots: two dropped guest frames are
+        // a three-slot span with ONE submission. At 59.975 against a 60.000
+        // timeline that span carries 0.00125 periods of residual.
+        double stampHz = 119.95 / 2.0;
+        AdaptiveFrameRateController value = new AdaptiveFrameRateController(120.0);
+        value.setProducerTimelineHz(60.0);
+        value.setSlotLatticeProducer(true);
+        long base = 520_000_000_000L;
+        long tick = 0L;
+        long ordinal = 1L;
+        value.onProducerFrame(latticeStamp(base, tick, stampHz), ordinal);
+        for (int frame = 0; frame < 600; ++frame) {
+            tick += frame % 20 == 19 ? 3L : 1L;
+            ordinal += 1L;
+            check(value.onProducerFrame(latticeStamp(base, tick, stampHz), ordinal),
+                    "slot-lattice span stays continuous frame=" + frame);
+        }
+        eq(0, (int) value.producerTimelineDiscontinuityCountForDiagnostics(),
+                "triple panel-paced slot spans are credited, not transport loss");
+    }
+
+    /**
+     * Feeds a hardware core that the host re-paces from the synchronized
+     * 60.000 onto the panel divisor after {@code prePaceFrames}; the native
+     * stamp re-bases continuously from its last stamp, as the GLES backend.
+     * Returns the controller after {@code totalFrames} images.
+     */
+    private static AdaptiveFrameRateController feedPhysicalRepace(
+            double panelHz, int prePaceFrames, int totalFrames) {
+        AdaptiveFrameRateController value = new AdaptiveFrameRateController(120.0);
+        value.setPhysicalDisplayRefreshHz(panelHz);
+        long base = 530_000_000_000L;
+        long last = base;
+        for (int frame = 0; frame < totalFrames; ++frame) {
+            long stamp = frame <= prePaceFrames ?
+                    latticeStamp(base, frame, 60.0) :
+                    latticeStamp(latticeStamp(base, prePaceFrames, 60.0),
+                            frame - prePaceFrames, panelHz / 2.0);
+            value.onProducerFrame(stamp, frame + 1L);
+            last = stamp;
+        }
+        check(last > base, "fixture advanced");
+        return value;
+    }
+
+    private static void physicalBootstrapSnapsPrePaceMeanToPanelDivisor() {
+        // Ten pre-pace 60.000 periods inside the 90-period bootstrap pull its
+        // mean ~46 ppm off 119.95/2. The strict 1e-5-Hz plan refuses that raw
+        // mean, leaving generation Direct until a later full window.
+        double panel = 119.95;
+        AdaptiveFrameRateController value = feedPhysicalRepace(panel, 10, 100);
+        check(value.qualifiedUniqueTimestampSourceHzForDiagnostics() == panel / 2.0,
+                "bootstrap snaps to the panel divisor: " +
+                        value.qualifiedUniqueTimestampSourceHzForDiagnostics());
+        check(value.uniformOutputQualified() && value.generatesIntermediateFrames(),
+                "snapped divisor qualifies exact doubling");
+
+        // An unpaced nominal 60.000 is 417 ppm off the divisor: never snapped.
+        AdaptiveFrameRateController unpaced = feedPhysicalRepace(panel, 2000, 1200);
+        check(unpaced.qualifiedUniqueTimestampSourceHzForDiagnostics() != panel / 2.0,
+                "unpaced 60.000 keeps its measured clock");
+        check(!unpaced.generatesIntermediateFrames(),
+                "unpaced 60.000 cannot claim the 119.95 doubling plan");
+    }
+
+    private static void physicalRepaceRelatchesWithoutSlowReacquisition() {
+        // A 50/50 pre-pace bootstrap (~208 ppm off) honestly qualifies its
+        // raw mean. The first complete post-pace window proves the divisor;
+        // it must re-latch there rather than revoke and wait for the
+        // thirty-second reacquisition ring.
+        double panel = 119.95;
+        AdaptiveFrameRateController value = feedPhysicalRepace(panel, 45, 100);
+        double bootstrap = value.qualifiedUniqueTimestampSourceHzForDiagnostics();
+        check(bootstrap > 0.0 && bootstrap != panel / 2.0,
+                "mixed bootstrap qualifies its measured mean: " + bootstrap);
+        check(!value.generatesIntermediateFrames(), "raw mean stays Direct");
+        value = feedPhysicalRepace(panel, 45, 100 + 660);
+        check(value.qualifiedUniqueTimestampSourceHzForDiagnostics() == panel / 2.0,
+                "complete paced window re-latches the divisor: " +
+                        value.qualifiedUniqueTimestampSourceHzForDiagnostics());
+        check(value.generatesIntermediateFrames(),
+                "re-latched divisor funds generation within one window");
+    }
+
+    private static void physicalRetentionRevokesRepacedClockDespiteHeldFrames() {
+        // Sparse ordinal-proven held frames make the strict window unprovable,
+        // so only the retention band decides. 0.060 Hz kept a qualified 59.975
+        // after the core moved to 59.950; the physical band is 100 ppm.
+        double panel = 119.95;
+        for (int moved = 0; moved < 2; ++moved) {
+            AdaptiveFrameRateController value = new AdaptiveFrameRateController(120.0);
+            value.setPhysicalDisplayRefreshHz(panel);
+            long base = 540_000_000_000L;
+            long tick = 0L;
+            for (int frame = 0; frame < 900; ++frame) {
+                value.onProducerFrame(latticeStamp(base, tick, panel / 2.0), tick + 1L);
+                ++tick;
+            }
+            check(value.qualifiedUniqueTimestampSourceHzForDiagnostics() == panel / 2.0,
+                    "exact paced lattice qualifies the divisor");
+            double sourceHz = moved == 1 ? 59.95 : panel / 2.0;
+            long movedBase = latticeStamp(base, tick, panel / 2.0);
+            long movedTick = 0L;
+            for (int frame = 0; frame < 720; ++frame) {
+                movedTick += frame % 25 == 24 ? 2L : 1L;
+                value.onProducerFrame(latticeStamp(movedBase, movedTick, sourceHz),
+                        tick + movedTick + 1L);
+            }
+            if (moved == 0)
+                check(value.qualifiedUniqueTimestampSourceHzForDiagnostics() == panel / 2.0,
+                        "held frames on the unchanged lattice retain the clock");
+            else
+                check(value.qualifiedUniqueTimestampSourceHzForDiagnostics() != panel / 2.0,
+                        "a 417-ppm re-pace revokes the old physical clock");
+        }
     }
 
     private static AdaptiveFrameRateController feed(int display, int source, int frames) {

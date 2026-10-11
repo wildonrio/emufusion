@@ -25,11 +25,13 @@ public class ClockTest {
    t.externalPhysicalClock.hz=100;t.publishExternalPhysicalClock();check(t.frameRate.sets==0);
    t.externalPhysicalClock.hz=119.95;t.externalPhysicalClock.actual=1000000000L;
    t.publishExternalPhysicalClock();check(t.frameRate.sets==1&&t.qualifiedPhysicalPanelHz==119.95);
-   t.externalPhysicalClock.hz=119.96;t.externalPhysicalClock.actual=2000000000L;
+   t.externalPhysicalClock.hz=119.97;t.externalPhysicalClock.actual=2000000000L;
    t.publishExternalPhysicalClock();check(t.frameRate.refines==0&&t.qualifiedPhysicalPanelObservedNs==2000000000L);
-   t.externalPhysicalClock.actual=7000000000L;t.publishExternalPhysicalClock();
+   t.externalPhysicalClock.hz=119.955;t.externalPhysicalClock.actual=7000000000L;
+   t.publishExternalPhysicalClock();check(t.frameRate.refines==0);
+   t.externalPhysicalClock.hz=119.97;t.publishExternalPhysicalClock();
    check(t.frameRate.refines==1&&t.qualifiedPhysicalPanelHz==119.95);
-   t.frameRate.accept=true;t.publishExternalPhysicalClock();check(t.qualifiedPhysicalPanelHz==119.96);
+   t.frameRate.accept=true;t.publishExternalPhysicalClock();check(t.qualifiedPhysicalPanelHz==119.97);
    t.externalPhysicalClock.hz=0;t.externalPhysicalClock.actual=9000000000L;
    t.publishExternalPhysicalClock();check(t.qualifiedPhysicalPanelObservedNs==7000000000L);
  }

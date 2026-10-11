@@ -18,7 +18,45 @@ public final class PhysicalPresentationClockTest {
         longIdleCannotQualifyGuestClock();
         sustainedFrequencyTracksRecentOscillatorInsteadOfSessionAverage();
         recentFrequencyCountsSkippedScansAndBoundsFenceNoise();
+        subSecondStallKeepsSustainedAdmissionButLongIdleRestarts();
         System.out.println("PhysicalPresentationClockTest passed");
+    }
+
+    private static void subSecondStallKeepsSustainedAdmissionButLongIdleRestarts() {
+        // Thor: one 383-ms allocation stall restarted the 20-s sustained
+        // admission (any present gap above 250 ms did). A sub-second stall is
+        // bridged with its counted scans; a 1.5-s idle still restarts.
+        long nominal = 8_333_333L, period = 8_337_154L;
+        for (long gapNs : new long[] {383_000_000L, 1_500_000_000L}) {
+            PhysicalPresentationClock clock = new PhysicalPresentationClock();
+            long start = 1_000_000_000L;
+            long scan = 0L;
+            clock.record(start, nominal);
+            while (scan < 1800L) // 15 s of physical rows before the stall.
+                check(clock.record(start + ++scan * period, nominal), "row accepted");
+            scan += Math.round((double) gapNs / period);
+            check(clock.record(start + scan * period, nominal), "post-gap row accepted");
+            for (int row = 0; row < 720; ++row) // 6 more seconds.
+                check(clock.record(start + ++scan * period, nominal), "row accepted");
+            double hz = clock.sustainedFrequencyHz(start + scan * period);
+            if (gapNs < PhysicalPresentationClock.SUSTAINED_GAP_BRIDGE_NS)
+                check(Math.abs(hz - 1e9 / period) < 1e-6,
+                        "383-ms stall keeps the 20-s window with exact scans: " + hz);
+            else
+                check(hz == 0.0, "1.5-s idle restarts the 20-s admission: " + hz);
+        }
+
+        // An oscillator far enough from nominal that the two periods count a
+        // 0.9-s gap differently: never bridge an ambiguous scan count.
+        PhysicalPresentationClock clock = new PhysicalPresentationClock();
+        long skewed = 8_400_000L, start = 1_000_000_000L, time = start;
+        clock.record(time, nominal);
+        for (int row = 0; row < 2400; ++row)
+            check(clock.record(time += skewed, nominal), "skewed row accepted");
+        check(clock.record(time += 107L * skewed, nominal), "ambiguous gap row accepted");
+        for (int row = 0; row < 720; ++row) clock.record(time += skewed, nominal);
+        check(clock.sustainedFrequencyHz(time) == 0.0,
+                "a gap counted differently by nominal and measured periods restarts");
     }
 
     private static void recentFrequencyCountsSkippedScansAndBoundsFenceNoise() {

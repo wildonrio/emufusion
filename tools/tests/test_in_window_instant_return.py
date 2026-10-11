@@ -94,16 +94,24 @@ class InWindowInstantReturnTest(unittest.TestCase):
         )
         self.assertLess(
             exit_method.index("RETIRING_SESSIONS.add(ending)"),
-            exit_method.index("returnToLibraryUi(returnStartedUptimeMs, renderQuiesced);"),
+            exit_method.index("returnToLibraryUi(returnStartedUptimeMs, renderQuiesced && !retainForCheckpoint);"),
         )
         self.assertLess(
             exit_method.index("ending.quiesceForExit();"),
-            exit_method.index("returnToLibraryUi(returnStartedUptimeMs, renderQuiesced);"),
+            exit_method.index("returnToLibraryUi(returnStartedUptimeMs, renderQuiesced && !retainForCheckpoint);"),
         )
         self.assertLess(
-            exit_method.index("returnToLibraryUi(returnStartedUptimeMs, renderQuiesced);"),
+            exit_method.index("returnToLibraryUi(returnStartedUptimeMs, renderQuiesced && !retainForCheckpoint);"),
             exit_method.index("ending.stop("),
         )
+        # With frame generation the generator's retirement destroys the core's
+        # GL context, so its Surface is kept (invisible) through the checkpoint.
+        self.assertIn("boolean retainForCheckpoint = renderQuiesced &&", exit_method)
+        self.assertIn("((GameSurfaceView) gameSurface).ownsFrameGenerator();", exit_method)
+        self.assertIn("((View) gameSurface).setAlpha(0f);", exit_method)
+        self.assertIn("checkpointRetainedProducer = ending;", exit_method)
+        self.assertLess(exit_method.index("checkpointRetainedProducer = ending;"),
+                        exit_method.index("ending.stop("))
         restore = self.method(
             "private void returnToLibraryUi(long", "private synchronized void finishRetiringSession"
         )
@@ -118,7 +126,7 @@ class InWindowInstantReturnTest(unittest.TestCase):
         )
         self.assertLess(
             exit_method.index("ending.quiesceForExit();"),
-            exit_method.index("returnToLibraryUi(returnStartedUptimeMs, renderQuiesced);"),
+            exit_method.index("returnToLibraryUi(returnStartedUptimeMs, renderQuiesced && !retainForCheckpoint);"),
         )
         reveal = self.method(
             "private void revealLibraryOverRetiringSurface()", "@Override public void onSurfaceAvailable"

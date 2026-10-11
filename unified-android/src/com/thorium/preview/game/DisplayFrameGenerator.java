@@ -2399,8 +2399,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     @Override public double physicalPanelHz() {
         long observed = qualifiedPhysicalPanelObservedNs;
         long now = System.nanoTime();
+        // Freshness matches the clock's own stall bridge: a sub-second
+        // present gap no longer withdraws builtin generation admission (and
+        // re-primes twice) while the measured oscillator is still valid.
         return !closed.get() && observed > 0 && now >= observed &&
-                now - observed <= 250_000_000L ? qualifiedPhysicalPanelHz : 0.0;
+                now - observed < PhysicalPresentationClock.SUSTAINED_GAP_BRIDGE_NS ?
+                qualifiedPhysicalPanelHz : 0.0;
     }
     @Override public double endpointDriftUsPerSecond() { return reportedEndpointDriftUsPerS; }
     @Override public long endpointOffsetNs() { return reportedEndpointOffsetNs; }
@@ -2491,6 +2495,29 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     " sourceAuthority=pixel-unique");
         });
     }
+
+    /**
+     * Follows a small host retime of the stamped core clock. Unlike
+     * setProducerTimelineHz this keeps the FIFO, dense epoch and every rate
+     * proof: the PTS remain one exact lattice whose period moved slightly.
+     */
+    @Override public void retimeProducerTimeline(double timelineHz) {
+        if (closed.get()) return;
+        handler.post(() -> {
+            if (closed.get()) return;
+            double previous = frameRate.producerTimelineHzForDiagnostics();
+            if (Double.compare(previous, timelineHz) == 0) return;
+            boolean accepted = frameRate.retimeProducerTimeline(timelineHz);
+            // The host repeats its request every second; log each refusal once.
+            if (!accepted && Double.compare(refusedProducerRetimeHz, timelineHz) == 0)
+                return;
+            refusedProducerRetimeHz = accepted ? 0.0 : timelineHz;
+            Log.i(TAG, "Producer timeline retime generator=" + generatorId +
+                    " fromHz=" + previous + " timelineHz=" + timelineHz +
+                    " accepted=" + accepted);
+        });
+    }
+    private double refusedProducerRetimeHz;
 
     /** Runs once after the producer's first complete buffer is consumed. */
     @Override public void setFirstSubmittedFrameListener(Runnable value) {
@@ -11483,7 +11510,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             qualifiedPhysicalPanelHz = hz;
             qualifiedPhysicalPanelRefinedNs = actualNs;
         } else if (actualNs - qualifiedPhysicalPanelRefinedNs >= 5_000_000_000L &&
-                Math.abs(hz / qualifiedPhysicalPanelHz - 1.0) >= 0.000005 &&
+                // 100 ppm, not 5: every refinement re-paces the guest and
+                // retimes its PTS; estimate noise is not worth a transition.
+                Math.abs(hz / qualifiedPhysicalPanelHz - 1.0) >= 0.0001 &&
                 frameRate.refinePhysicalDisplayRefreshHz(hz)) {
             qualifiedPhysicalPanelHz = hz;
             qualifiedPhysicalPanelRefinedNs = actualNs;
@@ -11858,7 +11887,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
                 } else if (builtInPhysicalClock.lastActualNs() -
                         qualifiedPhysicalPanelRefinedNs >= 5_000_000_000L &&
-                        Math.abs(physicalHz / qualifiedPhysicalPanelHz - 1.0) >= 0.000005 &&
+                        // Same 100-ppm re-pace threshold as the external clock.
+                        Math.abs(physicalHz / qualifiedPhysicalPanelHz - 1.0) >= 0.0001 &&
                         frameRate.refinePhysicalDisplayRefreshHz(physicalHz)) {
                     // Publish only an accepted transition. The guest owner
                     // applies the same rate to pacing and audio; the controller
