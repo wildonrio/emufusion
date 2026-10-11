@@ -113,6 +113,7 @@ public final class GameCheatDownloader {
             }
             document.identity.clear();
             document.identity.putAll(identity);
+            if ("ps2".equals(canonical)) document.inferSerialFromTags();
 
             int existing = existingCount(primary);
             if (document.isEmpty() && existing > 0) {

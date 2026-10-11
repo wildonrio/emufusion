@@ -51,6 +51,33 @@ public final class DownloadedCheatDocument {
 
     public boolean isEmpty() { return cheats.isEmpty(); }
 
+    /**
+     * A PS2 game without a readable serial (a CHD) matched its PCSX2 patch by
+     * title; the rows carry that file's serial and CRC as tags. Record them
+     * in the identity, so the boot writer can name the pnach PCSX2 loads.
+     * Only one serial is accepted; anything else stays unidentified.
+     */
+    public void inferSerialFromTags() {
+        if (identity.containsKey("serial") || identity.containsKey("crc")) return;
+        String serial = null, crc = null;
+        for (DownloadedCheat row : cheats) {
+            for (String tag : row.tags) {
+                if (tag.startsWith("serial:")) {
+                    String value = tag.substring(7).toUpperCase(java.util.Locale.US);
+                    if (serial != null && !serial.equals(value)) return;
+                    serial = value;
+                } else if (tag.startsWith("crc:")) {
+                    String value = tag.substring(4).toUpperCase(java.util.Locale.US);
+                    if (crc != null && !crc.equals(value)) return;
+                    crc = value;
+                }
+            }
+        }
+        if (serial == null) return;
+        identity.put("serial", serial);
+        if (crc != null) identity.put("crc", crc);
+    }
+
     public static String timestamp(long millis) {
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
         format.setTimeZone(TimeZone.getTimeZone("UTC"));

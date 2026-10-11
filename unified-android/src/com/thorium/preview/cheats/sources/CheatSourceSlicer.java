@@ -91,8 +91,12 @@ public final class CheatSourceSlicer {
                 case CheatSourceRegistry.MUPEN64PLUS: return mupen(source, canonicalSystem, identity);
                 case CheatSourceRegistry.PROJECT64: return project64(source, canonicalSystem, identity, title, contentName, originalName);
                 case CheatSourceRegistry.DUCKSTATION: return duckstation(source, canonicalSystem, identity);
-                case CheatSourceRegistry.PCSX2_PATCHES: return pcsx2Patches(source, canonicalSystem, identity);
-                case CheatSourceRegistry.PCSX2_CHEATS: return pcsx2Cheats(source, canonicalSystem, identity);
+                case CheatSourceRegistry.PCSX2_PATCHES:
+                    return pcsx2Patches(source, canonicalSystem, ps2TitleIdentity(source, canonicalSystem,
+                            identity, title, contentName));
+                case CheatSourceRegistry.PCSX2_CHEATS:
+                    return pcsx2Cheats(source, canonicalSystem, ps2TitleIdentity(source, canonicalSystem,
+                            identity, title, contentName));
                 case CheatSourceRegistry.CWCHEAT: return cwcheat(source, canonicalSystem, identity);
                 case CheatSourceRegistry.RC24_GECKO: return rc24(source, canonicalSystem, identity);
                 case CheatSourceRegistry.CEMU_PACKS: return cemu(source, canonicalSystem, identity, title, contentName);
@@ -207,6 +211,97 @@ public final class CheatSourceSlicer {
         return result;
     }
 
+    /**
+     * A PS2 CHD carries no readable SYSTEM.CNF here (its sectors are
+     * compressed), so it has no serial or ELF CRC and matched no patch at all.
+     * The archive's own "gametitle=" lines name each game; when the content's
+     * title resolves to exactly one patch file whose serial prefix fits the
+     * name's region, use that file's serial and CRC. Several candidates (disc
+     * revisions, regions) are ambiguous and match nothing: a patch for the
+     * wrong revision writes the wrong addresses.
+     */
+    private Map<String, String> ps2TitleIdentity(CheatSource source, String system, Map<String, String> identity,
+                                                 String title, String contentName) {
+        if (!"ps2".equals(system) || identity == null) return identity;
+        if (!CwCheatParser.normaliseSerial(identity.get("serial")).isEmpty() || !upper(identity.get("crc")).isEmpty())
+            return identity;
+        String stem = identity.get("stem");
+        if (stem == null || stem.isEmpty()) stem = contentName == null ? "" : CheatGameIdentity.stem(contentName);
+        String key = ps2TitleKey(stem);
+        if (key.isEmpty()) key = ps2TitleKey(title);
+        if (key.isEmpty()) return identity;
+        try {
+            File zip = fetch.fetch(source, source.url);
+            if (zip == null) return identity;
+            List<String> names = pnachTitleIndex(zip).get(key);
+            if (names == null) return identity;
+            List<String> prefixes = ps2RegionPrefixes(stem);
+            String only = null;
+            for (String name : names) {
+                Matcher match = PNACH_NAME.matcher(name);
+                if (!match.matches() || match.group(1) == null) continue;
+                String serial = CwCheatParser.normaliseSerial(match.group(1));
+                if (!prefixes.isEmpty() && !prefixes.contains(serial.substring(0, Math.min(4, serial.length()))))
+                    continue;
+                if (only != null) return identity;          // ambiguous
+                only = name;
+            }
+            if (only == null) return identity;
+            Matcher match = PNACH_NAME.matcher(only);
+            if (!match.matches()) return identity;
+            Map<String, String> inferred = new java.util.LinkedHashMap<>(identity);
+            inferred.put("serial", CwCheatParser.normaliseSerial(match.group(1)));
+            inferred.put("crc", match.group(2).toUpperCase(Locale.US));
+            inferred.put("serialSource", "pcsx2-gametitle");
+            return inferred;
+        } catch (IOException | RuntimeException unavailable) {
+            return identity;
+        }
+    }
+
+    /** "Prince of Persia - The Sands of Time (USA) (En,Fr,Es)" and "Prince of Persia: The Sands of Time (SLUS-20743)" agree. */
+    static String ps2TitleKey(String title) {
+        if (title == null) return "";
+        String clean = title.replaceAll("\\s*[\\(\\[][^\\)\\]]*[\\)\\]]", " ").toLowerCase(Locale.US)
+                .replace("&", " and ");
+        clean = (" " + clean.replaceAll("[^a-z0-9]+", " ") + " ").replace(" the ", " ");
+        return clean.replaceAll("[^a-z0-9]", "");
+    }
+
+    /** Serial prefixes a No-Intro/Redump region tag allows; empty when the name has none. */
+    static List<String> ps2RegionPrefixes(String stem) {
+        String lower = stem == null ? "" : stem.toLowerCase(Locale.US);
+        if (lower.contains("(usa") || lower.contains("(canada")) return java.util.Arrays.asList("SLUS", "SCUS");
+        if (lower.contains("(japan")) return java.util.Arrays.asList("SLPS", "SLPM", "SCPS", "SCAJ");
+        if (lower.matches(".*\\((europe|uk|germany|france|spain|italy|australia)[,)].*"))
+            return java.util.Arrays.asList("SLES", "SCES", "SCED");
+        return Collections.emptyList();
+    }
+
+    /** gametitle key -> pnach entry names, built once per downloaded archive. */
+    private Map<String, List<String>> pnachTitleIndex(File zip) throws IOException {
+        @SuppressWarnings("unchecked")
+        Map<String, List<String>> index = (Map<String, List<String>>) memo(zip, "pnach-titles");
+        if (index != null) return index;
+        index = new java.util.HashMap<>();
+        try (ZipFile archive = new ZipFile(zip)) {
+            for (ZipEntry entry : entries(archive)) {
+                String base = baseName(entry.getName());
+                if (!PNACH_NAME.matcher(base).matches()) continue;
+                String text = readEntry(archive, entry, MAX_ENTRY_BYTES);
+                if (text == null) continue;
+                Matcher title = GAMETITLE.matcher(text);
+                if (!title.find()) continue;
+                String key = ps2TitleKey(title.group(1));
+                if (!key.isEmpty()) index.computeIfAbsent(key, unused -> new ArrayList<>()).add(base);
+            }
+        }
+        remember(zip, "pnach-titles", index);
+        return index;
+    }
+
+    private static final Pattern GAMETITLE = Pattern.compile("(?im)^\\s*gametitle\\s*=\\s*(.+?)\\s*$");
+
     private List<DownloadedCheat> pcsx2Patches(CheatSource source, String system, Map<String, String> identity)
             throws IOException {
         String serial = CwCheatParser.normaliseSerial(identity.get("serial"));
@@ -231,6 +326,7 @@ public final class CheatSourceSlicer {
                 List<ParsedCheat> parsed = PnachParser.parse(text, "");
                 List<String> extra = new ArrayList<>();
                 extra.add("crc:" + entryCrc);
+                if (!entrySerial.isEmpty()) extra.add("serial:" + entrySerial);
                 result.addAll(rows(source, system, tagged(parsed, extra), source.name + " • " + base));
             }
         }

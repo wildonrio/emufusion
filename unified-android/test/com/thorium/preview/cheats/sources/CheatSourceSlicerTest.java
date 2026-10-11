@@ -53,6 +53,11 @@ public final class CheatSourceSlicerTest {
         pnach.put("SCUS-97472_7D6F5B0E.pnach", bytes("gametitle=SotC\n[Widescreen 16:9]\ngsaspectratio=16:9\npatch=1,EE,2034C7A0,extended,3F400000\n[No Interlacing]\npatch=1,EE,00000000,extended,00000001\n"));
         pnach.put("SCUS-97472_11111111.pnach", bytes("[Widescreen 16:9]\npatch=1,EE,2034C7A0,extended,3F400001\n"));
         pnach.put("SLUS-00000_22222222.pnach", bytes("[X]\npatch=1,EE,1,extended,1\n"));
+        // Title-matched (CHD) fixtures: one USA and one PAL Tekken 5, two Sly 2 revisions.
+        pnach.put("SLUS-21059_652050D2.pnach", bytes("gametitle=Tekken 5 (SLUS-21059)\n[Widescreen 16:9]\npatch=1,EE,00100000,word,3C013F40\n"));
+        pnach.put("SLES-53202_AAAAAAAA.pnach", bytes("gametitle=Tekken 5 (SLES-53202)\n[Widescreen 16:9]\npatch=1,EE,00100004,word,3C013F40\n"));
+        pnach.put("SCUS-97316_07652DD9.pnach", bytes("gametitle=Sly 2: Band of Thieves (USA) (SCUS-97316)\n[60 FPS]\npatch=1,EE,1,word,1\n"));
+        pnach.put("SCUS-97316_FDA1CBF6.pnach", bytes("gametitle=Sly 2: Band of Thieves (SCUS-97316)\n[60 FPS]\npatch=1,EE,2,word,1\n"));
         zip(src(CheatSourceRegistry.PCSX2_PATCHES).url, "patches.zip", pnach);
         Map<String, String> ps2 = identity("serial", "SCUS-97472", "crc", "7D6F5B0E");
         List<DownloadedCheat> ws = slicer.slice(src(CheatSourceRegistry.PCSX2_PATCHES), "ps2", ps2, "Shadow of the Colossus", "sotc.iso", "");
@@ -60,6 +65,27 @@ public final class CheatSourceSlicerTest {
         check(ws.get(0).hasTag("widescreen") && ws.get(0).hasTag("crc:7d6f5b0e"), "pnach tags: " + ws.get(0).tags);
         List<DownloadedCheat> serialOnly = slicer.slice(src(CheatSourceRegistry.PCSX2_PATCHES), "ps2", identity("serial", "SCUS-97472"), "sotc", "sotc.chd", "");
         check(serialOnly.size() == 3, "pnach serial-only takes every crc variant: " + serialOnly.size());
+        // A PS2 CHD has no serial: its title must resolve to exactly one file in its region.
+        check(CheatSourceSlicer.ps2TitleKey("Prince of Persia - The Sands of Time (USA) (En,Fr,Es)")
+                .equals(CheatSourceSlicer.ps2TitleKey("Prince of Persia: The Sands of Time (SLUS-20743)")), "title key");
+        check(CheatSourceSlicer.ps2TitleKey("King of Fighters 2002 The - Challenge to Ultimate Battle (USA)")
+                .equals(CheatSourceSlicer.ps2TitleKey("The King of Fighters 2002: Challenge to Ultimate Battle")), "article");
+        List<DownloadedCheat> usa = slicer.slice(src(CheatSourceRegistry.PCSX2_PATCHES), "ps2",
+                identity("stem", "Tekken 5 (USA)", "chdVersion", "5"), "Tekken 5", "Tekken 5 (USA).chd", "");
+        check(usa.size() == 1 && usa.get(0).hasTag("serial:slus-21059") && usa.get(0).hasTag("crc:652050d2"),
+                "chd title match, USA: " + (usa.isEmpty() ? "none" : usa.get(0).tags));
+        List<DownloadedCheat> pal = slicer.slice(src(CheatSourceRegistry.PCSX2_PATCHES), "ps2",
+                identity("stem", "Tekken 5 (Europe)"), "Tekken 5", "Tekken 5 (Europe).chd", "");
+        check(pal.size() == 1 && pal.get(0).hasTag("serial:sles-53202"), "chd title match, Europe");
+        check(slicer.slice(src(CheatSourceRegistry.PCSX2_PATCHES), "ps2", identity("stem", "Tekken 5"),
+                "Tekken 5", "Tekken 5.chd", "").isEmpty(), "no region tag and two regions: ambiguous");
+        check(slicer.slice(src(CheatSourceRegistry.PCSX2_PATCHES), "ps2", identity("stem", "Sly 2 - Band of Thieves (USA)"),
+                "Sly 2", "Sly 2 - Band of Thieves (USA).chd", "").isEmpty(), "two revisions: ambiguous");
+        DownloadedCheatDocument chdDoc = new DownloadedCheatDocument("ps2", "Tekken 5 (USA)");
+        chdDoc.addAll(usa);
+        chdDoc.inferSerialFromTags();
+        check("SLUS-21059".equals(chdDoc.identity.get("serial")) && "652050D2".equals(chdDoc.identity.get("crc")),
+                "identity inferred from tags: " + chdDoc.identity);
 
         Map<String, byte[]> coll = new LinkedHashMap<>();
         coll.put("xs1l3n7x-pcsx2_cheats_collection-abc/cheats/7D6F5B0E.pnach", bytes("//Infinite Health\npatch=1,EE,20000000,extended,00000063\n"));
