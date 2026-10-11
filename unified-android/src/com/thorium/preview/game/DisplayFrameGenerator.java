@@ -40,6 +40,7 @@ import com.thorium.lucent.video.ExternalPresentationLedger;
 import com.thorium.lucent.video.ExternalPhysicalClockBootstrap;
 import com.thorium.lucent.video.PhysicalPresentationDeadline;
 import com.thorium.lucent.video.PhysicalPresentationCadence;
+import com.thorium.lucent.video.PanelClockMemory;
 import com.thorium.lucent.video.PhysicalPresentationClock;
 import com.thorium.lucent.video.PresentationClockDiagnostics;
 
@@ -2206,6 +2207,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         this.outputWidth = positive(outputWidth);
         this.outputHeight = positive(outputHeight);
         this.refreshHz = sanitizeRefresh(refreshHz);
+        seedPhysicalClocks();
         frameRate = new AdaptiveFrameRateController(this.refreshHz);
         if (externalTransportFactory == null) frameRate.setGenerationAvailable(false);
         // Both Built-in and LSFG must sample the same exact one-midpoint lattice.
@@ -2608,6 +2610,21 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
     }
 
+    /**
+     * Starts both physical clocks from this mode's previously measured rate
+     * (PanelClockMemory); each still confirms it against live presents and
+     * replaces it with its own baseline after a full trim window.
+     */
+    private void seedPhysicalClocks() {
+        double remembered = PanelClockMemory.lookup(displayId, refreshHz);
+        builtInPhysicalClock.seedFrequencyHz(remembered);
+        externalPhysicalClock.seedFrequencyHz(remembered);
+        if (remembered > 0.0)
+            Log.i(TAG, "Physical panel clock seeded generator=" + generatorId +
+                    " displayId=" + displayId + " modeHz=" + refreshHz +
+                    " rememberedHz=" + remembered);
+    }
+
     @Override public void setPanelRefreshHz(float newRefreshHz) {
         if (closed.get()) return;
         final float hz = sanitizeRefresh(newRefreshHz);
@@ -2618,6 +2635,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             qualifiedPhysicalPanelObservedNs = 0L;
             builtInPhysicalClock.reset();
             refreshHz = hz;
+            seedPhysicalClocks();
             frameRate.setDisplayRefreshHz(hz);
             outputFrameRateReassertedAfterSwap = false;
             requestOutputFrameRate("panel-mode");
@@ -2654,6 +2672,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             outputWidth = ow;
             outputHeight = oh;
             refreshHz = hz;
+            seedPhysicalClocks();
             frameRate.setDisplayRefreshHz(hz);
             outputFrameRateReassertedAfterSwap = false;
             requestOutputFrameRate("resize");
@@ -11590,6 +11609,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         // Actual-present evidence only; the core/audio owner reads this pair.
         qualifiedPhysicalPanelObservedNs = actualNs;
+        if (externalPhysicalClock.hasSustainedBaseline())
+            PanelClockMemory.remember(displayId, refreshHz, hz);
     }
 
     private void pollPhysicalPresentations() {
@@ -11968,6 +11989,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
                 }
                 qualifiedPhysicalPanelObservedNs = builtInPhysicalClock.lastActualNs();
+                if (builtInPhysicalClock.hasSustainedBaseline())
+                    PanelClockMemory.remember(displayId, refreshHz, physicalHz);
             }
             if (!densePyramidEnabled) continue;
             if (!denseGpuHeadroom.ownsFrame(denseEvent.frameId)) {

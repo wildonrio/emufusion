@@ -80,6 +80,7 @@ public class NativeAdapterEngineSession implements EngineSession {
     void probeAps3eFirstSubmittedFrame(Surface s){}
     void drainAudioToTrack(NativeAdapterHost h){}
     void reportEngineSpeed(NativeAdapterHost h){}
+    void updatePhysicalFgClock(NativeAdapterHost h){}
     void releaseSecondaryDisplay(){}
     void releasePhoneTouch(){}
     String sessionFailureMessage(Throwable failure){return "failure";}

@@ -460,6 +460,23 @@ public final class InWindowGameHost
         this.request = request;
         this.content = content;
         privateDiagnostics = PrivateDiagnostics.session(activity, request.systemId);
+        installPanelClockStore(activity);
+    }
+
+    /** Lets measured panel rates survive launches (see PanelClockMemory). */
+    private static void installPanelClockStore(Context context) {
+        android.content.SharedPreferences prefs = context.getApplicationContext()
+                .getSharedPreferences("panel-clock", Context.MODE_PRIVATE);
+        com.thorium.lucent.video.PanelClockMemory.setStore(
+                new com.thorium.lucent.video.PanelClockMemory.Store() {
+                    @Override public double get(String key) {
+                        return Double.longBitsToDouble(prefs.getLong(key, 0L));
+                    }
+
+                    @Override public void put(String key, double hz) {
+                        prefs.edit().putLong(key, Double.doubleToRawLongBits(hz)).apply();
+                    }
+                });
     }
 
     /** Consumes a EmuFusion game intent and overlays gameplay in this Activity. */
@@ -772,7 +789,7 @@ public final class InWindowGameHost
             return null;
         }
         FrameGenerationSettings.Mode launchMode =
-                FrameGenerationSettings.mode(activity);
+                FrameGenerationSettings.forEngine(FrameGenerationSettings.mode(activity), engine);
         GameLaunchRequest request = new GameLaunchRequest(engine, system, gameId,
                 title, uri, SessionReturnState.from(source), qualificationSession,
                 launchMode);

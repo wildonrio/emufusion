@@ -524,6 +524,50 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     @Override public double pacedVideoHz() { return pacedVideoHz; }
 
+    private long physicalFgCheckNs;
+    private long physicalFgClockMisses;
+    private boolean physicalFgClockApplied;
+    private FrameGenerationRenderer physicalFgClockOwner;
+
+    /**
+     * The physical-clock lock the libretro and PPSSPP sessions already apply:
+     * while a frame generator owns the Surface, trim the guest clock (within
+     * DisplaySyncPolicy's sub-one-percent budget) to an exact division of the
+     * measured panel, so doubled output lands on the panel's own scan lattice.
+     * Without it Eden's measured 60.01-60.09 Hz never matched 119.96 / 2 and
+     * AUTO stayed Direct for every Switch title (Thor, 2026-10-11). Adapters
+     * without a clock hook decline the request and are left unchanged.
+     */
+    private void updatePhysicalFgClock(NativeAdapterHost active) {
+        long now = System.nanoTime();
+        if (now - physicalFgCheckNs < 1_000_000_000L) return;
+        physicalFgCheckNs = now;
+        Surface current = surface;
+        FrameGenerationRenderer renderer = current == null ? null :
+                FrameGenerationRendererRegistry.find(current);
+        double declared = declaredVideoHz();
+        double panel = renderer == null ? 0.0 : renderer.physicalPanelHz();
+        double target = renderer == null || !(declared > 1.0) ? 0.0 :
+                DisplaySyncPolicy.physicalSourceHz(declared, panel);
+        if (target <= 0.0 && renderer != null && physicalFgClockMisses++ % 60 == 0)
+            Log.i(TAG, "Physical clock lock waiting engine=" + entry.id +
+                    " declaredHz=" + declared + " panelHz=" + panel);
+        if (target > 0.0) {
+            // Repeated panel measurements jitter in the micro-hertz range;
+            // only a real change re-trims the guest.
+            if (Math.abs(target - pacedVideoHz) < 1.0e-3 || setPacedVideoHz(target)) {
+                physicalFgClockApplied = true;
+                physicalFgClockOwner = renderer;
+            }
+        } else if (physicalFgClockApplied && renderer != physicalFgClockOwner &&
+                setPacedVideoHz(0.0)) {
+            // A missing measurement from the same renderer is priming, not a
+            // nominal panel; only a different or removed renderer releases it.
+            physicalFgClockApplied = false;
+            physicalFgClockOwner = null;
+        }
+    }
+
     @Override public void setFirstFrameCallback(Runnable callback) {
         firstFrameCallback = callback;
     }
@@ -702,6 +746,7 @@ final class NativeAdapterEngineSession implements EngineSession,
                 probeAps3eFirstSubmittedFrame(current);
                 drainAudioToTrack(active);
                 reportEngineSpeed(active);
+                updatePhysicalFgClock(active);
                 sleepQuietly(RENDER_TICK_MS);
             }
         } catch (Throwable failure) {

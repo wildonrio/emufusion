@@ -172,6 +172,8 @@ public class WiringFixture {
     long qualifiedPhysicalPanelObservedNs;
     static class PhysicalClock {void reset(){}}
     final PhysicalClock builtInPhysicalClock=new PhysicalClock();
+    int seededPhysicalClocks;
+    void seedPhysicalClocks(){seededPhysicalClocks++;}
     NativeSourceImageObserver OBSERVER;
     static final int NATIVE_HISTORY_BASE=6,NATIVE_ADMISSION_SLOT=8;
     NativeSourceImageLedger nativeEndpointProvenance;

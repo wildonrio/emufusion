@@ -223,6 +223,18 @@ public final class PhysicalPresentationClock {
                 nowNs - frequencyLastActualNs > 250_000_000L ||
                 sustainedAnchorNs <= 0L || sustainedScans < MIN_ESTIMATE_SCANS)
             return 0.0;
+        int endpoint = sustainedBaselineEndpoint();
+        if (endpoint < 0) return seedConfirmedByShortBaseline() ? seededFrequencyHz : 0.0;
+        long spanNs = frequencyLastActualNs - trimTimes[endpoint];
+        long scans = sustainedScans - trimScans[endpoint];
+        double hz = scans * 1_000_000_000.0 / spanNs;
+        return Double.isFinite(hz) && hz > 0.0 ? hz : 0.0;
+    }
+
+    /** True once this session has its own full trim-window frequency baseline. */
+    public boolean hasSustainedBaseline() { return sustainedBaselineEndpoint() >= 0; }
+
+    private int sustainedBaselineEndpoint() {
         long cutoff = frequencyLastActualNs - TRIM_WINDOW_NS;
         int endpoint = -1;
         for (int i = 0; i < trimCount; ++i) {
@@ -230,11 +242,32 @@ public final class PhysicalPresentationClock {
             if (trimTimes[index] > cutoff) break;
             endpoint = index;
         }
-        if (endpoint < 0) return 0.0;
-        long spanNs = frequencyLastActualNs - trimTimes[endpoint];
-        long scans = sustainedScans - trimScans[endpoint];
-        double hz = scans * 1_000_000_000.0 / spanNs;
-        return Double.isFinite(hz) && hz > 0.0 ? hz : 0.0;
+        return endpoint;
+    }
+
+    // A panel's oscillator does not change between sessions, but measuring it
+    // to a few ppm takes a full trim window (20 s) of contiguous presents, and
+    // generation waits for it -- every launch started with ~20-35 s of plain
+    // output (Thor, 2026-10-11). A rate measured earlier for the same display
+    // mode stands in until this session's own baseline exists, and only while
+    // a live short measurement agrees with it.
+    private double seededFrequencyHz;
+    private static final long SEED_CONFIRM_MIN_SPAN_NS = 2_000_000_000L;
+    private static final double SEED_CONFIRM_TOLERANCE = 3.0e-4;
+
+    /** A rate measured in an earlier session for this mode; 0 clears it. */
+    public void seedFrequencyHz(double hz) {
+        seededFrequencyHz = Double.isFinite(hz) && hz > 0.0 ? hz : 0.0;
+    }
+
+    private boolean seedConfirmedByShortBaseline() {
+        if (!(seededFrequencyHz > 0.0) || trimCount < 2) return false;
+        long spanNs = frequencyLastActualNs - trimTimes[trimHead];
+        if (spanNs < SEED_CONFIRM_MIN_SPAN_NS) return false;
+        long scans = sustainedScans - trimScans[trimHead];
+        double shortHz = scans * 1_000_000_000.0 / spanNs;
+        return Double.isFinite(shortHz) &&
+                Math.abs(shortHz / seededFrequencyHz - 1.0) <= SEED_CONFIRM_TOLERANCE;
     }
 
     /**

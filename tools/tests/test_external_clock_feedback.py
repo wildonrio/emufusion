@@ -11,7 +11,10 @@ class ExternalClockFeedbackTest(unittest.TestCase):
                       '    private void publishExternalPhysicalClock()')
         source = '''
 public class ClockTest {
- static class Clock {double hz; long actual; double sustainedFrequencyHz(long n){return hz;} long lastActualNs(){return actual;}}
+ static class Clock {double hz; long actual; double sustainedFrequencyHz(long n){return hz;} long lastActualNs(){return actual;}
+   boolean hasSustainedBaseline(){return false;}}
+ static class PanelClockMemory {static void remember(int d,double n,double h){}}
+ int displayId; float refreshHz=120;
  static class Rate {int sets,refines;boolean accept;
    double declaredPanelHz(){return 120;} void setPhysicalDisplayRefreshHz(double h){sets++;}
    boolean refinePhysicalDisplayRefreshHz(double h){refines++;return accept;}}
