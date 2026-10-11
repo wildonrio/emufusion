@@ -39,6 +39,15 @@ FocusScope {
     readonly property color footerColor: "#b6bfd0"
     // Legends line up with the header bar rather than sitting 6 px further in.
     readonly property real footerSideMargin: 56
+    // A phone held sideways has its camera cutout on one short edge, and the
+    // window extends under it (no black band), so the "PLAYSTATION 3" heading
+    // ran under the punch hole. Backgrounds stay full-bleed; the UI layer
+    // (chrome), the footer, the preview and the status panel keep this much
+    // clear on BOTH sides, so it holds whichever way the phone is turned.
+    // The companion reports the cutout depth as a fraction of the long side.
+    property real cutoutInsetFraction: 0
+    readonly property real cutoutSafeInset:
+            Math.round(cutoutInsetFraction * Math.max(width, height))
     readonly property real footerLineHeight: Math.round(footerFontSize * 1.4)
     // The instruction strip is drawn straight onto the wallpaper -- no plate,
     // and no opaque gradient behind it either -- exactly like the clock and
@@ -49,7 +58,7 @@ FocusScope {
     // these (narrow phone windows); where they fit they render unchanged.
     readonly property real footerLegendLeft: Math.max(
             footerViewName.visible ? footerViewName.x + footerViewName.paintedWidth : 0,
-            coverNavigationHint.visible ?
+            coverNavigationHint.visible ? root.cutoutSafeInset +
                 coverNavigationHint.x + coverNavigationHint.paintedWidth : 0) + 36
     // Nothing that scrolls, or that grows under selection, may cross this.
     // The content-to-footer gap is deliberately tighter than the outer margin:
@@ -3814,6 +3823,9 @@ FocusScope {
             try {
                 var capabilities = JSON.parse(request.responseText)
                 var detectedDualScreen = Boolean(capabilities.dualScreen)
+                var cutout = Number(capabilities.cutoutInsetFraction)
+                root.cutoutInsetFraction = isFinite(cutout) ?
+                        Math.max(0, Math.min(0.12, cutout)) : 0
                 if (root.dualScreenDevice !== detectedDualScreen) {
                     root.dualScreenDevice = detectedDualScreen
                     if (root.page === "home" && root.homeViewMode === "list")
@@ -5284,7 +5296,7 @@ FocusScope {
         anchors.top: belowPreview ? undefined : parent.top
         anchors.right: belowPreview ? undefined : parent.right
         anchors.topMargin: 108
-        anchors.rightMargin: 46
+        anchors.rightMargin: 46 + root.cutoutSafeInset
         x: belowPreview ? singleScreenPip.x + singleScreenPip.width - width : 0
         y: belowPreview ? singleScreenPip.y + singleScreenPip.height + 12 : 0
         width: belowPreview ? Math.min(430, singleScreenPip.width) : 430
@@ -6332,9 +6344,10 @@ FocusScope {
                                     root.singleScreenMediaSwapped
         property bool swapGameList: compactGameList && !root.dualScreenDevice &&
                                     root.singleScreenMediaSwapped
-        x: swapHomeList ? parent.width - width - 56 :
-           (swapGameList ? listViewPanel.x :
-            (compactHomeList ? parent.width - width - 226 : parent.width - width - 56))
+        x: swapHomeList ? parent.width - width - 56 - root.cutoutSafeInset :
+           (swapGameList ? listViewPanel.x + root.cutoutSafeInset :
+            (compactHomeList ? parent.width - width - 226 - root.cutoutSafeInset :
+                               parent.width - width - 56 - root.cutoutSafeInset))
         y: swapGameList ? listViewPanel.y - 76 + (600 - height) / 2 :
            (compactHomeList ? 112 : 102)
         width: compactHomeList ? 330 :
@@ -6529,6 +6542,8 @@ FocusScope {
     Item {
         id: chrome
         anchors.fill: parent
+        anchors.leftMargin: root.cutoutSafeInset
+        anchors.rightMargin: root.cutoutSafeInset
 
         Item {
             id: topBar
@@ -8508,7 +8523,9 @@ FocusScope {
                 anchors.right: parent.right
                 anchors.rightMargin: root.footerSideMargin
                 y: root.footerY
-                width: Math.max(0, parent.width - root.footerSideMargin - root.footerLegendLeft)
+                // footerLegendLeft is in root coordinates; this is inside chrome.
+                width: Math.max(0, parent.width - root.footerSideMargin -
+                                   (root.footerLegendLeft - root.cutoutSafeInset))
                 horizontalAlignment: Text.AlignRight
                 fontSizeMode: Text.HorizontalFit
                 minimumPixelSize: 9
@@ -8538,9 +8555,10 @@ FocusScope {
         id: displaySettingsHint
         z: 90
         anchors.right: parent.right
-        anchors.rightMargin: root.footerSideMargin
+        anchors.rightMargin: root.footerSideMargin + root.cutoutSafeInset
         y: root.footerY
-        width: Math.max(0, parent.width - root.footerSideMargin - root.footerLegendLeft)
+        width: Math.max(0, parent.width - root.footerSideMargin - root.cutoutSafeInset -
+                           root.footerLegendLeft)
         horizontalAlignment: Text.AlignRight
         fontSizeMode: Text.HorizontalFit
         minimumPixelSize: 9
@@ -8582,7 +8600,7 @@ FocusScope {
         id: footerViewName
         z: 90
         anchors.left: parent.left
-        anchors.leftMargin: root.footerSideMargin
+        anchors.leftMargin: root.footerSideMargin + root.cutoutSafeInset
         y: root.footerY
         visible: !root.settingsOpen
         text: root.currentViewName

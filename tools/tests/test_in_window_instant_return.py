@@ -79,7 +79,7 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "db94ecc2ed85c1a24eac865906371e6bfc1a590af80d7d323ac4c4ff5c2370d0",
+            "f4b7b5ad6ff63b3ea506ca781558f74b6865307a2c3dc351fd383067b3fb0d7d",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):

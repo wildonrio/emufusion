@@ -29,7 +29,11 @@ class FooterLegendFitTest(unittest.TestCase):
                                ('id: displaySettingsHint', 'homeLegendMetrics')):
             start = THEME.rfind('Text {', 0, THEME.index(start))
             legend = THEME[start:start + 2600]
-            self.assertIn('width: Math.max(0, parent.width - root.footerSideMargin - root.footerLegendLeft)', legend)
+            # Both legends stop at the left labels; the cutout inset (0 on the
+            # Thor) is subtracted in whichever coordinate space the legend uses.
+            self.assertRegex(legend, r'width: Math\.max\(0, parent\.width - root\.footerSideMargin -\s*'
+                                     r'(root\.cutoutSafeInset -\s*root\.footerLegendLeft|'
+                                     r'\(root\.footerLegendLeft - root\.cutoutSafeInset\))\)')
             self.assertIn('horizontalAlignment: Text.AlignRight', legend)
             self.assertIn('fontSizeMode: Text.HorizontalFit', legend)
             self.assertIn('font.pixelSize: root.footerFontSize', legend)

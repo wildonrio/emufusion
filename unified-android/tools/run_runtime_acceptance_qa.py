@@ -72,7 +72,7 @@ MAIN_ACTIVITY = "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 # identity gate rather than weakening it to a structural/theme-name check.
 # Re-pinned for the WIDESCREEN HACK Settings slot (23); the theme.qml byte
 # identity otherwise stays the reviewed product source.
-FROZEN_THEME_QML = "db94ecc2ed85c1a24eac865906371e6bfc1a590af80d7d323ac4c4ff5c2370d0"
+FROZEN_THEME_QML = "f4b7b5ad6ff63b3ea506ca781558f74b6865307a2c3dc351fd383067b3fb0d7d"
 FROZEN_THEME_CFG = "b10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9"
 ROUTE = re.compile(r"In-window route accepted engine=([^ ]+) system=([^\s]+)")
 RETURN = re.compile(

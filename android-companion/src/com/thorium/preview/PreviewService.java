@@ -728,6 +728,8 @@ public final class PreviewService extends Service {
                         + (dualScreen ? "secondary-display" : "upper-right-pip")
                         + "\",\"soundEnabled\":" + soundEnabled
                         + ",\"soundEffects\":" + MenuSoundPlayer.isEnabled(this)
+                        + ",\"cutoutInsetFraction\":" + String.format(java.util.Locale.US, "%.4f",
+                                DisplayCutoutInset.fraction(this))
                         + "}");
             } else if ("/screensaver/status".equals(path)) {
                 // The theme polls only while the screensaver is enabled and the

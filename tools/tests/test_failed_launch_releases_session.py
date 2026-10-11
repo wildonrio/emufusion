@@ -38,7 +38,18 @@ class FailedLaunchReleasesSessionTest(unittest.TestCase):
 
     def test_startup_calls_wait_for_the_load(self):
         call = LOOP[LOOP.index('    private <T> T call(Callable<T> action) {'):]
-        self.assertIn('task.get(initializeFinished ? 10 : 60, TimeUnit.SECONDS)', call[:1500])
+        self.assertIn('return call(action, initializeFinished ? 10L : 60L);', call[:400])
+        self.assertIn('task.get(Math.max(timeoutSeconds, initializeFinished ? 10L : 60L), TimeUnit.SECONDS)',
+                      call[:2000])
+
+    def test_state_calls_outlast_a_slow_snapshot(self):
+        # A PS2/GameCube exit snapshot can exceed 10 s; timing out reported the
+        # save as failed while the render thread was still writing it.
+        self.assertIn('private static final long STATE_CALL_TIMEOUT_SECONDS = 45L;', LOOP)
+        self.assertIn('return call(() -> host.serialize(), STATE_CALL_TIMEOUT_SECONDS);', LOOP)
+        self.assertIn('return call(() -> host.readSaveRam(), STATE_CALL_TIMEOUT_SECONDS);', LOOP)
+        restore = LOOP[LOOP.index('    public void unserialize(final byte[] state, final boolean recreatePresentation) {'):]
+        self.assertIn('}, STATE_CALL_TIMEOUT_SECONDS);', restore[:2600])
         init = LOOP[LOOP.index('    private void initialize() {'):LOOP.index('    private void scheduleFrame() {')]
         # Set on success before onReady and on failure before reporting.
         self.assertLess(init.index('initializeFinished = true;'), init.index('listener.onReady();'))

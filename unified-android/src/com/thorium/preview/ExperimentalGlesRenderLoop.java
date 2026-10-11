@@ -888,7 +888,14 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
         });
     }
 
-    public byte[] serialize() { return call(() -> host.serialize()); }
+    /**
+     * Guest-state calls get their own bound: a PS2 or GameCube snapshot can
+     * take well over the ordinary 10 s, and timing out there reported the
+     * exit save as failed while the render thread was still writing it.
+     */
+    private static final long STATE_CALL_TIMEOUT_SECONDS = 45L;
+
+    public byte[] serialize() { return call(() -> host.serialize(), STATE_CALL_TIMEOUT_SECONDS); }
 
     public boolean stateReady() { return call(() -> host.stateReady()); }
 
@@ -936,10 +943,10 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                 }
             }
             return null;
-        });
+        }, STATE_CALL_TIMEOUT_SECONDS);
     }
 
-    public byte[] readSaveRam() { return call(() -> host.readSaveRam()); }
+    public byte[] readSaveRam() { return call(() -> host.readSaveRam(), STATE_CALL_TIMEOUT_SECONDS); }
 
     public void writeSaveRam(final byte[] saveRam) {
         if (saveRam == null) throw new IllegalArgumentException("save RAM is required");
@@ -1335,6 +1342,10 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
     }
 
     private <T> T call(Callable<T> action) {
+        return call(action, initializeFinished ? 10L : 60L);
+    }
+
+    private <T> T call(Callable<T> action, long timeoutSeconds) {
         if (closed) throw new IllegalStateException("experimental GLES loop is closed");
         if (Thread.currentThread() == renderThread) {
             requireReady();
@@ -1350,7 +1361,7 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
         });
         executor.execute(task);
         try {
-            return task.get(initializeFinished ? 10 : 60, TimeUnit.SECONDS);
+            return task.get(Math.max(timeoutSeconds, initializeFinished ? 10L : 60L), TimeUnit.SECONDS);
         } catch (TimeoutException timeout) {
             task.cancel(false);
             throw new IllegalStateException("timed out waiting for experimental GLES thread",

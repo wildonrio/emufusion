@@ -40,6 +40,10 @@ final class GameTitles {
                 "code".equalsIgnoreCase(parent.getName())) {
             return folderTitle(grandparent, base);
         }
+        // "Super Mario Sunshine (USA).nkit.iso": NKit is a container detail,
+        // not part of the name the pause menu shows.
+        if (base.toLowerCase(Locale.ROOT).endsWith(".nkit") && base.length() > 5)
+            return base.substring(0, base.length() - 5);
         return base;
     }
 

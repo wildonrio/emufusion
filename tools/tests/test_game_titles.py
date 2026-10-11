@@ -73,6 +73,9 @@ class GameTitlesTest(unittest.TestCase):
             plain = work / 'psp' / 'Castlevania The Dracula X Chronicles.iso'
             plain.parent.mkdir(parents=True)
             plain.write_bytes(b'')
+            nkit = work / 'gc' / 'Super Mario Sunshine (USA, Canada).nkit.iso'
+            nkit.parent.mkdir(parents=True)
+            nkit.write_bytes(b'')
             src = work / 'src'
             (src / 'com/thorium/preview/game').mkdir(parents=True)
             harness = src / 'com/thorium/preview/game/GameTitlesHarness.java'
@@ -82,13 +85,14 @@ class GameTitlesTest(unittest.TestCase):
                            capture_output=True, timeout=60)
             run = subprocess.run([java, '-cp', str(out), 'com.thorium.preview.game.GameTitlesHarness',
                                   str(ps3 / 'PS3_GAME/USRDIR/EBOOT.BIN'), str(bare / 'PS3_GAME/USRDIR/EBOOT.BIN'),
-                                  str(wiiu / 'code/RedCarpet.rpx'), str(plain)],
+                                  str(wiiu / 'code/RedCarpet.rpx'), str(plain), str(nkit)],
                                  check=True, capture_output=True, text=True, timeout=60)
             self.assertEqual(run.stdout.splitlines(), [
                 'ICO & Shadow of the Colossus Collection',
                 'Shadow of the Colossus',
                 'Super Mario 3D World',
                 'Castlevania The Dracula X Chronicles',
+                'Super Mario Sunshine (USA, Canada)',
             ])
 
 
