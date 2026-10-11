@@ -360,6 +360,7 @@ public final class PreviewService extends Service {
             PrivateDiagnostics.gameplay(this, true);
             boolean alreadyActive = gameplayActive;
             gameplayActive = true;
+            importManager.setGameplayActive(true);
             screensaverActive = false;
                 screensaverStateChanged();
             placementBlank = false;
@@ -395,6 +396,7 @@ public final class PreviewService extends Service {
         } else if (intent != null && ACTION_LIBRARY.equals(intent.getAction())) {
             PrivateDiagnostics.gameplay(this, false);
             gameplayActive = false;
+            importManager.setGameplayActive(false);
             suppressPlayUntil = 0L;
             updateManager.onLibraryVisible();
         } else if (intent != null && ACTION_SUSPEND.equals(intent.getAction())) {

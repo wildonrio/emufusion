@@ -4000,6 +4000,18 @@ FocusScope {
             importToastVisible = false
             return
         }
+        // Background retries of media for games already in the library are
+        // quiet (owner, 2026-10-11: the panel never went away). If such a pass
+        // did obtain new media it still reloads the library, silently.
+        if (Boolean(payload.quiet)) {
+            importToastVisible = false
+            if (importState === "complete" && previousState !== "complete" &&
+                    importNeedsReload && !importReloadRequested) {
+                importReloadRequested = true
+                importedLibraryReload.restart()
+            }
+            return
+        }
         if (importState === "complete") {
             // Status polling can continue returning "complete" forever. Show
             // the result once on the state transition, then dismiss it on an
@@ -6355,8 +6367,30 @@ FocusScope {
                                parent.width - width - 56 - root.cutoutSafeInset))
         y: swapGameList ? listViewPanel.y - 76 + (600 - height) / 2 :
            (compactHomeList ? 112 : 102)
+        // As tall as the space allows (owner, 2026-10-11: "as tall as
+        // possible without covering any list"): run down to 18 px above the
+        // top of whatever list is showing -- the cover rail or game list on a
+        // system's page, the shelf band at home -- at 16:9, capped at 42% of
+        // the width so titles and scores keep their room, and never smaller
+        // than the former fixed sizes.
+        property real listTop: root.page === "games" ?
+                (root.gameViewMode === "list" ? listViewPanel.y : gameRail.y) :
+                (root.homeZone === 0 && root.coverViewRowCount === 1 ?
+                     root.coverSystemBandTop : root.coverContentTop)
+        // ...and never over the controls beside it: on a system's page the
+        // sort buttons (x 48..640) and facts sit under the top-right corner,
+        // at home the subtitle line does. Growing down beside them is only
+        // allowed with the left edge 24 px clear of their right edge.
+        property real leftClear: root.cutoutSafeInset + 24 +
+                (root.page === "games" ? gameSortRow.x + gameSortRow.width :
+                 (homeSystemSubtitle.visible ?
+                      homeSystemSubtitle.x + homeSystemSubtitle.paintedWidth : 0))
+        property real fitWidth: Math.min(Math.round((listTop - 18 - y) * 16 / 9),
+                                         Math.round(parent.width * 0.42),
+                                         Math.round(parent.width - 56 - root.cutoutSafeInset - leftClear))
         width: compactHomeList ? 330 :
-               (compactGameList ? (swapGameList ? 600 : 624) : 392)
+               (compactGameList ? (swapGameList ? 600 : Math.max(624, fitWidth)) :
+                                  Math.max(392, fitWidth))
         height: Math.round(width * 9 / 16)
         visible: root.previewPlacementMode !== "off" &&
                  !root.useBottomPreview() && root.singleCurrentSlot >= 0 &&
@@ -7007,6 +7041,7 @@ FocusScope {
             }
 
             Text {
+                id: homeSystemSubtitle
                 x: 62
                 y: 267
                 width: 780
@@ -8053,6 +8088,7 @@ FocusScope {
             }
 
             Row {
+                id: gameSortRow
                 x: 48
                 y: 350
                 spacing: 8

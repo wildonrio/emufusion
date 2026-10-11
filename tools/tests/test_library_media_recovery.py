@@ -73,6 +73,21 @@ public class MediaRecoveryProbe {
       Files.delete(Paths.get(row.optString("video")));
       check(!mediaPending(row, 0), "A removed ROM must not trigger media downloads");
       check(!mediaPending(null, 0), "A null registry row must not trigger downloads");
+    } else if (mode.equals("recovered-incomplete")) {
+      // Thor, 2026-10-11: a game whose provider never had a video, re-marked
+      // enrichmentVersion=2 by metadata recovery, was reopened on every
+      // 2-minute poll. It must wait for its scheduled retry.
+      Files.delete(Paths.get(row.optString("video")));
+      row.put("mediaCompletedAt", 0L).put("mediaRetryCount", 3)
+         .put("mediaNextRetryAt", System.currentTimeMillis()+4L*3600000L);
+      check(!mediaPending(row, 0), "Never-complete recovered game reopened before its retry");
+      row.put("mediaNextRetryAt", System.currentTimeMillis()-1);
+      check(mediaPending(row, 0), "Due retry must resume");
+    } else if (mode.equals("completed-then-lost")) {
+      row.put("mediaCompletedAt", System.currentTimeMillis()-1000);
+      check(!mediaPending(row, 0), "Intact completed game must not download");
+      Files.delete(Paths.get(row.optString("boxArt")));
+      check(mediaPending(row, 0), "A once-complete game that lost a file must reopen");
     } else if (mode.equals("legacy-pending")) {
       row.put("mediaVersion", 0);
       check(mediaPending(row, 0), "Legacy rows must join the resumable queue");
@@ -102,6 +117,25 @@ public class MediaRecoveryProbe {
     def test_manual_refresh_still_forces_work(self): self.run_case('manual-refresh')
     def test_removed_rom_does_not_trigger_download(self): self.run_case('removed-game')
     def test_old_registry_rows_still_resume(self): self.run_case('legacy-pending')
+    def test_recovered_incomplete_waits_for_retry(self): self.run_case('recovered-incomplete')
+    def test_completed_then_lost_reopens(self): self.run_case('completed-then-lost')
+
+    def test_failing_providers_back_off_and_retries_are_quiet(self):
+        source = IMPORTER.read_text()
+        self.assertIn('firstDelay << (2 * Math.max(0, Math.min(misses - 1, 8)))', source)
+        self.assertIn('Math.min(7L * 86_400_000L,', source)
+        self.assertIn('.put("mediaCompletedAt", complete ? System.currentTimeMillis() : 0L)', source)
+        self.assertIn('boolean reload = newGames > 0 || mediaChanged || prerequisiteRoutesChanged;', source)
+        self.assertIn('next.put("quiet", statusQuiet);', source)
+        resume = source[source.index('private final Runnable resumeMedia'):][:900]
+        self.assertIn('quietScan = true;', resume)
+        # Never compete with the emulator: no quiet pass starts during
+        # gameplay, and a running one checkpoints and stops when a game starts.
+        self.assertIn('!running.get() && !gameplayActive && networkAvailable()', resume)
+        self.assertIn('if (statusQuiet && gameplayActive) {', source)
+        service = (ROOT / 'android-companion/src/com/thorium/preview/PreviewService.java').read_text()
+        self.assertIn('importManager.setGameplayActive(true);', service)
+        self.assertIn('importManager.setGameplayActive(false);', service)
 
 
 if __name__ == '__main__': unittest.main()

@@ -152,14 +152,31 @@ final class ImportManager {
     private final Runnable resumeMedia = new Runnable() {
         @Override public void run() {
             if (closed) return;
-            if (!running.get() && networkAvailable() && hasPendingMedia()) startScan(false, true);
+            // Background retry of media providers for games already in the
+            // library: quiet, so the "Updating" panel does not reappear for it
+            // (owner, 2026-10-11). A new game found on the way un-quiets it.
+            if (!running.get() && !gameplayActive && networkAvailable() && hasPendingMedia()) {
+                quietScan = true;
+                startScan(false, true);
+            }
             mediaHandler.postDelayed(this, 120_000L);
         }
     };
     private final Object statusLock = new Object();
     private volatile long lastScanStarted;
+    private volatile boolean quietScan;
+    // Background media passes (downloads, image decoding/scaling) compete with
+    // the emulator for CPU and storage: a quiet pass never starts during
+    // gameplay and stops at its next checkpoint when a game starts.
+    private volatile boolean gameplayActive;
+
+    void setGameplayActive(boolean active) {
+        gameplayActive = active;
+    }
     private volatile String lastDownloadFingerprint = "";
     private JSONObject status = idleStatus();
+    /** The running scan only retries media for existing games: no panel. */
+    private volatile boolean statusQuiet;
     private volatile Map<String, GameRankingsRecord> gamerankingsIndex;
     private volatile Map<String, GameRankingsRecord> gamerankingsAliasIndex;
     private volatile Map<String, MobyGamesRecord> mobygamesIndex;
@@ -334,7 +351,18 @@ final class ImportManager {
         // media can disappear or be cleaned after a successful download. Only
         // reopen previously complete rows here; failed providers retain their
         // scheduled backoff instead of being retried on every queue poll.
-        if (row.optInt("enrichmentVersion", 0) >= 2 && !mediaComplete(row)) return true;
+        // Keyed on mediaCompletedAt, not enrichmentVersion: rows recovered from
+        // the library's metadata are re-marked enrichmentVersion=2 on every
+        // pass, so a game whose provider never had a video (12 on the Thor)
+        // was reopened on every 2-minute poll and the "Updating" panel never
+        // went away (owner, 2026-10-11).
+        long completedAt = row.optLong("mediaCompletedAt", -1L);
+        boolean wasComplete = completedAt >= 0L ? completedAt > 0L :
+                // Rows finished before mediaCompletedAt existed: the queue set
+                // enrichmentVersion=2 with no retry scheduled only on success.
+                row.optInt("mediaVersion", 0) >= 1 && row.optInt("enrichmentVersion", 0) >= 2 &&
+                        row.optLong("mediaNextRetryAt", Long.MAX_VALUE) == Long.MAX_VALUE;
+        if (wasComplete && !mediaComplete(row)) return true;
         return row.optLong("mediaNextRetryAt", Long.MAX_VALUE) <= System.currentTimeMillis();
     }
 
@@ -355,9 +383,12 @@ final class ImportManager {
     private void startScan(boolean fullDiscovery, boolean force) {
         long now = SystemClock.elapsedRealtime();
         String fingerprint = downloadFingerprint();
+        boolean quiet = quietScan;
+        quietScan = false;
         if (running.get() || (!force && now - lastScanStarted < RESCAN_THROTTLE_MS &&
                 fingerprint.equals(lastDownloadFingerprint))) return;
         if (!running.compareAndSet(false, true)) return;
+        statusQuiet = quiet;
         lastScanStarted = now;
         lastDownloadFingerprint = fingerprint;
         setStatus("scanning", 0.01, "Scanning internal and SD Downloads for verified games…",
@@ -645,6 +676,7 @@ final class ImportManager {
         JSONArray registry = readRegistry();
         Set<String> registeredSources = registeredSources(registry);
         List<ImportedGame> imported = new ArrayList<>();
+        int newGames = 0;
         boolean localIndexChanged = false;
         Map<File, Integer> archiveTotals = new HashMap<>();
         Map<File, Integer> archiveSuccesses = new HashMap<>();
@@ -682,6 +714,8 @@ final class ImportManager {
                 // Pegasus before any slower media or network work begins.
                 enrichBundledMetadata(game);
                 imported.add(game);
+                newGames++;
+                statusQuiet = false;
                 registry.put(game.toJson());
                 writeJsonAtomic(REGISTRY, registry);
                 // Pegasus must never have an empty library merely because a
@@ -742,7 +776,15 @@ final class ImportManager {
                 ((LucentApplication) app).onLibraryIndexChanged();
         }
 
+        Map<String, String> mediaBefore = new HashMap<>();
+        for (ImportedGame game : imported)
+            mediaBefore.put(game.sourceIdentity, mediaFingerprint(registeredGame(registry, game.sourceIdentity)));
         if (!imported.isEmpty() && !enrichMediaQueue(imported, registry, cacheRoot, mediaRoot)) return;
+        boolean mediaChanged = false;
+        JSONArray afterQueue = readRegistry();
+        for (ImportedGame game : imported)
+            if (!mediaFingerprint(registeredGame(afterQueue, game.sourceIdentity))
+                    .equals(mediaBefore.get(game.sourceIdentity))) mediaChanged = true;
 
         // Keep provenance current for the games processed in this scan. This
         // is a local manifest write; it does not search or download old media.
@@ -773,7 +815,11 @@ final class ImportManager {
         }
 
         String message;
-        boolean reload = !imported.isEmpty() || prerequisiteRoutesChanged;
+        // Reload the frontend only when it has something new to show: a new
+        // game, newly obtained media/ratings, or changed emulator readiness.
+        // Retrying unavailable providers used to reload the whole library
+        // every 15 minutes with nothing to show for it.
+        boolean reload = newGames > 0 || mediaChanged || prerequisiteRoutesChanged;
         if (!imported.isEmpty()) {
             int incomplete = 0;
             for (ImportedGame game : imported)
@@ -789,6 +835,13 @@ final class ImportManager {
             message += " • " + waiting + (waiting == 1 ? " game has" : " games have") +
                     " no box art • choose what to do in Settings";
         setStatus("complete", 1.0, message, titles, imported.size(), reload);
+    }
+
+    private static String mediaFingerprint(JSONObject row) {
+        if (row == null) return "";
+        return row.optString("boxArt") + "|" + row.optString("background") + "|" +
+                row.optString("video") + "|" + row.optDouble("critic", 0) + "|" +
+                row.optDouble("user", 0);
     }
 
     private static boolean mediaComplete(JSONObject row) {
@@ -835,6 +888,13 @@ final class ImportManager {
             row.put("mediaRefreshEpoch", refresh);
             final int current = index + 1;
             for (int stage = row.optInt("mediaStage", 0); stage < stages.length; stage++) {
+                if (statusQuiet && gameplayActive) {
+                    // Checkpointed exactly like a network loss; the 2-minute
+                    // poll resumes it once the game has ended.
+                    writeJsonAtomic(REGISTRY, registry);
+                    writeMetadata(registry);
+                    return false;
+                }
                 if (closed || Thread.currentThread().isInterrupted() || !networkAvailable()) {
                     writeJsonAtomic(REGISTRY, registry);
                     writeMetadata(registry);
@@ -884,11 +944,19 @@ final class ImportManager {
                         " stage=" + label + " error=" + transfer.error);
             }
             boolean complete = mediaComplete(row);
+            // A provider that keeps failing is asked less and less often
+            // (15 min, 1 h, 4 h, 16 h, then weekly) instead of every 15 min
+            // forever; a definitive miss waits a day, then the same ladder.
+            int misses = complete ? 0 : row.optInt("mediaRetryCount", 0) + 1;
+            long firstDelay = row.optString("mediaLastError").isEmpty() ? 86_400_000L : 900_000L;
+            long delay = Math.min(7L * 86_400_000L,
+                    firstDelay << (2 * Math.max(0, Math.min(misses - 1, 8))));
             row.put("mediaVersion", 1).put("enrichmentVersion", complete ? 2 : 0)
                     .put("mediaRefreshCompletedAt", refresh)
                     .put("mediaUpdatedAt", System.currentTimeMillis())
-                    .put("mediaNextRetryAt", complete ? Long.MAX_VALUE : System.currentTimeMillis() +
-                            (row.optString("mediaLastError").isEmpty() ? 86_400_000L : 900_000L));
+                    .put("mediaCompletedAt", complete ? System.currentTimeMillis() : 0L)
+                    .put("mediaRetryCount", misses)
+                    .put("mediaNextRetryAt", complete ? Long.MAX_VALUE : System.currentTimeMillis() + delay);
             writeTextAtomic(checkpoint, row.toString(2));
             // Small checkpoint after every stage, full publication periodically
             // and at completion. No quadratic full-library rewrite per asset.
@@ -4063,6 +4131,7 @@ final class ImportManager {
             next.put("added", added);
             next.put("needsReload", needsReload);
             next.put("running", !"complete".equals(state) && !"error".equals(state) && !"idle".equals(state));
+            next.put("quiet", statusQuiet);
             next.put("updatedAt", System.currentTimeMillis());
         } catch (Exception ignored) {}
         synchronized (statusLock) { status = next; }
@@ -4370,7 +4439,10 @@ final class ImportManager {
         int dot = name.lastIndexOf('.'); return dot > 0 ? name.substring(0, dot) : name;
     }
     private static String cleanTitle(String value) {
-        String title = value.replaceAll("\\s*_+\\s*", ": ").trim();
+        // "Mario Kart - Double Dash!! (USA).nkit.iso": NKit is the container,
+        // not part of the name (rows read back pass through here too).
+        String title = value.replaceFirst("(?i)\\.nkit$", "")
+                .replaceAll("\\s*_+\\s*", ": ").trim();
         title = title.replaceAll("(?i)(?:\\s*[:\\-]\\s*)copy$", "").trim();
         // Switch dumps commonly append a 16-digit title ID and version tag.
         // They are identifiers, not part of the display title, and prevent

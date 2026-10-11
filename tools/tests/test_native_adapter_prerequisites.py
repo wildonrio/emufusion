@@ -57,7 +57,9 @@ class PrerequisiteLifecycleContractTest(unittest.TestCase):
         refresh = scan.index("NativeAdapterPrerequisites.refresh(context)")
         discover = scan.index("discoverCandidates(cacheRoot)")
         self.assertLess(refresh, discover)
-        self.assertIn("!imported.isEmpty() || prerequisiteRoutesChanged", scan)
+        # Readiness changes still reload; media retries reload only when they
+        # obtained something (3.2.29: no reload every 15 minutes for nothing).
+        self.assertIn("newGames > 0 || mediaChanged || prerequisiteRoutesChanged", scan)
         self.assertIn("LaunchMetadataRouter.normalize(context)", scan)
 
     def test_startup_route_migration_reloads_only_from_a_safe_heartbeat(self):
