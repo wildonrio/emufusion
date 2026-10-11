@@ -33,7 +33,8 @@ class CutoutSafeInsetTest(unittest.TestCase):
         chrome = THEME[THEME.index('        id: chrome\n'):][:200]
         self.assertIn('anchors.leftMargin: root.cutoutSafeInset', chrome)
         self.assertIn('anchors.rightMargin: root.cutoutSafeInset', chrome)
-        for item in ('id: footerViewName', 'id: displaySettingsHint', 'id: singleScreenPip', 'id: importToast'):
+        # The update status line is centred (no edge inset needed).
+        for item in ('id: footerViewName', 'id: displaySettingsHint', 'id: singleScreenPip'):
             block = THEME[THEME.index(item):][:1600]
             self.assertIn('root.cutoutSafeInset', block, item)
         # The first full-screen backdrop is still drawn edge to edge.

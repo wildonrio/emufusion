@@ -1,9 +1,7 @@
-"""The library "Updating" panel sits LEFT of the single-screen preview.
+"""Library update status is one line of text at the top centre (no panel).
 
-Owner, 2026-10-11: "Updating box should appear to the left of the preview video
-not below it." On single-screen devices the preview is the upper-right PiP;
-the panel is top-aligned with it, to its left, and never overlaps it. The Thor
-(dual screen) keeps the panel in its corner.
+Owner, 2026-10-11: "let's just move it into ... just a one line text at the
+very top middle of the screen ... instead of a box. The box is just annoying."
 """
 from pathlib import Path
 import unittest
@@ -12,15 +10,26 @@ ROOT = Path(__file__).resolve().parents[2]
 THEME = (ROOT / 'theme/theme.qml').read_text(encoding='utf-8')
 
 
-class ImportToastPlacementTest(unittest.TestCase):
-    def test_left_of_preview_top_aligned(self):
-        toast = THEME[THEME.index('        id: importToast'):][:1600]
-        self.assertIn('property bool besidePreview: !root.dualScreenDevice && singleScreenPip.visible', toast)
-        self.assertIn('x: besidePreview ? singleScreenPip.x - width - 16 : 0', toast)
-        self.assertIn('y: besidePreview ? singleScreenPip.y : 0', toast)
-        self.assertIn('singleScreenPip.x - 16 - 56 - root.cutoutSafeInset', toast)
-        self.assertNotIn('singleScreenPip.y + singleScreenPip.height', toast)
-        self.assertIn('anchors.right: besidePreview ? undefined : parent.right', toast)
+class ImportStatusLineTest(unittest.TestCase):
+    def test_single_centred_line(self):
+        block = THEME[THEME.index('        id: importToast\n'):][:2200]
+        # Screen-centred when it fits, else kept between the mark and the icons.
+        self.assertIn('(parent.width - width) / 2', block)
+        self.assertIn('property real freeLeft: root.cutoutSafeInset + topBar.x + 230 + 24', block)
+        self.assertIn('voiceFeedbackButton.x', block)
+        self.assertIn('y: 34 + Math.round((58 - height) / 2)', block)
+        self.assertIn('text: root.importStatusLineText()', block)
+        self.assertIn('maximumLineCount: 1', block)
+        self.assertIn('elide: Text.ElideRight', block)
+        # No panel: no border, background plate or progress bar.
+        self.assertNotIn('border.width', block)
+        self.assertNotIn('color: "#ee0b0f16"', block)
+
+    def test_line_text(self):
+        fn = THEME[THEME.index('function importStatusLineText()'):][:700]
+        self.assertIn('"Updating library  •  "', fn)
+        self.assertIn('importCurrent + " of " + importTotal', fn)
+        self.assertIn('"Library update paused  •  "', fn)
 
 
 if __name__ == '__main__':

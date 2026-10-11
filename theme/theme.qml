@@ -46,6 +46,10 @@ FocusScope {
     // clear on BOTH sides, so it holds whichever way the phone is turned.
     // The companion reports the cutout depth as a fraction of the long side.
     property real cutoutInsetFraction: 0
+    // The preview's left edge in the inset UI layer's coordinates: texts in
+    // chrome that stop short of the preview must subtract the cutout inset,
+    // or they run under it on phones with a cutout.
+    readonly property real pipLeftInChrome: singleScreenPip.x - cutoutSafeInset
     readonly property real cutoutSafeInset:
             Math.round(cutoutInsetFraction * Math.max(width, height))
     readonly property real footerLineHeight: Math.round(footerFontSize * 1.4)
@@ -3969,6 +3973,18 @@ FocusScope {
         request.send()
     }
 
+    // "Updating library • 3 of 12 • Super Mario Bros." -- the whole status
+    // in the one line that replaced the panel.
+    function importStatusLineText() {
+        var detail = importDetail !== "" ? importDetail :
+                (importTitles.length > 0 ? importTitles[0] : importMessage)
+        if (importState === "complete") return importMessage
+        if (importState === "error") return "Library update paused  •  " + importMessage
+        if (importState === "waiting") return importMessage
+        var progress = importTotal > 0 ? importCurrent + " of " + importTotal + "  •  " : ""
+        return "Updating library  •  " + progress + detail
+    }
+
     function applyImportStatus(payload) {
         if (!payload) return
         var previousState = importState
@@ -5300,119 +5316,39 @@ FocusScope {
         onTriggered: root.requestPreviewEndpoint("import/reload")
     }
 
-    Rectangle {
+    Item {
         id: importToast
         z: 300
-        // Single-screen devices show the game preview in the upper-right
-        // corner (singleScreenPip), exactly where this panel sits; sit to the
-        // LEFT of the preview, top-aligned with it (owner, 2026-10-11), never
-        // covering it. On the Thor the preview is on the lower screen and the
-        // panel keeps its corner.
-        property bool besidePreview: !root.dualScreenDevice && singleScreenPip.visible
-        anchors.top: besidePreview ? undefined : parent.top
-        anchors.right: besidePreview ? undefined : parent.right
-        anchors.topMargin: 108
-        anchors.rightMargin: 46 + root.cutoutSafeInset
-        x: besidePreview ? singleScreenPip.x - width - 16 : 0
-        y: besidePreview ? singleScreenPip.y : 0
-        width: besidePreview ? Math.max(240, Math.min(430,
-                singleScreenPip.x - 16 - 56 - root.cutoutSafeInset)) : 430
-        height: root.importDetail !== "" ? 148 : (root.importIdentified > 0 ? 126 : 96)
-        visible: root.importToastVisible
-        color: "#ee0b0f16"
-        border.width: 1
-        border.color: root.importState === "error" ? "#ff6d70" : root.accent
-        radius: 4
-
-        Rectangle {
-            x: 16
-            y: 18
-            width: 4
-            height: 36
-            color: root.importState === "error" ? "#ff6d70" : root.accent
-        }
+        // One line of text at the top centre of the screen, on the header
+        // line between the system mark and the status icons (owner,
+        // 2026-10-11: "just one line text at the very top middle of the
+        // screen ... instead of a box. The box is just annoying").
+        // Centred on the screen when it fits, otherwise kept in the free
+        // span between the system mark and the leftmost status icon (narrow
+        // phones and cutout insets left it running over the icons).
+        property real freeLeft: root.cutoutSafeInset + topBar.x + 230 + 24
+        property real freeRight: root.cutoutSafeInset + topBar.x - 24 +
+                Math.min(voiceFeedbackButton.visible ? voiceFeedbackButton.x : topBar.width,
+                         lucentRescanButton.x, lucentBrowserButton.x,
+                         lucentSettingsButton.x, searchControl.x)
+        x: Math.round(Math.max(freeLeft, Math.min(freeRight - width,
+                                                 (parent.width - width) / 2)))
+        y: 34 + Math.round((58 - height) / 2)
+        width: Math.max(0, Math.min(importStatusLine.implicitWidth, freeRight - freeLeft))
+        height: importStatusLine.implicitHeight
+        visible: root.importToastVisible && importStatusLine.text !== ""
 
         Text {
-            x: 34
-            y: 15
-            width: parent.width - 50
-            text: root.importState === "complete" ? "LIBRARY UPDATE COMPLETE" :
-                  root.importState === "error" ? "LIBRARY UPDATE PAUSED" :
-                  "UPDATING GAME LIBRARY"
-            color: "#f2f4f8"
-            font.family: global.fonts.condensed
-            font.pixelSize: 16
-            font.weight: Font.Bold
-            font.letterSpacing: 1.6
-        }
-
-        Text {
-            x: 34
-            y: 42
-            width: parent.width - 50
-            text: root.importMessage
-            color: "#aeb7c8"
+            id: importStatusLine
+            width: parent.width
+            text: root.importStatusLineText()
+            color: root.importState === "error" ? "#ff8a8d" : "#cfd6e3"
             elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
+            maximumLineCount: 1
             font.family: global.fonts.sans
-            font.pixelSize: 12
-        }
-
-        Text {
-            x: 34
-            y: 66
-            width: parent.width - 50
-            visible: root.importDetail === "" && root.importIdentified > 0
-            text: {
-                var shown = root.importTitles.slice(0, 2).join("  •  ")
-                if (root.importTitles.length > 2)
-                    shown += "  •  +" + (root.importTitles.length - 2) + " more"
-                return shown
-            }
-            color: root.accent
-            elide: Text.ElideRight
-            font.family: global.fonts.sans
-            font.pixelSize: 11
-            font.weight: Font.DemiBold
-        }
-
-        Text {
-            x: 34
-            y: 68
-            width: parent.width - 50
-            visible: root.importDetail !== ""
-            text: root.importDetail
-            color: root.accent
-            elide: Text.ElideMiddle
-            font.family: global.fonts.sans
-            font.pixelSize: 11
-            font.weight: Font.DemiBold
-        }
-
-        Text {
-            x: 34
-            y: 91
-            width: parent.width - 50
-            visible: root.importDetail !== "" && root.importTotal > 0
-            text: root.importCurrent + " OF " + root.importTotal
-            color: "#aeb7c8"
-            font.family: global.fonts.sans
-            font.pixelSize: 10
-            font.letterSpacing: 1.2
-        }
-
-        Rectangle {
-            x: 34
-            y: parent.height - 18
-            width: parent.width - 50
-            height: 3
-            color: "#26303e"
-
-            Rectangle {
-                width: parent.width * Math.max(0, Math.min(1, root.importProgress))
-                height: parent.height
-                color: root.importState === "error" ? "#ff6d70" : root.accent
-                Behavior on width { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-            }
+            font.pixelSize: 15
+            font.letterSpacing: 1
         }
     }
 
@@ -6368,9 +6304,9 @@ FocusScope {
         y: swapGameList ? listViewPanel.y - 76 + (600 - height) / 2 :
            (compactHomeList ? 112 : 102)
         // As tall as the space allows (owner, 2026-10-11: "as tall as
-        // possible without covering any list"): run down to 18 px above the
+        // possible without covering any list"): run down to 8 px above the
         // top of whatever list is showing -- the cover rail or game list on a
-        // system's page, the shelf band at home -- at 16:9, capped at 42% of
+        // system's page, the shelf band at home -- at 16:9, capped at 48% of
         // the width so titles and scores keep their room, and never smaller
         // than the former fixed sizes.
         property real listTop: root.page === "games" ?
@@ -6382,11 +6318,9 @@ FocusScope {
         // at home the subtitle line does. Growing down beside them is only
         // allowed with the left edge 24 px clear of their right edge.
         property real leftClear: root.cutoutSafeInset + 24 +
-                (root.page === "games" ? gameSortRow.x + gameSortRow.width :
-                 (homeSystemSubtitle.visible ?
-                      homeSystemSubtitle.x + homeSystemSubtitle.paintedWidth : 0))
-        property real fitWidth: Math.min(Math.round((listTop - 18 - y) * 16 / 9),
-                                         Math.round(parent.width * 0.42),
+                (root.page === "games" ? gameSortRow.x + gameSortRow.width : 0)
+        property real fitWidth: Math.min(Math.round((listTop - 8 - y) * 16 / 9),
+                                         Math.round(parent.width * 0.48),
                                          Math.round(parent.width - 56 - root.cutoutSafeInset - leftClear))
         width: compactHomeList ? 330 :
                (compactGameList ? (swapGameList ? 600 : Math.max(624, fitWidth)) :
@@ -7014,7 +6948,7 @@ FocusScope {
                 x: 58
                 y: 150
                 width: !root.dualScreenDevice && root.homeViewMode === "covers" ?
-                       singleScreenPip.x - x - 28 : parent.width - 116
+                       root.pipLeftInChrome - x - 28 : parent.width - 116
                 visible: root.homeZone === 0
                 text: systemModel.get(systemRail.currentIndex).name
                 color: "white"
@@ -7044,7 +6978,13 @@ FocusScope {
                 id: homeSystemSubtitle
                 x: 62
                 y: 267
-                width: 780
+                // Wraps beside the single-screen preview instead of limiting
+                // how tall the preview may grow (owner: preview flush with
+                // the list, no gap beneath it).
+                width: !root.dualScreenDevice && root.homeViewMode === "covers" && singleScreenPip.visible ?
+                       Math.min(780, root.pipLeftInChrome - x - 28) : 780
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
                 visible: root.homeZone === 0
                 text: systemRail.currentIndex === 0 ?
                       "ONE LIBRARY  •  EVERY GAME  •  SCORES, RELEASES, AND DIRECT LAUNCH" :
@@ -7061,9 +7001,9 @@ FocusScope {
                 y: 148
                 width: root.homeViewMode === "list" ?
                        ((!root.dualScreenDevice ?
-                         Math.min(singleScreenPip.x, homeListBoxArt.x) :
+                         Math.min(root.pipLeftInChrome, homeListBoxArt.x) :
                          homeListBoxArt.x) - x - 28) :
-                       ((!root.dualScreenDevice ? singleScreenPip.x : parent.width - 58) - x - 28)
+                       ((!root.dualScreenDevice ? root.pipLeftInChrome : parent.width - 58) - x - 28)
                 visible: root.homeZone > 0
                 text: root.homeListBrowsingSystems ?
                       systemModel.get(systemRail.currentIndex).name :
@@ -8040,7 +7980,7 @@ FocusScope {
                 // the PIP, including the larger single-screen list preview.
                 width: !root.dualScreenDevice ?
                        ((root.singleScreenMediaSwapped && root.gameViewMode === "list" ?
-                         parent.width - 624 - 56 : singleScreenPip.x) - x - 28) :
+                         parent.width - 624 - 56 : root.pipLeftInChrome) - x - 28) :
                        parent.width - 116
                 height: 68
                 text: root.activeGame ? root.displayTitle(root.activeGame) :

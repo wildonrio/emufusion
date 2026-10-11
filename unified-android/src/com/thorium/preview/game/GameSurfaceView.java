@@ -133,8 +133,13 @@ public final class GameSurfaceView extends SurfaceView
         // A SurfaceView defaults to RGB_565. Producers usually replace it, but
         // on some phones the game layer stayed 16-bit and Wii games showed a
         // visibly reduced palette (banding) that the Thor did not. Ask for
-        // full 8-bit colour explicitly, as the lower-display player does.
-        getHolder().setFormat(android.graphics.PixelFormat.RGBA_8888);
+        // full 8-bit colour explicitly -- but OPAQUE (RGBX): this layer is a
+        // media overlay above the library window, and RGBA made it
+        // translucent wherever a core leaves alpha below 1. PS2 framebuffers
+        // carry partial alpha (the menu showed through the whole picture) and
+        // aPS3e/Cemu clear their letterbox bars to transparent (the menu
+        // showed at the sides). The library must never be visible in-game.
+        getHolder().setFormat(android.graphics.PixelFormat.RGBX_8888);
         getHolder().addCallback(this);
     }
 
