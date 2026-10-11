@@ -1,7 +1,7 @@
 {
   "product": "EmuFusion",
-  "companionVersionCode": 105,
-  "companionVersionName": "3.2.31",
-  "companionApkUrl": "https://github.com/wildonrio/pegasus-lucent/releases/download/v3.2.31/emufusion-3.2.31.apk",
-  "companionSha256": "26326357edf4c627383443bd217db94f4912e22a6c45e1db877f003d1802d995"
+  "companionVersionCode": 106,
+  "companionVersionName": "3.2.32",
+  "companionApkUrl": "https://github.com/wildonrio/pegasus-lucent/releases/download/v3.2.32/emufusion-3.2.32.apk",
+  "companionSha256": "eed1efa73a4836d2b0b8cb11f774d241653f3b5339b63f648a75e65a1a28cade"
 }
