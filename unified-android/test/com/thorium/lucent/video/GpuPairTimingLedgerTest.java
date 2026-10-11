@@ -58,12 +58,14 @@ public final class GpuPairTimingLedgerTest {
                 eq(0L, ledger.takeCompletedPair(), "an old spike cannot become a fresh failure");
             eq(pair, policy.failureCount(), "one combined shader overload per independent pair");
             eq(0L, policy.restorationCount(), "no overload earns recovery");
-            check(policy.generationDisabled() == (pair == 32),
-                    "Direct is bounded by 32 real failed pairs, not 32 polls");
+            // Shader time over budget sheds work; only visible (physical)
+            // misses can force Direct (GpuWorkAdaptationPolicy, 2026-10-11).
+            check(!policy.generationDisabled(),
+                    "combined shader overload alone never forces Direct");
         }
         ledger.beginEvidenceEpoch();
         policy.beginEvidenceEpoch();
-        check(policy.generationDisabled(), "resetting timing ownership cannot undo Direct latch");
+        eq(2L, policy.workLevel(), "resetting timing ownership cannot restore shed work");
         eq(32L, policy.failureCount(), "epoch reset preserves failure accounting");
     }
 

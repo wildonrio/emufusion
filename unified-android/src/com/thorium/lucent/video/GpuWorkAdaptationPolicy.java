@@ -13,11 +13,21 @@ package com.thorium.lucent.video;
  * set and warp cost are known. A merely pending zero-duration timer poll is
  * not an observation. Missing/expired/invalid results must be reported as
  * failures and cannot be skipped while crediting later recovery samples.</p>
+ *
+ * <p>Only failures the viewer can see may disable generation. Shader time over
+ * budget sheds work while work can still be shed, but at minimum work it is
+ * not a reason to stop: GPU timer spans include the emulator's interleaved
+ * rendering, and the frames they flagged on the Thor were all presented in
+ * their slot (2026-10-11). Disabling also needs the failures to be recent --
+ * a full limit within one failure window -- not a lifetime total that a long
+ * session reaches through rare, isolated misses.</p>
  */
 public final class GpuWorkAdaptationPolicy {
     public static final int DEFAULT_MAX_WORK_LEVEL = 2;
     public static final int DEFAULT_RECOVERY_GOOD_PAIRS = 1200;
     public static final int DEFAULT_FAILURES_AT_MINIMUM = 30;
+    /** Completed pairs without a failure that clear the minimum-work count (~10 s at 60). */
+    public static final int DEFAULT_FAILURE_WINDOW_PAIRS = 600;
 
     public enum Decision { UNCHANGED, REDUCE_WORK, RESTORE_WORK, DISABLE_GENERATION }
     public enum Failure {
@@ -28,6 +38,8 @@ public final class GpuWorkAdaptationPolicy {
     private final int maxWorkLevel;
     private final int recoveryGoodPairs;
     private final int failuresAtMinimumLimit;
+    private final int failureWindowPairs;
+    private int pairsSinceFailure;
     private final long[] failuresByReason = new long[Failure.values().length];
     private int workLevel;
     private int consecutiveHealthyPairs;
@@ -46,16 +58,24 @@ public final class GpuWorkAdaptationPolicy {
 
     public GpuWorkAdaptationPolicy() {
         this(DEFAULT_MAX_WORK_LEVEL, DEFAULT_RECOVERY_GOOD_PAIRS,
-                DEFAULT_FAILURES_AT_MINIMUM);
+                DEFAULT_FAILURES_AT_MINIMUM, DEFAULT_FAILURE_WINDOW_PAIRS);
     }
 
     public GpuWorkAdaptationPolicy(int maxWorkLevel, int recoveryGoodPairs,
                                    int failuresAtMinimumLimit) {
-        if (maxWorkLevel < 0 || recoveryGoodPairs < 1 || failuresAtMinimumLimit < 1)
+        this(maxWorkLevel, recoveryGoodPairs, failuresAtMinimumLimit,
+                DEFAULT_FAILURE_WINDOW_PAIRS);
+    }
+
+    public GpuWorkAdaptationPolicy(int maxWorkLevel, int recoveryGoodPairs,
+                                   int failuresAtMinimumLimit, int failureWindowPairs) {
+        if (maxWorkLevel < 0 || recoveryGoodPairs < 1 || failuresAtMinimumLimit < 1 ||
+                failureWindowPairs < 1)
             throw new IllegalArgumentException("invalid GPU adaptation bounds");
         this.maxWorkLevel = maxWorkLevel;
         this.recoveryGoodPairs = recoveryGoodPairs;
         this.failuresAtMinimumLimit = failuresAtMinimumLimit;
+        this.failureWindowPairs = failureWindowPairs;
     }
 
     /**
@@ -80,6 +100,9 @@ public final class GpuWorkAdaptationPolicy {
         if (totalGpuUs <= 0L) return onFailure(Failure.TIMER_MISSING);
         if (totalGpuUs > shaderBudgetUs) return onFailure(Failure.GPU_OVER_BUDGET);
         if (disabled) return Decision.DISABLE_GENERATION;
+        // A window of failure-free pairs ends a burst; isolated misses spread
+        // across a long session never add up to a disable.
+        if (++pairsSinceFailure >= failureWindowPairs) failuresAtMinimum = 0;
         if (!physicalHeadroomVerified) {
             ++physicalHeadroomUnknownPairs;
             consecutiveHealthyPairs = 0;
@@ -122,8 +145,13 @@ public final class GpuWorkAdaptationPolicy {
             ++workLevel;
             ++reductions;
             failuresAtMinimum = 0;
+            pairsSinceFailure = 0;
             return Decision.REDUCE_WORK;
         }
+        // Nothing left to shed, and over-budget shader time is not a visible
+        // failure: keep generating and let physical misses decide.
+        if (reason == Failure.GPU_OVER_BUDGET) return Decision.UNCHANGED;
+        pairsSinceFailure = 0;
         if (++failuresAtMinimum < failuresAtMinimumLimit) return Decision.UNCHANGED;
         disabled = true;
         ++disableTransitions;

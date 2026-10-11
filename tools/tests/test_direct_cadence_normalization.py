@@ -47,7 +47,9 @@ class DirectCadenceNormalizationTest(unittest.TestCase):
         self.assertIn("directSurfaceCadenceHz(authoritativeHz)", host)
         self.assertIn("DisplaySyncPolicy.isUniformOnThor(synchronizedHz)", host)
         self.assertIn("requestNativePanelMode();", host)
-        self.assertIn("requestNativePanelMode(\n                            DisplaySyncPolicy.directPanelRefreshHz", host)
+        # Every offered mode is considered (PanelRefreshPlanner), not just 60/120.
+        self.assertIn("requestNativePanelMode(plannedPanelHz(declaredVideoHz));", host)
+        self.assertIn("PanelRefreshPlanner.direct(source, rates)", host)
         self.assertIn("preferredDisplayModeId = selectedModeId", host)
         self.assertIn("preferredRefreshRate = refreshHz", host)
         self.assertIn("mode.getRefreshRate() - refreshHz", host)

@@ -197,8 +197,15 @@ public final class GpuPhysicalHeadroomLedger {
         } else if (row.supportedMask >= 0 && (row.supportedMask & ~ALL_TIMESTAMPS) == 0 &&
                 (row.supportedMask & RENDER_COMPLETE) != 0 &&
                 row.renderCompleteNs > row.deadlineNs && row.renderCompleteNs <= row.actualNs) {
-            outcome = Outcome.DEADLINE_MISS;
-            reason = "application-rendering-completed-after-deadline";
+            // Rendering finished after the nominal latch deadline, yet the
+            // frame reached the panel in its own slot (checked just above):
+            // the compositor latched it and waited on its fence. That is what
+            // the viewer sees, so it is tight headroom, not a miss. Counting
+            // it as a miss disabled generation on GameCube and N64 while every
+            // generated frame was on time (Thor, 2026-10-11: actual within
+            // 0.1 ms of desired, render 0.4-2 ms past the latch deadline).
+            outcome = Outcome.MARGINAL_HEADROOM;
+            reason = "rendering-after-latch-deadline-presented-on-slot";
             appMargin = row.deadlineNs - row.renderCompleteNs;
         } else if (row.supportedMask != ALL_TIMESTAMPS ||
                 row.renderCompleteNs <= 0L || row.latchNs <= 0L || row.startNs <= 0L ||
@@ -220,8 +227,8 @@ public final class GpuPhysicalHeadroomLedger {
             compositorMargin = row.desiredNs - compositorReadyNs;
             long recoveryReserveNs = Math.max(1_000_000L, row.panelPeriodNs / 10L);
             if (appMargin < 0L) {
-                outcome = Outcome.DEADLINE_MISS;
-                reason = "application-rendering-completed-after-deadline";
+                outcome = Outcome.MARGINAL_HEADROOM;
+                reason = "rendering-after-latch-deadline-presented-on-slot";
             } else if (appMargin < recoveryReserveNs || compositorMargin < recoveryReserveNs) {
                 outcome = Outcome.MARGINAL_HEADROOM;
                 reason = "insufficient-verified-ready-margin";

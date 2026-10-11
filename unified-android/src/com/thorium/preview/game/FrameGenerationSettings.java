@@ -25,6 +25,13 @@ public final class FrameGenerationSettings {
             FrameGenerationBackendPolicy.Assessment.unavailable(
                     "RIFE qualification runtime is absent or not prewarmed");
 
+    /**
+     * Output frames per real frame the generator may produce. Doubling is the
+     * owner's default ceiling (more creates too many artifacts); the panel
+     * planner never asks for more than this.
+     */
+    public static final int MAX_MULTIPLIER = 2;
+
     private FrameGenerationSettings() {}
 
     /** One explicit owner choice. No package, shell global, or probe may override it. */

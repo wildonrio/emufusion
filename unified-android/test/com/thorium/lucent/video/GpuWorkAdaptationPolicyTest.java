@@ -3,6 +3,8 @@ package com.thorium.lucent.video;
 public final class GpuWorkAdaptationPolicyTest {
     public static void main(String[] args) {
         twelveHundredBadPairsNeverRestoreQuality();
+        overBudgetShaderTimeAloneNeverDisables();
+        isolatedPhysicalMissesDoNotAccumulate();
         everyFailureInvalidatesRecoveryAtMinimumWork();
         restorationRequiresConsecutiveEvidenceAndHeadroom();
         freshPairsAndFullTimingAreRequired();
@@ -22,15 +24,41 @@ public final class GpuWorkAdaptationPolicyTest {
             check(decision != GpuWorkAdaptationPolicy.Decision.RESTORE_WORK,
                     "an over-budget pair never restores quality");
             eq(0, value.consecutiveHealthyPairs(), "bad sample always clears recovery");
-            if (pair >= 32) check(value.generationDisabled(), "chronic overload disables by 32");
         }
         eq(2, value.workLevel(), "minimum work level reached");
         eq(1200, value.failureCount(), "all bad observations remain counted");
         eq(1200, value.failureCount(GpuWorkAdaptationPolicy.Failure.GPU_OVER_BUDGET),
                 "overload reason accounting remains intact");
         eq(0, value.restorationCount(), "1200 bad pairs cannot earn restoration");
-        eq(1, value.disableTransitionCount(), "disable latches exactly once");
         eq(2, value.reductionCount(), "only two work reductions exist");
+    }
+
+    private static void overBudgetShaderTimeAloneNeverDisables() {
+        // Thor 2026-10-11: GPU timer spans include the emulator's interleaved
+        // work; every flagged GameCube frame was still shown in its slot.
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        for (int pair = 1; pair <= 5000; ++pair) value.onCompletedPair(pair, 8000L, 7333L, true);
+        check(!value.generationDisabled(), "shader time over budget sheds work but never disables");
+        eq(0, value.failuresAtMinimum(), "over-budget time is not a minimum-work failure");
+        for (int miss = 0; miss < GpuWorkAdaptationPolicy.DEFAULT_FAILURES_AT_MINIMUM; ++miss)
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        check(value.generationDisabled(), "a burst of visible misses at minimum work disables");
+    }
+
+    private static void isolatedPhysicalMissesDoNotAccumulate() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy(0, 1200, 3, 10);
+        long pair = 0;
+        for (int round = 0; round < 100; ++round) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            for (int good = 0; good < 10; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        check(!value.generationDisabled(), "rare misses spread over a long session never disable");
+        eq(0, value.failuresAtMinimum(), "a failure-free window clears the burst count");
+        value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        value.onCompletedPair(++pair, 500L, 1000L, true);
+        value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        check(value.generationDisabled(), "misses within one window still disable");
     }
 
     private static void everyFailureInvalidatesRecoveryAtMinimumWork() {
@@ -43,7 +71,9 @@ public final class GpuWorkAdaptationPolicyTest {
             value.onFailure(reason);
             eq(0, value.consecutiveHealthyPairs(), reason + " invalidates recovery at minimum");
             eq(2, value.workLevel(), "failure cannot upgrade minimum work");
-            eq(1, value.failuresAtMinimum(), "minimum failure is retained");
+            eq(reason == GpuWorkAdaptationPolicy.Failure.GPU_OVER_BUDGET ? 0 : 1,
+                    value.failuresAtMinimum(),
+                    "visible minimum failures are retained; shader time is not one");
             value.onCompletedPair(4L, 500L, 1000L, true);
             eq(0, value.restorationCount(), "one later good sample cannot spend stale credit");
         }
@@ -91,7 +121,7 @@ public final class GpuWorkAdaptationPolicyTest {
     private static void intermittentFailureCannotEvadeTheMinimumWorkLimit() {
         GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy(0, 1200, 3);
         for (int pair = 1; pair <= 3; ++pair) {
-            value.onFailure(GpuWorkAdaptationPolicy.Failure.GPU_OVER_BUDGET);
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
             value.onCompletedPair(pair, 500L, 1000L, true);
         }
         check(value.generationDisabled(), "isolated good samples cannot hide chronic failure");
@@ -137,9 +167,9 @@ public final class GpuWorkAdaptationPolicyTest {
     }
 
     private static void invalidConfigurationRejected() {
-        for (int[] bounds : new int[][] {{-1, 4, 3}, {2, 0, 3}, {2, 4, 0}}) {
+        for (int[] bounds : new int[][] {{-1, 4, 3, 1}, {2, 0, 3, 1}, {2, 4, 0, 1}, {2, 4, 3, 0}}) {
             boolean rejected = false;
-            try { new GpuWorkAdaptationPolicy(bounds[0], bounds[1], bounds[2]); }
+            try { new GpuWorkAdaptationPolicy(bounds[0], bounds[1], bounds[2], bounds[3]); }
             catch (IllegalArgumentException expected) { rejected = true; }
             check(rejected, "invalid bounds cannot silently disable safety gates");
         }

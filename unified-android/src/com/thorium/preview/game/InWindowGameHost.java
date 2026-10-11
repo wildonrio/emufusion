@@ -51,6 +51,7 @@ import com.thorium.lucent.cheats.CheatPanelSnapshot;
 import com.thorium.lucent.emulators.NativeAdapterStopPolicy;
 import com.thorium.lucent.metadata.EngineSystemIdResolver;
 import com.thorium.lucent.timing.DisplaySyncPolicy;
+import com.thorium.lucent.timing.PanelRefreshPlanner;
 import com.thorium.preview.MenuSoundPlayer;
 import com.thorium.preview.AppVolumeController;
 import com.thorium.preview.BootVideoOverlay;
@@ -1074,11 +1075,63 @@ public final class InWindowGameHost
 
     /** Requests the exact native panel mode required by this launch. */
     private void requestNativePanelMode() {
-        float refreshHz = 120.0f;
-        if (request.frameGenerationMode == FrameGenerationSettings.Mode.OFF)
-            refreshHz = DisplaySyncPolicy.directPanelRefreshHz(
-                    authoritativeVideoHz(request.systemId));
-        requestNativePanelMode(refreshHz);
+        requestNativePanelMode(plannedPanelHz(authoritativeVideoHz(request.systemId)));
+    }
+
+    /**
+     * The panel rate for this launch from every fixed rate the display offers
+     * (PanelRefreshPlanner): direct presentation on an exact multiple of the
+     * game's clock, or with frame generation the lowest rate holding twice it.
+     * A clock not yet known (native adapters) plans for 60 x 2, which on the
+     * Thor is the 120 Hz mode it always used.
+     */
+    private float plannedPanelHz(double declaredHz) {
+        Display display = activity.getDisplay();
+        if (display == null) return 120.0f;
+        double source = declaredHz > 1.0 && declaredHz < 1000.0
+                ? DisplaySyncPolicy.synchronizedSourceHz(declaredHz) : 0.0;
+        double[] rates = supportedRefreshRates(display);
+        double variableMaxHz = variableRefreshMaxHz(display, rates);
+        PanelRefreshPlanner.Plan plan =
+                request.frameGenerationMode == FrameGenerationSettings.Mode.OFF && source > 0.0
+                        ? PanelRefreshPlanner.direct(source, rates)
+                        : PanelRefreshPlanner.generated(source, rates,
+                                FrameGenerationSettings.MAX_MULTIPLIER, variableMaxHz);
+        Log.i(TAG, "Panel plan system=" + request.systemId + " declaredHz=" + declaredHz +
+                " modes=" + java.util.Arrays.toString(rates) + " " + plan);
+        // An adaptive panel follows the Surface's frame-rate vote from its
+        // fastest mode; a fixed one needs the exact listed mode.
+        return (float) (plan.variableRefresh ? rates[rates.length - 1] : plan.panelHz);
+    }
+
+    /** Distinct refresh rates offered at the current resolution, ascending. */
+    private static double[] supportedRefreshRates(Display display) {
+        Display.Mode current = display.getMode();
+        java.util.ArrayList<Double> rates = new java.util.ArrayList<>();
+        for (Display.Mode mode : display.getSupportedModes()) {
+            if (current != null && (mode.getPhysicalWidth() != current.getPhysicalWidth() ||
+                    mode.getPhysicalHeight() != current.getPhysicalHeight())) continue;
+            rates.add((double) mode.getRefreshRate());
+        }
+        if (rates.isEmpty()) rates.add((double) display.getRefreshRate());
+        double[] values = new double[rates.size()];
+        for (int i = 0; i < values.length; ++i) values[i] = rates.get(i);
+        java.util.Arrays.sort(values);
+        return values;
+    }
+
+    /**
+     * The fastest rate of a panel that adapts its refresh to the content
+     * (Android 16 ARR, Display#hasArrSupport), or 0 for fixed modes only.
+     */
+    private static double variableRefreshMaxHz(Display display, double[] rates) {
+        try {
+            Object arr = Display.class.getMethod("hasArrSupport").invoke(display);
+            if (Boolean.TRUE.equals(arr) && rates.length > 0) return rates[rates.length - 1];
+        } catch (ReflectiveOperationException | RuntimeException absent) {
+            // Older Android: fixed modes only.
+        }
+        return 0.0;
     }
 
     /**
@@ -2633,8 +2686,7 @@ public final class InWindowGameHost
             if (declaredVideoHz > 1.0 && declaredVideoHz < 1000.0) {
                 float directPanelHz = directSurfaceCadenceHz(declaredVideoHz);
                 if (request.frameGenerationMode == FrameGenerationSettings.Mode.OFF)
-                    requestNativePanelMode(
-                            DisplaySyncPolicy.directPanelRefreshHz(declaredVideoHz));
+                    requestNativePanelMode(plannedPanelHz(declaredVideoHz));
                 if (gameSurface instanceof GameSurface)
                     ((GameSurface) gameSurface).setDirectPresentationHz(directPanelHz);
                 else if (gameSurface instanceof GameSurfaceView)

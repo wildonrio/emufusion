@@ -154,6 +154,8 @@ SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/GpuDriverTable.java"
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.GpuDriverTableTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.lucent.timing.PanelRefreshPlannerTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.sources.CheatParsersTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.sources.CheatGameIdentityTest
