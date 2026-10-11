@@ -6303,14 +6303,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             Log.e(TAG, "Dense pyramid rejected generator=" + generatorId +
                     " reason=" + reason + " recoverable=" + (recoverable ? 1 : 0) +
                     " transientRejections=" + denseTransientRejections, failure);
-        if (!recoverable && frameRate.directLatticeActive()) {
-            // The endpoint-only path already presents every real frame on the
-            // producer's own paced 2-scan slots, exactly like Direct. Retiring
-            // the renderer here detached the core and destroyed its GL
-            // context, and rebuilding Dolphin/Azahar state stalled the game
-            // 100-430 ms (Thor AUTO runs); stay on this passthrough instead.
+        if (!recoverable && (frameRate.directLatticeActive() || !retireOnPermanentRejection)) {
+            // The endpoint-only path presents every real frame like Direct:
+            // on the producer's own paced 2-scan slots when it has a stamped
+            // lattice, else as each frame arrives (what the Direct Surface
+            // does too). Retiring the renderer here detached the core and
+            // destroyed its GL context; rebuilding Dolphin/Azahar/mupen state
+            // stalled the game 100-430 ms (Thor AUTO runs). Stay on this
+            // passthrough instead.
             Log.i(TAG, "Built-in generation unavailable; staying on exact Direct passthrough generator=" +
-                    generatorId + " reason=" + reason);
+                    generatorId + " reason=" + reason + " lattice=" + frameRate.directLatticeActive());
         } else if (!recoverable) {
             // Endpoint-only output still owns an intermediate renderer. Once
             // generation cannot recover, retire it through the host's normal
@@ -6960,11 +6962,19 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer);
         GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
                 GLES20.GL_TEXTURE_2D, texture, 0);
-        if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
-                GLES20.GL_FRAMEBUFFER_COMPLETE)
+        // Session-lifetime textures at fixed sizes: validate each once, not on
+        // every one of ~38 passes per promotion (a synchronous driver call).
+        if (verifiedDenseTargets.add(texture) &&
+                GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                        GLES20.GL_FRAMEBUFFER_COMPLETE)
             throw new IllegalStateException("dense framebuffer incomplete");
         GLES20.glViewport(0, 0, width, height);
     }
+
+    private final java.util.Set<Integer> verifiedDenseTargets = new java.util.HashSet<>();
+    // Retiring after a permanent rejection is kept only as an explicit
+    // diagnostic switch; the passthrough above is the product behaviour.
+    private static final boolean retireOnPermanentRejection = false;
 
     /**
      * Builds a coarse then refined field mapping {@code currentTexture} back

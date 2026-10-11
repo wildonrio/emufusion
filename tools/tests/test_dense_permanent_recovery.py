@@ -38,6 +38,8 @@ class DensePermanentRecoveryTest(unittest.TestCase):
 
     def test_permanent_rejection_requests_direct_but_transient_can_rearm(self):
         source = (ROOT / 'unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java').read_text()
+        # Product behaviour: a failed generator stays on the Direct passthrough.
+        self.assertIn('private static final boolean retireOnPermanentRejection = false;', source)
         body = method(source, '    private void rejectDense(')
         fixture = r'''
 public class DenseRejectionTest {
@@ -54,6 +56,7 @@ public class DenseRejectionTest {
     final Adaptation denseGpuAdaptation=new Adaptation();
     final FrameRate frameRate=new FrameRate();
     static final int DENSE_TRANSIENT_REJECT_REARM_LIMIT=2;
+    boolean retireOnPermanentRejection=true;  // product default false; tested both ways
     static final String TAG="fixture";
     boolean densePyramidEnabled=true,densePyramidUnavailable,densePerformanceRejected;
     boolean reportedCadenceQualified=true;
@@ -93,6 +96,12 @@ public class DenseRejectionTest {
         passthrough.rejectDense("gpu-headroom-binding-failure",null);
         assert passthrough.recoveries==0 && passthrough.densePyramidUnavailable;
         assert !passthrough.frameRate.enabled && passthrough.teardowns==1 && passthrough.reports==1;
+        // Product default: no stamped lattice, still never retire (retiring
+        // destroyed the core's GL context: 100-430 ms stalls).
+        DenseRejectionTest noLattice=new DenseRejectionTest();
+        noLattice.retireOnPermanentRejection=false;
+        noLattice.rejectDense("gpu-headroom-binding-failure",null);
+        assert noLattice.recoveries==0 && noLattice.densePyramidUnavailable && !noLattice.frameRate.enabled;
         DenseRejectionTest exhausted=new DenseRejectionTest();
         exhausted.denseGpuAdaptation.disabled=true;
         exhausted.rejectDense("budget",null);
