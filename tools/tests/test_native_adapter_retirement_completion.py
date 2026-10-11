@@ -62,6 +62,11 @@ final class DurableBlobStore {
         writes.incrementAndGet();
     }
 }
+// Driver bookkeeping has its own table tests; retirement only reports the end.
+final class GpuDriverProvisioner {
+    static final List<String> ended=new CopyOnWriteArrayList<>();
+    static void noteSessionEnded(Object context,String engine){ended.add(engine);}
+}
 // Formatting has its own filesystem tests; retirement must preserve the
 // original callback while it exercises the real preparation catch block.
 final class NativeAdapterSystemDirectory {
@@ -100,6 +105,7 @@ public class NativeAdapterEngineSession implements EngineSession {
         void abandon(){abandons.incrementAndGet();if(fail)throw new IllegalStateException("focus failed");}
     }
     final Entry entry=new Entry();
+    final Object appContext=new Object();
     final Request request=new Request();
     final AudioFocus audioFocus=new AudioFocus();
     final AtomicReference<Thread> lifecycleThread=new AtomicReference<>();

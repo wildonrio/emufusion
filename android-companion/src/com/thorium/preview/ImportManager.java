@@ -103,7 +103,17 @@ final class ImportManager {
             new File(PEGASUS_CONFIG, "metafiles"),
             "99-thorium-auto-import.metadata.pegasus.txt");
     private static final long RESCAN_THROTTLE_MS = 45_000L;
-    private static final long MISS_RETRY_MS = 7L * 24L * 60L * 60L * 1000L;
+    /**
+     * The sources a definitive miss was established against. A release that
+     * adds or changes an artwork, video or ratings source changes this, and
+     * every recorded miss is then asked once more of the new set.
+     */
+    static final String MEDIA_SOURCE_SET =
+            "2026-10-11:nintendo,libretro,launchbox-box,launchbox-fanart,archive,metacritic";
+    /** Even a definitive miss is asked again after this long: catalogs grow. */
+    private static final long DEFINITIVE_MISS_MS = 90L * 24L * 60L * 60L * 1000L;
+    /** What each media-queue stage produces (the cheats stage has no media kind). */
+    private static final String[] MEDIA_KINDS = {"ratings", "boxArt", "background", "video", null};
     /** Where every artwork-driven library removal is written down. */
     private static final String ARTLESS_LEDGER = "removed-without-artwork.json";
     /**
@@ -844,10 +854,58 @@ final class ImportManager {
                 row.optDouble("user", 0);
     }
 
+    /**
+     * Every media kind is present or definitively unavailable. A kind no
+     * source has (every source answered, none had it) counts as settled, so
+     * the game is not searched again every week (owner, 2026-10-11).
+     */
     private static boolean mediaComplete(JSONObject row) {
-        return row != null && readableMedia(row.optString("boxArt")) &&
-                readableMedia(row.optString("background")) && readableMedia(row.optString("video")) &&
-                (row.optDouble("critic", 0) > 0 || row.optDouble("user", 0) > 0);
+        if (row == null) return false;
+        for (String kind : MEDIA_KINDS)
+            if (kind != null && !hasMedia(row, kind) && !definitiveMiss(row, kind)) return false;
+        return true;
+    }
+
+    private static boolean hasMedia(JSONObject row, String kind) {
+        if ("ratings".equals(kind))
+            return row.optDouble("critic", 0) > 0 || row.optDouble("user", 0) > 0;
+        return readableMedia(row.optString(kind));
+    }
+
+    /** Every source answered "none" for this kind, recently and against today's source set. */
+    private static boolean definitiveMiss(JSONObject row, String kind) {
+        JSONObject misses = row.optJSONObject("mediaMisses");
+        JSONObject miss = misses == null ? null : misses.optJSONObject(kind);
+        return miss != null && MEDIA_SOURCE_SET.equals(miss.optString("sources")) &&
+                System.currentTimeMillis() - miss.optLong("at", 0L) < DEFINITIVE_MISS_MS;
+    }
+
+    /**
+     * After a stage: clear the miss if the asset arrived, or record a
+     * definitive one -- only when no lookup in the stage failed without an
+     * answer (timeout, network loss, throttling, server error, parse error).
+     */
+    private static void recordMediaOutcome(JSONObject row, String kind, int indefiniteBefore)
+            throws Exception {
+        JSONObject misses = row.optJSONObject("mediaMisses");
+        if (hasMedia(row, kind)) {
+            if (misses != null) misses.remove(kind);
+            return;
+        }
+        if (LibraryHttp.indefiniteFailures() != indefiniteBefore) return;
+        if (misses == null) {
+            misses = new JSONObject();
+            row.put("mediaMisses", misses);
+        }
+        misses.put(kind, new JSONObject().put("sources", MEDIA_SOURCE_SET)
+                .put("at", System.currentTimeMillis()));
+        Log.i(TAG, "No source has " + kind + " for " + row.optString("title") +
+                "; not searched again until the sources change");
+    }
+
+    /** A lookup that broke without an HTTP answer cannot prove a miss. */
+    private static void noteUnanswered(Exception error) {
+        if (!(error instanceof LibraryHttp.HttpAnswer)) LibraryHttp.noteIndefiniteFailure();
     }
 
     private static boolean readableMedia(String path) {
@@ -881,6 +939,9 @@ final class ImportManager {
             }
             ImportedGame game = ImportedGame.fromJson(row);
             if (game == null) continue;
+            // An owner-requested media refresh asks every source again,
+            // including about kinds earlier passes found nowhere.
+            if (row.optLong("mediaRefreshEpoch", 0) < refresh) row.remove("mediaMisses");
             if (row.optLong("mediaRefreshEpoch", 0) < refresh ||
                     row.optInt("mediaVersion", 0) >= 1 && mediaPending(row, refresh)) {
                 row.put("mediaStage", 0).put("mediaVersion", 0).put("mediaLastError", "");
@@ -888,6 +949,11 @@ final class ImportManager {
             row.put("mediaRefreshEpoch", refresh);
             final int current = index + 1;
             for (int stage = row.optInt("mediaStage", 0); stage < stages.length; stage++) {
+                String kind = MEDIA_KINDS[stage];
+                if (kind != null && !hasMedia(row, kind) && definitiveMiss(row, kind)) {
+                    row.put("mediaStage", stage + 1);
+                    continue;
+                }
                 if (statusQuiet && gameplayActive) {
                     // Checkpointed exactly like a network loss; the 2-minute
                     // poll resumes it once the game has ended.
@@ -919,6 +985,7 @@ final class ImportManager {
                                 label + " • " + host + " • " + bytes / 1024 + " KB" +
                                         (total > 0 ? " / " + total / 1024 + " KB" : ""),
                                 current, games.size(), Collections.singletonList(title), current - 1, false));
+                int indefiniteBefore = LibraryHttp.indefiniteFailures();
                 try {
                     if (stage == 0) {
                         enrichBundledMetadata(game);
@@ -937,6 +1004,7 @@ final class ImportManager {
                     if (wake.isHeld()) wake.release();
                 }
                 mergeObject(row, game.toJson());
+                if (kind != null) recordMediaOutcome(row, kind, indefiniteBefore);
                 row.put("mediaStage", stage + 1).put("mediaUpdatedAt", System.currentTimeMillis());
                 if (!transfer.error.isEmpty()) row.put("mediaLastError", transfer.error);
                 writeTextAtomic(checkpoint, row.toString(2));
@@ -1425,6 +1493,13 @@ final class ImportManager {
             if (official != null && !official.cover.isEmpty())
                 match = new CatalogMatch(official.cover, game.title);
             if (match == null) match = boxArtMatch(game.system, game.title, cacheRoot);
+            if (match == null) {
+                try { match = launchBoxBoxFrontMatch(game.system, game.title, cacheRoot); }
+                catch (Exception unavailable) {
+                    noteUnanswered(unavailable);
+                    Log.w(TAG, "LaunchBox box art unavailable for " + game.title);
+                }
+            }
             if (match == null) return;
             File folder = new File(mediaRoot, "boxfront/" + game.system.folder);
             folder.mkdirs();
@@ -1433,6 +1508,7 @@ final class ImportManager {
                     (ext.isEmpty() ? "png" : ext));
             if (download(match.url, target, 64L * 1024L * 1024L)) game.boxArt = target.getAbsolutePath();
         } catch (Exception error) {
+            noteUnanswered(error);
             Log.w(TAG, "Box art unavailable for " + game.title, error);
         }
     }
@@ -1522,7 +1598,10 @@ final class ImportManager {
             // banners, or a fuzzy title result).
             CatalogMatch launchBox = null;
             try { launchBox = launchBoxFanartMatch(game.system, game.title, cacheRoot); }
-            catch (Exception unavailable) { Log.w(TAG, "Fanart source unavailable; trying fallback"); }
+            catch (Exception unavailable) {
+                noteUnanswered(unavailable);
+                Log.w(TAG, "Fanart source unavailable; trying fallback");
+            }
             if (launchBox != null) {
                 File folder = new File(mediaRoot,
                         "game-wallpapers-launchbox-fanart/" + game.system.folder);
@@ -1586,6 +1665,7 @@ final class ImportManager {
             }
             return;
         } catch (Exception error) {
+            noteUnanswered(error);
             Log.w(TAG, "Wallpaper unavailable for " + game.title, error);
         }
     }
@@ -1802,7 +1882,10 @@ final class ImportManager {
                 match = new VideoMatch(official.video);
             if (match == null && !game.system.videoArchive.isEmpty()) {
                 try { match = videoMatch(game.system, game.title, cacheRoot); }
-                catch (Exception unavailable) { Log.w(TAG, "Video catalog unavailable; trying fallback"); }
+                catch (Exception unavailable) {
+                    noteUnanswered(unavailable);
+                    Log.w(TAG, "Video catalog unavailable; trying fallback");
+                }
             }
             if (match == null)
                 match = archiveSearchVideo(game.system, game.title, cacheRoot);
@@ -1812,6 +1895,7 @@ final class ImportManager {
             File target = new File(folder, safeFilename(game.title) + ".mp4");
             if (download(match.url, target, 192L * 1024L * 1024L)) game.video = target.getAbsolutePath();
         } catch (Exception error) {
+            noteUnanswered(error);
             Log.w(TAG, "Video unavailable for " + game.title, error);
         }
     }
@@ -1926,6 +2010,7 @@ final class ImportManager {
                 return;
             }
         } catch (Exception error) {
+            noteUnanswered(error);
             Log.w(TAG, "Metacritic unavailable for " + game.title, error);
         }
     }
@@ -2418,12 +2503,26 @@ final class ImportManager {
                     game.backgroundTransform = field(stanza, "x-background-transform");
                     game.inferBackgroundProvenance();
 
-                    if (needsArt && !recentlyMissed(cacheRoot, system, title)) {
+                    if (needsArt && !definitiveFileMiss(cacheRoot, "boxArt", system, title)) {
+                        int before = LibraryHttp.indefiniteFailures();
                         enrichBoxArt(game, cacheRoot, mediaRoot);
-                        if (missingMediaFile(game.boxArt)) recordMiss(cacheRoot, system, title);
+                        if (missingMediaFile(game.boxArt))
+                            recordFileMiss(cacheRoot, "boxArt", system, title, before);
                     }
-                    if (needsBackground) enrichBackground(game, cacheRoot, mediaRoot);
-                    if (needsVideo) enrichVideo(game, cacheRoot, mediaRoot);
+                    if (needsBackground &&
+                            !definitiveFileMiss(cacheRoot, "background", system, title)) {
+                        int before = LibraryHttp.indefiniteFailures();
+                        enrichBackground(game, cacheRoot, mediaRoot);
+                        if (missingMediaFile(game.background) ||
+                                !wallpaperCanvasIsValid(new File(game.background)))
+                            recordFileMiss(cacheRoot, "background", system, title, before);
+                    }
+                    if (needsVideo && !definitiveFileMiss(cacheRoot, "video", system, title)) {
+                        int before = LibraryHttp.indefiniteFailures();
+                        enrichVideo(game, cacheRoot, mediaRoot);
+                        if (missingMediaFile(game.video))
+                            recordFileMiss(cacheRoot, "video", system, title, before);
+                    }
 
                     String updated = stanza;
                     if (needsArt && !missingMediaFile(game.boxArt)) {
@@ -2477,6 +2576,71 @@ final class ImportManager {
 
     private CatalogMatch launchBoxFanartMatch(GameSystems.SystemDef system, String title,
                                                File cacheRoot) throws Exception {
+        String gameId = launchBoxGameId(system, title, cacheRoot);
+        if (gameId.isEmpty()) return null;
+        Pattern fanart = Pattern.compile(
+                "<a\\b[^>]*href=\"(https://images\\.launchbox-app\\.com/[^\"]+)\"" +
+                        "[^>]*data-title=\"[^\"]*Fanart - Background[^\"]*\"" +
+                        "[^>]*data-footer=\"(\\d+)\\s*x\\s*(\\d+)[^\"]*\"",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        Matcher candidates = fanart.matcher(launchBoxImages(gameId, cacheRoot));
+        String bestUrl = "";
+        long bestPixels = 0L;
+        while (candidates.find()) {
+            int width = Integer.parseInt(candidates.group(2));
+            int height = Integer.parseInt(candidates.group(3));
+            if (width < 960 || height < 540) continue;
+            float aspect = width / (float) height;
+            if (aspect < 1.35f || aspect > 2.35f) continue;
+            long pixels = (long) width * height;
+            if (pixels > bestPixels) {
+                bestPixels = pixels;
+                bestUrl = htmlText(candidates.group(1));
+            }
+        }
+        return bestUrl.isEmpty() ? null : new CatalogMatch(bestUrl, cleanTitle(title));
+    }
+
+    /**
+     * LaunchBox's "Box - Front" for one exact-title, exact-platform game:
+     * the third box-art source, after the official store and the libretro
+     * catalog. Region-tagged fronts are equal candidates; the largest wins.
+     */
+    private CatalogMatch launchBoxBoxFrontMatch(GameSystems.SystemDef system, String title,
+                                                File cacheRoot) throws Exception {
+        String gameId = launchBoxGameId(system, title, cacheRoot);
+        if (gameId.isEmpty()) return null;
+        Pattern front = Pattern.compile(
+                "<a\\b[^>]*href=\"(https://images\\.launchbox-app\\.com/[^\"]+)\"" +
+                        "[^>]*data-title=\"[^\"]*Box - Front[^\"]*\"" +
+                        "[^>]*data-footer=\"(\\d+)\\s*x\\s*(\\d+)[^\"]*\"",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+        Matcher candidates = front.matcher(launchBoxImages(gameId, cacheRoot));
+        String bestUrl = "";
+        long bestPixels = 0L;
+        while (candidates.find()) {
+            int width = Integer.parseInt(candidates.group(2));
+            int height = Integer.parseInt(candidates.group(3));
+            if (width < 256 || height < 256) continue;
+            long pixels = (long) width * height;
+            if (pixels > bestPixels) {
+                bestPixels = pixels;
+                bestUrl = htmlText(candidates.group(1));
+            }
+        }
+        return bestUrl.isEmpty() ? null : new CatalogMatch(bestUrl, cleanTitle(title));
+    }
+
+    private String launchBoxImages(String gameId, File cacheRoot) throws Exception {
+        File imagesCache = new File(cacheRoot, "launchbox-images-" + gameId + ".html");
+        return cachedText(imagesCache,
+                "https://gamesdb.launchbox-app.com/games/images/" + gameId,
+                30L * 24L * 60L * 60L * 1000L, 24L * 1024L * 1024L);
+    }
+
+    /** The LaunchBox game id for an exact title on this platform, or "". */
+    private String launchBoxGameId(GameSystems.SystemDef system, String title,
+                                   File cacheRoot) throws Exception {
         File searchCache = new File(cacheRoot,
                 "launchbox-search-" + system.folder + '-' + sha1(normalize(title)) + ".html");
         String results = cachedText(searchCache,
@@ -2509,33 +2673,7 @@ final class ImportManager {
             gameId = cards.group(1);
             break;
         }
-        if (gameId.isEmpty()) return null;
-
-        File imagesCache = new File(cacheRoot, "launchbox-images-" + gameId + ".html");
-        String images = cachedText(imagesCache,
-                "https://gamesdb.launchbox-app.com/games/images/" + gameId,
-                30L * 24L * 60L * 60L * 1000L, 24L * 1024L * 1024L);
-        Pattern fanart = Pattern.compile(
-                "<a\\b[^>]*href=\"(https://images\\.launchbox-app\\.com/[^\"]+)\"" +
-                        "[^>]*data-title=\"[^\"]*Fanart - Background[^\"]*\"" +
-                        "[^>]*data-footer=\"(\\d+)\\s*x\\s*(\\d+)[^\"]*\"",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-        Matcher candidates = fanart.matcher(images);
-        String bestUrl = "";
-        long bestPixels = 0L;
-        while (candidates.find()) {
-            int width = Integer.parseInt(candidates.group(2));
-            int height = Integer.parseInt(candidates.group(3));
-            if (width < 960 || height < 540) continue;
-            float aspect = width / (float) height;
-            if (aspect < 1.35f || aspect > 2.35f) continue;
-            long pixels = (long) width * height;
-            if (pixels > bestPixels) {
-                bestPixels = pixels;
-                bestUrl = htmlText(candidates.group(1));
-            }
-        }
-        return bestUrl.isEmpty() ? null : new CatalogMatch(bestUrl, cleanTitle(title));
+        return gameId;
     }
 
     private static boolean launchBoxPlatformMatches(GameSystems.SystemDef system,
@@ -3327,6 +3465,7 @@ final class ImportManager {
             if (cover.isEmpty() && background.isEmpty() && video.isEmpty()) return null;
             return new NintendoMedia(cover, background, video);
         } catch (Exception error) {
+            noteUnanswered(error);
             Log.w(TAG, "Official Nintendo media unavailable for " + title, error);
             return null;
         }
@@ -3369,6 +3508,7 @@ final class ImportManager {
             }
             return null;
         } catch (Exception error) {
+            noteUnanswered(error);
             Log.w(TAG, "Archive fallback unavailable for " + title, error);
             return null;
         }
@@ -4708,6 +4848,34 @@ final class ImportManager {
         try { if (!probe.createNewFile()) return false; return probe.delete(); }
         catch (Exception ignored) { return false; }
     }
-    private static boolean recentlyMissed(File cacheRoot, GameSystems.SystemDef system, String title) { File f=new File(cacheRoot,"misses/"+system.folder+"/"+sha1(normalize(title)));return f.isFile()&&System.currentTimeMillis()-f.lastModified()<MISS_RETRY_MS; }
-    private static void recordMiss(File cacheRoot, GameSystems.SystemDef system, String title) { try { File f=new File(cacheRoot,"misses/"+system.folder+"/"+sha1(normalize(title)));f.getParentFile().mkdirs();new FileOutputStream(f).close(); } catch(Exception ignored){} }
+    /**
+     * The same definitive-miss rule for hand-authored collections, which have
+     * no registry row: a small file per kind and title holding the source set.
+     * The older "misses/" memo also counted network failures as misses, so it
+     * is not read.
+     */
+    private static File missFile(File cacheRoot, String kind, GameSystems.SystemDef system,
+                                 String title) {
+        return new File(cacheRoot, "misses-v2/" + kind + "/" + system.folder + "/" +
+                sha1(normalize(title)));
+    }
+    private static boolean definitiveFileMiss(File cacheRoot, String kind,
+                                              GameSystems.SystemDef system, String title) {
+        File f = missFile(cacheRoot, kind, system, title);
+        try {
+            return f.isFile() && System.currentTimeMillis() - f.lastModified() < DEFINITIVE_MISS_MS &&
+                    MEDIA_SOURCE_SET.equals(readText(f).trim());
+        } catch (Exception unreadable) {
+            return false;
+        }
+    }
+    private static void recordFileMiss(File cacheRoot, String kind, GameSystems.SystemDef system,
+                                       String title, int indefiniteBefore) {
+        if (LibraryHttp.indefiniteFailures() != indefiniteBefore) return;
+        try {
+            File f = missFile(cacheRoot, kind, system, title);
+            f.getParentFile().mkdirs();
+            writeTextAtomic(f, MEDIA_SOURCE_SET);
+        } catch (Exception ignored) {}
+    }
 }

@@ -39,6 +39,7 @@ SOURCES="$SOURCES $(find "$PROJECT_DIR/src/com/thorium/preview/cheats/delivery" 
     ! -name 'FrameRateUnlockPolicy.java' -print)"
 SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/CoreOptionOverrideFile.java"
 SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/WidescreenHackTable.java"
+SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/GpuDriverTable.java"
 "$JAVA_HOME/bin/javac" --release 8 -encoding UTF-8 \
     -d "$TEST_BUILD" $SOURCES
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.lucent.state.StateVaultTest
@@ -150,6 +151,8 @@ SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/WidescreenHackTable.
     com.thorium.lucent.emulators.NativeAdapterStopPolicyTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.WidescreenHackPolicyTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.preview.game.GpuDriverTableTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.sources.CheatParsersTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \

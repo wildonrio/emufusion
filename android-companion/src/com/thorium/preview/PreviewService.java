@@ -324,6 +324,9 @@ public final class PreviewService extends Service {
             else
                 Log.w("LucentImport", "Startup update check still running; starting library scan");
             mainHandler.post(() -> { if (running) importManager.startInitialScan(); });
+            // The Switch runtime's per-GPU Vulkan driver (Turnip on most
+            // Adreno phones) is fetched up front, before anyone launches a game.
+            com.thorium.preview.game.GpuDriverProvisioner.provisionAsync(this);
         }, "lucent-update-first");
         updateFirst.setDaemon(true);
         updateFirst.start();
@@ -732,6 +735,8 @@ public final class PreviewService extends Service {
                         + ",\"soundEffects\":" + MenuSoundPlayer.isEnabled(this)
                         + ",\"cutoutInsetFraction\":" + String.format(java.util.Locale.US, "%.4f",
                                 DisplayCutoutInset.fraction(this))
+                        + ",\"gpuDriver\":" + JSONObject.quote(
+                                com.thorium.preview.game.GpuDriverProvisioner.describe(this))
                         + "}");
             } else if ("/screensaver/status".equals(path)) {
                 // The theme polls only while the screensaver is enabled and the

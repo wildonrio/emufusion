@@ -47,6 +47,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <list>
@@ -54,6 +55,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
 
 #include <android/native_window.h>
 #include <dlfcn.h>
@@ -143,6 +145,27 @@ static std::string adapter_library_directory() {
     const std::string path(info.dli_fname);
     const auto separator = path.find_last_of('/');
     return separator == std::string::npos ? std::string() : path.substr(0, separator);
+}
+
+/**
+ * The per-GPU driver package EmuFusion's frontend provisioned (Mesa Turnip on
+ * most Adreno GPUs; GpuDriverProvisioner.java), as {directory with trailing
+ * slash, library name}. Both empty means the system driver. The frontend sets
+ * these before the first load in the process; Eden falls back to the system
+ * driver by itself when the custom one fails to open.
+ */
+static std::pair<std::string, std::string> provisioned_gpu_driver() {
+    const char* dir = std::getenv("EMUFUSION_GPU_DRIVER_DIR");
+    const char* name = std::getenv("EMUFUSION_GPU_DRIVER_LIBRARY");
+    if (dir == nullptr || name == nullptr || dir[0] == '\0' || name[0] == '\0' ||
+        std::strchr(name, '/') != nullptr) {
+        return {};
+    }
+    std::string directory(dir);
+    if (directory.back() != '/') {
+        directory.push_back('/');
+    }
+    return {directory, std::string(name)};
 }
 
 // ---------------------------------------------------------------------------
@@ -550,18 +573,26 @@ static bool adapter_load(lucent_native_engine* engine,
     // that says the process-wide half is already standing.
     static std::atomic<bool> process_initialized{false};
     const bool first_session = !process_initialized.exchange(true);
+    std::string requested_driver;
     if (first_session) {
         // The Vulkan driver has to be resolved before InitializeEmulation,
         // which hands the loaded library to its render window. An empty
-        // custom-driver triple asks for the system driver.
-        session.InitializeGpuDriver(adapter_library_directory(), std::string(),
-                                    std::string(), std::string());
+        // custom-driver pair asks for the system driver.
+        const auto [driver_dir, driver_name] = provisioned_gpu_driver();
+        requested_driver = driver_name.empty() ? std::string("system") : driver_dir + driver_name;
+        session.InitializeGpuDriver(adapter_library_directory(), driver_dir, driver_name,
+                                    std::string());
     }
     // InitializeSystem creates the filesystem and the manual content provider.
     // Nothing that touches content may run before it: ConfigureFilesystemProvider
     // dereferences that provider, and calling it first is a null dereference.
     // That half runs for every title; only the process-wide half is skipped.
     session.InitializeSystem(!first_session);
+    if (first_session) {
+        // Logged here, once logging stands; Eden's own device log line names
+        // the driver that actually opened (a failed custom open falls back).
+        LOG_INFO(Frontend, "EmuFusion GPU driver requested={}", requested_driver);
+    }
     LOG_INFO(Frontend, "EmuFusion Switch console mode={} source=portable-default",
              Settings::values.use_docked_mode.GetValue() == Settings::ConsoleMode::Handheld
                  ? "handheld" : "docked");

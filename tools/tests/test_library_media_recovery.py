@@ -18,7 +18,15 @@ class MissingMediaRecoveryTest(unittest.TestCase):
         predicates = '\n'.join(method(source, signature) for signature in (
             'private static boolean mediaPending(',
             'private static boolean mediaComplete(',
+            'private static boolean hasMedia(',
+            'private static boolean definitiveMiss(',
             'private static boolean readableMedia('))
+        # The real declarations, each up to its terminating semicolon.
+        constants = '\n'.join(
+            source[source.index(name):].split(';', 1)[0] + ';' for name in (
+                'static final String MEDIA_SOURCE_SET =',
+                'private static final long DEFINITIVE_MISS_MS =',
+                'private static final String[] MEDIA_KINDS ='))
         harness = folder / 'MediaRecoveryProbe.java'
         harness.write_text(r'''
 import java.io.*;
@@ -36,6 +44,9 @@ class JSONObject {
   }
   double optDouble(String key, double fallback) {
     Object value=values.get(key); return value instanceof Number ? ((Number)value).doubleValue() : fallback;
+  }
+  JSONObject optJSONObject(String key) {
+    Object value=values.get(key); return value instanceof JSONObject ? (JSONObject)value : null;
   }
 }
 public class MediaRecoveryProbe {
@@ -88,13 +99,45 @@ public class MediaRecoveryProbe {
       check(!mediaPending(row, 0), "Intact completed game must not download");
       Files.delete(Paths.get(row.optString("boxArt")));
       check(mediaPending(row, 0), "A once-complete game that lost a file must reopen");
+    } else if (mode.equals("definitive-miss")) {
+      // Owner, 2026-10-11: every source answered and none has a video. That
+      // game is settled; it must not be searched again every week.
+      Files.delete(Paths.get(row.optString("video")));
+      row.put("mediaCompletedAt", System.currentTimeMillis()-1000)
+         .put("mediaNextRetryAt", System.currentTimeMillis()-1);
+      check(mediaPending(row, 0), "A missing video with no recorded answer must be searched");
+      row.put("mediaMisses", new JSONObject().put("video", new JSONObject()
+         .put("sources", MEDIA_SOURCE_SET).put("at", System.currentTimeMillis())));
+      check(mediaComplete(row), "A definitive miss settles that media kind");
+      row.put("mediaNextRetryAt", Long.MAX_VALUE);
+      check(!mediaPending(row, 0), "A definitive miss must not be searched again");
+      check(mediaPending(row, System.currentTimeMillis()), "An explicit refresh still asks again");
+    } else if (mode.equals("stale-sources-miss")) {
+      Files.delete(Paths.get(row.optString("boxArt")));
+      row.put("mediaCompletedAt", System.currentTimeMillis()-1000)
+         .put("mediaMisses", new JSONObject().put("boxArt", new JSONObject()
+         .put("sources", "2025-01-01:libretro").put("at", System.currentTimeMillis())));
+      check(!mediaComplete(row), "A miss against an older source set is asked of the new sources");
+      check(mediaPending(row, 0), "New sources must be consulted");
+    } else if (mode.equals("expired-miss")) {
+      Files.delete(Paths.get(row.optString("background")));
+      row.put("mediaCompletedAt", System.currentTimeMillis()-1000)
+         .put("mediaMisses", new JSONObject().put("background", new JSONObject()
+         .put("sources", MEDIA_SOURCE_SET).put("at", System.currentTimeMillis()-DEFINITIVE_MISS_MS-1)));
+      check(mediaPending(row, 0), "An expired miss is asked again: catalogs grow");
+    } else if (mode.equals("missing-ratings")) {
+      row.put("critic", 0).put("mediaCompletedAt", System.currentTimeMillis()-1000);
+      check(!mediaComplete(row), "Missing ratings keep the game incomplete");
+      row.put("mediaMisses", new JSONObject().put("ratings", new JSONObject()
+         .put("sources", MEDIA_SOURCE_SET).put("at", System.currentTimeMillis())));
+      check(mediaComplete(row), "Ratings no source has are settled too");
     } else if (mode.equals("legacy-pending")) {
       row.put("mediaVersion", 0);
       check(mediaPending(row, 0), "Legacy rows must join the resumable queue");
     } else throw new AssertionError("Unknown test " + mode);
     System.out.println("PASS " + mode);
   }
-''' + predicates + '\n}\n')
+''' + constants + '\n' + predicates + '\n}\n')
         subprocess.run([str(JAVA / 'javac'), '-d', cls.temp.name, str(harness)],
                        check=True, capture_output=True, text=True)
 
@@ -119,6 +162,24 @@ public class MediaRecoveryProbe {
     def test_old_registry_rows_still_resume(self): self.run_case('legacy-pending')
     def test_recovered_incomplete_waits_for_retry(self): self.run_case('recovered-incomplete')
     def test_completed_then_lost_reopens(self): self.run_case('completed-then-lost')
+    def test_definitive_miss_is_not_searched_again(self): self.run_case('definitive-miss')
+    def test_miss_against_old_sources_is_retried(self): self.run_case('stale-sources-miss')
+    def test_expired_miss_is_retried(self): self.run_case('expired-miss')
+    def test_missing_ratings_settle_on_definitive_miss(self): self.run_case('missing-ratings')
+
+    def test_only_answered_lookups_record_a_miss(self):
+        source = IMPORTER.read_text()
+        outcome = source[source.index('private static void recordMediaOutcome('):][:900]
+        self.assertIn('if (LibraryHttp.indefiniteFailures() != indefiniteBefore) return;', outcome)
+        http = (ROOT / 'android-companion/src/com/thorium/preview/LibraryHttp.java').read_text()
+        transfer = http[http.index('private static void transfer('):]
+        # 404/410 answer; everything else (timeouts, 5xx, 429, backoff) does not.
+        self.assertIn('if (code == 404 || code == 410) {', transfer)
+        self.assertEqual(transfer.count('noteIndefiniteFailure();'), 3)
+        queue = source[source.index('private boolean enrichMediaQueue('):][:9000]
+        self.assertIn('int indefiniteBefore = LibraryHttp.indefiniteFailures();', queue)
+        self.assertIn('if (kind != null) recordMediaOutcome(row, kind, indefiniteBefore);', queue)
+        self.assertIn('if (row.optLong("mediaRefreshEpoch", 0) < refresh) row.remove("mediaMisses");', queue)
 
     def test_failing_providers_back_off_and_retries_are_quiet(self):
         source = IMPORTER.read_text()

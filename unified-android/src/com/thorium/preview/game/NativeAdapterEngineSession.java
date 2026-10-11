@@ -336,6 +336,9 @@ final class NativeAdapterEngineSession implements EngineSession,
                 created.create();
                 logLaunchPhase("adapter-create", phaseStarted);
                 phaseStarted = SystemClock.uptimeMillis();
+                // Eden resolves its Vulkan driver inside its first load in
+                // the process: publish the provisioned per-GPU driver first.
+                GpuDriverProvisioner.prepareLaunch(appContext, entry.id);
                 created.loadContent(system, saveDirectory, game.getPath());
                 logLaunchPhase("content-load", phaseStarted);
 
@@ -405,6 +408,7 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     /** Wall-clock of the last speed line, so the log stays readable at 60fps. */
     private long lastSpeedReportUptimeMs;
+    private boolean gpuDriverFrameNoted;
     private static final long SPEED_REPORT_INTERVAL_MS = 2000L;
 
     /**
@@ -604,6 +608,10 @@ final class NativeAdapterEngineSession implements EngineSession,
             return;
         }
         if (!NativeAdapterHost.isMeasuredFps(fps)) return;
+        if (fps > 0.0 && !gpuDriverFrameNoted) {
+            gpuDriverFrameNoted = true;
+            GpuDriverProvisioner.noteFirstFrame(appContext, entry.id);
+        }
         if (awaitingFirstFrame && fps > 0.0) {
             Log.i(TAG, "First guest frame engine=" + entry.id + " system=" +
                     (request == null ? "?" : request.systemId) + " totalMs=" +
@@ -1264,6 +1272,7 @@ final class NativeAdapterEngineSession implements EngineSession,
         // A release queued after a failed stop can establish the same actual
         // retirement boundary; pending stop observers must join that result.
         if (stopping.get()) completeStop();
+        GpuDriverProvisioner.noteSessionEnded(appContext, entry.id);
         List<Completion> callbacks;
         synchronized (retirementLock) {
             releaseCompleted = true;
