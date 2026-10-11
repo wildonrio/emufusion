@@ -6303,7 +6303,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             Log.e(TAG, "Dense pyramid rejected generator=" + generatorId +
                     " reason=" + reason + " recoverable=" + (recoverable ? 1 : 0) +
                     " transientRejections=" + denseTransientRejections, failure);
-        if (!recoverable) {
+        if (!recoverable && frameRate.directLatticeActive()) {
+            // The endpoint-only path already presents every real frame on the
+            // producer's own paced 2-scan slots, exactly like Direct. Retiring
+            // the renderer here detached the core and destroyed its GL
+            // context, and rebuilding Dolphin/Azahar state stalled the game
+            // 100-430 ms (Thor AUTO runs); stay on this passthrough instead.
+            Log.i(TAG, "Built-in generation unavailable; staying on exact Direct passthrough generator=" +
+                    generatorId + " reason=" + reason);
+        } else if (!recoverable) {
             // Endpoint-only output still owns an intermediate renderer. Once
             // generation cannot recover, retire it through the host's normal
             // producer acknowledgement and rebind the exact Direct Surface.

@@ -145,6 +145,14 @@ public final class AdaptiveFrameRateController {
     // its divisors is that divisor (the host paces it there); see
     // panelLatticeSourceHz. Also bounds physical-mode clock retention.
     private static final double PANEL_LATTICE_SNAP_FRACTION = 1.0e-4;
+    // Direct-equal passthrough only (no generation is funded by it). The paced
+    // producer clock and this controller's panel clock are two estimates of
+    // the same panel; on the Thor they disagreed by ~125 ppm (3DS retimed to
+    // 59.9604 against a 59.9679 lattice), which left the lattice inactive and
+    // sent a permanent rejection through a context-destroying Direct recovery.
+    // 300 ppm still excludes an unpaced 60.000 core on a 119.95 panel (417
+    // ppm) and costs at most one doubled hold every ~55 s.
+    private static final double DIRECT_LATTICE_SNAP_FRACTION = 3.0e-4;
     private static final double CANONICAL_PERIOD_RMS_FRACTION = 0.006;
     private static final double CANONICAL_PERIOD_MAX_FRACTION = 0.03;
     // Some emulator bridges expose an exact source grid through immutable
@@ -2726,7 +2734,7 @@ public final class AdaptiveFrameRateController {
         if (divisor < 1L || divisor > 8L) return 0.0;
         double latticeHz = displayRefreshHz / divisor;
         return Math.abs(timeline / latticeHz - 1.0) <=
-                PANEL_LATTICE_SNAP_FRACTION ? latticeHz : 0.0;
+                DIRECT_LATTICE_SNAP_FRACTION ? latticeHz : 0.0;
     }
 
     /** Panel scans per Direct-equal slot while presentation is unqualified Direct. */

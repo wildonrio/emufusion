@@ -1487,7 +1487,8 @@ public final class PreviewService extends Service {
 
     /*
      * Screensaver keep-awake (owner, 2026-10-10: "the screensaver no longer
-     * works"). The screensaver starts after two idle minutes, but phones and
+     * works"). The screensaver starts after five idle minutes (owner,
+     * 2026-10-11; it was two), but phones and
      * the Thor turn the screen off after 30-60 s, so the device always slept
      * first. While the library is idle with the screensaver enabled, hold the
      * screen on until the screensaver has had its chance to start; while it
@@ -1495,7 +1496,7 @@ public final class PreviewService extends Service {
      * normally. Gameplay keeps its own idle-sleep prevention.
      */
     private static final long SCREENSAVER_POLL_GRACE_MS = 15_000L;
-    private static final long SCREENSAVER_START_WINDOW_MS = 150_000L;
+    private static final long SCREENSAVER_START_WINDOW_MS = 330_000L;
     private static final long SCREENSAVER_MAX_AWAKE_MS = 30L * 60L * 1000L;
     private PowerManager.WakeLock screensaverWakeLock;
     private volatile long lastScreensaverPollMs;

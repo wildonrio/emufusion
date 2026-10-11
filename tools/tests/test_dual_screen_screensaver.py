@@ -12,7 +12,7 @@ SERVICE = (COMPANION / "PreviewService.java").read_text(encoding="utf-8")
 class DualScreenScreensaverTest(unittest.TestCase):
     def test_timeout_is_exactly_two_minutes_and_default_is_on(self):
         self.assertIn("property bool screensaverEnabled: true", THEME)
-        self.assertIn("screensaverStillTimeoutMs: 120000", THEME)
+        self.assertIn("screensaverStillTimeoutMs: 300000", THEME)
         self.assertIn('api.memory.has("lucentScreensaverEnabled")', THEME)
         self.assertIn('Boolean(api.memory.get("lucentScreensaverEnabled")) : true', THEME)
         completed = THEME.split("Component.onCompleted: {", 1)[1]
@@ -56,7 +56,7 @@ class DualScreenScreensaverTest(unittest.TestCase):
         # an active screensaver hold a bounded screen wake lock.
         self.assertIn('lastScreensaverPollMs = SystemClock.elapsedRealtime();', SERVICE)
         self.assertIn('PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE', SERVICE)
-        self.assertIn('SCREENSAVER_START_WINDOW_MS = 150_000L', SERVICE)
+        self.assertIn('SCREENSAVER_START_WINDOW_MS = 330_000L', SERVICE)
         self.assertIn('SCREENSAVER_MAX_AWAKE_MS = 30L * 60L * 1000L', SERVICE)
         update = SERVICE.split('private void updateScreensaverWakeLock() {', 1)[1].split('\n    }\n', 1)[0]
         self.assertIn('!gameplayActive', update)

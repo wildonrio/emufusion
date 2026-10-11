@@ -136,7 +136,8 @@ FocusScope {
     property int screensaverPendingSlot: -1
     property int screensaverGeneration: 0
     property double screensaverTopStillSince: Date.now()
-    readonly property int screensaverStillTimeoutMs: 120000
+    // Five idle minutes (owner, 2026-10-11).
+    readonly property int screensaverStillTimeoutMs: 300000
     readonly property int screensaverCrossfadeMs: 500
     // Single-screen devices can exchange the PIP and box-art columns. The
     // preference may persist across hardware, but is never applied or exposed
@@ -5291,17 +5292,19 @@ FocusScope {
         id: importToast
         z: 300
         // Single-screen devices show the game preview in the upper-right
-        // corner (singleScreenPip), exactly where this panel sits; move below
-        // the preview instead of covering it. On the Thor the preview is on
-        // the lower screen and the panel keeps its corner.
-        property bool belowPreview: !root.dualScreenDevice && singleScreenPip.visible
-        anchors.top: belowPreview ? undefined : parent.top
-        anchors.right: belowPreview ? undefined : parent.right
+        // corner (singleScreenPip), exactly where this panel sits; sit to the
+        // LEFT of the preview, top-aligned with it (owner, 2026-10-11), never
+        // covering it. On the Thor the preview is on the lower screen and the
+        // panel keeps its corner.
+        property bool besidePreview: !root.dualScreenDevice && singleScreenPip.visible
+        anchors.top: besidePreview ? undefined : parent.top
+        anchors.right: besidePreview ? undefined : parent.right
         anchors.topMargin: 108
         anchors.rightMargin: 46 + root.cutoutSafeInset
-        x: belowPreview ? singleScreenPip.x + singleScreenPip.width - width : 0
-        y: belowPreview ? singleScreenPip.y + singleScreenPip.height + 12 : 0
-        width: belowPreview ? Math.min(430, singleScreenPip.width) : 430
+        x: besidePreview ? singleScreenPip.x - width - 16 : 0
+        y: besidePreview ? singleScreenPip.y : 0
+        width: besidePreview ? Math.max(240, Math.min(430,
+                singleScreenPip.x - 16 - 56 - root.cutoutSafeInset)) : 430
         height: root.importDetail !== "" ? 148 : (root.importIdentified > 0 ? 126 : 96)
         visible: root.importToastVisible
         color: "#ee0b0f16"

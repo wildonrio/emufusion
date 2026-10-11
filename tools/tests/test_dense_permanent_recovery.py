@@ -1,4 +1,5 @@
-"""Execute production rejection logic; permanent rejection must retire transport."""
+"""Execute production rejection logic: permanent rejection retires the transport,
+unless an exact Direct lattice lets the passthrough present like Direct."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -40,14 +41,16 @@ class DensePermanentRecoveryTest(unittest.TestCase):
         body = method(source, '    private void rejectDense(')
         fixture = r'''
 public class DenseRejectionTest {
-    static class Log {static void e(String t,String s){} static void e(String t,String s,Throwable f){}}
+    static class Log {static void e(String t,String s){} static void e(String t,String s,Throwable f){}
+        static void i(String t,String s){}}
     static class Adaptation {
         boolean disabled;
         boolean generationDisabled(){return disabled;}
         void onFailure(String reason){} void invalidateRecoveryEvidence(){}
         int workLevel(){return 0;}
     }
-    static class FrameRate {boolean enabled=true;void setGenerationAvailable(boolean v){enabled=v;}}
+    static class FrameRate {boolean enabled=true,lattice;void setGenerationAvailable(boolean v){enabled=v;}
+        boolean directLatticeActive(){return lattice;}}
     final Adaptation denseGpuAdaptation=new Adaptation();
     final FrameRate frameRate=new FrameRate();
     static final int DENSE_TRANSIENT_REJECT_REARM_LIMIT=2;
@@ -83,6 +86,13 @@ public class DenseRejectionTest {
         assert temporary.recoveries==0;
         temporary.rejectDense("transient",null);
         assert temporary.recoveries==1 && temporary.densePyramidUnavailable;
+        // A stamped producer on an exact Direct lattice keeps the endpoint-only
+        // passthrough: retiring it destroyed the core's GL context (Thor stalls).
+        DenseRejectionTest passthrough=new DenseRejectionTest();
+        passthrough.frameRate.lattice=true;
+        passthrough.rejectDense("gpu-headroom-binding-failure",null);
+        assert passthrough.recoveries==0 && passthrough.densePyramidUnavailable;
+        assert !passthrough.frameRate.enabled && passthrough.teardowns==1 && passthrough.reports==1;
         DenseRejectionTest exhausted=new DenseRejectionTest();
         exhausted.denseGpuAdaptation.disabled=true;
         exhausted.rejectDense("budget",null);

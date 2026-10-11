@@ -141,6 +141,16 @@ public final class FrameGenerationAutoPolicyTest {
         unpaced.retimeProducerTimeline(PACED_HZ);
         near(PACED_HZ, unpaced.directLatticeHz(), 1.0e-9,
                 "the host retime to the panel divisor engages the lattice");
+
+        // Thor 3DS: the paced clock (59.9604) and the controller's panel
+        // estimate (119.9358 -> 59.9679 lattice) disagree by ~125 ppm. The
+        // Direct passthrough must still engage, or a permanent rejection takes
+        // the context-destroying Direct recovery.
+        AdaptiveFrameRateController skewed = new AdaptiveFrameRateController(120.0);
+        skewed.setPhysicalDisplayRefreshHz(119.935774);
+        skewed.setProducerTimelineHz(60.0);
+        skewed.retimeProducerTimeline(59.960403880855566);
+        near(119.935774 / 2.0, skewed.directLatticeHz(), 1.0e-9, "125 ppm estimate skew keeps the lattice");
     }
 
     // ------------------------------------------------------------------

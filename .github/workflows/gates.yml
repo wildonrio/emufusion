@@ -34,7 +34,7 @@ jobs:
         run: python3 tools/run_ci_tests.py -s tools/tests
       - name: Frozen theme hashes
         run: |
-          printf '98a614d297e68bdb21086693d095a91a95f5cbd8b6457ca6ae56f8e58b76bee2  theme/theme.qml\nb10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9  theme/theme.cfg\n' | shasum -a 256 -c -
+          printf '2924ccc4d31687e7f366cbb11c590bf32311132c6a515cb63233bb4a5e62ca8d  theme/theme.qml\nb10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9  theme/theme.cfg\n' | shasum -a 256 -c -
 
   java-unit-tests:
     runs-on: ubuntu-latest

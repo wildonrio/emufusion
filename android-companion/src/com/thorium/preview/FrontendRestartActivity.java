@@ -156,7 +156,12 @@ public final class FrontendRestartActivity extends Activity {
     }
 
     private void launchFreshFrontend() {
-        if (relaunchStarted || isFinishing() || isDestroyed()) return;
+        // Not isFinishing(): by now the old frontend is dead. A launch intent
+        // that arrived mid-restart (it lands on the dying process and is lost)
+        // finishes this bridge as the task is reorganized; bailing then left
+        // only the companion service and a black screen (Thor, 2026-10-11).
+        // The bridge is still in front while finishing, so it can start it.
+        if (relaunchStarted || isDestroyed()) return;
         relaunchStarted = true;
         launchAttempts++;
         Intent next = getIntent().getParcelableExtra(EXTRA_NEXT_LAUNCH);
