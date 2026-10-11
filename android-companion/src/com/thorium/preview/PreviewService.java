@@ -806,7 +806,7 @@ public final class PreviewService extends Service {
                             requested.trim().toLowerCase(Locale.US);
                     if (!parsed.storedValue().equals(normalized)) {
                         respond(writer, "400 Bad Request",
-                                "{\"error\":\"mode must be off, built-in-alpha, or lsfg\"}");
+                                "{\"error\":\"mode must be off, auto, built-in-alpha, or lsfg\"}");
                         return;
                     }
                     FrameGenerationSettings.setMode(this, parsed);

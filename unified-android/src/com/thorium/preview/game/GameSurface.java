@@ -243,6 +243,8 @@ public final class GameSurface extends TextureView
             frameGenerator = FrameGenerationRendererFactory.create(selection, outputSurface,
                     width, height, width, height, refreshRate(), "primary-legacy",
                     displayId());
+            frameGenerator.setLockToThirtyTierPolicy(
+                    launchMode.usesLockToThirtyTierPolicy());
             frameGenerator.setStatsListener(frameRateListener);
             bindRuntimeErrorListener();
             renderSurface = frameGenerator.inputSurface();

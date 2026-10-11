@@ -75,11 +75,13 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # the in-window return flow.
         # On single-screen devices the library-update panel now sits below the
         # upper-right preview instead of covering it; library chrome only.
+        # The FRAME GENERATION picker gained AUTO (listed after OFF); a Settings
+        # value only, it does not alter the in-window return flow.
         # The pin exists so unrelated runtime-return work cannot alter the theme
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "f4b7b5ad6ff63b3ea506ca781558f74b6865307a2c3dc351fd383067b3fb0d7d",
+            "98a614d297e68bdb21086693d095a91a95f5cbd8b6457ca6ae56f8e58b76bee2",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):

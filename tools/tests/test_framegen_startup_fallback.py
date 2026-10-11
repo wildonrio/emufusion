@@ -57,7 +57,8 @@ public class StartupFallbackTest {
         static class Selection {Backend backend=Backend.BUILTIN;}
     }
     static class FrameGenerationSettings {
-        enum Mode {OFF, BUILT_IN_ALPHA, LSFG}
+        enum Mode {OFF, BUILT_IN_ALPHA, LSFG;
+            boolean usesLockToThirtyTierPolicy(){return false;}}
         static int selections,probes; static boolean available=true,directSelection;
         static class QualificationTransport {
             Object factory=new Object(); String label="LSFG";
@@ -76,6 +77,7 @@ public class StartupFallbackTest {
         void close(){closes++;if(failClose)throw new IllegalStateException("close unresolved");if(input!=null)input.release();}
         void setAuthoritativeSourceHz(double h){} void setProducerTimelineHz(double h){}
         void setSlotLatticeProducer(boolean enabled){}
+        void setLockToThirtyTierPolicy(boolean enabled){}
         void setStatsListener(Object o){} void setFirstSubmittedFrameListener(Runnable r){}
         Surface inputSurface(){return input;}
         void resize(int a,int b,int c,int d,float h){}

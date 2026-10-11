@@ -1558,6 +1558,16 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn('OFF("off")', setting)
         self.assertIn('BUILT_IN_ALPHA("built-in-alpha")', setting)
         self.assertIn('LSFG("lsfg")', setting)
+        # AUTO (2026-10-11): the built-in backend with the lock-to-30 tier
+        # policy. Opt-in only: OFF stays the default and migration target, and
+        # the forced-OFF mode version is unchanged.
+        self.assertIn('AUTO("auto")', setting)
+        self.assertIn('return this == AUTO || this == BUILT_IN_ALPHA;', setting)
+        self.assertIn('public boolean usesLockToThirtyTierPolicy() { return this == AUTO; }',
+                      setting)
+        self.assertIn('if (selected.usesBuiltInBackend())', setting)
+        self.assertIn('private static final int CURRENT_MODE_VERSION = 3;', setting)
+        self.assertIn('String stored = prefs.getString(MODE, Mode.OFF.storedValue());', setting)
         self.assertIn('return Mode.OFF;', setting)
         self.assertIn('prefs.getInt(MODE_VERSION, 0) != CURRENT_MODE_VERSION', setting)
         self.assertNotIn('LOSSLESS_SCALING', setting)
@@ -1589,6 +1599,10 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             if relative.endswith(("GameSurface.java", "GameSurfaceView.java")):
                 self.assertIn("renderer.activeBackendLabel()", source, relative)
                 self.assertIn("FrameGenerationSettings.Mode.OFF", source, relative)
+                # AUTO's tier policy reaches every built-in primary renderer.
+                self.assertIn("setLockToThirtyTierPolicy(\n" +
+                              "                    launchMode.usesLockToThirtyTierPolicy())",
+                              source, relative)
 
         policy = self.read(
             "unified-android/src/com/thorium/lucent/video/FrameGenerationBackendPolicy.java"
@@ -1604,7 +1618,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
         service = self.read("android-companion/src/com/thorium/preview/PreviewService.java")
         self.assertGreaterEqual(service.count('"/settings/frame-generation"'), 3)
-        self.assertIn('mode must be off, built-in-alpha, or lsfg', service)
+        self.assertIn('mode must be off, auto, built-in-alpha, or lsfg', service)
         self.assertIn("FrameGenerationSettings.Mode", service)
         self.assertIn("FrameGenerationSettings.setMode(this, parsed)", service)
         self.assertIn("legacy frame-generation enable is disabled", service)
@@ -1616,6 +1630,8 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn('return "BUILT-IN (ALPHA)"', theme)
         self.assertIn('return "LSFG"', theme)
         self.assertIn('return "OFF"', theme)
+        self.assertIn('if (frameGenerationMode === "auto") return "AUTO"', theme)
+        self.assertIn('var modes = ["off", "auto", "built-in-alpha", "lsfg"]', theme)
         self.assertIn('lucentFrameGenerationThreeModeV3', theme)
         self.assertIn('property bool frameGenerationModeConfirmed: false', theme)
         self.assertIn('if (frameGenerationModePending || !frameGenerationModeConfirmed)', theme)

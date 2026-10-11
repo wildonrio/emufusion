@@ -439,6 +439,8 @@ public final class GameSurfaceView extends SurfaceView
         if (generator != null) {
             // Setters that arrived while the generator did not exist yet.
             bindRuntimeErrorListener(generation);
+            generator.setLockToThirtyTierPolicy(
+                    launchMode.usesLockToThirtyTierPolicy());
             generator.setAuthoritativeSourceHz(authoritativeSourceHz);
             generator.setProducerTimelineHz(producerTimelineHz);
             generator.setStatsListener(frameRateListener);
@@ -641,6 +643,8 @@ public final class GameSurfaceView extends SurfaceView
                     this::qualificationProofEnabled, this::densePyramidEnabled,
                     this::denseV27ReducedAnalysisEnabled,
                     this::denseV28ReducedAnalysisEnabled);
+            frameGenerator.setLockToThirtyTierPolicy(
+                    launchMode.usesLockToThirtyTierPolicy());
             frameGenerator.setAuthoritativeSourceHz(authoritativeSourceHz);
             frameGenerator.setProducerTimelineHz(producerTimelineHz);
             frameGenerator.setStatsListener(frameRateListener);

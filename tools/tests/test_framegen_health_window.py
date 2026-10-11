@@ -25,6 +25,7 @@ public class HealthWindowTest {
         double target=30;
         int lockedSourceFps(){return (int)target;}
         double sustainedMeasuredSourceHz(){return target;}
+        double reportedSourceHz(){return sustainedMeasuredSourceHz();}
         double targetOutputHz(){return target;}
     }
     final FrameRate frameRate=new FrameRate();

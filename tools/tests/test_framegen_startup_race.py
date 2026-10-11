@@ -57,7 +57,8 @@ public class StartupRace {
     static class android {static class os {static class SystemClock {
         static long elapsedRealtime(){return 0;}
     }}}
-    static class FrameGenerationSettings {enum Mode {OFF, BUILT_IN_ALPHA, LSFG}}
+    static class FrameGenerationSettings {enum Mode {OFF, BUILT_IN_ALPHA, LSFG;
+        boolean usesLockToThirtyTierPolicy(){return false;}}}
     static class FrameGenerationBackendPolicy {enum Backend {DIRECT, BUILTIN}}
     static class Surface {boolean valid=true; Renderer owner; boolean isValid(){return valid;}}
     static class SurfaceHolder {Surface output=new Surface(); Surface getSurface(){return output;}}
@@ -74,6 +75,7 @@ public class StartupRace {
         void setAuthoritativeSourceHz(double v){} void setProducerTimelineHz(double v){}
         void setStatsListener(Object v){} void setFirstSubmittedFrameListener(Runnable v){}
         void setSlotLatticeProducer(boolean v){}
+        void setLockToThirtyTierPolicy(boolean v){}
         void resize(int w,int h,int a,int b,float hz){resizes++;}
     }
     static class FrameGenerationRenderer extends Renderer {}

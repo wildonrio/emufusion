@@ -30,6 +30,12 @@ public final class FrameGenerationSettings {
     /** One explicit owner choice. No package, shell global, or probe may override it. */
     public enum Mode {
         OFF("off"),
+        /**
+         * Built-in backend with the owner's lock-to-30 tier policy: 60->120
+         * when the game holds 60, otherwise locked 30->60 (20->40 below 30).
+         * Opt-in like the others; OFF stays the default and migration target.
+         */
+        AUTO("auto"),
         BUILT_IN_ALPHA("built-in-alpha"),
         LSFG("lsfg");
 
@@ -38,6 +44,14 @@ public final class FrameGenerationSettings {
         Mode(String storedValue) { this.storedValue = storedValue; }
 
         public String storedValue() { return storedValue; }
+
+        /** Built-in renderer modes: AUTO and Built-in (Alpha). */
+        public boolean usesBuiltInBackend() {
+            return this == AUTO || this == BUILT_IN_ALPHA;
+        }
+
+        /** AUTO alone selects the lock-to-30 tier policy. */
+        public boolean usesLockToThirtyTierPolicy() { return this == AUTO; }
 
         public static Mode parse(String value) {
             if (value != null) {
@@ -109,7 +123,8 @@ public final class FrameGenerationSettings {
 
     /**
      * Freezes the explicitly selected backend at the session boundary. Off is
-     * always Direct. Built-in (Alpha) is the user's opt-in experimental arm.
+     * always Direct. Built-in (Alpha) is the user's opt-in experimental arm;
+     * AUTO is the same built-in backend with the lock-to-30 tier policy.
      * LSFG is constructed separately by qualificationTransport() and must pass
      * its in-process capability/deadline checks on this surface; this generic
      * selector cannot authorize a substitute generator when LSFG is absent or
@@ -124,7 +139,9 @@ public final class FrameGenerationSettings {
     public static FrameGenerationBackendPolicy.Selection selectBackendForSession(
             Context context, Mode launchMode) {
         Mode selected = launchMode == null ? Mode.OFF : launchMode;
-        if (selected == Mode.BUILT_IN_ALPHA)
+        // AUTO uses the same built-in backend; only its tier policy differs
+        // (applied to the renderer by the owning surface).
+        if (selected.usesBuiltInBackend())
             return FrameGenerationBackendPolicy.select(true,
                     FrameGenerationBackendPolicy.Assessment.unavailable(
                             "LSFG was not selected"),
@@ -207,7 +224,8 @@ public final class FrameGenerationSettings {
         if (context == null || displayId != Display.DEFAULT_DISPLAY ||
                 launchMode == null || launchMode == Mode.OFF) return null;
         // Explicit qualification only: the stored Alpha choice remains
-        // mandatory, and neither Off nor LSFG can be overridden by this flag.
+        // mandatory, and neither Off, AUTO nor LSFG can be overridden by this
+        // flag. AUTO is the product built-in path and returns null below.
         if (launchMode == Mode.BUILT_IN_ALPHA) {
             if (Settings.Global.getInt(context.getContentResolver(),
                     "emufusion_framegen_rife_qualification", 0) != 1) return null;

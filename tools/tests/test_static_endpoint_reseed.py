@@ -18,6 +18,10 @@ public class StaticEndpointTest {
         boolean sustainable;
         boolean hasSustainableGenerationRate(){return sustainable;}
         double presentationSourceHz(){return 60;}
+        // No AUTO lock and no Direct-equal producer lattice in this fixture.
+        boolean lockedTierActive(){return false;}
+        boolean admitLockedTierEndpoint(long timestamp){return true;}
+        double directLatticeSourceHz(){return 0;}
     }
     static class AdaptiveFrameRateController {
         static boolean duplicateOccupiesNextSourceSlot(long a,long b,double h,long c,long d){return false;}

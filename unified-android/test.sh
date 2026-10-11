@@ -131,6 +131,8 @@ SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/WidescreenHackTable.
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.lucent.video.AdaptiveFrameRateControllerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.lucent.video.FrameGenerationAutoPolicyTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.DenseGpuTimerMathTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.FullResolutionFrameReadbackTest

@@ -169,6 +169,9 @@ public class ProvenanceTest {
     static class Rate {boolean sustainable=true;int resets;
         boolean hasSustainableGenerationRate(){return sustainable;}
         double presentationSourceHz(){return 60;}
+        boolean lockedTierActive(){return false;}
+        boolean admitLockedTierEndpoint(long timestamp){return true;}
+        double directLatticeSourceHz(){return 0;}
         void resetPresentation(){resets++;}}
     static class ExternalFrameGenerationTransport {
         boolean admit=true;int exports,cancelled,resets;long seq,pts;

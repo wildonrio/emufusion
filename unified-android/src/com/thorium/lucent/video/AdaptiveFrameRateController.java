@@ -20,10 +20,28 @@ public final class AdaptiveFrameRateController {
     // remain unqualified Direct even when a nearby tier label exists.
     private static final int[] TIERS_120 = {60, 40, 30, 20};
     private static final int[] TIERS_60 = {60, 30, 20};
+    // Owner rule for AUTO (2026-10-11): 60->120 when the game holds 60;
+    // otherwise lock it to 30 and double to 60 (two scans per output on a
+    // 120-Hz panel), never 30->120; below 30, lock 20 and double to 40.
+    private static final int[] TIERS_LOCK_TO_THIRTY = {60, 30, 20};
     private static final double SIXTY_HZ_PROTOCOL_MAX_PANEL_HZ = 90.0;
     private static final double MAX_GENERATION_FACTOR =
             UniformFrameRatePlan.MAX_GENERATION_FACTOR;
     private int[] tiers = TIERS_120;
+
+    /** Source-tier protocol selected by the owner's frame-generation mode. */
+    public enum TierPolicy {
+        /** Built-in (Alpha)/LSFG: 60/40/30/20 on 120 Hz, 60/30/20 on 60 Hz. */
+        ADAPTIVE,
+        /**
+         * AUTO: only 60, 30 and 20. A source that cannot hold 60 is locked to
+         * the fixed panel-divisor 30 (or 20) clock, its newest image is
+         * promoted on that clock, and UniformFrameRatePlan doubles it.
+         */
+        LOCK_TO_THIRTY
+    }
+
+    private TierPolicy tierPolicy = TierPolicy.ADAPTIVE;
     private static final int MIN_SAMPLES = 10;
     private static final int INITIAL_TIER_PERIODS = 90;
     // Once a tier has been acquired, change it only from a complete rolling
@@ -491,7 +509,7 @@ public final class AdaptiveFrameRateController {
         if (displayPeriodNs != 0L) discardPendingMidpoint();
         if (!Double.isFinite(value) || value < 20.0 || value > 1000.0) value = 60.0;
         declaredDisplayRefreshHz = value;
-        tiers = value < SIXTY_HZ_PROTOCOL_MAX_PANEL_HZ ? TIERS_60 : TIERS_120;
+        tiers = protocolTiersFor(value);
         declaredDisplayPeriodNs = Math.max(1L,
                 Math.round(1_000_000_000.0 / value));
         measuredDisplayRefreshHz = 0.0;
@@ -1031,6 +1049,13 @@ public final class AdaptiveFrameRateController {
             return PRESENT_NONE;
         }
         if (!bufferedPresentationDue(displayFrameNs)) return PRESENT_NONE;
+        // Direct-equal fallback: unqualified Direct presents only on the
+        // producer's own paced lattice (see directLatticeHz). Off-lattice
+        // scans are not output slots and record nothing.
+        int directLatticeScans = directLatticePanelScans();
+        if (directLatticeScans > 0 &&
+                !directLatticeSlotDue(physicalPresentationNs, directLatticeScans))
+            return PRESENT_NONE;
 
         double exactSourceHz = presentationSourceHz();
         // This integer is only the stable schedule identity/invariant bound;
@@ -1185,6 +1210,17 @@ public final class AdaptiveFrameRateController {
                 ++bufferedUnavailableSlotCount;
                 ++bufferedPrimeWaitCount;
                 bufferedPrimeNeedsPacingRephase = true;
+                return PRESENT_NONE;
+            }
+            // A re-primed Direct endpoint (after a held frame or a stream cut)
+            // keeps the established stamp-to-slot mapping: one that arrived
+            // early waits for its own slot instead of shortening the hold of
+            // the previous image and shifting every later frame.
+            if (directLatticeScans > 0 && directOnly &&
+                    directLatticePrimeEarly(physicalPresentationNs,
+                            leftTimestampNs, directLatticeScans)) {
+                ++directLatticeEarlyWaitCount;
+                bufferedLastUnavailableReason = "direct-lattice-early";
                 return PRESENT_NONE;
             }
             pendingPrime = true;
@@ -1352,6 +1388,7 @@ public final class AdaptiveFrameRateController {
         float phase;
         int pendingAdvance;
         boolean pendingMidpointOmitted = false;
+        boolean pendingDirectLatticeReanchor = false;
         boolean exactDoubleSchedule = exactDoubleEndpointLatticeRequired &&
                 !directOnly && validPair &&
                 source > 0 && output == source * 2;
@@ -1434,6 +1471,15 @@ public final class AdaptiveFrameRateController {
                 // callback.  This is an endpoint present, never generation.
                 presentation = PRESENT_REAL;
                 phase = 1f;
+                // On the Direct-equal lattice a right endpoint that missed
+                // its own slot is shown one lattice period late; re-anchor
+                // the stamp-to-slot mapping on it so the following frames
+                // keep that margin instead of each landing on the edge of
+                // their slot (a held 4-scan step, then steady 2-scan).
+                pendingDirectLatticeReanchor = directLatticeScans > 0 &&
+                        rawTargetSourceNs - rightTimestampNs >=
+                                saturatingMultiply(Math.max(1L, displayPeriodNs),
+                                        directLatticeScans) / 2L;
                 targetSourceNs = rightTimestampNs;
                 pendingAdvance = 1;
             } else {
@@ -1598,6 +1644,7 @@ public final class AdaptiveFrameRateController {
         bufferedPendingRawTargetSourceNs = rawTargetSourceNs;
         bufferedPendingPrime = pendingPrime;
         bufferedPendingMidpointOmitted = pendingMidpointOmitted;
+        bufferedPendingDirectLatticeReanchor = pendingDirectLatticeReanchor;
         return presentation;
     }
 
@@ -1644,6 +1691,18 @@ public final class AdaptiveFrameRateController {
                             bufferedPendingTargetSourceNs);
             if (bufferedPendingMidpointOmitted)
                 ++bufferedMidpointOmittedCount;
+            // Direct-equal lattice phase: survives epoch resets (see
+            // directLatticeSlotDue / directLatticePrimeEarly).
+            directLatticeLastPresentNs = bufferedPendingDisplayFrameNs;
+            directLatticeLastSourceNs = bufferedPendingTargetSourceNs;
+            if (bufferedPendingDirectLatticeReanchor) {
+                // Late Direct REAL: this exact scan/stamp pair becomes the
+                // timeline origin. The raw playhead restarts with it, so the
+                // monotonic-target guard compares against the new origin.
+                bufferedTimelineDisplayAnchorNs = bufferedPendingDisplayFrameNs;
+                bufferedTimelineSourceAnchorNs = bufferedPendingTargetSourceNs;
+                bufferedLastRawTargetSourceNs = bufferedPendingTargetSourceNs;
+            }
         }
         selectedPhase = bufferedPendingPhase;
         bufferedAdvanceAfterPresentation = bufferedPendingAdvance;
@@ -2233,6 +2292,7 @@ public final class AdaptiveFrameRateController {
         bufferedPendingPhase = 0f;
         bufferedPendingPrime = false;
         bufferedPendingMidpointOmitted = false;
+        bufferedPendingDirectLatticeReanchor = false;
     }
 
     private void recordEndpointOffset(long displayNs, long offsetNs) {
@@ -2410,9 +2470,145 @@ public final class AdaptiveFrameRateController {
     /** True only while real endpoints arrive fast enough for a supported tier. */
     public boolean hasSustainableGenerationRate() {
         if (authoritativeSourceHz > 0.0) return latestSequence > 0L;
+        if (lockedTierClockHz() > 0.0) return latestSequence > 0L;
         return latestSequence > 0L &&
                 qualifiedUniqueTimestampSourceHz >=
                         MIN_GENERATION_SOURCE_HZ;
+    }
+
+    /**
+     * Fixed presentation clock of an AUTO-locked 30 or 20 tier, or zero.
+     *
+     * <p>The clock is the panel divisor nearest the tier (119.95/4 = 29.9875
+     * on the Thor), so UniformFrameRatePlan always finds the exact doubled
+     * divisor: 30->60 and 20->40 on 120 Hz, never 30->120. It requires a
+     * stamped producer timeline whose tick divides the lock clock, so every
+     * locked endpoint is a whole number of producer ticks (the newest image
+     * at that tick, held frames included) and endpoint spacing is exact.
+     * A complete-window unique rate must still fund the tier within the
+     * one-FPS Schmitt hold, and a qualified unique clock that already sits on
+     * the same lattice keeps owning presentation. The lock never applies to
+     * the 60 tier, to authoritative cores, or under the ADAPTIVE policy.</p>
+     */
+    private double lockedTierClockHz() {
+        // The lock exists only to feed a doubled plan. With generation
+        // unavailable (budget, rejected, panel not yet measured) AUTO is the
+        // Direct-equal fallback: decimating real frames to 30 there would
+        // look worse than frame generation off.
+        if (tierPolicy != TierPolicy.LOCK_TO_THIRTY || !tierAcquired ||
+                !generationAvailable ||
+                authoritativeSourceHz > 0.0 || lockedSourceFps >= 60 ||
+                lockedSourceFps < (int) MIN_GENERATION_SOURCE_HZ ||
+                !(displayRefreshHz > 0.0) || !(producerTimelineHz > 0.0))
+            return 0.0;
+        long divisor = Math.round(displayRefreshHz / lockedSourceFps);
+        if (divisor < 1L || divisor > MAX_LOCKED_TIER_PANEL_DIVISOR) return 0.0;
+        double clockHz = displayRefreshHz / divisor;
+        // Whole producer ticks per locked endpoint.
+        double ticks = producerTimelineHz / clockHz;
+        long wholeTicks = Math.round(ticks);
+        if (wholeTicks < 1L || Math.abs(ticks - wholeTicks) >
+                LOCKED_TIER_TICK_RESIDUAL) return 0.0;
+        if (qualifiedUniqueTimestampSourceHz > 0.0 &&
+                Math.abs(qualifiedUniqueTimestampSourceHz / clockHz - 1.0) <=
+                        LOCKED_TIER_SAME_LATTICE_FRACTION) return 0.0;
+        // Never lock without the doubled divisor (20 on a 60-Hz panel would
+        // only decimate real frames to a Direct 20).
+        if (!UniformFrameRatePlan.select(clockHz, displayRefreshHz,
+                maxGenerationFactor).generatesIntermediateFrames()) return 0.0;
+        double sustained = cachedSustainedMeasuredSourceHz();
+        if (!(sustained >= tierFloorHz(lockedSourceFps) - CLEAR_DEFICIT_HZ))
+            return 0.0;
+        return clockHz;
+    }
+
+    private long sustainedCacheSumNs = -1L;
+    private int sustainedCacheIndex = -1;
+    private int sustainedCacheCount = -1;
+    private double sustainedCachePeriodNs = -1.0;
+    private double sustainedCacheHz;
+
+    /** sustainedMeasuredSourceHz() memoized on the decision-ring identity. */
+    private double cachedSustainedMeasuredSourceHz() {
+        if (sustainedCacheSumNs != decisionPeriodSumNs ||
+                sustainedCacheIndex != decisionPeriodIndex ||
+                sustainedCacheCount != decisionPeriodCount ||
+                Double.compare(sustainedCachePeriodNs,
+                        measuredProducerPeriodNs) != 0) {
+            sustainedCacheSumNs = decisionPeriodSumNs;
+            sustainedCacheIndex = decisionPeriodIndex;
+            sustainedCacheCount = decisionPeriodCount;
+            sustainedCachePeriodNs = measuredProducerPeriodNs;
+            sustainedCacheHz = sustainedMeasuredSourceHz();
+        }
+        return sustainedCacheHz;
+    }
+
+    /** True while AUTO presents a locked 30/20 tier on its fixed clock. */
+    public boolean lockedTierActive() { return lockedTierClockHz() > 0.0; }
+
+    /**
+     * Source rate for the owner-facing badge and committed-rate log: the
+     * locked clock while AUTO is locked (a 30 -> 60 session reads 30, not the
+     * 58.5 the game delivers), otherwise the measured unique-image rate.
+     */
+    public double reportedSourceHz() {
+        double locked = lockedTierClockHz();
+        return locked > 0.0 ? locked : sustainedMeasuredSourceHz();
+    }
+
+    private static final long MAX_LOCKED_TIER_PANEL_DIVISOR = 12L;
+    // A paced producer (59.975 on 119.95) is an exact 2x/3x of the lock
+    // clock; an unpaced 60.000 is 417 ppm off and still fits whole ticks.
+    private static final double LOCKED_TIER_TICK_RESIDUAL = 0.01;
+    private static final double LOCKED_TIER_SAME_LATTICE_FRACTION = 1.0e-3;
+    private long lockGateNextNs;
+    private long lockGateLastSeenNs;
+    private double lockGateClockHz;
+
+    /**
+     * Endpoint admission for an AUTO-locked tier: called once for every
+     * classified producer callback (unique or held). Returns true for every
+     * callback when no lock is active. While locked it admits exactly one
+     * callback per lock period, on the producer tick nearest the fixed
+     * deadline (promoteIfDue's fixed-tier clock): the intervening real
+     * frames are replaced by generated midpoints, and a held image that sits
+     * on a lock tick is admitted as the newest image of that tick, so a held
+     * frame never stretches one locked interval. A pause or reversal
+     * restarts the clock; a callback more than one period late re-anchors it
+     * instead of admitting a catch-up pair.
+     */
+    public boolean admitLockedTierEndpoint(long timestampNs) {
+        double clockHz = lockedTierClockHz();
+        if (!(clockHz > 0.0) || timestampNs <= 0L) {
+            resetLockedTierEndpointGate();
+            return true;
+        }
+        long periodNs = Math.max(1L, Math.round(1_000_000_000.0 / clockHz));
+        boolean restart = lockGateNextNs <= 0L ||
+                Double.compare(lockGateClockHz, clockHz) != 0 ||
+                timestampNs <= lockGateLastSeenNs ||
+                timestampNs - lockGateLastSeenNs >
+                        Math.max(100_000_000L, 4L * periodNs);
+        lockGateLastSeenNs = timestampNs;
+        if (restart) {
+            lockGateClockHz = clockHz;
+            lockGateNextNs = saturatingAdd(timestampNs, periodNs);
+            return true;
+        }
+        long toleranceNs = periodNs / 4L;
+        if (saturatingAdd(timestampNs, toleranceNs) < lockGateNextNs)
+            return false;
+        lockGateNextNs = timestampNs - lockGateNextNs > periodNs ?
+                saturatingAdd(timestampNs, periodNs) :
+                saturatingAdd(lockGateNextNs, periodNs);
+        return true;
+    }
+
+    private void resetLockedTierEndpointGate() {
+        lockGateNextNs = 0L;
+        lockGateLastSeenNs = 0L;
+        lockGateClockHz = 0.0;
     }
 
     public int lockedSourceFps() {
@@ -2477,18 +2673,139 @@ public final class AdaptiveFrameRateController {
 
     public int outputFps() {
         double source = presentationSourceHz();
-        if (!generationAvailable || !hasSustainableGenerationRate())
-            return Math.max(1, (int) Math.round(
+        if (!generationAvailable || !hasSustainableGenerationRate()) {
+            double lattice = unqualifiedDirectLatticeHz();
+            return Math.max(1, (int) Math.round(lattice > 0.0 ? lattice :
                     Math.min(displayRefreshHz, source)));
+        }
         UniformFrameRatePlan plan = currentUniformOutputPlan();
         return Math.max(1, (int) Math.round(plan.outputHz()));
     }
 
     /** Exact selected panel-divisor output clock, prior to UI rounding. */
     public double targetOutputHz() {
-        if (!generationAvailable || !hasSustainableGenerationRate())
-            return Math.min(displayRefreshHz, presentationSourceHz());
+        if (!generationAvailable || !hasSustainableGenerationRate()) {
+            // Direct-equal fallback: the producer's own paced clock, exactly
+            // what FG-off presents, never a measured non-divisor such as
+            // the 58.469 unique mean of a game that holds frames.
+            double lattice = unqualifiedDirectLatticeHz();
+            return lattice > 0.0 ? lattice :
+                    Math.min(displayRefreshHz, presentationSourceHz());
+        }
         return currentUniformOutputPlan().outputHz();
+    }
+
+    private double unqualifiedDirectLatticeHz() {
+        return directLatticePanelScans() > 0 ? directLatticeHz() : 0.0;
+    }
+
+    /**
+     * Direct-equal fallback lattice (2026-10-11).
+     *
+     * <p>With frame generation selected but not funded (unqualified source,
+     * generation unavailable/rejected/budget), FG-off shows every producer
+     * frame on its own stamped slot: a core paced to 59.975 on the Thor's
+     * 119.95-Hz panel occupies exactly two scans per frame. Presenting each
+     * classified endpoint "on the first available callback" and re-priming
+     * the timeline at every held frame instead produced 1- and 3-scan gaps
+     * (GameCube {1:25, 3:25}) that FG-off never shows. When the stamped
+     * producer timeline is a panel divisor within the 100-ppm physical band,
+     * unqualified Direct presentation is restricted to that lattice: only
+     * scans a whole number of lattice periods after the previous committed
+     * REAL may present, and a re-primed endpoint waits for the slot of its
+     * own stamp. A held frame that is not re-delivered then shows as a
+     * doubled (4-scan) hold, never as an odd gap.</p>
+     *
+     * @return the paced producer clock, or 0 without such a timeline
+     */
+    public double directLatticeHz() {
+        double timeline = producerTimelineHz;
+        if (!(timeline > 0.0) || !(displayRefreshHz > 0.0) ||
+                authoritativeSourceHz > 0.0) return 0.0;
+        long divisor = Math.round(displayRefreshHz / timeline);
+        if (divisor < 1L || divisor > 8L) return 0.0;
+        double latticeHz = displayRefreshHz / divisor;
+        return Math.abs(timeline / latticeHz - 1.0) <=
+                PANEL_LATTICE_SNAP_FRACTION ? latticeHz : 0.0;
+    }
+
+    /** Panel scans per Direct-equal slot while presentation is unqualified Direct. */
+    private int directLatticePanelScans() {
+        boolean generated = generationAvailable && hasSustainableGenerationRate();
+        if (generated && currentUniformOutputPlan().qualified()) return 0;
+        double latticeHz = directLatticeHz();
+        if (!(latticeHz > 0.0)) return 0;
+        // A durable source clock faster than the producer lattice cannot be
+        // paced onto it without a backlog (not observed for stamped cores).
+        if (generated && latticeHz + 1.0e-5 < presentationSourceHz()) return 0;
+        long scans = Math.round(displayRefreshHz / latticeHz);
+        return scans >= 1L && scans <= 8L ? (int) scans : 0;
+    }
+
+    /** True while unqualified Direct output is held to the producer lattice. */
+    public boolean directLatticeActive() { return directLatticePanelScans() > 0; }
+
+    /**
+     * Producer tick of the active Direct-equal lattice, else 0. The renderer
+     * uses it to retain a held (pixel-identical) producer frame that occupies
+     * the next stamped slot, so Direct shows every producer frame like FG-off.
+     */
+    public double directLatticeSourceHz() {
+        return directLatticeActive() ? producerTimelineHz : 0.0;
+    }
+
+    public long directLatticeEarlyWaitCount() { return directLatticeEarlyWaitCount; }
+
+    // Physical scan and endpoint stamp of the newest committed REAL. Unlike
+    // the buffered timeline they survive epoch resets (held frames, stream
+    // discontinuities), so a re-prime keeps the established slot phase.
+    private long directLatticeLastPresentNs;
+    private long directLatticeLastSourceNs;
+    private long directLatticeEarlyWaitCount;
+    private boolean bufferedPendingDirectLatticeReanchor;
+    private static final long DIRECT_LATTICE_STALE_NS = 1_000_000_000L;
+    private static final int DIRECT_LATTICE_MAX_EARLY_PERIODS = 3;
+
+    private void clearDirectLatticeMapping() {
+        directLatticeLastPresentNs = 0L;
+        directLatticeLastSourceNs = 0L;
+    }
+
+    private boolean directLatticeMappingFresh(long physicalNs) {
+        return directLatticeLastPresentNs > 0L &&
+                physicalNs > directLatticeLastPresentNs &&
+                physicalNs - directLatticeLastPresentNs <=
+                        DIRECT_LATTICE_STALE_NS;
+    }
+
+    /** Whether this physical scan is a whole lattice period after the last REAL. */
+    private boolean directLatticeSlotDue(long physicalNs, int scans) {
+        long last = directLatticeLastPresentNs;
+        if (last <= 0L || physicalNs - last > DIRECT_LATTICE_STALE_NS)
+            return true;
+        if (physicalNs <= last) return false;
+        long elapsedScans = Math.round((double) (physicalNs - last) /
+                Math.max(1L, displayPeriodNs));
+        return elapsedScans >= scans && elapsedScans % scans == 0L;
+    }
+
+    /**
+     * True while a re-primed endpoint is still at least one lattice period
+     * ahead of the slot its stamp maps to under the newest committed REAL.
+     * Bounded, so a rebased producer clock primes immediately.
+     */
+    private boolean directLatticePrimeEarly(long physicalNs,
+                                            long leftTimestampNs, int scans) {
+        if (!directLatticeMappingFresh(physicalNs) ||
+                directLatticeLastSourceNs <= 0L ||
+                leftTimestampNs <= directLatticeLastSourceNs) return false;
+        long latticePeriodNs = saturatingMultiply(Math.max(1L, displayPeriodNs),
+                scans);
+        long slotSourceNs = saturatingAdd(directLatticeLastSourceNs,
+                physicalNs - directLatticeLastPresentNs);
+        long earlyNs = leftTimestampNs - slotSourceNs;
+        return earlyNs > latticePeriodNs / 2L &&
+                earlyNs <= latticePeriodNs * DIRECT_LATTICE_MAX_EARLY_PERIODS;
     }
 
     /** Number of physical panel scans occupied by every qualified output. */
@@ -2554,8 +2871,11 @@ public final class AdaptiveFrameRateController {
         // 59.94 source on an exact 120.000-Hz clock must select the two-scan
         // 60-Hz divisor rather than being rounded up to a fictitious60/120.
         double source = presentationSourceHz();
+        // An AUTO-locked tier clock is an exact panel divisor by
+        // construction, not an unproven measured mean near a boundary.
         if (authoritativeSourceHz <= 0.0 &&
-                qualifiedUniqueTimestampSourceHz <= 0.0) {
+                qualifiedUniqueTimestampSourceHz <= 0.0 &&
+                lockedTierClockHz() <= 0.0) {
             // A complete stable arbitrary clock may plan from its measured
             // value.  Until that evidence exists, stay just below a nearby
             // exact 2x tier boundary.  This is a conservative one-time
@@ -2665,6 +2985,8 @@ public final class AdaptiveFrameRateController {
     /** Exact source clock used by endpoint selection and temporal phase. */
     public double presentationSourceHz() {
         if (authoritativeSourceHz > 0.0) return authoritativeSourceHz;
+        double locked = lockedTierClockHz();
+        if (locked > 0.0) return locked;
         if (qualifiedUniqueTimestampSourceHz > 0.0)
             return qualifiedUniqueTimestampSourceHz;
         double measured = sustainedMeasuredSourceHz();
@@ -2761,6 +3083,49 @@ public final class AdaptiveFrameRateController {
         return Math.abs(measuredHz / latticeHz - 1.0) <=
                 PANEL_LATTICE_SNAP_FRACTION ? latticeHz : 0.0;
     }
+
+    /**
+     * Physical-panel lattice proven through ordinal-proven held frames, or 0.
+     *
+     * <p>Held frames (an exactly doubled/tripled span whose submission ordinal
+     * advanced by the same multiple) pull the unique mean below the lattice,
+     * so the candidate is the largest panel divisor not above the panel over
+     * the measured mean. It must then pass the same thirty-second
+     * proven-duplicates proof the canonical path uses (90 percent ordinary
+     * periods, 75 for slot-lattice producers; at most one percent
+     * unexplained), with the logical clock inside the 100-ppm physical band.
+     * An unpaced 60.000 core on the 119.95-Hz Thor (417 ppm) never passes;
+     * held frames are then bridged exactly as on a canonical lattice.</p>
+     */
+    private double physicalHeldFrameLatticeHz() {
+        if (!physicalDisplayClockQualified || authoritativeSourceHz > 0.0 ||
+                !(displayRefreshHz > 0.0)) return 0.0;
+        // After a revocation the whole thirty-second window must postdate
+        // it; otherwise a window that is still mostly the old good lattice
+        // would re-qualify on the next frame and churn the epoch.
+        // (Tracked separately from the rejected flag, which a tier change
+        // clears while the decision ring keeps the old periods.)
+        if (qualifiedClockRevokedAtProducerNs > 0L &&
+                previousProducerNs - qualifiedClockRevokedAtProducerNs <
+                        CANONICAL_REACQUIRE_WINDOW_NS) return 0.0;
+        int periods = decisionPeriodsForElapsed(CANONICAL_REACQUIRE_WINDOW_NS);
+        if (periods <= 0) return 0.0;
+        double measured = decisionRateHz(periods);
+        if (!Double.isFinite(measured) || measured < MIN_GENERATION_SOURCE_HZ)
+            return 0.0;
+        long divisor = (long) Math.floor(displayRefreshHz / measured *
+                (1.0 + HELD_LATTICE_DIVISOR_SLACK));
+        if (divisor < 1L || divisor > 8L) return 0.0;
+        double latticeHz = displayRefreshHz / divisor;
+        return decisionTimestampPeriodsMatchWithProvenDuplicates(latticeHz,
+                periods, acquisitionOrdinaryPercent(),
+                latticeHz * PANEL_LATTICE_SNAP_FRACTION) ? latticeHz : 0.0;
+    }
+
+    // A mean slightly above its lattice (bounded jitter) must not floor to
+    // the next lower divisor; far below the 12-percent divisor spacing.
+    private static final double HELD_LATTICE_DIVISOR_SLACK = 1.0e-3;
+    private long qualifiedClockRevokedAtProducerNs;
 
     /**
      * Proves a canonical image clock across a durable window while preserving
@@ -3439,6 +3804,7 @@ public final class AdaptiveFrameRateController {
                                 uniquePeriods);
                 qualifiedUniqueTimestampSourceHz = 0.0;
                 qualifiedUniqueTimestampClockRejected = true;
+                qualifiedClockRevokedAtProducerNs = previousProducerNs;
                 replacementUniqueClockHz = 0.0;
                 replacementUniqueClockSinceNs = 0L;
                 provenTimestampSourceHz = 0.0;
@@ -3458,6 +3824,28 @@ public final class AdaptiveFrameRateController {
                 canonicalReacquireCandidateHz = 0.0;
                 resetPresentation();
                 return;
+            } else if (!(uniqueClock > 0.0)) {
+                double heldLattice = physicalHeldFrameLatticeHz();
+                if (heldLattice > 0.0) {
+                    // The canonical held-frame path below can only name
+                    // 60.000/59.94; on a measured 119.95-Hz panel the paced
+                    // lattice is 59.975 and neither canonical clock divides
+                    // the panel. Same thirty-second ordinal-proven proof, on
+                    // the panel divisor within the 100-ppm physical band.
+                    qualifiedUniqueTimestampSourceHz = heldLattice;
+                    qualifiedUniqueTimestampClockRejected = false;
+                    lastRejectedQualifiedTimestampSourceHz = 0.0;
+                    lastRejectedQualifiedTimestampProof = "none";
+                    replacementUniqueClockHz = 0.0;
+                    replacementUniqueClockSinceNs = 0L;
+                    provenTimestampSourceHz = heldLattice;
+                    canonicalReacquireEvidenceNs = 0L;
+                    canonicalReacquireCandidateHz = 0.0;
+                    lockedSourceFps = tierFor(heldLattice);
+                    tierAcquired = true;
+                    resetPresentation();
+                    return;
+                }
             }
         }
 
@@ -3969,6 +4357,9 @@ public final class AdaptiveFrameRateController {
         producerTimelineHz = sanitized;
         installedProducerTimelineHz = sanitized;
         producerTimelineDiscontinuityCount = 0L;
+        qualifiedClockRevokedAtProducerNs = 0L;
+        clearDirectLatticeMapping();
+        resetLockedTierEndpointGate();
         provenTimestampSourceHz = 0.0;
         qualifiedUniqueTimestampSourceHz = 0.0;
         qualifiedUniqueTimestampClockRejected = false;
@@ -4015,6 +4406,9 @@ public final class AdaptiveFrameRateController {
      * core frame on those systems and must not be mistaken for slowdown.
      */
     public void setAuthoritativeSourceHz(double value) {
+        qualifiedClockRevokedAtProducerNs = 0L;
+        clearDirectLatticeMapping();
+        resetLockedTierEndpointGate();
         provenTimestampSourceHz = 0.0;
         qualifiedUniqueTimestampSourceHz = 0.0;
         qualifiedUniqueTimestampClockRejected = false;
@@ -4190,17 +4584,27 @@ public final class AdaptiveFrameRateController {
             // (2026-09-01, gc-b22) A game that natively holds ~4 percent of
             // its frames keeps the 60 lattice of its submission clock; the
             // generator interpolates across ordinal-proven held frames.
+            // Under AUTO that vouch is only meaningful while the 60 lattice is
+            // actually funded (a qualified unique clock bridging the holds):
+            // an unqualified held 60 would stay Direct with uneven holds,
+            // which is exactly what the owner's lock-to-30 rule replaces.
+            boolean submissionMayVouch =
+                    tierPolicy != TierPolicy.LOCK_TO_THIRTY ||
+                            qualifiedUniqueTimestampSourceHz >= tierFloorHz(60);
             boolean currentSixtyClockHealthy = lockedSourceFps == 60 &&
                     (uniqueHz >=
                             tierFloorHz(60) - SIXTY_TIER_SCHEDULER_HOLD_HZ ||
-                     (submissionHz >=
+                     (submissionMayVouch && submissionHz >=
                             tierFloorHz(60) - SIXTY_TIER_SCHEDULER_HOLD_HZ &&
                       !exactDuplicateSchedule));
             int hystereticTier = currentSixtyClockHealthy ? lockedSourceFps :
                     candidateTier;
-            if (hystereticTier < lockedSourceFps &&
-                    duplicateFilteredDowngradeIsSupported(
-                            settledRateHz, hystereticTier, periods))
+            boolean demotionSupported =
+                    tierPolicy == TierPolicy.LOCK_TO_THIRTY ?
+                            lockedTierDemotionIsSupported() :
+                            duplicateFilteredDowngradeIsSupported(
+                                    settledRateHz, hystereticTier, periods);
+            if (hystereticTier < lockedSourceFps && demotionSupported)
                 applyTier(hystereticTier);
         }
         // Initial acquisition is intentionally quick. Start the durable
@@ -4295,6 +4699,18 @@ public final class AdaptiveFrameRateController {
         return Math.abs(measuredHz - proposedTier) <= 2.0;
     }
 
+    /**
+     * AUTO demotion admission. The ADAPTIVE rational-pattern test above exists
+     * so a skipped-callback window cannot manufacture an unplanned lower
+     * lattice; AUTO's lower lattice is explicit (the locked 30/20 clock with
+     * fixed-tick endpoint admission), so a moving source that missed the
+     * one-FPS Schmitt hold locks down. Static content is still not slowdown.
+     */
+    private boolean lockedTierDemotionIsSupported() {
+        return !(measuredProducerHz() < MIN_GENERATION_SOURCE_HZ &&
+                measuredSubmissionHz() >= tierFloorHz(lockedSourceFps));
+    }
+
     /** Number of newest periods covering at least the requested producer time. */
     private int decisionPeriodsForElapsed(long requiredNs) {
         if (requiredNs <= 0L || decisionPeriodSumNs < requiredNs) return 0;
@@ -4372,7 +4788,7 @@ public final class AdaptiveFrameRateController {
         // 50 bucket: 40.0-59.8 is the 40 tier on a 120-Hz panel and, with no
         // 40 divisor on a 60-Hz panel, 30.0-59.8 is the 30 tier there.
         if (measuredHz >= 59.9) return 60;
-        if (tiers == TIERS_60) return measuredHz >= 29.9 ? 30 : 20;
+        if (!hasFortyTier()) return measuredHz >= 29.9 ? 30 : 20;
         if (measuredHz >= 39.9) return 40;
         if (measuredHz >= 29.9) return 30;
         return 20;
@@ -4380,6 +4796,43 @@ public final class AdaptiveFrameRateController {
 
     /** Protocol tiers for the active panel, highest first. */
     public int[] protocolTiers() { return tiers.clone(); }
+
+    private int[] protocolTiersFor(double declaredPanelHz) {
+        if (declaredPanelHz < SIXTY_HZ_PROTOCOL_MAX_PANEL_HZ) return TIERS_60;
+        return tierPolicy == TierPolicy.LOCK_TO_THIRTY ?
+                TIERS_LOCK_TO_THIRTY : TIERS_120;
+    }
+
+    /** 60/30/20 protocols (60-Hz panels, AUTO) have no 40 bucket. */
+    private boolean hasFortyTier() {
+        for (int tier : tiers) if (tier == 40) return true;
+        return false;
+    }
+
+    /**
+     * Selects the owner's tier protocol. Changing it re-buckets an acquired
+     * tier that the new protocol lacks (40 under AUTO becomes 30) and
+     * publishes one presentation epoch; rate evidence is retained.
+     */
+    public void setTierPolicy(TierPolicy policy) {
+        TierPolicy safe = policy == null ? TierPolicy.ADAPTIVE : policy;
+        if (safe == tierPolicy) return;
+        tierPolicy = safe;
+        tiers = protocolTiersFor(declaredDisplayRefreshHz);
+        resetLockedTierEndpointGate();
+        if (tierIndexExact(lockedSourceFps) < 0)
+            applyTier(nextLowerTier(lockedSourceFps));
+        else
+            resetPresentation();
+    }
+
+    public TierPolicy tierPolicy() { return tierPolicy; }
+
+    private int tierIndexExact(int tier) {
+        for (int index = 0; index < tiers.length; ++index)
+            if (tiers[index] == tier) return index;
+        return -1;
+    }
 
     private int tierIndex(int tier) {
         for (int index = 0; index < tiers.length; ++index)
@@ -4431,7 +4884,7 @@ public final class AdaptiveFrameRateController {
         if (measuredHz < MIN_GENERATION_SOURCE_HZ - 2.0)
             return Math.max(1, (int) Math.round(measuredHz));
         if (measuredHz >= 55.0) return 60;
-        if (tiers == TIERS_60) return measuredHz >= 25.0 ? 30 : 20;
+        if (!hasFortyTier()) return measuredHz >= 25.0 ? 30 : 20;
         if (measuredHz >= 35.0) return 40;
         if (measuredHz >= 25.0) return 30;
         return 20;

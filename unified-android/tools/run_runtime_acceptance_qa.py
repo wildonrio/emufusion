@@ -70,9 +70,10 @@ MAIN_ACTIVITY = "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 # full-height/settings/screensaver work and made the physical QA runner reject
 # the very APK it had just built, before any game launch.  Keep this as a byte
 # identity gate rather than weakening it to a structural/theme-name check.
-# Re-pinned for the WIDESCREEN HACK Settings slot (23); the theme.qml byte
-# identity otherwise stays the reviewed product source.
-FROZEN_THEME_QML = "f4b7b5ad6ff63b3ea506ca781558f74b6865307a2c3dc351fd383067b3fb0d7d"
+# Re-pinned for the WIDESCREEN HACK Settings slot (23) and the AUTO frame-
+# generation mode; the theme.qml byte identity otherwise stays the reviewed
+# product source.
+FROZEN_THEME_QML = "98a614d297e68bdb21086693d095a91a95f5cbd8b6457ca6ae56f8e58b76bee2"
 FROZEN_THEME_CFG = "b10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9"
 ROUTE = re.compile(r"In-window route accepted engine=([^ ]+) system=([^\s]+)")
 RETURN = re.compile(

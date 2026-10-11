@@ -2308,10 +2308,12 @@ FocusScope {
 
     function normalizedFrameGenerationMode(value) {
         value = String(value || "").toLowerCase()
-        return value === "built-in-alpha" || value === "lsfg" ? value : "off"
+        return value === "auto" || value === "built-in-alpha" ||
+                value === "lsfg" ? value : "off"
     }
 
     function frameGenerationModeLabel() {
+        if (frameGenerationMode === "auto") return "AUTO"
         if (frameGenerationMode === "built-in-alpha") return "BUILT-IN (ALPHA)"
         if (frameGenerationMode === "lsfg") return "LSFG"
         return "OFF"
@@ -2362,7 +2364,7 @@ FocusScope {
 
     function cycleFrameGenerationMode(direction) {
         if (frameGenerationModePending) return
-        var modes = ["off", "built-in-alpha", "lsfg"]
+        var modes = ["off", "auto", "built-in-alpha", "lsfg"]
         var current = modes.indexOf(frameGenerationMode)
         if (current < 0) current = 0
         var step = direction < 0 ? -1 : 1
@@ -3107,7 +3109,7 @@ FocusScope {
             "Trademarks, third-party content, and your responsibilities",
             "Choose once per game: keep it, hide it, or delete the ROM",
             "After two still minutes, play one synchronized preview on both screens",
-            "Off is a true direct bypass; Built-in is experimental; LSFG is the private beta",
+            "Off: true direct bypass. Auto: 60, or locked 30. Built-in: experimental. LSFG: beta",
             "Use verified built-in emulator 16:9 options; unsupported systems are unchanged",
             "Off by default: true 16:9 geometry for N64, PS1, PS2, GC, Wii, Dreamcast, PSP"
         ]

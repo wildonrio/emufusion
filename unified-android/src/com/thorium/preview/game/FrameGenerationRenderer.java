@@ -91,6 +91,13 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      *  guest frame is a doubled span with one submission. */
     default void setSlotLatticeProducer(boolean value) {}
 
+    /**
+     * AUTO frame generation: tiers 60/30/20 only; a source that cannot hold
+     * 60 is locked to 30 (or 20) and doubled. False keeps the adaptive
+     * protocol used by Built-in (Alpha) and LSFG.
+     */
+    default void setLockToThirtyTierPolicy(boolean enabled) {}
+
     void setStatsListener(StatsListener value);
 
     /** Once-only runtime failure; owners must marshal to UI and validate Surface identity.

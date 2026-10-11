@@ -2421,7 +2421,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             reportedTargetTenths = -1;
             reportedCadenceQualified = false;
             reportedBackendLabel = null;
-            publishReportedFrameRate(frameRate.sustainedMeasuredSourceHz(), 0.0,
+            publishReportedFrameRate(frameRate.reportedSourceHz(), 0.0,
                     frameRate.targetOutputHz(), false);
         });
     }
@@ -2469,6 +2469,26 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             Log.i(TAG, "Authoritative source cadence generator=" + generatorId +
                     " sourceHz=" + sourceHz +
                     " enabled=" + frameRate.usesAuthoritativeSourceRate());
+        });
+    }
+
+    /** AUTO's lock-to-30 tier protocol; Built-in (Alpha)/LSFG stay adaptive. */
+    @Override public void setLockToThirtyTierPolicy(boolean enabled) {
+        if (closed.get()) return;
+        handler.post(() -> {
+            if (closed.get()) return;
+            AdaptiveFrameRateController.TierPolicy policy = enabled ?
+                    AdaptiveFrameRateController.TierPolicy.LOCK_TO_THIRTY :
+                    AdaptiveFrameRateController.TierPolicy.ADAPTIVE;
+            if (frameRate.tierPolicy() == policy) return;
+            long previousEpoch = schedulerPresentationEpoch();
+            frameRate.setTierPolicy(policy);
+            if (schedulerPresentationEpoch() != previousEpoch)
+                synchronizeBufferedPresentationEpoch();
+            Log.i(TAG, "Frame-generation tier policy generator=" + generatorId +
+                    " policy=" + policy +
+                    " protocolTiers=" + java.util.Arrays.toString(
+                            frameRate.protocolTiers()));
         });
     }
 
@@ -4141,11 +4161,31 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                             classifiedUniqueTimestampNs, classifiedUniqueSubmission);
                     return;
                 }
-                if (!frameRate.hasSustainableGenerationRate() ||
+                // AUTO lock (30/20 tier): the fixed locked clock observes
+                // every producer tick; a held image on a locked tick is the
+                // newest image of that tick (promoteIfDue's rule), so the
+                // locked interval is never stretched by a held frame.
+                if (frameRate.lockedTierActive()) {
+                    if (frameRate.admitLockedTierEndpoint(
+                            classifiedUniqueTimestampNs))
+                        acceptPresentationEndpoint(classifiedUniqueTexture,
+                                classifiedUniqueTimestampNs,
+                                classifiedUniqueSubmission);
+                    return;
+                }
+                // A held producer frame is retained as the real endpoint of
+                // its own slot: on a proven source clock, and on the
+                // Direct-equal producer lattice while generation is not
+                // funded (FG-off also shows it for its whole slot, so the
+                // previous image is never stretched into an odd gap).
+                double heldSlotHz = frameRate.hasSustainableGenerationRate() ?
+                        frameRate.presentationSourceHz() :
+                        frameRate.directLatticeSourceHz();
+                if (!(heldSlotHz > 0.0) ||
                         !AdaptiveFrameRateController.duplicateOccupiesNextSourceSlot(
                                 lastPresentationEndpointTimestampNs,
                                 classifiedUniqueTimestampNs,
-                                frameRate.presentationSourceHz(),
+                                heldSlotHz,
                                 lastPresentationEndpointSubmission,
                                 classifiedUniqueSubmission)) return;
                 acceptPresentationEndpoint(classifiedUniqueTexture,
@@ -4154,6 +4194,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             }
             if (!observeUniqueFrame(classifiedUniqueTimestampNs,
                     classifiedUniqueSubmission)) return;
+            // AUTO lock (30/20 tier): every unique image still funds rate
+            // evidence above, but only the image on each fixed locked tick
+            // becomes a presentation endpoint.
+            if (!frameRate.admitLockedTierEndpoint(classifiedUniqueTimestampNs))
+                return;
             acceptPresentationEndpoint(classifiedUniqueTexture,
                     classifiedUniqueTimestampNs, classifiedUniqueSubmission);
         } finally {
@@ -6206,6 +6251,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 "wrapped-incomplete-timer-pair".equals(reason) ||
                 "duplicate-warp-timer".equals(reason) ||
                 "invalid-timer-result".equals(reason) ||
+                // A shader pair that could not be joined to its EGL frame
+                // events (the driver logged "Did not find frame") is missing
+                // evidence, not a wrong result. Treating it as permanent retired
+                // generation on the Thor's Wii run with a 300 ms Direct
+                // recovery stall; re-arm a fresh epoch like the other timer
+                // anomalies, still bounded per session.
+                "invalid-timer-physical-join".equals(reason) ||
                 "async-gpu-pair-over-budget".equals(reason) ||
                 "combined-pair-warp-over-budget".equals(reason) ||
                 "async-signature-failure".equals(reason) ||
@@ -10989,7 +11041,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void reportStats() {
-        double source = frameRate.sustainedMeasuredSourceHz();
+        // Measured unique rate, or AUTO's locked 30/20 clock while locked.
+        double source = frameRate.reportedSourceHz();
         double targetOutput = frameRate.targetOutputHz();
         long now = System.nanoTime();
         reportSourceAdmissionDiagnostic(now);
@@ -12235,7 +12288,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " nativeStatus=" +
                         (tracker == null ? 0 : tracker.lastNativeFailure()) +
                 " actualAvailable=0");
-        publishReportedFrameRate(frameRate.sustainedMeasuredSourceHz(), 0.0,
+        publishReportedFrameRate(frameRate.reportedSourceHz(), 0.0,
                 frameRate.targetOutputHz(), false);
     }
 
