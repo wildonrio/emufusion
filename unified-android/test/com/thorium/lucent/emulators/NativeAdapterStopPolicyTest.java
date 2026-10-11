@@ -14,6 +14,12 @@ final class NativeAdapterStopPolicyTest {
             throw new AssertionError("aps3e must not Kill/join on Stop");
         if (!NativeAdapterStopPolicy.requiresCleanFrontendRestart("aps3e"))
             throw new AssertionError("aps3e must cross a clean process boundary");
+        if (NativeAdapterStopPolicy.destroyNativeHostOnStop("eden"))
+            throw new AssertionError("eden must not tear down NCE in-process on Stop");
+        if (!NativeAdapterStopPolicy.requiresCleanFrontendRestart("eden"))
+            throw new AssertionError("eden must cross a clean process boundary");
+        if (NativeAdapterStopPolicy.allowsForcedFrontendRestart("eden"))
+            throw new AssertionError("eden's restart must wait for its save flush");
         if (NativeAdapterStopPolicy.requiresCleanFrontendRestart("cemu"))
             throw new AssertionError("cemu does not use the aps3e restart policy");
         System.out.println("NativeAdapterStopPolicyTest passed");

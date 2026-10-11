@@ -1511,8 +1511,8 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     private void retireHost(String engineId) {
         if (!NativeAdapterStopPolicy.destroyNativeHostOnStop(engineId)) {
-            Log.w(TAG, "Retaining aPS3e native host after library return engine=" +
-                    engineId + " marker=aps3e-stop-no-kill");
+            Log.w(TAG, "Retaining native host for the process restart engine=" +
+                    engineId + " marker=" + engineId + "-stop-no-kill");
             host = null;
             started = false;
             return;

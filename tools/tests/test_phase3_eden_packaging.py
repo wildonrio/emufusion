@@ -47,7 +47,8 @@ SUPERSEDED_COMMIT = "5ec94b19714f75489cdfc62d890d2f94d45514ce"
 # Follow-up preserves that fix and explains Vulkan startup failures in-app.
 # October7 adds previously missing stick-click routes; runtime acceptance pending.
 # October 11 passes the frontend-provisioned per-GPU driver (Turnip) to Eden.
-ADAPTER_SHA256 = "ad8ee89b56376b09db8038a6f5ed61ded79418900ab1e11dec652e1482835c33"
+# 3.2.34 runs the guest natively (NCE) and flushes saves for process replacement.
+ADAPTER_SHA256 = "b974cd99ba9583628367e0ecce3bd749d470fc962b8d4790717d0ff90c0ec54c"
 ADAPTER_LIBRARY = "liblucent_native_adapter_eden.so"
 STAGED_ADAPTER = ROOT / "engines" / "build" / "arm64-v8a" / ADAPTER_LIBRARY
 ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-lucent-adapter.cpp"

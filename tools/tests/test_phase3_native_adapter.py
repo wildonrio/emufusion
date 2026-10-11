@@ -531,8 +531,8 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
         self.assertIn("public static boolean reportsQuickResume(", policy)
         self.assertIn("public static boolean destroyNativeHostOnStop(", policy)
         self.assertIn("!isAps3e(engineId)", policy)
-        self.assertIn("Retaining aPS3e native host after library return", SESSION)
-        self.assertIn("marker=aps3e-stop-no-kill", SESSION)
+        self.assertIn("Retaining native host for the process restart", SESSION)
+        self.assertIn('" marker=" + engineId + "-stop-no-kill"', SESSION)
         self.assertIn(
             "NativeAdapterStopPolicy.reportsQuickResume(", SESSION)
         self.assertIn("retireHost(entry.id)", SESSION)

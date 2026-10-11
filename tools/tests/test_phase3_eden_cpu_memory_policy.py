@@ -19,15 +19,29 @@ EMITTER = TREE / "src/dynarmic/src/dynarmic/backend/arm64/emit_arm64_memory.cpp"
 
 
 class EdenCpuMemoryPolicyTest(unittest.TestCase):
-    def test_embedded_load_selects_accurate_before_initialization(self):
+    def test_embedded_load_selects_eden_android_defaults_before_initialization(self):
+        # October 11: NCE + Auto, as standalone Eden runs on Android. Eden falls
+        # back to Dynarmic itself where NCE cannot run (SetNceEnabled).
         source = ADAPTER.read_text()
         load = source[source.index("static bool adapter_load("):]
         load = load[:load.index("engine_session.InitializeEmulation(")]
         settings = re.findall(
             r"Settings::values\.(cpu_backend|cpu_accuracy)\.SetValue\("
             r"Settings::(?:CpuBackend|CpuAccuracy)::(\w+)\);", load)
-        self.assertEqual([("cpu_backend", "Dynarmic"), ("cpu_accuracy", "Accurate")],
-                         settings)
+        self.assertEqual([("cpu_backend", "Nce"), ("cpu_accuracy", "Auto")], settings)
+        settings_source = (TREE / "src/common/settings.cpp").read_text()
+        self.assertIn("is_nce_enabled = IsFastmemEnabled() && is_nce_selected && is_39bit;",
+                      settings_source)
+
+    def test_exit_flush_makes_saves_durable_without_teardown(self):
+        # NCE is never torn down in-process: the frontend retains the host and
+        # replaces the process, so every buffered save file must be flushed.
+        source = ADAPTER.read_text()
+        flush = source[source.index("static bool adapter_flush_save("):]
+        flush = flush[:flush.index("\n}\n")]
+        self.assertLess(flush.index("session.PauseEmulation();"),
+                        flush.index("std::fflush(nullptr)"))
+        self.assertIn("SetPresentationSuspended(true)", flush)
 
     def test_accurate_preserves_actual_guest_address_width(self):
         source = (TREE / "src/core/arm/dynarmic/arm_dynarmic_64.cpp").read_text()

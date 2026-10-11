@@ -97,7 +97,9 @@ public class NativeAdapterEngineSession implements EngineSession {
     static final int MAX_QUICK_RESUME_BYTES=1024;
     static final long RENDER_TASK_TIMEOUT_MS=20;
     static final long QUICK_RESUME_TASK_TIMEOUT_MS=2000;
-    static class Entry { String id="eden"; }
+    // An engine that still tears its native host down on Stop (Eden and aPS3e
+    // retain theirs for the process restart; see NativeAdapterStopPolicy).
+    static class Entry { String id="cemu"; }
     static class Request { String systemId="switch"; }
     static class AudioFocus {
         final AtomicInteger abandons=new AtomicInteger();
@@ -291,8 +293,8 @@ public class NativeAdapterEngineSession implements EngineSession {
         NativeAdapterEngineSession s=new NativeAdapterEngineSession();s.started=false;
         String detail="Switch graphics could not start: Vulkan initialization failed";
         check(detail.equals(s.sessionFailureMessage(new IllegalStateException(detail))),"startup cause hidden");
-        check(s.sessionFailureMessage(null).equals("EmuFusion could not start eden."),"null cause lacks fallback");
-        check(s.sessionFailureMessage(new RuntimeException(" ")).equals("EmuFusion could not start eden."),"empty cause lacks fallback");
+        check(s.sessionFailureMessage(null).equals("EmuFusion could not start cemu."),"null cause lacks fallback");
+        check(s.sessionFailureMessage(new RuntimeException(" ")).equals("EmuFusion could not start cemu."),"empty cause lacks fallback");
         s.started=true;
         check(s.sessionFailureMessage(new RuntimeException(detail)).equals("The native adapter stopped."),"runtime failure classified as startup");
     }

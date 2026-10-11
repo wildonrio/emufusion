@@ -38,7 +38,7 @@ def execute(java, name, extra=None):
 
 
 class NativeSessionRestartTest(unittest.TestCase):
-    def test_actual_policy_keeps_switch_native_cleanup_and_waits_for_ack(self):
+    def test_actual_policy_retains_switch_owner_and_waits_for_ack(self):
         policy = source('NativeAdapterStopPolicy.java')
         execute('''
 import com.thorium.lucent.emulators.NativeAdapterStopPolicy;
@@ -46,7 +46,7 @@ public class PolicyTest {
  static void check(boolean v,String why){if(!v)throw new AssertionError(why);}
  public static void main(String[] args){
   check(NativeAdapterStopPolicy.requiresCleanFrontendRestart("eden"),"Switch reuse must cross process boundary");
-  check(NativeAdapterStopPolicy.destroyNativeHostOnStop("eden"),"Switch must still flush and destroy native owner");
+  check(!NativeAdapterStopPolicy.destroyNativeHostOnStop("eden"),"Switch flushes saves, retains its NCE owner and replaces the process");
   check(!NativeAdapterStopPolicy.allowsForcedFrontendRestart("eden"),"Switch cleanup may not be killed by a timer");
   check(NativeAdapterStopPolicy.requiresCleanFrontendRestart("aps3e"),"PS3 restart retained");
   check(NativeAdapterStopPolicy.allowsForcedFrontendRestart("aps3e"),"PS3 bounded retirement retained");

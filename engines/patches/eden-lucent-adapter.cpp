@@ -41,12 +41,14 @@
 // Firmware and keys are never bundled: load() fails closed unless Lucent hands
 // over a validated system directory that Eden can read them from.
 
+#include <cerrno>
 #include <cmath>
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -487,19 +489,25 @@ static bool adapter_load(lucent_native_engine* engine,
         return fail("no validated key/firmware directory was supplied");
     }
 
-    // Keep the embedded runtime on translated guest execution with address
-    // checks. Selecting Dynarmic alone is insufficient: Eden's default Auto
-    // accuracy sets fastmem_address_space_bits=64, bypassing the ARM64 emitter's
-    // guest-range branch. Accurate preserves the actual process address width,
-    // disables unsafe FP optimizations, and retains in-range fastmem access.
-    // EmulationSession does not read the standalone frontend's config, so set
-    // both values explicitly before it initializes the guest.
+    // Run the guest the way standalone Eden does on Android: native code
+    // execution (NCE) with Auto accuracy. Eden itself falls back to Dynarmic
+    // when NCE cannot run -- a 16 KiB-page kernel, or a 32-bit title without
+    // the 39-bit address space (SetNceEnabled). EmulationSession does not read
+    // the standalone frontend's config, so set both values explicitly before
+    // it initializes the guest.
     //
-    // This is an address-boundary correctness policy, NOT attribution of the
-    // observed heap corruption. The prior SurfaceControl and malloc-debug
-    // failures already ran with Dynarmic; their original writer is unknown.
-    Settings::values.cpu_backend.SetValue(Settings::CpuBackend::Dynarmic);
-    Settings::values.cpu_accuracy.SetValue(Settings::CpuAccuracy::Accurate);
+    // Until October 11 this forced Dynarmic + Accurate (an address-boundary
+    // policy from September's heap-corruption investigation, whose crashes
+    // ran Dynarmic either way). On the Thor the same Mario Wonder stretch ran
+    // ~36 fps that way, ~37 with Dynarmic + Auto and 55-60 with NCE.
+    //
+    // NCE's teardown is not safe in this long-lived process (an NVDEC thread
+    // faulting while nvdrv closed; a kernel assert while AM terminated the
+    // title), so the Switch runtime is never torn down here: flush_save makes
+    // the saves durable and the frontend replaces the process instead
+    // (NativeAdapterStopPolicy). NCE's process-wide signal handlers go with it.
+    Settings::values.cpu_backend.SetValue(Settings::CpuBackend::Nce);
+    Settings::values.cpu_accuracy.SetValue(Settings::CpuAccuracy::Auto);
 
     // EmuFusion's internal Switch runtime intentionally exposes no Nintendo
     // account, LAN room, or multiplayer UI. Advertising a live network anyway
@@ -866,6 +874,21 @@ static bool adapter_flush_save(lucent_native_engine* engine) {
     if (session.IsRunning() && !session.IsPaused()) {
         session.PauseEmulation();
     }
+    // Lucent calls this only on the way out, and the Switch runtime is never
+    // torn down in-process any more: the frontend retains this host and
+    // replaces the whole process instead (NativeAdapterStopPolicy). Under NCE
+    // Eden's own teardown crashed in this long-lived process. So everything
+    // the guest has written must reach the kernel now: Eden's files are
+    // buffered C streams (Common::FS::IOFile), and fflush(nullptr) flushes
+    // every one of them. Nothing is presented into the retiring Surface.
+    if (session.IsRunning()) {
+        session.System().GPU().SetPresentationSuspended(true);
+    }
+    if (std::fflush(nullptr) != 0) {
+        LOG_ERROR(Frontend, "EmuFusion Switch save flush failed errno={}", errno);
+        return false;
+    }
+    LOG_INFO(Frontend, "EmuFusion Switch saves flushed; the process will be replaced");
     return true;
 }
 
