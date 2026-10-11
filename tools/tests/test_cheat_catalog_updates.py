@@ -81,8 +81,12 @@ class CheatCatalogUpdateTests(unittest.TestCase):
         # the core's own (non-LIBRETRO-gated) CheatManager; it is genuinely
         # live now, so it moved out of the still-a-no-op list below and into
         # the hardware session's advertised set alongside dolphin/ppsspp.
-        for core in ("dolphin", "ppsspp", "mupen64plus-next", "flycast"):
+        for core in ("dolphin", "mupen64plus-next", "flycast"):
             self.assertIn(f'"{core}".equals(engineId)', hardware)
+        # PPSSPP's retro_cheat_set corrupts its own cheat file ("_C_S" header
+        # line), so PSP codes are written before boot instead of live.
+        self.assertNotIn('"ppsspp".equals(engineId)', hardware.split(
+            "private static boolean supportsLiveCheats(String engineId) {", 1)[1].split("}", 1)[0])
         for source in (software, hardware):
             for no_op in ("armsx2", "azahar", "dosbox-pure", "mame"):
                 self.assertNotIn(f'"{no_op}".equals(engineId)', source)

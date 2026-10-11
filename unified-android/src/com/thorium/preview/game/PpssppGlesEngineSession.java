@@ -1,5 +1,6 @@
 package com.thorium.preview.game;
 
+import com.thorium.lucent.timing.DisplaySyncPolicy;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -250,6 +251,13 @@ final class PpssppGlesEngineSession implements EngineSession,
                 if (!entry.isInstalled(appContext))
                     throw new IllegalStateException("Internal engine identity changed");
                 if (stopping.get() || released.get()) return;
+                // PPSSPP reads its CwCheat file once when the game boots; give
+                // the boot writer (60 FPS unlock and the player's codes) a
+                // bounded head start so the codes apply from the first frame.
+                if ("ppsspp".equals(entry.id) &&
+                        !com.thorium.preview.cheats.delivery.CheatLaunchHooks.awaitBootCheats(
+                                PpssppGlesEngineSession.this, 2000L))
+                    Log.i(TAG, "Boot cheats not ready before PPSSPP boot; they apply next launch");
                 File game = resolveGameFile(request.contentUri);
                 DiscImagePreflight.validate(request.systemId, game);
                 LibretroEngineSpec.SystemInstallation runtime =
@@ -341,6 +349,7 @@ final class PpssppGlesEngineSession implements EngineSession,
                                     presentAudio(active.drainAudio(2048));
                                     recordFrameHealth();
                                     recordActiveProgress(active);
+                                    maybeUpdatePhysicalFgClock();
                                 }
                             }
 
@@ -1231,6 +1240,43 @@ final class PpssppGlesEngineSession implements EngineSession,
         callback.onSessionReady();
     }
 
+    /*
+     * Frame-generation clock for hardware cores, as LibretroEngineSession does
+     * for software cores. While a generator owns the surface the display-tick
+     * clock is off, and the core ran on the nominal 60.000 Hz timer; a 30 fps
+     * game then arrived at 29.97 Hz against a measured 119.95 Hz panel, the
+     * generator's exact-lattice check rejected it, and it repeated frames on
+     * an uneven cadence (Thor, N64: 212 gaps over 25 ms in 33 s). Locking the
+     * core to the generator's measured panel rate puts every source frame on
+     * the panel lattice so 60 -> 120 and 30 -> 60 qualify.
+     */
+    private long physicalFgCheckNs;
+    private boolean physicalFgClockApplied;
+    private FrameGenerationRenderer physicalFgClockOwner;
+
+    private void maybeUpdatePhysicalFgClock() {
+        long now = System.nanoTime();
+        if (now - physicalFgCheckNs < 1_000_000_000L) return;
+        physicalFgCheckNs = now;
+        Surface current = surface;
+        FrameGenerationRenderer renderer = current == null ? null :
+                FrameGenerationRendererRegistry.find(current);
+        double target = renderer == null ? 0.0 : DisplaySyncPolicy.physicalSourceHz(
+                declaredVideoHz, renderer.physicalPanelHz());
+        if (target > 0.0) {
+            if (setPacedVideoHz(target)) {
+                physicalFgClockApplied = true;
+                physicalFgClockOwner = renderer;
+            }
+        } else if (physicalFgClockApplied && renderer != physicalFgClockOwner &&
+                setPacedVideoHz(0.0)) {
+            // A missing measurement from the same renderer is priming, not a
+            // nominal panel; only a different/removed renderer releases it.
+            physicalFgClockApplied = false;
+            physicalFgClockOwner = null;
+        }
+    }
+
     /** Exact AV clock used by the native hardware producer's PTS stamp. */
     @Override public double declaredVideoHz() { return declaredVideoHz; }
 
@@ -1278,7 +1324,9 @@ final class PpssppGlesEngineSession implements EngineSession,
         // create a dishonest toggle. Flycast's own retro_cheat_set was such a
         // stub too until engines/patches/flycast-libretro-cheat-support.patch
         // wired it to the core's existing (non-LIBRETRO-gated) CheatManager.
-        return "dolphin".equals(engineId) || "ppsspp".equals(engineId) ||
+        // PPSSPP is excluded: its retro_cheat_set corrupts the cheat file
+        // (see CheatDelivery); its codes are written before boot instead.
+        return "dolphin".equals(engineId) ||
                 "mupen64plus-next".equals(engineId) || "flycast".equals(engineId);
     }
 

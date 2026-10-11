@@ -31,6 +31,25 @@ public final class DeliveryCheat {
 
     private static final Pattern WIDESCREEN_NAME =
             Pattern.compile("(?i)(16:9|widescreen|wide screen|aspect)");
+    /**
+     * Community frame-rate unlocks: "60 FPS", "60fps", Cemu's "FPS++",
+     * "Unlock framerate", "FPS unlock". A "30 FPS" lock never matches.
+     */
+    private static final Pattern FRAME_RATE_UNLOCK_NAME = Pattern.compile(
+            "(?i)(\\b60\\s*-?\\s*fps\\b|\\b60\\s*frames|fps\\s*\\+\\+|" +
+            "\\bunlock(ed)?\\s*(the\\s*)?(frame\\s*-?\\s*rate|fps)|" +
+            "(frame\\s*-?\\s*rate|fps)\\s*unlock)");
+    /** "60 FPS" said outright: preferred over a generic "unlock". */
+    private static final Pattern SIXTY_FPS_NAME = Pattern.compile("(?i)(\\b60\\s*-?\\s*fps\\b|\\b60\\s*frames)");
+    /**
+     * Never an unlock, whatever a source tagged it: a code that puts the game
+     * back ("Unlimited FPS [Default]", "Restore", "Normal") or, below, a lower
+     * rate ("30 FPS [Fixed]", "20fps lock"). Sources tag every frame-rate
+     * code "60fps", so the tag alone is not enough.
+     */
+    private static final Pattern REVERT_NAME = Pattern.compile(
+            "(?i)(\\bdefault\\b|\\brestore|\\bnormal\\b|\\boriginal\\b)");
+    private static final Pattern LOWER_RATE_NAME = Pattern.compile("(?i)\\b[1-5]?[0-9]\\s*-?\\s*(fps|frames)\\b");
 
     public final Cheat cheat;
     public final String source;
@@ -83,6 +102,27 @@ public final class DeliveryCheat {
      */
     public boolean isWidescreen() {
         return hasTag("widescreen") || WIDESCREEN_NAME.matcher(cheat.name).find();
+    }
+
+    /** A patch that lets the game run at 60 fps (or uncapped) instead of 30/20. */
+    public boolean isFrameRateUnlock() {
+        return frameRateUnlockRank() < Integer.MAX_VALUE;
+    }
+
+    /**
+     * 0 for an explicit "60 FPS" code, 1 for another unlock by name, 2 for a
+     * code only a source tagged; {@code Integer.MAX_VALUE} when it is not an
+     * unlock at all.
+     */
+    public int frameRateUnlockRank() {
+        String name = cheat.name == null ? "" : cheat.name;
+        if (REVERT_NAME.matcher(name).find()) return Integer.MAX_VALUE;
+        // "60 FPS (30 FPS cutscenes)" is still a 60 FPS code; a lower rate
+        // with no 60 beside it is a lock.
+        if (SIXTY_FPS_NAME.matcher(name).find()) return 0;
+        if (LOWER_RATE_NAME.matcher(name).find()) return Integer.MAX_VALUE;
+        if (FRAME_RATE_UNLOCK_NAME.matcher(name).find()) return 1;
+        return hasTag("60fps") ? 2 : Integer.MAX_VALUE;
     }
 
     /**

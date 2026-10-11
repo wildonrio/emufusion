@@ -20,7 +20,11 @@ public final class CheatDelivery {
     private static final Set<String> LIVE_ENGINES = new HashSet<>(Arrays.asList(
             "mesen", "mesen-s", "sameboy", "mgba", "gearsystem", "swanstation",
             "melonds-ds", "fuse", "virtualjaguar",
-            "mupen64plus-next", "ppsspp", "dolphin", "flycast"));
+            "mupen64plus-next", "dolphin", "flycast"));
+    // ppsspp is boot-only: its libretro retro_cheat_set rewrites the cheat
+    // file with the "_S" header as a "_C" entry, so CwCheat rejects the whole
+    // file ("could not parse cheat name line" on line 2) and no code applies.
+    // PpssppCheatWriter writes the same file correctly before boot.
     // flycast is absent from BOOT_ENGINES: engines/patches/
     // flycast-libretro-cheat-support.patch wires retro_cheat_set/reset to the
     // core's own CheatManager::addGameSharkCheat/enableCheat directly (live,

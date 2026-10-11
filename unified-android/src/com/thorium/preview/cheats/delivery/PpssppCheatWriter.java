@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * PPSSPP's CWCheat file: {@code <memstick>/PSP/Cheats/<DISCID>.ini}.
@@ -25,6 +26,7 @@ public final class PpssppCheatWriter implements BootCheatWriter {
         String discId = discId(request);
         if (discId.isEmpty() || request.gameSaveDirectory == null) return touched;
         File file = new File(request.gameSaveDirectory, "PSP/Cheats/" + discId + ".ini");
+        adoptCoreWrittenFile(file);
         if (request.cheats.isEmpty()) {
             if (OwnedFiles.remove(file, OwnedFiles.Ownership.CREATED)) touched.add(file);
             return touched;
@@ -32,6 +34,32 @@ public final class PpssppCheatWriter implements BootCheatWriter {
         if (OwnedFiles.write(file, render(request, discId), OwnedFiles.Ownership.CREATED))
             touched.add(file);
         return touched;
+    }
+
+    /**
+     * Earlier builds delivered PSP codes live, and the core's own writer left
+     * a file EmuFusion never created (so it was never ours to replace): just
+     * "_S <id>" from retro_cheat_reset, or a rewrite whose entries are named
+     * by index ("_C1 0") and whose header is mangled ("_C_S", or a bare "_C"
+     * plus a byte-order mark) so the CwCheat parser fails on line 2. All are
+     * EmuFusion's doing and unusable; claim them so the correct file can be
+     * written. A player's own cheat file is left alone.
+     */
+    static void adoptCoreWrittenFile(File file) {
+        try {
+            if (!file.isFile() || OwnedFiles.owns(file, OwnedFiles.Ownership.CREATED)) return;
+            if (file.length() > 1024 * 1024) return;
+            if (isCoreWritten(OwnedFiles.readText(file, 1024 * 1024))) file.delete();
+        } catch (IOException | RuntimeException ignored) {
+            // Leave it; the writer's ownership check still protects it.
+        }
+    }
+
+    private static final Pattern CORE_ENTRY = Pattern.compile("(?m)^_C(?:[01] \\d+)?[\\s\uFEFF]*$");
+
+    static boolean isCoreWritten(String text) {
+        if (text.trim().matches("_S [A-Z0-9-]+")) return true;
+        return text.contains("\n_C_S ") || text.indexOf('\uFEFF') >= 0 || CORE_ENTRY.matcher(text).find();
     }
 
     static String discId(BootCheatRequest request) {

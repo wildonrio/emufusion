@@ -251,6 +251,22 @@ public final class CheatControl {
         }
     }
 
+    /**
+     * Whether the downloader ever wrote this game's catalog (even an empty
+     * one). Games the owner listed by hand never pass through an import, so
+     * a launch fetches theirs on demand when this is false.
+     */
+    public static boolean hasDownloadedCatalog(Context context, String system, String title,
+                                               String contentName) {
+        if (context == null) return false;
+        try {
+            File file = downloadedFileFor(context, system, title, contentName);
+            return file != null && file.isFile();
+        } catch (RuntimeException unreadable) {
+            return false;
+        }
+    }
+
     private static File downloadedFileFor(Context context, String system, String title,
                                           String contentName) {
         String canonicalSystem = EngineSystemIdResolver.canonical(system);

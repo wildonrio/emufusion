@@ -203,9 +203,10 @@ class DeliveryPolicyTests(unittest.TestCase):
             self.assertIn('BOOT_NOTE = "applies on next launch"', codec.read_text(encoding="utf-8"))
 
     def test_writers_stay_host_testable(self):
-        # The host suite compiles the delivery package minus its three Android
+        # The host suite compiles the delivery package minus its Android
         # files; nothing else in it may import Android or org.json.
-        android_only = {"CheatLaunchHooks.java", "EngineRoots.java", "WidescreenCheatOverlay.java"}
+        android_only = {"CheatLaunchHooks.java", "EngineRoots.java", "WidescreenCheatOverlay.java",
+                        "FrameRateUnlockOverlay.java", "FrameRateUnlockPolicy.java"}
         for path in DELIVERY.glob("*.java"):
             text = path.read_text(encoding="utf-8")
             if path.name in android_only:

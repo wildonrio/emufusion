@@ -85,6 +85,7 @@ package android.content;
 import java.util.HashMap;
 public class Intent {
     public static final int FLAG_ACTIVITY_NEW_TASK = 1, FLAG_ACTIVITY_REORDER_TO_FRONT = 2;
+    public static final String ACTION_MY_PACKAGE_REPLACED = "android.intent.action.MY_PACKAGE_REPLACED";
     private String action;
     private final HashMap<String, String> extras = new HashMap<>();
     public Intent() {}
@@ -223,6 +224,16 @@ package com.thorium.preview;
 class SecondaryCheatPanelRouter {
     static int detaches;
     static void detach(Object owner) { detaches++; }
+}
+""",
+    # BootReceiver offers "Restart app?" after MY_PACKAGE_REPLACED; the
+    # prompt itself is covered by test_update_first_and_restart_prompt.
+    "com/thorium/preview/UpdateCompleteActivity.java": """
+package com.thorium.preview;
+import android.content.Context;
+final class UpdateCompleteActivity {
+    static int announcements;
+    static void announce(Context context) { announcements++; }
 }
 """,
 }

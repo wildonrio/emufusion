@@ -12,6 +12,7 @@ import com.thorium.preview.cheats.sources.CheatSource;
 import com.thorium.preview.cheats.sources.CheatSourceFetcher;
 import com.thorium.preview.cheats.sources.CheatSourceRegistry;
 import com.thorium.preview.cheats.sources.CheatSourceSlicer;
+import com.thorium.preview.cheats.sources.CuratedLibraryGames;
 import com.thorium.preview.cheats.sources.DownloadedCheat;
 import com.thorium.preview.cheats.sources.DownloadedCheatCodec;
 import com.thorium.preview.cheats.sources.DownloadedCheatDocument;
@@ -52,6 +53,11 @@ public final class GameCheatDownloader {
 
     private GameCheatDownloader() {}
 
+    /** {@code ImportManager}'s download cache, so a launch-time fetch reuses its source archives. */
+    public static File sharedCacheRoot() {
+        return new File(REGISTRY.getParentFile(), ".thorium-import-cache");
+    }
+
     /**
      * @param originalName the candidate's original file name (or the import's
      *                     {@code sourceIdentity}, whose path is used); serial
@@ -76,8 +82,8 @@ public final class GameCheatDownloader {
      *     large NES/SNES/N64/NDS dump's whole-file hash -- the one identity read that is not a
      *     bounded header read -- cannot by itself consume the rest of a refresh batch either.
      */
-    static int fetch(Context context, String systemFolder, String title, File rom,
-                      String originalName, File cacheRoot, long deadlineElapsedRealtime) {
+    public static int fetch(Context context, String systemFolder, String title, File rom,
+                            String originalName, File cacheRoot, long deadlineElapsedRealtime) {
         if (context == null || rom == null) return 0;
         try {
             String canonical = EngineSystemIdResolver.canonical(systemFolder);
@@ -154,19 +160,26 @@ public final class GameCheatDownloader {
     public static int refreshLibrary(Context context, File cacheRoot) {
         int total = 0;
         File cursorFile = cacheRoot == null ? null : new File(cacheRoot, REFRESH_CURSOR_FILE);
+        // Hand-listed games with no catalog at all come first, with half the
+        // batch and budget: refreshing an imported game's catalog matters
+        // less than giving a played game its first one.
+        int[] curatedProcessed = {0};
+        total += fetchUncataloguedCurated(context, cacheRoot,
+                SystemClock.elapsedRealtime() + REFRESH_TIME_BUDGET_MS / 2,
+                REFRESH_BATCH_LIMIT / 2, curatedProcessed);
         try {
-            if (!REGISTRY.isFile() || REGISTRY.length() > 64L * 1024L * 1024L) return 0;
+            if (!REGISTRY.isFile() || REGISTRY.length() > 64L * 1024L * 1024L) return total;
             String text;
             try (InputStream input = new FileInputStream(REGISTRY)) {
                 text = readAll(input, 64L * 1024L * 1024L);
             }
             JSONArray rows = new JSONArray(text);
             int count = rows.length();
-            if (count == 0) return 0;
+            if (count == 0) return total;
             int index = Math.abs(readCursor(cursorFile)) % count;
-            long deadline = SystemClock.elapsedRealtime() + REFRESH_TIME_BUDGET_MS;
+            long deadline = SystemClock.elapsedRealtime() + REFRESH_TIME_BUDGET_MS / 2;
             int processed = 0;
-            while (processed < count && processed < REFRESH_BATCH_LIMIT
+            while (processed < count && processed < REFRESH_BATCH_LIMIT - curatedProcessed[0]
                     && SystemClock.elapsedRealtime() < deadline) {
                 JSONObject row = rows.optJSONObject(index);
                 if (row != null) {
@@ -185,6 +198,50 @@ public final class GameCheatDownloader {
                     " games, next cursor=" + index);
         } catch (Throwable failed) {
             Log.w(TAG, "Library cheat refresh stopped: " + failed);
+        }
+        return total;
+    }
+
+    /**
+     * Games listed in hand-written Pegasus metadata never pass through an
+     * import, so neither the per-game step nor the registry round-robin ever
+     * reaches them. Fetch a catalog for those that have none yet; a game is
+     * skipped once it has one, so no cursor is needed.
+     */
+    private static int fetchUncataloguedCurated(Context context, File cacheRoot, long deadline,
+                                                int limit, int[] processed) {
+        int total = 0;
+        try {
+            File root = REGISTRY.getParentFile();
+            java.util.Set<String> seenFiles = new java.util.HashSet<>();
+            java.util.Set<String> seenMetadata = new java.util.HashSet<>();
+            for (File directory : new File[] {root, new File(root, "metadata-systems")}) {
+                File[] metadata = directory.listFiles((parent, name) -> name.endsWith(".metadata.pegasus.txt"));
+                if (metadata == null) continue;
+                java.util.Arrays.sort(metadata);
+                for (File file : metadata) {
+                    if (!seenMetadata.add(file.getName()) || file.length() > 16L * 1024L * 1024L) continue;
+                    String text;
+                    try (InputStream input = new FileInputStream(file)) {
+                        text = readAll(input, 16L * 1024L * 1024L);
+                    }
+                    for (CuratedLibraryGames.Game game : CuratedLibraryGames.parse(text, directory)) {
+                        if (processed[0] >= limit || SystemClock.elapsedRealtime() >= deadline) return total;
+                        if (game.system.isEmpty() || !seenFiles.add(game.file.getPath())) continue;
+                        if (!game.file.exists()) continue;
+                        if (CheatControl.hasDownloadedCatalog(context, game.system, game.title,
+                                game.file.getName())) continue;
+                        total += fetch(context, game.system, game.title, game.file, game.file.getName(),
+                                cacheRoot, deadline);
+                        processed[0]++;
+                    }
+                }
+            }
+        } catch (Throwable failed) {
+            Log.w(TAG, "Curated library cheat fetch stopped: " + failed);
+        } finally {
+            if (processed[0] > 0)
+                Log.i(TAG, "Curated library cheat fetch processed " + processed[0] + " uncatalogued games");
         }
         return total;
     }

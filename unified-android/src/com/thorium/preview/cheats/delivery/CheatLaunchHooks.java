@@ -81,6 +81,20 @@ public final class CheatLaunchHooks {
                             " before=" + before.size() + " after=" + after.size() +
                             " marker=cheat-delivery-widescreen");
             }
+            // Unlock the frame rate first (owner rule): one community 60 FPS
+            // code per game, on by default, never overriding a manual choice.
+            if (resolved != null && resolved.rows != null && !resolved.rows.isEmpty()) {
+                boolean unlockOn = FrameRateUnlockPolicy.isEnabled(app);
+                Set<String> before = resolved.selection.enabledIds();
+                Set<String> after = FrameRateUnlockOverlay.apply(CheatControl.directory(app),
+                        CheatControl.store(app), resolved.gameKey, resolved.rows,
+                        resolved.selection, unlockOn);
+                if (!before.equals(after))
+                    Log.i(TAG, "Frame-rate unlock " + (unlockOn ? "enabled" : "disabled") +
+                            " engine=" + engine + " system=" + request.systemId +
+                            " before=" + before.size() + " after=" + after.size() +
+                            " marker=cheat-delivery-fps-unlock");
+            }
         } catch (Throwable failure) {
             resolved = null;
             Log.w(TAG, "Cheat catalog not resolved engine=" + engine + " system=" +
@@ -105,17 +119,79 @@ public final class CheatLaunchHooks {
         }
 
         final CheatControl.GameCheats forWorker = resolved;
+        final java.util.concurrent.CountDownLatch bootReady = new java.util.concurrent.CountDownLatch(1);
+        BOOT_READY.put(session, bootReady);
         Thread worker = new Thread(() -> {
             try {
-                deliverBoot(app, request, engine, canonical, session, forWorker);
+                CheatControl.GameCheats cheats = fetchOnDemand(app, request, engine, session, forWorker);
+                deliverBoot(app, request, engine, canonical, session, cheats);
             } catch (Throwable failure) {
                 Log.w(TAG, "Cheat delivery failed engine=" + engine + " system=" +
                         request.systemId + " marker=cheat-delivery-failure", failure);
+            } finally {
+                bootReady.countDown();
             }
         }, "lucent-cheat-prepare");
         worker.setDaemon(true);
         worker.start();
         return session;
+    }
+
+    /** Boot-cheat delivery per session, released when its file I/O is done. */
+    private static final java.util.Map<EngineSession, java.util.concurrent.CountDownLatch> BOOT_READY =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /**
+     * Lets an engine that reads its cheat file once at boot (PPSSPP) wait,
+     * bounded, until the boot file is written. False on timeout.
+     */
+    public static boolean awaitBootCheats(EngineSession session, long timeoutMs) {
+        java.util.concurrent.CountDownLatch ready = BOOT_READY.get(session);
+        if (ready == null) return true;
+        try {
+            return ready.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /** Bound on a launch-time catalog fetch; the game is already booting meanwhile. */
+    static final long ON_DEMAND_FETCH_MILLIS = 12_000L;
+
+    /**
+     * Only imported games pass through the downloader's per-game step and
+     * library refresh, so a game the owner listed by hand (God of War on
+     * the Thor) never had a catalog: no cheats, no frame-rate unlock. Fetch
+     * it now, on this worker thread, the first time such a game launches.
+     * The unlock is applied at once (boot writers still get it when the
+     * engine has not read its file yet; otherwise from the next launch); the
+     * widescreen pick waits for the next launch, because this launch's
+     * generic projection-hack override was already written without it.
+     */
+    private static CheatControl.GameCheats fetchOnDemand(Context app, GameLaunchRequest request,
+                                                         String engine, EngineSession session,
+                                                         CheatControl.GameCheats current) {
+        File game = EngineRoots.contentFile(request.contentUri);
+        if (game == null || !game.exists()) return current;
+        if (CheatControl.hasDownloadedCatalog(app, request.systemId, request.gameTitle, game.getName()))
+            return current;
+        int count = com.thorium.preview.GameCheatDownloader.fetch(app, request.systemId,
+                request.gameTitle, game, game.getName(),
+                com.thorium.preview.GameCheatDownloader.sharedCacheRoot(),
+                android.os.SystemClock.elapsedRealtime() + ON_DEMAND_FETCH_MILLIS);
+        Log.i(TAG, "Launch-time cheat catalog fetched engine=" + engine + " system=" +
+                request.systemId + " rows=" + count + " marker=cheat-delivery-on-demand");
+        if (count <= 0) return current;
+        CheatControl.GameCheats resolved = CheatControl.gameCheatsFor(app, request.systemId,
+                request.gameTitle, game.getName(), discIdentityOf(request), engine);
+        if (resolved.rows != null && !resolved.rows.isEmpty()) {
+            FrameRateUnlockOverlay.apply(CheatControl.directory(app), CheatControl.store(app),
+                    resolved.gameKey, resolved.rows, resolved.selection,
+                    FrameRateUnlockPolicy.isEnabled(app));
+        }
+        registerBinding(app, session, engine, resolved, resolved.selection.enabledIds(), null);
+        return resolved;
     }
 
     private static String contentNameOf(GameLaunchRequest request) {
@@ -151,6 +227,11 @@ public final class CheatLaunchHooks {
             }
             if (!CheatDelivery.needsSaveDirectory(engine) || saveDirectory != null) {
                 Map<String, String> identity = new LinkedHashMap<>(cheats.identity);
+                // PPSSPP names its cheat file after the PARAM.SFO DISC_ID.
+                if ("psp".equals(canonical) && !identity.containsKey("discId")) {
+                    String pspId = PspDiscId.of(game);
+                    if (!pspId.isEmpty()) identity.put("discId", pspId);
+                }
                 if (!discIdentity.isEmpty()) {
                     identity.put("discIdentity", discIdentity);
                     if (!identity.containsKey("gameId")) identity.put("gameId", discIdentity.substring(0, 6));

@@ -201,8 +201,8 @@ class CheatSourceTests(unittest.TestCase):
                       "                                row.optString(\"sourceIdentity\", \"\"), cacheRoot, deadline)",
                       body)
         fetch_with_deadline = source.index(
-            "static int fetch(Context context, String systemFolder, String title, File rom,\n"
-            "                      String originalName, File cacheRoot, long deadlineElapsedRealtime)")
+            "public static int fetch(Context context, String systemFolder, String title, File rom,\n"
+            "                            String originalName, File cacheRoot, long deadlineElapsedRealtime)")
         fetch_body = source[fetch_with_deadline:source.index("private static void writeCursor")]
         self.assertIn("for (CheatSource source : sources) {\n"
                       "                if (SystemClock.elapsedRealtime() >= deadlineElapsedRealtime) break;",
@@ -215,6 +215,30 @@ class CheatSourceTests(unittest.TestCase):
         self.assertIn("writeCursor(File file, int index)", source)
         cursor_write = source[source.index("private static void writeCursor"):]
         self.assertIn("catch (Exception ignored)", cursor_write)
+
+    def test_hand_listed_games_get_catalogs(self):
+        # Games in hand-written Pegasus metadata (God of War on the Thor)
+        # were never imported, so neither path above reached them: no
+        # cheats, no 60 FPS unlock. The refresh fetches their first catalog
+        # ahead of re-fetching imported ones, and a launch fetches it on
+        # demand when it is still missing.
+        source = DOWNLOADER.read_text(encoding="utf-8")
+        refresh = source.index("public static int refreshLibrary(Context context, File cacheRoot)")
+        curated = source.index("total += fetchUncataloguedCurated(context, cacheRoot,", refresh)
+        self.assertLess(curated, source.index("new JSONArray(text)", refresh))
+        body = source[source.index("private static int fetchUncataloguedCurated"):]
+        self.assertIn("CuratedLibraryGames.parse(text, directory)", body)
+        self.assertIn("CheatControl.hasDownloadedCatalog(context, game.system, game.title", body)
+        self.assertIn("processed[0] >= limit || SystemClock.elapsedRealtime() >= deadline", body)
+        hooks = (ROOT / "unified-android/src/com/thorium/preview/cheats/delivery/CheatLaunchHooks.java"
+                 ).read_text(encoding="utf-8")
+        self.assertIn("CheatControl.GameCheats cheats = fetchOnDemand(app, request, engine, session, forWorker);", hooks)
+        on_demand = hooks[hooks.index("private static CheatControl.GameCheats fetchOnDemand"):]
+        self.assertIn("CheatControl.hasDownloadedCatalog(app, request.systemId, request.gameTitle, game.getName())",
+                      on_demand)
+        self.assertIn("android.os.SystemClock.elapsedRealtime() + ON_DEMAND_FETCH_MILLIS", on_demand)
+        self.assertIn("com.thorium.preview.cheats.sources.CuratedLibraryGamesTest",
+                      TEST_SH.read_text(encoding="utf-8"))
 
     def test_host_suite_runs_the_source_tests(self):
         script = TEST_SH.read_text(encoding="utf-8")

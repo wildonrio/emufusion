@@ -35,7 +35,8 @@ SOURCES="$SOURCES $(find "$PROJECT_DIR/src/com/thorium/preview/cheats/sources" \
 # Android/org.json and are compiled by build.sh.
 SOURCES="$SOURCES $(find "$PROJECT_DIR/src/com/thorium/preview/cheats/delivery" \
     -name '*.java' ! -name 'CheatLaunchHooks.java' ! -name 'EngineRoots.java' \
-    ! -name 'WidescreenCheatOverlay.java' -print)"
+    ! -name 'WidescreenCheatOverlay.java' ! -name 'FrameRateUnlockOverlay.java' \
+    ! -name 'FrameRateUnlockPolicy.java' -print)"
 SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/CoreOptionOverrideFile.java"
 SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/WidescreenHackTable.java"
 "$JAVA_HOME/bin/javac" --release 8 -encoding UTF-8 \
@@ -162,8 +163,12 @@ SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/WidescreenHackTable.
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.sources.CheatIdentityCrcTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.preview.cheats.sources.CuratedLibraryGamesTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.delivery.BootCheatWritersTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.delivery.CheatSessionRegistryTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.delivery.WidescreenCheatPickTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.preview.cheats.delivery.FrameRateUnlockPickTest

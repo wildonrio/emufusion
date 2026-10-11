@@ -182,6 +182,26 @@ public final class BootCheatWritersTest {
         write(ini, "_S ULUS10041\n_C1 0\n_L 0x20456789 0x3F400000\n");
         new PpssppCheatWriter().write(request);
         check(read(ini).equals(expected), "core-rewritten file reclaimed");
+        // A file the core wrote before EmuFusion ever owned it (3.2.23 and
+        // earlier delivered PSP codes live) is claimed in every corrupt form.
+        for (String corrupt : new String[] {
+                "_S ULUS10041\n",
+                "_S ULUS10041\n_C_S ULUS10041\n_C1 0\n_L 0x20456789 0x3F400000\n",
+                "_S ULUS10041\n_C\uFEFF\n\n_C1 0\n_L 0x20456789 0x3F400000\n"}) {
+            ini.delete();
+            OwnedFiles.sidecar(ini).delete();
+            write(ini, corrupt);
+            new PpssppCheatWriter().write(request);
+            check(read(ini).equals(expected), "foreign core-written file reclaimed\n" + corrupt);
+        }
+        // A player's own named codes are never touched.
+        String own = "_S ULUS10041\n_G Mine\n_C1 Moon Jump\n_L 0x20456789 0x3F400000\n";
+        ini.delete();
+        OwnedFiles.sidecar(ini).delete();
+        write(ini, own);
+        new PpssppCheatWriter().write(request);
+        check(read(ini).equals(own), "player's own cheat file left alone");
+        check(!PpssppCheatWriter.isCoreWritten(own), "named codes are not core-written");
         // Serial from the file name when the identity has none.
         BootCheatRequest byStem = new BootCheatRequest("ppsspp", "psp", "", "Game [US] [ULES-54321]",
                 dir("ppsspp-root"), save, null, rows, new HashSet<String>());
