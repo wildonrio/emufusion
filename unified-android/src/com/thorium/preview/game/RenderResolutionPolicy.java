@@ -73,13 +73,23 @@ final class RenderResolutionPolicy {
         return out;
     }
 
+    /**
+     * Within this fraction of the panel counts as matching it: 2x Dolphin is
+     * 1056 lines on a 1080-line panel (2% short, indistinguishable), while 3x
+     * shades 2.25 times as many pixels and made heavy Wii scenes miss frames
+     * on the Thor.
+     */
+    static final double MATCH_TOLERANCE = 0.06;
+
     private static int scale(int target, int nativeLines, int max) {
-        return Math.max(1, Math.min(max, (target + nativeLines - 1) / nativeLines));
+        double needed = target * (1.0 - MATCH_TOLERANCE) / nativeLines;
+        return Math.max(1, Math.min(max, (int) Math.ceil(needed)));
     }
 
     private static String atLeast(String[] sizes, int target) {
+        double needed = target * (1.0 - MATCH_TOLERANCE);
         for (String size : sizes)
-            if (Integer.parseInt(size.substring(size.indexOf('x') + 1)) >= target) return size;
+            if (Integer.parseInt(size.substring(size.indexOf('x') + 1)) >= needed) return size;
         return sizes[sizes.length - 1];
     }
 

@@ -1090,10 +1090,18 @@ public final class InWindowGameHost
         Display display = activity.getDisplay();
         if (display == null) return;
         int selectedModeId = 0;
+        // Phones often list the same refresh rate at several resolutions
+        // (FHD+ and QHD+). Taking the first match could switch the panel to a
+        // lower resolution for gameplay; keep the current resolution, else
+        // the largest one offered at this rate.
+        Display.Mode current = display.getMode();
+        long bestRank = -1;
         for (Display.Mode mode : display.getSupportedModes()) {
-            if (Math.abs(mode.getRefreshRate() - refreshHz) <= 0.25f) {
+            if (Math.abs(mode.getRefreshRate() - refreshHz) > 0.25f) continue;
+            long rank = panelModeRank(mode, current);
+            if (rank > bestRank) {
+                bestRank = rank;
                 selectedModeId = mode.getModeId();
-                break;
             }
         }
         if (selectedModeId == 0) {
@@ -1108,6 +1116,15 @@ public final class InWindowGameHost
         Log.i(TAG, "Requested native gameplay panel mode display=" +
                 display.getDisplayId() + " modeId=" + selectedModeId +
                 " refreshHz=" + refreshHz);
+    }
+
+    /** Same resolution as the current mode first, then the most pixels. */
+    static long panelModeRank(Display.Mode mode, Display.Mode current) {
+        long pixels = (long) mode.getPhysicalWidth() * mode.getPhysicalHeight();
+        boolean sameResolution = current != null &&
+                mode.getPhysicalWidth() == current.getPhysicalWidth() &&
+                mode.getPhysicalHeight() == current.getPhysicalHeight();
+        return (sameResolution ? 1L << 40 : 0L) + pixels;
     }
 
     /**

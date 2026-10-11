@@ -86,7 +86,12 @@ public final class VsyncCadence {
             produced += due;
             latestDueNs = timestampNs - Math.round(phase * measuredPanelPeriodNs);
         }
-        if (produced - consumed > 4) reset();
+        // A core more than four source frames behind drops the stale backlog
+        // and keeps the measured cadence. Resetting sent the loop back to the
+        // nominal clock for a fresh warm-up whenever a heavy scene ran long,
+        // toggling the clock dozens of times a minute (Wii on the Thor), and
+        // every hand-off was a visible hitch. Neither path catches up.
+        if (produced - consumed > 4) consumed = produced - 1;
     }
 
     public boolean ready() { return ready; }

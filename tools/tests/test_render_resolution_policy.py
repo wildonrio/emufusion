@@ -30,6 +30,7 @@ import java.util.*;
 public final class ResolutionProbe {
   static final int MAX_TARGET_LINES = 1440;
   static final int MAX_PS2_SCALE = 3;
+  static final double MATCH_TOLERANCE = 0.06;
   private static final String[] FOUR_BY_THREE = {
       "640x480", "960x720", "1280x960", "1440x1080", "1920x1440", "2560x1920"};
   private static final String[] SIXTEEN_BY_NINE = {"1280x720", "1920x1080", "2560x1440", "3840x2160"};
@@ -41,9 +42,9 @@ public final class ResolutionProbe {
     String[][] expect = {
       // dolphin, ppsspp, flycast, mupen 4:3, mupen 16:9, azahar, armsx2
       {"2", "1440x816",  "960x720",   "960x720",   "1280x720",  "3", "2x"},
-      {"3", "1920x1088", "1440x1080", "1440x1080", "1920x1080", "5", "3x"},
-      {"3", "2880x1632", "1920x1440", "1920x1440", "2560x1440", "6", "3x"},
-      {"3", "2880x1632", "1920x1440", "1920x1440", "2560x1440", "6", "3x"}};
+      {"2", "1920x1088", "1440x1080", "1440x1080", "1920x1080", "5", "3x"},
+      {"3", "2400x1360", "1920x1440", "1920x1440", "2560x1440", "6", "3x"},
+      {"3", "2400x1360", "1920x1440", "1920x1440", "2560x1440", "6", "3x"}};
     for (int i = 0; i < screens.length; i++) {
       int s = screens[i];
       eq(expect[i][0], forScreen("dolphin", s).get("dolphin_efb_scale"), s + " dolphin");

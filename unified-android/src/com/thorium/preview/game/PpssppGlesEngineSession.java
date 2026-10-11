@@ -531,9 +531,14 @@ final class PpssppGlesEngineSession implements EngineSession,
     }
 
     private void installDirectDisplayClock(ExperimentalGlesRenderLoop loop) {
-        // Physical gameplay/cadence evidence currently covers Azahar only.
-        // Keep other hardware routes on their retained clock until separately tested.
-        if (!"azahar".equals(entry.id)) return;
+        // Every hardware core is paced from the panel's real vsync (owner,
+        // 2026-10-10: the game's rate must match the screen exactly). A fixed
+        // 60.000 Hz timer drifts against a 59.9x/60.0x or 120 Hz panel and
+        // shows as a periodic repeated or dropped frame. The loop itself
+        // keeps audio-paced cores (Flycast) on their audio clock, and the
+        // cadence only engages when panel/source is a whole number within the
+        // 0.75% retiming budget.
+
         final DirectDisplayVsync clock;
         try { clock = new DirectDisplayVsync(context); }
         catch (RuntimeException unavailable) {
