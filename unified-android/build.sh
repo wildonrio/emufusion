@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.21
-VERSION_CODE=95
+VERSION_NAME=3.2.22
+VERSION_CODE=96
 
 case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -627,6 +627,7 @@ printf '%s\n' \
 '        <activity android:name="com.thorium.preview.FrontendRestartActivity" android:excludeFromRecents="true" android:exported="false" android:noHistory="true" android:process=":frontend_restart" android:screenOrientation="userLandscape" android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"/>' \
 '        <activity android:name="com.thorium.preview.PreviewActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" android:excludeFromRecents="true" android:launchMode="singleTop" android:resizeableActivity="true" android:screenOrientation="landscape" android:taskAffinity="com.thorium.preview.preview" android:exported="false"/>' \
 '        <activity android:name="com.thorium.preview.BrowserActivity" android:configChanges="density|keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" android:excludeFromRecents="true" android:launchMode="singleTask" android:resizeableActivity="true" android:taskAffinity="com.thorium.preview.browser" android:exported="false"/>' \
+'        <activity android:name="com.thorium.preview.UpdateCompleteActivity" android:excludeFromRecents="true" android:exported="false" android:noHistory="true" android:taskAffinity="" android:theme="@android:style/Theme.Translucent.NoTitleBar"/>' \
 '        <activity android:name="com.thorium.preview.VoiceFeedbackActivity" android:excludeFromRecents="true" android:exported="false" android:noHistory="true" android:screenOrientation="userLandscape" android:theme="@android:style/Theme.Translucent.NoTitleBar"/>' \
 '        <activity android:name="com.thorium.preview.RomLaunchActivity" android:excludeFromRecents="true" android:noHistory="true" android:taskAffinity="com.thorium.preview.romlaunch" android:exported="false"/>' \
 '        <service android:name="com.thorium.preview.PreviewService" android:exported="false"/>' \

@@ -22,12 +22,16 @@ LSFG_QUALIFICATION_LIBRARY = (
     "lib/arm64-v8a/liblucent_lsfg_qualification.so"
 )
 VOICE_FEEDBACK_ACTIVITY = "com.thorium.preview.VoiceFeedbackActivity"
+UPDATE_COMPLETE_ACTIVITY = "com.thorium.preview.UpdateCompleteActivity"
 ALLOWED_ACTIVITIES = {
     MAIN_ACTIVITY,
     "com.thorium.preview.FrontendRestartActivity",
     "com.thorium.preview.PreviewActivity",
     "com.thorium.preview.BrowserActivity",
     VOICE_FEEDBACK_ACTIVITY,
+    # Non-exported "Restart app?" dialog shown after an update replaces the
+    # package; checked below to stay non-exported, no-history, no filter.
+    UPDATE_COMPLETE_ACTIVITY,
     # Non-exported, no-launcher content-URI trampoline for the per-system
     # EXTERNAL route. It grants a one-time read URI and finishes immediately;
     # its manifest properties are asserted below so it can never become a
@@ -238,6 +242,15 @@ def verify_manifest(xmltree: str, expected_label: str = APP_LABEL) -> list[str]:
             errors.append("voice-feedback Activity must be no-history")
         if 'E: intent-filter' in voice:
             errors.append("voice-feedback Activity must have no intent filter")
+
+    update_prompt = by_name.get(UPDATE_COMPLETE_ACTIVITY, "")
+    if update_prompt:
+        if not re.search(r'android:exported[^\n]*\(type 0x12\)0x0', update_prompt):
+            errors.append("update-complete Activity must be non-exported")
+        if not re.search(r'android:noHistory[^\n]*0xffffffff', update_prompt):
+            errors.append("update-complete Activity must be no-history")
+        if 'E: intent-filter' in update_prompt:
+            errors.append("update-complete Activity must have no intent filter")
 
     restart = by_name.get("com.thorium.preview.FrontendRestartActivity", "")
     if not restart:

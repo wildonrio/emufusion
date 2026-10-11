@@ -78,6 +78,13 @@ final class UpdateManager {
 
     private final Context context;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    /**
+     * Released when this process's first update check finishes (success,
+     * failure, or an update downloaded and handed to the installer). The
+     * library's startup scan waits on it: the app update comes first.
+     */
+    private final java.util.concurrent.CountDownLatch firstCheck =
+            new java.util.concurrent.CountDownLatch(1);
     private volatile GameplayGate gameplayGate;
     private final Object statusLock = new Object();
     private JSONObject status = status("idle", 0, "Updater ready", false, false);
@@ -159,10 +166,21 @@ final class UpdateManager {
                 if (!userInitiated) retrySoonAfterFailure();
             } finally {
                 running.set(false);
+                firstCheck.countDown();
             }
         }, "lucent-update-check");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    /** Waits for the first update check of this process; false on timeout. */
+    boolean awaitFirstCheck(long timeoutMs) {
+        try {
+            return firstCheck.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     private void retrySoonAfterFailure() {

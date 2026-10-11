@@ -12,6 +12,11 @@ public final class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         Intent service = new Intent(context, PreviewService.class);
         context.startForegroundService(service);
+        // After an update the old process is gone; offer to open the new one
+        // (only while the screen is on, never over sleeping panels).
+        if (intent != null && Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction()) &&
+                PrimaryDisplayFocusGuard.isInteractive(context))
+            UpdateCompleteActivity.announce(context);
 
         // Boot delivery bypasses PreviewService's launch gateway. Keep its
         // background work alive, but never open a window while the panels sleep.

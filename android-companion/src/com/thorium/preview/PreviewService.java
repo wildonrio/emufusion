@@ -313,11 +313,24 @@ public final class PreviewService extends Service {
             updateManager.checkAsync(false);
         }
         startServer();
-        // Both checks are independent and non-blocking. The importer is
-        // fingerprint-throttled, while the updater performs lightweight
-        // version checks and only downloads changed artifacts.
-        importManager.startInitialScan();
+        // The app update comes first (owner, 2026-10-10): the library scan and
+        // its artwork/media downloads start only after the startup update
+        // check has finished -- including a found update's download and
+        // install prompt -- or after a bounded wait if the network stalls.
+        // Offline, the check fails within seconds and the scan follows.
+        Thread updateFirst = new Thread(() -> {
+            if (updateManager.awaitFirstCheck(STARTUP_UPDATE_GATE_MS))
+                Log.i("LucentImport", "Startup update check finished; starting library scan");
+            else
+                Log.w("LucentImport", "Startup update check still running; starting library scan");
+            mainHandler.post(() -> { if (running) importManager.startInitialScan(); });
+        }, "lucent-update-first");
+        updateFirst.setDaemon(true);
+        updateFirst.start();
     }
+
+    /** Longest the library scan waits behind the startup update check. */
+    private static final long STARTUP_UPDATE_GATE_MS = 5L * 60L * 1000L;
 
     private void ensureForeground() {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);

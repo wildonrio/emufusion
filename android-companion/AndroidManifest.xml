@@ -127,6 +127,15 @@
              process. This black, no-history bridge is started while the old
              frontend is still visible, remains foreground in its own process,
              ends the old Qt process, and launches one fresh MainActivity. -->
+        <!-- "Restart app?" offered after an update replaces the package. -->
+        <activity
+            android:name=".UpdateCompleteActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <activity
             android:name=".FrontendRestartActivity"
             android:excludeFromRecents="true"
