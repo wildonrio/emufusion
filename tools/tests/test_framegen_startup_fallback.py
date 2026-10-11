@@ -83,6 +83,7 @@ public class StartupFallbackTest {
         void resize(int a,int b,int c,int d,float h){}
     }
     static class FrameGenerationRendererRegistry {static int liveCount(){return 0;}}
+    static class TimelineSchedulerSwitch {static void refresh(Object c,FrameGenerationSettings.Mode m){}}
     static class FrameGenerationRendererFactory {
         static int creates; static boolean fail=true,unsafe,invalidInput,nullInput;
         static FrameGenerationRenderer last;

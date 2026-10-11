@@ -1562,9 +1562,12 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         # policy. Opt-in only: OFF stays the default and migration target, and
         # the forced-OFF mode version is unchanged.
         self.assertIn('AUTO("auto")', setting)
-        self.assertIn('return this == AUTO || this == BUILT_IN_ALPHA;', setting)
-        self.assertIn('public boolean usesLockToThirtyTierPolicy() { return this == AUTO; }',
+        self.assertIn('return this == AUTO || this == AUTO_TRIPLE || this == BUILT_IN_ALPHA;',
                       setting)
+        self.assertIn('return this == AUTO || this == AUTO_TRIPLE;', setting)
+        # AUTO (TRIPLE): the owner's optional tripling ceiling, timeline only.
+        self.assertIn('AUTO_TRIPLE("auto-triple")', setting)
+        self.assertIn('return this == AUTO_TRIPLE ? TRIPLE_MULTIPLIER : MAX_MULTIPLIER;', setting)
         self.assertIn('if (selected.usesBuiltInBackend())', setting)
         self.assertIn('private static final int CURRENT_MODE_VERSION = 3;', setting)
         self.assertIn('String stored = prefs.getString(MODE, Mode.OFF.storedValue());', setting)
@@ -1618,7 +1621,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
         service = self.read("android-companion/src/com/thorium/preview/PreviewService.java")
         self.assertGreaterEqual(service.count('"/settings/frame-generation"'), 3)
-        self.assertIn('mode must be off, auto, built-in-alpha, or lsfg', service)
+        self.assertIn('mode must be off, auto, auto-triple, built-in-alpha, or lsfg', service)
         self.assertIn("FrameGenerationSettings.Mode", service)
         self.assertIn("FrameGenerationSettings.setMode(this, parsed)", service)
         self.assertIn("legacy frame-generation enable is disabled", service)
@@ -1631,7 +1634,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn('return "LSFG"', theme)
         self.assertIn('return "OFF"', theme)
         self.assertIn('if (frameGenerationMode === "auto") return "AUTO"', theme)
-        self.assertIn('var modes = ["off", "auto", "built-in-alpha", "lsfg"]', theme)
+        self.assertIn('var modes = ["off", "auto", "auto-triple", "built-in-alpha", "lsfg"]', theme)
         self.assertIn('lucentFrameGenerationThreeModeV3', theme)
         self.assertIn('property bool frameGenerationModeConfirmed: false', theme)
         self.assertIn('if (frameGenerationModePending || !frameGenerationModeConfirmed)', theme)
@@ -1946,9 +1949,10 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             prepare,
         )
         self.assertIn(
-            "int requiredPrimeDepth = generatedTimeline ?",
+            "int requiredPrimeDepth = requiredEndpointPrimeDepth(generatedTimeline);",
             prepare,
         )
+        self.assertIn("return generatedTimeline ?", prepare)
         # The external path still primes at least its four-endpoint depth;
         # it may retain deeper look-ahead pairs, bounded by FIFO capacity.
         self.assertRegex(
@@ -2114,9 +2118,12 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             generator.index("private void acceptPresentationEndpoint"):
             generator.index("private void publishExternalEndpoint")
         ]
+        # The exact lattice keeps its 1.5-period rule; the timeline scheduler
+        # bridges held frames up to its own pause limit instead.
         self.assertIn(
-            "!AdaptiveFrameRateController.endpointSpanContinuous(", accepted
+            "AdaptiveFrameRateController.endpointSpanContinuous(", accepted
         )
+        self.assertIn("timeline.pairSpanAllowed(", accepted)
         source_gap = accepted[
             accepted.index(
                 "if (lastPresentationEndpointTimestampNs > 0L &&"
@@ -4352,9 +4359,11 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             "unified-android/src/com/thorium/lucent/video/UniformFrameRatePlan.java"
         )
         self.assertIn("MAX_GENERATION_FACTOR = 2.0", planner)
-        self.assertIn("panelDivisor(sourceHz * 2.0, panelHz)", planner)
-        self.assertIn("panelDivisor(sourceHz, panelHz)", planner)
-        self.assertIn("Math.abs(panelHz / divisor - outputHz) <= COMPARISON_EPSILON_HZ",
+        self.assertIn("panelDivisor(sourceHz * 2.0, panelHz, tolerance)", planner)
+        self.assertIn("panelDivisor(sourceHz, panelHz, tolerance)", planner)
+        # Exact unless the timeline scheduler passes a relative tolerance.
+        self.assertIn("return select(sourceHz, panelHz, maxGenerationFactor, 0.0);", planner)
+        self.assertIn("Math.max(COMPARISON_EPSILON_HZ, outputHz * relativeTolerance)",
                       planner)
         self.assertIn("currentUniformOutputPlan()", controller)
         self.assertIn(

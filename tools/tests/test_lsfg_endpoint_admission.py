@@ -65,7 +65,9 @@ public class EndpointTest {
   long generatorId=1,endpointCandidateUnavailable,externalEndpointAdmissionRejected,endpointTimestampCorrections;
   long endpointFifoCoalesced,lastPresentationEndpointTimestampNs=800,endpointSequence=8,realFrameCount,observedBufferedPresentationEpoch;
   int lastPresentationEndpointSubmission,endpointFifoCount=2,endpointFifoHead,resetCalls,proofRefreshes,healthResets,exports,copies;
-  boolean externalEndpointAdmissionBlocked;
+  boolean externalEndpointAdmissionBlocked,timelineMode,timelineActive;
+  static class Timeline {boolean pairSpanAllowed(long a,long b){return true;}void reset(){}}
+  final Timeline timeline=new Timeline();
   final int[] endpointFifoTextures=new int[6],endpointFifoSubmission=new int[6];
   final long[] endpointFifoSequence=new long[6],endpointFifoTimestampNs=new long[6],endpointFifoUniqueSequence=new long[6],endpointFifoCandidateLoss=new long[6];
   long schedulerPresentationEpoch(){return frameRate.epoch;}

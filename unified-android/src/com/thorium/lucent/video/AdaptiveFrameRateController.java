@@ -211,8 +211,16 @@ public final class AdaptiveFrameRateController {
 
     public void setMaxGenerationFactor(double factor) {
         maxGenerationFactor = Double.isFinite(factor)
-                ? Math.min(UniformFrameRatePlan.MAX_GENERATION_FACTOR,
+                ? Math.min(UniformFrameRatePlan.TRIPLE_GENERATION_FACTOR,
                         Math.max(1.0, factor)) : Double.NaN;
+    }
+
+    // Zero keeps every plan on an exact divisor (the one-midpoint lattice).
+    private volatile double planRelativeTolerance;
+
+    /** Only the timeline scheduler may plan a clock slightly off a divisor. */
+    public void setPlanRelativeTolerance(double relative) {
+        planRelativeTolerance = Double.isFinite(relative) && relative > 0.0 ? relative : 0.0;
     }
 
     public double maxGenerationFactor() { return maxGenerationFactor; }
@@ -2523,7 +2531,8 @@ public final class AdaptiveFrameRateController {
         // Never lock without the doubled divisor (20 on a 60-Hz panel would
         // only decimate real frames to a Direct 20).
         if (!UniformFrameRatePlan.select(clockHz, displayRefreshHz,
-                maxGenerationFactor).generatesIntermediateFrames()) return 0.0;
+                maxGenerationFactor, planRelativeTolerance).generatesIntermediateFrames())
+            return 0.0;
         double sustained = cachedSustainedMeasuredSourceHz();
         if (!(sustained >= tierFloorHz(lockedSourceFps) - CLEAR_DEFICIT_HZ))
             return 0.0;
@@ -2902,7 +2911,8 @@ public final class AdaptiveFrameRateController {
                         boundary - UNPROVEN_BOUNDARY_GUARD_HZ);
             }
         }
-        return UniformFrameRatePlan.select(source, displayRefreshHz, maxGenerationFactor);
+        return UniformFrameRatePlan.select(source, displayRefreshHz, maxGenerationFactor,
+                planRelativeTolerance);
     }
 
 

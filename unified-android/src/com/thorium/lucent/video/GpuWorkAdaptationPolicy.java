@@ -20,7 +20,11 @@ package com.thorium.lucent.video;
  * rendering, and the frames they flagged on the Thor were all presented in
  * their slot (2026-10-11). Disabling also needs the failures to be recent --
  * a full limit within one failure window -- not a lifetime total that a long
- * session reaches through rare, isolated misses.</p>
+ * session reaches through rare, isolated misses. In the product policy the
+ * misses must also persist: a burst has to span a few seconds of pairs with
+ * at least a quarter of them missed. One emulator hitch (a shader compile, a
+ * 0.35 s stall) misses thirty frames in a fifth of a second and used to end
+ * generation for the whole session (GameCube, 2026-10-11).</p>
  */
 public final class GpuWorkAdaptationPolicy {
     public static final int DEFAULT_MAX_WORK_LEVEL = 2;
@@ -28,6 +32,8 @@ public final class GpuWorkAdaptationPolicy {
     public static final int DEFAULT_FAILURES_AT_MINIMUM = 30;
     /** Completed pairs without a failure that clear the minimum-work count (~10 s at 60). */
     public static final int DEFAULT_FAILURE_WINDOW_PAIRS = 600;
+    /** Observations a minimum-work burst must span before it can disable (~3 s at 60). */
+    public static final int DEFAULT_MIN_DISABLE_SPAN_PAIRS = 180;
 
     public enum Decision { UNCHANGED, REDUCE_WORK, RESTORE_WORK, DISABLE_GENERATION }
     public enum Failure {
@@ -39,7 +45,10 @@ public final class GpuWorkAdaptationPolicy {
     private final int recoveryGoodPairs;
     private final int failuresAtMinimumLimit;
     private final int failureWindowPairs;
+    private final int minDisableSpanPairs;
     private int pairsSinceFailure;
+    // Observations (completed or failed) since the current burst's first failure.
+    private int burstObservations;
     private final long[] failuresByReason = new long[Failure.values().length];
     private int workLevel;
     private int consecutiveHealthyPairs;
@@ -58,7 +67,8 @@ public final class GpuWorkAdaptationPolicy {
 
     public GpuWorkAdaptationPolicy() {
         this(DEFAULT_MAX_WORK_LEVEL, DEFAULT_RECOVERY_GOOD_PAIRS,
-                DEFAULT_FAILURES_AT_MINIMUM, DEFAULT_FAILURE_WINDOW_PAIRS);
+                DEFAULT_FAILURES_AT_MINIMUM, DEFAULT_FAILURE_WINDOW_PAIRS,
+                DEFAULT_MIN_DISABLE_SPAN_PAIRS);
     }
 
     public GpuWorkAdaptationPolicy(int maxWorkLevel, int recoveryGoodPairs,
@@ -69,13 +79,20 @@ public final class GpuWorkAdaptationPolicy {
 
     public GpuWorkAdaptationPolicy(int maxWorkLevel, int recoveryGoodPairs,
                                    int failuresAtMinimumLimit, int failureWindowPairs) {
+        this(maxWorkLevel, recoveryGoodPairs, failuresAtMinimumLimit, failureWindowPairs, 1);
+    }
+
+    public GpuWorkAdaptationPolicy(int maxWorkLevel, int recoveryGoodPairs,
+                                   int failuresAtMinimumLimit, int failureWindowPairs,
+                                   int minDisableSpanPairs) {
         if (maxWorkLevel < 0 || recoveryGoodPairs < 1 || failuresAtMinimumLimit < 1 ||
-                failureWindowPairs < 1)
+                failureWindowPairs < 1 || minDisableSpanPairs < 1)
             throw new IllegalArgumentException("invalid GPU adaptation bounds");
         this.maxWorkLevel = maxWorkLevel;
         this.recoveryGoodPairs = recoveryGoodPairs;
         this.failuresAtMinimumLimit = failuresAtMinimumLimit;
         this.failureWindowPairs = failureWindowPairs;
+        this.minDisableSpanPairs = minDisableSpanPairs;
     }
 
     /**
@@ -100,9 +117,10 @@ public final class GpuWorkAdaptationPolicy {
         if (totalGpuUs <= 0L) return onFailure(Failure.TIMER_MISSING);
         if (totalGpuUs > shaderBudgetUs) return onFailure(Failure.GPU_OVER_BUDGET);
         if (disabled) return Decision.DISABLE_GENERATION;
+        if (failuresAtMinimum > 0) ++burstObservations;
         // A window of failure-free pairs ends a burst; isolated misses spread
         // across a long session never add up to a disable.
-        if (++pairsSinceFailure >= failureWindowPairs) failuresAtMinimum = 0;
+        if (++pairsSinceFailure >= failureWindowPairs) clearBurst();
         if (!physicalHeadroomVerified) {
             ++physicalHeadroomUnknownPairs;
             consecutiveHealthyPairs = 0;
@@ -125,7 +143,7 @@ public final class GpuWorkAdaptationPolicy {
         --workLevel;
         ++restorations;
         consecutiveHealthyPairs = 0;
-        failuresAtMinimum = 0;
+        clearBurst();
         return Decision.RESTORE_WORK;
     }
 
@@ -144,18 +162,31 @@ public final class GpuWorkAdaptationPolicy {
         if (workLevel < maxWorkLevel) {
             ++workLevel;
             ++reductions;
-            failuresAtMinimum = 0;
+            clearBurst();
             pairsSinceFailure = 0;
             return Decision.REDUCE_WORK;
         }
         // Nothing left to shed, and over-budget shader time is not a visible
         // failure: keep generating and let physical misses decide.
-        if (reason == Failure.GPU_OVER_BUDGET) return Decision.UNCHANGED;
+        if (reason == Failure.GPU_OVER_BUDGET) {
+            if (failuresAtMinimum > 0) ++burstObservations;
+            return Decision.UNCHANGED;
+        }
         pairsSinceFailure = 0;
-        if (++failuresAtMinimum < failuresAtMinimumLimit) return Decision.UNCHANGED;
+        ++failuresAtMinimum;
+        ++burstObservations;
+        if (failuresAtMinimum < failuresAtMinimumLimit ||
+                burstObservations < minDisableSpanPairs ||
+                (long) failuresAtMinimum * 4L < burstObservations)
+            return Decision.UNCHANGED;
         disabled = true;
         ++disableTransitions;
         return Decision.DISABLE_GENERATION;
+    }
+
+    private void clearBurst() {
+        failuresAtMinimum = 0;
+        burstObservations = 0;
     }
 
     /**

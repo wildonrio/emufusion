@@ -1113,7 +1113,10 @@ public final class InWindowGameHost
                 request.frameGenerationMode == FrameGenerationSettings.Mode.OFF && source > 0.0
                         ? PanelRefreshPlanner.direct(source, rates)
                         : PanelRefreshPlanner.generated(source, rates,
-                                FrameGenerationSettings.MAX_MULTIPLIER, variableMaxHz);
+                                request.frameGenerationMode == null
+                                        ? FrameGenerationSettings.MAX_MULTIPLIER
+                                        : request.frameGenerationMode.maxMultiplier(),
+                                variableMaxHz);
         Log.i(TAG, "Panel plan system=" + request.systemId + " declaredHz=" + declaredHz +
                 " modes=" + java.util.Arrays.toString(rates) + " " + plan);
         // An adaptive panel follows the Surface's frame-rate vote from its

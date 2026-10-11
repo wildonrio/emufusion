@@ -26,7 +26,10 @@ class DensePermanentRecoveryTest(unittest.TestCase):
                     "invalid synthetic cadence must still reach strict rejection";
             }
         }'''
-        self.assertIn('!requiresDenseGpuHeadroomBinding(renderedSynthetic,', source)
+        # Only the pair's timed warp binds as generated; further images of the
+        # same pair (timeline: held frame bridged, x3) bind as cadence rows.
+        self.assertIn('!requiresDenseGpuHeadroomBinding(renderedTimedWarp,', source)
+        self.assertIn('renderedTimedWarp ? densePromotions : 0L,', source)
         with tempfile.TemporaryDirectory(prefix='dense-binding-') as directory:
             out = Path(directory)
             java = out / 'BindingAdmissionTest.java'

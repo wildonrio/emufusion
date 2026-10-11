@@ -13,6 +13,7 @@ public final class GpuPhysicalHeadroomLedgerTest {
         epochsAndCapacityFailClosed();
         qualifiedRecoveryUsesFreshPairedEvidence();
         rejectedBindingPreservesDiagnosticOwner();
+        wholeScanOffsetInSequenceIsNotAMiss();
         System.out.println("GpuPhysicalHeadroomLedgerTest passed");
     }
 
@@ -121,6 +122,33 @@ public final class GpuPhysicalHeadroomLedgerTest {
         physical(partlyKnown, 1, 1, DEADLINE + 1L, -1L);
         check(partlyKnown.takeCompleted().outcome == GpuPhysicalHeadroomLedger.Outcome.MARGINAL_HEADROOM,
                 "missing compositor data cannot turn a late-rendered on-slot frame into headroom");
+    }
+
+    private static void wholeScanOffsetInSequenceIsNotAMiss() {
+        // Thor 2026-10-11: once a screen recording started, the compositor
+        // showed every frame one scan before its requested time, in order.
+        GpuPhysicalHeadroomLedger value = create(8);
+        long[] shownOffsets = {0L, PERIOD, -PERIOD, -PERIOD, -PERIOD + 50_000L};
+        GpuPhysicalHeadroomLedger.Outcome[] expected = {
+                GpuPhysicalHeadroomLedger.Outcome.UNKNOWN,       // on time, no ready data
+                GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS, // one scan late: repeated scan
+                GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS, // two scans sooner: skipped scan
+                GpuPhysicalHeadroomLedger.Outcome.MARGINAL_HEADROOM, // steady one scan early
+                GpuPhysicalHeadroomLedger.Outcome.MARGINAL_HEADROOM};
+        for (int frame = 1; frame <= shownOffsets.length; ++frame) {
+            long offset = (frame - 1L) * 2L * PERIOD;
+            check(bind(value, frame, 0, 0), "bind endpoint row");
+            check(value.recordPhysical(1, frame, 1, TARGET + offset + shownOffsets[frame - 1],
+                    2, PERIOD, 0, -1, -1, -1, -1), "record physical row");
+            GpuPhysicalHeadroomLedger.Result result = value.takeCompleted();
+            check(result.outcome == expected[frame - 1], "frame " + frame + " outcome " +
+                    result.outcome + " " + result.reason);
+        }
+        GpuPhysicalHeadroomLedger fresh = create(2);
+        check(bind(fresh, 1, 0, 0), "bind first row");
+        fresh.recordPhysical(1, 1, 1, TARGET - PERIOD, 2, PERIOD, 0, -1, -1, -1, -1);
+        check(fresh.takeCompleted().outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS,
+                "without a shown predecessor an off-slot frame stays a miss");
     }
 
     private static void epochsAndCapacityFailClosed() {

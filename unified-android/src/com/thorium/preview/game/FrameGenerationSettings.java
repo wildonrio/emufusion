@@ -28,9 +28,11 @@ public final class FrameGenerationSettings {
     /**
      * Output frames per real frame the generator may produce. Doubling is the
      * owner's default ceiling (more creates too many artifacts); the panel
-     * planner never asks for more than this.
+     * planner never asks for more than this unless the owner picks
+     * AUTO (TRIPLE), whose ceiling is {@link #TRIPLE_MULTIPLIER}.
      */
     public static final int MAX_MULTIPLIER = 2;
+    public static final int TRIPLE_MULTIPLIER = 3;
 
     private FrameGenerationSettings() {}
 
@@ -44,8 +46,9 @@ public final class FrameGenerationSettings {
      * experimental modes are left as chosen.
      */
     public static Mode forEngine(Mode selected, String engineId) {
-        if (selected == Mode.AUTO && ("eden".equals(engineId) || "cemu".equals(engineId) ||
-                "aps3e".equals(engineId)))
+        if ((selected == Mode.AUTO || selected == Mode.AUTO_TRIPLE) &&
+                ("eden".equals(engineId) || "cemu".equals(engineId) ||
+                        "aps3e".equals(engineId)))
             return Mode.OFF;
         return selected == null ? Mode.OFF : selected;
     }
@@ -59,6 +62,12 @@ public final class FrameGenerationSettings {
          * Opt-in like the others; OFF stays the default and migration target.
          */
         AUTO("auto"),
+        /**
+         * AUTO allowed to triple (40->120, 20->60) as well as double, on the
+         * timeline scheduler -- the owner's optional setting; doubling stays
+         * the default because each extra generated frame adds artifacts.
+         */
+        AUTO_TRIPLE("auto-triple"),
         BUILT_IN_ALPHA("built-in-alpha"),
         LSFG("lsfg");
 
@@ -68,13 +77,23 @@ public final class FrameGenerationSettings {
 
         public String storedValue() { return storedValue; }
 
-        /** Built-in renderer modes: AUTO and Built-in (Alpha). */
+        /** Built-in renderer modes: AUTO, AUTO (TRIPLE) and Built-in (Alpha). */
         public boolean usesBuiltInBackend() {
-            return this == AUTO || this == BUILT_IN_ALPHA;
+            return this == AUTO || this == AUTO_TRIPLE || this == BUILT_IN_ALPHA;
         }
 
-        /** AUTO alone selects the lock-to-30 tier policy. */
-        public boolean usesLockToThirtyTierPolicy() { return this == AUTO; }
+        /** AUTO (either ceiling) alone selects the lock-to-30 tier policy. */
+        public boolean usesLockToThirtyTierPolicy() {
+            return this == AUTO || this == AUTO_TRIPLE;
+        }
+
+        /** Output frames per real frame this mode may generate. */
+        public int maxMultiplier() {
+            return this == AUTO_TRIPLE ? TRIPLE_MULTIPLIER : MAX_MULTIPLIER;
+        }
+
+        /** Tripling needs the timeline scheduler; the one-midpoint lattice cannot. */
+        public boolean requiresTimelineScheduler() { return this == AUTO_TRIPLE; }
 
         public static Mode parse(String value) {
             if (value != null) {

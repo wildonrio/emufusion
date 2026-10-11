@@ -109,6 +109,7 @@ public class BuiltInDeadlineTest {
     Rate frameRate=new Rate();
     PhysicalPresentationClock builtInPhysicalClock=new PhysicalPresentationClock();
     long builtInLastCommittedTargetNs;
+    long builtinQueueReserveNs=1000000L;
     long builtinPlanCallbackNs,builtinPlanNowNs,builtinPlanCompositeDeadlineNs,
          builtinPlanIntervalNs,builtinPlanLatencyNs;
 ''' + body + '''

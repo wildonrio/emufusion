@@ -68,6 +68,9 @@ public final class GpuPhysicalHeadroomLedger {
     private final boolean[] shaderConsumed;
     private int head, count;
     private long epoch, lastFrameId, lastPairSequence, lastWarpSequence, lastDesiredNs;
+    // The previous evaluated row, when it reached the panel: a frame whose
+    // spacing from it matches the requested spacing kept the cadence.
+    private long previousDesiredNs, previousActualNs;
 
     public GpuPhysicalHeadroomLedger(int capacity) {
         if (capacity < 1) throw new IllegalArgumentException("invalid headroom capacity");
@@ -88,6 +91,7 @@ public final class GpuPhysicalHeadroomLedger {
         Arrays.fill(shaderConsumed, false);
         head = count = 0;
         lastFrameId = lastPairSequence = lastWarpSequence = lastDesiredNs = 0L;
+        previousDesiredNs = previousActualNs = 0L;
     }
 
     /** Called only after the EGL ID's corresponding swap successfully commits. */
@@ -176,10 +180,14 @@ public final class GpuPhysicalHeadroomLedger {
         rows[head] = null;
         head = (head + 1) % rows.length;
         --count;
-        return evaluate(row, shaderCostUs, shaderBudgetUs);
+        Result result = evaluate(row, shaderCostUs, shaderBudgetUs);
+        boolean presented = row.status == PRESENTED && row.actualNs > 0L;
+        previousDesiredNs = presented ? row.desiredNs : 0L;
+        previousActualNs = presented ? row.actualNs : 0L;
+        return result;
     }
 
-    private static Result evaluate(Row row, long costUs, long budgetUs) {
+    private Result evaluate(Row row, long costUs, long budgetUs) {
         Outcome outcome;
         String reason;
         long appMargin = 0L, compositorMargin = 0L;
@@ -192,8 +200,19 @@ public final class GpuPhysicalHeadroomLedger {
             outcome = Outcome.UNKNOWN;
             reason = "physical-timestamp-unavailable";
         } else if (Math.abs(row.actualNs - row.desiredNs) > slotToleranceNs) {
-            outcome = Outcome.DEADLINE_MISS;
-            reason = "wrong-physical-slot";
+            if (wholeScansOffInSequence(row, slotToleranceNs)) {
+                // The compositor's own present prediction can sit a whole
+                // scan from ours (it did on the Thor when a screen recording
+                // started): every frame is then shown one scan before the
+                // requested time, in order and evenly spaced. The viewer
+                // sees an unchanged cadence; only a changed spacing -- a
+                // repeated or skipped scan -- is a miss.
+                outcome = Outcome.MARGINAL_HEADROOM;
+                reason = "presented-whole-scans-off-desired-in-sequence";
+            } else {
+                outcome = Outcome.DEADLINE_MISS;
+                reason = "wrong-physical-slot";
+            }
         } else if (row.supportedMask >= 0 && (row.supportedMask & ~ALL_TIMESTAMPS) == 0 &&
                 (row.supportedMask & RENDER_COMPLETE) != 0 &&
                 row.renderCompleteNs > row.deadlineNs && row.renderCompleteNs <= row.actualNs) {
@@ -239,6 +258,20 @@ public final class GpuPhysicalHeadroomLedger {
             }
         }
         return new Result(row, costUs, budgetUs, outcome, reason, appMargin, compositorMargin);
+    }
+
+    private boolean wholeScansOffInSequence(Row row, long slotToleranceNs) {
+        if (previousDesiredNs <= 0L || previousActualNs <= 0L || row.panelPeriodNs <= 0L)
+            return false;
+        long offsetNs = row.actualNs - row.desiredNs;
+        long scansOff = Math.round((double) offsetNs / (double) row.panelPeriodNs);
+        if (scansOff == 0L || Math.abs(scansOff) > 2L ||
+                Math.abs(offsetNs - scansOff * row.panelPeriodNs) > slotToleranceNs)
+            return false;
+        long requestedSpacingNs = row.desiredNs - previousDesiredNs;
+        long shownSpacingNs = row.actualNs - previousActualNs;
+        return requestedSpacingNs > 0L &&
+                Math.abs(shownSpacingNs - requestedSpacingNs) <= slotToleranceNs;
     }
 
     public int pendingCount() { return count; }

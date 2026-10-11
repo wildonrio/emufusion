@@ -188,6 +188,8 @@ public class ProvenanceTest {
         void resetEndpointTimeline(){resets++;}
     }
     static class TransportFactory {boolean nativeSoftwareGeometry(){return false;}}
+    static class Timeline {boolean pairSpanAllowed(long a,long b){return true;}void reset(){}}
+    final Timeline timeline=new Timeline();boolean timelineMode,timelineActive;
     TransportFactory externalTransportFactory;
     Object deferredExternalPreparation,pendingAppOwnedRequest,pendingAppOwnedPreparation;
     static final int ENDPOINT_FIFO_CAPACITY=6,NATIVE_HISTORY_BASE=6,NATIVE_ADMISSION_SLOT=8;

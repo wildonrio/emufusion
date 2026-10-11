@@ -5155,9 +5155,16 @@ public final class AdaptiveFrameRateControllerTest {
             eq(20, value.outputFps(), "invalid ceiling retains visible Direct fallback");
             eq(0, value.panelScansPerOutput(), "invalid ceiling has no scan claim");
         }
-        value.setMaxGenerationFactor(3.0);
-        eq(40, value.outputFps(), "a backend cannot raise the global doubling limit");
+        value.setMaxGenerationFactor(Math.nextDown(3.0));
+        eq(40, value.outputFps(), "only a whole triple ceiling may triple");
         eq(3, value.panelScansPerOutput(), "20->40 retains its three-scan hold");
+        // The built-in timeline's AUTO (TRIPLE) ceiling; external backends
+        // are clamped to doubling by the generator.
+        value.setMaxGenerationFactor(3.0);
+        eq(60, value.outputFps(), "the owner's triple ceiling triples 20->60");
+        eq(2, value.panelScansPerOutput(), "20->60 holds two scans");
+        value.setMaxGenerationFactor(100.0);
+        eq(60, value.outputFps(), "no ceiling exceeds triple");
     }
 
     private static void stampedCoreTimelineDetectsTransportLossWithoutBecomingSourceAuthority() {

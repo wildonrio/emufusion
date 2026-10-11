@@ -9,6 +9,7 @@ public final class UniformFrameRatePlanTest {
         measuredThorMismatchRequiresClockCorrection();
         invalidInputsFailClosed();
         everyIntegerClockObeysBothLattices();
+        timelineTripleAndTolerance();
         System.out.println("UniformFrameRatePlanTest passed");
     }
 
@@ -87,11 +88,18 @@ public final class UniformFrameRatePlanTest {
             eq(4, plan.panelScansPerOutput(), "Direct panel hold");
             check(!plan.generatesIntermediateFrames(), "Direct is not generated");
         }
-        for (double ceiling : new double[] {2.0, 3.0, 100.0, Double.MAX_VALUE}) {
+        for (double ceiling : new double[] {2.0, Math.nextDown(3.0)}) {
             near(40.0, UniformFrameRatePlan.select(20.0, 120.0, ceiling).outputHz(),
-                    1.0e-9, "ceiling never permits 20->60");
+                    1.0e-9, "a doubling ceiling never permits 20->60");
             near(40.0, UniformFrameRatePlan.select(40.0, 120.0, ceiling).outputHz(),
-                    1.0e-9, "ceiling never permits 40->60 or 40->120");
+                    1.0e-9, "a doubling ceiling never permits 40->60 or 40->120");
+        }
+        // AUTO (TRIPLE) is the only way to a ceiling of three; never fractional.
+        for (double ceiling : new double[] {3.0, 100.0, Double.MAX_VALUE}) {
+            near(60.0, UniformFrameRatePlan.select(20.0, 120.0, ceiling).outputHz(),
+                    1.0e-9, "the triple ceiling permits exact 20->60");
+            near(120.0, UniformFrameRatePlan.select(40.0, 120.0, ceiling).outputHz(),
+                    1.0e-9, "the triple ceiling permits exact 40->120, never 40->60");
         }
     }
 
@@ -143,6 +151,31 @@ public final class UniformFrameRatePlanTest {
                 }
             }
         }
+    }
+
+    private static void timelineTripleAndTolerance() {
+        // AUTO (TRIPLE): the highest exact output wins.
+        UniformFrameRatePlan forty = UniformFrameRatePlan.select(40.0, 120.0, 3.0, 0.0);
+        near(120.0, forty.outputHz(), 1e-9, "40 triples to 120");
+        eq(1, forty.panelScansPerOutput(), "40x3 holds one scan");
+        near(60.0, UniformFrameRatePlan.select(30.0, 120.0, 3.0, 0.0).outputHz(), 1e-9,
+                "30 cannot triple to 90 on 120 Hz and doubles");
+        near(60.0, UniformFrameRatePlan.select(20.0, 120.0, 3.0, 0.0).outputHz(), 1e-9,
+                "20 triples to 60 rather than doubling to 40");
+        near(120.0, UniformFrameRatePlan.select(60.0, 120.0, 3.0, 0.0).outputHz(), 1e-9,
+                "60 cannot triple on 120 Hz and doubles");
+        near(144.0, UniformFrameRatePlan.select(48.0, 144.0, 3.0, 0.0).outputHz(), 1e-9,
+                "48 triples to 144");
+        near(80.0, UniformFrameRatePlan.select(40.0, 120.0, 2.0, 0.0).outputHz() * 2.0, 1e-9,
+                "the default ceiling never triples (40 stays Direct)");
+        // Timeline tolerance: the Thor's 3DS clock against its measured panel.
+        check(!UniformFrameRatePlan.select(29.983, 119.906, 2.0).generatesIntermediateFrames(),
+                "the exact lattice refuses a clock just off the divisor");
+        UniformFrameRatePlan near3ds = UniformFrameRatePlan.select(29.983, 119.906, 2.0, 0.005);
+        check(near3ds.generatesIntermediateFrames(), "the timeline doubles a near-divisor clock");
+        eq(2, near3ds.panelScansPerOutput(), "near-3DS doubles to two scans");
+        check(!UniformFrameRatePlan.select(58.0, 120.0, 2.0, 0.005).qualified(),
+                "a game below its tier is not a near-divisor clock");
     }
 
     private static void rejectedClock(UniformFrameRatePlan plan) {

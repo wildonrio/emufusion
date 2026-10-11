@@ -2313,12 +2313,13 @@ FocusScope {
 
     function normalizedFrameGenerationMode(value) {
         value = String(value || "").toLowerCase()
-        return value === "auto" || value === "built-in-alpha" ||
-                value === "lsfg" ? value : "off"
+        return value === "auto" || value === "auto-triple" ||
+                value === "built-in-alpha" || value === "lsfg" ? value : "off"
     }
 
     function frameGenerationModeLabel() {
         if (frameGenerationMode === "auto") return "AUTO"
+        if (frameGenerationMode === "auto-triple") return "AUTO (TRIPLE)"
         if (frameGenerationMode === "built-in-alpha") return "BUILT-IN (ALPHA)"
         if (frameGenerationMode === "lsfg") return "LSFG"
         return "OFF"
@@ -2369,7 +2370,7 @@ FocusScope {
 
     function cycleFrameGenerationMode(direction) {
         if (frameGenerationModePending) return
-        var modes = ["off", "auto", "built-in-alpha", "lsfg"]
+        var modes = ["off", "auto", "auto-triple", "built-in-alpha", "lsfg"]
         var current = modes.indexOf(frameGenerationMode)
         if (current < 0) current = 0
         var step = direction < 0 ? -1 : 1

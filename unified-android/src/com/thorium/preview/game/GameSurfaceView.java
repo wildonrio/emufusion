@@ -642,6 +642,7 @@ public final class GameSurfaceView extends SurfaceView
             engineSurface = output;
             return;
         }
+        TimelineSchedulerSwitch.refresh(getContext(), launchMode);
         try {
             frameGenerator = FrameGenerationRendererFactory.create(selection, output,
                     width, height, width, height, refreshRate(), "primary", displayId(),

@@ -33,6 +33,8 @@ import com.thorium.lucent.video.NativeSourceImageProvider;
 import com.thorium.lucent.video.GpuPairTimingLedger;
 import com.thorium.lucent.video.GpuPhysicalHeadroomLedger;
 import com.thorium.lucent.video.SubmissionTimingHistory;
+import com.thorium.lucent.video.TimelineFrameScheduler;
+import com.thorium.lucent.video.UniformFrameRatePlan;
 import com.thorium.lucent.video.GpuWorkAdaptationPolicy;
 import com.thorium.lucent.video.ExternalGeneratedContentEvidence;
 import com.thorium.lucent.video.ExternalPresentationEvidence;
@@ -1722,6 +1724,24 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private boolean activePairSyntheticCommitted;
     // Endpoint sequence is lifetime-monotonic; never reset this at a scheduler epoch.
     private final MidpointPairBudget midpointPairBudget = new MidpointPairBudget();
+    // Timeline scheduler (2026-10-11): any number of generated images per
+    // pair on a fixed output lattice; pairs may bridge held source frames.
+    // Built-in path only, chosen once per generator (TimelineSchedulerSwitch).
+    private final TimelineFrameScheduler timeline = new TimelineFrameScheduler();
+    private boolean timelineMode;
+    // The timeline presents only while frames are generated; Direct output
+    // stays on the controller's proven lattice (including before the tier is
+    // known, when the timeline would only be guessing the source period).
+    private boolean timelineActive;
+    // When generation stops while the timeline presents, it keeps presenting
+    // the real images (evenly, no re-prime) and is released only once the
+    // pause in generation outlasts this: a momentary tier wobble no longer
+    // costs two pair restarts.
+    private static final long TIMELINE_RELEASE_AFTER_NS = 3_000_000_000L;
+    private long timelineGenerationLostNs;
+    // Output lattice of the last generated plan, kept through a dropout so
+    // the timeline does not restart when the plan briefly has no divisor.
+    private int timelineScansPerOutput;
     private long lastPromotedEndpointSequence;
     private long bufferedPairCreatedCount;
     private long bufferedSyntheticSelectedCount;
@@ -1816,6 +1836,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final long[] densePairTotalUs = new long[128];
     private final int[] densePairMask = new int[128];
     private long denseWarpSequence;
+    // The pair (dense promotion) whose generated image was GPU-timed. The
+    // timeline may show several images from one pair (a held frame bridged,
+    // x3, a slot re-drawn after a missed queue cutoff); only the first is
+    // timed and bound as the pair's warp, the rest are drawn untimed and
+    // reported as cadence-only rows, keeping both ledgers one warp per pair.
+    private long denseTimedWarpPromotion;
     private long denseWarpMaxCompletedSequence;
     private final long[] denseWarpCompletedSequence = new long[128];
     private long denseTimedPairs;
@@ -2210,8 +2236,20 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         seedPhysicalClocks();
         frameRate = new AdaptiveFrameRateController(this.refreshHz);
         if (externalTransportFactory == null) frameRate.setGenerationAvailable(false);
-        // Both Built-in and LSFG must sample the same exact one-midpoint lattice.
+        // Both Built-in and LSFG must sample the same exact one-midpoint lattice
+        // whenever the controller presents; the timeline scheduler lifts it
+        // only while it owns presentation (switchTimelineOwnership).
+        timelineMode = externalTransportFactory == null && TimelineSchedulerSwitch.enabled();
         frameRate.setExactDoubleEndpointLatticeRequired(true);
+        if (timelineMode) {
+            // The timeline places each output at its own source time, so a
+            // clock a hair off the panel's divisor (3DS 29.98 Hz on a 119.91 Hz
+            // panel) can still generate; the exact lattice refused it.
+            frameRate.setPlanRelativeTolerance(TimelineFrameScheduler.PLAN_RELATIVE_TOLERANCE);
+            frameRate.setMaxGenerationFactor(TimelineSchedulerSwitch.maxMultiplier());
+            Log.i(TAG, "Timeline scheduler active generator=" + generatorId +
+                    " maxMultiplier=" + TimelineSchedulerSwitch.maxMultiplier());
+        }
         thread = new HandlerThread("emufusion-frame-generator");
         thread.start();
         handler = new Handler(thread.getLooper());
@@ -3424,6 +3462,24 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         compositorFrameTimelineErrorMaxNs,
                         Math.abs(compositorTimeline.signedTargetErrorNs()));
             }
+            if (timelineMode) {
+                boolean generating = frameRate.generatesIntermediateFrames();
+                if (generating || !timelineActive) timelineGenerationLostNs = 0L;
+                if (generating && !timelineActive) {
+                    switchTimelineOwnership(true);
+                } else if (!generating && timelineActive) {
+                    long nowNs = System.nanoTime();
+                    if (timelineGenerationLostNs == 0L) timelineGenerationLostNs = nowNs;
+                    else if (nowNs - timelineGenerationLostNs >= TIMELINE_RELEASE_AFTER_NS)
+                        switchTimelineOwnership(false);
+                }
+            }
+            if (timelineActive) {
+                int timelinePresentation = selectTimelinePresentation(frameTimeNanos);
+                if (timelinePresentation != AdaptiveFrameRateController.PRESENT_NONE)
+                    presentTimelineSelection(deadline, compositorTimeline, timelinePresentation);
+                return;
+            }
             int presentation = frameRate.selectBufferedPresentation(
                     frameTimeNanos, deadline.contentPresentationTimeNs(),
                     activeLeftSequence, activeLeftTimestampNs,
@@ -3615,7 +3671,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // 20->40 / 30->60 / 60->120 for it instead of the built-in
                 // x3 tiers (which its supportsRatePath would refuse forever,
                 // leaving the session Direct: lsfg4, 2026-09-03).
-                frameRate.setMaxGenerationFactor(externalTransport.maxGenerationFactor());
+                // Tripling belongs to the built-in timeline only.
+                frameRate.setMaxGenerationFactor(Math.min(
+                        UniformFrameRatePlan.MAX_GENERATION_FACTOR,
+                        externalTransport.maxGenerationFactor()));
                 registerExternalPreparationCapacityListener();
                 Log.i(TAG, "External transport generation ceiling generator=" + generatorId +
                         " backend=" + externalTransport.backendLabel() +
@@ -4644,9 +4703,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             return;
         }
         if (lastPresentationEndpointTimestampNs > 0L &&
-                !AdaptiveFrameRateController.endpointSpanContinuous(
-                        lastPresentationEndpointTimestampNs, timestampNs,
-                        frameRate.presentationSourceHz())) {
+                !(timelineActive ?
+                        timeline.pairSpanAllowed(lastPresentationEndpointTimestampNs, timestampNs) :
+                        AdaptiveFrameRateController.endpointSpanContinuous(
+                                lastPresentationEndpointTimestampNs, timestampNs,
+                                frameRate.presentationSourceHz()))) {
             // A loading screen, static hold, save-state transition, or lost
             // carrier interval ends the old presentation timeline before the
             // resumed endpoint can be submitted.  Detecting this only while
@@ -4988,17 +5049,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 long left = endpointFifoSequence[leftSlot];
                 long right = endpointFifoSequence[rightSlot];
                 if (left > 0L && right == left + 1L &&
-                        AdaptiveFrameRateController.endpointSpanContinuous(
-                                endpointFifoTimestampNs[leftSlot],
-                                endpointFifoTimestampNs[rightSlot],
-                                frameRate.presentationSourceHz(),
-                                endpointFifoUniqueSequence[leftSlot],
-                                endpointFifoUniqueSequence[rightSlot],
-                                endpointFifoSubmission[leftSlot],
-                                endpointFifoSubmission[rightSlot],
-                                endpointFifoCandidateLoss[leftSlot],
-                                endpointFifoCandidateLoss[rightSlot],
-                                slotLatticeProducer)) break;
+                        endpointPairContinuous(endpointFifoTimestampNs[leftSlot], endpointFifoTimestampNs[rightSlot],
+                                endpointFifoUniqueSequence[leftSlot], endpointFifoUniqueSequence[rightSlot],
+                                endpointFifoSubmission[leftSlot], endpointFifoSubmission[rightSlot],
+                                endpointFifoCandidateLoss[leftSlot], endpointFifoCandidateLoss[rightSlot])) break;
                 previousIndex = 0;
                 currentIndex = 1;
                 consumeEndpointIntoHistory(previousIndex, true);
@@ -5021,15 +5075,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // slot is never left empty (4-8 missed scans per second were the
             // remaining physical-cadence rejections).  Costs one source
             // period of latency on those systems only.
-            int requiredPrimeDepth = generatedTimeline ?
-                    (externalTransport != null ?
-                            Math.min(ENDPOINT_FIFO_CAPACITY,
-                                    Math.max(ENDPOINT_FIFO_EXTERNAL_PRIME_DEPTH,
-                                            externalLookaheadPairCount() + 2)) :
-                            (slotLatticeProducer ?
-                                    Math.min(ENDPOINT_FIFO_CAPACITY,
-                                            ENDPOINT_FIFO_PRIME_DEPTH + 3) :
-                                    ENDPOINT_FIFO_PRIME_DEPTH)) : 2;
+            int requiredPrimeDepth = requiredEndpointPrimeDepth(generatedTimeline);
             if (endpointFifoCount < requiredPrimeDepth) return;
             previousIndex = 0;
             currentIndex = 1;
@@ -5045,13 +5091,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             long nextCandidateLoss = endpointFifoCandidateLoss[endpointFifoHead];
             boolean sequenceContinuous = next == activeLeftSequence + 1L;
             boolean timestampContinuous =
-                    AdaptiveFrameRateController.endpointSpanContinuous(
-                            activeLeftTimestampNs, nextTimestampNs,
-                            frameRate.presentationSourceHz(),
-                            activeLeftUniqueSequence, nextUniqueSequence,
-                            activeLeftSubmission, nextSubmission,
-                            activeLeftCandidateLoss, nextCandidateLoss,
-                            slotLatticeProducer);
+                    endpointPairContinuous(activeLeftTimestampNs, nextTimestampNs,
+                                activeLeftUniqueSequence, nextUniqueSequence,
+                                activeLeftSubmission, nextSubmission,
+                                activeLeftCandidateLoss, nextCandidateLoss);
             if (!sequenceContinuous || !timestampContinuous) {
                 Log.w(TAG, "Buffered endpoint discontinuity" +
                         " generator=" + generatorId +
@@ -5090,6 +5133,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * the new source tier and can form the next exact adjacent pair.
      */
     private void resetEndpointTimelineForSchedulerEpoch() {
+        timeline.reset();
         clearNativeEndpointTimeline(true);
         if (externalTransport != null) externalTransport.resetEndpointTimeline();
         if (activePairReady && !activePairSyntheticCommitted)
@@ -5129,6 +5173,19 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return true;
     }
 
+    /** Endpoints retained before the first pair of a timeline is formed. */
+    private int requiredEndpointPrimeDepth(boolean generatedTimeline) {
+        return generatedTimeline ?
+                (externalTransport != null ?
+                        Math.min(ENDPOINT_FIFO_CAPACITY,
+                                Math.max(ENDPOINT_FIFO_EXTERNAL_PRIME_DEPTH,
+                                        externalLookaheadPairCount() + 2)) :
+                        (slotLatticeProducer ?
+                                Math.min(ENDPOINT_FIFO_CAPACITY,
+                                        ENDPOINT_FIFO_PRIME_DEPTH + 3) :
+                                ENDPOINT_FIFO_PRIME_DEPTH)) : 2;
+    }
+
     private void copyBufferedEndpoints(boolean initialPair) {
         motionEstimateReady = false;
         activePairReady = false;
@@ -5156,13 +5213,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 throw new IllegalStateException(
                         "endpoint FIFO lost adjacent sequence continuity");
             if (activeLeftTimestampNs <= 0L ||
-                    !AdaptiveFrameRateController.endpointSpanContinuous(
-                            activeLeftTimestampNs, activeRightTimestampNs,
-                            frameRate.presentationSourceHz(),
-                            activeLeftUniqueSequence, activeRightUniqueSequence,
-                            activeLeftSubmission, activeRightSubmission,
-                            activeLeftCandidateLoss, activeRightCandidateLoss,
-                            slotLatticeProducer))
+                    !endpointPairContinuous(activeLeftTimestampNs, activeRightTimestampNs,
+                                activeLeftUniqueSequence, activeRightUniqueSequence,
+                                activeLeftSubmission, activeRightSubmission,
+                                activeLeftCandidateLoss, activeRightCandidateLoss))
                 throw new IllegalStateException(
                         "endpoint FIFO lost timestamp continuity");
         } catch (RuntimeException copyFailure) {
@@ -5255,6 +5309,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void invalidateBufferedPairForReprime(boolean resetController) {
+        timeline.reset();
         deferredExternalPreparation = null;
         pendingAppOwnedRequest = null;
         pendingAppOwnedPreparation = null;
@@ -6039,6 +6094,37 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int denseJoinedGapEvidenceCount;
     private final SubmissionTimingHistory denseSubmissionHistory = new SubmissionTimingHistory();
 
+    /** Raise the queue reserve after a frame rendered past the latch; decay it while on time. */
+    private void adaptBuiltinQueueReserve(GpuPhysicalHeadroomLedger.Result result) {
+        if (externalTransport != null || result.panelPeriodNs <= 0L) return;
+        long maximumNs = Math.max(BUILTIN_QUEUE_RESERVE_MIN_NS,
+                result.panelPeriodNs + result.panelPeriodNs / 2L);
+        boolean renderKnown = result.renderCompleteNs > 0L &&
+                (result.supportedMask & GpuPhysicalHeadroomLedger.RENDER_COMPLETE) != 0;
+        // Shown late, and rendering finished close enough to the slot that
+        // more lead would have made it: a frame rendered long before its slot
+        // and still late is the compositor's miss, not ours.
+        boolean lateFromRendering = renderKnown && result.actualNs > 0L &&
+                result.actualNs - result.desiredNs >= result.panelPeriodNs / 2L &&
+                result.renderCompleteNs > result.desiredNs - 2L * result.panelPeriodNs;
+        if (result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS && lateFromRendering) {
+            builtinQueueReserveOnTimeFrames = 0;
+            long previous = builtinQueueReserveNs;
+            builtinQueueReserveNs = Math.min(maximumNs,
+                    builtinQueueReserveNs + BUILTIN_QUEUE_RESERVE_STEP_NS);
+            if (builtinQueueReserveNs != previous && ++builtinQueueReserveRaises <= 16L)
+                Log.i(TAG, "Built-in queue reserve raised generator=" + generatorId +
+                        " reserveUs=" + builtinQueueReserveNs / 1000L +
+                        " renderBeforeSlotUs=" +
+                        (result.desiredNs - result.renderCompleteNs) / 1000L);
+        } else if (result.outcome != GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS &&
+                ++builtinQueueReserveOnTimeFrames >= BUILTIN_QUEUE_RESERVE_DECAY_FRAMES) {
+            builtinQueueReserveOnTimeFrames = 0;
+            builtinQueueReserveNs = Math.max(BUILTIN_QUEUE_RESERVE_MIN_NS,
+                    builtinQueueReserveNs - BUILTIN_QUEUE_RESERVE_DECAY_NS);
+        }
+    }
+
     private boolean consumeDensePhysicalGpuHeadroom() {
         GpuPhysicalHeadroomLedger.Result result;
         while ((result = denseGpuHeadroom.takeCompleted()) != null) {
@@ -6079,6 +6165,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             }
             boolean verified = result.outcome ==
                     GpuPhysicalHeadroomLedger.Outcome.VERIFIED_HEADROOM;
+            adaptBuiltinQueueReserve(result);
             if (result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS) {
                 ++denseGpuPhysicalDeadlineMisses;
                 // Bounded failure-only evidence: distinguish a wrong physical
@@ -7234,6 +7321,23 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private long builtinQueueCutoffMisses;
+    // Time kept between the planned queue cutoff and the compositor's
+    // reported deadline. On the Thor at 120 Hz the compositor really latches
+    // ~10 ms before a frame's display time while EGL reports ~2 ms, and the
+    // emulator shares the GPU: 3DS frames finished 3-6 ms before their slot
+    // still landed one scan late (2026-10-11). The reserve grows on each such
+    // late frame and decays slowly while frames are on time, so under load
+    // the built-in path targets one scan later instead of missing unevenly.
+    private static final long BUILTIN_QUEUE_RESERVE_MIN_NS = 1_000_000L;
+    private static final long BUILTIN_QUEUE_RESERVE_STEP_NS = 1_000_000L;
+    // Step back down only after ~10 s of on-time frames: each change of
+    // pipeline depth moves one output by a scan, so the depth must not
+    // flip-flop between a reserve that is just enough and one that is not.
+    private static final long BUILTIN_QUEUE_RESERVE_DECAY_NS = 500_000L;
+    private static final int BUILTIN_QUEUE_RESERVE_DECAY_FRAMES = 1200;
+    private long builtinQueueReserveNs = BUILTIN_QUEUE_RESERVE_MIN_NS;
+    private int builtinQueueReserveOnTimeFrames;
+    private long builtinQueueReserveRaises;
     private long builtinPlanCallbackNs, builtinPlanNowNs;
     private long builtinPlanCompositeDeadlineNs, builtinPlanIntervalNs, builtinPlanLatencyNs;
     private int builtinPlanGapEvidenceCount;
@@ -7250,7 +7354,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             PhysicalPresentationDeadline egl = PhysicalPresentationDeadline.nextEgl(
                     builtinCompositorTiming[0], builtinCompositorTiming[1],
                     builtinCompositorTiming[2], planNowNs,
-                    builtInLastCommittedTargetNs, 1_000_000L);
+                    builtInLastCommittedTargetNs, builtinQueueReserveNs);
             // Copy the planning query: the later submission probe reuses its
             // array. Emit only after swap, never inside this admission window.
             builtinPlanCallbackNs = callbackNs;
@@ -7391,6 +7495,95 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 frameRate.panelClockMeasured() && frameRate.panelHz() < 90.0;
     }
 
+    /**
+     * Hands presentation between the controller (Direct) and the timeline
+     * (generated). Each owns its own pair bookkeeping, so the visible pair is
+     * dropped and re-primed under the new owner -- once per change of
+     * generation, never per frame.
+     */
+    private void switchTimelineOwnership(boolean active) {
+        long previousEpoch = schedulerPresentationEpoch();
+        timelineActive = active;
+        timelineScansPerOutput = 0;
+        timeline.reset();
+        frameRate.setExactDoubleEndpointLatticeRequired(!active);
+        frameRate.resetPresentation();
+        synchronizeBufferedPresentationEpoch();
+        Log.i(TAG, "Timeline scheduler " + (active ? "owns" : "released") +
+                " presentation generator=" + generatorId +
+                " previousEpoch=" + previousEpoch + " epoch=" + schedulerPresentationEpoch() +
+                " generationAvailable=" + frameRate.generationAvailable() +
+                " sustainable=" + frameRate.hasSustainableGenerationRate() +
+                " sourceHz=" + String.format(java.util.Locale.ROOT, "%.3f",
+                        frameRate.presentationSourceHz()) +
+                " panelHz=" + String.format(java.util.Locale.ROOT, "%.3f", frameRate.panelHz()) +
+                " physicalHz=" + String.format(java.util.Locale.ROOT, "%.3f", physicalPanelHz()) +
+                " dense=" + densePyramidEnabled + " denseUnavailable=" + densePyramidUnavailable);
+    }
+
+    /** Configures the timeline from the controller's plan and asks it for this callback. */
+    private int selectTimelinePresentation(long callbackNs) {
+        long panelPeriodNs = frameRate.panelPeriodNs();
+        int planned = frameRate.panelScansPerOutput();
+        if (planned > 0) timelineScansPerOutput = planned;
+        int scans = Math.max(1, planned > 0 ? planned : timelineScansPerOutput);
+        double sourceHz = frameRate.presentationSourceHz();
+        long sourcePeriodNs = sourceHz > 0.0 ? Math.round(1e9 / sourceHz) : 0L;
+        timeline.configure(panelPeriodNs > 0L ? panelPeriodNs * scans : 0L, sourcePeriodNs);
+        // Clock the timeline by the vsync callback, not the predicted display
+        // time: when the queue reserve deepens the pipeline by a scan, the
+        // display target moves but the content timeline must not jump ahead
+        // with it -- that ate a scan of slack and made every 3DS successor
+        // late for its midpoint (2026-10-11).
+        int kind = timeline.select(callbackNs,
+                activeLeftSequence, activeLeftTimestampNs,
+                activeRightSequence, activeRightTimestampNs,
+                activePairReady && motionEstimateReady &&
+                        frameRate.generatesIntermediateFrames(),
+                activeRightSequence > 0L ?
+                        endpointFifoCount - (requiredEndpointPrimeDepth(true) - 2) : 0);
+        if (kind == TimelineFrameScheduler.GENERATED)
+            return AdaptiveFrameRateController.PRESENT_SYNTHETIC;
+        if (kind == TimelineFrameScheduler.REAL_LEFT || kind == TimelineFrameScheduler.REAL_RIGHT)
+            return AdaptiveFrameRateController.PRESENT_REAL;
+        return AdaptiveFrameRateController.PRESENT_NONE;
+    }
+
+    private void presentTimelineSelection(PhysicalPresentationDeadline deadline,
+                                          CompositorFrameTimeline.Selection compositorTimeline,
+                                          int presentation) {
+        long presentStarted = densePyramidEnabled ? System.nanoTime() : 0L;
+        try {
+            presentBuffered(deadline, compositorTimeline, presentation, timeline.pendingPhase());
+        } catch (RuntimeException failure) {
+            timeline.abort();
+            invalidateBufferedPairForReprime(false);
+            throw failure;
+        }
+        if (presentStarted != 0L) {
+            long wallNs = System.nanoTime() - presentStarted;
+            recordDenseWall(DENSE_WALL_PRESENT, wallNs);
+            if (presentation == AdaptiveFrameRateController.PRESENT_REAL)
+                recordDenseWall(DENSE_WALL_PROMOTION, wallNs);
+        }
+        if (pendingDenseCadenceReject) finalizeDenseCadenceReject();
+    }
+
+    /** Pair continuity: the timeline bridges held frames; the exact lattice does not. */
+    private boolean endpointPairContinuous(long leftTs, long rightTs,
+                                           long leftUnique, long rightUnique,
+                                           long leftSubmission, long rightSubmission,
+                                           long leftLoss, long rightLoss) {
+        if (timelineActive)
+            return leftLoss == rightLoss && leftUnique > 0L && rightUnique > leftUnique &&
+                    rightSubmission > leftSubmission &&
+                    timeline.pairSpanAllowed(leftTs, rightTs);
+        return AdaptiveFrameRateController.endpointSpanContinuous(
+                leftTs, rightTs, frameRate.presentationSourceHz(),
+                leftUnique, rightUnique, leftSubmission, rightSubmission,
+                leftLoss, rightLoss, slotLatticeProducer);
+    }
+
     private void presentBuffered(PhysicalPresentationDeadline deadline,
                                  CompositorFrameTimeline.Selection compositorTimeline,
                                  int presentation,
@@ -7404,10 +7597,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         refreshProofEvidencePresentationEpoch();
         boolean realThisTick = presentation ==
                 AdaptiveFrameRateController.PRESENT_REAL;
-        long selectedTimestampNs = frameRate.bufferedSelectedTargetSourceNs();
+        long selectedTimestampNs = timelineActive ? timeline.pendingTargetNs() :
+                frameRate.bufferedSelectedTargetSourceNs();
         // Use the same overflow-safe integer midpoint as private preparation.
         // Recomputing from float phase can round an odd span the other way.
-        if (!realThisTick) {
+        if (!realThisTick && !timelineActive) {
             selectedTimestampNs = AdaptiveFrameRateController.exactMidpointTimestampNs(
                     activeLeftTimestampNs, activeRightTimestampNs);
         }
@@ -7446,7 +7640,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (Math.abs(presentationRequest.phase() - selectedPhase) > 0.00001)
             throw new IllegalStateException(
                     "controller phase disagrees with immutable endpoint timestamps");
-        if (!realThisTick && !midpointPairBudget.canAdmit(presentationRequest))
+        if (!realThisTick && !timelineActive && !midpointPairBudget.canAdmit(presentationRequest))
             throw new IllegalStateException("midpoint admission rejected: " +
                     midpointPairBudget.lastRejection());
         if (externalTransport != null) {
@@ -7501,11 +7695,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         // Unlike a deferred external enqueue, this path is now attempting the
         // actual render. A subsequent shader/swap failure cannot renew budget.
-        if (!realThisTick && !midpointPairBudget.admit(presentationRequest))
+        if (!realThisTick && !timelineActive && !midpointPairBudget.admit(presentationRequest))
             throw new IllegalStateException("midpoint render admission rejected");
         boolean captureProof = false;
         float proofPhase = 0f;
         boolean renderedSynthetic = false;
+        boolean renderedTimedWarp = false;
         // Consume completed queries before choosing this frame's pixels. Any
         // async rejection therefore draws the current endpoint in this very
         // swap instead of leaking one last stale/generated frame.
@@ -7575,9 +7770,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (sustainable) {
                 if (densePyramidEnabled) {
                     try {
-                        beginDenseStage(DenseGpuTimer.VISIBLE_WARP);
-                        drawMotionFrame(phase);
-                        endDenseStage();
+                        if (denseTimedWarpPromotion != densePromotions) {
+                            beginDenseStage(DenseGpuTimer.VISIBLE_WARP);
+                            denseTimedWarpPromotion = densePromotions;
+                            drawMotionFrame(phase);
+                            endDenseStage();
+                            renderedTimedWarp = true;
+                        } else {
+                            drawMotionFrame(phase);
+                        }
                         renderedSynthetic = true;
                     } catch (RuntimeException timerFailure) {
                         ++denseTimerUnavailable;
@@ -7665,6 +7866,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (physicalFramePrepared) physicalTracker.cancelPrepared();
             // Do not swap stale content or commit scheduler credit after its
             // prospective EGL queue deadline. The next callback selects anew.
+            // The timeline keeps its pair: the next due slot simply follows.
+            if (timelineActive) {
+                timeline.abort();
+                return;
+            }
             frameRate.abortBufferedPresentation();
             invalidateBufferedPairForReprime(false);
             return;
@@ -7722,14 +7928,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 denseGpuAdaptation.invalidateRecoveryEvidence();
             }
             if (!densePhysicalFrameCommitted ||
-                    !requiresDenseGpuHeadroomBinding(renderedSynthetic,
+                    !requiresDenseGpuHeadroomBinding(renderedTimedWarp,
                             frameRate.panelScansPerOutput())) {
                 ++denseGpuPhysicalUnboundEvents;
                 denseGpuAdaptation.invalidateRecoveryEvidence();
             } else if (!denseGpuHeadroom.bindSwap(denseGpuHeadroom.evidenceEpoch(),
                     presentationEpoch, densePhysicalFrameId,
-                    renderedSynthetic ? densePromotions : 0L,
-                    renderedSynthetic ? denseWarpSequence : 0L,
+                    renderedTimedWarp ? densePromotions : 0L,
+                    renderedTimedWarp ? denseWarpSequence : 0L,
                     deadline.contentPresentationTimeNs(), deadline.hardCompletionDeadlineNs(),
                     frameRate.panelScansPerOutput(), frameRate.panelPeriodNs())) {
                 // The visible swap already succeeded. Preserve its controller
@@ -7740,8 +7946,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 Log.e(TAG, "Dense GPU swap binding rejected generator=" + generatorId +
                         " presentationEpoch=" + presentationEpoch +
                         " frameId=" + densePhysicalFrameId +
-                        " pair=" + (renderedSynthetic ? densePromotions : 0L) +
-                        " warp=" + (renderedSynthetic ? denseWarpSequence : 0L) +
+                        " pair=" + (renderedTimedWarp ? densePromotions : 0L) +
+                        " warp=" + (renderedTimedWarp ? denseWarpSequence : 0L) +
                         " desiredNs=" + deadline.contentPresentationTimeNs() +
                         " deadlineNs=" + deadline.hardCompletionDeadlineNs() +
                         " scans=" + frameRate.panelScansPerOutput() +
@@ -7755,17 +7961,23 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         if (swapStarted != 0L)
             recordDenseWall(DENSE_WALL_SWAP, System.nanoTime() - swapStarted);
-        int endpointAdvance = frameRate.bufferedEndpointAdvanceAfterPresentation();
+        int endpointAdvance = timelineActive ? timeline.pendingAdvance() :
+                frameRate.bufferedEndpointAdvanceAfterPresentation();
         boolean advanceCrossesGap = bufferedAdvanceWouldCrossGap(endpointAdvance);
         long presentationEpochBeforeAdvance = schedulerPresentationEpoch();
-        if (renderedSynthetic || realThisTick)
+        if (timelineActive) {
+            // A generated slot that rendered the left image instead (dense
+            // rejected or unsustainable) still consumed its output slot.
+            timeline.commit(true);
+            if (!renderedSynthetic && !realThisTick) endpointAdvance = 0;
+        } else if (renderedSynthetic || realThisTick)
             frameRate.commitBufferedPresentation(true);
         else {
             frameRate.abortBufferedPresentation();
             endpointAdvance = 0;
             invalidateBufferedPairForReprime(false);
         }
-        if (endpointAdvance == 1 &&
+        if (!timelineActive && endpointAdvance == 1 &&
                 frameRate.bufferedRetainedLeftSequence() != activeRightSequence) {
             Log.e(TAG, "Buffered commit ownership mismatch" +
                     " generator=" + generatorId +
@@ -9645,6 +9857,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             denseTimedPairTotalUs = 0;
             denseTimedPairMaxUs = 0;
             denseWarpSequence = 0;
+            denseTimedWarpPromotion = 0;
             denseWarpMaxCompletedSequence = 0;
             java.util.Arrays.fill(denseWarpCompletedSequence, 0L);
             denseTimerUnavailable = 0;
@@ -10623,7 +10836,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         proofAtlasHeader.putInt(currentIndex);
         proofAtlasHeader.putInt(7); // synthetic + dense + motion-ready
         proofAtlasHeader.putLong(proofEvidencePresentationEpoch);
-        long targetSourceNs = frameRate.bufferedSelectedTargetSourceNs();
+        long targetSourceNs = timelineActive ? timeline.pendingTargetNs() :
+                frameRate.bufferedSelectedTargetSourceNs();
         if (targetSourceNs <= 0L)
             throw new IllegalStateException(
                     "proof atlas target source timestamp unavailable");
@@ -11213,6 +11427,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " schedulerLeadWaits=" + frameRate.bufferedLeadWaitCount() +
                 " schedulerDuplicateWaits=" + frameRate.bufferedDuplicateWaitCount() +
                 " schedulerPrimeWaits=" + frameRate.bufferedPrimeWaitCount() +
+                " builtinQueueReserveUs=" + builtinQueueReserveNs / 1000L +
+                (timelineMode ? " timelineMode=1 timelineActive=" + (timelineActive ? 1 : 0) +
+                        " " + timeline.diagnostics() : "") +
                 " schedulerUnavailable=" +
                         frameRate.bufferedUnavailableSlotCount() +
                 " schedulerLastUnavailableReason=" +

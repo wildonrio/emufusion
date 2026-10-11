@@ -4,6 +4,7 @@ public final class GpuWorkAdaptationPolicyTest {
     public static void main(String[] args) {
         twelveHundredBadPairsNeverRestoreQuality();
         overBudgetShaderTimeAloneNeverDisables();
+        oneEmulatorHitchDoesNotDisable();
         isolatedPhysicalMissesDoNotAccumulate();
         everyFailureInvalidatesRecoveryAtMinimumWork();
         restorationRequiresConsecutiveEvidenceAndHeadroom();
@@ -40,9 +41,29 @@ public final class GpuWorkAdaptationPolicyTest {
         for (int pair = 1; pair <= 5000; ++pair) value.onCompletedPair(pair, 8000L, 7333L, true);
         check(!value.generationDisabled(), "shader time over budget sheds work but never disables");
         eq(0, value.failuresAtMinimum(), "over-budget time is not a minimum-work failure");
-        for (int miss = 0; miss < GpuWorkAdaptationPolicy.DEFAULT_FAILURES_AT_MINIMUM; ++miss)
+        for (int miss = 0; miss < GpuWorkAdaptationPolicy.DEFAULT_MIN_DISABLE_SPAN_PAIRS; ++miss)
             value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
-        check(value.generationDisabled(), "a burst of visible misses at minimum work disables");
+        check(value.generationDisabled(), "visible misses sustained at minimum work disable");
+    }
+
+    private static void oneEmulatorHitchDoesNotDisable() {
+        // GameCube 2026-10-11: one 0.35 s stall missed thirty frames at once.
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        for (int i = 0; i < 2; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        eq(2, value.workLevel(), "the first misses shed work");
+        for (int hitch = 0; hitch < 3; ++hitch) {
+            for (int miss = 0; miss < 40; ++miss)
+                value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            check(!value.generationDisabled(), "a short burst of misses is a hitch, not overload");
+            for (int good = 0; good < 300; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        check(!value.generationDisabled(), "hitches seconds apart stay below the disable density");
+        for (int round = 0; round < 400; ++round) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        check(value.generationDisabled(), "half the frames missing for seconds is overload");
     }
 
     private static void isolatedPhysicalMissesDoNotAccumulate() {
