@@ -104,6 +104,8 @@ public final class WidescreenHackPolicy {
                         system, engine, hackOn, perGameWidescreenCodeSelected));
         // Render at the screen's resolution, not the console's (owner request).
         overrides.putAll(RenderResolutionPolicy.coreOptionOverrides(context, engine));
+        // ...and without emulator-side shader stutter.
+        overrides.putAll(SmoothnessPolicy.coreOptionOverrides(engine));
         File file = CoreOptionOverrideFile.in(root);
         try {
             if (overrides.isEmpty()) {
