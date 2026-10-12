@@ -120,7 +120,7 @@ class PhaseTwoArmsx2Test(unittest.TestCase):
         self.assertNotIn("setOpaque(true)", surface)
         # Compositing over black is what makes the published alpha one, so both
         # gameplay hosts must keep an opaque backdrop under the video surface.
-        for host in ("InWindowGameHost.java", "LucentGameActivity.java"):
+        for host in ("InWindowGameHost.java", "EmuFusionGameActivity.java"):
             source = (ROOT / "unified-android" / "src" / "com" / "thorium" /
                       "preview" / "game" / host).read_text(encoding="utf-8")
             backdrop = source.index("setBackgroundColor(Color.BLACK)")
@@ -134,7 +134,7 @@ class PhaseTwoArmsx2Test(unittest.TestCase):
     def test_runtime_state_restore_is_quarantined_without_deleting_memory_cards(self):
         session = SESSION_PATH.read_text(encoding="utf-8")
         policy = (ROOT / "unified-android" / "src" / "com" / "thorium" /
-                  "lucent" / "state" / "QuickResumePolicy.java").read_text(
+                  "emufusion" / "state" / "QuickResumePolicy.java").read_text(
                           encoding="utf-8")
         self.assertIn('!"armsx2".equals(engineId)', policy)
         self.assertNotIn('!"dolphin".equals(engineId)', policy)

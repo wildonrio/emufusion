@@ -3,13 +3,13 @@ package com.thorium.preview.multiplayer;
 import android.content.Context;
 import android.util.Log;
 
-import com.thorium.lucent.netplay.ActiveEngineSessionRegistry;
-import com.thorium.lucent.netplay.NetplayCapableSession;
-import com.thorium.lucent.netplay.NetplayInputRelay;
-import com.thorium.lucent.netplay.NetplayMessage;
-import com.thorium.lucent.netplay.NetplayPortAssignment;
-import com.thorium.lucent.netplay.NetplaySession;
-import com.thorium.lucent.netplay.NetplaySignalingClient;
+import com.thorium.emufusion.netplay.ActiveEngineSessionRegistry;
+import com.thorium.emufusion.netplay.NetplayCapableSession;
+import com.thorium.emufusion.netplay.NetplayInputRelay;
+import com.thorium.emufusion.netplay.NetplayMessage;
+import com.thorium.emufusion.netplay.NetplayPortAssignment;
+import com.thorium.emufusion.netplay.NetplaySession;
+import com.thorium.emufusion.netplay.NetplaySignalingClient;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * (see PLAY_NOW_LAUNCH_NOT_IMPLEMENTED below).
  */
 public final class MultiplayerManager implements NetplaySignalingClient.Listener {
-    private static final String TAG = "LucentMultiplayer";
+    private static final String TAG = "EmuFusionMultiplayer";
 
     private final Context context;
     private volatile NetplaySignalingClient signaling;
@@ -261,7 +261,7 @@ public final class MultiplayerManager implements NetplaySignalingClient.Listener
         String myDeviceId = DeviceIdentity.deviceId(context);
         Object target = ActiveEngineSessionRegistry.current();
         if (!(target instanceof NetplayCapableSession) &&
-                !(target instanceof com.thorium.lucent.netplay.NativeAdapterCapableSession)) {
+                !(target instanceof com.thorium.emufusion.netplay.NativeAdapterCapableSession)) {
             Log.w(TAG, "activateMatch(" + matchId + "): no running engine session to attach to " +
                     "(launching the right game automatically is not implemented yet)");
             return;
@@ -307,10 +307,10 @@ public final class MultiplayerManager implements NetplaySignalingClient.Listener
             session.setDataListener(relay);
             libretroTarget.attachNetplayRelay(relay);
         } else {
-            com.thorium.lucent.netplay.NativeAdapterCapableSession nativeTarget =
-                    (com.thorium.lucent.netplay.NativeAdapterCapableSession) target;
-            com.thorium.lucent.netplay.NativeAdapterInputRelay relay =
-                    new com.thorium.lucent.netplay.NativeAdapterInputRelay(
+            com.thorium.emufusion.netplay.NativeAdapterCapableSession nativeTarget =
+                    (com.thorium.emufusion.netplay.NativeAdapterCapableSession) target;
+            com.thorium.emufusion.netplay.NativeAdapterInputRelay relay =
+                    new com.thorium.emufusion.netplay.NativeAdapterInputRelay(
                             session, nativeTarget::applyRemoteControl, indices, onHostLost);
             session.setDataListener(relay);
             nativeTarget.attachNetplayRelay(relay);
@@ -324,8 +324,8 @@ public final class MultiplayerManager implements NetplaySignalingClient.Listener
         Object target = ActiveEngineSessionRegistry.current();
         if (target instanceof NetplayCapableSession) {
             ((NetplayCapableSession) target).detachNetplayRelay();
-        } else if (target instanceof com.thorium.lucent.netplay.NativeAdapterCapableSession) {
-            ((com.thorium.lucent.netplay.NativeAdapterCapableSession) target).detachNetplayRelay();
+        } else if (target instanceof com.thorium.emufusion.netplay.NativeAdapterCapableSession) {
+            ((com.thorium.emufusion.netplay.NativeAdapterCapableSession) target).detachNetplayRelay();
         }
         if (match.libretroRelay != null) match.libretroRelay.stop();
         match.session.close();

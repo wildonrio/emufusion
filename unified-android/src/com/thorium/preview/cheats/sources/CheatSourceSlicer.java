@@ -1,7 +1,7 @@
 package com.thorium.preview.cheats.sources;
 
-import com.thorium.lucent.cheats.Cheat;
-import com.thorium.lucent.cheats.CheatDatabase;
+import com.thorium.emufusion.cheats.Cheat;
+import com.thorium.emufusion.cheats.CheatDatabase;
 import com.thorium.preview.cheats.CheatArchive;
 
 import java.io.ByteArrayOutputStream;

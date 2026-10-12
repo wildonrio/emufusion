@@ -22,7 +22,7 @@ import java.util.Map;
  *
  * The attributes are USAGE_MEDIA, which resolves to STREAM_MUSIC: the same
  * stream the engines' AudioTracks and the preview MediaPlayer use, and the one
- * LucentApplication binds the hardware volume keys to. Nothing here may
+ * EmuFusionApplication binds the hardware volume keys to. Nothing here may
  * introduce a second stream, or the volume keys would once again control only
  * part of what the user can hear.
  *
@@ -38,7 +38,7 @@ public final class MenuSoundPlayer {
     /** Sound Effects ships on; the setting exists to turn it off. */
     public static final boolean DEFAULT_ENABLED = true;
 
-    private static final String TAG = "LucentMenuSfx";
+    private static final String TAG = "EmuFusionMenuSfx";
     // One cue per ~45 ms. Held D-pad repeats stay audible as distinct ticks
     // while a burst of simultaneous events cannot pile into a chord.
     private static final long MIN_INTERVAL_MILLIS = 45L;

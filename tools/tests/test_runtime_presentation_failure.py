@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 GAME = ROOT / "unified-android/src/com/thorium/preview/game"
-VIDEO = ROOT / "unified-android/src/com/thorium/lucent/video"
+VIDEO = ROOT / "unified-android/src/com/thorium/emufusion/video"
 PREVIEW = ROOT / "android-companion/src/com/thorium/preview/PreviewActivity.java"
 JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
@@ -38,7 +38,7 @@ class RuntimePresentationFailureTest(unittest.TestCase):
 
     def test_actual_latch_once_late_listener_close_race_and_no_monitor_callback(self):
         self.compile_run(r'''
-import com.thorium.lucent.video.RuntimePresentationFailure;
+import com.thorium.emufusion.video.RuntimePresentationFailure;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 public class RuntimeFailureTest {
@@ -83,7 +83,7 @@ public class RuntimeFailureTest {
         secondary = method(PREVIEW.read_text(), "    private void bindGameplayRuntimeErrorListener(")
         host = method((GAME / "InWindowGameHost.java").read_text(), "public void onSurfaceRuntimeError(")
         self.compile_run(r'''
-import com.thorium.lucent.video.RuntimePresentationFailure;
+import com.thorium.emufusion.video.RuntimePresentationFailure;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 public class RuntimeFailureTest {
@@ -326,7 +326,7 @@ public class RuntimeFailureTest {
                         finish.index("listener.onSurfaceAvailable"))
         preview = PREVIEW.read_text()
         self.assertEqual(preview.count("gameplayQuarantinedGeneration == surfaceGeneration) return;"), 4)
-        for name in ("InWindowGameHost.java", "LucentGameActivity.java"):
+        for name in ("InWindowGameHost.java", "EmuFusionGameActivity.java"):
             source = (GAME / name).read_text()
             error = method(source, "public void onSessionError(")
             self.assertIn("RuntimePresentationFailure.Failure", error)
@@ -349,7 +349,7 @@ public class RuntimeFailureTest {
         render_catch = method(render[render.rindex("} catch (RuntimeException failure)") + 2:],
                               "catch (RuntimeException failure)")
         self.compile_run(r'''
-import com.thorium.lucent.video.RuntimePresentationFailure;
+import com.thorium.emufusion.video.RuntimePresentationFailure;
 import java.util.concurrent.atomic.*;
 public class RuntimeFailureTest {
     static class android {static class os {static class Trace {

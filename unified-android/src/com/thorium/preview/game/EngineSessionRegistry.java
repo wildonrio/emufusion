@@ -57,7 +57,7 @@ public final class EngineSessionRegistry {
         @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) { return false; }
         @Override public boolean shouldShowOnScreenControls() { return false; }
         @Override public boolean dispatchVirtualControl(
-                com.thorium.lucent.input.CanonicalControl control, boolean pressed) { return false; }
+                com.thorium.emufusion.input.CanonicalControl control, boolean pressed) { return false; }
         @Override public void stop(StopReason reason, Completion completion) {
             completion.complete();
         }

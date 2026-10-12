@@ -12,7 +12,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import com.thorium.lucent.cheats.CheatPanelSnapshot;
+import com.thorium.emufusion.cheats.CheatPanelSnapshot;
 
 import java.util.ArrayList;
 import java.util.List;

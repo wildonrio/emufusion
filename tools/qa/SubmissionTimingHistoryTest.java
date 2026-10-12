@@ -1,4 +1,4 @@
-import com.thorium.lucent.video.SubmissionTimingHistory;
+import com.thorium.emufusion.video.SubmissionTimingHistory;
 
 public final class SubmissionTimingHistoryTest {
     public static void main(String[] args) {

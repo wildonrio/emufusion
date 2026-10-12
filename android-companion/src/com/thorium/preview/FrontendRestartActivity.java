@@ -48,7 +48,7 @@ public final class FrontendRestartActivity extends Activity {
             restart.putExtra(EXTRA_NEXT_LAUNCH, new Intent(nextLaunch));
         return restart;
     }
-    private static final String TAG = "LucentImport";
+    private static final String TAG = "EmuFusionImport";
     private static final long OLD_PROCESS_EXIT_TIMEOUT_MS = 3000L;
     private static final int MAX_LAUNCH_ATTEMPTS = 3;
 

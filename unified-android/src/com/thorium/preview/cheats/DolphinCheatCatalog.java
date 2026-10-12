@@ -2,7 +2,7 @@ package com.thorium.preview.cheats;
 
 import android.content.Context;
 
-import com.thorium.lucent.cheats.Cheat;
+import com.thorium.emufusion.cheats.Cheat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;

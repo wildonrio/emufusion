@@ -13,7 +13,7 @@ from tools.tests.test_native_source_image_renderer_wiring import method
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
-VIDEO = ROOT / "unified-android/src/com/thorium/lucent/video"
+VIDEO = ROOT / "unified-android/src/com/thorium/emufusion/video"
 FIXTURE = Path(__file__).with_name("fixtures") / "external_physical_slot_reservation.java.in"
 JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 

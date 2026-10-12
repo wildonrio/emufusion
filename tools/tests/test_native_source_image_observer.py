@@ -17,14 +17,14 @@ class NativeSourceImageObserverTest(unittest.TestCase):
         base = ROOT / "unified-android"
         names = ("NativeSourceImage", "NativeSourceImageLedger", "NativeSourceImageProvider",
                  "NativeSourceImageObserver")
-        sources = [base / f"src/com/thorium/lucent/video/{name}.java" for name in names]
-        sources.append(base / "test/com/thorium/lucent/video/NativeSourceImageObserverTest.java")
+        sources = [base / f"src/com/thorium/emufusion/video/{name}.java" for name in names]
+        sources.append(base / "test/com/thorium/emufusion/video/NativeSourceImageObserverTest.java")
         with tempfile.TemporaryDirectory(prefix="source-image-observer-") as temporary:
             compiled = subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", temporary,
                                        *map(str, sources)], capture_output=True, text=True, timeout=30)
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             ran = subprocess.run([str(JAVA / "java"), "-cp", temporary,
-                                  "com.thorium.lucent.video.NativeSourceImageObserverTest"],
+                                  "com.thorium.emufusion.video.NativeSourceImageObserverTest"],
                                  capture_output=True, text=True, timeout=45)
             self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
             self.assertIn("no source authority; zero hot allocations", ran.stdout)

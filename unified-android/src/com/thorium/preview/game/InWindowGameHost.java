@@ -18,7 +18,7 @@ import android.view.Gravity;
 import android.view.Display;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
-import com.thorium.lucent.input.CanonicalControl;
+import com.thorium.emufusion.input.CanonicalControl;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
@@ -45,13 +45,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.thorium.lucent.cheats.Cheat;
-import com.thorium.lucent.cheats.CheatPanelModel;
-import com.thorium.lucent.cheats.CheatPanelSnapshot;
-import com.thorium.lucent.emulators.NativeAdapterStopPolicy;
-import com.thorium.lucent.metadata.EngineSystemIdResolver;
-import com.thorium.lucent.timing.DisplaySyncPolicy;
-import com.thorium.lucent.timing.PanelRefreshPlanner;
+import com.thorium.emufusion.cheats.Cheat;
+import com.thorium.emufusion.cheats.CheatPanelModel;
+import com.thorium.emufusion.cheats.CheatPanelSnapshot;
+import com.thorium.emufusion.emulators.NativeAdapterStopPolicy;
+import com.thorium.emufusion.metadata.EngineSystemIdResolver;
+import com.thorium.emufusion.timing.DisplaySyncPolicy;
+import com.thorium.emufusion.timing.PanelRefreshPlanner;
 import com.thorium.preview.MenuSoundPlayer;
 import com.thorium.preview.AppVolumeController;
 import com.thorium.preview.BootVideoOverlay;
@@ -73,7 +73,7 @@ public final class InWindowGameHost
         SecondaryCheatPanelRouter.Controller {
     public static final String ACTION_LAUNCH =
             "com.thorium.preview.LAUNCH_INTERNAL_GAME";
-    private static final String TAG = "LucentInWindow";
+    private static final String TAG = "EmuFusionInWindow";
     private static final String AUTHORITY = "com.thorium.preview.roms";
     private static final long STOP_HOLD_MS = 1000L;
     // Select+Start held together resets the running game. Three seconds is far
@@ -344,7 +344,7 @@ public final class InWindowGameHost
                     new IdentityHashMap<EngineSession, Boolean>()));
     private static final ExecutorService RETIREMENT_RELEASES =
             Executors.newSingleThreadExecutor(runnable -> {
-                Thread thread = new Thread(runnable, "LucentEngineRetirement");
+                Thread thread = new Thread(runnable, "EmuFusionEngineRetirement");
                 thread.setDaemon(true);
                 return thread;
             });
@@ -467,8 +467,8 @@ public final class InWindowGameHost
     private static void installPanelClockStore(Context context) {
         android.content.SharedPreferences prefs = context.getApplicationContext()
                 .getSharedPreferences("panel-clock", Context.MODE_PRIVATE);
-        com.thorium.lucent.video.PanelClockMemory.setStore(
-                new com.thorium.lucent.video.PanelClockMemory.Store() {
+        com.thorium.emufusion.video.PanelClockMemory.setStore(
+                new com.thorium.emufusion.video.PanelClockMemory.Store() {
                     @Override public double get(String key) {
                         return Double.longBitsToDouble(prefs.getLong(key, 0L));
                     }
@@ -779,7 +779,7 @@ public final class InWindowGameHost
             // Audited native routes separate guest system trees and wrapper
             // snapshots. Eden additionally pins one storage root per process.
             boolean nativeNamespace = approvedPhaseThree &&
-                    com.thorium.lucent.emulators.NativeQualificationStorage.supports(engine, system);
+                    com.thorium.emufusion.emulators.NativeQualificationStorage.supports(engine, system);
             if ((!phaseTwoNamespace && !phaseOneNamespace && !nativeNamespace) ||
                     !QUALIFICATION_SESSION.matcher(candidate).matches()) return null;
             qualificationSession = candidate;
@@ -854,9 +854,9 @@ public final class InWindowGameHost
 
     /** Un-publishes a torn-down session from ActiveEngineSessionRegistry, if it was the published one. */
     private static void clearActiveNetplaySession(EngineSession ending) {
-        if (ending instanceof com.thorium.lucent.netplay.NetplayCapableSession ||
-                ending instanceof com.thorium.lucent.netplay.NativeAdapterCapableSession) {
-            com.thorium.lucent.netplay.ActiveEngineSessionRegistry.clearIfCurrent(ending);
+        if (ending instanceof com.thorium.emufusion.netplay.NetplayCapableSession ||
+                ending instanceof com.thorium.emufusion.netplay.NativeAdapterCapableSession) {
+            com.thorium.emufusion.netplay.ActiveEngineSessionRegistry.clearIfCurrent(ending);
         }
     }
 
@@ -915,7 +915,7 @@ public final class InWindowGameHost
         switchingCompletion = switchGame;
         if (ending == null) switchGame.complete();
         else runAfterPresentationRecovery(() ->
-                ending.stop(EngineSession.StopReason.EXIT_TO_LUCENT, switchGame));
+                ending.stop(EngineSession.StopReason.EXIT_TO_EMUFUSION, switchGame));
     }
 
     private void buildUi() {
@@ -2251,7 +2251,7 @@ public final class InWindowGameHost
             try {
                 Runnable stop = () -> {
                     try {
-                        ending.stop(EngineSession.StopReason.EXIT_TO_LUCENT,
+                        ending.stop(EngineSession.StopReason.EXIT_TO_EMUFUSION,
                                 () -> finishRetiringSession(ending, null));
                     } catch (RuntimeException failure) {
                         finishRetiringSession(ending, failure);
@@ -2779,34 +2779,34 @@ public final class InWindowGameHost
             // active -- see ActiveEngineSessionRegistry's own doc comment. A
             // session implementing neither capable-session interface simply
             // never gets published.
-            if (session instanceof com.thorium.lucent.netplay.NetplayCapableSession ||
-                    session instanceof com.thorium.lucent.netplay.NativeAdapterCapableSession) {
-                com.thorium.lucent.netplay.ActiveEngineSessionRegistry.set(session);
+            if (session instanceof com.thorium.emufusion.netplay.NetplayCapableSession ||
+                    session instanceof com.thorium.emufusion.netplay.NativeAdapterCapableSession) {
+                com.thorium.emufusion.netplay.ActiveEngineSessionRegistry.set(session);
             }
             // Manual netplay port-routing verification only: fires only when
             // a marker file has been placed by hand (adb shell touch
             // /sdcard/lucent-netplay-synthetic-test), which nothing in the
             // normal UI or launch flow ever does. See
             // NetplaySyntheticInputTester's class doc for the full rationale.
-            if (com.thorium.lucent.netplay.NetplaySyntheticInputTester.isRequested(activity)) {
+            if (com.thorium.emufusion.netplay.NetplaySyntheticInputTester.isRequested(activity)) {
                 if (session instanceof LibretroEngineSession) {
                     LibretroEngineSession target = (LibretroEngineSession) session;
-                    com.thorium.lucent.netplay.NetplaySyntheticInputTester.start(
+                    com.thorium.emufusion.netplay.NetplaySyntheticInputTester.start(
                             target::applyRemoteJoypadButton);
                 } else if (session instanceof PpssppGlesEngineSession) {
                     PpssppGlesEngineSession target = (PpssppGlesEngineSession) session;
-                    com.thorium.lucent.netplay.NetplaySyntheticInputTester.start(
+                    com.thorium.emufusion.netplay.NetplaySyntheticInputTester.start(
                             target::applyRemoteJoypadButton);
                 }
             }
             // Same manual-only verification, for the native-adapter (Eden/Cemu)
             // family -- its own separate marker file, since it drives a
             // different sink type (NativeControlSink, not RemoteJoypadSink).
-            if (com.thorium.lucent.netplay.NativeAdapterSyntheticInputTester.isRequested(activity)
-                    && session instanceof com.thorium.lucent.netplay.NativeAdapterCapableSession) {
-                com.thorium.lucent.netplay.NativeAdapterCapableSession target =
-                        (com.thorium.lucent.netplay.NativeAdapterCapableSession) session;
-                com.thorium.lucent.netplay.NativeAdapterSyntheticInputTester.start(
+            if (com.thorium.emufusion.netplay.NativeAdapterSyntheticInputTester.isRequested(activity)
+                    && session instanceof com.thorium.emufusion.netplay.NativeAdapterCapableSession) {
+                com.thorium.emufusion.netplay.NativeAdapterCapableSession target =
+                        (com.thorium.emufusion.netplay.NativeAdapterCapableSession) session;
+                com.thorium.emufusion.netplay.NativeAdapterSyntheticInputTester.start(
                         target::applyRemoteControl);
             }
             prepared = true;
@@ -2832,7 +2832,7 @@ public final class InWindowGameHost
     }
 
     @Override public void onSessionError(String message, Throwable cause) {
-        if (cause instanceof com.thorium.lucent.video.RuntimePresentationFailure.Failure) {
+        if (cause instanceof com.thorium.emufusion.video.RuntimePresentationFailure.Failure) {
             onSurfaceRuntimeError(cause.getMessage(), cause);
             return;
         }
@@ -2915,9 +2915,9 @@ public final class InWindowGameHost
             // The live host owns the retained native session again; this is
             // cancellation of a switch, not an acknowledgement of release.
             RETIRING_SESSIONS.remove(session);
-            if (session instanceof com.thorium.lucent.netplay.NetplayCapableSession ||
-                    session instanceof com.thorium.lucent.netplay.NativeAdapterCapableSession) {
-                com.thorium.lucent.netplay.ActiveEngineSessionRegistry.set(session);
+            if (session instanceof com.thorium.emufusion.netplay.NetplayCapableSession ||
+                    session instanceof com.thorium.emufusion.netplay.NativeAdapterCapableSession) {
+                com.thorium.emufusion.netplay.ActiveEngineSessionRegistry.set(session);
             }
             return true;
         }

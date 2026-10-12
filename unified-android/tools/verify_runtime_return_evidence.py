@@ -233,7 +233,7 @@ def verify_directory(evidence: Path, tesseract: Path) -> Audit:
         # the missing lifecycle trace: otherwise an Activity START is
         # impossible to rule out.
         log_text = "\n".join(
-            "I/LucentInWindow: Returned to Lucent immediately in same window "
+            "I/EmuFusionInWindow: Returned to Lucent immediately in same window "
             f"latencyMs={latency}" for latency in stored_latencies
         )
     frames = sorted(path for path in evidence.glob("*-return-*.png")

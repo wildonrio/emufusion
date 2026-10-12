@@ -1,6 +1,6 @@
 package com.thorium.preview.cheats.delivery;
 
-import com.thorium.lucent.cheats.Cheat;
+import com.thorium.emufusion.cheats.Cheat;
 import com.thorium.preview.cheats.sources.MiniYaml;
 
 import java.io.File;

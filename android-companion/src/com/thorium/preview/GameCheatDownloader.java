@@ -4,7 +4,7 @@ import android.content.Context;
 import android.os.SystemClock;
 import android.util.Log;
 
-import com.thorium.lucent.metadata.EngineSystemIdResolver;
+import com.thorium.emufusion.metadata.EngineSystemIdResolver;
 import com.thorium.preview.cheats.CheatControl;
 import com.thorium.preview.cheats.sources.CheatFetch;
 import com.thorium.preview.cheats.sources.CheatGameIdentity;
@@ -46,7 +46,7 @@ import java.util.Map;
  * game keeps whatever file it already had.
  */
 public final class GameCheatDownloader {
-    private static final String TAG = "LucentCheatFetch";
+    private static final String TAG = "EmuFusionCheatFetch";
     /** {@code ImportManager.REGISTRY}; duplicated because that constant is private. */
     private static final File REGISTRY = new File(
             "/storage/emulated/0/pegasus-frontend/thorium-imports.json");

@@ -51,7 +51,7 @@ import java.util.List;
 public final class PrimaryDisplayFocusGuard {
     /** The frontend Activity, which owns display 0 and hosts every game. */
     static final String PRIMARY_ACTIVITY = "org.pegasus_frontend.android.MainActivity";
-    private static final String TAG = "LucentFocusGuard";
+    private static final String TAG = "EmuFusionFocusGuard";
 
     private PrimaryDisplayFocusGuard() {}
 

@@ -21,7 +21,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import com.thorium.lucent.legal.LegalNotice;
+import com.thorium.emufusion.legal.LegalNotice;
 
 /**
  * The first-launch legal notice.

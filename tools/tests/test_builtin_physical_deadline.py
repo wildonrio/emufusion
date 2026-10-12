@@ -13,7 +13,7 @@ class BuiltInDeadlineTest(unittest.TestCase):
         """Replay measured inputs; do not loosen reserve to manufacture a pass."""
         src = ROOT / 'unified-android/src'
         fixture = '''
-import com.thorium.lucent.video.PhysicalPresentationDeadline;
+import com.thorium.emufusion.video.PhysicalPresentationDeadline;
 public class RecordedGapTest {
     public static void main(String[] args) {
         long previous=9332086973665L, interval=8333333L;
@@ -46,7 +46,7 @@ public class RecordedGapTest {
             java = out / 'RecordedGapTest.java'
             java.write_text(fixture)
             subprocess.run([str(JAVA / 'javac'), '-d', str(out),
-                            str(src / 'com/thorium/lucent/video/PhysicalPresentationDeadline.java'),
+                            str(src / 'com/thorium/emufusion/video/PhysicalPresentationDeadline.java'),
                             str(java)], check=True)
             subprocess.run([str(JAVA / 'java'), '-ea', '-cp', str(out),
                             'RecordedGapTest'], check=True)
@@ -95,7 +95,7 @@ public class RecordedGapTest {
         source = (src / 'com/thorium/preview/game/DisplayFrameGenerator.java').read_text()
         body = method(source, '    private PhysicalPresentationDeadline nextBuiltInDeadline(')
         fixture = '''
-import com.thorium.lucent.video.*;
+import com.thorium.emufusion.video.*;
 public class BuiltInDeadlineTest {
     static class PhysicalPresentationTracker {
         boolean available(){return true;}

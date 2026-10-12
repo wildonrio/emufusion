@@ -4,8 +4,8 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 
-import com.thorium.lucent.cheats.Cheat;
-import com.thorium.lucent.input.CanonicalControl;
+import com.thorium.emufusion.cheats.Cheat;
+import com.thorium.emufusion.input.CanonicalControl;
 import com.thorium.preview.cheats.delivery.CheatSessionRegistry;
 
 import java.util.Collections;
@@ -15,7 +15,7 @@ import java.util.Set;
 /** Runtime boundary shared by future libretro and native engine adapters. */
 public interface EngineSession {
     enum PauseReason { LUCENT_MENU, ANDROID_BACKGROUND }
-    enum StopReason { EXIT_TO_LUCENT, ACTIVITY_DESTROYED }
+    enum StopReason { EXIT_TO_EMUFUSION, ACTIVITY_DESTROYED }
 
     interface Listener {
         void onSessionReady();

@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
  * build alongside the Eden flag.
  */
 public final class NativeAdapterCatalog {
-    private static final String TAG = "LucentPhase3Catalog";
+    private static final String TAG = "EmuFusionPhase3Catalog";
     private static final String REGISTRY = "phase3-engine-registry.json";
     private static final String OPT_IN = "phase3-qualification-opt-in.json";
     private static final String ARTIFACTS = "phase3-engine-artifacts.json";

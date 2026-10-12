@@ -19,7 +19,7 @@ import java.util.Locale;
  * reasserts it; it does not capture the screen or run an animation loop.
  */
 final class ThorLedManager {
-    private static final String TAG = "LucentLeds";
+    private static final String TAG = "EmuFusionLeds";
     private static final String DEVICE_BRIGHTNESS_SETTING =
             "led_light_brightness_percent";
     private final Context context;

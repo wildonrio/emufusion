@@ -7,7 +7,7 @@ from pathlib import Path
 from tools.tests.test_first_install_startup import JAVA, ROOT, method
 
 IMPORTER = ROOT / "android-companion/src/com/thorium/preview/ImportManager.java"
-APP = ROOT / "unified-android/src/com/thorium/preview/LucentApplication.java"
+APP = ROOT / "unified-android/src/com/thorium/preview/EmuFusionApplication.java"
 
 
 class OfflineRescanRefreshTest(unittest.TestCase):
@@ -19,7 +19,7 @@ class OfflineRescanRefreshTest(unittest.TestCase):
         self.assertLess(scan.index("writeMetadata(registry);"), changed)
         self.assertEqual(scan.count("localIndexChanged = true;"), 1)
         self.assertIn("localIndexChanged |= writeMetadata(registry);", scan)
-        request = scan.index("((LucentApplication) app).onLibraryIndexChanged();")
+        request = scan.index("((EmuFusionApplication) app).onLibraryIndexChanged();")
         self.assertLess(scan.index("LaunchMetadataRouter.normalize(context);"), request)
         self.assertLess(request, scan.index("!enrichMediaQueue("))
         self.assertIn("if (localIndexChanged || prerequisiteRoutesChanged)", scan)

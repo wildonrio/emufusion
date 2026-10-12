@@ -28,10 +28,10 @@ def java_method(source, signature):
 HARNESS = r'''
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import com.thorium.lucent.state.QuickResumePolicy;
+import com.thorium.emufusion.state.QuickResumePolicy;
 
 interface EngineSession {
-    enum StopReason { EXIT_TO_LUCENT, ACTIVITY_DESTROYED }
+    enum StopReason { EXIT_TO_EMUFUSION, ACTIVITY_DESTROYED }
     interface Completion { void complete(); }
     interface Listener { void onSessionStopRejected(String message, Throwable failure); }
     void stop(StopReason reason, Completion completion);
@@ -96,7 +96,7 @@ public class PpssppGlesEngineSession implements EngineSession {
         PpssppGlesEngineSession session = new PpssppGlesEngineSession();
         ExperimentalGlesRenderLoop loop = session.renderLoop;
         int[] completed = {0};
-        session.stop(StopReason.EXIT_TO_LUCENT, () -> completed[0]++);
+        session.stop(StopReason.EXIT_TO_EMUFUSION, () -> completed[0]++);
         session.stop(StopReason.ACTIVITY_DESTROYED, () -> completed[0]++);
         check(completed[0] == 0, "duplicate stop completed before lifecycle task");
         session.lifecycle.drain();
@@ -120,14 +120,14 @@ public class PpssppGlesEngineSession implements EngineSession {
             session.rejected++;
             throw new IllegalStateException("UI callback rejected");
         };
-        session.stop(StopReason.EXIT_TO_LUCENT, () -> rejectedCallbacks[0]++);
-        session.stop(StopReason.EXIT_TO_LUCENT, () -> rejectedCallbacks[0]++);
+        session.stop(StopReason.EXIT_TO_EMUFUSION, () -> rejectedCallbacks[0]++);
+        session.stop(StopReason.EXIT_TO_EMUFUSION, () -> rejectedCallbacks[0]++);
         session.lifecycle.drain();
         check(session.rejected == 1 && !session.stopping.get() && session.prepared &&
                 session.renderLoop == loop && loop.closeRequests == 0 && rejectedCallbacks[0] == 0,
                 "save rejection closed or completed the retained session");
         session.saveFailure = null;
-        session.stop(StopReason.EXIT_TO_LUCENT, () -> retried[0]++);
+        session.stop(StopReason.EXIT_TO_EMUFUSION, () -> retried[0]++);
         session.lifecycle.drain();
         check(retried[0] == 0, "retry completed before native close");
         loop.acknowledge();
@@ -139,7 +139,7 @@ public class PpssppGlesEngineSession implements EngineSession {
         ExperimentalGlesRenderLoop loop = session.renderLoop;
         session.saveFailure = new IllegalStateException("disk commit rejected");
         int[] completed = {0};
-        session.stop(StopReason.EXIT_TO_LUCENT, () -> completed[0]++);
+        session.stop(StopReason.EXIT_TO_EMUFUSION, () -> completed[0]++);
         session.stop(StopReason.ACTIVITY_DESTROYED, () -> completed[0]++);
         session.lifecycle.drain();
         check(session.rejected == 0 && loop.closeRequests == 1 && completed[0] == 0,
@@ -277,11 +277,11 @@ class GlesStopCompletionTest(unittest.TestCase):
             "native/tests/java/android/view/Surface.java",
             "native/tests/java/android/util/Log.java",
             "native/tests/java/android/os/Build.java",
-            "src/com/thorium/lucent/video/NativeSourceImageProvider.java",
-            "src/com/thorium/lucent/video/RuntimePresentationFailure.java",
+            "src/com/thorium/emufusion/video/NativeSourceImageProvider.java",
+            "src/com/thorium/emufusion/video/RuntimePresentationFailure.java",
             "src/com/thorium/preview/game/FrameGenerationRenderer.java",
             "src/com/thorium/preview/game/FrameGenerationRendererRegistry.java",
-            "src/com/thorium/lucent/timing/DisplaySyncPolicy.java",
+            "src/com/thorium/emufusion/timing/DisplaySyncPolicy.java",
             "src/com/thorium/preview/LibretroHost.java",
             "src/com/thorium/preview/PendingHostInput.java",
             "src/com/thorium/preview/ExperimentalGlesLibretroHost.java",
@@ -317,7 +317,7 @@ class GlesStopCompletionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="lucent-gles-stop-") as temporary:
             target = Path(temporary) / "PpssppGlesEngineSession.java"
             target.write_text(harness, encoding="utf-8")
-            policy = ROOT / "unified-android/src/com/thorium/lucent/state/QuickResumePolicy.java"
+            policy = ROOT / "unified-android/src/com/thorium/emufusion/state/QuickResumePolicy.java"
             compiled = subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", temporary,
                                        str(policy), str(target)], capture_output=True, text=True)
             self.assertEqual(0, compiled.returncode, compiled.stdout + compiled.stderr)

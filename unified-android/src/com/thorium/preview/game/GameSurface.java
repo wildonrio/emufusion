@@ -8,8 +8,8 @@ import android.view.Display;
 import android.view.Surface;
 import android.view.TextureView;
 
-import com.thorium.lucent.video.PresentationGeometry;
-import com.thorium.lucent.video.FrameGenerationBackendPolicy;
+import com.thorium.emufusion.video.PresentationGeometry;
+import com.thorium.emufusion.video.FrameGenerationBackendPolicy;
 
 /** Engine-neutral, Lucent-owned video surface. */
 public final class GameSurface extends TextureView

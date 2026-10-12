@@ -37,14 +37,14 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.thorium.lucent.cheats.CheatPanelSnapshot;
+import com.thorium.emufusion.cheats.CheatPanelSnapshot;
 import com.thorium.preview.cheats.CheatPanelView;
 import com.thorium.preview.game.FrameGenerationRenderer;
 import com.thorium.preview.game.FrameGenerationRendererFactory;
 import com.thorium.preview.game.FrameGenerationSettings;
 import com.thorium.preview.game.SurfaceOwnershipException;
-import com.thorium.lucent.video.FrameGenerationBackendPolicy;
-import com.thorium.lucent.video.DualScreenLayout;
+import com.thorium.emufusion.video.FrameGenerationBackendPolicy;
+import com.thorium.emufusion.video.DualScreenLayout;
 
 import org.json.JSONObject;
 
@@ -162,7 +162,7 @@ public final class PreviewActivity extends Activity
         // MainActivity window there.
         Display display = getWindowManager().getDefaultDisplay();
         if (display == null || display.getDisplayId() == Display.DEFAULT_DISPLAY) {
-            Log.e("LucentPreview", "Rejected PreviewActivity on primary display");
+            Log.e("EmuFusionPreview", "Rejected PreviewActivity on primary display");
             finishAndRemoveTask();
             return;
         }
@@ -174,7 +174,7 @@ public final class PreviewActivity extends Activity
         windowState.created(this);
         // Preview audio is STREAM_MUSIC (MediaPlayer's USAGE_MEDIA attributes
         // below), the same stream the engines play on. Bind the hardware volume
-        // keys to it here as well as in LucentApplication so this Activity can
+        // keys to it here as well as in EmuFusionApplication so this Activity can
         // never present a window whose keys drive an unrelated stream.
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         soundEnabled = getSharedPreferences("preview", MODE_PRIVATE)
@@ -200,7 +200,7 @@ public final class PreviewActivity extends Activity
         buildUi();
         AppVolumeController.registerListener(this, appVolumeListener);
         hideSystemUi();
-        // LucentApplication starts the process-wide foreground service before
+        // EmuFusionApplication starts the process-wide foreground service before
         // any Activity. This visible secondary Activity only needs to deliver
         // a normal start; issuing a second foreground-service request creates
         // an independent Android deadline during process-death restoration.
@@ -723,7 +723,7 @@ public final class PreviewActivity extends Activity
         // still follows the normal path below.
         if (gameplaySurface != null &&
                 SecondaryGameplaySurfaceRouter.isCurrent(gameplayGeneration)) {
-            Log.i("LucentPreview", "Ignoring preview blank while gameplay owns generation=" +
+            Log.i("EmuFusionPreview", "Ignoring preview blank while gameplay owns generation=" +
                     gameplayGeneration);
             return;
         }
@@ -766,7 +766,7 @@ public final class PreviewActivity extends Activity
         gameplaySurfaceActive = true;
         gameplayClockwiseQuarterTurn =
                 SecondaryGameplaySurfaceRouter.isClockwiseQuarterTurn(generation);
-        Log.i("LucentPreview", "showGameplaySurface generation=" + generation +
+        Log.i("EmuFusionPreview", "showGameplaySurface generation=" + generation +
                 " displayId=" + (getDisplay() == null ? -1 : getDisplay().getDisplayId()) +
                 " clockwiseQuarterTurn=" + gameplayClockwiseQuarterTurn);
         if (gameplayClockwiseQuarterTurn) {
@@ -813,7 +813,7 @@ public final class PreviewActivity extends Activity
                         gameplayQuarantinedGeneration == surfaceGeneration) return;
                 ensureGameplayGenerator(holder.getSurface(),
                         gameplaySurface.getWidth(), gameplaySurface.getHeight());
-                Log.i("LucentPreview", "gameplay surfaceCreated generation=" + surfaceGeneration +
+                Log.i("EmuFusionPreview", "gameplay surfaceCreated generation=" + surfaceGeneration +
                         " size=" + gameplaySurface.getWidth() + "x" + gameplaySurface.getHeight() +
                         " valid=" + holder.getSurface().isValid() + " -> surfaceAvailable");
                 SecondaryGameplaySurfaceRouter.surfaceAvailable(surfaceGeneration,
@@ -829,7 +829,7 @@ public final class PreviewActivity extends Activity
                     ensureGameplayGenerator(holder.getSurface(), width, height);
                 else gameplayFrameGenerator.resize(width, height, width, height,
                         displayRefreshRate());
-                Log.i("LucentPreview", "gameplay surfaceChanged generation=" + surfaceGeneration +
+                Log.i("EmuFusionPreview", "gameplay surfaceChanged generation=" + surfaceGeneration +
                         " size=" + width + "x" + height +
                         " valid=" + holder.getSurface().isValid() + " -> surfaceAvailable");
                 SecondaryGameplaySurfaceRouter.surfaceAvailable(surfaceGeneration,
@@ -839,7 +839,7 @@ public final class PreviewActivity extends Activity
             @Override public void surfaceDestroyed(SurfaceHolder holder) {
                 // Synchronous and bounded: the Surface dies when this
                 // callback returns, so the engine must detach first.
-                Log.i("LucentPreview", "gameplay surfaceDestroyed generation=" + surfaceGeneration);
+                Log.i("EmuFusionPreview", "gameplay surfaceDestroyed generation=" + surfaceGeneration);
                 SecondaryGameplaySurfaceRouter.surfaceDestroyed(surfaceGeneration);
                 releaseGameplayGenerator(surfaceGeneration);
             }
@@ -853,7 +853,7 @@ public final class PreviewActivity extends Activity
             float normalizedX = event.getX() / width;
             float normalizedY = event.getY() / height;
             if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP)
-                Log.i("LucentPreview", "Secondary gameplay touch view=" + width +
+                Log.i("EmuFusionPreview", "Secondary gameplay touch view=" + width +
                         "x" + height + " normalized=" + normalizedX + "," +
                         normalizedY + " pressed=" + pressed);
             SecondaryGameplaySurfaceRouter.touch(surfaceGeneration,
@@ -907,7 +907,7 @@ public final class PreviewActivity extends Activity
                 int width = Math.max(1, holder.getSurfaceFrame().width());
                 int height = Math.max(1, holder.getSurfaceFrame().height());
                 ensureGameplayGenerator(holder.getSurface(), width, height);
-                Log.i("LucentPreview", "clockwise gameplay surfaceCreated generation=" +
+                Log.i("EmuFusionPreview", "clockwise gameplay surfaceCreated generation=" +
                         surfaceGeneration + " buffer=" + width + "x" + height);
                 SecondaryGameplaySurfaceRouter.surfaceAvailable(surfaceGeneration,
                         gameplayEngineSurface, width, height);
@@ -945,7 +945,7 @@ public final class PreviewActivity extends Activity
                     (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP ||
                             action == MotionEvent.ACTION_CANCEL)) {
                 gameplayTouchDiagnosticCount++;
-                Log.i("LucentPreview", "3DS touch action=" + action + " view=" +
+                Log.i("EmuFusionPreview", "3DS touch action=" + action + " view=" +
                         width + "x" + height + " raw=" + event.getX() + "," + event.getY() +
                         " normalized=" + point.x + "," + point.y + " pressed=" + pressed);
             }
@@ -996,7 +996,7 @@ public final class PreviewActivity extends Activity
                 FrameGenerationSettings.selectBackendForSession(
                         this, gameplayFrameGenerationMode);
         if (selection.backend == FrameGenerationBackendPolicy.Backend.DIRECT) {
-            Log.i("LucentPreview",
+            Log.i("EmuFusionPreview",
                     "Lower display uses Direct; frame generation is primary-only");
             gameplayEngineSurface = output;
             gameplayGeneratorGeneration = gameplayGeneration;
@@ -1033,7 +1033,7 @@ public final class PreviewActivity extends Activity
                 quarantineGameplayGenerator(gameplayGeneration, failure);
                 return;
             }
-            Log.e("LucentPreview",
+            Log.e("EmuFusionPreview",
                     "Lower-screen frame generation unavailable; using direct presentation",
                     failure);
             gameplayEngineSurface = output;
@@ -1047,7 +1047,7 @@ public final class PreviewActivity extends Activity
         gameplayFrameGenerator = null;
         gameplayEngineSurface = null;
         gameplayGeneratorGeneration = failedGeneration;
-        Log.e("LucentPreview", "Lower-screen output ownership is unresolved; no Surface handoff" +
+        Log.e("EmuFusionPreview", "Lower-screen output ownership is unresolved; no Surface handoff" +
                 " generation=" + failedGeneration, failure);
         if (firstFailure)
             SecondaryGameplaySurfaceRouter.surfaceFailed(failedGeneration, failure);
@@ -1062,7 +1062,7 @@ public final class PreviewActivity extends Activity
             gameplayQuarantinedGeneration = ownerGeneration;
             // Preserve the renderer reference until the existing generation-
             // checked retirement path drains it. Never reuse this output as Direct.
-            Log.e("LucentPreview", "Lower-screen runtime display failed generation=" +
+            Log.e("EmuFusionPreview", "Lower-screen runtime display failed generation=" +
                     ownerGeneration, cause);
             SecondaryGameplaySurfaceRouter.surfaceFailed(ownerGeneration, cause);
         }));
@@ -1070,7 +1070,7 @@ public final class PreviewActivity extends Activity
 
     private void releaseGameplayGenerator(long ownerGeneration) {
         if (ownerGeneration != gameplayGeneratorGeneration) {
-            Log.i("LucentPreview", "Ignoring stale gameplay surface destruction candidate=" +
+            Log.i("EmuFusionPreview", "Ignoring stale gameplay surface destruction candidate=" +
                     ownerGeneration + " owner=" + gameplayGeneratorGeneration);
             return;
         }

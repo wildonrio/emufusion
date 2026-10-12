@@ -21,7 +21,7 @@ EXCLUDED = {
     'com/thorium/launchbridge/RomFileProvider.java',
     'com/thorium/launchbridge/StopButtonService.java',
     'com/thorium/preview/game/InternalGameLaunchActivity.java',
-    'com/thorium/preview/game/LucentGameActivity.java',
+    'com/thorium/preview/game/EmuFusionGameActivity.java',
     'com/thorium/preview/game/QualificationLaunchActivity.java',
     'com/thorium/preview/game/SessionReturnRouter.java',
 }

@@ -192,9 +192,9 @@ class VolumeEvidenceTest(unittest.TestCase):
 
     def test_soundpool_parser_consumes_per_id_gain_log(self):
         log = """
-08-10 10:00:00.000 I/LucentMenuSfx( 4242): SoundPool sink started stream=17 gain=0.5
-08-10 10:00:00.021 I/LucentMenuSfx( 4242): SoundPool sink gain stream=17 gain=0.0
-08-10 10:00:00.022 I/LucentMenuSfx( 4242): SoundPool active sinks gain=0.0 trackedStreams=1
+08-10 10:00:00.000 I/EmuFusionMenuSfx( 4242): SoundPool sink started stream=17 gain=0.5
+08-10 10:00:00.021 I/EmuFusionMenuSfx( 4242): SoundPool sink gain stream=17 gain=0.0
+08-10 10:00:00.022 I/EmuFusionMenuSfx( 4242): SoundPool active sinks gain=0.0 trackedStreams=1
         """
         self.assertEqual(MODULE.parse_soundpool_sink_transitions(log, 4242), [{
             "soundPoolStreamId": 17,
@@ -215,24 +215,24 @@ class VolumeEvidenceTest(unittest.TestCase):
 
     def test_soundpool_aggregate_log_cannot_replace_per_id_proof(self):
         log = """
-08-10 10:00:00.000 I/LucentMenuSfx(4242): SoundPool sink started stream=17 gain=0.5
-08-10 10:00:00.020 I/LucentMenuSfx(4242): SoundPool active sinks gain=0.0 trackedStreams=1
+08-10 10:00:00.000 I/EmuFusionMenuSfx(4242): SoundPool sink started stream=17 gain=0.5
+08-10 10:00:00.020 I/EmuFusionMenuSfx(4242): SoundPool active sinks gain=0.0 trackedStreams=1
         """
         with self.assertRaisesRegex(ValueError, "per-ID zero-gain"):
             MODULE.parse_soundpool_sink_transitions(log, 4242)
 
     def test_soundpool_completed_stream_cannot_masquerade_as_active(self):
         log = """
-08-10 10:00:00.000 4242 4243 I LucentMenuSfx: SoundPool sink started stream=17 gain=0.5
-08-10 10:00:00.120 4242 4243 I LucentMenuSfx: SoundPool sink gain stream=17 gain=0.0
+08-10 10:00:00.000 4242 4243 I EmuFusionMenuSfx: SoundPool sink started stream=17 gain=0.5
+08-10 10:00:00.120 4242 4243 I EmuFusionMenuSfx: SoundPool sink gain stream=17 gain=0.0
         """
         with self.assertRaisesRegex(ValueError, "active proof"):
             MODULE.parse_soundpool_sink_transitions(log, 4242)
 
     def test_soundpool_log_is_bound_to_emufusion_pid(self):
         log = """
-08-10 10:00:00.000 I/LucentMenuSfx(9999): SoundPool sink started stream=17 gain=0.5
-08-10 10:00:00.010 I/LucentMenuSfx(9999): SoundPool sink gain stream=17 gain=0.0
+08-10 10:00:00.000 I/EmuFusionMenuSfx(9999): SoundPool sink started stream=17 gain=0.5
+08-10 10:00:00.010 I/EmuFusionMenuSfx(9999): SoundPool sink gain stream=17 gain=0.0
         """
         with self.assertRaisesRegex(ValueError, "no positive-gain"):
             MODULE.parse_soundpool_sink_transitions(log, 4242)

@@ -1,7 +1,7 @@
 package com.thorium.preview.cheats;
 
-import com.thorium.lucent.cheats.Cheat;
-import com.thorium.lucent.metadata.EngineSystemIdResolver;
+import com.thorium.emufusion.cheats.Cheat;
+import com.thorium.emufusion.metadata.EngineSystemIdResolver;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;

@@ -53,7 +53,7 @@ STUBS = {
 HARNESS = r"""package com.thorium.preview.game;
 import android.content.Context;
 import android.view.MotionEvent;
-import com.thorium.lucent.input.*;
+import com.thorium.emufusion.input.*;
 import java.util.EnumSet;
 
 public class PhoneAnalogTest {
@@ -349,8 +349,8 @@ class PhoneAnalogControlsTest(unittest.TestCase):
             harness.write_text(HARNESS.replace("1212", str(width)).replace("720", str(height)))
             sources.append(str(harness))
             sources.extend(str(SRC / path) for path in (
-                "preview/game/TouchControlsView.java", "lucent/input/TouchAnalogStick.java",
-                "lucent/input/CanonicalControl.java", "lucent/input/SystemControlLayouts.java"))
+                "preview/game/TouchControlsView.java", "emufusion/input/TouchAnalogStick.java",
+                "emufusion/input/CanonicalControl.java", "emufusion/input/SystemControlLayouts.java"))
             subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", str(root), *sources], check=True)
             subprocess.run([str(JAVA / "java"), "-cp", str(root),
                             "com.thorium.preview.game.PhoneAnalogTest"], check=True)

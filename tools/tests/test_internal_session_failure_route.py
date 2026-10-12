@@ -84,7 +84,7 @@ public class InternalFailureProbe {
             "retirement lost original failure");
     }
     InternalFailureProbe host = new InternalFailureProbe();
-    Throwable failure = new com.thorium.lucent.video.RuntimePresentationFailure.Failure("display stopped");
+    Throwable failure = new com.thorium.emufusion.video.RuntimePresentationFailure.Failure("display stopped");
     host.onSessionError("outer message",failure);
     check(host.runtime == 1 && host.fatal == 0 && host.retired == 0 && host.failure == failure,
           "runtime presentation error lost dedicated recovery path");
@@ -98,9 +98,9 @@ public class InternalFailureProbe {
             directory = Path(directory)
             main = directory / 'InternalFailureProbe.java'
             main.write_text(harness)
-            failure = directory / 'com/thorium/lucent/video/RuntimePresentationFailure.java'
+            failure = directory / 'com/thorium/emufusion/video/RuntimePresentationFailure.java'
             failure.parent.mkdir(parents=True)
-            failure.write_text('package com.thorium.lucent.video; public class RuntimePresentationFailure {'
+            failure.write_text('package com.thorium.emufusion.video; public class RuntimePresentationFailure {'
                                'public static class Failure extends RuntimeException {'
                                'public Failure(String message){super(message);}}}')
             compile_result = subprocess.run([str(JAVA/'javac'), '-d', str(directory), str(main), str(failure)],

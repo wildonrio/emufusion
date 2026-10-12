@@ -1,7 +1,7 @@
 package com.thorium.preview.game;
 
 import android.util.Log;
-import com.thorium.lucent.video.SubmissionTimingHistory;
+import com.thorium.emufusion.video.SubmissionTimingHistory;
 
 /** Diagnostic adapter for the audited installed renderer; no pacing decisions. */
 public final class SubmissionTimingOverlay {

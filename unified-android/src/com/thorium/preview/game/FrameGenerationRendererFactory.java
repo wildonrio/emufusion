@@ -2,7 +2,7 @@ package com.thorium.preview.game;
 
 import android.view.Surface;
 
-import com.thorium.lucent.video.FrameGenerationBackendPolicy;
+import com.thorium.emufusion.video.FrameGenerationBackendPolicy;
 
 import java.util.function.BooleanSupplier;
 import java.util.concurrent.atomic.AtomicLong;

@@ -90,7 +90,7 @@
       "reviewState": "SOURCE_FIXED_DEVICE_UNVERIFIED",
       "summary": "Pre-change September 4 audit found load-driven guest downclocking. Current source removes that controller and its probes, and software, GLES and native-adapter session setters reject corrections outside 0.75 percent of the original declared clock. Runtime proof of preserved speed is still required.",
       "sources": [
-        {"path": "unified-android/src/com/thorium/lucent/timing/DisplaySyncPolicy.java", "line": 46},
+        {"path": "unified-android/src/com/thorium/emufusion/timing/DisplaySyncPolicy.java", "line": 46},
         {"path": "unified-android/src/com/thorium/preview/game/LibretroEngineSession.java", "line": 440},
         {"path": "unified-android/src/com/thorium/preview/ExperimentalGlesRenderLoop.java", "line": 878},
         {"path": "unified-android/src/com/thorium/preview/game/NativeAdapterEngineSession.java", "line": 381},
@@ -102,7 +102,7 @@
       "reviewState": "OPEN",
       "summary": "The pre-change panel-ratio path was fixed at one; it has now been removed with the load-tier probes. Current source still uses nominal synchronized clocks and lacks a proved measured fractional-panel clock lock. Physical interval and long-run phase evidence remain required.",
       "sources": [
-        {"path": "unified-android/src/com/thorium/lucent/timing/DisplaySyncPolicy.java", "line": 25},
+        {"path": "unified-android/src/com/thorium/emufusion/timing/DisplaySyncPolicy.java", "line": 25},
         {"path": "unified-android/src/com/thorium/preview/game/InWindowGameHost.java", "line": 1}
       ]
     },
@@ -151,7 +151,7 @@
       "id": "device-specific-policy",
       "summary": "DisplaySyncPolicy uses Thor's 60/120-Hz modes, and Eden forces Docked. Qualification must discover device limits rather than assuming these settings fit every GPU.",
       "sources": [
-        {"path": "unified-android/src/com/thorium/lucent/timing/DisplaySyncPolicy.java", "line": 18},
+        {"path": "unified-android/src/com/thorium/emufusion/timing/DisplaySyncPolicy.java", "line": 18},
         {"path": "engines/patches/eden-lucent-adapter.cpp", "line": 454}
       ]
     }

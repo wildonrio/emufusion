@@ -3,9 +3,9 @@ package com.thorium.preview;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import com.thorium.lucent.emulators.CustomEmulatorSpec;
-import com.thorium.lucent.emulators.ExternalEmulatorDelivery;
-import com.thorium.lucent.metadata.EngineSystemIdResolver;
+import com.thorium.emufusion.emulators.CustomEmulatorSpec;
+import com.thorium.emufusion.emulators.ExternalEmulatorDelivery;
+import com.thorium.emufusion.metadata.EngineSystemIdResolver;
 
 import org.json.JSONArray;
 import org.json.JSONObject;

@@ -16,11 +16,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.thorium.lucent.metadata.MetadataLaunchNormalizer;
+import com.thorium.emufusion.metadata.MetadataLaunchNormalizer;
 
 /** Replaces stale launch commands with EmuFusion's sole in-window route. */
 final class LaunchMetadataRouter {
-    private static final String TAG = "LucentLaunchMetadata";
+    private static final String TAG = "EmuFusionLaunchMetadata";
     static int normalize(Context context) {
         File storage = Environment.getExternalStorageDirectory();
         List<File> roots = Arrays.asList(

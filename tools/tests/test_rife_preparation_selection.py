@@ -17,7 +17,7 @@ class PreparationSelectionTest(unittest.TestCase):
     def test_real_selection_and_backpressure(self):
         qualification=ROOT/'unified-android/qualification-src/com/thorium/preview/game'
         native=ROOT/'experiments/rife-ncnn-vulkan-android/android-benchmark/app/src/main/java/com/emufusion/rifebenchmark'
-        video=ROOT/'unified-android/src/com/thorium/lucent/video'
+        video=ROOT/'unified-android/src/com/thorium/emufusion/video'
         sources=[qualification/'RifePresentationTransport.java',qualification/'RifeQualificationRuntime.java',
                  ROOT/'unified-android/src/com/thorium/preview/game/ExternalFrameGenerationTransport.java',
                  native/'NativeRifeBridge.java',native/'ModelIntegrity.java',

@@ -159,7 +159,7 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
             'android:launchMode="singleTask" android:name="org.pegasus_frontend.android.MainActivity"',
             BUILD,
         )
-        self.assertNotIn('android:name="com.thorium.preview.game.LucentGameActivity"', BUILD)
+        self.assertNotIn('android:name="com.thorium.preview.game.EmuFusionGameActivity"', BUILD)
         self.assertNotIn('android:name="com.thorium.preview.game.InternalGameLaunchActivity"', BUILD)
         self.assertNotIn('android:name="com.thorium.preview.GameLaunchRouter"', BUILD)
 
@@ -232,7 +232,7 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
             "E AndroidRuntime: Process: com.thorium.preview, PID: 42\n"
         ))
         telemetry = module.runtime_telemetry(
-            "I/LucentEngine: Runtime telemetry engine=mesen system=nes "
+            "I/EmuFusionEngine: Runtime telemetry engine=mesen system=nes "
             "frames=180 elapsedMs=3000 measuredFps=60.000 targetFps=60.000 "
             "audioFrames=12345 audioStarted=true\n",
             module.Case("nes", "QA", "mesen", "opaque-case"),
@@ -242,10 +242,10 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
         self.assertTrue(telemetry["audioStarted"])
         self.assertEqual(12345, telemetry["audioFrames"])
         telemetry = module.runtime_telemetry(
-            "I/LucentEngine: Runtime telemetry engine=mesen system=nes "
+            "I/EmuFusionEngine: Runtime telemetry engine=mesen system=nes "
             "frames=300 elapsedMs=6000 measuredFps=50.000 targetFps=60.000 "
             "audioFrames=100 audioStarted=true\n"
-            "I/LucentEngine: Runtime telemetry engine=mesen system=nes "
+            "I/EmuFusionEngine: Runtime telemetry engine=mesen system=nes "
             "frames=300 elapsedMs=5000 measuredFps=60.000 targetFps=60.000 "
             "audioFrames=200 audioStarted=true\n",
             module.Case("nes", "QA", "mesen", "opaque-case"),
@@ -253,7 +253,7 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
         self.assertEqual(60.0, telemetry["measuredFps"])
         self.assertTrue(telemetry["pacingWithinTolerance"])
         slow = module.runtime_telemetry(
-            "I/LucentEngine: Runtime telemetry engine=mesen system=nes "
+            "I/EmuFusionEngine: Runtime telemetry engine=mesen system=nes "
             "frames=300 elapsedMs=5100 measuredFps=58.000 targetFps=60.000 "
             "audioFrames=200 audioStarted=true\n",
             module.Case("nes", "QA", "mesen", "opaque-case"),

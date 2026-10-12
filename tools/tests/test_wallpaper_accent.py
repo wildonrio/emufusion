@@ -31,7 +31,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 UNIFIED = ROOT / "unified-android"
 COMPANION = ROOT / "android-companion" / "src" / "com" / "thorium" / "preview"
-ACCENT_PATH = (UNIFIED / "src" / "com" / "thorium" / "lucent" / "metadata" /
+ACCENT_PATH = (UNIFIED / "src" / "com" / "thorium" / "emufusion" / "metadata" /
                "WallpaperAccent.java")
 
 
@@ -135,8 +135,8 @@ class AccentAlgorithmContractTest(unittest.TestCase):
         self.assertIn("if (sampled == 0 || weightSum <= 0) return null;", body)
 
     def test_the_host_suite_runs_the_algorithm_test(self):
-        self.assertIn("com.thorium.lucent.metadata.WallpaperAccentTest", TEST_SH)
-        self.assertTrue((UNIFIED / "test" / "com" / "thorium" / "lucent" /
+        self.assertIn("com.thorium.emufusion.metadata.WallpaperAccentTest", TEST_SH)
+        self.assertTrue((UNIFIED / "test" / "com" / "thorium" / "emufusion" /
                          "metadata" / "WallpaperAccentTest.java").is_file())
 
 
@@ -283,7 +283,7 @@ class ThemeWallpaperGroupingTest(unittest.TestCase):
 
 
 HARNESS = r'''
-import com.thorium.lucent.metadata.WallpaperAccent;
+import com.thorium.emufusion.metadata.WallpaperAccent;
 
 /** Drives the real accent derivation with synthetic wallpapers. */
 public final class WallpaperAccentHarness {

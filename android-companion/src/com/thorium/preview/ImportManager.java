@@ -10,8 +10,8 @@ import android.os.Environment;
 import android.os.SystemClock;
 import android.util.Log;
 
-import com.thorium.lucent.metadata.TitleMatcher;
-import com.thorium.lucent.metadata.WallpaperAccent;
+import com.thorium.emufusion.metadata.TitleMatcher;
+import com.thorium.emufusion.metadata.WallpaperAccent;
 import com.thorium.preview.game.NativeAdapterPrerequisites;
 
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
@@ -231,8 +231,8 @@ final class ImportManager {
             } finally {
                 running.set(false);
                 Context app = context.getApplicationContext();
-                if (app instanceof LucentApplication)
-                    ((LucentApplication) app).onInitialLibraryScanFinished(changed);
+                if (app instanceof EmuFusionApplication)
+                    ((EmuFusionApplication) app).onInitialLibraryScanFinished(changed);
                 // Do not wait for QML, window focus or a legal/permission
                 // dialog to be dismissed. Checkpoints survive Qt retirement.
                 scheduleMediaResume();
@@ -782,8 +782,8 @@ final class ImportManager {
         // rows alone must not request another restart on every process start.
         if (localIndexChanged || prerequisiteRoutesChanged) {
             Context app = context.getApplicationContext();
-            if (app instanceof LucentApplication)
-                ((LucentApplication) app).onLibraryIndexChanged();
+            if (app instanceof EmuFusionApplication)
+                ((EmuFusionApplication) app).onLibraryIndexChanged();
         }
 
         Map<String, String> mediaBefore = new HashMap<>();

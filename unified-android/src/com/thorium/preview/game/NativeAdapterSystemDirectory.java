@@ -57,7 +57,7 @@ import java.util.zip.ZipFile;
  * undecryptable state that would look like a hang.
  */
 final class NativeAdapterSystemDirectory {
-    private static final String TAG = "LucentPhase3System";
+    private static final String TAG = "EmuFusionPhase3System";
 
     /* Layout Eden derives from the app directory (Common::FS::GetYuzuPath). */
     private static final String KEYS_DIRECTORY = "keys";

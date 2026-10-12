@@ -1,6 +1,6 @@
 package com.thorium.preview.game;
 
-import com.thorium.lucent.timing.DisplaySyncPolicy;
+import com.thorium.emufusion.timing.DisplaySyncPolicy;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -16,32 +16,32 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 
-import com.thorium.lucent.input.CanonicalControl;
-import com.thorium.lucent.cheats.Cheat;
-import com.thorium.lucent.cheats.CheatDatabase;
-import com.thorium.lucent.cheats.CheatSelection;
-import com.thorium.lucent.input.DeviceCatalog;
-import com.thorium.lucent.input.FileRemapStore;
-import com.thorium.lucent.input.GamepadDescriptor;
-import com.thorium.lucent.input.InputRouter;
-import com.thorium.lucent.input.InputSignal;
-import com.thorium.lucent.input.JoypadPressLedger;
-import com.thorium.lucent.input.LibretroJoypadLayout;
-import com.thorium.lucent.input.SystemControlLayouts;
-import com.thorium.lucent.input.WiiIrPointer;
-import com.thorium.lucent.input.android.AndroidDeviceScanner;
-import com.thorium.lucent.input.android.AndroidGamingDeviceDetector;
-import com.thorium.lucent.audio.PcmAudioQueue;
-import com.thorium.lucent.state.CheckpointScheduler;
-import com.thorium.lucent.state.DurableBlobStore;
-import com.thorium.lucent.state.SnapshotKind;
-import com.thorium.lucent.state.QuickResumePolicy;
-import com.thorium.lucent.state.StateIdentity;
-import com.thorium.lucent.state.StateLoadResult;
-import com.thorium.lucent.state.StateSnapshot;
-import com.thorium.lucent.state.StateVault;
-import com.thorium.lucent.video.DualScreenLayout;
-import com.thorium.lucent.video.PresentationGeometry;
+import com.thorium.emufusion.input.CanonicalControl;
+import com.thorium.emufusion.cheats.Cheat;
+import com.thorium.emufusion.cheats.CheatDatabase;
+import com.thorium.emufusion.cheats.CheatSelection;
+import com.thorium.emufusion.input.DeviceCatalog;
+import com.thorium.emufusion.input.FileRemapStore;
+import com.thorium.emufusion.input.GamepadDescriptor;
+import com.thorium.emufusion.input.InputRouter;
+import com.thorium.emufusion.input.InputSignal;
+import com.thorium.emufusion.input.JoypadPressLedger;
+import com.thorium.emufusion.input.LibretroJoypadLayout;
+import com.thorium.emufusion.input.SystemControlLayouts;
+import com.thorium.emufusion.input.WiiIrPointer;
+import com.thorium.emufusion.input.android.AndroidDeviceScanner;
+import com.thorium.emufusion.input.android.AndroidGamingDeviceDetector;
+import com.thorium.emufusion.audio.PcmAudioQueue;
+import com.thorium.emufusion.state.CheckpointScheduler;
+import com.thorium.emufusion.state.DurableBlobStore;
+import com.thorium.emufusion.state.SnapshotKind;
+import com.thorium.emufusion.state.QuickResumePolicy;
+import com.thorium.emufusion.state.StateIdentity;
+import com.thorium.emufusion.state.StateLoadResult;
+import com.thorium.emufusion.state.StateSnapshot;
+import com.thorium.emufusion.state.StateVault;
+import com.thorium.emufusion.video.DualScreenLayout;
+import com.thorium.emufusion.video.PresentationGeometry;
 import com.thorium.preview.ExperimentalGlesRenderLoop;
 import com.thorium.preview.AppVolumeController;
 import com.thorium.preview.SecondaryGameplaySurfaceRouter;
@@ -66,8 +66,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Explicit, qualification-only hardware-capable libretro route. */
 final class PpssppGlesEngineSession implements EngineSession,
         SecondaryGameplaySurfaceRouter.Listener,
-        com.thorium.lucent.netplay.NetplayCapableSession {
-    private static final String TAG = "LucentPhase2Engine";
+        com.thorium.emufusion.netplay.NetplayCapableSession {
+    private static final String TAG = "EmuFusionPhase2Engine";
     private static final float AXIS_DEAD_ZONE = 0.08f;
     private static final float AXIS_PRESS = 0.55f;
     private static final int MAX_SAVE_RAM_BYTES = 64 * 1024 * 1024;
@@ -141,15 +141,15 @@ final class PpssppGlesEngineSession implements EngineSession,
      * later (same forward-reference rule as joypad/wiiIrPointer ordering
      * relative to other fields in this class).
      */
-    private volatile com.thorium.lucent.netplay.NetplayInputRelay netplayRelay;
+    private volatile com.thorium.emufusion.netplay.NetplayInputRelay netplayRelay;
     private final JoypadPressLedger.Sink joypadSink = (retroId, pressed) -> {
         ExperimentalGlesRenderLoop active = renderLoop;
         if (active != null) active.setJoypadButton(0, retroId, pressed);
-        com.thorium.lucent.netplay.NetplayInputRelay relay = netplayRelay;
+        com.thorium.emufusion.netplay.NetplayInputRelay relay = netplayRelay;
         if (relay != null) relay.onLocalJoypadButton(retroId, pressed);
     };
 
-    public void attachNetplayRelay(com.thorium.lucent.netplay.NetplayInputRelay relay) {
+    public void attachNetplayRelay(com.thorium.emufusion.netplay.NetplayInputRelay relay) {
         this.netplayRelay = relay;
     }
 
@@ -178,7 +178,7 @@ final class PpssppGlesEngineSession implements EngineSession,
         if (active != null) active.setAnalogAxis(port, retroAnalogIndex, retroAnalogId, normalizedValue);
     }
 
-    /** {@link com.thorium.lucent.netplay.NetplayCapableSession}: the same serialize() Quick Resume already uses. */
+    /** {@link com.thorium.emufusion.netplay.NetplayCapableSession}: the same serialize() Quick Resume already uses. */
     public byte[] currentSerializedStateForDesync() {
         ExperimentalGlesRenderLoop active = renderLoop;
         if (active == null) return null;

@@ -4,13 +4,13 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 NORMALIZER = (ROOT / "unified-android" / "src" / "com" / "thorium" /
-              "lucent" / "metadata" / "MetadataLaunchNormalizer.java").read_text(
+              "emufusion" / "metadata" / "MetadataLaunchNormalizer.java").read_text(
                   encoding="utf-8")
 SYSTEM_RESOLVER = (ROOT / "unified-android" / "src" / "com" / "thorium" /
-                   "lucent" / "metadata" / "EngineSystemIdResolver.java").read_text(
+                   "emufusion" / "metadata" / "EngineSystemIdResolver.java").read_text(
                            encoding="utf-8")
 COMMAND = (ROOT / "unified-android" / "src" / "com" / "thorium" /
-           "lucent" / "metadata" / "MetadataGameLaunchCommand.java").read_text(
+           "emufusion" / "metadata" / "MetadataGameLaunchCommand.java").read_text(
                    encoding="utf-8")
 ROUTER = (ROOT / "android-companion" / "src" / "com" / "thorium" /
           "preview" / "GameLaunchRouter.java").read_text(encoding="utf-8")
@@ -27,7 +27,7 @@ BRIDGE = (ROOT / "android-companion" / "src" / "com" / "thorium" /
 PATCHER = (ROOT / "unified-android" / "tools" /
            "patch_main_activity_right_stick.py").read_text(encoding="utf-8")
 APPLICATION = (ROOT / "unified-android" / "src" / "com" / "thorium" /
-               "preview" / "LucentApplication.java").read_text(encoding="utf-8")
+               "preview" / "EmuFusionApplication.java").read_text(encoding="utf-8")
 BUILD = (ROOT / "unified-android" / "build.sh").read_text(encoding="utf-8")
 THEME = (ROOT / "theme" / "theme.qml").read_text(encoding="utf-8")
 BOOTSTRAP = (ROOT / "unified-android" / "src" / "com" / "thorium" /
@@ -81,7 +81,7 @@ class GameLaunchRouterTest(unittest.TestCase):
         self.assertIn('" --es engine_id " + engine', COMMAND)
 
     def test_menu_command_is_intercepted_before_starting_an_activity(self):
-        self.assertIn("LucentApplication.currentMainActivity()", BRIDGE)
+        self.assertIn("EmuFusionApplication.currentMainActivity()", BRIDGE)
         self.assertIn("Intercepted lifecycle-neutral menu launch", BRIDGE)
         self.assertIn("activity.runOnUiThread", BRIDGE)
         self.assertIn("InWindowGameHost.handleIntent(activity, request)", BRIDGE)

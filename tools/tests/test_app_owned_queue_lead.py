@@ -15,9 +15,9 @@ class AppOwnedQueueLeadTest(unittest.TestCase):
         expression = body.split('if (System.nanoTime() >= request.hardCompletionDeadlineNs()', 1)[1].split(' {', 1)[0]
         expression = ('System.nanoTime() >= request.hardCompletionDeadlineNs()' + expression)[:-1]
         expression = expression.replace('System.nanoTime()', 'now')
-        source = ROOT / 'unified-android/src/com/thorium/lucent/video/PhysicalPresentationDeadline.java'
+        source = ROOT / 'unified-android/src/com/thorium/emufusion/video/PhysicalPresentationDeadline.java'
         java = '''
-import com.thorium.lucent.video.PhysicalPresentationDeadline;
+import com.thorium.emufusion.video.PhysicalPresentationDeadline;
 class BootstrapAdmissionProbe {
  static class Request {
   long hardCompletionDeadlineNs(){return 100000000L;}
@@ -48,9 +48,9 @@ class BootstrapAdmissionProbe {
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_measured_failure_and_boundaries(self):
-        source = ROOT / 'unified-android/src/com/thorium/lucent/video/PhysicalPresentationDeadline.java'
+        source = ROOT / 'unified-android/src/com/thorium/emufusion/video/PhysicalPresentationDeadline.java'
         code = '''
-import com.thorium.lucent.video.PhysicalPresentationDeadline;
+import com.thorium.emufusion.video.PhysicalPresentationDeadline;
 class QueueLeadProbe {
  static void check(boolean value) { if (!value) throw new AssertionError(); }
  static boolean admit(long target,long period,long now) {

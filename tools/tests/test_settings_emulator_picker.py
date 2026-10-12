@@ -25,7 +25,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPANION = ROOT / "android-companion" / "src" / "com" / "thorium" / "preview"
-LUCENT = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "emulators"
+LUCENT = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "emulators"
 DIRECTORY_PATH = ROOT / "engines" / "external-emulators.json"
 SCHEMA_PATH = ROOT / "engines" / "external-emulators.schema.json"
 
@@ -523,7 +523,7 @@ class RouteEndpointTest(unittest.TestCase):
 
 
 THEME = _read(ROOT / "theme" / "theme.qml")
-LEGAL = _read(ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" /
+LEGAL = _read(ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" /
               "legal" / "LegalNotice.java")
 
 
@@ -705,8 +705,8 @@ class LegalNoticeScreenTest(unittest.TestCase):
         self.assertIn("root.legalParagraphs[index]", THEME)
 
     def test_the_endpoint_serves_the_single_source(self):
-        self.assertIn("com.thorium.lucent.legal.LegalNotice.PARAGRAPHS", SERVICE)
-        self.assertIn("com.thorium.lucent.legal.LegalNotice.TITLE", SERVICE)
+        self.assertIn("com.thorium.emufusion.legal.LegalNotice.PARAGRAPHS", SERVICE)
+        self.assertIn("com.thorium.emufusion.legal.LegalNotice.TITLE", SERVICE)
         self.assertIn('"/legal/notice".equals(path)', SERVICE)
 
     def test_the_settings_copy_has_no_acceptance_gate(self):
@@ -739,8 +739,8 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("EmulatorCatalog.optionsForSystem(canonical)", PICKER)
 
     def test_host_tests_are_compiled_and_actually_run(self):
-        self.assertIn("src/com/thorium/lucent/emulators", TEST_SH)
-        self.assertIn("com.thorium.lucent.emulators.ExternalEmulatorModelTest", TEST_SH)
+        self.assertIn("src/com/thorium/emufusion/emulators", TEST_SH)
+        self.assertIn("com.thorium.emufusion.emulators.ExternalEmulatorModelTest", TEST_SH)
 
     def test_the_model_layer_stays_free_of_android_and_json(self):
         # This split is what makes the host tests possible at all.

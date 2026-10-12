@@ -15,8 +15,8 @@ REGISTRY = ROOT / "engines" / "phase2-registry.json"
 LOCK = ROOT / "engines" / "dolphin-source-lock.json"
 RECIPE = ROOT / "engines" / "build_core.sh"
 ACTIVITY_QA = ROOT / "unified-android" / "tools" / "run_phase2_activity_qa.py"
-LIBRETRO_INPUT = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "input" / "LibretroJoypadLayout.java"
-SYSTEM_LAYOUTS = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "input" / "SystemControlLayouts.java"
+LIBRETRO_INPUT = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "input" / "LibretroJoypadLayout.java"
+SYSTEM_LAYOUTS = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "input" / "SystemControlLayouts.java"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_controller_mapping import layout_blocks  # noqa: E402
 LIBRETRO_HOST = ROOT / "unified-android" / "native" / "lucent_libretro_host.c"
@@ -28,7 +28,7 @@ PHASE2_SESSION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview
 GLES_HOST = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "ExperimentalGlesLibretroHost.java"
 GLES_LOOP = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "ExperimentalGlesRenderLoop.java"
 GLES_JNI = ROOT / "unified-android" / "native" / "lucent_libretro_jni.c"
-WII_POINTER = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "input" / "WiiIrPointer.java"
+WII_POINTER = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "input" / "WiiIrPointer.java"
 DISC_PREFLIGHT = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game" / "DiscImagePreflight.java"
 CORRUPT_FBO_FIXTURE = (
     ROOT / "unified-android" / "test" / "fixtures" / "dolphin-corrupt-fbo.png"

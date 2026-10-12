@@ -1,8 +1,8 @@
 package com.thorium.preview.game;
 
 import android.view.Surface;
-import com.thorium.lucent.video.NativeSourceImageProvider;
-import com.thorium.lucent.video.RuntimePresentationFailure;
+import com.thorium.emufusion.video.NativeSourceImageProvider;
+import com.thorium.emufusion.video.RuntimePresentationFailure;
 
 /**
  * Engine-facing contract for one EmuFusion-owned frame-generation renderer.

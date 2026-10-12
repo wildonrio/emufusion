@@ -25,7 +25,7 @@ BROWSER = COMPANION / "BrowserActivity.java"
 PREVIEW_ACTIVITY = COMPANION / "PreviewActivity.java"
 PREVIEW_SERVICE = COMPANION / "PreviewService.java"
 FRONTEND_RESTART = COMPANION / "FrontendRestartActivity.java"
-LUCENT_APPLICATION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "LucentApplication.java"
+LUCENT_APPLICATION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "EmuFusionApplication.java"
 ROUTER = COMPANION / "SecondaryGameplaySurfaceRouter.java"
 MANIFEST = ROOT / "android-companion" / "AndroidManifest.xml"
 BUILD = ROOT / "unified-android" / "build.sh"
@@ -342,7 +342,7 @@ class PreviewBreakTest(unittest.TestCase):
         self.assertIn("FrontendRestartActivity.EXTRA_OLD_PROCESS_PID",
                       reload_frontend)
         self.assertIn("Intent.FLAG_ACTIVITY_NO_ANIMATION", reload_frontend)
-        self.assertIn("LucentApplication.currentMainActivity()", reload_frontend)
+        self.assertIn("EmuFusionApplication.currentMainActivity()", reload_frontend)
         self.assertIn("frontendOwner.hasWindowFocus()", reload_frontend)
         self.assertIn("frontendOwner.startActivity(restart)", reload_frontend)
         self.assertNotIn("startActivity(frontend)", code(reload_frontend))

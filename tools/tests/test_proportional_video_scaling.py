@@ -22,10 +22,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GEOMETRY = (ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" /
+GEOMETRY = (ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" /
             "video" / "PresentationGeometry.java")
 GEOMETRY_TEST = (ROOT / "unified-android" / "test" / "com" / "thorium" /
-                 "lucent" / "video" / "PresentationGeometryTest.java")
+                 "emufusion" / "video" / "PresentationGeometryTest.java")
 SURFACE = (ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" /
            "game" / "GameSurface.java")
 SURFACE_VIEW = (ROOT / "unified-android" / "src" / "com" / "thorium" /
@@ -357,7 +357,7 @@ class ProportionalVideoScalingTest(unittest.TestCase):
 
     def test_the_java_scaling_unit_test_runs(self):
         self.assertTrue(GEOMETRY_TEST.is_file())
-        self.assertIn("com.thorium.lucent.video.PresentationGeometryTest",
+        self.assertIn("com.thorium.emufusion.video.PresentationGeometryTest",
                       TEST_RUNNER.read_text(encoding="utf-8"))
 
 

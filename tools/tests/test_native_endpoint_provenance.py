@@ -11,7 +11,7 @@ import unittest
 from tools.tests.test_native_source_image_renderer_wiring import method, JAVA
 
 ROOT = Path(__file__).resolve().parents[2]
-VIDEO = ROOT / "unified-android/src/com/thorium/lucent/video"
+VIDEO = ROOT / "unified-android/src/com/thorium/emufusion/video"
 DFG = ROOT / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
 
 
@@ -36,7 +36,7 @@ class NativeEndpointProvenanceTest(unittest.TestCase):
             "private void commitBufferedEndpointAdvance(int presentation, int advance)",
         )
         fixture = r'''
-import com.thorium.lucent.video.*;
+import com.thorium.emufusion.video.*;
 import java.nio.*;
 import java.lang.management.ManagementFactory;
 public class ProvenanceTest {

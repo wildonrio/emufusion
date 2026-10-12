@@ -1,6 +1,6 @@
 package com.thorium.preview.cheats.delivery;
 
-import com.thorium.lucent.cheats.CheatSelection;
+import com.thorium.emufusion.cheats.CheatSelection;
 import com.thorium.preview.cheats.CheatStore;
 
 import org.json.JSONArray;

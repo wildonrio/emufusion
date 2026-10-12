@@ -13,7 +13,7 @@ import java.io.File;
 public final class InternalGameLaunchActivity extends Activity {
     public static final String ACTION_LAUNCH = "com.thorium.preview.LAUNCH_INTERNAL_GAME";
     private static final String AUTHORITY = "com.thorium.preview.roms";
-    private static final String TAG = "LucentLaunch";
+    private static final String TAG = "EmuFusionLaunch";
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -58,7 +58,7 @@ public final class InternalGameLaunchActivity extends Activity {
         Log.i(TAG, "Internal route accepted engine=" + request.engineId +
                 " system=" + request.systemId);
 
-        Intent launch = LucentGameActivity.createIntent(this, request)
+        Intent launch = EmuFusionGameActivity.createIntent(this, request)
                 .setDataAndType(uri, "application/octet-stream");
         launch.setClipData(ClipData.newRawUri("rom", uri));
         try {

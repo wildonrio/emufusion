@@ -2,7 +2,7 @@ package com.thorium.preview.cheats.sources;
 
 import android.content.Context;
 
-import com.thorium.lucent.cheats.Cheat;
+import com.thorium.emufusion.cheats.Cheat;
 
 import java.io.File;
 import java.io.IOException;

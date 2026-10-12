@@ -10,7 +10,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SESSION = ROOT / "unified-android/src/com/thorium/preview/game/NativeAdapterEngineSession.java"
-POLICY = ROOT / "unified-android/src/com/thorium/lucent/emulators/NativeAdapterStopPolicy.java"
+POLICY = ROOT / "unified-android/src/com/thorium/emufusion/emulators/NativeAdapterStopPolicy.java"
 JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
@@ -33,10 +33,10 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import java.util.function.BooleanSupplier;
-import com.thorium.lucent.emulators.NativeAdapterStopPolicy;
+import com.thorium.emufusion.emulators.NativeAdapterStopPolicy;
 import com.thorium.preview.game.DiscImagePreflight;
 interface EngineSession {
-    enum StopReason { EXIT_TO_LUCENT, ACTIVITY_DESTROYED }
+    enum StopReason { EXIT_TO_EMUFUSION, ACTIVITY_DESTROYED }
     interface Completion { void complete(); }
     interface Listener {
         void onSessionStopRejected(String message,Throwable failure);
@@ -185,7 +185,7 @@ public class NativeAdapterEngineSession implements EngineSession {
     static void duplicateStopAndRelease() throws Exception {
         NativeAdapterEngineSession s=new NativeAdapterEngineSession();NativeAdapterHost h=s.host;
         h.blockClose=true;AtomicInteger stopped=new AtomicInteger(),released=new AtomicInteger();
-        s.stop(StopReason.EXIT_TO_LUCENT,stopped::incrementAndGet);
+        s.stop(StopReason.EXIT_TO_EMUFUSION,stopped::incrementAndGet);
         check(h.closeEntered.await(2,TimeUnit.SECONDS),"stop never reached native close");
         s.stop(StopReason.ACTIVITY_DESTROYED,stopped::incrementAndGet);
         s.releaseWhenComplete(released::incrementAndGet);
@@ -234,7 +234,7 @@ public class NativeAdapterEngineSession implements EngineSession {
     static void durableSaveFailureIsNotReportedAsSuccess() throws Exception {
         NativeAdapterEngineSession s=new NativeAdapterEngineSession();NativeAdapterHost h=s.host;
         s.capabilities.hasPersistentSave=true;h.flushFailure=true;AtomicInteger done=new AtomicInteger();
-        s.stop(StopReason.EXIT_TO_LUCENT,done::incrementAndGet);
+        s.stop(StopReason.EXIT_TO_EMUFUSION,done::incrementAndGet);
         await(()->done.get()==1,"flush failure changed final-stop retirement policy");
         check(s.rejected.get()==1 && h.flushes.get()==1 && h.closes.get()==1,"flush failure was not reported");
         check(Log.info.stream().noneMatch(text->text.contains("save flushed and session stopped")),
@@ -245,7 +245,7 @@ public class NativeAdapterEngineSession implements EngineSession {
         s.started=false;s.prepared=false;
         s.capabilities.hasQuickResume=true;s.capabilities.hasPersistentSave=true;
         h.flushFailure=true;h.state=null;AtomicInteger done=new AtomicInteger();
-        s.stop(StopReason.EXIT_TO_LUCENT,done::incrementAndGet);
+        s.stop(StopReason.EXIT_TO_EMUFUSION,done::incrementAndGet);
         await(()->done.get()==1,"failed launch did not retire");
         check(s.rejected.get()==0 && h.flushes.get()==0 && h.serializes.get()==0,
                 "unstarted guest attempted a save or reported save loss");
@@ -269,7 +269,7 @@ public class NativeAdapterEngineSession implements EngineSession {
                 else Thread.yield();
             }
         });
-        s.renderThread.start();s.stop(StopReason.EXIT_TO_LUCENT,done::incrementAndGet);
+        s.renderThread.start();s.stop(StopReason.EXIT_TO_EMUFUSION,done::incrementAndGet);
         await(()->quickResume ? !s.renderTasks.isEmpty() : !s.prepared,"stop not waiting on start");
         check(h.flushes.get()==0 && h.serializes.get()==0 && done.get()==0,"save/close overtook start");
         begin.countDown();await(()->done.get()==1,"pending start was not retired");
@@ -284,7 +284,7 @@ public class NativeAdapterEngineSession implements EngineSession {
         s.renderThread=new Thread(()->{
             while(s.prepared){RenderTask task=s.renderTasks.poll();if(task!=null)task.run();else Thread.yield();}
         });
-        s.renderThread.start();s.stop(StopReason.EXIT_TO_LUCENT,done::incrementAndGet);
+        s.renderThread.start();s.stop(StopReason.EXIT_TO_EMUFUSION,done::incrementAndGet);
         await(()->done.get()==1,"invalid snapshot did not retire");
         check(s.rejected.get()==1 && h.serializes.get()==1 && DurableBlobStore.writes.get()==0,
                 "empty snapshot of started guest silently accepted");
@@ -302,7 +302,7 @@ public class NativeAdapterEngineSession implements EngineSession {
         NativeAdapterEngineSession s=new NativeAdapterEngineSession();NativeAdapterHost h=s.host;
         s.entry.id="aps3e";s.capabilities.hasQuickResume=true;s.serializationFailure=true;
         AtomicInteger done=new AtomicInteger();
-        s.stop(StopReason.EXIT_TO_LUCENT,done::incrementAndGet);
+        s.stop(StopReason.EXIT_TO_EMUFUSION,done::incrementAndGet);
         await(()->done.get()==1,"retained policy failed to retire Java owner");
         s.releaseWhenComplete(done::incrementAndGet);await(()->done.get()==2,"retained release incomplete");
         check(h.stops.get()==0 && h.closes.get()==0 && s.rejected.get()==0 && s.host==null,

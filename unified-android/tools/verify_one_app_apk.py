@@ -95,7 +95,7 @@ ALLOWED_EMULATOR_SHIM_CLASSES = frozenset({
 # NOT here anymore: it is EmuFusion's own external-route trampoline (see above).
 FORBIDDEN_DEX_CLASSES = (
     "InternalGameLaunchActivity",
-    "LucentGameActivity",
+    "EmuFusionGameActivity",
     "QualificationLaunchActivity",
     "SessionReturnRouter",
     "com/thorium/launchbridge/LaunchActivity",
@@ -177,10 +177,10 @@ def verify_manifest(xmltree: str, expected_label: str = APP_LABEL) -> list[str]:
         errors.append(f"expected one application, found {len(applications)}")
     else:
         if _raw_attribute(applications[0], "name") != \
-                "com.thorium.preview.LucentApplication":
-            errors.append("application class is not LucentApplication")
+                "com.thorium.preview.EmuFusionApplication":
+            errors.append("application class is not EmuFusionApplication")
         # The product is branded EmuFusion. The Application CLASS above stays
-        # LucentApplication deliberately: it is an internal identifier, and
+        # EmuFusionApplication deliberately: it is an internal identifier, and
         # renaming it is part of the wider package rename rather than of the
         # user-facing branding, so the two are asserted separately.
         if _raw_attribute(applications[0], "label") != expected_label:

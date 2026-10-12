@@ -732,7 +732,7 @@ def app_crash_markers(log: str) -> list[str]:
             found.append("Fatal signal")
             break
 
-    for marker in (f"ANR in {PACKAGE}", "E/LucentEngine", "Unable to prepare"):
+    for marker in (f"ANR in {PACKAGE}", "E/EmuFusionEngine", "Unable to prepare"):
         if marker in log:
             found.append(marker)
     return found

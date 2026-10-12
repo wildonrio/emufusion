@@ -15,7 +15,7 @@ public final class SecondaryGameplaySurfaceRouter {
             "com.thorium.preview.SECONDARY_GAMEPLAY";
     static final String EXTRA_GENERATION = "secondary_gameplay_generation";
     static final String EXTRA_SYSTEM = "secondary_gameplay_system";
-    private static final String TAG = "LucentSecondary";
+    private static final String TAG = "EmuFusionSecondary";
 
     public interface Listener {
         void onSecondarySurfaceAvailable(Surface surface, int width, int height);

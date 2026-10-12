@@ -1,4 +1,4 @@
-import com.thorium.lucent.video.*;
+import com.thorium.emufusion.video.*;
 import java.util.ArrayList;
 
 public class SlotReservationFixture {

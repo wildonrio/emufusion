@@ -113,7 +113,7 @@ class LogObserver:
         self.lines: queue.Queue[tuple[float, str]] = queue.Queue()
         self.all_lines: list[str] = []
         self.process = subprocess.Popen(
-            # Do not tag-filter this stream. FPS comes from LucentPhase3Engine,
+            # Do not tag-filter this stream. FPS comes from EmuFusionPhase3Engine,
             # but native crash, package-kill and install-contention evidence is
             # emitted by DEBUG, crash_dump, ActivityManager and PackageManager.
             # A filtered stream would make the crash gate silently blind.

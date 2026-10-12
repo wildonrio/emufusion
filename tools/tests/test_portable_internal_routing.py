@@ -13,8 +13,8 @@ class PortableInternalRoutingTest(unittest.TestCase):
         sources = [
             ROOT / 'android-companion/src/com/thorium/preview/EngineRouteStore.java',
             ROOT / 'android-companion/src/com/thorium/preview/GameLaunchRouter.java',
-            ROOT / 'unified-android/src/com/thorium/lucent/metadata/EngineSystemIdResolver.java',
-            ROOT / 'unified-android/src/com/thorium/lucent/metadata/MetadataGameLaunchCommand.java',
+            ROOT / 'unified-android/src/com/thorium/emufusion/metadata/EngineSystemIdResolver.java',
+            ROOT / 'unified-android/src/com/thorium/emufusion/metadata/MetadataGameLaunchCommand.java',
         ]
         harness = r'''
 import java.util.*;

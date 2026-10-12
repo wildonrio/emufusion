@@ -12,11 +12,11 @@ class BetweenCallbackRetryTest(unittest.TestCase):
     def test_owner_task_identity_and_next_physical_slot(self):
         source = (ROOT / 'unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java').read_text()
         body = method(source, 'private void scheduleAppOwnedRetry()')
-        clock = ROOT / 'unified-android/src/com/thorium/lucent/video/PhysicalPresentationDeadline.java'
+        clock = ROOT / 'unified-android/src/com/thorium/emufusion/video/PhysicalPresentationDeadline.java'
         code = '''
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import com.thorium.lucent.video.PhysicalPresentationDeadline;
+import com.thorium.emufusion.video.PhysicalPresentationDeadline;
 public class OwnerRetryProbe {
  static class FrameGenerationPresentationRequest {}
  class Handler {

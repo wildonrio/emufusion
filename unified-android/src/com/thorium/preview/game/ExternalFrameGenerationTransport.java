@@ -3,11 +3,11 @@ package com.thorium.preview.game;
 import android.view.Surface;
 import android.os.Handler;
 
-import com.thorium.lucent.video.FrameGenerationPresentationRequest;
-import com.thorium.lucent.video.FrameGenerationPreparationRequest;
-import com.thorium.lucent.video.ExternalGeneratedContentProof;
-import com.thorium.lucent.video.PhysicalPresentMargin;
-import com.thorium.lucent.video.NativeSourceImageLedger;
+import com.thorium.emufusion.video.FrameGenerationPresentationRequest;
+import com.thorium.emufusion.video.FrameGenerationPreparationRequest;
+import com.thorium.emufusion.video.ExternalGeneratedContentProof;
+import com.thorium.emufusion.video.PhysicalPresentMargin;
+import com.thorium.emufusion.video.NativeSourceImageLedger;
 
 import java.util.List;
 
@@ -63,7 +63,7 @@ public interface ExternalFrameGenerationTransport extends AutoCloseable {
      * 60->120) instead of the built-in x3 tiers it can never fill.
      */
     default double maxGenerationFactor() {
-        return com.thorium.lucent.video.UniformFrameRatePlan.MAX_GENERATION_FACTOR;
+        return com.thorium.emufusion.video.UniformFrameRatePlan.MAX_GENERATION_FACTOR;
     }
 
     /**

@@ -20,7 +20,7 @@ PREVIEW_ACTIVITY = (ROOT / "android-companion" / "src" / "com" / "thorium" /
 PREVIEW_SERVICE = (ROOT / "android-companion" / "src" / "com" / "thorium" /
                    "preview" / "PreviewService.java")
 LUCENT_APPLICATION = (ROOT / "unified-android" / "src" / "com" / "thorium" /
-                      "preview" / "LucentApplication.java")
+                      "preview" / "EmuFusionApplication.java")
 BROWSER_ACTIVITY = (ROOT / "android-companion" / "src" / "com" / "thorium" /
                     "preview" / "BrowserActivity.java")
 BRANDING_PATCH = (ROOT / "unified-android" / "tools" /

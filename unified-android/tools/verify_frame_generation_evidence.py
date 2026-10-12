@@ -1262,11 +1262,11 @@ ROUTE_EVENT = re.compile(
     r"In-window route accepted engine=([^ ]+) system=([^\s]+)"
 )
 ROUTE_BRIEF_PID = re.compile(
-    r"^\s*[VDIWEF]/(?:InWindowGameHost|LucentInWindow)\(\s*(\d+)\s*\)\s*:"
+    r"^\s*[VDIWEF]/(?:InWindowGameHost|EmuFusionInWindow)\(\s*(\d+)\s*\)\s*:"
 )
 ROUTE_THREADTIME_PID = re.compile(
     r"^\s*\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,6}\s+"
-    r"(\d+)\s+\d+\s+[VDIWEF]\s+(?:InWindowGameHost|LucentInWindow)\s*:"
+    r"(\d+)\s+\d+\s+[VDIWEF]\s+(?:InWindowGameHost|EmuFusionInWindow)\s*:"
 )
 SHA256 = re.compile(r"[0-9a-f]{64}")
 SAFE_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")

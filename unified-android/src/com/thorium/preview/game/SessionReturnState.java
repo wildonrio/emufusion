@@ -5,7 +5,7 @@ import android.content.Intent;
 /**
  * The exact frontend selection to reveal after emulation finishes.
  *
- * The frontend remains alive below LucentGameActivity in the normal path, so
+ * The frontend remains alive below EmuFusionGameActivity in the normal path, so
  * this state is primarily a recovery contract for process/task recreation.
  */
 public final class SessionReturnState {

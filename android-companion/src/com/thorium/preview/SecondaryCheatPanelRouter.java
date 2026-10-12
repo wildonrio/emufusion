@@ -8,7 +8,7 @@ import android.os.Build;
 import android.provider.Settings;
 import android.util.Log;
 
-import com.thorium.lucent.cheats.CheatPanelSnapshot;
+import com.thorium.emufusion.cheats.CheatPanelSnapshot;
 
 /**
  * Puts the running game's cheat list on EmuFusion's physical lower display.
@@ -33,7 +33,7 @@ public final class SecondaryCheatPanelRouter {
     public static final String ACTION_SECONDARY_CHEATS =
             "com.thorium.preview.SECONDARY_CHEATS";
     static final String EXTRA_GENERATION = "secondary_cheats_generation";
-    private static final String TAG = "LucentCheatPanel";
+    private static final String TAG = "EmuFusionCheatPanel";
 
     /** The game host, which owns the cheats and the pad. */
     public interface Controller {

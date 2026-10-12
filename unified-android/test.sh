@@ -10,16 +10,16 @@ mkdir -p "$TEST_BUILD"
 
 # Android adapters are compiled by build.sh. These host tests intentionally use
 # only the platform-neutral state/input core and therefore need no device or SDK.
-SOURCES=$(find "$PROJECT_DIR/src/com/thorium/lucent/state" \
-    "$PROJECT_DIR/src/com/thorium/lucent/audio" \
-    "$PROJECT_DIR/src/com/thorium/lucent/input" \
-    "$PROJECT_DIR/src/com/thorium/lucent/navigation" \
-    "$PROJECT_DIR/src/com/thorium/lucent/metadata" \
-    "$PROJECT_DIR/src/com/thorium/lucent/timing" \
-    "$PROJECT_DIR/src/com/thorium/lucent/video" \
-    "$PROJECT_DIR/src/com/thorium/lucent/cheats" \
-    "$PROJECT_DIR/src/com/thorium/lucent/emulators" \
-    "$PROJECT_DIR/src/com/thorium/lucent/legal" "$PROJECT_DIR/test" \
+SOURCES=$(find "$PROJECT_DIR/src/com/thorium/emufusion/state" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/audio" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/input" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/navigation" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/metadata" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/timing" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/video" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/cheats" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/emulators" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/legal" "$PROJECT_DIR/test" \
     -name '*.java' ! -path '*/input/android/*' \
     ! -name 'RightStickMotionBridge.java' -print)
 SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/cheats/CheatArchive.java"
@@ -42,125 +42,125 @@ SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/WidescreenHackTable.
 SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/GpuDriverTable.java"
 "$JAVA_HOME/bin/javac" --release 8 -encoding UTF-8 \
     -d "$TEST_BUILD" $SOURCES
-"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.lucent.state.StateVaultTest
-"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.lucent.emulators.NativeQualificationStorageTest
-"$JAVA_HOME/bin/java" -Xmx192m -cp "$TEST_BUILD" com.thorium.lucent.state.StateVaultHeapTest
-"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.lucent.state.StateVaultPayloadValidationTest
-"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.lucent.audio.PcmAudioQueueTest
-"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.lucent.audio.PcmSignalTelemetryTest
-"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.lucent.input.InputRouterTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.emufusion.state.StateVaultTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.emufusion.emulators.NativeQualificationStorageTest
+"$JAVA_HOME/bin/java" -Xmx192m -cp "$TEST_BUILD" com.thorium.emufusion.state.StateVaultHeapTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.emufusion.state.StateVaultPayloadValidationTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.emufusion.audio.PcmAudioQueueTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.emufusion.audio.PcmSignalTelemetryTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" com.thorium.emufusion.input.InputRouterTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.input.LibretroJoypadLayoutTest
+    com.thorium.emufusion.input.LibretroJoypadLayoutTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.input.JoypadPressLedgerTest
+    com.thorium.emufusion.input.JoypadPressLedgerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.input.WiiIrPointerTest
+    com.thorium.emufusion.input.WiiIrPointerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.navigation.RightStickViewRouterTest
+    com.thorium.emufusion.navigation.RightStickViewRouterTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.timing.AbsoluteFramePacerTest
+    com.thorium.emufusion.timing.AbsoluteFramePacerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.timing.VsyncCadenceTest
+    com.thorium.emufusion.timing.VsyncCadenceTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.timing.LatestValueMailboxTest
+    com.thorium.emufusion.timing.LatestValueMailboxTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.timing.DirectVideoTelemetryTest
+    com.thorium.emufusion.timing.DirectVideoTelemetryTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.timing.DisplaySyncPolicyTest
+    com.thorium.emufusion.timing.DisplaySyncPolicyTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.metadata.MetadataLaunchNormalizerTest
+    com.thorium.emufusion.metadata.MetadataLaunchNormalizerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.metadata.EngineSystemIdResolverTest
+    com.thorium.emufusion.metadata.EngineSystemIdResolverTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.metadata.WallpaperAccentTest
+    com.thorium.emufusion.metadata.WallpaperAccentTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.metadata.TitleMatcherTest
+    com.thorium.emufusion.metadata.TitleMatcherTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.DualScreenLayoutTest
+    com.thorium.emufusion.video.DualScreenLayoutTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.PresentationGeometryTest
+    com.thorium.emufusion.video.PresentationGeometryTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.FrameGenerationCadenceTest
+    com.thorium.emufusion.video.FrameGenerationCadenceTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.FrameGenerationPresentationRequestTest
+    com.thorium.emufusion.video.FrameGenerationPresentationRequestTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.CompositorFrameTimelineTest
+    com.thorium.emufusion.video.CompositorFrameTimelineTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.CompositorPredictionLatticeTest
+    com.thorium.emufusion.video.CompositorPredictionLatticeTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.ExternalPresentationLedgerTest
+    com.thorium.emufusion.video.ExternalPresentationLedgerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.ExternalPresentationEvidenceTest
+    com.thorium.emufusion.video.ExternalPresentationEvidenceTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.AppOwnedExternalPresentationEvidenceTest
+    com.thorium.emufusion.video.AppOwnedExternalPresentationEvidenceTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.ExternalGeneratedContentEvidenceTest
+    com.thorium.emufusion.video.ExternalGeneratedContentEvidenceTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.UniformFrameRatePlanTest
+    com.thorium.emufusion.video.UniformFrameRatePlanTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.GpuWorkAdaptationPolicyTest
+    com.thorium.emufusion.video.GpuWorkAdaptationPolicyTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.GpuPairTimingLedgerTest
+    com.thorium.emufusion.video.GpuPairTimingLedgerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.GpuPhysicalHeadroomLedgerTest
+    com.thorium.emufusion.video.GpuPhysicalHeadroomLedgerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.MidpointPairBudgetTest
+    com.thorium.emufusion.video.MidpointPairBudgetTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.PhysicalPresentationCadenceTest
+    com.thorium.emufusion.video.PhysicalPresentationCadenceTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.PhysicalPresentationClockTest
+    com.thorium.emufusion.video.PhysicalPresentationClockTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.PresentationClockDiagnosticsTest
+    com.thorium.emufusion.video.PresentationClockDiagnosticsTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.ExternalPhysicalClockBootstrapTest
+    com.thorium.emufusion.video.ExternalPhysicalClockBootstrapTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.PhysicalPresentMarginTest
+    com.thorium.emufusion.video.PhysicalPresentMarginTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.PhysicalPresentationDeadlineTest
+    com.thorium.emufusion.video.PhysicalPresentationDeadlineTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.DenseFlowTrajectoryDiagnosticsTest
+    com.thorium.emufusion.video.DenseFlowTrajectoryDiagnosticsTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.EndpointFrameSelectorTest
+    com.thorium.emufusion.video.EndpointFrameSelectorTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.NativeSourceImageTest
+    com.thorium.emufusion.video.NativeSourceImageTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.NativeSourceImageLedgerTest
+    com.thorium.emufusion.video.NativeSourceImageLedgerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.NativeSourceImageObserverTest
+    com.thorium.emufusion.video.NativeSourceImageObserverTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.FrameGenerationBackendPolicyTest
+    com.thorium.emufusion.video.FrameGenerationBackendPolicyTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.AdaptiveFrameRateControllerTest
+    com.thorium.emufusion.video.AdaptiveFrameRateControllerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.FrameGenerationAutoPolicyTest
+    com.thorium.emufusion.video.FrameGenerationAutoPolicyTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.DenseGpuTimerMathTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.FullResolutionFrameReadbackTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.cheats.CheatModelTest
+    com.thorium.emufusion.cheats.CheatModelTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.legal.LegalNoticeTest
+    com.thorium.emufusion.legal.LegalNoticeTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.cheats.CheatPanelModelTest
+    com.thorium.emufusion.cheats.CheatPanelModelTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.cheats.CheatArchiveTest
+    com.thorium.emufusion.cheats.CheatArchiveTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.emulators.ExternalEmulatorModelTest
+    com.thorium.emufusion.emulators.ExternalEmulatorModelTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.emulators.NativeAdapterStopPolicyTest
+    com.thorium.emufusion.emulators.NativeAdapterStopPolicyTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.WidescreenHackPolicyTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.game.GpuDriverTableTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.timing.PanelRefreshPlannerTest
+    com.thorium.emufusion.timing.PanelRefreshPlannerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.PanelClockMemoryTest
+    com.thorium.emufusion.video.PanelClockMemoryTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.TimelineFrameSchedulerTest
+    com.thorium.emufusion.video.TimelineFrameSchedulerTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
-    com.thorium.lucent.video.GeneratedFrameVerdictTest
+    com.thorium.emufusion.video.GeneratedFrameVerdictTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.sources.CheatParsersTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \

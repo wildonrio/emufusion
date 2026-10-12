@@ -10,9 +10,9 @@ trap 'rm -rf "$TEST_DIR"' EXIT INT TERM
     "$PROJECT_DIR/native/tests/java/android/view/Surface.java" \
     "$PROJECT_DIR/native/tests/java/android/util/Log.java" \
     "$PROJECT_DIR/native/tests/java/android/os/Build.java" \
-    "$PROJECT_DIR/src/com/thorium/lucent/timing/DisplaySyncPolicy.java" \
-    "$PROJECT_DIR/src/com/thorium/lucent/video/NativeSourceImageProvider.java" \
-    "$PROJECT_DIR/src/com/thorium/lucent/video/RuntimePresentationFailure.java" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/timing/DisplaySyncPolicy.java" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/video/NativeSourceImageProvider.java" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/video/RuntimePresentationFailure.java" \
     "$PROJECT_DIR/src/com/thorium/preview/game/FrameGenerationRenderer.java" \
     "$PROJECT_DIR/src/com/thorium/preview/game/FrameGenerationRendererRegistry.java" \
     "$PROJECT_DIR/src/com/thorium/preview/LibretroHost.java" \

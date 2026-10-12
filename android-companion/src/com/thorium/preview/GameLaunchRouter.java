@@ -6,8 +6,8 @@ import com.thorium.preview.game.InWindowGameHost;
 import com.thorium.preview.game.InternalEngineCatalog;
 import com.thorium.preview.game.NativeAdapterCatalog;
 import com.thorium.preview.game.Phase2QualificationCatalog;
-import com.thorium.lucent.metadata.EngineSystemIdResolver;
-import com.thorium.lucent.metadata.MetadataGameLaunchCommand;
+import com.thorium.emufusion.metadata.EngineSystemIdResolver;
+import com.thorium.emufusion.metadata.MetadataGameLaunchCommand;
 
 /**
  * Builds EmuFusion's only supported game-launch route.

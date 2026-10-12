@@ -62,7 +62,7 @@ final class DirectHardwareCanvas implements AutoCloseable {
         if (result != lastReportedSyncResult &&
                 (lastReportedSyncResult == Integer.MIN_VALUE ||
                         nowNs - lastSyncReportNs >= 1_000_000_000L)) {
-            Log.i("LucentDirectCanvas", "HWUI sync owner=" + name +
+            Log.i("EmuFusionDirectCanvas", "HWUI sync owner=" + name +
                     " result=" + result + " epoch=" + epoch +
                     " sourceAgeUs=" + (sourceVsyncNs > 0
                             ? (nowNs - sourceVsyncNs) / 1000L : -1L));

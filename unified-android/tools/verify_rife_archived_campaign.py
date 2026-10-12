@@ -29,7 +29,7 @@ EXPECTED_SYSTEM = "n64"
 EXPECTED_CORE = "liblucent_core_mupen64plus_next.so"
 HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 ROUTE_RE = re.compile(
-    r"LucentInWindow\(\s*(\d+)\): In-window route accepted "
+    r"EmuFusionInWindow\(\s*(\d+)\): In-window route accepted "
     r"engine=([^\s]+) system=([^\s]+)"
 )
 CORE_RE = re.compile(r"core library loaded path=([^\s]+)")

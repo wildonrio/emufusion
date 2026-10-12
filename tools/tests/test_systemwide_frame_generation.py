@@ -123,7 +123,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_external_generated_work_gets_the_next_safe_divisor_slot(self):
         deadline = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "PhysicalPresentationDeadline.java"
         )
         planner = deadline.split(
@@ -208,7 +208,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_scheduler_epoch_reanchors_phase_without_forgetting_panel_period(self):
         clock = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "PhysicalPresentationClock.java"
         )
         self.assertIn("public void beginPresentationEpoch()", clock)
@@ -417,7 +417,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("externalPhysicalClockCalibrated", report)
         self.assertIn("externalPhysicalClockCalibrationPresents", report)
         bootstrap = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "ExternalPhysicalClockBootstrap.java"
         )
         self.assertIn("presentationEpoch == calibrationPresentationEpoch",
@@ -578,7 +578,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("physical earliest-present time is invalid", external)
         self.assertIn("PhysicalPresentMargin.normalize(", external)
         margin = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "PhysicalPresentMargin.java"
         )
         self.assertIn("if (rawSignedNs >= -refreshDurationNs) return 0L;",
@@ -681,11 +681,11 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_rife_finished_image_is_released_to_wsi_only_inside_bounded_window(self):
         request = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "FrameGenerationPresentationRequest.java"
         )
         preparation = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "FrameGenerationPreparationRequest.java"
         )
         transport_contract = self.read(
@@ -1197,7 +1197,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_fixed_rate_legacy_systems_use_core_cadence_not_image_uniqueness(self):
         controller = (ROOT / pathlib.Path(
-            "unified-android/src/com/thorium/lucent/video/AdaptiveFrameRateController.java"
+            "unified-android/src/com/thorium/emufusion/video/AdaptiveFrameRateController.java"
         )).read_text(encoding="utf-8")
         generator = (ROOT / pathlib.Path(
             "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
@@ -1472,7 +1472,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
                               source, relative)
 
         policy = self.read(
-            "unified-android/src/com/thorium/lucent/video/FrameGenerationBackendPolicy.java"
+            "unified-android/src/com/thorium/emufusion/video/FrameGenerationBackendPolicy.java"
         )
         self.assertIn("legallyUsable", policy)
         self.assertIn("abiCompatible", policy)
@@ -1521,7 +1521,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         current = self.read("docs/FRAME-GENERATION-GOAL-2026-09-04.md")
 
         controller_test = self.read(
-            "unified-android/test/com/thorium/lucent/video/"
+            "unified-android/test/com/thorium/emufusion/video/"
             "AdaptiveFrameRateControllerTest.java"
         )
 
@@ -1651,7 +1651,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_starved_source_holds_real_endpoint_instead_of_extrapolating(self):
         controller = self.read(
-            "unified-android/src/com/thorium/lucent/video/AdaptiveFrameRateController.java"
+            "unified-android/src/com/thorium/emufusion/video/AdaptiveFrameRateController.java"
         )
         generator = self.read(
             "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
@@ -1681,13 +1681,13 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_buffered_scheduler_commits_swaps_and_exact_fifo_pairs(self):
         controller = self.read(
-            "unified-android/src/com/thorium/lucent/video/AdaptiveFrameRateController.java"
+            "unified-android/src/com/thorium/emufusion/video/AdaptiveFrameRateController.java"
         )
         generator = self.read(
             "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
         )
         endpoint_selector = self.read(
-            "unified-android/src/com/thorium/lucent/video/EndpointFrameSelector.java"
+            "unified-android/src/com/thorium/emufusion/video/EndpointFrameSelector.java"
         )
         decision = controller[controller.index("public int selectBufferedPresentation"):
                               controller.index("public float selectedInterpolation")]
@@ -2100,7 +2100,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_qualified_source_clock_owns_public_scheduler_identity(self):
         controller = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "AdaptiveFrameRateController.java"
         )
         method = controller[
@@ -2265,7 +2265,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         )
         self.assertNotIn("outputWidth / aspect", viewport)
         geometry = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "PresentationGeometry.java"
         )
         fit = geometry.split("public static Rectangle fitInside(", 1)[1].split(
@@ -4046,7 +4046,9 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         for state in ("GL_SCISSOR_TEST", "GL_DEPTH_TEST", "GL_STENCIL_TEST", "GL_CULL_FACE"):
             self.assertIn("glDisable(GLES20." + state + ")", compare)
             self.assertIn("glEnable(GLES20." + state + ")", compare)
-        self.assertIn("if (begun) signatureTimer.endSignature()", compare)
+        self.assertIn("if (begun) {\n                    signatureTimer.endSignature();\n"
+                      "                    // Submit the query now.", compare)
+        self.assertIn("GLES20.glFlush();", compare)
         self.assertIn("external asynchronous signature failed closed", signature)
         self.assertIn("rejectDense(\"async-signature-failure\"", signature)
         self.assertIn("signaturePixels.position(0)", signature)
@@ -4064,7 +4066,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
         )
         helper = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
+            "unified-android/src/com/thorium/emufusion/video/"
             "DenseFlowTrajectoryDiagnostics.java"
         )
         poll = generator.split(
@@ -4162,7 +4164,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("newest.producerTimestampNs = scheduledNs;", session)
         self.assertIn("frame.producerTimestampNs)", session)
         pacer = self.read(
-            "unified-android/src/com/thorium/lucent/timing/AbsoluteFramePacer.java"
+            "unified-android/src/com/thorium/emufusion/timing/AbsoluteFramePacer.java"
         )
         self.assertIn("public long deadlineNanos() { return deadlineNanos; }", pacer)
 
@@ -4194,7 +4196,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_matched_refresh_bypass_and_pause_endpoint_are_explicit(self):
         cadence = self.read(
-            "unified-android/src/com/thorium/lucent/video/FrameGenerationCadence.java"
+            "unified-android/src/com/thorium/emufusion/video/FrameGenerationCadence.java"
         )
         self.assertIn("GENERATION_MARGIN", cadence)
         self.assertIn("if (!generatesIntermediateFrames()) return 1f", cadence)
@@ -4202,7 +4204,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_adaptive_visual_lock_has_only_requested_tiers_and_hysteresis(self):
         controller = self.read(
-            "unified-android/src/com/thorium/lucent/video/AdaptiveFrameRateController.java"
+            "unified-android/src/com/thorium/emufusion/video/AdaptiveFrameRateController.java"
         )
         # Tier protocol 2026-09-01: no 50 tier; a separate 60-Hz protocol.
         self.assertIn("int[] TIERS_120 = {60, 40, 30, 20}", controller)
@@ -4227,7 +4229,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("bufferedOutputCredits <= 0", controller)
         self.assertIn("--bufferedOutputCredits", controller)
         planner = self.read(
-            "unified-android/src/com/thorium/lucent/video/UniformFrameRatePlan.java"
+            "unified-android/src/com/thorium/emufusion/video/UniformFrameRatePlan.java"
         )
         self.assertIn("MAX_GENERATION_FACTOR = 2.0", planner)
         self.assertIn("panelDivisor(sourceHz * 2.0, panelHz, tolerance)", planner)
@@ -4240,7 +4242,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn(
             "selectedSixtyTierCannotOutrunSlowerPhysicalSource",
             self.read(
-                "unified-android/test/com/thorium/lucent/video/"
+                "unified-android/test/com/thorium/emufusion/video/"
                 "AdaptiveFrameRateControllerTest.java"
             ),
         )

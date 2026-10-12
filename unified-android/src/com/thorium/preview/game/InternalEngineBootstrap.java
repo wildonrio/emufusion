@@ -11,7 +11,7 @@ import java.io.File;
 
 /** Registers only release-qualified cores that are present in the installed APK. */
 public final class InternalEngineBootstrap {
-    private static final String TAG = "LucentEngineBootstrap";
+    private static final String TAG = "EmuFusionEngineBootstrap";
 
     private InternalEngineBootstrap() {}
 

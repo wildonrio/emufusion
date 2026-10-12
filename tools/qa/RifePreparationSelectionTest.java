@@ -1,7 +1,7 @@
 import java.lang.reflect.*;
 import java.util.LinkedHashMap;
-import com.thorium.lucent.video.FrameGenerationPreparationRequest;
-import com.thorium.lucent.video.FrameGenerationPresentationRequest;
+import com.thorium.emufusion.video.FrameGenerationPreparationRequest;
+import com.thorium.emufusion.video.FrameGenerationPresentationRequest;
 
 /** Executes actual transport selection methods without initializing Android/JNI.
  * Constructor bypass is test-only; no GPU/reset behavior is simulated as passed.

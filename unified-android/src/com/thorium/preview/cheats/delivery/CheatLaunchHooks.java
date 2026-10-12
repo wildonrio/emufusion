@@ -3,7 +3,7 @@ package com.thorium.preview.cheats.delivery;
 import android.content.Context;
 import android.util.Log;
 
-import com.thorium.lucent.metadata.EngineSystemIdResolver;
+import com.thorium.emufusion.metadata.EngineSystemIdResolver;
 import com.thorium.preview.cheats.CheatControl;
 import com.thorium.preview.game.EngineSession;
 import com.thorium.preview.game.GameLaunchRequest;

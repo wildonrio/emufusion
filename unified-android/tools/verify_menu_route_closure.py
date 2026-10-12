@@ -310,7 +310,7 @@ def dex_alias_contract_evidence(apk: Path, dexdump: Path) -> tuple[bool, str]:
         return False, "GameLaunchRouter class is absent from candidate DEX"
     router = match.group(0)
     resolver_match = re.search(
-        r"Class descriptor\s+: 'Lcom/thorium/lucent/metadata/"
+        r"Class descriptor\s+: 'Lcom/thorium/emufusion/metadata/"
         r"EngineSystemIdResolver;'.*?(?=\nClass #|\Z)",
         disassembly, re.S,
     )
@@ -318,7 +318,7 @@ def dex_alias_contract_evidence(apk: Path, dexdump: Path) -> tuple[bool, str]:
         return False, "EngineSystemIdResolver class is absent from candidate DEX"
     resolver = resolver_match.group(0)
     command_match = re.search(
-        r"Class descriptor\s+: 'Lcom/thorium/lucent/metadata/"
+        r"Class descriptor\s+: 'Lcom/thorium/emufusion/metadata/"
         r"MetadataGameLaunchCommand;'.*?(?=\nClass #|\Z)",
         disassembly, re.S,
     )

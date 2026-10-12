@@ -23,7 +23,7 @@ import android.util.Log;
  * tap-to-restart notification is posted instead.
  */
 public final class UpdateCompleteActivity extends Activity {
-    private static final String TAG = "LucentUpdater";
+    private static final String TAG = "EmuFusionUpdater";
     private static final String CHANNEL = "updates";
     private static final int NOTIFICATION_ID = 43822;
 

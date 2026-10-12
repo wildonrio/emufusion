@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 APPLICATION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" \
-    / "LucentApplication.java"
+    / "EmuFusionApplication.java"
 PREVIEW_ACTIVITY = ROOT / "android-companion" / "src" / "com" / "thorium" \
     / "preview" / "PreviewActivity.java"
 BROWSER_ACTIVITY = ROOT / "android-companion" / "src" / "com" / "thorium" \

@@ -55,7 +55,7 @@ public final class BrowserActivity extends Activity {
     private static final String HOME = "https://www.google.com/";
     private static final String PREFS = "lucent_browser";
     private static final String LAST_URL = "last_url";
-    private static final String TAG = "LucentBrowser";
+    private static final String TAG = "EmuFusionBrowser";
     private static final int BAR_COLOR = Color.rgb(11, 14, 20);
     private static final int FIELD_COLOR = Color.rgb(27, 32, 42);
     // 43821 belongs to PreviewService and 43822 to the secondary gameplay

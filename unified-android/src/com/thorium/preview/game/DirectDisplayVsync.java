@@ -8,7 +8,7 @@ import android.os.HandlerThread;
 import android.os.Process;
 import android.view.Choreographer;
 import android.view.Display;
-import com.thorium.lucent.timing.VsyncCadence;
+import com.thorium.emufusion.timing.VsyncCadence;
 
 /** Display-clock input only: owns no rendering Surface, images or FG worker. */
 final class DirectDisplayVsync implements AutoCloseable {

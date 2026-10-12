@@ -20,7 +20,7 @@ E: manifest
     A: android:name="android.permission.RECORD_AUDIO" (Raw: "android.permission.RECORD_AUDIO")
   E: application
     A: android:label="EmuFusion" (Raw: "EmuFusion")
-    A: android:name="com.thorium.preview.LucentApplication" (Raw: "com.thorium.preview.LucentApplication")
+    A: android:name="com.thorium.preview.EmuFusionApplication" (Raw: "com.thorium.preview.EmuFusionApplication")
     E: activity
       A: android:name="org.pegasus_frontend.android.MainActivity" (Raw: "org.pegasus_frontend.android.MainActivity")
       A: android:launchMode(0x0101001d)=(type 0x10)0x2
@@ -75,7 +75,7 @@ class OneAppApkVerifierTest(unittest.TestCase):
     def test_rejects_second_game_activity(self):
         value = MANIFEST + '''
     E: activity
-      A: android:name="com.thorium.preview.game.LucentGameActivity" (Raw: "com.thorium.preview.game.LucentGameActivity")
+      A: android:name="com.thorium.preview.game.EmuFusionGameActivity" (Raw: "com.thorium.preview.game.EmuFusionGameActivity")
 '''
         errors = MODULE.verify_manifest(value)
         self.assertTrue(any(
@@ -147,10 +147,10 @@ class OneAppApkVerifierTest(unittest.TestCase):
 
     def test_lsfg_self_test_activity_is_exact_and_conditional(self):
         value = MANIFEST.replace(
-            'A: android:name="com.thorium.preview.LucentApplication" '
-            '(Raw: "com.thorium.preview.LucentApplication")',
-            'A: android:name="com.thorium.preview.LucentApplication" '
-            '(Raw: "com.thorium.preview.LucentApplication")\n'
+            'A: android:name="com.thorium.preview.EmuFusionApplication" '
+            '(Raw: "com.thorium.preview.EmuFusionApplication")',
+            'A: android:name="com.thorium.preview.EmuFusionApplication" '
+            '(Raw: "com.thorium.preview.EmuFusionApplication")\n'
             '    A: android:debuggable(0x0101000f)=(type 0x12)0xffffffff',
         ) + '''
     E: activity

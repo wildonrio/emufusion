@@ -28,7 +28,7 @@ class CutoutTest(unittest.TestCase):
         self.assertIn('window.setAttributes(attributes);', helper)
         apply_once = full.split('private static void applyOnce(Activity activity) {', 1)[1]
         self.assertIn('extendIntoCutout(activity.getWindow());', apply_once.split('\n', 3)[2])
-        game = read(SRC / 'game/LucentGameActivity.java')
+        game = read(SRC / 'game/EmuFusionGameActivity.java')
         immersive = game.split('private void enterImmersiveMode() {', 1)[1].split('\n    }', 1)[0]
         self.assertIn('FullDisplayWindow.extendIntoCutout(getWindow());', immersive)
 

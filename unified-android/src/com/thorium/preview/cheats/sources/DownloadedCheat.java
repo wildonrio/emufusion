@@ -1,6 +1,6 @@
 package com.thorium.preview.cheats.sources;
 
-import com.thorium.lucent.cheats.Cheat;
+import com.thorium.emufusion.cheats.Cheat;
 
 import java.util.ArrayList;
 import java.util.Collections;

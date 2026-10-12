@@ -2,7 +2,7 @@ package com.thorium.preview;
 
 import android.view.Surface;
 import android.os.SystemClock;
-import com.thorium.lucent.video.NativeSourceImage;
+import com.thorium.emufusion.video.NativeSourceImage;
 
 import java.io.Closeable;
 import java.io.File;

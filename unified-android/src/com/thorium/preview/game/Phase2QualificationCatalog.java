@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 /** Fail-closed reader for explicitly packaged Phase 2 qualification assets. */
 public final class Phase2QualificationCatalog {
-    private static final String TAG = "LucentPhase2Catalog";
+    private static final String TAG = "EmuFusionPhase2Catalog";
     private static final String REGISTRY = "phase2-engine-registry.json";
     private static final String OPT_IN = "phase2-qualification-opt-in.json";
     private static final String ARTIFACTS = "phase2-engine-artifacts.json";

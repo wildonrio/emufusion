@@ -14,7 +14,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.thorium.lucent.cheats.CheatDatabase;
+import com.thorium.emufusion.cheats.CheatDatabase;
 import com.thorium.preview.PreviewService;
 import com.thorium.preview.multiplayer.DeviceIdentity;
 import com.thorium.preview.multiplayer.MultiplayerManager;
@@ -88,7 +88,7 @@ import java.util.concurrent.Executors;
  * menu that discovered it has been closed again.
  */
 final class MultiplayerOverlay extends FrameLayout {
-    private static final String TAG = "LucentMultiplayerOverlay";
+    private static final String TAG = "EmuFusionMultiplayerOverlay";
 
     /** A few seconds, per the session's own guidance for a paused-only poll. */
     private static final long POLL_INTERVAL_MS = 4000L;
@@ -98,7 +98,7 @@ final class MultiplayerOverlay extends FrameLayout {
 
     private static final ExecutorService NETWORK = Executors.newSingleThreadExecutor(
             runnable -> {
-                Thread thread = new Thread(runnable, "LucentMultiplayerOverlayHttp");
+                Thread thread = new Thread(runnable, "EmuFusionMultiplayerOverlayHttp");
                 thread.setDaemon(true);
                 return thread;
             });

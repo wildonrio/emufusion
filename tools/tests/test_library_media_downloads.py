@@ -132,7 +132,7 @@ class VideoCandidateTest(unittest.TestCase):
             harness = folder/'VideoProbe.java'
             harness.write_text('''
 import java.util.*;
-import com.thorium.lucent.metadata.TitleMatcher;
+import com.thorium.emufusion.metadata.TitleMatcher;
 class GameSystems { static class SystemDef { String collection="Nintendo Game Boy Advance"; } }
 public class VideoProbe {
 static String normalize(String s) { return TitleMatcher.normalize(s); }
@@ -155,7 +155,7 @@ public static void main(String[] args) {
 }
 }
 ''')
-            matcher = ROOT/'unified-android/src/com/thorium/lucent/metadata/TitleMatcher.java'
+            matcher = ROOT/'unified-android/src/com/thorium/emufusion/metadata/TitleMatcher.java'
             subprocess.run([str(JAVA/'javac'), '-d', temp, str(matcher), str(harness)],
                            check=True, capture_output=True, text=True)
             subprocess.run([str(JAVA/'java'), '-cp', temp, 'VideoProbe'],

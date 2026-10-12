@@ -3,7 +3,7 @@ package com.thorium.preview.game;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import com.thorium.lucent.video.FrameGenerationBackendPolicy;
+import com.thorium.emufusion.video.FrameGenerationBackendPolicy;
 
 /** Process-wide owner preference for internal-emulator frame generation. */
 public final class FrameGenerationSettings {

@@ -20,37 +20,37 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.Surface;
 
-import com.thorium.lucent.input.CanonicalControl;
-import com.thorium.lucent.audio.PcmAudioQueue;
-import com.thorium.lucent.audio.PcmSignalTelemetry;
-import com.thorium.lucent.input.DeviceCatalog;
-import com.thorium.lucent.input.FileRemapStore;
-import com.thorium.lucent.input.GamepadDescriptor;
-import com.thorium.lucent.input.InputRouter;
-import com.thorium.lucent.input.InputSignal;
-import com.thorium.lucent.input.JoypadPressLedger;
-import com.thorium.lucent.input.LibretroJoypadLayout;
-import com.thorium.lucent.input.SystemControlLayouts;
-import com.thorium.lucent.input.android.AndroidDeviceScanner;
-import com.thorium.lucent.input.android.AndroidGamingDeviceDetector;
-import com.thorium.lucent.cheats.Cheat;
-import com.thorium.lucent.cheats.CheatDatabase;
-import com.thorium.lucent.cheats.CheatSelection;
+import com.thorium.emufusion.input.CanonicalControl;
+import com.thorium.emufusion.audio.PcmAudioQueue;
+import com.thorium.emufusion.audio.PcmSignalTelemetry;
+import com.thorium.emufusion.input.DeviceCatalog;
+import com.thorium.emufusion.input.FileRemapStore;
+import com.thorium.emufusion.input.GamepadDescriptor;
+import com.thorium.emufusion.input.InputRouter;
+import com.thorium.emufusion.input.InputSignal;
+import com.thorium.emufusion.input.JoypadPressLedger;
+import com.thorium.emufusion.input.LibretroJoypadLayout;
+import com.thorium.emufusion.input.SystemControlLayouts;
+import com.thorium.emufusion.input.android.AndroidDeviceScanner;
+import com.thorium.emufusion.input.android.AndroidGamingDeviceDetector;
+import com.thorium.emufusion.cheats.Cheat;
+import com.thorium.emufusion.cheats.CheatDatabase;
+import com.thorium.emufusion.cheats.CheatSelection;
 import com.thorium.preview.cheats.CheatControl;
-import com.thorium.lucent.state.CheckpointScheduler;
-import com.thorium.lucent.state.DurableBlobStore;
-import com.thorium.lucent.state.StateIdentity;
-import com.thorium.lucent.state.StateLoadResult;
-import com.thorium.lucent.state.StateSnapshot;
-import com.thorium.lucent.state.StateVault;
-import com.thorium.lucent.state.StateVaultWorker;
-import com.thorium.lucent.timing.AbsoluteFramePacer;
-import com.thorium.lucent.timing.DisplaySyncPolicy;
-import com.thorium.lucent.timing.DirectVideoTelemetry;
+import com.thorium.emufusion.state.CheckpointScheduler;
+import com.thorium.emufusion.state.DurableBlobStore;
+import com.thorium.emufusion.state.StateIdentity;
+import com.thorium.emufusion.state.StateLoadResult;
+import com.thorium.emufusion.state.StateSnapshot;
+import com.thorium.emufusion.state.StateVault;
+import com.thorium.emufusion.state.StateVaultWorker;
+import com.thorium.emufusion.timing.AbsoluteFramePacer;
+import com.thorium.emufusion.timing.DisplaySyncPolicy;
+import com.thorium.emufusion.timing.DirectVideoTelemetry;
 import com.thorium.preview.AppVolumeController;
-import com.thorium.lucent.timing.LatestValueMailbox;
-import com.thorium.lucent.video.DualScreenLayout;
-import com.thorium.lucent.video.PresentationGeometry;
+import com.thorium.emufusion.timing.LatestValueMailbox;
+import com.thorium.emufusion.video.DualScreenLayout;
+import com.thorium.emufusion.video.PresentationGeometry;
 import com.thorium.preview.LibretroHost;
 import com.thorium.preview.SecondaryGameplaySurfaceRouter;
 
@@ -73,8 +73,8 @@ import java.util.concurrent.atomic.AtomicLong;
 /** One release-qualified libretro core behind EmuFusion's engine-neutral shell. */
 public final class LibretroEngineSession implements EngineSession,
         SecondaryGameplaySurfaceRouter.Listener,
-        com.thorium.lucent.netplay.NetplayCapableSession {
-    private static final String TAG = "LucentEngine";
+        com.thorium.emufusion.netplay.NetplayCapableSession {
+    private static final String TAG = "EmuFusionEngine";
     private static final long FRAME_NS = 1_000_000_000L / 60L;
     private static final float AXIS_PRESS = 0.55f;
     private static final int MAX_VIDEO_DIMENSION = 8192;
@@ -130,7 +130,7 @@ public final class LibretroEngineSession implements EngineSession,
      * rejects joypadSink's lambda body reading this field's simple name
      * otherwise, even though the lambda only runs later.
      */
-    private volatile com.thorium.lucent.netplay.NetplayInputRelay netplayRelay;
+    private volatile com.thorium.emufusion.netplay.NetplayInputRelay netplayRelay;
     private final JoypadPressLedger.Sink joypadSink = (retroId, pressed) -> {
         // Log the aggregate libretro boundary, not only Android key events.
         // This also catches remaps, axis alternatives and virtual controls,
@@ -141,11 +141,11 @@ public final class LibretroEngineSession implements EngineSession,
         }
         LibretroHost active = host;
         if (active != null) active.setJoypadButton(0, retroId, pressed);
-        com.thorium.lucent.netplay.NetplayInputRelay relay = netplayRelay;
+        com.thorium.emufusion.netplay.NetplayInputRelay relay = netplayRelay;
         if (relay != null) relay.onLocalJoypadButton(retroId, pressed);
     };
 
-    public void attachNetplayRelay(com.thorium.lucent.netplay.NetplayInputRelay relay) {
+    public void attachNetplayRelay(com.thorium.emufusion.netplay.NetplayInputRelay relay) {
         this.netplayRelay = relay;
     }
 
@@ -180,7 +180,7 @@ public final class LibretroEngineSession implements EngineSession,
         if (active != null) active.setAnalogAxis(port, retroAnalogIndex, retroAnalogId, normalizedValue);
     }
 
-    /** {@link com.thorium.lucent.netplay.NetplayCapableSession}: the same serialize() Quick Resume already uses. */
+    /** {@link com.thorium.emufusion.netplay.NetplayCapableSession}: the same serialize() Quick Resume already uses. */
     public byte[] currentSerializedStateForDesync() {
         LibretroHost active = host;
         if (active == null) return null;
@@ -670,7 +670,7 @@ public final class LibretroEngineSession implements EngineSession,
         secondarySurface = next;
         secondarySurfaceWidth = width;
         secondarySurfaceHeight = height;
-        Log.i(TAG, "LucentLowerScreen secondary surface available engine=" + entry.id +
+        Log.i(TAG, "EmuFusionLowerScreen secondary surface available engine=" + entry.id +
                 " system=" + (request == null ? "?" : request.systemId) +
                 " valid=" + (next != null && next.isValid()) +
                 " size=" + width + "x" + height +
@@ -705,7 +705,7 @@ public final class LibretroEngineSession implements EngineSession,
     }
 
     @Override public void onSecondarySurfaceDestroyed() {
-        Log.i(TAG, "LucentLowerScreen secondary surface destroyed engine=" + entry.id +
+        Log.i(TAG, "EmuFusionLowerScreen secondary surface destroyed engine=" + entry.id +
                 " system=" + (request == null ? "?" : request.systemId) +
                 " secondaryGameplayRequested=" + secondaryGameplayRequested);
         secondarySurface = null;
@@ -1851,7 +1851,7 @@ public final class LibretroEngineSession implements EngineSession,
         List<StateSnapshot> all = vault.list(identity);
         List<StateSnapshot> history = new ArrayList<>();
         for (StateSnapshot snapshot : all)
-            if (snapshot.metadata.kind != com.thorium.lucent.state.SnapshotKind.QUICK_RESUME)
+            if (snapshot.metadata.kind != com.thorium.emufusion.state.SnapshotKind.QUICK_RESUME)
                 history.add(snapshot);
         return history;
     }
@@ -2116,7 +2116,7 @@ public final class LibretroEngineSession implements EngineSession,
                             frame.producerTimestampNs);
             if (!lowerDrawEvidenceLogged) {
                 lowerDrawEvidenceLogged = true;
-                Log.i(TAG, "LucentLowerScreen bottom crop drawn engine=" + entry.id +
+                Log.i(TAG, "EmuFusionLowerScreen bottom crop drawn engine=" + entry.id +
                         " system=" + request.systemId +
                         " secondarySurfaceNotNull=" + true +
                         " isValid=" + lower.isValid() +
@@ -2130,7 +2130,7 @@ public final class LibretroEngineSession implements EngineSession,
             String reason = secondarySource == null ? "secondarySource-null(frameHeightNotEvenPair)"
                     : lower == null ? "secondarySurface-null(never-attached)"
                     : "secondarySurface-invalid";
-            Log.i(TAG, "LucentLowerScreen bottom crop SKIPPED engine=" + entry.id +
+            Log.i(TAG, "EmuFusionLowerScreen bottom crop SKIPPED engine=" + entry.id +
                     " system=" + request.systemId +
                     " reason=" + reason +
                     " secondarySurfaceNotNull=" + (lower != null) +

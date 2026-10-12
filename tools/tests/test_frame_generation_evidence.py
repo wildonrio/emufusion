@@ -371,7 +371,7 @@ class FrameGenerationEvidenceTest(unittest.TestCase):
                 "08-11 10:09:37.258 1234 22885 I EmuFusionFrameGen:",
             ).replace(
                 "I/InWindowGameHost(1234):",
-                "08-11 10:09:36.221 1234 1234 I LucentInWindow:",
+                "08-11 10:09:36.221 1234 1234 I EmuFusionInWindow:",
             )
             log.write_text(text, encoding="utf-8")
             report = self.verify(log, latency)
@@ -401,7 +401,7 @@ class FrameGenerationEvidenceTest(unittest.TestCase):
                 "08-11 10:09:37.258 9999 22885 I EmuFusionFrameGen:",
             ).replace(
                 "I/InWindowGameHost(1234):",
-                "08-11 10:09:36.221 9999 9999 I LucentInWindow:",
+                "08-11 10:09:36.221 9999 9999 I EmuFusionInWindow:",
             )
             log.write_text(text, encoding="utf-8")
             with self.assertRaisesRegex(ValueError,

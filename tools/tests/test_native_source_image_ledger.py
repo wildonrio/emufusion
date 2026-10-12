@@ -13,14 +13,14 @@ class NativeSourceImageLedgerTest(unittest.TestCase):
     def test_actual_retention_identity_and_zero_hot_allocations(self):
         with tempfile.TemporaryDirectory(prefix="source-image-retention-") as temporary:
             base = ROOT / "unified-android"
-            files = [base / "src/com/thorium/lucent/video/NativeSourceImage.java",
-                     base / "src/com/thorium/lucent/video/NativeSourceImageLedger.java",
-                     base / "test/com/thorium/lucent/video/NativeSourceImageLedgerTest.java"]
+            files = [base / "src/com/thorium/emufusion/video/NativeSourceImage.java",
+                     base / "src/com/thorium/emufusion/video/NativeSourceImageLedger.java",
+                     base / "test/com/thorium/emufusion/video/NativeSourceImageLedgerTest.java"]
             compiled = subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", temporary,
                                        *map(str, files)], capture_output=True, text=True, timeout=30)
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             ran = subprocess.run([str(JAVA / "java"), "-cp", temporary,
-                                  "com.thorium.lucent.video.NativeSourceImageLedgerTest"],
+                                  "com.thorium.emufusion.video.NativeSourceImageLedgerTest"],
                                  capture_output=True, text=True, timeout=30)
             self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
             self.assertIn("retention foundation only; no source authority", ran.stdout)

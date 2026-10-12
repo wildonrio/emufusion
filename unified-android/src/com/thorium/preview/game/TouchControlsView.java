@@ -8,9 +8,9 @@ import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
 
-import com.thorium.lucent.input.CanonicalControl;
-import com.thorium.lucent.input.SystemControlLayouts;
-import com.thorium.lucent.input.TouchAnalogStick;
+import com.thorium.emufusion.input.CanonicalControl;
+import com.thorium.emufusion.input.SystemControlLayouts;
+import com.thorium.emufusion.input.TouchAnalogStick;
 
 import java.util.EnumSet;
 

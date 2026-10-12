@@ -7,7 +7,7 @@ import unittest
 from tools.tests.test_first_install_startup import method, JAVA, ROOT
 
 IMPORTER = ROOT / 'android-companion/src/com/thorium/preview/ImportManager.java'
-APPLICATION = ROOT / 'unified-android/src/com/thorium/preview/LucentApplication.java'
+APPLICATION = ROOT / 'unified-android/src/com/thorium/preview/EmuFusionApplication.java'
 SERVICE = ROOT / 'android-companion/src/com/thorium/preview/PreviewService.java'
 
 

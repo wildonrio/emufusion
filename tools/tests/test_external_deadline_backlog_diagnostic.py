@@ -14,9 +14,9 @@ class ExternalDeadlineBacklogDiagnostic(unittest.TestCase):
         renderer = ROOT / 'unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java'
         body = method(renderer.read_text(),
                       '    private static boolean directExternalSubmissionWindowOpen(')
-        production = ROOT / 'unified-android/src/com/thorium/lucent/video/PhysicalPresentationDeadline.java'
+        production = ROOT / 'unified-android/src/com/thorium/emufusion/video/PhysicalPresentationDeadline.java'
         harness = '''
-import com.thorium.lucent.video.PhysicalPresentationDeadline;
+import com.thorium.emufusion.video.PhysicalPresentationDeadline;
 public class WindowTest {
  BODY
  public static void main(String[] args) {
@@ -47,10 +47,10 @@ public class WindowTest {
                            check=True, capture_output=True)
 
     def test_startup_burst_debt_survives_normal_source_rate(self):
-        production = ROOT / ('unified-android/src/com/thorium/lucent/video/'
+        production = ROOT / ('unified-android/src/com/thorium/emufusion/video/'
                              'PhysicalPresentationDeadline.java')
         harness = '''
-import com.thorium.lucent.video.PhysicalPresentationDeadline;
+import com.thorium.emufusion.video.PhysicalPresentationDeadline;
 public class BacklogDiagnostic {
  public static void main(String[] args) {
   long period=8333333L, anchor=1000000000L, now=anchor, last=0;

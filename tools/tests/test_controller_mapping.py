@@ -25,16 +25,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs" / "controller-mapping.md"
-INPUT_DIR = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "input"
+INPUT_DIR = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "input"
 LAYOUT = INPUT_DIR / "LibretroJoypadLayout.java"
 LEDGER = INPUT_DIR / "JoypadPressLedger.java"
 SYSTEM_LAYOUTS = INPUT_DIR / "SystemControlLayouts.java"
 GAME_DIR = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game"
 LIBRETRO_SESSION = GAME_DIR / "LibretroEngineSession.java"
 GLES_SESSION = GAME_DIR / "PpssppGlesEngineSession.java"
-LAYOUT_TEST = (ROOT / "unified-android" / "test" / "com" / "thorium" / "lucent" /
+LAYOUT_TEST = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" /
                "input" / "LibretroJoypadLayoutTest.java")
-LEDGER_TEST = (ROOT / "unified-android" / "test" / "com" / "thorium" / "lucent" /
+LEDGER_TEST = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" /
                "input" / "JoypadPressLedgerTest.java")
 TEST_RUNNER = ROOT / "unified-android" / "test.sh"
 QA_HARNESS = ROOT / "unified-android" / "tools" / "run_runtime_acceptance_qa.py"
@@ -467,7 +467,7 @@ class CompletenessTests(unittest.TestCase):
         self.assertIn("megaDriveKeepsItsThreeButtonRowOnTheFace();", test)
         self.assertIn("keypadConsolesReachEveryKey();", test)
         # ...and the runner actually runs it.
-        self.assertIn("com.thorium.lucent.input.LibretroJoypadLayoutTest",
+        self.assertIn("com.thorium.emufusion.input.LibretroJoypadLayoutTest",
                       TEST_RUNNER.read_text(encoding="utf-8"))
 
 

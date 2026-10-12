@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** GitHub-backed theme and APK updater with a small JSON status surface. */
 final class UpdateManager {
-    private static final String TAG = "LucentUpdater";
+    private static final String TAG = "EmuFusionUpdater";
     // The repository was renamed from pegasus-lucent to emufusion. Both names
     // stay trusted: GitHub redirects the old name, and before the rename only
     // the old name resolves. Never drop the legacy entries while installs that

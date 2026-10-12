@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 HOST = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game" / "InWindowGameHost.java"
 THEME = ROOT / "theme" / "theme.qml"
-COMMAND = ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "metadata" / "MetadataGameLaunchCommand.java"
+COMMAND = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "metadata" / "MetadataGameLaunchCommand.java"
 BRIDGE = ROOT / "android-companion" / "src" / "com" / "thorium" / "preview" / "InProcessGameLaunchCommand.java"
 PATCHER = ROOT / "unified-android" / "tools" / "patch_main_activity_right_stick.py"
 GLES_SESSION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game" / "PpssppGlesEngineSession.java"
@@ -244,7 +244,7 @@ class InWindowInstantReturnTest(unittest.TestCase):
         self.assertIn('return "am start -a', command)
         self.assertNotIn('return "am broadcast', command)
         self.assertIn("org.pegasus_frontend.android.MainActivity", command)
-        self.assertIn("LucentApplication.currentMainActivity()", bridge)
+        self.assertIn("EmuFusionApplication.currentMainActivity()", bridge)
         self.assertIn("activity.runOnUiThread", bridge)
         self.assertIn("InWindowGameHost.handleIntent(activity, request)", bridge)
         self.assertNotIn("startActivity(", bridge)

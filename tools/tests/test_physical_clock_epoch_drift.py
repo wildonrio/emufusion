@@ -13,9 +13,9 @@ class PhysicalClockEpochDriftTest(unittest.TestCase):
     def test_thor_startup_fractional_clock_with_missing_generated_slots(self):
         """Isolate frequency/phase math; deliberately excludes GPU/queue latency."""
         jdk = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
-        source = ROOT / 'unified-android/src/com/thorium/lucent/video/PhysicalPresentationClock.java'
+        source = ROOT / 'unified-android/src/com/thorium/emufusion/video/PhysicalPresentationClock.java'
         harness = '''
-import com.thorium.lucent.video.PhysicalPresentationClock;
+import com.thorium.emufusion.video.PhysicalPresentationClock;
 public class ThorStartupClockProbe {
  public static void main(String[] args) {
   PhysicalPresentationClock c=new PhysicalPresentationClock();
@@ -52,8 +52,8 @@ public class ThorStartupClockProbe {
         java = str(jdk / 'java') if (jdk / 'java').exists() else shutil.which('java')
         if not javac or not java:
             self.skipTest('JDK unavailable')
-        production = ROOT / 'unified-android/src/com/thorium/lucent/video'
-        test = ROOT / 'unified-android/test/com/thorium/lucent/video'
+        production = ROOT / 'unified-android/src/com/thorium/emufusion/video'
+        test = ROOT / 'unified-android/test/com/thorium/emufusion/video'
         with tempfile.TemporaryDirectory() as temporary:
             sources = [production / 'PhysicalPresentationClock.java',
                        production / 'PhysicalPresentationDeadline.java',
@@ -66,7 +66,7 @@ public class ThorStartupClockProbe {
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             for name in ('PhysicalPresentationClockTest', 'PhysicalPresentationDeadlineTest',
                          'PhysicalPlanningPhaseTest'):
-                result = subprocess.run([java, '-cp', temporary, 'com.thorium.lucent.video.' + name],
+                result = subprocess.run([java, '-cp', temporary, 'com.thorium.emufusion.video.' + name],
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         renderer = (ROOT / 'unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java').read_text()
@@ -81,9 +81,9 @@ public class ThorStartupClockProbe {
         java = str(jdk / 'java') if (jdk / 'java').exists() else shutil.which('java')
         if not javac or not java:
             self.skipTest('JDK unavailable')
-        source = ROOT / 'unified-android/src/com/thorium/lucent/video/PhysicalPresentationClock.java'
+        source = ROOT / 'unified-android/src/com/thorium/emufusion/video/PhysicalPresentationClock.java'
         harness = '''
-import com.thorium.lucent.video.PhysicalPresentationClock;
+import com.thorium.emufusion.video.PhysicalPresentationClock;
 public class EpochDriftProbe {
     public static void main(String[] args) {
         PhysicalPresentationClock c = new PhysicalPresentationClock();

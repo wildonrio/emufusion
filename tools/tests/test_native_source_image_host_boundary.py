@@ -14,7 +14,7 @@ from tools.tests.test_native_source_image_renderer_wiring import method
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "unified-android/src"
-VIDEO = SRC / "com/thorium/lucent/video"
+VIDEO = SRC / "com/thorium/emufusion/video"
 JAVA = Path(os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"), "bin")
 
 
@@ -30,7 +30,7 @@ class NativeSourceImageHostBoundaryTest(unittest.TestCase):
 import java.nio.*;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import com.thorium.lucent.video.*;
+import com.thorium.emufusion.video.*;
 public class HostBoundaryTest implements NativeSourceImageProvider {
     private long handle=19;
     private final ReentrantReadWriteLock sourceQueryLease=new ReentrantReadWriteLock();

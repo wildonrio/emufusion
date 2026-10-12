@@ -1,7 +1,7 @@
 package com.thorium.preview.game;
 
 import android.view.MotionEvent;
-import com.thorium.lucent.video.DualScreenLayout;
+import com.thorium.emufusion.video.DualScreenLayout;
 
 /** One finger owns the emulated stylus; unrelated fingers cannot release it. */
 final class ThreeDsPhoneStylus {

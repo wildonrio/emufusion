@@ -16,10 +16,10 @@ import android.util.Log;
 import android.view.Surface;
 
 import com.emufusion.rifebenchmark.NativeRifeBridge;
-import com.thorium.lucent.video.ExternalGeneratedContentProof;
-import com.thorium.lucent.video.FrameGenerationPreparationRequest;
-import com.thorium.lucent.video.FrameGenerationPresentationRequest;
-import com.thorium.lucent.video.PhysicalPresentationDeadline;
+import com.thorium.emufusion.video.ExternalGeneratedContentProof;
+import com.thorium.emufusion.video.FrameGenerationPreparationRequest;
+import com.thorium.emufusion.video.FrameGenerationPresentationRequest;
+import com.thorium.emufusion.video.PhysicalPresentationDeadline;
 
 import org.json.JSONObject;
 

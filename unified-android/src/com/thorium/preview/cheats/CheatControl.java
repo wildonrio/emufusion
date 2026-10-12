@@ -2,10 +2,10 @@ package com.thorium.preview.cheats;
 
 import android.content.Context;
 
-import com.thorium.lucent.cheats.Cheat;
-import com.thorium.lucent.cheats.CheatDatabase;
-import com.thorium.lucent.cheats.CheatSelection;
-import com.thorium.lucent.metadata.EngineSystemIdResolver;
+import com.thorium.emufusion.cheats.Cheat;
+import com.thorium.emufusion.cheats.CheatDatabase;
+import com.thorium.emufusion.cheats.CheatSelection;
+import com.thorium.emufusion.metadata.EngineSystemIdResolver;
 
 import org.json.JSONArray;
 import org.json.JSONException;

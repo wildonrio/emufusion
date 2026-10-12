@@ -369,15 +369,15 @@ public final class ExternalEmulatorRoutingHarness {
         // catalog's copies. They are aliases, not parallel spellings: a
         // divergence would make a validated custom entry unlaunchable.
         check(EmulatorCatalog.DELIVERY_FILE_PATH ==
-                com.thorium.lucent.emulators.ExternalEmulatorDelivery.FILE_PATH,
+                com.thorium.emufusion.emulators.ExternalEmulatorDelivery.FILE_PATH,
                 "file-path delivery constant is shared");
         check(EmulatorCatalog.DELIVERY_ACTION_VIEW ==
-                com.thorium.lucent.emulators.ExternalEmulatorDelivery.ACTION_VIEW,
+                com.thorium.emufusion.emulators.ExternalEmulatorDelivery.ACTION_VIEW,
                 "action-view delivery constant is shared");
         check(EmulatorCatalog.DELIVERY_CONTENT_URI ==
-                com.thorium.lucent.emulators.ExternalEmulatorDelivery.CONTENT_URI,
+                com.thorium.emufusion.emulators.ExternalEmulatorDelivery.CONTENT_URI,
                 "content-uri delivery constant is shared");
-        check(!com.thorium.lucent.emulators.ExternalEmulatorDelivery.known(
+        check(!com.thorium.emufusion.emulators.ExternalEmulatorDelivery.known(
                 EmulatorCatalog.DELIVERY_UNSUPPORTED),
                 "the unsupported marker is not a delivery a custom entry can pick");
 
@@ -412,7 +412,7 @@ class EmulatorCatalogExecutingTest(unittest.TestCase):
                         "/com/thorium/launchbridge/RomFileProvider.java",
                         "/com/thorium/launchbridge/StopButtonService.java",
                         "/com/thorium/preview/game/InternalGameLaunchActivity.java",
-                        "/com/thorium/preview/game/LucentGameActivity.java",
+                        "/com/thorium/preview/game/EmuFusionGameActivity.java",
                         "/com/thorium/preview/game/QualificationLaunchActivity.java",
                         "/com/thorium/preview/game/SessionReturnRouter.java")):
                     continue

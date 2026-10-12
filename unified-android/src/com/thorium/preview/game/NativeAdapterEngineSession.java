@@ -19,19 +19,19 @@ import android.view.MotionEvent;
 import android.view.PixelCopy;
 import android.view.Surface;
 
-import com.thorium.lucent.input.CanonicalControl;
-import com.thorium.lucent.input.DeviceCatalog;
-import com.thorium.lucent.input.FileRemapStore;
-import com.thorium.lucent.input.GamepadDescriptor;
-import com.thorium.lucent.input.InputRouter;
-import com.thorium.lucent.input.InputSignal;
-import com.thorium.lucent.input.android.AndroidDeviceScanner;
-import com.thorium.lucent.input.android.AndroidGamingDeviceDetector;
-import com.thorium.lucent.audio.PcmAudioQueue;
-import com.thorium.lucent.emulators.NativeAdapterStopPolicy;
-import com.thorium.lucent.timing.DisplaySyncPolicy;
-import com.thorium.lucent.state.DurableBlobStore;
-import com.thorium.lucent.video.NativeSourceImageProvider;
+import com.thorium.emufusion.input.CanonicalControl;
+import com.thorium.emufusion.input.DeviceCatalog;
+import com.thorium.emufusion.input.FileRemapStore;
+import com.thorium.emufusion.input.GamepadDescriptor;
+import com.thorium.emufusion.input.InputRouter;
+import com.thorium.emufusion.input.InputSignal;
+import com.thorium.emufusion.input.android.AndroidDeviceScanner;
+import com.thorium.emufusion.input.android.AndroidGamingDeviceDetector;
+import com.thorium.emufusion.audio.PcmAudioQueue;
+import com.thorium.emufusion.emulators.NativeAdapterStopPolicy;
+import com.thorium.emufusion.timing.DisplaySyncPolicy;
+import com.thorium.emufusion.state.DurableBlobStore;
+import com.thorium.emufusion.video.NativeSourceImageProvider;
 import com.thorium.preview.NativeAdapterHost;
 import com.thorium.preview.AppVolumeController;
 import com.thorium.preview.SecondaryGameplaySurfaceRouter;
@@ -77,8 +77,8 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class NativeAdapterEngineSession implements EngineSession,
         SecondaryGameplaySurfaceRouter.Listener,
-        com.thorium.lucent.netplay.NativeAdapterCapableSession {
-    private static final String TAG = "LucentPhase3Engine";
+        com.thorium.emufusion.netplay.NativeAdapterCapableSession {
+    private static final String TAG = "EmuFusionPhase3Engine";
     private static final int OUTPUT_SAMPLE_RATE = 48_000;
     // JNI byte arrays are signed-int sized.  A compressed RPCS3 state is much
     // larger than a libretro state, so keep a generous but explicit OOM guard.
@@ -192,7 +192,7 @@ final class NativeAdapterEngineSession implements EngineSession,
      */
     private final BlockingQueue<RenderTask> renderTasks = new LinkedBlockingQueue<>();
 
-    private volatile com.thorium.lucent.netplay.NativeAdapterInputRelay netplayRelay;
+    private volatile com.thorium.emufusion.netplay.NativeAdapterInputRelay netplayRelay;
     private volatile Listener listener;
     private volatile NativeAdapterHost host;
     private volatile NativeAdapterHost.Capabilities capabilities;
@@ -263,13 +263,13 @@ final class NativeAdapterEngineSession implements EngineSession,
                             request.systemId);
                 if (stopping.get() || released.get()) return;
                 if (!request.qualificationSession.isEmpty() &&
-                        !com.thorium.lucent.emulators.NativeQualificationStorage.supports(
+                        !com.thorium.emufusion.emulators.NativeQualificationStorage.supports(
                                 entry.id, request.systemId))
                     throw new IllegalArgumentException(
                             "Isolated native qualification is unavailable for this engine");
                 // Reserve before any native initialization or writable save
                 // directory access. A failed load must not release this claim.
-                com.thorium.lucent.emulators.NativeQualificationStorage.claimProcessRoot(
+                com.thorium.emufusion.emulators.NativeQualificationStorage.claimProcessRoot(
                         entry.id, request.qualificationSession);
                 requestPinnedWiiUSecondaryDisplay(request);
                 File game = resolveGameFile(request.contentUri);
@@ -1733,11 +1733,11 @@ final class NativeAdapterEngineSession implements EngineSession,
      * joypadSink also calling relay.onLocalJoypadButton. */
     private void setLocalControl(NativeAdapterHost active, int control, float value) {
         active.setControl(LOCAL_PLAYER, control, value);
-        com.thorium.lucent.netplay.NativeAdapterInputRelay relay = netplayRelay;
+        com.thorium.emufusion.netplay.NativeAdapterInputRelay relay = netplayRelay;
         if (relay != null) relay.onLocalControl(control, value);
     }
 
-    /** {@link com.thorium.lucent.netplay.NativeControlSink}: applies a remote
+    /** {@link com.thorium.emufusion.netplay.NativeControlSink}: applies a remote
      * player's control value at their assigned controller_index. */
     public void applyRemoteControl(int controllerIndex, int control, float value) {
         NativeAdapterHost active = host;
@@ -1745,8 +1745,8 @@ final class NativeAdapterEngineSession implements EngineSession,
         active.setControl(controllerIndex, control, value);
     }
 
-    /** {@link com.thorium.lucent.netplay.NativeAdapterCapableSession}. */
-    public void attachNetplayRelay(com.thorium.lucent.netplay.NativeAdapterInputRelay relay) {
+    /** {@link com.thorium.emufusion.netplay.NativeAdapterCapableSession}. */
+    public void attachNetplayRelay(com.thorium.emufusion.netplay.NativeAdapterInputRelay relay) {
         netplayRelay = relay;
     }
 

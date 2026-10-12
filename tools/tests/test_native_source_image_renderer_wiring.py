@@ -64,8 +64,8 @@ class RendererSourceImageWiringTest(unittest.TestCase):
         # every production decision and observer call remains unchanged.
         fixture = r'''
 import java.nio.ByteBuffer;
-import com.thorium.lucent.video.NativeSourceImageLedger;
-import com.thorium.lucent.video.NativeSourceImage;
+import com.thorium.emufusion.video.NativeSourceImageLedger;
+import com.thorium.emufusion.video.NativeSourceImage;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 public class WiringFixture {
@@ -457,7 +457,7 @@ public class Bitmap {
         trace_stub = output / "android/os/Trace.java"
         trace_stub.parent.mkdir(parents=True)
         trace_stub.write_text("package android.os; public class Trace {public static void beginSection(String s){} public static void endSection(){}}")
-        video = ROOT / "unified-android/src/com/thorium/lucent/video"
+        video = ROOT / "unified-android/src/com/thorium/emufusion/video"
         result = subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", str(output), str(unit), str(bitmap),
                                  str(trace_stub), str(video / "NativeSourceImage.java"), str(video / "NativeSourceImageLedger.java")],
                                 capture_output=True, text=True, timeout=30)

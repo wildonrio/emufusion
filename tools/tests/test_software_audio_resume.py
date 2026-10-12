@@ -26,7 +26,7 @@ class SoftwareAudioResumeTests(unittest.TestCase):
         bodies = "\n".join(method(source, s) for s in signatures)
         harness = r'''
 import java.util.concurrent.atomic.AtomicBoolean;
-import com.thorium.lucent.audio.PcmAudioQueue;
+import com.thorium.emufusion.audio.PcmAudioQueue;
 public class SoftwareAudioResumeTest {
     static final String TAG="test";
     static final class Build { static final class VERSION { static final int SDK_INT=35; } }
@@ -162,7 +162,7 @@ public class SoftwareAudioResumeTest {
         java_file = Path(cls.temp.name) / "SoftwareAudioResumeTest.java"
         java_file.write_text(harness)
         subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", cls.temp.name,
-                        str(java_file), str(ROOT / "unified-android/src/com/thorium/lucent/audio/PcmAudioQueue.java")], check=True)
+                        str(java_file), str(ROOT / "unified-android/src/com/thorium/emufusion/audio/PcmAudioQueue.java")], check=True)
 
     def test_actual_software_audio_lifecycle(self):
         for scenario in ("wake", "full", "focus", "startup", "partial", "released"):

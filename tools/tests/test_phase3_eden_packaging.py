@@ -561,7 +561,7 @@ class Phase3RoutingTest(unittest.TestCase):
 
     def test_switch_is_its_own_canonical_system_id(self):
         resolver = _read(ROOT / "unified-android" / "src" / "com" / "thorium" /
-                         "lucent" / "metadata" / "EngineSystemIdResolver.java")
+                         "emufusion" / "metadata" / "EngineSystemIdResolver.java")
         # No alias rewrites "switch", so the registry/opt-in id and the route
         # store key are the same string end to end.
         self.assertNotIn('"switch"', resolver)

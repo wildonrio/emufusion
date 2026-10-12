@@ -5,7 +5,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SESSION = ROOT / "unified-android/src/com/thorium/preview/game/LibretroEngineSession.java"
 HOST = ROOT / "unified-android/src/com/thorium/preview/game/InWindowGameHost.java"
-SIGNAL = ROOT / "unified-android/src/com/thorium/lucent/audio/PcmSignalTelemetry.java"
+SIGNAL = ROOT / "unified-android/src/com/thorium/emufusion/audio/PcmSignalTelemetry.java"
 
 
 class NesRuntimeUxHardeningTest(unittest.TestCase):

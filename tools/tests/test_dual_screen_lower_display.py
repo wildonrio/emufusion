@@ -38,7 +38,7 @@ GAME = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game"
 LIBRETRO = GAME / "LibretroEngineSession.java"
 PPSSPP = GAME / "PpssppGlesEngineSession.java"
 NATIVE_ADAPTER = GAME / "NativeAdapterEngineSession.java"
-LAYOUT = (ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent"
+LAYOUT = (ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion"
           / "video" / "DualScreenLayout.java")
 
 

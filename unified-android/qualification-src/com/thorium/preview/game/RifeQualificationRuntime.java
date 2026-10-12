@@ -6,7 +6,7 @@ import android.os.Build;
 
 import com.emufusion.rifebenchmark.ModelIntegrity;
 import com.emufusion.rifebenchmark.NativeRifeBridge;
-import com.thorium.lucent.video.FrameGenerationBackendPolicy;
+import com.thorium.emufusion.video.FrameGenerationBackendPolicy;
 
 import org.json.JSONObject;
 

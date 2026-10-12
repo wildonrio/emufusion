@@ -3,7 +3,7 @@ package com.thorium.preview;
 import android.util.Log;
 import android.view.Surface;
 
-import com.thorium.lucent.timing.DisplaySyncPolicy;
+import com.thorium.emufusion.timing.DisplaySyncPolicy;
 import com.thorium.preview.game.FrameGenerationRendererRegistry;
 
 import java.io.Closeable;
@@ -24,7 +24,7 @@ import java.util.concurrent.Callable;
  * It has no production catalog or EngineSession route.
  */
 public final class ExperimentalGlesRenderLoop implements Closeable {
-    private static final String TAG = "LucentGlesLoop";
+    private static final String TAG = "EmuFusionGlesLoop";
 
     public interface Listener {
         void onReady();

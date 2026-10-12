@@ -24,9 +24,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 IMPORTER = ROOT / "android-companion" / "src" / "com" / "thorium" / "preview" / "ImportManager.java"
-MATCHER = (ROOT / "unified-android" / "src" / "com" / "thorium" / "lucent" / "metadata"
+MATCHER = (ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "metadata"
            / "TitleMatcher.java")
-MATCHER_TEST = (ROOT / "unified-android" / "test" / "com" / "thorium" / "lucent" / "metadata"
+MATCHER_TEST = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "metadata"
                 / "TitleMatcherTest.java")
 TEST_SCRIPT = ROOT / "unified-android" / "test.sh"
 THEME = ROOT / "theme" / "theme.qml"
@@ -52,7 +52,7 @@ class BoxArtMatchingTests(unittest.TestCase):
         self.assertNotIn("androidx.", self.matcher)
 
     def test_the_host_suite_runs_the_matcher_test(self):
-        self.assertIn("com.thorium.lucent.metadata.TitleMatcherTest", self.script,
+        self.assertIn("com.thorium.emufusion.metadata.TitleMatcherTest", self.script,
                       "TitleMatcherTest is not wired into unified-android/test.sh")
 
     def test_the_reported_failures_are_pinned_as_fixtures(self):

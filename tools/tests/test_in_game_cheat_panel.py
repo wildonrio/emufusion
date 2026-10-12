@@ -34,8 +34,8 @@ GAMEPLAY_ROUTER = COMPANION / "SecondaryGameplaySurfaceRouter.java"
 UNIFIED = ROOT / "unified-android" / "src" / "com" / "thorium"
 HOST = UNIFIED / "preview" / "game" / "InWindowGameHost.java"
 PANEL_VIEW = UNIFIED / "preview" / "cheats" / "CheatPanelView.java"
-MODEL = UNIFIED / "lucent" / "cheats" / "CheatPanelModel.java"
-SNAPSHOT = UNIFIED / "lucent" / "cheats" / "CheatPanelSnapshot.java"
+MODEL = UNIFIED / "emufusion" / "cheats" / "CheatPanelModel.java"
+SNAPSHOT = UNIFIED / "emufusion" / "cheats" / "CheatPanelSnapshot.java"
 TEST_RUNNER = ROOT / "unified-android" / "test.sh"
 DOC = ROOT / "docs" / "controller-mapping.md"
 
@@ -288,7 +288,7 @@ class HostTestedModelTests(unittest.TestCase):
             self.assertNotIn("import org.json.", source, f"{path.name} must stay host-testable")
 
     def test_the_host_suite_runs_the_panel_model_test(self):
-        self.assertIn("com.thorium.lucent.cheats.CheatPanelModelTest",
+        self.assertIn("com.thorium.emufusion.cheats.CheatPanelModelTest",
                       TEST_RUNNER.read_text(encoding="utf-8"))
 
     def test_both_panels_label_a_row_from_one_place(self):

@@ -91,7 +91,7 @@ public final class PreviewService extends Service {
      * must come back paused rather than playing under the browser. */
     public static final String EXTRA_BROWSER_ACTIVE = "browser_active";
     public static final int PORT = 43821;
-    private static final String BROWSER_TAG = "LucentBrowser";
+    private static final String BROWSER_TAG = "EmuFusionBrowser";
 
     private volatile boolean running;
     private volatile long suppressPlayUntil;
@@ -280,7 +280,7 @@ public final class PreviewService extends Service {
         // comment. globalInit() must run before any NetplaySession is ever
         // constructed; doing it here, once, at the same place every other
         // process-wide manager starts, is the simplest way to guarantee that.
-        com.thorium.lucent.netplay.NetplaySession.globalInit(this);
+        com.thorium.emufusion.netplay.NetplaySession.globalInit(this);
         multiplayerManager = new com.thorium.preview.multiplayer.MultiplayerManager(this);
         multiplayerManager.start();
         // Decode the four menu blips now. SoundPool loads asynchronously, and
@@ -290,7 +290,7 @@ public final class PreviewService extends Service {
         Thread launchMigration = new Thread(() -> {
             int changed = LaunchMetadataRouter.normalize(this);
             if (changed > 0) {
-                Log.i("LucentLaunchMetadata",
+                Log.i("EmuFusionLaunchMetadata",
                         "Migrated " + changed + " collection launch routes");
                 // The migration runs before Pegasus can safely be restarted.
                 // Defer exactly one reload until a heartbeat proves the Qt
@@ -320,9 +320,9 @@ public final class PreviewService extends Service {
         // Offline, the check fails within seconds and the scan follows.
         Thread updateFirst = new Thread(() -> {
             if (updateManager.awaitFirstCheck(STARTUP_UPDATE_GATE_MS))
-                Log.i("LucentImport", "Startup update check finished; starting library scan");
+                Log.i("EmuFusionImport", "Startup update check finished; starting library scan");
             else
-                Log.w("LucentImport", "Startup update check still running; starting library scan");
+                Log.w("EmuFusionImport", "Startup update check still running; starting library scan");
             mainHandler.post(() -> { if (running) importManager.startInitialScan(); });
             // The Switch runtime's per-GPU Vulkan driver (Turnip on most
             // Adreno phones) is fetched up front, before anyone launches a game.
@@ -1054,11 +1054,11 @@ public final class PreviewService extends Service {
                 // scroll gate and no checkbox — it is just readable text.
                 JSONObject notice = new JSONObject();
                 JSONArray paragraphs = new JSONArray();
-                for (String paragraph : com.thorium.lucent.legal.LegalNotice.PARAGRAPHS)
+                for (String paragraph : com.thorium.emufusion.legal.LegalNotice.PARAGRAPHS)
                     paragraphs.put(paragraph);
-                notice.put("title", com.thorium.lucent.legal.LegalNotice.TITLE);
+                notice.put("title", com.thorium.emufusion.legal.LegalNotice.TITLE);
                 notice.put("paragraphs", paragraphs);
-                notice.put("body", com.thorium.lucent.legal.LegalNotice.body());
+                notice.put("body", com.thorium.emufusion.legal.LegalNotice.body());
                 respond(writer, "200 OK", notice.toString());
             } else if ("/route/systems".equals(path)) {
                 respond(writer, "200 OK", RoutePicker.systemsJson(
@@ -1208,7 +1208,7 @@ public final class PreviewService extends Service {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             return true;
         } catch (RuntimeException unavailable) {
-            Log.i("LucentRoute", "No handler for install source " + uri);
+            Log.i("EmuFusionRoute", "No handler for install source " + uri);
             return false;
         }
     }
@@ -1267,7 +1267,7 @@ public final class PreviewService extends Service {
     }
 
     private void reloadEmuFusionFrontend() {
-        Activity frontendOwner = LucentApplication.currentMainActivity();
+        Activity frontendOwner = EmuFusionApplication.currentMainActivity();
         if (gameplayActive || browserActive || screensaverActive ||
                 frontendOwner == null || !frontendOwner.hasWindowFocus()) {
             launchRouteReloadPending.set(true);
@@ -1279,7 +1279,7 @@ public final class PreviewService extends Service {
             // no timer that can kill a guest merely because its save is slow.
             launchRouteReloadPending.set(true);
             if (!importReloadWaitLogged) {
-                Log.i("LucentImport", "Deferred frontend reload until game retirement completes");
+                Log.i("EmuFusionImport", "Deferred frontend reload until game retirement completes");
                 importReloadWaitLogged = true;
             }
             return;
@@ -1309,11 +1309,11 @@ public final class PreviewService extends Service {
                             android.os.Process.myPid())
                     .addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
             frontendOwner.startActivity(restart);
-            Log.i("LucentImport", "Started clean EmuFusion process reload after import");
+            Log.i("EmuFusionImport", "Started clean EmuFusion process reload after import");
         } catch (RuntimeException error) {
             InWindowGameHost.cancelImportFrontendRestart();
             launchRouteReloadPending.set(true);
-            Log.e("LucentImport", "Unable to refresh Lucent after import", error);
+            Log.e("EmuFusionImport", "Unable to refresh Lucent after import", error);
         }
     }
 
@@ -1327,7 +1327,7 @@ public final class PreviewService extends Service {
         if (gameplayActive || browserActive || screensaverActive ||
                 !launchRouteReloadPending.compareAndSet(true, false)) return;
         mainHandler.postDelayed(() -> {
-            Activity owner = LucentApplication.currentMainActivity();
+            Activity owner = EmuFusionApplication.currentMainActivity();
             if (gameplayActive || browserActive || screensaverActive ||
                     owner == null || !owner.hasWindowFocus()) {
                 launchRouteReloadPending.set(true);

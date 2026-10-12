@@ -51,11 +51,11 @@ int main(void) {
             fixture = directory / "fixture.bin"
             fixture.write_bytes(subprocess.run([str(native)], check=True, capture_output=True).stdout)
             subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", str(directory),
-                            str(ROOT / "unified-android/src/com/thorium/lucent/video/NativeSourceImage.java"),
-                            str(ROOT / "unified-android/test/com/thorium/lucent/video/NativeSourceImageTest.java")],
+                            str(ROOT / "unified-android/src/com/thorium/emufusion/video/NativeSourceImage.java"),
+                            str(ROOT / "unified-android/test/com/thorium/emufusion/video/NativeSourceImageTest.java")],
                            check=True, capture_output=True)
             result = subprocess.run([str(JAVA / "java"), "-cp", str(directory),
-                                     "com.thorium.lucent.video.NativeSourceImageTest", str(fixture)],
+                                     "com.thorium.emufusion.video.NativeSourceImageTest", str(fixture)],
                                     capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("metadata only; no source authority", result.stdout)

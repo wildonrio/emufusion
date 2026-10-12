@@ -85,9 +85,9 @@ public class InWindowGameHost {
         public void release(){releases++;if(fail)throw new IllegalStateException("release failed");}
     }
     static class NetplayGeneric extends Generic
-            implements com.thorium.lucent.netplay.NetplayCapableSession {}
+            implements com.thorium.emufusion.netplay.NetplayCapableSession {}
     static class NativeAdapterGeneric extends Generic
-            implements com.thorium.lucent.netplay.NativeAdapterCapableSession {}
+            implements com.thorium.emufusion.netplay.NativeAdapterCapableSession {}
     static class AsyncOwner implements EngineSession {
         int releases,requests;
         boolean fail,immediate;
@@ -209,7 +209,7 @@ public class InWindowGameHost {
             check(host.switchingStopCompleted.get() && !RETIRING_SESSIONS.contains(engine),
                   "switch rejection did not claim completion/remove only retirement ownership");
             check(!host.restoreRejectedSwitchSession(),"rejected switch restored twice");
-            Object published=com.thorium.lucent.netplay.ActiveEngineSessionRegistry.active;
+            Object published=com.thorium.emufusion.netplay.ActiveEngineSessionRegistry.active;
             check(published==(reason.equals("live") ? null : engine),"netplay registry publication changed");
             requestTerminal();Handler.MAIN.drain();
             check(terminals==0 && active==host,"restored active owner no longer gates Qt shutdown");
@@ -217,7 +217,7 @@ public class InWindowGameHost {
             check(host.session==null && host.switchingSession==engine && host.switchingCompletion==original,
                   "unavailable owner was resurrected or its retirement callback discarded");
             check(RETIRING_SESSIONS.contains(engine),"rejected restoration dropped retirement gate");
-            check(com.thorium.lucent.netplay.ActiveEngineSessionRegistry.active==null,
+            check(com.thorium.emufusion.netplay.ActiveEngineSessionRegistry.active==null,
                   "unavailable owner published a netplay session");
         }
         check(!tryBeginImportFrontendRestart(),"switch rejection incorrectly opened import gate");
@@ -277,13 +277,13 @@ public class Os {
             throw new AssertionError("unexpected environment mutation");
     }
 }''')
-        netplay = directory / "com/thorium/lucent/netplay"
+        netplay = directory / "com/thorium/emufusion/netplay"
         netplay.mkdir(parents=True)
         for name in ("NetplayCapableSession", "NativeAdapterCapableSession"):
             (netplay / (name + ".java")).write_text(
-                "package com.thorium.lucent.netplay; public interface " + name + " {}")
+                "package com.thorium.emufusion.netplay; public interface " + name + " {}")
         (netplay / "ActiveEngineSessionRegistry.java").write_text(
-            "package com.thorium.lucent.netplay; public class ActiveEngineSessionRegistry {"
+            "package com.thorium.emufusion.netplay; public class ActiveEngineSessionRegistry {"
             "public static Object active; public static void set(Object session){active=session;}}")
         compile_result = subprocess.run(
             [str(JAVA / "javac"), "-d", str(directory),

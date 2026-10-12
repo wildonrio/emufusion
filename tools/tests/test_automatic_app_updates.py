@@ -9,7 +9,7 @@ UPDATE = (ROOT / "android-companion" / "src" / "com" / "thorium" /
 SERVICE = (ROOT / "android-companion" / "src" / "com" / "thorium" /
            "preview" / "PreviewService.java").read_text(encoding="utf-8")
 APPLICATION = (ROOT / "unified-android" / "src" / "com" / "thorium" /
-               "preview" / "LucentApplication.java").read_text(encoding="utf-8")
+               "preview" / "EmuFusionApplication.java").read_text(encoding="utf-8")
 MANIFEST = (ROOT / "android-companion" / "AndroidManifest.xml").read_text(
     encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")

@@ -32,7 +32,7 @@ class NativeStickClicksTest(unittest.TestCase):
         constants = '\n'.join(re.findall(r'private static final int PAD_[^;]+;', source))
         body = member(source, 'private int controlOrdinal(')
         harness = '''
-import com.thorium.lucent.input.CanonicalControl;
+import com.thorium.emufusion.input.CanonicalControl;
 public class ClickRoutes {
  static class Entry { String id; Entry(String id){this.id=id;} }
  Entry entry;
@@ -56,7 +56,7 @@ public class ClickRoutes {
         with tempfile.TemporaryDirectory(prefix='native-click-java-') as directory:
             path = Path(directory) / 'ClickRoutes.java'
             path.write_text(harness)
-            canonical = ROOT / 'unified-android/src/com/thorium/lucent/input/CanonicalControl.java'
+            canonical = ROOT / 'unified-android/src/com/thorium/emufusion/input/CanonicalControl.java'
             subprocess.run([str(JAVA / 'javac'), '-d', directory, str(canonical), str(path)],
                            check=True, capture_output=True, env=ENV)
             result = subprocess.run([str(JAVA / 'java'), '-cp', directory, 'ClickRoutes'],

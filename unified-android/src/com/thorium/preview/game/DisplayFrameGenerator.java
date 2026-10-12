@@ -18,34 +18,34 @@ import android.util.Log;
 import android.view.Choreographer;
 import android.view.Surface;
 
-import com.thorium.lucent.video.AdaptiveFrameRateController;
-import com.thorium.lucent.video.AppOwnedExternalPresentationEvidence;
-import com.thorium.lucent.video.CompositorFrameTimeline;
-import com.thorium.lucent.video.CompositorPredictionLattice;
-import com.thorium.lucent.video.DenseFlowTrajectoryDiagnostics;
-import com.thorium.lucent.video.FrameGenerationCadence;
-import com.thorium.lucent.video.FrameGenerationPreparationRequest;
-import com.thorium.lucent.video.FrameGenerationPresentationRequest;
-import com.thorium.lucent.video.MidpointPairBudget;
-import com.thorium.lucent.video.NativeSourceImageObserver;
-import com.thorium.lucent.video.NativeSourceImageLedger;
-import com.thorium.lucent.video.NativeSourceImageProvider;
-import com.thorium.lucent.video.GpuPairTimingLedger;
-import com.thorium.lucent.video.GpuPhysicalHeadroomLedger;
-import com.thorium.lucent.video.SubmissionTimingHistory;
-import com.thorium.lucent.video.GeneratedFrameVerdict;
-import com.thorium.lucent.video.TimelineFrameScheduler;
-import com.thorium.lucent.video.UniformFrameRatePlan;
-import com.thorium.lucent.video.GpuWorkAdaptationPolicy;
-import com.thorium.lucent.video.ExternalGeneratedContentEvidence;
-import com.thorium.lucent.video.ExternalPresentationEvidence;
-import com.thorium.lucent.video.ExternalPresentationLedger;
-import com.thorium.lucent.video.ExternalPhysicalClockBootstrap;
-import com.thorium.lucent.video.PhysicalPresentationDeadline;
-import com.thorium.lucent.video.PhysicalPresentationCadence;
-import com.thorium.lucent.video.PanelClockMemory;
-import com.thorium.lucent.video.PhysicalPresentationClock;
-import com.thorium.lucent.video.PresentationClockDiagnostics;
+import com.thorium.emufusion.video.AdaptiveFrameRateController;
+import com.thorium.emufusion.video.AppOwnedExternalPresentationEvidence;
+import com.thorium.emufusion.video.CompositorFrameTimeline;
+import com.thorium.emufusion.video.CompositorPredictionLattice;
+import com.thorium.emufusion.video.DenseFlowTrajectoryDiagnostics;
+import com.thorium.emufusion.video.FrameGenerationCadence;
+import com.thorium.emufusion.video.FrameGenerationPreparationRequest;
+import com.thorium.emufusion.video.FrameGenerationPresentationRequest;
+import com.thorium.emufusion.video.MidpointPairBudget;
+import com.thorium.emufusion.video.NativeSourceImageObserver;
+import com.thorium.emufusion.video.NativeSourceImageLedger;
+import com.thorium.emufusion.video.NativeSourceImageProvider;
+import com.thorium.emufusion.video.GpuPairTimingLedger;
+import com.thorium.emufusion.video.GpuPhysicalHeadroomLedger;
+import com.thorium.emufusion.video.SubmissionTimingHistory;
+import com.thorium.emufusion.video.GeneratedFrameVerdict;
+import com.thorium.emufusion.video.TimelineFrameScheduler;
+import com.thorium.emufusion.video.UniformFrameRatePlan;
+import com.thorium.emufusion.video.GpuWorkAdaptationPolicy;
+import com.thorium.emufusion.video.ExternalGeneratedContentEvidence;
+import com.thorium.emufusion.video.ExternalPresentationEvidence;
+import com.thorium.emufusion.video.ExternalPresentationLedger;
+import com.thorium.emufusion.video.ExternalPhysicalClockBootstrap;
+import com.thorium.emufusion.video.PhysicalPresentationDeadline;
+import com.thorium.emufusion.video.PhysicalPresentationCadence;
+import com.thorium.emufusion.video.PanelClockMemory;
+import com.thorium.emufusion.video.PhysicalPresentationClock;
+import com.thorium.emufusion.video.PresentationClockDiagnostics;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -1744,8 +1744,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     /** First resumed app-owned swap needs a complete predecessor scan. */
     private boolean externalAppOwnedActivationFirstSwapPending;
     private boolean externalPresentationFailed;
-    private final com.thorium.lucent.video.RuntimePresentationFailure runtimeFailure =
-            new com.thorium.lucent.video.RuntimePresentationFailure();
+    private final com.thorium.emufusion.video.RuntimePresentationFailure runtimeFailure =
+            new com.thorium.emufusion.video.RuntimePresentationFailure();
     private boolean externalTimingRejected;
     private long externalTimingRejectedAtNs;
     private int externalTimingRearms;
@@ -2758,7 +2758,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     @Override public void setRuntimeErrorListener(
-            com.thorium.lucent.video.RuntimePresentationFailure.Listener value) {
+            com.thorium.emufusion.video.RuntimePresentationFailure.Listener value) {
         if (closed.get()) return;
         handler.post(() -> {
             if (closed.get()) return;
@@ -4827,7 +4827,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         } finally {
             try {
-                if (begun) signatureTimer.endSignature();
+                if (begun) {
+                    signatureTimer.endSignature();
+                    // Submit the query now. Software cores (NDS, PS1) submit
+                    // several images per presented frame, so waiting for the
+                    // next swap to flush left four queries unsubmitted, the
+                    // ring full and dense estimation rejected every few seconds.
+                    GLES20.glFlush();
+                }
             } finally {
                 if (scissor) GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
                 if (depth) GLES20.glEnable(GLES20.GL_DEPTH_TEST);
@@ -7700,8 +7707,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private void setPresentationViewport() {
         float aspect = presentationAspect > 0f ? presentationAspect :
                 (float) outputWidth / outputHeight;
-        com.thorium.lucent.video.PresentationGeometry.Rectangle bounds =
-                com.thorium.lucent.video.PresentationGeometry.fitInside(
+        com.thorium.emufusion.video.PresentationGeometry.Rectangle bounds =
+                com.thorium.emufusion.video.PresentationGeometry.fitInside(
                         outputWidth, outputHeight, aspect);
         // Geometry uses top-left coordinates; OpenGL uses bottom-left.
         GLES20.glViewport(bounds.left, outputHeight - bounds.bottom,

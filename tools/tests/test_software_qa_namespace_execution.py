@@ -58,7 +58,7 @@ public class NamespaceTest {
             folder = Path(directory)
             java = folder / 'NamespaceTest.java'
             java.write_text(source)
-            native = ROOT / 'unified-android/src/com/thorium/lucent/emulators/NativeQualificationStorage.java'
+            native = ROOT / 'unified-android/src/com/thorium/emufusion/emulators/NativeQualificationStorage.java'
             compile_result = subprocess.run([str(JAVA / 'javac'), '--release', '8',
                 '-d', directory, str(java), str(native)], text=True, capture_output=True)
             self.assertEqual(compile_result.returncode, 0, compile_result.stderr)

@@ -12,11 +12,11 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
-import com.thorium.lucent.video.PresentationGeometry;
+import com.thorium.emufusion.video.PresentationGeometry;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import com.thorium.lucent.video.FrameGenerationBackendPolicy;
+import com.thorium.emufusion.video.FrameGenerationBackendPolicy;
 
 /**
  * A real SurfaceFlinger layer for gameplay video, used by the in-process
@@ -56,7 +56,7 @@ import com.thorium.lucent.video.FrameGenerationBackendPolicy;
  */
 public final class GameSurfaceView extends SurfaceView
         implements SurfaceHolder.Callback {
-    private static final String TAG = "LucentGameLayer";
+    private static final String TAG = "EmuFusionGameLayer";
 
     private GameSurface.Listener listener;
     private boolean surfaceLive;

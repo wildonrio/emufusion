@@ -128,7 +128,7 @@ METHODS = r'''
 
     if-nez v0, :lucent_motion_handled
 
-    invoke-static {p0, p1}, Lcom/thorium/lucent/navigation/RightStickMotionBridge;->dispatch(Landroid/app/Activity;Landroid/view/MotionEvent;)Z
+    invoke-static {p0, p1}, Lcom/thorium/emufusion/navigation/RightStickMotionBridge;->dispatch(Landroid/app/Activity;Landroid/view/MotionEvent;)Z
 
     move-result v0
 

@@ -10,7 +10,7 @@ from tools.tests.test_host_acknowledged_retirement import method, member
 ROOT = Path(__file__).resolve().parents[2]
 JDK = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'), 'bin')
 PATHS = {
-    'NativeAdapterStopPolicy.java': 'unified-android/src/com/thorium/lucent/emulators/',
+    'NativeAdapterStopPolicy.java': 'unified-android/src/com/thorium/emufusion/emulators/',
     'InWindowGameHost.java': 'unified-android/src/com/thorium/preview/game/',
     'FrontendRestartActivity.java': 'android-companion/src/com/thorium/preview/',
 }
@@ -41,7 +41,7 @@ class NativeSessionRestartTest(unittest.TestCase):
     def test_actual_policy_retains_switch_owner_and_waits_for_ack(self):
         policy = source('NativeAdapterStopPolicy.java')
         execute('''
-import com.thorium.lucent.emulators.NativeAdapterStopPolicy;
+import com.thorium.emufusion.emulators.NativeAdapterStopPolicy;
 public class PolicyTest {
  static void check(boolean v,String why){if(!v)throw new AssertionError(why);}
  public static void main(String[] args){
@@ -56,7 +56,7 @@ public class PolicyTest {
    check(!NativeAdapterStopPolicy.allowsForcedFrontendRestart(id),"unrelated forced restart enabled");
   }
  }
-}''', 'PolicyTest', {'com/thorium/lucent/emulators/NativeAdapterStopPolicy.java': policy})
+}''', 'PolicyTest', {'com/thorium/emufusion/emulators/NativeAdapterStopPolicy.java': policy})
 
     def test_actual_exit_completion_waits_for_release_not_just_stop(self):
         body = method(source('InWindowGameHost.java'), 'finishRetiringSession')

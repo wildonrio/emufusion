@@ -9,7 +9,7 @@ from tools.tests.test_phone_analog_controls import JAVA, ROOT, STUBS
 
 HARNESS = r"""package com.thorium.preview.game;
 import android.view.MotionEvent;
-import com.thorium.lucent.video.DualScreenLayout;
+import com.thorium.emufusion.video.DualScreenLayout;
 public class ThreeDsPhoneStylusTest {
   static void check(boolean b,String m){if(!b)throw new AssertionError(m);}
   static MotionEvent event(int a,int index,int[] ids,float... xy){return new MotionEvent(a,index,ids,xy);}
@@ -67,9 +67,9 @@ class ThreeDsPhoneTouchTest(unittest.TestCase):
             harness.write_text(HARNESS)
             subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", str(temp),
                             str(event), str(harness),
-                            str(src / "lucent/metadata/EngineSystemIdResolver.java"),
-                            str(src / "lucent/video/PresentationGeometry.java"),
-                            str(src / "lucent/video/DualScreenLayout.java"),
+                            str(src / "emufusion/metadata/EngineSystemIdResolver.java"),
+                            str(src / "emufusion/video/PresentationGeometry.java"),
+                            str(src / "emufusion/video/DualScreenLayout.java"),
                             str(src / "preview/game/ThreeDsPhoneStylus.java")], check=True)
             subprocess.run([str(JAVA / "java"), "-cp", str(temp),
                             "com.thorium.preview.game.ThreeDsPhoneStylusTest"], check=True)

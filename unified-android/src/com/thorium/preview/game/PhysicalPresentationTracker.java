@@ -1,6 +1,6 @@
 package com.thorium.preview.game;
 
-import com.thorium.lucent.video.PhysicalPresentationCadence;
+import com.thorium.emufusion.video.PhysicalPresentationCadence;
 
 import java.util.ArrayDeque;
 

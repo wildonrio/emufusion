@@ -64,7 +64,7 @@ public class LibretroEngineSession {
         void onSessionStopRejected(String message,Throwable failure);
         default void onSessionError(String message,Throwable failure){}
     }
-    enum StopReason {EXIT_TO_LUCENT,ACTIVITY_DESTROYED}
+    enum StopReason {EXIT_TO_EMUFUSION,ACTIVITY_DESTROYED}
     static final String TAG="test";
     final Object appContext=new Object();
     final Object lifecycleSubmissionLock=new Object(),runLock=new Object();
@@ -227,8 +227,8 @@ public class LibretroEngineSession {
         LibretroEngineSession s=new LibretroEngineSession();s.checkpointFail=fail;
         CountDownLatch stopped=new CountDownLatch(2);AtomicInteger callbacks=new AtomicInteger();
         Completion complete=()->{callbacks.incrementAndGet();stopped.countDown();};
-        s.stop(StopReason.EXIT_TO_LUCENT,complete);await(s.checkpointEntered,"checkpoint not started");
-        s.stop(StopReason.EXIT_TO_LUCENT,complete);
+        s.stop(StopReason.EXIT_TO_EMUFUSION,complete);await(s.checkpointEntered,"checkpoint not started");
+        s.stop(StopReason.EXIT_TO_EMUFUSION,complete);
         check(callbacks.get()==0 && s.checkpointCalls.get()==1,"duplicate stop completed before checkpoint");
         CountDownLatch releasedAck=new CountDownLatch(1);LibretroHost original=s.host;
         s.releaseWhenComplete(releasedAck::countDown);
@@ -311,8 +311,8 @@ public class LibretroEngineSession {
         CountDownLatch rejected=new CountDownLatch(1),completed=new CountDownLatch(2);
         AtomicInteger callbacks=new AtomicInteger();s.listener=(message,failure)->rejected.countDown();
         Completion callback=()->{callbacks.incrementAndGet();completed.countDown();};
-        s.stop(StopReason.EXIT_TO_LUCENT,callback);await(original.unloadEntered,"ScummVM unload not entered");
-        s.stop(destroyed?StopReason.ACTIVITY_DESTROYED:StopReason.EXIT_TO_LUCENT,callback);
+        s.stop(StopReason.EXIT_TO_EMUFUSION,callback);await(original.unloadEntered,"ScummVM unload not entered");
+        s.stop(destroyed?StopReason.ACTIVITY_DESTROYED:StopReason.EXIT_TO_EMUFUSION,callback);
         check(callbacks.get()==0,"duplicate stop acknowledged in-flight ScummVM unload");
         original.unloadPermit.countDown();
         if(destroyed){await(completed,"destroy-upgraded failed stop stranded retirement");check(callbacks.get()==2,"destroy stop fanout lost");}

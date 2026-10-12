@@ -2,8 +2,8 @@ package com.thorium.preview;
 
 import android.content.Context;
 
-import com.thorium.lucent.emulators.ExternalEmulator;
-import com.thorium.lucent.emulators.ExternalEmulatorDirectory;
+import com.thorium.emufusion.emulators.ExternalEmulator;
+import com.thorium.emufusion.emulators.ExternalEmulatorDirectory;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -22,7 +22,7 @@ import java.util.Map;
  * {@link ExternalEmulatorDirectory} the Settings picker reads.
  *
  * The parsing lives here, in the Android layer, and the model lives in
- * com.thorium.lucent.emulators — the same split CheatCatalog/CheatDatabase
+ * com.thorium.emufusion.emulators — the same split CheatCatalog/CheatDatabase
  * already use, and what lets the picker's data rules be tested on the host.
  *
  * A missing or damaged asset yields an empty directory rather than an

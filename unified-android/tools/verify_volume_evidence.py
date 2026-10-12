@@ -67,13 +67,13 @@ def _logcat_time_ms(line: str) -> float | None:
 
 
 def _soundpool_message(line: str, expected_pid: int) -> str | None:
-    # Android's brief logger: I/LucentMenuSfx( 27228): message
-    brief = re.search(r"\bLucentMenuSfx\(\s*(\d+)\):\s*(.*)$", line)
+    # Android's brief logger: I/EmuFusionMenuSfx( 27228): message
+    brief = re.search(r"\bEmuFusionMenuSfx\(\s*(\d+)\):\s*(.*)$", line)
     if brief is not None:
         return brief.group(2) if int(brief.group(1)) == expected_pid else None
-    # Android threadtime: ... 27228 27301 I LucentMenuSfx: message
+    # Android threadtime: ... 27228 27301 I EmuFusionMenuSfx: message
     threadtime = re.search(
-        r"^\S+\s+\S+\s+(\d+)\s+\d+\s+[VDIWEF]\s+LucentMenuSfx:\s*(.*)$",
+        r"^\S+\s+\S+\s+(\d+)\s+\d+\s+[VDIWEF]\s+EmuFusionMenuSfx:\s*(.*)$",
         line,
     )
     if threadtime is not None:

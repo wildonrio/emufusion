@@ -259,10 +259,10 @@ launch: external-command-owned-by-game
         good = f"""Class descriptor  : 'Lcom/thorium/preview/GameLaunchRouter;'
     #0 : (in Lcom/thorium/preview/GameLaunchRouter;)
 [0000] com.thorium.preview.GameLaunchRouter.metadataCommand:
-0000: invoke-static {{v0}}, Lcom/thorium/lucent/metadata/EngineSystemIdResolver;.canonical:(Ljava/lang/String;)Ljava/lang/String;
+0000: invoke-static {{v0}}, Lcom/thorium/emufusion/metadata/EngineSystemIdResolver;.canonical:(Ljava/lang/String;)Ljava/lang/String;
   Virtual methods   -
 Class #997 -
-Class descriptor  : 'Lcom/thorium/lucent/metadata/MetadataGameLaunchCommand;'
+Class descriptor  : 'Lcom/thorium/emufusion/metadata/MetadataGameLaunchCommand;'
 0000: const-string v0, "am start -a "
 0002: const-string v1, "org.pegasus_frontend.android.MainActivity"
   Virtual methods   -
@@ -276,7 +276,7 @@ Class descriptor  : 'Lorg/pegasus_frontend/android/MainActivity;'
 0000: invoke-static {{v0}}, Lcom/thorium/preview/InProcessGameLaunchCommand;.tryLaunch:([Ljava/lang/String;)Z
   Virtual methods   -
 Class #998 -
-Class descriptor  : 'Lcom/thorium/lucent/metadata/EngineSystemIdResolver;'
+Class descriptor  : 'Lcom/thorium/emufusion/metadata/EngineSystemIdResolver;'
 {literals}
   Virtual methods   -
 Class #999 -

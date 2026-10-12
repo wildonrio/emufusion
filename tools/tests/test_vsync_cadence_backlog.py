@@ -8,7 +8,7 @@ from pathlib import Path
 import unittest
 
 CADENCE = (Path(__file__).resolve().parents[2] /
-           'unified-android/src/com/thorium/lucent/timing/VsyncCadence.java').read_text()
+           'unified-android/src/com/thorium/emufusion/timing/VsyncCadence.java').read_text()
 
 
 class VsyncCadenceBacklogTest(unittest.TestCase):

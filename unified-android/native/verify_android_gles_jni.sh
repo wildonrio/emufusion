@@ -34,9 +34,9 @@ fi
 
 "$JAVA_HOME/bin/javac" -source 8 -target 8 -encoding UTF-8 \
     -classpath "$ANDROID_JAR" -h "$CHECK_DIR" -d "$CHECK_DIR" \
-    "$PROJECT_DIR/src/com/thorium/lucent/timing/DisplaySyncPolicy.java" \
-    "$PROJECT_DIR/src/com/thorium/lucent/video/NativeSourceImageProvider.java" \
-    "$PROJECT_DIR/src/com/thorium/lucent/video/RuntimePresentationFailure.java" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/timing/DisplaySyncPolicy.java" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/video/NativeSourceImageProvider.java" \
+    "$PROJECT_DIR/src/com/thorium/emufusion/video/RuntimePresentationFailure.java" \
     "$PROJECT_DIR/src/com/thorium/preview/game/FrameGenerationRenderer.java" \
     "$PROJECT_DIR/src/com/thorium/preview/game/FrameGenerationRendererRegistry.java" \
     "$PROJECT_DIR/src/com/thorium/preview/LibretroHost.java" \

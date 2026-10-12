@@ -1993,10 +1993,10 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
 
         reload_log = "\n".join((
             "baseline",
-            "I/LucentImport( 333): Frontend restart bridge ready oldPid=111 "
+            "I/EmuFusionImport( 333): Frontend restart bridge ready oldPid=111 "
             "bridgePid=333 resumed=true focused=true firstFrameDrawn=true",
-            "I/LucentImport( 333): Frontend restart observed old process exit oldPid=111",
-            "I/LucentImport( 333): Frontend restart bridge launching fresh Qt process attempt=1",
+            "I/EmuFusionImport( 333): Frontend restart observed old process exit oldPid=111",
+            "I/EmuFusionImport( 333): Frontend restart bridge launching fresh Qt process attempt=1",
             "healthy",
             "",
         ))
@@ -2053,7 +2053,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         policy = "allowBackgroundActivityStart:false"
         self.assertEqual(MODULE.reload_log_failures(denied, 111, 222), [denied])
         self.assertEqual(MODULE.reload_log_failures(policy, 111, 222), [policy])
-        failed_launch = "E/LucentImport: Frontend restart bridge launch attempt failed"
+        failed_launch = "E/EmuFusionImport: Frontend restart bridge launch attempt failed"
         self.assertEqual(
             MODULE.reload_log_failures(failed_launch, 111, 222), [failed_launch]
         )
@@ -2299,10 +2299,10 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
 
         reload_log = "\n".join((
             "baseline",
-            "I/LucentImport( 333): Frontend restart bridge ready oldPid=111 "
+            "I/EmuFusionImport( 333): Frontend restart bridge ready oldPid=111 "
             "bridgePid=333 resumed=true focused=true firstFrameDrawn=true",
-            "I/LucentImport( 333): Frontend restart observed old process exit oldPid=111",
-            "I/LucentImport( 333): Frontend restart bridge launching fresh Qt process attempt=1",
+            "I/EmuFusionImport( 333): Frontend restart observed old process exit oldPid=111",
+            "I/EmuFusionImport( 333): Frontend restart bridge launching fresh Qt process attempt=1",
             "",
         ))
 
@@ -2352,10 +2352,10 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
 
         reload_log = "\n".join((
             "baseline",
-            "I/LucentImport( 333): Frontend restart bridge ready oldPid=111 "
+            "I/EmuFusionImport( 333): Frontend restart bridge ready oldPid=111 "
             "bridgePid=333 resumed=true focused=true firstFrameDrawn=true",
-            "I/LucentImport( 333): Frontend restart observed old process exit oldPid=111",
-            "I/LucentImport( 333): Frontend restart bridge launching fresh Qt process attempt=1",
+            "I/EmuFusionImport( 333): Frontend restart observed old process exit oldPid=111",
+            "I/EmuFusionImport( 333): Frontend restart bridge launching fresh Qt process attempt=1",
             "",
         ))
         iterator = iter(responses)
@@ -2923,7 +2923,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         old_lines = "\n".join((
             "08-11 06:45:23.486 23936 24001 I Adreno: DequeueBuffer: dequeueBuffer failed",
             "08-11 06:45:23.486 23936 24001 I Adreno: DequeueBuffer: dequeueBuffer failed",
-            "08-11 06:45:23.544 28472 28472 I LucentImport: Frontend restart bridge ready oldPid=23936 bridgePid=28472 resumed=true focused=true firstFrameDrawn=true",
+            "08-11 06:45:23.544 28472 28472 I EmuFusionImport: Frontend restart bridge ready oldPid=23936 bridgePid=28472 resumed=true focused=true firstFrameDrawn=true",
         ))
         proof = MODULE.classify_reload_surface_teardown(old_lines, new_pid)
         self.assertEqual(proof["failures"], [])
@@ -3020,10 +3020,10 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
 
     def test_bridge_chronology_rejects_wrong_pids_and_manual_relaunch(self):
         valid = "\n".join((
-            "I/LucentImport( 333): Frontend restart bridge ready oldPid=111 "
+            "I/EmuFusionImport( 333): Frontend restart bridge ready oldPid=111 "
             "bridgePid=333 resumed=true focused=true firstFrameDrawn=true",
-            "I/LucentImport( 333): Frontend restart observed old process exit oldPid=111",
-            "I/LucentImport( 333): Frontend restart bridge launching fresh Qt process attempt=1",
+            "I/EmuFusionImport( 333): Frontend restart observed old process exit oldPid=111",
+            "I/EmuFusionImport( 333): Frontend restart bridge launching fresh Qt process attempt=1",
         ))
         proof = MODULE.bridge_reload_chronology(valid, 111, 222)
         self.assertEqual(proof["bridgePid"], 333)
@@ -3035,8 +3035,8 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         with self.assertRaisesRegex(RuntimeError, "PID/attempt mismatch"):
             MODULE.bridge_reload_chronology(wrong, 111, 222)
         wrong_logger = valid.replace(
-            "I/LucentImport( 333): Frontend restart observed",
-            "I/LucentImport( 444): Frontend restart observed",
+            "I/EmuFusionImport( 333): Frontend restart observed",
+            "I/EmuFusionImport( 444): Frontend restart observed",
         )
         with self.assertRaisesRegex(RuntimeError, "PID/attempt mismatch"):
             MODULE.bridge_reload_chronology(wrong_logger, 111, 222)
@@ -3518,7 +3518,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
 
     def test_native_adapter_first_guest_frame_satisfies_only_exact_route(self):
         log = """
-          LucentPhase3Engine: First guest frame engine=eden system=switch totalMs=15886
+          EmuFusionPhase3Engine: First guest frame engine=eden system=switch totalMs=15886
         """
         self.assertTrue(MODULE.has_presented_frame_telemetry(
             log, "eden", "switch"
@@ -5206,9 +5206,9 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
 
     def test_n3ds_runtime_requires_the_clockwise_display_four_path(self):
         valid = "\n".join((
-            "LucentPreview: showGameplaySurface generation=6 displayId=4 "
+            "EmuFusionPreview: showGameplaySurface generation=6 displayId=4 "
             "clockwiseQuarterTurn=true",
-            "LucentPreview: clockwise gameplay surfaceCreated generation=6 "
+            "EmuFusionPreview: clockwise gameplay surfaceCreated generation=6 "
             "buffer=1080x1240",
         ))
         report = MODULE.require_n3ds_clockwise_lower(valid)
@@ -6010,9 +6010,9 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
 
     def test_dual_screen_accepts_reused_resumed_lower_window_with_surface(self):
         routed = "\n".join([
-            "LucentSecondary: request served by the resumed lower-display activity "
+            "EmuFusionSecondary: request served by the resumed lower-display activity "
             "generation=1 system=nds",
-            "LucentPreview: showGameplaySurface generation=1 displayId=4 "
+            "EmuFusionPreview: showGameplaySurface generation=1 displayId=4 "
             "clockwiseQuarterTurn=false",
             "EmuFusionFrameGen: Frame generator attached generator=2 "
             "role=secondary displayId=4 output=1240x1080",

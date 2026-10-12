@@ -34,7 +34,7 @@ class BuiltinClockIntegrationTest(unittest.TestCase):
         body = method((src / 'com/thorium/preview/game/LibretroEngineSession.java').read_text(),
                       '    private void updatePhysicalFgClock(')
         fixture = '''
-import com.thorium.lucent.timing.DisplaySyncPolicy;
+import com.thorium.emufusion.timing.DisplaySyncPolicy;
 public class ClockIntegrationTest {
     interface FrameGenerationRenderer { double physicalPanelHz(); }
     static class FrameGenerationRendererRegistry {

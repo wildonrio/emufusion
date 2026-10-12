@@ -122,7 +122,7 @@ class PhaseOneMednafenCandidatesTest(unittest.TestCase):
             'android:name="org.pegasus_frontend.android.MainActivity"',
             build,
         )
-        self.assertNotIn('android:name="com.thorium.preview.game.LucentGameActivity"',
+        self.assertNotIn('android:name="com.thorium.preview.game.EmuFusionGameActivity"',
                          build)
         self.assertNotIn(
             'android:name="com.thorium.preview.game.InternalGameLaunchActivity"',

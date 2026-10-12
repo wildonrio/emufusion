@@ -8,7 +8,7 @@ import com.thorium.preview.game.InWindowGameHost;
 
 /** Intercepts EmuFusion's internal `am start` syntax before any Activity starts. */
 public final class InProcessGameLaunchCommand {
-    private static final String TAG = "LucentLaunchCommand";
+    private static final String TAG = "EmuFusionLaunchCommand";
     private static final String COMPONENT =
             "com.thorium.preview/org.pegasus_frontend.android.MainActivity";
 
@@ -45,7 +45,7 @@ public final class InProcessGameLaunchCommand {
             Log.e(TAG, "Rejected internal launch with a foreign component");
             return true;
         }
-        Activity activity = LucentApplication.currentMainActivity();
+        Activity activity = EmuFusionApplication.currentMainActivity();
         if (activity == null) {
             Log.e(TAG, "Rejected internal launch because MainActivity is not live");
             return true;

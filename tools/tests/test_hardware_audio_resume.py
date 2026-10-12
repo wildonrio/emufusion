@@ -40,7 +40,7 @@ class HardwareAudioResumeTests(unittest.TestCase):
         ])
         harness = r'''
 import java.util.concurrent.atomic.AtomicBoolean;
-import com.thorium.lucent.audio.PcmAudioQueue;
+import com.thorium.emufusion.audio.PcmAudioQueue;
 
 public class HardwareAudioResumeTest {
     static final String TAG = "test";
@@ -179,7 +179,7 @@ public class HardwareAudioResumeTest {
             path = Path(temp) / "HardwareAudioResumeTest.java"
             path.write_text(harness)
             subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", temp,
-                            str(path), str(ROOT / "unified-android/src/com/thorium/lucent/audio/PcmAudioQueue.java")], check=True)
+                            str(path), str(ROOT / "unified-android/src/com/thorium/emufusion/audio/PcmAudioQueue.java")], check=True)
             result = subprocess.run([str(JAVA / "java"), "-cp", temp, "HardwareAudioResumeTest"],
                                     text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

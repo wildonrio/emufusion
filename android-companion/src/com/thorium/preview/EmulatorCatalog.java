@@ -2,7 +2,7 @@ package com.thorium.preview;
 
 import android.content.Context;
 
-import com.thorium.lucent.emulators.ExternalEmulatorDelivery;
+import com.thorium.emufusion.emulators.ExternalEmulatorDelivery;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -500,7 +500,7 @@ final class EmulatorCatalog {
     // ---- helpers -------------------------------------------------------------
 
     private static String canonical(String value) {
-        return com.thorium.lucent.metadata.EngineSystemIdResolver.canonical(value);
+        return com.thorium.emufusion.metadata.EngineSystemIdResolver.canonical(value);
     }
 
     private static List<String> words(String value) {

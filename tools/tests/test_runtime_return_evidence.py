@@ -21,9 +21,9 @@ class RuntimeReturnEvidenceTest(unittest.TestCase):
     def test_activity_start_and_resume_are_release_failures(self):
         log = """
 E/ActivityTaskManager: START u0 {act=com.thorium.preview.LAUNCH_INTERNAL_GAME cmp=com.thorium.preview/org.pegasus_frontend.android.MainActivity}
-I/LucentInWindow: In-window route accepted engine=mesen system=nes
+I/EmuFusionInWindow: In-window route accepted engine=mesen system=nes
 I/ActivityThread: performResumeActivity com.thorium.preview displayId 0
-I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen system=nes latencyMs=1
+I/EmuFusionInWindow: Returned to Lucent immediately in same window engine=mesen system=nes latencyMs=1
 """
         result = MODULE.audit(log, {"return-01.png": "Nintendo menu"})
         self.assertFalse(result.passed)
@@ -34,7 +34,7 @@ I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen sys
 
     def test_visible_splash_overrules_fast_host_marker(self):
         log = (
-            "I/LucentInWindow: Returned to Lucent immediately in same window "
+            "I/EmuFusionInWindow: Returned to Lucent immediately in same window "
             "engine=mesen system=nes latencyMs=1\n"
         )
         result = MODULE.audit(log, {
@@ -49,9 +49,9 @@ I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen sys
 
     def test_receiver_route_with_clean_frames_passes(self):
         log = """
-I/LucentLaunchReceiver: received launch
-I/LucentInWindow: In-window route accepted engine=mesen system=nes
-I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen system=nes latencyMs=7
+I/EmuFusionLaunchReceiver: received launch
+I/EmuFusionInWindow: In-window route accepted engine=mesen system=nes
+I/EmuFusionInWindow: Returned to Lucent immediately in same window engine=mesen system=nes latencyMs=7
 """
         result = MODULE.audit(log, {
             "return-01.png": "Nintendo Entertainment System 10-Yard Fight",
@@ -61,7 +61,7 @@ I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen sys
 
     def test_missing_return_marker_is_not_inferred_from_clean_screen(self):
         result = MODULE.audit(
-            "I/LucentInWindow: In-window route accepted engine=mesen system=nes",
+            "I/EmuFusionInWindow: In-window route accepted engine=mesen system=nes",
             {"return-01.png": "Nintendo menu"},
         )
         self.assertFalse(result.passed)
@@ -125,7 +125,7 @@ I/LucentInWindow: Returned to Lucent immediately in same window engine=mesen sys
         self.assertEqual(latencies, (3,))
         self.assertEqual(reports, ())
         result = MODULE.audit(
-            "I/LucentInWindow: Returned to Lucent immediately in same window "
+            "I/EmuFusionInWindow: Returned to Lucent immediately in same window "
             "latencyMs=3",
             ocr,
         )

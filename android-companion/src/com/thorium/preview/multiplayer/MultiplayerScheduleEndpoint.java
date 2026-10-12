@@ -2,7 +2,7 @@ package com.thorium.preview.multiplayer;
 
 import android.content.Context;
 
-import com.thorium.lucent.cheats.CheatDatabase;
+import com.thorium.emufusion.cheats.CheatDatabase;
 import com.thorium.preview.PreviewService;
 
 import org.json.JSONArray;

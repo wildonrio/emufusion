@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.38
-VERSION_CODE=112
+VERSION_NAME=3.2.39
+VERSION_CODE=113
 
 case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -478,7 +478,7 @@ fi
 # this unified build installs in place without deleting its settings.
 APP_ICON_SOURCE="$PROJECT_DIR/res/drawable/lucent_icon.png"
 perl -0pi -e 's/package="org\.pegasus_frontend\.android"/package="com.thorium.preview"/g;
-    s/android:name="org\.qtproject\.qt5\.android\.bindings\.QtApplication"/android:name="com.thorium.preview.LucentApplication"/g;
+    s/android:name="org\.qtproject\.qt5\.android\.bindings\.QtApplication"/android:name="com.thorium.preview.EmuFusionApplication"/g;
     s/android:label="Pegasus"/android:label="EmuFusion"/g;
     s/org\.pegasus_frontend\.android\.files/com.thorium.preview.files/g' \
     "$DECODED/AndroidManifest.xml"
@@ -943,7 +943,7 @@ SOURCES=$(find "$ROOT_DIR/android-companion/src" "$ROOT_DIR/android-launch-bridg
     ! -path '*/com/thorium/launchbridge/RomFileProvider.java' \
     ! -path '*/com/thorium/launchbridge/StopButtonService.java' \
     ! -path '*/com/thorium/preview/game/InternalGameLaunchActivity.java' \
-    ! -path '*/com/thorium/preview/game/LucentGameActivity.java' \
+    ! -path '*/com/thorium/preview/game/EmuFusionGameActivity.java' \
     ! -path '*/com/thorium/preview/game/QualificationLaunchActivity.java' \
     ! -path '*/com/thorium/preview/game/SessionReturnRouter.java' -print)
 if [ "$INCLUDE_RIFE_FRAMEGEN" = 1 ]; then

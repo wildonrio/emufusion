@@ -527,7 +527,7 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
 
     def test_aps3e_stop_does_not_kill_the_process(self):
         policy = _read(ROOT / "unified-android" / "src" / "com" / "thorium" /
-                       "lucent" / "emulators" / "NativeAdapterStopPolicy.java")
+                       "emufusion" / "emulators" / "NativeAdapterStopPolicy.java")
         self.assertIn("public static boolean reportsQuickResume(", policy)
         self.assertIn("public static boolean destroyNativeHostOnStop(", policy)
         self.assertIn("!isAps3e(engineId)", policy)
@@ -542,7 +542,7 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
 
     def test_aps3e_return_crosses_a_clean_frontend_process_boundary(self):
         policy = _read(ROOT / "unified-android" / "src" / "com" / "thorium" /
-                       "lucent" / "emulators" / "NativeAdapterStopPolicy.java")
+                       "emufusion" / "emulators" / "NativeAdapterStopPolicy.java")
         host = _read(ROOT / "unified-android" / "src" / "com" / "thorium" /
                      "preview" / "game" / "InWindowGameHost.java")
         bridge = _read(ROOT / "android-companion" / "src" / "com" / "thorium" /

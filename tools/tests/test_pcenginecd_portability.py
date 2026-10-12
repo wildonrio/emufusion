@@ -13,8 +13,8 @@ GAME = ROOT / 'unified-android/src/com/thorium/preview/game'
 
 class PcEngineCdPortabilityTest(unittest.TestCase):
     def test_actual_joypad_dispatch_and_console_roster(self):
-        source = ROOT / 'unified-android/src/com/thorium/lucent/input'
-        tests = ROOT / 'unified-android/test/com/thorium/lucent'
+        source = ROOT / 'unified-android/src/com/thorium/emufusion/input'
+        tests = ROOT / 'unified-android/test/com/thorium/emufusion'
         with tempfile.TemporaryDirectory(prefix='emufusion-pcecd-controller-') as temp:
             units = [source / (name + '.java') for name in
                      ('CanonicalControl', 'SystemControlLayouts', 'LibretroJoypadLayout')]
@@ -23,7 +23,7 @@ class PcEngineCdPortabilityTest(unittest.TestCase):
                                      '-d', temp, *map(str, units)], capture_output=True, text=True)
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             result = subprocess.run([str(JAVA / 'java'), '-cp', temp,
-                                     'com.thorium.lucent.input.LibretroJoypadLayoutTest'],
+                                     'com.thorium.emufusion.input.LibretroJoypadLayoutTest'],
                                     capture_output=True, text=True)
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 

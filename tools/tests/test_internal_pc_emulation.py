@@ -38,11 +38,11 @@ class InternalPcEmulationTest(unittest.TestCase):
         self.assertNotIn(" cmd", block)
 
     def test_aliases_controls_and_qa_fixture_cover_windows(self):
-        resolver = (ROOT / "unified-android/src/com/thorium/lucent/metadata/"
+        resolver = (ROOT / "unified-android/src/com/thorium/emufusion/metadata/"
                     "EngineSystemIdResolver.java").read_text()
         self.assertIn('alias(aliases, "windows", "win", "windows10", "pc")',
                       resolver)
-        controls = (ROOT / "unified-android/src/com/thorium/lucent/input/"
+        controls = (ROOT / "unified-android/src/com/thorium/emufusion/input/"
                     "SystemControlLayouts.java").read_text()
         self.assertIn('"dos", "windows", "windows9x", "scummvm"', controls)
         generator = (ROOT / "engines/qa/generate_fixtures.py").read_text()
