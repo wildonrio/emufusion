@@ -1,5 +1,5 @@
-Lucent Phase 2 PUAE qualification notices
-==========================================
+EmuFusion Phase 2 PUAE qualification notices
+=============================================
 
 This qualification payload contains an exact Android ARM64 build of PUAE from
 libretro/libretro-uae commit 96ebfcfc2c66233ad37f6dc99ee991211dc719ad.
@@ -14,12 +14,12 @@ phase2-puae-dependency-audit.json.
 
 The core contains a fallback AROS ROM snapshot. Its exact compressed and
 decompressed identities are recorded in phase2-puae-firmware-policy.json.
-AROS upstream declares the AROS Public License 1.1, but Lucent has not yet
+AROS upstream declares the AROS Public License 1.1, but EmuFusion has not yet
 reproduced these exact ROM bytes from a pinned AROS source revision; therefore
 the release firmware and license gates remain open.
 
-Lucent contains no Amiga or CD32 Kickstart ROM. CD32 starts only after a user
-provides an exact-size, upstream-compatible ROM identity. Lucent neither
-downloads nor redistributes those proprietary files.
+EmuFusion contains no Amiga or CD32 Kickstart ROM. CD32 starts only after a
+user provides an exact-size, upstream-compatible ROM identity. EmuFusion
+neither downloads nor redistributes those proprietary files.
 
 This is a qualification-only payload. It is not approved for release.

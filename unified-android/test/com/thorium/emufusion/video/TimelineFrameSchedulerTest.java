@@ -26,6 +26,7 @@ public final class TimelineFrameSchedulerTest {
         passingKeepsWholeCadencesExact();
         passingNeedsAQueuedSuccessor();
         burstsAreNotTrimmed();
+        trimsKeepTheLatencyTheSourceNeeds();
         System.out.println("TimelineFrameSchedulerTest passed");
     }
 
@@ -155,6 +156,40 @@ public final class TimelineFrameSchedulerTest {
         check(momentaryExcess > 20, "the bursts do queue extra images " + momentaryExcess);
         check(diagnostics.contains("timelineTrims=0 "), "bursts are not trimmed: " + diagnostics);
         check(!rig.shown.subList(1, rig.shown.size()).contains("-"), "no repeated output " + rig.shown);
+    }
+
+    private static String backlogDiagnostics(long requiredLatencyNs) {
+        // A 60-fps source with a standing backlog: four images queued beyond
+        // the pair for two seconds, so the latency is trimmed unless the
+        // source has shown it needs that latency.
+        Rig rig = new Rig(PANEL, SOURCE60);
+        rig.steadyQueued = 0;
+        rig.scheduler.setRequiredLatencyNs(requiredLatencyNs);
+        long t0 = 1_000_000_000L;
+        int produced = 0;
+        for (; produced < 6; ++produced) rig.produce(produced + 1, t0 + produced * SOURCE60);
+        for (int v = 0; v < 240; ++v) {
+            long now = t0 + 40_000_000L + v * PANEL;
+            while (rig.fifo.size() < 4) {
+                rig.produce(produced + 1, t0 + produced * SOURCE60);
+                ++produced;
+            }
+            rig.vsync(now);
+        }
+        return rig.scheduler.diagnostics();
+    }
+
+    private static void trimsKeepTheLatencyTheSourceNeeds() {
+        String unknown = backlogDiagnostics(Long.MIN_VALUE);
+        check(!unknown.contains("timelineTrims=0 "), "a standing backlog is trimmed: " + unknown);
+        check(unknown.contains("timelineTrimsHeld=0 "), "nothing holds it: " + unknown);
+        // Images have been arriving a second after their stamps: no trim.
+        String needed = backlogDiagnostics(1_000_000_000L);
+        check(needed.contains("timelineTrims=0 "), "latency the source needs is kept: " + needed);
+        check(!needed.contains("timelineTrimsHeld=0 "), "the held trims are counted: " + needed);
+        // A small requirement still lets the excess latency go.
+        String small = backlogDiagnostics(-1_000_000_000L);
+        check(!small.contains("timelineTrims=0 "), "latency beyond the need is trimmed: " + small);
     }
 
     private static void doublesSixtyEvenly() {

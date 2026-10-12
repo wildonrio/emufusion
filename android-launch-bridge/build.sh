@@ -13,6 +13,16 @@ export JAVA_HOME
 PATH="$JAVA_HOME/bin:$PATH"
 export PATH
 
+# The signing variables were renamed from the product's former prefix to
+# EMUFUSION_CONTROLLER_* (2026-10-12). A stale export would otherwise be
+# ignored and the APK silently signed with the debug keystore.
+legacy_vars=$(env | LC_ALL=C sed -n 's/^\(LUC''ENT_CONTROLLER_[A-Za-z0-9_]*\)=.*/\1/p')
+if [ -n "$legacy_vars" ]; then
+    printf 'Refusing to build: %s use the former prefix; signing variables are EMUFUSION_CONTROLLER_*\n' \
+        "$(echo $legacy_vars)" >&2
+    exit 1
+fi
+
 mkdir -p "$BUILD_DIR/classes" "$BUILD_DIR/dex" "$BUILD_DIR/compiled-res"
 rm -rf "$BUILD_DIR/classes"/* "$BUILD_DIR/dex"/* "$BUILD_DIR/compiled-res"/*
 "$BUILD_TOOLS/aapt2" compile --dir "$PROJECT_DIR/res" \
@@ -29,9 +39,9 @@ rm -rf "$BUILD_DIR/classes"/* "$BUILD_DIR/dex"/* "$BUILD_DIR/compiled-res"/*
 (cd "$BUILD_DIR/dex" && "$BUILD_TOOLS/aapt" add "$BUILD_DIR/unsigned.apk" classes.dex)
 "$BUILD_TOOLS/zipalign" -f 4 "$BUILD_DIR/unsigned.apk" "$BUILD_DIR/aligned.apk"
 "$BUILD_TOOLS/apksigner" sign \
-    --ks "${LUCENT_CONTROLLER_KEYSTORE:-$BUILD_DIR/debug.keystore}" \
-    --ks-pass "pass:${LUCENT_CONTROLLER_STORE_PASS:-android}" \
-    --key-pass "pass:${LUCENT_CONTROLLER_KEY_PASS:-android}" \
+    --ks "${EMUFUSION_CONTROLLER_KEYSTORE:-$BUILD_DIR/debug.keystore}" \
+    --ks-pass "pass:${EMUFUSION_CONTROLLER_STORE_PASS:-android}" \
+    --key-pass "pass:${EMUFUSION_CONTROLLER_KEY_PASS:-android}" \
     --out "$BUILD_DIR/emufusion-controller.apk" "$BUILD_DIR/aligned.apk"
 "$BUILD_TOOLS/apksigner" verify --verbose "$BUILD_DIR/emufusion-controller.apk"
 printf '%s\n' "$BUILD_DIR/emufusion-controller.apk"

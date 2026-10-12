@@ -47,7 +47,7 @@ class DensePermanentRecoveryTest(unittest.TestCase):
         fixture = r'''
 public class DenseRejectionTest {
     static class Log {static void e(String t,String s){} static void e(String t,String s,Throwable f){}
-        static void i(String t,String s){}}
+        static void i(String t,String s){} static void w(String t,String s){}}
     static class Adaptation {
         boolean disabled;
         boolean generationDisabled(){return disabled;}
@@ -59,6 +59,8 @@ public class DenseRejectionTest {
     final Adaptation denseGpuAdaptation=new Adaptation();
     final FrameRate frameRate=new FrameRate();
     static final int DENSE_TRANSIENT_REJECT_REARM_LIMIT=2;
+    static final long DENSE_OVERLOAD_SUSPEND_NS=10_000_000_000L,DENSE_OVERLOAD_SUSPEND_MAX_NS=160_000_000_000L;
+    int denseOverloadSuspensions; long denseOverloadResumeAtNs;
     boolean retireOnPermanentRejection=true;  // product default false; tested both ways
     static final String TAG="fixture";
     boolean densePyramidEnabled=true,densePyramidUnavailable,densePerformanceRejected;
@@ -109,6 +111,20 @@ public class DenseRejectionTest {
         exhausted.denseGpuAdaptation.disabled=true;
         exhausted.rejectDense("budget",null);
         assert exhausted.recoveries==1;
+        // Sustained overload suspends: no Direct retirement, nothing latched,
+        // and each suspension is twice as long as the last, up to 160 s.
+        DenseRejectionTest overloaded=new DenseRejectionTest();
+        overloaded.denseGpuAdaptation.disabled=true;
+        long before=System.nanoTime();
+        overloaded.rejectDense("persistent-gpu-overload",null);
+        assert overloaded.recoveries==0 && !overloaded.densePyramidUnavailable;
+        assert !overloaded.frameRate.enabled && overloaded.denseTransientRejections==0;
+        long first=overloaded.denseOverloadResumeAtNs-before;
+        assert first>=10_000_000_000L && first<11_000_000_000L : first;
+        for (int i=0;i<10;++i) overloaded.rejectDense("persistent-gpu-overload",null);
+        long last=overloaded.denseOverloadResumeAtNs-System.nanoTime();
+        assert overloaded.denseOverloadSuspensions==11 && last<=160_000_000_000L && last>150_000_000_000L : last;
+        assert overloaded.recoveries==0 && !overloaded.densePyramidUnavailable;
     }
 }
 '''

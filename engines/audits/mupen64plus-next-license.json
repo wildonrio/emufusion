@@ -4,7 +4,7 @@
   "sourceCommit": "f275caf4b2bfa1e6d1c51636746ea793f3d80320",
   "sourceArchiveSha256": "1810b7bbdc4abfdeee8a9f7f99c4a91dab601a228935802317c25a43d7cf9dbb",
   "scope": "Pinned Mupen64Plus-Next Android ARM64 GLES3 build using the AArch64 dynarec, GLideN64, Mupen64Plus core, RSP-HLE, the exact vendored support sources selected by Makefile.common, and the Android NDK r27 libc++ static runtime. paraLLEl RDP/RSP, Angrylion, CXD4, private Android GraphicBuffer APIs, the process-wide libc++_shared runtime, fonts, game content, and firmware are excluded.",
-  "conclusion": "Configuration-specific compatible candidate. Selected program sources state GPL-2.0-or-later and are exercised under GPLv3 for Lucent's source-available aggregate. Selected permissive/LGPL dependencies and the Apache-2.0 WITH LLVM-exception static C++ runtime are compatible with that election; all notices and corresponding source remain required.",
+  "conclusion": "Configuration-specific compatible candidate. Selected program sources state GPL-2.0-or-later and are exercised under GPLv3 for EmuFusion's source-available aggregate. Selected permissive/LGPL dependencies and the Apache-2.0 WITH LLVM-exception static C++ runtime are compatible with that election; all notices and corresponding source remain required.",
   "components": [
     {
       "path": "libretro frontend, Mupen64Plus core, and RSP-HLE",

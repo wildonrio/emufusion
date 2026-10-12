@@ -5130,6 +5130,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         copyNativeEndpointProvenance(NATIVE_ADMISSION_SLOT, slot);
         endpointFifoSequence[slot] = endpointSequence;
         endpointFifoTimestampNs[slot] = timestampNs;
+        recordEndpointAdmissionLag(timestampNs);
         // This provenance is the accepted source-slot ordinal, not the count
         // of pixel-distinct images. A positively classified repeated callback
         // can occupy one exact proven source slot; using its accepted ordinal
@@ -6678,6 +6679,68 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     /** Session cap on automatic dense re-arms after transient timer anomalies. */
     private static final int DENSE_TRANSIENT_REJECT_REARM_LIMIT = 32;
+    /** First overload suspension; each later one doubles, up to the maximum. */
+    private static final long DENSE_OVERLOAD_SUSPEND_NS = 10_000_000_000L;
+    private static final long DENSE_OVERLOAD_SUSPEND_MAX_NS = 160_000_000_000L;
+    private int denseOverloadSuspensions;
+    private long denseOverloadResumeAtNs;
+
+    // Age of each admitted source image on entering the FIFO (stamp to queue,
+    // one monotonic clock), bucketed <4 / <8 / <16 / <33 / >=33 ms: the slack
+    // the timeline needs for the image after the shown one to be here in time.
+    private final long[] endpointAdmissionLagBuckets = new long[5];
+    private long endpointAdmissionLagMaxUs;
+
+    // The timeline's latency floor: the 95th percentile of the signed lag
+    // (arrival - stamp) over the last 240 admitted images. The display/target
+    // comparison carries the same stamp-clock offset, so a source stamped on
+    // another clock still compares correctly; one stalled image does not move
+    // it, and it follows a changed source within a few seconds.
+    private static final int ADMISSION_LAG_WINDOW = 240;
+    private static final int ADMISSION_LAG_MIN_SAMPLES = 30;
+    private final long[] admissionLagWindowNs = new long[ADMISSION_LAG_WINDOW];
+    private final long[] admissionLagSorted = new long[ADMISSION_LAG_WINDOW];
+    private int admissionLagCount, admissionLagNext;
+    private long timelineRequiredLatencyNs = Long.MIN_VALUE;
+
+    private void recordEndpointAdmissionLag(long timestampNs) {
+        long lagNs = System.nanoTime() - timestampNs;
+        // The sorted copy is kept in step with the window (remove the outgoing
+        // sample, insert the new one): no sort and no allocation per frame.
+        if (admissionLagCount == ADMISSION_LAG_WINDOW) {
+            int out = java.util.Arrays.binarySearch(admissionLagSorted, 0, admissionLagCount,
+                    admissionLagWindowNs[admissionLagNext]);
+            System.arraycopy(admissionLagSorted, out + 1, admissionLagSorted, out,
+                    admissionLagCount - out - 1);
+            --admissionLagCount;
+        }
+        int at = java.util.Arrays.binarySearch(admissionLagSorted, 0, admissionLagCount, lagNs);
+        if (at < 0) at = -at - 1;
+        System.arraycopy(admissionLagSorted, at, admissionLagSorted, at + 1, admissionLagCount - at);
+        admissionLagSorted[at] = lagNs;
+        ++admissionLagCount;
+        admissionLagWindowNs[admissionLagNext] = lagNs;
+        admissionLagNext = (admissionLagNext + 1) % ADMISSION_LAG_WINDOW;
+        if (admissionLagCount >= ADMISSION_LAG_MIN_SAMPLES)
+            timelineRequiredLatencyNs = admissionLagSorted[(admissionLagCount * 95 - 1) / 100];
+        long lagUs = lagNs / 1000L;
+        if (lagUs < 0L || lagUs > 10_000_000L) return;  // another clock or a stale stamp
+        int bucket = lagUs < 4_000L ? 0 : lagUs < 8_000L ? 1 : lagUs < 16_000L ? 2 :
+                lagUs < 33_000L ? 3 : 4;
+        ++endpointAdmissionLagBuckets[bucket];
+        endpointAdmissionLagMaxUs = Math.max(endpointAdmissionLagMaxUs, lagUs);
+    }
+
+    /** Whether a sustained-overload suspension still holds; ends it when due. */
+    private boolean denseOverloadSuspended() {
+        if (!denseGpuAdaptation.generationDisabled()) return false;
+        if (System.nanoTime() - denseOverloadResumeAtNs < 0L) return true;
+        denseGpuAdaptation.resumeAfterSuspension();
+        Log.i(TAG, "Dense GPU overload suspension ended; generation retries generator=" +
+                generatorId + " workLevel=" + denseGpuAdaptation.workLevel() +
+                " suspensions=" + denseOverloadSuspensions);
+        return false;
+    }
     private int denseTransientRejections;
     // Cached shader work level; the session-owned policy is the sole writer.
     // Minimum-work overload has a bounded Direct fallback. Quality recovery
@@ -6771,9 +6834,24 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         else
             denseGpuAdaptation.invalidateRecoveryEvidence();
         denseWorkLevel = denseGpuAdaptation.workLevel();
-        boolean recoverable = !denseGpuAdaptation.generationDisabled() &&
+        // Sustained overload suspends generation instead of ending it for the
+        // session: a GPU-heavy engine's heavy stretch passes (Wind Waker HD's
+        // title sequence on Cemu, 2026-10-12), and the refresh retries after
+        // the suspension, each one twice as long as the last.
+        boolean suspended = "persistent-gpu-overload".equals(reason) &&
+                denseGpuAdaptation.generationDisabled();
+        if (suspended) {
+            long suspendNs = Math.min(DENSE_OVERLOAD_SUSPEND_MAX_NS,
+                    DENSE_OVERLOAD_SUSPEND_NS << Math.min(denseOverloadSuspensions, 8));
+            ++denseOverloadSuspensions;
+            denseOverloadResumeAtNs = System.nanoTime() + suspendNs;
+            Log.w(TAG, "Dense GPU overload: generation suspended generator=" + generatorId +
+                    " seconds=" + suspendNs / 1_000_000_000L +
+                    " suspensions=" + denseOverloadSuspensions);
+        }
+        boolean recoverable = suspended || (!denseGpuAdaptation.generationDisabled() &&
                 (isTransientDenseRejection(reason) || overBudget) &&
-                ++denseTransientRejections <= DENSE_TRANSIENT_REJECT_REARM_LIMIT;
+                ++denseTransientRejections <= DENSE_TRANSIENT_REJECT_REARM_LIMIT);
         if (!recoverable) densePyramidUnavailable = true;
         densePerformanceRejected = true;
         // A rejected qualified renderer has no authorized generation path.
@@ -7956,8 +8034,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (!timelineMode || !frameRate.generationAvailable()) return 0;
         double panelHz = frameRate.panelHz();
         double sourceHz = frameRate.sustainedMeasuredSourceHz();
+        // Up to a little above half the panel: a source wobbling 55-60 FPS
+        // measures 60 at times, and the controller plans only a uniform
+        // qualified clock, so neither generated (Wii U SM3DW, 2026-10-12).
+        // The controller's own plan still takes precedence when it has one.
         if (!(panelHz > 0.0) || !(sourceHz >= VARIABLE_SOURCE_MIN_HZ) ||
-                sourceHz > panelHz / 2.0) return 0;
+                sourceHz > panelHz * VARIABLE_SOURCE_MAX_PANEL_FRACTION) return 0;
         int multiplier = TimelineSchedulerSwitch.maxMultiplier();
         int fresh = freshVariableSourceScans(panelHz, sourceHz, multiplier);
         int previous = timelineScansPerOutput;
@@ -7996,6 +8078,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     /** Below this a pair spans > 50 ms and the motion between them is not worth guessing. */
     private static final double VARIABLE_SOURCE_MIN_HZ = 19.5;
+    /** Highest source the timeline owns, as a fraction of the panel (63.6 Hz on 120 Hz). */
+    private static final double VARIABLE_SOURCE_MAX_PANEL_FRACTION = 0.53;
 
     /** Measured unique source x whole multiplier lands on the timeline's output rate (1%). */
     private boolean sourceFitsTimelineLattice() {
@@ -8064,6 +8148,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         double sourceHz = frameRate.presentationSourceHz();
         long sourcePeriodNs = sourceHz > 0.0 ? Math.round(1e9 / sourceHz) : 0L;
         timeline.configure(panelPeriodNs > 0L ? panelPeriodNs * scans : 0L, sourcePeriodNs);
+        timeline.setRequiredLatencyNs(timelineRequiredLatencyNs);
         // Clock the timeline by the vsync callback, not the predicted display
         // time: when the queue reserve deepens the pipeline by a scan, the
         // display target moves but the content timeline must not jump ahead
@@ -8661,7 +8746,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                             generationMissesTarget);
             boolean generationTargetReject = generationMissesTarget &&
                     generationTargetFailureWindows >=
-                            DENSE_CADENCE_REJECT_CONSECUTIVE_WINDOWS;
+                            DENSE_CADENCE_REJECT_CONSECUTIVE_WINDOWS &&
+                    FrameGenerationCadence.targetMissEndsGeneration(actualPresentHz,
+                            frameRate.outputFps());
             boolean cadenceUnderTarget = densePyramidEnabled &&
                     targetScheduleEligible && windowPresents >= HEALTH_INTERVAL &&
                     actualPresentHz < Math.max(1.0, frameRate.outputFps() * .96);
@@ -10111,6 +10198,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         String record = "Dense GPU adaptation health" + key +
                 " workLevel=" + denseGpuAdaptation.workLevel() +
                 " disabled=" + (denseGpuAdaptation.generationDisabled() ? 1 : 0) +
+                " suspensions=" + denseOverloadSuspensions +
+                " resumes=" + denseGpuAdaptation.resumeCount() +
                 " completeEstimatorAndOwnWarpPairs=" + denseGpuCompletePairs +
                 " pendingPairs=" + denseGpuPairLedger.pendingPairCount() +
                 " retiredWithoutWarp=" + denseGpuPairLedger.unpairedEstimateCount() +
@@ -10281,7 +10370,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             frameRate.resetPresentation();
         }
         boolean nextDense = false;
-        if (denseRequested && !densePyramidUnavailable) {
+        if (denseRequested && !densePyramidUnavailable && !denseOverloadSuspended()) {
             try {
                 if (denseGpuTimer == null) denseGpuTimer = DenseGpuTimer.create();
                 ensureDenseResources();
@@ -12475,6 +12564,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " builtinQueueReserveUs=" + builtinQueueReserveNs / 1000L +
                 (timelineMode ? " timelineMode=1 timelineActive=" + (timelineActive ? 1 : 0) +
                         " " + timeline.diagnostics() : "") +
+                " endpointAdmissionLagMs4/8/16/33/more=" + endpointAdmissionLagBuckets[0] + "/" +
+                        endpointAdmissionLagBuckets[1] + "/" + endpointAdmissionLagBuckets[2] + "/" +
+                        endpointAdmissionLagBuckets[3] + "/" + endpointAdmissionLagBuckets[4] +
+                " endpointAdmissionLagMaxUs=" + endpointAdmissionLagMaxUs +
+                " timelineRequiredLatencyUs=" + (timelineRequiredLatencyNs == Long.MIN_VALUE ?
+                        "unknown" : String.valueOf(timelineRequiredLatencyNs / 1000L)) +
                 " schedulerUnavailable=" +
                         frameRate.bufferedUnavailableSlotCount() +
                 " schedulerLastUnavailableReason=" +

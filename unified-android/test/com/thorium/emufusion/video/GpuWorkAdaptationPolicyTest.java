@@ -6,6 +6,7 @@ public final class GpuWorkAdaptationPolicyTest {
         overBudgetShaderTimeAloneNeverDisables();
         oneEmulatorHitchDoesNotDisable();
         screenshotSpikeAfterStrayMissesDoesNotDisable();
+        suspensionResumesAtMinimumWorkAndCanDisableAgain();
         isolatedPhysicalMissesDoNotAccumulate();
         everyFailureInvalidatesRecoveryAtMinimumWork();
         restorationRequiresConsecutiveEvidenceAndHeadroom();
@@ -100,6 +101,33 @@ public final class GpuWorkAdaptationPolicyTest {
             value.onCompletedPair(++pair, 500L, 1000L, true);
         }
         check(value.generationDisabled(), "half the frames missing for seconds is overload");
+    }
+
+    private static void suspensionResumesAtMinimumWorkAndCanDisableAgain() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        value.resumeAfterSuspension();
+        eq(0, value.resumeCount(), "an enabled policy has nothing to resume");
+        while (!value.generationDisabled()) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        long failures = value.failureCount();
+        value.resumeAfterSuspension();
+        check(!value.generationDisabled(), "the owner's suspension ended: generation retries");
+        eq(1, value.resumeCount(), "the resume is counted");
+        eq(2, value.workLevel(), "it retries at minimum work");
+        eq(0, value.failuresAtMinimum(), "with a fresh burst");
+        eq(0, value.overloadedBlocks(), "and no overloaded blocks carried over");
+        eq(failures, value.failureCount(), "failure accounting is kept");
+        for (int good = 0; good < 600; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+        check(!value.generationDisabled(), "a lighter scene keeps generating");
+        while (!value.generationDisabled() && pair < 100_000) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        check(value.generationDisabled(), "overload that returns disables it again");
+        eq(2, value.disableTransitionCount(), "both disables are counted");
     }
 
     private static void isolatedPhysicalMissesDoNotAccumulate() {

@@ -115,6 +115,14 @@ public final class FrameGenerationCadenceTest {
         check(!FrameGenerationCadence.generationMissesTargetCadence(
                         1_000L, 60L, 60, 60),
                 "direct presentation is outside generated-target rejection");
+        check(FrameGenerationCadence.targetMissEndsGeneration(45.0, 60),
+                "a 30-to-45 outcome still ends the claimed 60 target");
+        check(FrameGenerationCadence.targetMissEndsGeneration(54.0, 120),
+                "a 60-to-54 outcome still ends the claimed 120 target");
+        check(!FrameGenerationCadence.targetMissEndsGeneration(107.1, 120),
+                "a 55-60 FPS source presenting 107 of 120 keeps generating");
+        check(!FrameGenerationCadence.targetMissEndsGeneration(110.0, 120),
+                "a 55 FPS source's 110 of 120 keeps generating");
     }
 
     private static void eq(long expected, long actual, String message) {

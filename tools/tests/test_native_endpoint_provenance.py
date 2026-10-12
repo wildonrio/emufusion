@@ -34,6 +34,7 @@ class NativeEndpointProvenanceTest(unittest.TestCase):
             "private void resetEndpointTimelineForSchedulerEpoch()",
             "private void invalidateBufferedPairForReprime(boolean resetController)",
             "private void commitBufferedEndpointAdvance(int presentation, int advance)",
+            "private void recordEndpointAdmissionLag(long timestampNs)",
         )
         fixture = r'''
 import com.thorium.emufusion.video.*;
@@ -88,6 +89,11 @@ public class ProvenanceTest {
     TransportFactory externalTransportFactory;
     Object deferredExternalPreparation,pendingAppOwnedRequest,pendingAppOwnedPreparation;
     static final int ENDPOINT_FIFO_CAPACITY=6,NATIVE_HISTORY_BASE=6,NATIVE_ADMISSION_SLOT=8;
+    // The admission-lag floor runs on every admission; it must not allocate either.
+    static final int ADMISSION_LAG_WINDOW=240,ADMISSION_LAG_MIN_SAMPLES=30;
+    final long[] admissionLagWindowNs=new long[240],admissionLagSorted=new long[240],
+        endpointAdmissionLagBuckets=new long[5];
+    int admissionLagCount,admissionLagNext;long timelineRequiredLatencyNs=Long.MIN_VALUE,endpointAdmissionLagMaxUs;
     static final String TAG="test";long generatorId=1;
     final NativeSourceImageObserver nativeSourceImageObserverInitial=new NativeSourceImageObserver(6);
     NativeSourceImageObserver nativeSourceImageObserver=nativeSourceImageObserverInitial;

@@ -34,6 +34,7 @@ class VariableSourceGenerationTest(unittest.TestCase):
         harness = r'''
 public class VariableProbe {
   static final double VARIABLE_SOURCE_MIN_HZ = 19.5;
+  static final double VARIABLE_SOURCE_MAX_PANEL_FRACTION = 0.53;
   boolean timelineMode = true; int timelineScansPerOutput;
   static int multiplier = 2;
   static class TimelineSchedulerSwitch { static int maxMultiplier() { return multiplier; } }
@@ -55,7 +56,9 @@ public class VariableProbe {
     check(scans(25.0, 0) == 3, "25 FPS -> 40 (60 would be 2.4x)");
     check(scans(55.0, 0) == 1, "55 FPS -> 120");
     check(scans(19.0, 0) == 0, "below the floor: no generation");
-    check(scans(60.5, 0) == 0, "above half the panel: the controller owns it");
+    check(scans(60.5, 0) == 1, "an unqualified ~60-FPS source (SM3DW 55-60) still doubles to 120");
+    check(scans(59.9, 2) == 1, "and leaves a 60 lattice for 120 when it rises to 60");
+    check(scans(64.0, 0) == 0, "well above half the panel: the controller owns it");
     check(scans(26.0, 2) == 2, "hysteresis keeps 60 for a dip to 26");
     check(scans(23.0, 2) == 3, "a sustained 23 leaves 60");
     check(scans(50.0, 0) == 1, "50 FPS -> 120 (60 gains too little; there was no generation)");

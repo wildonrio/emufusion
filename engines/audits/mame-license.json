@@ -4,7 +4,7 @@
   "sourceCommit": "85eaed9c22242206b68eaca8310cf0dbde331b43",
   "sourceArchiveSha256": "938efbe6bdd2d6e54fad7d9d53e93e9b09a0a708243e5929c286f21b1438833f",
   "scope": "Configuration-specific audit of the files selected by the pinned Android ARM64 build (subtarget=lucent, sources=src/mame/atari/pong.cpp,src/mame/snk/neogeo.cpp,src/mame/snk/neogeocd.cpp), determined by intersecting every licence-tagged source in the tree against the 1049 object files the build actually produced under build/. No game, firmware, or prebuilt dependency is included. This engineering record is not legal advice.",
-  "aggregateConclusion": "Not blocked. Exactly three of the 1049 linked objects come from GPL-tagged sources, and all three are tagged GPL-2.0+ (or-later), which is compatible with Lucent's GPL-3.0-only combined distribution. No file anywhere in the tree carries a GPL-2.0-only tag. The aggregate licence is also or-later: docs/source/license.rst in this same pinned commit states 'The MAME project as a whole is distributed under the terms of the GNU General Public License, version 2 or later (GPL-2.0+), since it contains code made available under multiple GPL-compatible licenses.' and its copyright block grants 'either version 2 of the License, or (at your option) any later version.' Copyright compatibility is therefore established at both the file level and the aggregate level. The remaining risk is not copyright but trademark: see openQuestions.",
+  "aggregateConclusion": "Not blocked. Exactly three of the 1049 linked objects come from GPL-tagged sources, and all three are tagged GPL-2.0+ (or-later), which is compatible with EmuFusion's GPL-3.0-only combined distribution. No file anywhere in the tree carries a GPL-2.0-only tag. The aggregate licence is also or-later: docs/source/license.rst in this same pinned commit states 'The MAME project as a whole is distributed under the terms of the GNU General Public License, version 2 or later (GPL-2.0+), since it contains code made available under multiple GPL-compatible licenses.' and its copyright block grants 'either version 2 of the License, or (at your option) any later version.' Copyright compatibility is therefore established at both the file level and the aggregate level. The remaining risk is not copyright but trademark: see openQuestions.",
   "method": [
     "Enumerated every '// license:' tag under src/. Distribution: 13998 BSD-3-Clause, 434 GPL-2.0+, 196 LGPL-2.1+, 113 CC0-1.0, 77 MIT, 6 BSD-2-Clause, 5 GPL2+, 2 Public, 1 bare GPL. Zero GPL-2.0-only tags.",
     "Listed the 1049 object files under build/ and matched each candidate GPL/LGPL source to its object by full path, not basename. Basename matching alone produced 12 apparent hits, 9 of which were unrelated same-named files in unbuilt directories (for example src/devices/bus/vtech/memexp/memory.cpp versus the compiled 3rdparty/flac/src/libFLAC/memory.o).",
@@ -44,7 +44,7 @@
     {
       "paths": ["3rdparty/zstd/**"],
       "license": "BSD-3-Clause",
-      "evidence": "Dual-licensed. LICENSE is the Meta Platforms BSD grant and COPYING is GPL-2.0. Lucent elects the BSD option, which carries no copyleft obligation."
+      "evidence": "Dual-licensed. LICENSE is the Meta Platforms BSD grant and COPYING is GPL-2.0. EmuFusion elects the BSD option, which carries no copyleft obligation."
     },
     {
       "paths": ["3rdparty/lua/**", "3rdparty/lsqlite3/**", "3rdparty/lua-zlib/**", "3rdparty/lua-linenoise/**", "3rdparty/luafilesystem/**", "3rdparty/utf8proc/**", "3rdparty/expat/**", "3rdparty/zlib/**", "3rdparty/ymfm/**", "3rdparty/lzma/**", "3rdparty/libjpeg/**", "3rdparty/linenoise/**", "3rdparty/wdlfft/**", "3rdparty/sqlite3/**"],
@@ -69,7 +69,7 @@
     }
   ],
   "openQuestions": [
-    "TRADEMARK, not copyright, and the only live risk. docs/source/license.rst lines 12-13: 'Please note that MAME is a registered trademark of Gregory Ember, and permission is required to use the “MAME” name, logo, or wordmark.' COPYING line 1 repeats the registration. Lucent currently uses the bare string 'MAME' as registry displayName and in the packaged artefact name liblucent_core_mame.so. Nothing in the GPL grant conveys trademark rights, so this needs either written permission from the mark holder or a rename to a non-infringing descriptive label before shipping."
+    "TRADEMARK, not copyright, and the only live risk. docs/source/license.rst lines 12-13: 'Please note that MAME is a registered trademark of Gregory Ember, and permission is required to use the “MAME” name, logo, or wordmark.' COPYING line 1 repeats the registration. EmuFusion currently uses the bare string 'MAME' as registry displayName and in the packaged artefact name libemufusion_core_mame.so. Nothing in the GPL grant conveys trademark rights, so this needs either written permission from the mark holder or a rename to a non-infringing descriptive label before shipping."
   ],
   "blockingGates": [],
   "followUps": [

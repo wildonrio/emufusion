@@ -80,6 +80,7 @@ public final class GpuWorkAdaptationPolicy {
     private long reductions;
     private long restorations;
     private long disableTransitions;
+    private long resumes;
     private long evidenceEpochs;
 
     public GpuWorkAdaptationPolicy() {
@@ -246,6 +247,21 @@ public final class GpuWorkAdaptationPolicy {
         consecutiveHealthyPairs = 0;
     }
 
+    /**
+     * Ends a disable after the owner's timed suspension: generation retries
+     * at minimum work with a fresh burst. Overload that persists disables it
+     * again, and the owner lengthens the next suspension. Failure accounting
+     * and the work level are kept. Nothing else rearms a disabled policy.
+     */
+    public void resumeAfterSuspension() {
+        if (!disabled) return;
+        disabled = false;
+        clearBurst();
+        pairsSinceFailure = 0;
+        consecutiveHealthyPairs = 0;
+        ++resumes;
+    }
+
     /** Invalid evidence cannot retain recovery credit even when its failure was already counted. */
     public void invalidateRecoveryEvidence() { consecutiveHealthyPairs = 0; }
 
@@ -266,5 +282,6 @@ public final class GpuWorkAdaptationPolicy {
     public long reductionCount() { return reductions; }
     public long restorationCount() { return restorations; }
     public long disableTransitionCount() { return disableTransitions; }
+    public long resumeCount() { return resumes; }
     public long evidenceEpochCount() { return evidenceEpochs; }
 }

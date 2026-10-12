@@ -39,7 +39,7 @@
   },
   "notices": {
     "path": "engines/PUAE-CORE-NOTICES.txt",
-    "sha256": "c600aa8778fa7740dba86d2510d6468bc687fb6c6beeee5a3b5b4b593321a00b"
+    "sha256": "97b9732f6b4a0109779ba976d1c694023490bde1495b48cfbdf9726cd1b9edf8"
   },
   "legalTestContent": {
     "path": "engines/puae-test-content-lock.json",

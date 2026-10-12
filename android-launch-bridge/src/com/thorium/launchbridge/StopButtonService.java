@@ -230,7 +230,7 @@ public final class StopButtonService extends AccessibilityService {
 
     private void returnToPegasus(final String contentPackage) {
         blankPreview();
-        Log.i(TAG, "Returning to Lucent from " + contentPackage);
+        Log.i(TAG, "Returning to EmuFusion from " + contentPackage);
 
         Intent pegasus = new Intent(Intent.ACTION_MAIN)
                 .setComponent(PEGASUS_ACTIVITY)

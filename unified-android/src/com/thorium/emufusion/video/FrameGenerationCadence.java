@@ -134,4 +134,16 @@ public final class FrameGenerationCadence {
                 outputFps <= sourceFps) return false;
         return presents * 1000.0 / elapsedMs < outputFps * 0.96;
     }
+
+    /**
+     * Whether a sustained target miss ends generation for the session: only an
+     * intermediate outcome well short of the target (30-to-45 is 75%) does. A
+     * source wobbling 55-58 FPS on a 60-to-120 plan can present at most
+     * 110-116 a second however well it is generated, under the 96% miss line;
+     * Wii U SM3DW presented 107 (89%) and was switched to its 58-FPS Direct
+     * output for the rest of the session (2026-10-12).
+     */
+    public static boolean targetMissEndsGeneration(double presentedHz, int outputFps) {
+        return outputFps > 0 && presentedHz < outputFps * 0.85;
+    }
 }

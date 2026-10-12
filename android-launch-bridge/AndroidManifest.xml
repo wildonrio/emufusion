@@ -10,7 +10,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="Lucent Stop Button"
+        android:label="EmuFusion Stop Button"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <provider
             android:name=".RomFileProvider"

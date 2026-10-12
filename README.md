@@ -24,7 +24,7 @@ EmuFusion checks the latest GitHub release at startup and can also check manuall
 
 ## Installation
 
-1. Download and install `lucent-<version>.apk` from the latest release.
+1. Download and install `emufusion-<version>.apk` from the latest release.
 2. Open EmuFusion and grant the storage permissions Android requests. The first library discovery runs automatically.
 3. On an AYN Thor, the square Stop/Select button works as Select when tapped. Holding it continuously for one second saves and exits the active game back to EmuFusion.
 

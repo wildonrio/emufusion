@@ -86,7 +86,7 @@ SameBoy, mGBA, Gearsystem, SwanStation, melonDS DS, Fuse, and constrained MAME.
 No ROM, proprietary firmware, key, or copyrighted game-system material is
 included.
 
-An APK explicitly built with `LUCENT_INCLUDE_RIFE_FRAMEGEN=1` additionally
+An APK explicitly built with `EMUFUSION_INCLUDE_RIFE_FRAMEGEN=1` additionally
 contains the exact qualification-only RIFE/ncnn native payload and the
 hash-bound RIFE v4.6 model. The complete source commits, source/archive hashes,
 model hashes, patch identities, and licenses are recorded in

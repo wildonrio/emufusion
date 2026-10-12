@@ -63,7 +63,7 @@ that govern the combined application as a whole.
 
 ## Corresponding source
 
-The scripts and Lucent-authored source required to reproduce the distributed
+The scripts and EmuFusion-authored source required to reproduce the distributed
 APK are in this repository. The exact unmodified Pegasus base used by the build
 is commit [`6b322063`](https://github.com/mmatyas/pegasus-frontend/tree/6b322063).
 The reproducible transformation and packaging steps are in

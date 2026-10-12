@@ -46,6 +46,6 @@
     "Two clean path-isolated Android ARM64 builds must be byte-identical.",
     "A redistributable DOS fixture must pass video, audio, input, and repeated state cycles.",
     "Physical-device performance, frame pacing, audio, lifecycle, and Quick Resume must pass.",
-    "Windows 9x guest files remain user content and are not part of Lucent."
+    "Windows 9x guest files remain user content and are not part of EmuFusion."
   ]
 }

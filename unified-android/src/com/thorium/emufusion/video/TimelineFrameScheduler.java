@@ -108,6 +108,15 @@ public final class TimelineFrameScheduler {
     private long pendingSpanNs;
 
     private long reanchors;
+    // Consecutive successor-late callbacks before the image arrived, bucketed
+    // 1 / 2 / 3+ callbacks: how late successors are, in output slots.
+    private int lateStreak;
+    private final long[] lateStreaks = new long[3];
+    // Latest admission lag the source has shown (stamp to renderer, same
+    // clock offset as the display/target comparison), or MIN_VALUE when the
+    // owner does not know it; trims keep the latency above it.
+    private long requiredLatencyNs = Long.MIN_VALUE;
+    private long trimsHeld;
     private long passedReals;
     private int excessCallbacks;
     private long timingSamples;
@@ -156,6 +165,8 @@ public final class TimelineFrameScheduler {
         consecutivePassBlockedPairs = 0;
         excessCallbacks = 0;
         pairsSinceGenerated = Integer.MAX_VALUE / 2;
+        if (lateStreak > 0) ++lateStreaks[Math.min(lateStreak, 3) - 1];
+        lateStreak = 0;
         shownSequence = 0L;
         shownTargetNs = Long.MIN_VALUE;
         clearPending();
@@ -228,10 +239,24 @@ public final class TimelineFrameScheduler {
         // callback jitter); rounding would show multi-scan outputs a scan early.
         long slot = Math.floorDiv(displayNs - anchorDisplayNs + outputPeriodNs / 4L, outputPeriodNs);
         if (slot <= lastSlot) return NONE;  // this output slot is already shown
+        if (hasRight && lateStreak > 0) {
+            ++lateStreaks[Math.min(lateStreak, 3) - 1];
+            lateStreak = 0;
+        }
         excessCallbacks = hasRight && excessQueued >= TRIM_EXCESS_QUEUED ? excessCallbacks + 1 : 0;
         if (excessCallbacks >= TRIM_PERSISTENCE_CALLBACKS) {
-            anchorSourceNs += Math.max(1L, outputPeriodNs / TRIM_DIVISOR);
-            ++trims;
+            // Never trim into the lateness the source has shown: images that
+            // reach the renderer 35-90 ms after their stamps (Cemu) queued up
+            // between slow ones, trims removed the slack, and the next slow
+            // image was late for its slot again (SM3DW, 60 re-anchors in 35 s).
+            long latencyNs = displayNs - (anchorSourceNs + slot * outputPeriodNs);
+            if (requiredLatencyNs == Long.MIN_VALUE ||
+                    latencyNs - outputPeriodNs > requiredLatencyNs) {
+                anchorSourceNs += Math.max(1L, outputPeriodNs / TRIM_DIVISOR);
+                ++trims;
+            } else {
+                ++trimsHeld;
+            }
         }
         long target = anchorSourceNs + slot * outputPeriodNs;
         long tolerance = outputPeriodNs / 2L;
@@ -259,6 +284,7 @@ public final class TimelineFrameScheduler {
             return propose(REAL_LEFT, 0f, leftTimestampNs, slot, leftSequence, false, 0L, 0L);
         }
         if (!hasRight) {
+            ++lateStreak;
             // The next image is not here yet: hold the left one. Once the
             // timeline reaches the point where it would be due, stop just
             // short of it (a re-anchor, never a re-prime) so it shows the
@@ -433,6 +459,13 @@ public final class TimelineFrameScheduler {
     public long expectedSpanNs() { return expectedSpanNs; }
     public long outputPeriodNs() { return outputPeriodNs; }
 
+    /**
+     * The latency (display time minus shown source time) the source needs so
+     * the image after the shown one has arrived by its slot: the recent
+     * maximum of (arrival time - stamp). Long.MIN_VALUE when unknown.
+     */
+    public void setRequiredLatencyNs(long value) { requiredLatencyNs = value; }
+
     public String diagnostics() {
         return "timelineGenerated=" + generated + " timelineReal=" + real +
                 " timelineReanchors=" + reanchors +
@@ -440,12 +473,14 @@ public final class TimelineFrameScheduler {
                 " timelineSuccessorLate=" + successorLateHolds +
                 " timelinePauseHolds=" + pauseHolds +
                 " timelineTrims=" + trims +
+                " timelineTrimsHeld=" + trimsHeld +
                 " timelineSlackSteps=" + slackSteps +
                 " timelineExpectedSpanUs=" + expectedSpanNs / 1000L +
                 " timelinePassedReals=" + passedReals +
                 " timelineTimingErrRmsUs=" + (timingSamples > 0L ?
                         Math.round(Math.sqrt(timingErrorSquares / timingSamples) / 1000.0) : 0L) +
                 " timelineTimingErrMaxUs=" + timingErrorMaxNs / 1000L +
+                " timelineLateStreaks=" + lateStreaks[0] + "/" + lateStreaks[1] + "/" + lateStreaks[2] +
                 " timelineLastHold=" + lastHoldReason;
     }
 }

@@ -4,7 +4,7 @@
   "sourceCommit": "363b6dfbd3e240762e022c2b4897b4fe55722be3",
   "sourceArchiveSha256": "7abed225b58d306bd3988c6950f851aa52a4c7b30d97cedcf626aa18fbf05282",
   "scope": "Pinned ProSystem libretro source and the source files selected by its default Makefile for the Android ARM64 software-rendered build; no BIOS or game content is included.",
-  "conclusion": "GPL-2.0-or-later compatible candidate. Source file notices, including core/ProSystem.c, expressly permit GPL version 2 or any later version. Lucent exercises the GPLv3 option for combined distribution.",
+  "conclusion": "GPL-2.0-or-later compatible candidate. Source file notices, including core/ProSystem.c, expressly permit GPL version 2 or any later version. EmuFusion exercises the GPLv3 option for combined distribution.",
   "components": [
     {"path": "core and libretro frontend", "license": "GPL-2.0-or-later", "evidence": "core/ProSystem.c and companion source headers"},
     {"path": "libretro-common subset", "license": "MIT", "evidence": "vendored libretro-common file notices"},
