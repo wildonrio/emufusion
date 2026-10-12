@@ -79,6 +79,31 @@ else:
 '''
 
 
+def default_trial_signals():
+    """Child pre-exec: HUP, INT and TERM back to their default dispositions.
+
+    A non-interactive shell cannot trap a signal that was ignored when it
+    started (POSIX), and a suite launched in the background starts its children
+    with SIGINT ignored (SIGHUP too under nohup). The trial's traps then never
+    ran, the test's signal was lost, and the test waited on the guard forever.
+    """
+    for sig in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, signal.SIG_DFL)
+
+
+def kill_trial_group(process):
+    """Kill the trial and everything it started, including its background guard.
+
+    Killing only the trial shell left the guard running with the output pipes
+    open, so the following communicate() never returned.
+    """
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    process.communicate(timeout=10)
+
+
 class Ps3ConfigTrialTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -191,7 +216,10 @@ class Ps3ConfigTrialTests(unittest.TestCase):
                         calls.index("config-before.yml', 'app_engine-system"))
 
     def test_signals_restore_original(self):
-        self.guard.write_text("#!/bin/sh\ntrap 'exit 0' HUP INT TERM\nwhile :; do sleep 0.05; done\n")
+        # A guard that waits for the trial's TERM, bounded so that a guard leaked
+        # by a broken run still ends on its own (about 30 s).
+        self.guard.write_text("#!/bin/sh\ntrap 'exit 0' HUP INT TERM\n"
+                              "i=0\nwhile [ $i -lt 600 ]; do sleep 0.05; i=$((i + 1)); done\nexit 3\n")
         for sig in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
             with self.subTest(signal=sig):
                 for name in ("trial-ready", "config-applied.yml", "config-restored.yml"):
@@ -203,21 +231,21 @@ class Ps3ConfigTrialTests(unittest.TestCase):
                     backup.rmdir()
                 process = subprocess.Popen(["sh", str(TRIAL), str(self.evidence)],
                                            env=self.env, stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE)
+                                           stderr=subprocess.PIPE,
+                                           preexec_fn=default_trial_signals,
+                                           start_new_session=True)
                 try:
-                    deadline = time.monotonic() + 10
+                    deadline = time.monotonic() + 20
                     while not (self.evidence / "trial-ready").exists():
                         if process.poll() is not None or time.monotonic() > deadline:
                             self.fail("Trial did not reach fake ready state")
                         time.sleep(0.01)
                     process.send_signal(sig)
-                    _, stderr = process.communicate(timeout=5)
+                    _, stderr = process.communicate(timeout=15)
                     self.assertEqual(process.returncode, 128 + sig, stderr)
                     self.assert_restored()
                 finally:
-                    if process.poll() is None:
-                        process.kill()
-                        process.communicate()
+                    kill_trial_group(process)
 
 
 if __name__ == "__main__":
