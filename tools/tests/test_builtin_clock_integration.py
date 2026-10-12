@@ -29,6 +29,46 @@ class BuiltinClockIntegrationTest(unittest.TestCase):
             subprocess.run([str(JAVA / 'javac'), '-d', str(out), str(java)], check=True)
             subprocess.run([str(JAVA / 'java'), '-ea', '-cp', str(out), 'AdmissionTest'], check=True)
 
+    def test_admission_uses_remembered_rate_only_while_presenting(self):
+        # A near-60 source kept the live clock unqualified for 10-19 s (Wii U
+        # SM3DW, 2026-10-12): admission may use this mode's remembered rate,
+        # but only while this generator's own presents are being observed.
+        src = ROOT / 'unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java'
+        body = method(src.read_text(), '    private double admissionPanelHz()')
+        fixture = r'''
+public class RememberedAdmissionTest {
+    static class PhysicalPresentationClock { static final long SUSTAINED_GAP_BRIDGE_NS=1_000_000_000L;
+        long last; long lastActualNs(){return last;} }
+    static class PanelClockMemory { static double value; static double lookup(int d,double hz){return value;} }
+    static class Closed { boolean v; boolean get(){return v;} }
+    final Closed closed=new Closed();
+    final PhysicalPresentationClock builtInPhysicalClock=new PhysicalPresentationClock();
+    int displayId; float refreshHz=120f; double live;
+    double physicalPanelHz(){return live;}
+''' + body + r'''
+    public static void main(String[] args){
+        RememberedAdmissionTest t=new RememberedAdmissionTest();
+        PanelClockMemory.value=119.93;
+        assert t.admissionPanelHz()==0.0 : "no presents observed yet";
+        t.builtInPhysicalClock.last=System.nanoTime();
+        assert t.admissionPanelHz()==119.93 : "presenting: the remembered rate admits";
+        t.builtInPhysicalClock.last=System.nanoTime()-2_000_000_000L;
+        assert t.admissionPanelHz()==0.0 : "a stale present does not";
+        t.live=119.95; assert t.admissionPanelHz()==119.95 : "the live clock wins";
+        t.live=0; t.builtInPhysicalClock.last=System.nanoTime(); PanelClockMemory.value=0;
+        assert t.admissionPanelHz()==0.0 : "nothing remembered: wait for the live clock";
+        PanelClockMemory.value=119.93; t.closed.v=true;
+        assert t.admissionPanelHz()==0.0 : "closed generator";
+    }
+}
+'''
+        with tempfile.TemporaryDirectory(prefix='remembered-admission-') as directory:
+            out = Path(directory)
+            java = out / 'RememberedAdmissionTest.java'
+            java.write_text(fixture)
+            subprocess.run([str(JAVA / 'javac'), '-d', str(out), str(java)], check=True)
+            subprocess.run([str(JAVA / 'java'), '-ea', '-cp', str(out), 'RememberedAdmissionTest'], check=True)
+
     def test_owner_loss_off_and_rejection(self):
         src = ROOT / 'unified-android/src'
         body = method((src / 'com/thorium/preview/game/LibretroEngineSession.java').read_text(),

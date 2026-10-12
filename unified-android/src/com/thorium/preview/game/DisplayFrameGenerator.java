@@ -2573,7 +2573,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     " maxMultiplier=" + TimelineSchedulerSwitch.maxMultiplier() +
                     (holdoutMode ? " holdoutQa=1" : ""));
         }
-        thread = new HandlerThread("emufusion-frame-generator");
+        // The presenter runs on deadlines, like the compositor: at the default
+        // priority, a CPU-heavy engine's threads preempted it and it missed
+        // its vsync callback 235 times in 30 s of Wii U SM3DW (97 in Wind
+        // Waker HD; 1-2 elsewhere), each a repeated output (2026-10-12).
+        thread = new HandlerThread("emufusion-frame-generator",
+                android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
         thread.start();
         handler = new Handler(thread.getLooper());
         handler.post(this::initialize);
@@ -2759,6 +2764,25 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         });
     }
     @Override public double panelClockRatio() { return reportedPanelClockRatio; }
+    /**
+     * Panel rate for admitting generation. Until the live clock confirms
+     * itself (2 s of contiguous presents against the remembered rate, or a
+     * full baseline), use the rate this display mode measured in an earlier
+     * session -- only while this generator's own presents are being observed.
+     * A near-60 source dropping frames kept the live clock unqualified for
+     * 10-19 s and generation waited (Wii U SM3DW, 2026-10-12). Engine pacing
+     * still reads physicalPanelHz(), which stays on the confirmed rate.
+     */
+    private double admissionPanelHz() {
+        double live = physicalPanelHz();
+        if (live > 0.0 || closed.get()) return live;
+        long last = builtInPhysicalClock.lastActualNs();
+        long now = System.nanoTime();
+        if (last <= 0L || now < last ||
+                now - last >= PhysicalPresentationClock.SUSTAINED_GAP_BRIDGE_NS) return 0.0;
+        return PanelClockMemory.lookup(displayId, refreshHz);
+    }
+
     @Override public double physicalPanelHz() {
         long observed = qualifiedPhysicalPanelObservedNs;
         long now = System.nanoTime();
@@ -3232,7 +3256,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (externalTransport == null) {
                 frameRate.setGenerationAvailable(builtinClockAdmissionReady(
                         densePyramidEnabled, densePyramidUnavailable, displayId,
-                        physicalPanelHz()));
+                        admissionPanelHz()));
             }
             if (externalTransport != null) {
                 if (externalPhysicalClockBoundaryCommittedThisCallback) {
@@ -8152,6 +8176,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         frameRate.sustainedMeasuredSourceHz()) +
                 " panelHz=" + String.format(java.util.Locale.US, "%.2f", frameRate.panelHz()) +
                 " physicalHz=" + String.format(java.util.Locale.US, "%.2f", physicalPanelHz()) +
+                " admissionHz=" + String.format(java.util.Locale.US, "%.2f", admissionPanelHz()) +
+                " clockScans=" + builtInPhysicalClock.frequencyObservedScans() +
+                " clockDiscontinuities=" + builtInPhysicalClock.frequencyDiscontinuities() +
                 " suspended=" + (denseGpuAdaptation.generationDisabled() ? 1 : 0));
     }
 
@@ -10463,7 +10490,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         if (nextDense) frameRate.setGenerationAvailable(externalTransport != null ||
                 builtinClockAdmissionReady(true, densePyramidUnavailable, displayId,
-                        physicalPanelHz()));
+                        admissionPanelHz()));
         else if (denseRequested) frameRate.setGenerationAvailable(false);
         if (!nextDense && (wasDense || denseGpuTimer != null))
             teardownDenseEpoch("settings-disabled");

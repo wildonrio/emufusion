@@ -58,3 +58,12 @@ class ExternalGpuPriorityTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PresenterThreadPriorityTest(unittest.TestCase):
+    def test_frame_generator_thread_runs_at_display_urgency(self):
+        # A CPU-heavy engine preempted the default-priority presenter and it
+        # missed hundreds of vsync callbacks (Wii U, 2026-10-12).
+        source = (ROOT / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java").read_text()
+        self.assertIn('new HandlerThread("emufusion-frame-generator",\n'
+                      '                android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)', source)
