@@ -16,9 +16,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "engines" / "build" / "qa-open-newcores"
-PCE_SOURCE = ROOT / "engines" / "qa" / "fixtures" / "pce" / "lucent_pce_qa.c"
+PCE_SOURCE = ROOT / "engines" / "qa" / "fixtures" / "pce" / "emufusion_pce_qa.c"
 A7800_SOURCE = (ROOT / "engines" / "qa" / "fixtures" / "atari7800" /
-                "lucent_atari7800_qa.bas")
+                "emufusion_atari7800_qa.bas")
 
 CC65_COMMIT = "547d923588d870aacf0b0016c67d0f6a92a70f83"
 CC65_ARCHIVE_SHA256 = "1915cf1ce467a726163618007e6c7a87ae8c8a5f7c8f7651640c4e90a941ed78"
@@ -77,9 +77,9 @@ FILES = (
 )
 OUTPUT_HASHES = {
     **{name: expected for name, _url, expected in FILES},
-    "lucent-pce-qa.pce": PCE_FIXTURE_SHA256,
+    "emufusion-pce-qa.pce": PCE_FIXTURE_SHA256,
     "cc65-LICENSE": "8e87ae93bbc45dbe3def75c8b20ba2905b052ddf766fe61d55b8e16a807d57f3",
-    "lucent-atari7800-qa.a78": A7800_FIXTURE_SHA256,
+    "emufusion-atari7800-qa.a78": A7800_FIXTURE_SHA256,
 }
 
 
@@ -92,7 +92,7 @@ def sha256(path: Path) -> str:
 
 
 def verified_download(url: str, destination: Path, expected: str) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": "Lucent-QA/1"})
+    request = urllib.request.Request(url, headers={"User-Agent": "EmuFusion-QA/1"})
     with urllib.request.urlopen(request) as response, destination.open("wb") as output:
         shutil.copyfileobj(response, output)
     actual = sha256(destination)
@@ -118,7 +118,7 @@ def build_pce_fixture(work: Path) -> Path:
 
     outputs: list[Path] = []
     for index in range(2):
-        output = work / f"lucent-pce-qa-{index}.pce"
+        output = work / f"emufusion-pce-qa-{index}.pce"
         subprocess.run(
             [
                 str(source / "bin" / "cl65"), "-t", "pce", "-Oirs",
@@ -169,7 +169,7 @@ def build_atari7800_fixture(work: Path) -> Path:
     for index in range(2):
         build = work / f"a7800-build-{index}"
         build.mkdir()
-        source = build / "lucent-atari7800-qa.bas"
+        source = build / "emufusion-atari7800-qa.bas"
         shutil.copyfile(A7800_SOURCE, source)
         environment = os.environ.copy()
         environment["bas7800dir"] = str(compiler)
@@ -194,14 +194,14 @@ def main() -> None:
            for name, expected in OUTPUT_HASHES.items()):
         print(OUTPUT)
         return
-    with tempfile.TemporaryDirectory(prefix="lucent-newcore-fixtures-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="emufusion-newcore-fixtures-") as temporary:
         work = Path(temporary)
         for name, url, expected in FILES:
             verified_download(url, OUTPUT / name, expected)
         pce = build_pce_fixture(work)
-        shutil.copyfile(pce, OUTPUT / "lucent-pce-qa.pce")
+        shutil.copyfile(pce, OUTPUT / "emufusion-pce-qa.pce")
         a7800 = build_atari7800_fixture(work)
-        shutil.copyfile(a7800, OUTPUT / "lucent-atari7800-qa.a78")
+        shutil.copyfile(a7800, OUTPUT / "emufusion-atari7800-qa.a78")
     print(OUTPUT)
 
 

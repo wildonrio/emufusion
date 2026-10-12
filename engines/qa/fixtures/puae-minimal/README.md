@@ -8,7 +8,7 @@ or copyrighted asset.
 Build it with:
 
 ```sh
-python3 engines/qa/fixtures/puae-minimal/build_fixture.py /tmp/lucent-puae.adf
+python3 engines/qa/fixtures/puae-minimal/build_fixture.py /tmp/emufusion-puae.adf
 ```
 
 Expected SHA-256: `e5692a1ef7a769936b283b465f1dd965979a2cae1e16e4f8af32e41c310724b1`.

@@ -38,7 +38,7 @@ LEGACY_PACKAGE = "org.pegasus_frontend.android"
 MAIN_ACTIVITY = f"{PACKAGE}/org.pegasus_frontend.android.MainActivity"
 GAME_ACTIVITY = "org.pegasus_frontend.android.MainActivity"
 ACTION_LAUNCH = "com.thorium.preview.LAUNCH_INTERNAL_GAME"
-REMOTE = "/storage/emulated/0/Download/lucent-phase1a-activity-qa"
+REMOTE = "/storage/emulated/0/Download/emufusion-phase1a-activity-qa"
 # Some deliberately minimal conformance ROMs render only a pair of sprites;
 # the open MAME Pong fixture renders only two paddles, a net, and a ball. Core-
 # originated nonblack telemetry is required independently before this check,
@@ -78,23 +78,23 @@ class BlockedCase:
 
 
 CASES = (
-    Case("nes", "EmuFusion NES QA", "mesen", "lucent-callback-test.nes"),
-    Case("snes", "EmuFusion SNES QA", "mesen-s", "lucent-callback-test.sfc"),
+    Case("nes", "EmuFusion NES QA", "mesen", "emufusion-callback-test.nes"),
+    Case("snes", "EmuFusion SNES QA", "mesen-s", "emufusion-callback-test.sfc"),
     Case("gb", "SameBoy DMG Acid2", "sameboy", "dmg-acid2.gb"),
     Case("gbc", "SameBoy CGB Acid2", "sameboy", "cgb-acid2.gbc"),
     Case("gba", "mGBA 2D Wrap", "mgba", "mgba-2d-wrap-test.gba"),
-    Case("sg1000", "EmuFusion SG-1000 QA", "gearsystem", "lucent-callback-test.sg"),
-    Case("mastersystem", "EmuFusion Master System QA", "gearsystem", "lucent-callback-test.sms"),
-    Case("gamegear", "EmuFusion Game Gear QA", "gearsystem", "lucent-callback-test.gg"),
-    Case("psx", "EmuFusion PlayStation QA", "swanstation", "lucent-callback-test.psexe"),
+    Case("sg1000", "EmuFusion SG-1000 QA", "gearsystem", "emufusion-callback-test.sg"),
+    Case("mastersystem", "EmuFusion Master System QA", "gearsystem", "emufusion-callback-test.sms"),
+    Case("gamegear", "EmuFusion Game Gear QA", "gearsystem", "emufusion-callback-test.gg"),
+    Case("psx", "EmuFusion PlayStation QA", "swanstation", "emufusion-callback-test.psexe"),
     Case("nds", "melonDS Homebrew QA", "melonds-ds", "melonds-homebrew-periph-slot2.nds"),
-    Case("zxspectrum", "EmuFusion ZX Spectrum QA", "fuse", "lucent-visible-test.sna"),
+    Case("zxspectrum", "EmuFusion ZX Spectrum QA", "fuse", "emufusion-visible-test.sna"),
     Case("arcade", "MAME Romless Pong", "mame", "pong.cmd"),
     Case("neogeo", "MAME Open Neo Geo QA", "mame", "ngdevkit-open.cmd"),
-    Case("dos", "EmuFusion DOS QA", "dosbox-pure", "lucent-dos-callback-test.zip"),
+    Case("dos", "EmuFusion DOS QA", "dosbox-pure", "emufusion-dos-callback-test.zip"),
     Case("windows", "EmuFusion Internal PC QA", "dosbox-pure",
          "emufusion-internal-pc-callback-test.zip"),
-    Case("pcengine", "EmuFusion PC Engine QA", "beetle-pce-fast", "lucent-pce-qa.pce"),
+    Case("pcengine", "EmuFusion PC Engine QA", "beetle-pce-fast", "emufusion-pce-qa.pce"),
     Case("ngp", "Stargunner Neo Geo Pocket Color", "beetle-neopop", "stargunner.ngc"),
     Case("wonderswancolor", "Bug Witch WonderSwan Color", "beetle-cygne", "bug-witch.wsc"),
 )
@@ -129,7 +129,7 @@ BLOCKED_CASES = (
 def validate_runner_coverage() -> None:
     """Fail closed if the core probe's runnable matrix changes under us."""
     path = ROOT / "engines" / "qa" / "run_phase1a_qa.py"
-    spec = importlib.util.spec_from_file_location("lucent_phase1a_probe_matrix", path)
+    spec = importlib.util.spec_from_file_location("emufusion_phase1a_probe_matrix", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load probe matrix: {path}")
     module = importlib.util.module_from_spec(spec)
@@ -470,7 +470,7 @@ def ensure_library(adb_path: Path, serial: str) -> dict[str, str]:
 
 
 def ui_root(adb_path: Path, serial: str) -> ET.Element:
-    remote = "/sdcard/lucent-qa-window.xml"
+    remote = "/sdcard/emufusion-qa-window.xml"
     try:
         adb(adb_path, serial, "shell", "uiautomator", "dump", remote,
             check=False, timeout=3.0)
@@ -990,7 +990,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
         "returnedIdentity": returned_identity,
         "pauseResume": not require_stop_hold,
         "stopHoldReturn": require_stop_hold,
-        "returnedToLucent": True,
+        "returnedToEmuFusion": True,
         "quickResumeCommitted": True,
         "quickResumeRestored": True,
         "explicitExitClearedLaunchIntent": True,
@@ -1075,7 +1075,7 @@ def main() -> int:
             staged_fixture = args.output / case.fixture
             staged_fixture.write_text(
                 fixture.read_text(encoding="utf-8").replace(
-                    "/data/local/tmp/lucent-phase1a-qa/fixtures", REMOTE
+                    "/data/local/tmp/emufusion-phase1a-qa/fixtures", REMOTE
                 ),
                 encoding="utf-8",
             )

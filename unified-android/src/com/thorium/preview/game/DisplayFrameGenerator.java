@@ -6698,7 +6698,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     " reason=" + reason + " workLevel=" + denseWorkLevel +
                     " anomalies=" + denseLoadAnomalies +
                     " failures=" + denseGpuAdaptation.failureCount() +
-                    " minimumWorkFailures=" + denseGpuAdaptation.failuresAtMinimum());
+                    " minimumWorkFailures=" + denseGpuAdaptation.failuresAtMinimum() +
+                    " overloadedBlocks=" + denseGpuAdaptation.overloadedBlocks());
         }
         if (decision == GpuWorkAdaptationPolicy.Decision.DISABLE_GENERATION)
             rejectDense("persistent-gpu-overload", null);
@@ -7958,17 +7959,30 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (!(panelHz > 0.0) || !(sourceHz >= VARIABLE_SOURCE_MIN_HZ) ||
                 sourceHz > panelHz / 2.0) return 0;
         int multiplier = TimelineSchedulerSwitch.maxMultiplier();
+        int fresh = freshVariableSourceScans(panelHz, sourceHz, multiplier);
         int previous = timelineScansPerOutput;
         if (previous > 0) {
             double previousOutput = panelHz / previous;
-            if (previousOutput <= multiplier * sourceHz * 1.3 &&
+            // Keep the lattice while it still fits, unless a higher output now
+            // fits comfortably: Wind Waker HD (30 FPS) dipped to 22, took the
+            // 40-Hz lattice, and kept it after recovering because 40 is still
+            // above 1.2 x 29 -- a third of its pairs generated (2026-10-12).
+            boolean higherFits = fresh > 0 && fresh < previous &&
+                    panelHz / fresh <= multiplier * sourceHz * 1.1;
+            if (!higherFits && previousOutput <= multiplier * sourceHz * 1.3 &&
                     previousOutput >= sourceHz * 1.2) return previous;
         }
-        // Prefer the highest output within 1.12 x the multiplier; when none
-        // fits (46-53 FPS on 120 Hz: 60 gains too little, 120 is 2.3-2.6x),
-        // the highest within 1.3 x. Without that fallback such a source got
-        // no generation at all, and one wobbling through that range (Wii U
-        // Super Mario 3D World, 43-56 FPS) kept dropping and re-priming it.
+        return fresh;
+    }
+
+    /**
+     * Prefer the highest output within 1.12 x the multiplier; when none fits
+     * (46-53 FPS on 120 Hz: 60 gains too little, 120 is 2.3-2.6x), the highest
+     * within 1.3 x. Without that fallback such a source got no generation at
+     * all, and one wobbling through that range (Wii U Super Mario 3D World,
+     * 43-56 FPS) kept dropping and re-priming it.
+     */
+    private static int freshVariableSourceScans(double panelHz, double sourceHz, int multiplier) {
         int fallback = 0;
         for (int scans = 1; scans <= 12; ++scans) {
             double output = panelHz / scans;

@@ -239,7 +239,7 @@ def stage_legal_fixtures(adb_path: Path, serial: str,
             staged = output / case.fixture
             staged.write_text(
                 fixture.read_text(encoding="utf-8").replace(
-                    "/data/local/tmp/lucent-phase1a-qa/fixtures", qa.REMOTE
+                    "/data/local/tmp/emufusion-phase1a-qa/fixtures", qa.REMOTE
                 ),
                 encoding="utf-8",
             )

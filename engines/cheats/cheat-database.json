@@ -21,7 +21,7 @@
     },
     {
       "system": "nes",
-      "title": "Lucent Callback Test",
+      "title": "EmuFusion Callback Test",
       "cheats": [
         { "id": "qualification-red-border", "name": "Qualification red border", "description": "EmuFusion's original QA ROM only (SHA-256 42019e9ca4a3a11815a9e13b7c60734a73fb7ae3cb06a140915daa4605ee8508). Changes the four-edge border from white to red immediately and reverses when disabled.", "code": "6000:3F" }
       ]

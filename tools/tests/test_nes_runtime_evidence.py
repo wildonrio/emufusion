@@ -380,7 +380,7 @@ class NesRuntimeEvidenceTest(unittest.TestCase):
                                         fill=(146, 120, 247))
         image.save(panel)
         completed = (
-            mock.Mock(returncode=0, stdout="Lucent Callback Test CHEATS"),
+            mock.Mock(returncode=0, stdout="EmuFusion Callback Test CHEATS"),
             mock.Mock(returncode=0,
                       stdout="Qualification red border * OFF"),
         )
@@ -414,7 +414,7 @@ class NesRuntimeEvidenceTest(unittest.TestCase):
                 image.save(panel)
                 completed = (
                     mock.Mock(returncode=0,
-                              stdout="Lucent Callback Test CHEATS"),
+                              stdout="EmuFusion Callback Test CHEATS"),
                     mock.Mock(returncode=0, stdout=row_text),
                 )
                 with mock.patch.object(MODULE.subprocess, "run",
@@ -661,7 +661,7 @@ class NesRuntimeEvidenceTest(unittest.TestCase):
         rom_sha = MODULE.sha256_file(files["qualification-rom"])
         with zipfile.ZipFile(candidate_apk, "w") as archive:
             archive.writestr("assets/cheats/cheat-database.json", json.dumps({
-                "games": [{"system": "nes", "title": "Lucent Callback Test",
+                "games": [{"system": "nes", "title": "EmuFusion Callback Test",
                            "cheats": [{"id": "qualification-red-border",
                                        "code": "6000:3F",
                                        "description": f"fixture {rom_sha}"}]}]
@@ -926,7 +926,7 @@ class NesRuntimeEvidenceTest(unittest.TestCase):
         manifest = {
             "schemaVersion": 1, "profile": MODULE.PROFILE,
             "identity": {"engine": "mesen", "system": "nes",
-                         "gameTitle": "Lucent Callback Test",
+                         "gameTitle": "EmuFusion Callback Test",
                          "pid": 1234,
                          "apkSha256": apk_hash, "installedApkSha256": apk_hash,
                          "romSha256": MODULE.sha256_file(files["qualification-rom"]),
@@ -940,7 +940,7 @@ class NesRuntimeEvidenceTest(unittest.TestCase):
                            "frames": launch_frames},
                 "stop": {"thresholdElapsedNs": stop_origin,
                          "frames": stop_frames,
-                         "selectionOcr": "Lucent Callback Test",
+                         "selectionOcr": "EmuFusion Callback Test",
                          "immediateInputChangedPixels": sum(
                              max(pixel) >= 10 for pixel in ImageChops.difference(
                                  Image.open(stop_first).convert("RGB").resize((320, 180)),

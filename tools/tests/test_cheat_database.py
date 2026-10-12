@@ -89,7 +89,7 @@ class CheatDatabaseTests(unittest.TestCase):
     def test_nes_qualification_cheat_is_discoverable_through_the_normal_catalog(self):
         matches = [game for game in self.data["games"]
                    if game["system"] == "nes" and
-                   normalise(game["title"]) == normalise("Lucent Callback Test")]
+                   normalise(game["title"]) == normalise("EmuFusion Callback Test")]
         self.assertEqual(1, len(matches),
                          "the physical QA ROM must use the same title lookup as users")
         cheats = matches[0]["cheats"]

@@ -1,6 +1,6 @@
 # PPSSPP minimal smoke fixture
 
-This is Lucent-owned, CC0-1.0 source for a PSP homebrew smoke screen. It uses
+This is EmuFusion-owned, CC0-1.0 source for a PSP homebrew smoke screen. It uses
 only public PSPSDK interfaces and contains no Sony firmware, SDK, game code,
 artwork, audio, keys, or other proprietary data.
 

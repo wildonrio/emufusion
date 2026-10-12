@@ -26,7 +26,7 @@ FIRMWARE_DIR = BUILD / "firmware"
 FIRMWARE_MANIFEST = ROOT / "engines" / "firmware" / "manifest.json"
 QA_BUILD = BUILD / "qa"
 DEFAULT_RESULTS = BUILD / "qa-results"
-REMOTE = "/data/local/tmp/lucent-phase1a-qa"
+REMOTE = "/data/local/tmp/emufusion-phase1a-qa"
 
 
 class TestCase:
@@ -46,33 +46,33 @@ class TestCase:
 
 
 CASES = (
-    TestCase("nes", "NES", "mesen", "lucent-callback-test.nes"),
-    TestCase("snes", "SNES", "mesen-s", "lucent-callback-test.sfc"),
+    TestCase("nes", "NES", "mesen", "emufusion-callback-test.nes"),
+    TestCase("snes", "SNES", "mesen-s", "emufusion-callback-test.sfc"),
     TestCase("gb", "Game Boy", "sameboy", "dmg-acid2.gb"),
     TestCase("gbc", "Game Boy Color", "sameboy", "cgb-acid2.gbc"),
     TestCase("gba", "Game Boy Advance", "mgba", "mgba-2d-wrap-test.gba"),
-    TestCase("sg1000", "SG-1000", "gearsystem", "lucent-callback-test.sg"),
-    TestCase("mastersystem", "Master System", "gearsystem", "lucent-callback-test.sms"),
-    TestCase("gamegear", "Game Gear", "gearsystem", "lucent-callback-test.gg"),
+    TestCase("sg1000", "SG-1000", "gearsystem", "emufusion-callback-test.sg"),
+    TestCase("mastersystem", "Master System", "gearsystem", "emufusion-callback-test.sms"),
+    TestCase("gamegear", "Game Gear", "gearsystem", "emufusion-callback-test.gg"),
     TestCase(
         "colecovision", "ColecoVision", "gearcoleco",
-        "lucent-firmware-gate-test.col",
+        "emufusion-firmware-gate-test.col",
         "The candidate minimal BIOS has adjacent GPL source, but its pinned upstream build instructions do not reproduce the packaged ROM; no firmware identity is accepted for qualification.",
     ),
     TestCase(
         "intellivision", "Intellivision", "freeintv", "4-tris.rom",
         "No clearly licensed, source-auditable replacement exists for the required exec.bin and grom.bin firmware; proprietary originals and binary-only substitutes are excluded from QA.",
     ),
-    TestCase("psx", "PlayStation", "swanstation", "lucent-callback-test.psexe"),
+    TestCase("psx", "PlayStation", "swanstation", "emufusion-callback-test.psexe"),
     TestCase("nds", "Nintendo DS", "melonds-ds", "melonds-homebrew-periph-slot2.nds", state_cycles=100),
-    TestCase("zxspectrum", "ZX Spectrum", "fuse", "lucent-visible-test.sna"),
+    TestCase("zxspectrum", "ZX Spectrum", "fuse", "emufusion-visible-test.sna"),
     TestCase("arcade", "Arcade", "mame", "pong.cmd", state_cycles=100),
     TestCase("neogeo", "Neo Geo", "mame", "ngdevkit-open.cmd", state_cycles=100),
-    TestCase("dos", "DOS", "dosbox-pure", "lucent-dos-callback-test.zip",
+    TestCase("dos", "DOS", "dosbox-pure", "emufusion-dos-callback-test.zip",
              state_cycles=100),
     TestCase("windows", "Windows / PC", "dosbox-pure",
              "emufusion-internal-pc-callback-test.zip", state_cycles=100),
-    TestCase("pcengine", "PC Engine", "beetle-pce-fast", "lucent-pce-qa.pce",
+    TestCase("pcengine", "PC Engine", "beetle-pce-fast", "emufusion-pce-qa.pce",
              require_input_effect=True),
     TestCase(
         "pcenginecd", "PC Engine CD", "beetle-pce-fast", None,
@@ -84,15 +84,15 @@ CASES = (
              require_input_effect=True),
     TestCase(
         "amstradcpc", "Amstrad CPC", "caprice32", None,
-        "Caprice32 is GPL-2.0-only and is excluded from the GPLv3 Lucent aggregate until license compatibility is resolved.",
+        "Caprice32 is GPL-2.0-only and is excluded from the GPLv3 EmuFusion aggregate until license compatibility is resolved.",
     ),
     TestCase(
         "atari2600", "Atari 2600", "stella-2023", None,
-        "Stella 2023 is GPL-2.0-only and is excluded from the GPLv3 Lucent aggregate until license compatibility is resolved.",
+        "Stella 2023 is GPL-2.0-only and is excluded from the GPLv3 EmuFusion aggregate until license compatibility is resolved.",
     ),
     TestCase(
         "atari5200", "Atari 5200", "atari800", None,
-        "Atari800 is GPL-2.0-only and is excluded from the GPLv3 Lucent aggregate until license compatibility is resolved.",
+        "Atari800 is GPL-2.0-only and is excluded from the GPLv3 EmuFusion aggregate until license compatibility is resolved.",
     ),
     TestCase(
         "atari7800", "Atari 7800", "prosystem", None,
@@ -100,7 +100,7 @@ CASES = (
     ),
     TestCase(
         "atari800", "Atari 8-bit", "atari800", None,
-        "Atari800 is GPL-2.0-only and is excluded from the GPLv3 Lucent aggregate until license compatibility is resolved.",
+        "Atari800 is GPL-2.0-only and is excluded from the GPLv3 EmuFusion aggregate until license compatibility is resolved.",
     ),
     TestCase(
         "atarist", "Atari ST", "hatari", None,
@@ -108,7 +108,7 @@ CASES = (
     ),
     TestCase(
         "c64", "Commodore 64", "vice-x64sc", None,
-        "VICE is GPL-2.0-only and its ROM-data policy is unresolved, so it is excluded from the GPLv3 Lucent aggregate.",
+        "VICE is GPL-2.0-only and its ROM-data policy is unresolved, so it is excluded from the GPLv3 EmuFusion aggregate.",
     ),
     TestCase(
         "megadrive", "Mega Drive / Genesis", "blastem", None,
@@ -128,7 +128,7 @@ CASES = (
     ),
     TestCase(
         "sega32x", "Sega 32X", "picodrive", None,
-        "PicoDrive has a mixed, unresolved source-license closure and is excluded from the Lucent aggregate.",
+        "PicoDrive has a mixed, unresolved source-license closure and is excluded from the EmuFusion aggregate.",
     ),
     TestCase(
         "segacd", "Sega CD", "picodrive", None,
@@ -136,7 +136,7 @@ CASES = (
     ),
     TestCase(
         "virtualboy", "Virtual Boy", "beetle-vb", None,
-        "The Beetle Virtual Boy build includes a SoftFloat-2b license combination that has not been cleared for Lucent distribution.",
+        "The Beetle Virtual Boy build includes a SoftFloat-2b license combination that has not been cleared for EmuFusion distribution.",
     ),
     TestCase(
         "neogeocd", "Neo Geo CD", None, None,
@@ -183,14 +183,14 @@ def find_ndk(sdk: Path) -> Path:
 def select_emulator(adb: Path, requested: str | None) -> str:
     listing = run([str(adb), "devices"]).stdout.splitlines()[1:]
     online = [line.split()[0] for line in listing if line.strip().endswith("\tdevice")]
-    serial = requested or os.environ.get("LUCENT_QA_SERIAL")
+    serial = requested or os.environ.get("EMUFUSION_QA_SERIAL")
     if serial:
         if serial not in online:
             raise SystemExit(f"requested Android emulator is not online: {serial}")
     else:
         emulators = [item for item in online if item.startswith("emulator-")]
         if len(emulators) != 1:
-            raise SystemExit("set --serial or LUCENT_QA_SERIAL when exactly one emulator is not online")
+            raise SystemExit("set --serial or EMUFUSION_QA_SERIAL when exactly one emulator is not online")
         serial = emulators[0]
     if not serial.startswith("emulator-"):
         raise SystemExit(f"refusing non-emulator Android target: {serial}")
@@ -361,7 +361,7 @@ def main() -> int:
                 pushed_firmware.add(firmware_id)
             case_firmware.append(metadata)
 
-        input_gate = "export LUCENT_PROBE_REQUIRE_INPUT_EFFECT=1 && " \
+        input_gate = "export EMUFUSION_PROBE_REQUIRE_INPUT_EFFECT=1 && " \
             if case.require_input_effect else ""
         command = (
             f"cd {REMOTE} && export LD_LIBRARY_PATH={REMOTE} && {input_gate}"

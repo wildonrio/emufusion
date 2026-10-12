@@ -5,6 +5,7 @@ public final class GpuWorkAdaptationPolicyTest {
         twelveHundredBadPairsNeverRestoreQuality();
         overBudgetShaderTimeAloneNeverDisables();
         oneEmulatorHitchDoesNotDisable();
+        screenshotSpikeAfterStrayMissesDoesNotDisable();
         isolatedPhysicalMissesDoNotAccumulate();
         everyFailureInvalidatesRecoveryAtMinimumWork();
         restorationRequiresConsecutiveEvidenceAndHeadroom();
@@ -41,9 +42,44 @@ public final class GpuWorkAdaptationPolicyTest {
         for (int pair = 1; pair <= 5000; ++pair) value.onCompletedPair(pair, 8000L, 7333L, true);
         check(!value.generationDisabled(), "shader time over budget sheds work but never disables");
         eq(0, value.failuresAtMinimum(), "over-budget time is not a minimum-work failure");
-        for (int miss = 0; miss < GpuWorkAdaptationPolicy.DEFAULT_MIN_DISABLE_SPAN_PAIRS; ++miss)
+        int misses = 0;
+        while (!value.generationDisabled() && misses < 1000) {
             value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            ++misses;
+        }
         check(value.generationDisabled(), "visible misses sustained at minimum work disable");
+        check(misses > (GpuWorkAdaptationPolicy.DEFAULT_PERSISTENCE_BLOCKS - 1) *
+                        GpuWorkAdaptationPolicy.DEFAULT_PERSISTENCE_BLOCK_PAIRS,
+                "the misses had to persist over several blocks: " + misses);
+    }
+
+    private static void screenshotSpikeAfterStrayMissesDoesNotDisable() {
+        // Wind Waker HD on Cemu, Thor 2026-10-12, 30 pairs/s: a few misses in
+        // the seconds before two screenshots, then 54 misses in their 3 s.
+        // Over the burst that was a quarter of all pairs and it disabled
+        // generation for the session; the misses were not sustained.
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        for (int i = 0; i < 2; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        for (int good = 0; good < 60; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+        for (int i = 0; i < 120; ++i) {
+            if (i % 17 == 0) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            else value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        for (int i = 0; i < 90; ++i) {
+            if (i % 5 < 3) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            else value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        check(value.failuresAtMinimum() >= GpuWorkAdaptationPolicy.DEFAULT_FAILURES_AT_MINIMUM,
+                "the fixture reaches the failure count");
+        check(!value.generationDisabled(), "a three-second compositor spike is not sustained overload");
+        for (int good = 0; good < 300; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+        check(!value.generationDisabled(), "generation continues after the spike");
+        for (int round = 0; round < 150; ++round) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        check(value.generationDisabled(), "half the frames missing for ten seconds is overload");
     }
 
     private static void oneEmulatorHitchDoesNotDisable() {

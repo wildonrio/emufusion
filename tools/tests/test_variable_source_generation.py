@@ -29,7 +29,8 @@ def method(signature):
 
 class VariableSourceGenerationTest(unittest.TestCase):
     def test_lattice_for_measured_rates(self):
-        body = method("private int variableSourceScans()")
+        body = (method("private int variableSourceScans()") + "\n" +
+                method("private static int freshVariableSourceScans("))
         harness = r'''
 public class VariableProbe {
   static final double VARIABLE_SOURCE_MIN_HZ = 19.5;
@@ -64,6 +65,10 @@ public class VariableProbe {
     check(scans(45.0, 1) == 2, "a sustained 45 leaves 120");
     check(scans(49.5, 2) == 2, "hysteresis keeps 60 up to 50");
     check(scans(52.0, 2) == 1, "a sustained 52 leaves 60 for 120");
+    check(scans(29.0, 3) == 2, "a 30-FPS game back from a dip leaves 40 for 60");
+    check(scans(27.5, 3) == 2, "27.5 FPS is comfortably 60");
+    check(scans(27.0, 3) == 3, "hysteresis keeps 40 near the 60 boundary");
+    check(scans(21.0, 3) == 3, "a sustained low rate keeps 40");
     multiplier = 3;
     check(scans(20.0, 0) == 2, "triple: 20 FPS -> 60");
     VariableProbe off = new VariableProbe(); off.frameRate.source = 30; off.frameRate.available = false;

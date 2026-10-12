@@ -44,7 +44,7 @@ import visible_return_video as return_video
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "com.thorium.preview"
-NES_QUALIFICATION_FILE = "lucent-callback-test.nes"
+NES_QUALIFICATION_FILE = "emufusion-callback-test.nes"
 NES_QUALIFICATION_SHA256 = "42019e9ca4a3a11815a9e13b7c60734a73fb7ae3cb06a140915daa4605ee8508"
 NES_REAL_QUALIFICATION_TITLES = (
     "10-Yard Fight", "1943: The Battle of Midway", "8 Eyes",
@@ -108,7 +108,7 @@ SECONDARY_GAMEPLAY_REUSED = re.compile(
 )
 PROHIBITED_TEXT = re.compile(
     r"PREPARING|SAVING\s+AND\s+RETURNING|POWERED\s+BY\s+PEGASUS|"
-    r"\bLUCENT\b|\bPEGASUS\b",
+    r"\bPEGASUS\b",
     re.I,
 )
 ACTIVE_NES_CAPTURES: list[dict[str, object]] = []
@@ -622,7 +622,7 @@ def validate_nes_registry_row(adb: Path, serial: str,
     if row.get("sourceIdentity") != identity:
         raise RuntimeError("NES fixture registry source identity changed")
     if normalize(str(row.get("system", ""))) != "nes" or \
-            normalize(str(row.get("title", ""))) != normalize("Lucent Callback Test"):
+            normalize(str(row.get("title", ""))) != normalize("EmuFusion Callback Test"):
         raise RuntimeError("NES fixture registry row has the wrong system or title")
     registry_path = str(row.get("file", ""))
     canonical_registry_path = remote_canonical_path(adb, serial, registry_path)
@@ -654,15 +654,15 @@ def resolve_live_nes_qualification(adb: Path, serial: str,
         raise RuntimeError("live index has no NES Alpha list")
     matching_titles = [title_from_key(str(key)) for key in alpha
                        if normalize(title_from_key(str(key))) ==
-                       normalize("Lucent Callback Test")]
+                       normalize("EmuFusion Callback Test")]
     if len(matching_titles) != 1:
         raise RuntimeError(
-            "live index does not contain exactly one Lucent Callback Test"
+            "live index does not contain exactly one EmuFusion Callback Test"
         )
     case = SystemCase("nes", ("nintendoentertainmentsystem", "famicom"),
                       ("mesen",), 1)
     files = metadata_title_files(adb, serial, case).get(
-        normalize("Lucent Callback Test"), set()
+        normalize("EmuFusion Callback Test"), set()
     )
     matches = [(remote_canonical_path(adb, serial, path),
                 remote_sha256(adb, serial, path)) for path in sorted(files)]
@@ -670,9 +670,9 @@ def resolve_live_nes_qualification(adb: Path, serial: str,
                       if digest == NES_QUALIFICATION_SHA256})
     if len(matches) != 1:
         raise RuntimeError(
-            "live Lucent Callback Test does not resolve to one exact-hash ROM"
+            "live EmuFusion Callback Test does not resolve to one exact-hash ROM"
         )
-    return {"title": "Lucent Callback Test", "path": matches[0][0],
+    return {"title": "EmuFusion Callback Test", "path": matches[0][0],
             "sha256": matches[0][1]}
 
 
@@ -1621,7 +1621,7 @@ def stage_nes_qualification_fixture(adb: Path, serial: str,
     fixture = fixture.resolve()
     if not fixture.is_file() or sha256_file(fixture) != NES_QUALIFICATION_SHA256:
         raise RuntimeError("host NES qualification fixture is absent or has the wrong SHA")
-    remote = "/sdcard/Download/Lucent Callback Test.nes"
+    remote = "/sdcard/Download/EmuFusion Callback Test.nes"
     canonical_source = canonical_shared_path(remote)
     source_identity = canonical_source + ":" + str(fixture.stat().st_size)
     registry_before = read_import_registry(adb, serial)
@@ -1638,7 +1638,7 @@ def stage_nes_qualification_fixture(adb: Path, serial: str,
                 (identity, row) for identity, row in registry_before.items()
                 if normalize(str(row.get("system", ""))) == "nes"
                 and normalize(str(row.get("title", ""))) ==
-                    normalize("Lucent Callback Test")
+                    normalize("EmuFusion Callback Test")
                 if remote_canonical_path(adb, serial,
                                          str(row.get("file", ""))) ==
                    preexisting_indexed_path
@@ -1668,7 +1668,7 @@ def stage_nes_qualification_fixture(adb: Path, serial: str,
         )
     if remote_path_exists(adb, serial, remote):
         raise RuntimeError(
-            "refusing to overwrite existing /sdcard/Download/Lucent Callback Test.nes"
+            "refusing to overwrite existing /sdcard/Download/EmuFusion Callback Test.nes"
         )
     pushed = subprocess.run(
         [str(adb), "-s", serial, "push", str(fixture), remote],
@@ -1790,7 +1790,7 @@ def cleanup_nes_qualification_fixture(adb: Path, serial: str,
         raise RuntimeError("owned NES fixture paths still exist after cleanup: " + str(existing))
     refreshed_index = library_index(adb, serial)
     refreshed_systems = refreshed_index.get("systems") or {}
-    fixture_title = normalize("Lucent Callback Test")
+    fixture_title = normalize("EmuFusion Callback Test")
     if any(
         normalize(title_from_key(str(key))) == fixture_title
         for system in refreshed_systems.values()
@@ -4760,7 +4760,7 @@ def indexed_nes_qualification(adb: Path, serial: str, case: SystemCase,
     title_files = metadata_title_files(adb, serial, case)
     matches: list[tuple[str, str]] = []
     indexed_titles = {normalize(title_from_key(key)): title_from_key(key) for key in keys}
-    fixture_title = normalize("Lucent Callback Test")
+    fixture_title = normalize("EmuFusion Callback Test")
     for normalized_title, paths in title_files.items():
         if normalized_title != fixture_title:
             continue
@@ -4769,7 +4769,7 @@ def indexed_nes_qualification(adb: Path, serial: str, case: SystemCase,
             continue
         for path in sorted(paths):
             # ImportManager intentionally preserves the exact display title in
-            # its destination filename (`Lucent Callback Test.nes`). Bind the
+            # its destination filename (`EmuFusion Callback Test.nes`). Bind the
             # indexed title and bytes, never the host generator's hyphenated
             # source basename.
             if remote_sha256(adb, serial, path) == NES_QUALIFICATION_SHA256:
@@ -6790,7 +6790,7 @@ def write_nes_qualification_manifest(
     manifest = {
         "schemaVersion": 1, "profile": nes_qa.PROFILE,
         "identity": {"engine": "mesen", "system": "nes",
-                     "gameTitle": "Lucent Callback Test",
+                     "gameTitle": "EmuFusion Callback Test",
                      "pid": pid,
                      "apkSha256": expected_apk_sha256,
                      "installedApkSha256": expected_apk_sha256,
@@ -13014,7 +13014,7 @@ def run_system(adb: Path, serial: str, controller: PhysicalController,
     requested_titles = max(titles, 4) if case.folder == "nes" else titles
     playable_keys = playable_alpha_keys(
         adb, serial, case, keys, requested_titles,
-        (("Lucent Callback Test", *NES_REAL_QUALIFICATION_TITLES)
+        (("EmuFusion Callback Test", *NES_REAL_QUALIFICATION_TITLES)
          if case.folder == "nes" else ()),
     )
     nes_fixture = indexed_nes_qualification(adb, serial, case, playable_keys) \
@@ -13300,7 +13300,7 @@ def _runtime_main() -> int:
                         choices=(1, 2, 3))
     parser.add_argument(
         "--nes-qualification-fixture", type=Path,
-        default=ROOT / "engines/build/qa-fixtures/lucent-callback-test.nes",
+        default=ROOT / "engines/build/qa-fixtures/emufusion-callback-test.nes",
         help="exact frozen fixture staged and ownership-cleaned when NES is selected",
     )
     parser.add_argument("--skip-list-view-smoke", action="store_true")

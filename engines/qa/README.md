@@ -52,7 +52,7 @@ file by SHA-256; it will not accept a substituted BIOS.
 ## EmuFusion activity qualification
 
 To build a qualification-only APK and exercise every legally runnable fixture
-through `InternalGameLaunchActivity` and `LucentGameActivity` on the emulator:
+through `InternalGameLaunchActivity` and `EmuFusionGameActivity` on the emulator:
 
 ```sh
 python3 unified-android/tools/run_phase1a_activity_qa.py --serial emulator-5554
@@ -83,7 +83,7 @@ fixtures are copied from the already checksum-pinned core source archives:
 | Game Boy Advance | mGBA `cinema/gba/obj/2d-wrap/test.gba`, pinned mGBA commit | MPL-2.0 |
 | Intellivision | FreeIntv open-content 4-Tris by Joe Zbiciak, pinned FreeIntv commit | GPL-2.0-only |
 | Nintendo DS | `test/nds/periph_slot2.nds`, pinned melonDS DS commit | GPL-3.0-or-later |
-| PC Engine | `lucent-pce-qa.pce` | Original EmuFusion cartridge built twice identically by pinned zlib-licensed cc65 commit `547d923`; visible video/audio and button-I response | GPL-3.0-only |
+| PC Engine | `emufusion-pce-qa.pce` | Original EmuFusion cartridge built twice identically by pinned zlib-licensed cc65 commit `547d923`; visible video/audio and button-I response | GPL-3.0-only |
 | Neo Geo Pocket Color | `stargunner.ngc` | Tixul/Stargunner commit `fb9295c`; exact upstream binary and license SHA-256 pinned | MIT |
 | WonderSwan Color | `bug-witch.wsc` | SwanSong Originals v3.3.0 / commit `28547c5`; exact release binary and license SHA-256 pinned | MIT |
 

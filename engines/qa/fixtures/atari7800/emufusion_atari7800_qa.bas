@@ -1,4 +1,4 @@
- rem Lucent Atari 7800 visible-output QA fixture
+ rem EmuFusion Atari 7800 visible-output QA fixture
  rem SPDX-License-Identifier: CC0-1.0
 
  displaymode 160A

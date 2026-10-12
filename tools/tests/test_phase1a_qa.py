@@ -66,7 +66,7 @@ class Phase1AQATest(unittest.TestCase):
     def test_generated_fixtures_are_deterministic(self):
         expected = {
             "nes": (FIXTURES.make_nes(), "42019e9ca4a3a11815a9e13b7c60734a73fb7ae3cb06a140915daa4605ee8508"),
-            "snes": (FIXTURES.make_snes(), "e841dcdca175a4473b8d5db9c59f48f7291e3974f89917aa136ba137e5c14cbc"),
+            "snes": (FIXTURES.make_snes(), "c3a6f905ac3dfde7cb927f58aa98a76476b2dd57c592183ebaebeb1309a97e6d"),
             "sg1000": (FIXTURES.make_sega(None), "2b98b5c06119e72b24bb35c7bb576babc1da495416389bccfd014e0e2de93e24"),
             "mastersystem": (FIXTURES.make_sega(0x4C), "772ff72c94820cb1efb792ede85ce105d5cf0867deba644d4d094f9c97f37fd9"),
             "gamegear": (FIXTURES.make_sega(0x6C), "0a5565580bb8713d512a5f14e2de42d8559d9a789908edc9bceb2d12b0d9d10d"),
@@ -74,8 +74,8 @@ class Phase1AQATest(unittest.TestCase):
             "psx": (FIXTURES.make_psx(), "5f0688ab0120fd2b5f26466d2805981ed33ceef42a67a7afc5bf711e68498460"),
             "zxspectrum": (FIXTURES.make_zx_spectrum(), "80e5788ca68ad3177dd0240a6eee28be1bc2d96f8615dc9e3dc0f3c5fa735f9a"),
             "arcade": (FIXTURES.make_mame_command(), "5a6a28fc1600ea141d7b39125822c1d51fb166abe5628e7fc1f99a9b02f5d52c"),
-            "neogeo": (FIXTURES.make_neogeo_command(), "c2d676acb9d32f56daa26797caaebea84f07382791aeccfea35363972e26194c"),
-            "dos": (FIXTURES.make_dos_zip(), "cc80753646f0ab9ea27f0a65f7401fc94f651b05d0c4fe02ecd5d8cca32aa537"),
+            "neogeo": (FIXTURES.make_neogeo_command(), "3cee7cc72836a01954d11124edbdc9c88725a1ce09987dc8831e47ad78fa9f76"),
+            "dos": (FIXTURES.make_dos_zip(), "e7b4c478a53cf04fbb8c4882120ccc3f530544d674632cf2590e0d091c9f50ff"),
         }
         for system, (payload, digest) in expected.items():
             with self.subTest(system=system):
@@ -210,13 +210,13 @@ class Phase1AQATest(unittest.TestCase):
         probe = (ROOT / "engines" / "qa" / "libretro_probe.c").read_text(
             encoding="utf-8"
         )
-        self.assertIn('getenv("LUCENT_PROBE_REQUIRE_INPUT_EFFECT")', probe)
+        self.assertIn('getenv("EMUFUSION_PROBE_REQUIRE_INPUT_EFFECT")', probe)
         self.assertIn("inputEffectRequired", probe)
 
     def test_playstation_uses_built_swanstation_and_legal_fixture(self):
         case = next(case for case in RUNNER.CASES if case.system == "psx")
         self.assertEqual("swanstation", case.core)
-        self.assertEqual("lucent-callback-test.psexe", case.fixture)
+        self.assertEqual("emufusion-callback-test.psexe", case.fixture)
         self.assertIsNone(case.blocked_reason)
         build_script = (ROOT / "engines" / "build_core.sh").read_text(encoding="utf-8")
         self.assertIn("df747c49b9038499b8d8762cd2662f0b8c128ee3999b74b19979e5ab20dd622d", build_script)

@@ -50,7 +50,7 @@ means the qualification work has not run.
 | Flycast | Dreamcast, Naomi, Atomiswave | libretro | locked | GPL-2.0-or-later primary; deps open | exact ARM64 build; hardened Dreamcast one-window checkpoint passed | Dreamcast HLE candidate; **Naomi/Atomiswave blocked** | one Dreamcast process-death restore passed; matrix open | physical GLES Dreamcast passed; Vulkan/loss open | KallistiOS 240pSuite user fixture passed; arcade fixtures absent | experimental |
 | Play! | PlayStation 2 | in-process libretro; native route remains a later benchmark | locked | BSD-3-Clause primary; exact staged closure pinned, dependency audit open | **two byte-identical patched Android ARM64 builds; hardened runtime performance failed** | no BIOS required for target route | historical process-death restore; current full state gate not reached | GLES renders but 33–48 FPS and increasing underruns; Vulkan/context-loss open | PS2SDK sample candidate; artifact unpinned | experimental / performance failed |
 | Dolphin | GameCube, Wii | in-process libretro | locked, including 30-input staged closure | GPL-2.0-or-later aggregate candidate; dependency SPDX audit open | exact normalized ARM64 build; qualification-packaged in EmuFusion's single-Activity host | no GameCube BIOS; Wii NAND feature-gated | serialize works; final three-title/process-death matrix open | GLES/FBO integration works; final visual/lifecycle matrix open | user-owned Thor titles available for device qualification; distributable fixture still open | experimental / qualification only |
-| **PPSSPP** | **PSP** | **libretro** | **locked including FFmpeg** | combined GPL-3.0-only; exact compiled-source/FFmpeg audit complete, final distribution review open | **byte-identical normalized FFmpeg-enabled AArch64 build; current binary not device-tested** | **no BIOS required** | earlier-profile restore only; 100-cycle/migration open | earlier-profile physical GLES only; current GLES/FMV and Vulkan/loss open | **Lucent-owned CC0 source-only fixture; no PBP yet** | **experimental / first candidate** |
+| **PPSSPP** | **PSP** | **libretro** | **locked including FFmpeg** | combined GPL-3.0-only; exact compiled-source/FFmpeg audit complete, final distribution review open | **byte-identical normalized FFmpeg-enabled AArch64 build; current binary not device-tested** | **no BIOS required** | earlier-profile restore only; 100-cycle/migration open | earlier-profile physical GLES only; current GLES/FMV and Vulkan/loss open | **EmuFusion-owned CC0 source-only fixture; no PBP yet** | **experimental / first candidate** |
 | Azahar | Nintendo 3DS | libretro | locked | GPL-2.0-or-later primary; dependency audit open | checksum-pinned official 2125.1.3 ARM64 core; source reproduction open; **hardened Thor first-frame test fails** | **blocked**: keys/system-data policy and identities | serialize exports; runtime blocked | Vulkan and GLES both stall before first frame in MainActivity | devkitPro 3DS example candidate; artifact unpinned | experimental / runtime failed |
 | ScummVM | ScummVM | in-process libretro | exact core/dependency closure locked | GPL-3.0-or-later plus exact 15-component/337-object notice bundle | exact reproducible, 16 KiB-aligned ARM64 core; qualification-packaged | no firmware | held-Stop engine-native autosave is fail-closed; generic serialize/history unavailable | GLES host; device matrix open | official Flight of the Amazon Queen freeware download pinned, never bundled | experimental / qualification only |
 | Virtual Jaguar | Atari Jaguar | libretro | locked | GPL-3.0 primary; bundled data audit open | **two byte-identical Android ARM64 proof builds** | **blocked**: embedded BIOS provenance | serialize source; open | software; open | Jaguar SDK candidate; artifact unpinned | experimental |
@@ -129,7 +129,7 @@ archive SHA-256 is
 archive SHA-256 is
 `a07a32b2db1f6c5f2823847d47ba6e326b08fbcfe78690801fda9c3aeddf25a3`.
 
-The legal content authority is Lucent-owned CC0 source in
+The legal content authority is EmuFusion-owned CC0 source in
 `engines/qa/fixtures/ppsspp-minimal`. There is intentionally no checked-in or
 approved `EBOOT.PBP`. PSPSDK commit
 `314b2083f2e1eaf145fc5de342736336fe1f0148`, archive SHA-256
@@ -173,7 +173,7 @@ Ninja 1.12.1, plus EmuFusion's reviewed host/audio/state patches, produced the
 byte-identical stripped AArch64 ELF SHA-256
 `a90adf7f06c12c8a7505420a18b18bfaca812737a7612436b69041a89fb86843`
 through `engines/build_core.sh play`. On the authorized AYN Thor, the exact
-artifact booted a user-owned God of War disc inside `LucentGameActivity`,
+artifact booted a user-owned God of War disc inside `EmuFusionGameActivity`,
 accepted controller input, returned to EmuFusion, and restored the exact
 difficulty menu after process death with live graphics and audio. A later
 strict gameplay run exposed sustained ~38 FPS throughput and accumulating

@@ -25,6 +25,14 @@ package com.thorium.emufusion.video;
  * at least a quarter of them missed. One emulator hitch (a shader compile, a
  * 0.35 s stall) misses thirty frames in a fifth of a second and used to end
  * generation for the whole session (GameCube, 2026-10-11).</p>
+ *
+ * <p>The product policy also needs the overload to be sustained, not just dense
+ * on average since the burst began: several consecutive blocks of minimum-work
+ * pairs must each miss at least a quarter of their frames. A screenshot taken
+ * while a GPU-heavy engine runs makes the compositor late for two or three
+ * seconds; with a couple of stray misses earlier in the burst that was enough
+ * to end generation for the session (Wind Waker HD on Cemu, 2026-10-12: no
+ * more than 9 misses in 10 s of 30->60, then 54 in the 3 s of two screenshots).</p>
  */
 public final class GpuWorkAdaptationPolicy {
     public static final int DEFAULT_MAX_WORK_LEVEL = 2;
@@ -34,6 +42,10 @@ public final class GpuWorkAdaptationPolicy {
     public static final int DEFAULT_FAILURE_WINDOW_PAIRS = 600;
     /** Observations a minimum-work burst must span before it can disable (~3 s at 60). */
     public static final int DEFAULT_MIN_DISABLE_SPAN_PAIRS = 180;
+    /** Minimum-work observations per overload-persistence block (1 s at 60 pairs/s). */
+    public static final int DEFAULT_PERSISTENCE_BLOCK_PAIRS = 60;
+    /** Consecutive blocks with a quarter of their pairs missed before a disable. */
+    public static final int DEFAULT_PERSISTENCE_BLOCKS = 4;
 
     public enum Decision { UNCHANGED, REDUCE_WORK, RESTORE_WORK, DISABLE_GENERATION }
     public enum Failure {
@@ -46,6 +58,11 @@ public final class GpuWorkAdaptationPolicy {
     private final int failuresAtMinimumLimit;
     private final int failureWindowPairs;
     private final int minDisableSpanPairs;
+    private final int persistenceBlockPairs;
+    private final int persistenceBlocks;
+    private int blockObservations;
+    private int blockMisses;
+    private int overloadedBlocks;
     private int pairsSinceFailure;
     // Observations (completed or failed) since the current burst's first failure.
     private int burstObservations;
@@ -68,7 +85,8 @@ public final class GpuWorkAdaptationPolicy {
     public GpuWorkAdaptationPolicy() {
         this(DEFAULT_MAX_WORK_LEVEL, DEFAULT_RECOVERY_GOOD_PAIRS,
                 DEFAULT_FAILURES_AT_MINIMUM, DEFAULT_FAILURE_WINDOW_PAIRS,
-                DEFAULT_MIN_DISABLE_SPAN_PAIRS);
+                DEFAULT_MIN_DISABLE_SPAN_PAIRS, DEFAULT_PERSISTENCE_BLOCK_PAIRS,
+                DEFAULT_PERSISTENCE_BLOCKS);
     }
 
     public GpuWorkAdaptationPolicy(int maxWorkLevel, int recoveryGoodPairs,
@@ -85,14 +103,26 @@ public final class GpuWorkAdaptationPolicy {
     public GpuWorkAdaptationPolicy(int maxWorkLevel, int recoveryGoodPairs,
                                    int failuresAtMinimumLimit, int failureWindowPairs,
                                    int minDisableSpanPairs) {
+        this(maxWorkLevel, recoveryGoodPairs, failuresAtMinimumLimit, failureWindowPairs,
+                minDisableSpanPairs, 1, 0);
+    }
+
+    /** persistenceBlocks 0 leaves out the sustained-overload requirement. */
+    public GpuWorkAdaptationPolicy(int maxWorkLevel, int recoveryGoodPairs,
+                                   int failuresAtMinimumLimit, int failureWindowPairs,
+                                   int minDisableSpanPairs, int persistenceBlockPairs,
+                                   int persistenceBlocks) {
         if (maxWorkLevel < 0 || recoveryGoodPairs < 1 || failuresAtMinimumLimit < 1 ||
-                failureWindowPairs < 1 || minDisableSpanPairs < 1)
+                failureWindowPairs < 1 || minDisableSpanPairs < 1 ||
+                persistenceBlockPairs < 1 || persistenceBlocks < 0)
             throw new IllegalArgumentException("invalid GPU adaptation bounds");
         this.maxWorkLevel = maxWorkLevel;
         this.recoveryGoodPairs = recoveryGoodPairs;
         this.failuresAtMinimumLimit = failuresAtMinimumLimit;
         this.failureWindowPairs = failureWindowPairs;
         this.minDisableSpanPairs = minDisableSpanPairs;
+        this.persistenceBlockPairs = persistenceBlockPairs;
+        this.persistenceBlocks = persistenceBlocks;
     }
 
     /**
@@ -118,6 +148,7 @@ public final class GpuWorkAdaptationPolicy {
         if (totalGpuUs > shaderBudgetUs) return onFailure(Failure.GPU_OVER_BUDGET);
         if (disabled) return Decision.DISABLE_GENERATION;
         if (failuresAtMinimum > 0) ++burstObservations;
+        if (workLevel == maxWorkLevel) observeAtMinimum(false);
         // A window of failure-free pairs ends a burst; isolated misses spread
         // across a long session never add up to a disable.
         if (++pairsSinceFailure >= failureWindowPairs) clearBurst();
@@ -170,23 +201,38 @@ public final class GpuWorkAdaptationPolicy {
         // failure: keep generating and let physical misses decide.
         if (reason == Failure.GPU_OVER_BUDGET) {
             if (failuresAtMinimum > 0) ++burstObservations;
+            observeAtMinimum(false);
             return Decision.UNCHANGED;
         }
         pairsSinceFailure = 0;
         ++failuresAtMinimum;
         ++burstObservations;
+        observeAtMinimum(true);
         if (failuresAtMinimum < failuresAtMinimumLimit ||
                 burstObservations < minDisableSpanPairs ||
-                (long) failuresAtMinimum * 4L < burstObservations)
+                (long) failuresAtMinimum * 4L < burstObservations ||
+                overloadedBlocks < persistenceBlocks)
             return Decision.UNCHANGED;
         disabled = true;
         ++disableTransitions;
         return Decision.DISABLE_GENERATION;
     }
 
+    /** One minimum-work observation; a block closes as overloaded or not. */
+    private void observeAtMinimum(boolean miss) {
+        if (miss) ++blockMisses;
+        if (++blockObservations < persistenceBlockPairs) return;
+        overloadedBlocks = (long) blockMisses * 4L >= blockObservations ? overloadedBlocks + 1 : 0;
+        blockObservations = 0;
+        blockMisses = 0;
+    }
+
     private void clearBurst() {
         failuresAtMinimum = 0;
         burstObservations = 0;
+        blockObservations = 0;
+        blockMisses = 0;
+        overloadedBlocks = 0;
     }
 
     /**
@@ -206,6 +252,8 @@ public final class GpuWorkAdaptationPolicy {
     public int workLevel() { return workLevel; }
     public int consecutiveHealthyPairs() { return consecutiveHealthyPairs; }
     public int failuresAtMinimum() { return failuresAtMinimum; }
+    /** Consecutive closed minimum-work blocks that missed a quarter of their pairs. */
+    public int overloadedBlocks() { return overloadedBlocks; }
     public boolean generationDisabled() { return disabled; }
     public long completedPairObservations() { return completedPairObservations; }
     public long verifiedHealthyPairs() { return verifiedHealthyPairs; }

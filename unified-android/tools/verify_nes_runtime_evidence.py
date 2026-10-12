@@ -558,7 +558,7 @@ def analyze_cheat_panel(path: Path, log_text: str) -> dict[str, object]:
         timeout=30.0,
     )
     full_normalized = re.sub(r"[^a-z0-9]+", "", completed.stdout.lower())
-    if (completed.returncode != 0 or "lucentcallbacktest" not in full_normalized or
+    if (completed.returncode != 0 or "emufusioncallbacktest" not in full_normalized or
             "cheats" not in full_normalized):
         raise ValueError("NES Cheats panel pixels lack the exact title/CHEATS heading")
     # Full-frame OCR on r26 correctly saw the heading and explanatory text but
@@ -1352,7 +1352,7 @@ def verify_manifest(path: Path) -> dict[str, object]:
         errors.append("installed APK differs from the qualification candidate")
     if identity.get("engine") != "mesen" or identity.get("system") != "nes":
         errors.append("qualification identity is not exact Mesen/NES")
-    if identity.get("gameTitle") != "Lucent Callback Test":
+    if identity.get("gameTitle") != "EmuFusion Callback Test":
         errors.append("qualification identity is not the exact fixture title")
     if not isinstance(identity.get("pid"), int) or identity.get("pid", 0) <= 0:
         errors.append("qualification identity has no exact package PID")
@@ -1439,7 +1439,7 @@ def verify_manifest(path: Path) -> dict[str, object]:
             errors.append("candidate APK Mesen core differs from core-artifact")
         matches = []
         for game in database.get("games", []):
-            if game.get("system") == "nes" and game.get("title") == "Lucent Callback Test":
+            if game.get("system") == "nes" and game.get("title") == "EmuFusion Callback Test":
                 matches.extend(cheat for cheat in game.get("cheats", [])
                                if cheat.get("id") == "qualification-red-border")
         if len(matches) != 1 or matches[0].get("code") != "6000:3F" or \
@@ -1587,7 +1587,7 @@ def verify_manifest(path: Path) -> dict[str, object]:
             raise ValueError("NES returned library lacks bound immediate D-pad response")
         selection = str(stop_spec.get("selectionOcr", ""))
         if re.sub(r"[^a-z0-9]+", "", selection.lower()).find(
-                "lucentcallbacktest") < 0:
+                "emufusioncallbacktest") < 0:
             raise ValueError("NES returned library selection is not the fixture title")
         recomputed["stop"]["immediateInputChangedPixels"] = input_changed
         recomputed["stop"]["selectionOcr"] = selection

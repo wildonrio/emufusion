@@ -89,7 +89,7 @@ static bool environment_cb(unsigned cmd, void *data)
         struct retro_variable *variable = (struct retro_variable *)data;
         if (variable->key &&
             strcmp(variable->key, "dosbox_pure_savestate") == 0 &&
-            getenv("LUCENT_PROBE_DOSBOX_REWIND")) {
+            getenv("EMUFUSION_PROBE_DOSBOX_REWIND")) {
             variable->value = "rewind";
             return true;
         }
@@ -238,7 +238,7 @@ static const char *json_bool(bool value) { return value ? "true" : "false"; }
 
 static void dump_state_if_requested(const char *suffix, const void *data, size_t size)
 {
-    const char *prefix = getenv("LUCENT_PROBE_STATE_DUMP");
+    const char *prefix = getenv("EMUFUSION_PROBE_STATE_DUMP");
     if (!prefix || !*prefix) return;
     char path[1024];
     if (snprintf(path, sizeof(path), "%s.%s", prefix, suffix) < 0) return;
@@ -437,7 +437,7 @@ int main(int argc, char **argv)
                         g_input_polls > 0 && g_input_states > 0;
     bool state_ok = state_size > 0 && serialize_ok && unserialize_ok && state_equal &&
                     state_cycles_completed == state_cycles_requested;
-    bool input_effect_required = getenv("LUCENT_PROBE_REQUIRE_INPUT_EFFECT") != NULL;
+    bool input_effect_required = getenv("EMUFUSION_PROBE_REQUIRE_INPUT_EFFECT") != NULL;
     bool passed = loaded && callbacks_ok && state_ok &&
                   (!input_effect_required || (input_effect_checked && input_effect));
 

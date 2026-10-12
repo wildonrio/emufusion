@@ -30,22 +30,22 @@ because it contains locally built artifacts and an emulator serial.
 Summary: **16 PASS, 0 FAIL, 3 BLOCKED**. No entry is promoted to `approved`,
 `shipped`, or device-qualified by this result.
 
-## Lucent-owned Android path
+## EmuFusion-owned Android path
 
 The qualification APK exercised all 13 runnable systems through the same path
 a user takes: Pegasus collection → controller Select/A action →
-`InternalGameLaunchActivity` → `LucentGameActivity`. The final single-run
+`InternalGameLaunchActivity` → `EmuFusionGameActivity`. The final single-run
 Activity report recorded **13 PASS and 0 FAIL**. Each case required both a
 core-originated RGB frame log and a visible emulator screenshot, so callback
 counts alone could not pass the gate. The emulator confirmed:
 
-- direct launch into the Lucent-owned activity with no emulator window;
+- direct launch into the EmuFusion-owned activity with no emulator window;
 - non-black core video presented at the correct aspect ratio;
 - the EmuFusion touch fallback composited above video on a device with no gamepad;
 - gamepad-focus pause, Resume, and Exit interaction plus return to Pegasus;
 - an atomically committed Quick Resume state after Exit to EmuFusion;
 - automatic Quick Resume restore on a second launch for every runnable system;
-- no Java fatal exception, native signal, ANR, or `LucentEngine` error.
+- no Java fatal exception, native signal, ANR, or `EmuFusionEngine` error.
 
 This Activity suite is Android-emulator evidence, not a substitute for the physical
 controller, audio, display-timing, process-death, reboot, and power-loss checks
