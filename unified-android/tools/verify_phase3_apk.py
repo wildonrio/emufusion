@@ -45,7 +45,7 @@ def _by_id(rows: list, key: str = "id") -> dict:
 def _asset_names(engine_id: str) -> tuple[str, str, str]:
     stem = engine_id.replace("-", "_")
     return (
-        f"lib/arm64-v8a/liblucent_native_adapter_{stem}.so",
+        f"lib/arm64-v8a/libemufusion_native_adapter_{stem}.so",
         f"assets/phase3-{engine_id}-source-lock.json",
         f"assets/phase3-{engine_id}-lucent-adapter.cpp",
     )

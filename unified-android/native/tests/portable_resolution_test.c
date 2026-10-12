@@ -5,7 +5,7 @@
 static void check(const char *key, const char *choices,
                   const char *override, const char *expected) {
     emufusion_retro_host host = {0};
-    host.core_path = "liblucent_core_test.so";
+    host.core_path = "libemufusion_core_test.so";
     struct retro_variable definitions[] = {{key, choices}, {NULL, NULL}};
     if (override) {
         host.core_override_count = 1;

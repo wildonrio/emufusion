@@ -40,13 +40,13 @@ class MenuRouteClosureTest(unittest.TestCase):
             "autoSelect": auto_select,
             "engines": [{
                 "id": "mesen", "commit": "1" * 40,
-                "libraryName": "liblucent_core_mesen.so",
+                "libraryName": "libemufusion_core_mesen.so",
             }],
         }
         artifacts = {
             "schemaVersion": 1,
             "artifacts": [{
-                "engineId": "mesen", "fileName": "liblucent_core_mesen.so",
+                "engineId": "mesen", "fileName": "libemufusion_core_mesen.so",
                 "sha256": expected, "sourceCommit": "1" * 40,
             }],
         }
@@ -56,7 +56,7 @@ class MenuRouteClosureTest(unittest.TestCase):
             archive.writestr("assets/engine-artifacts.json", json.dumps(artifacts))
             archive.writestr("classes.dex", b"dex\n035\0")
             if include_core:
-                archive.writestr("lib/arm64-v8a/liblucent_core_mesen.so", core)
+                archive.writestr("lib/arm64-v8a/libemufusion_core_mesen.so", core)
             if include_libcxx:
                 archive.writestr("lib/arm64-v8a/libc++_shared.so",
                                  b"\x7fELFruntime")
@@ -350,7 +350,7 @@ Class #999 -
                 mock.patch.object(MODULE.subprocess, "run", side_effect=runs):
             with zipfile.ZipFile(apk) as archive:
                 passed, detail = MODULE.libcxx_abi_evidence(
-                    archive, "lib/arm64-v8a/liblucent_core_mesen.so"
+                    archive, "lib/arm64-v8a/libemufusion_core_mesen.so"
                 )
         self.assertFalse(passed)
         self.assertIn("runtime ABI misses 1 required symbol", detail)
@@ -368,7 +368,7 @@ Class #999 -
                 mock.patch.object(MODULE.subprocess, "run", side_effect=runs):
             with zipfile.ZipFile(apk) as archive:
                 passed, detail = MODULE.libcxx_abi_evidence(
-                    archive, "lib/arm64-v8a/liblucent_core_mesen.so"
+                    archive, "lib/arm64-v8a/libemufusion_core_mesen.so"
                 )
         self.assertTrue(passed)
         self.assertIn("resolves 1", detail)

@@ -11,7 +11,7 @@
  *
  * The real device-level Vulkan window binding arrives with the compiled Cemu
  * adapter. Until then start()/surfaceRecreated() hand the validated
- * ANativeWindow to the host's lucent_native_io unchanged; the lifecycle,
+ * ANativeWindow to the host's emufusion_native_io unchanged; the lifecycle,
  * signatures, and ownership are already complete.
  */
 #include "include/emufusion_native_adapter_host.h"
@@ -161,9 +161,9 @@ static void release_windows(emufusion_adapter_jni_session *session) {
     }
 }
 
-static void build_io(emufusion_adapter_jni_session *session, lucent_native_io *io) {
+static void build_io(emufusion_adapter_jni_session *session, emufusion_native_io *io) {
     memset(io, 0, sizeof(*io));
-    io->kind = LUCENT_NATIVE_RENDER_VULKAN_WINDOW;
+    io->kind = EMUFUSION_NATIVE_RENDER_VULKAN_WINDOW;
     io->primary_window = session->primary_window;
     io->lower_window = session->lower_window;
     io->audio_sink = adapter_audio_sink;
@@ -226,7 +226,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeDescribe(
     (void)type;
     char error[ERROR_SIZE] = {0};
     emufusion_adapter_jni_session *session = from_handle(handle);
-    lucent_native_capabilities caps;
+    emufusion_native_capabilities caps;
     jint values[6];
     jintArray result;
     if (!session || !emufusion_native_adapter_describe(
@@ -251,7 +251,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeEngineId(
     (void)type;
     char error[ERROR_SIZE] = {0};
     emufusion_adapter_jni_session *session = from_handle(handle);
-    lucent_native_capabilities caps;
+    emufusion_native_capabilities caps;
     if (!session || !emufusion_native_adapter_describe(
             session->host, &caps, error, sizeof(error))) {
         throw_state(env, error);
@@ -299,7 +299,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeProducerTimelineHz(
     (void)env;
     (void)type;
     emufusion_adapter_jni_session *session = from_handle(handle);
-    return session ? lucent_native_adapter_producer_timeline_hz(session->host) : 0.0;
+    return session ? emufusion_native_adapter_producer_timeline_hz(session->host) : 0.0;
 }
 
 JNIEXPORT jdouble JNICALL
@@ -309,7 +309,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeDeclaredVideoHz(
     (void)type;
     emufusion_adapter_jni_session *session = from_handle(handle);
     if (!session) return 0.0;
-    return lucent_native_adapter_declared_video_hz(session->host);
+    return emufusion_native_adapter_declared_video_hz(session->host);
 }
 
 /* Java owns a try-read session lease until this bounded copy returns. Use a
@@ -319,12 +319,12 @@ Java_com_thorium_preview_NativeAdapterHost_nativeSourceImageBinding(
         JNIEnv *env, jclass type, jlong handle, jobject output) {
     (void)type;
     emufusion_adapter_jni_session *session = from_handle(handle);
-    if (!session) return LUCENT_SOURCE_CLOSED;
-    if (!output) return LUCENT_SOURCE_BAD_ARGUMENT;
+    if (!session) return EMUFUSION_SOURCE_CLOSED;
+    if (!output) return EMUFUSION_SOURCE_BAD_ARGUMENT;
     void *bytes = (*env)->GetDirectBufferAddress(env, output);
     jlong capacity = (*env)->GetDirectBufferCapacity(env, output);
-    if (!bytes || capacity < (jlong)sizeof(lucent_source_binding_v1)) return LUCENT_SOURCE_BAD_ARGUMENT;
-    lucent_source_binding_v1 value = {0};
+    if (!bytes || capacity < (jlong)sizeof(emufusion_source_binding_v1)) return EMUFUSION_SOURCE_BAD_ARGUMENT;
+    emufusion_source_binding_v1 value = {0};
     uint32_t result = emufusion_native_adapter_source_image_binding(session->host, &value, sizeof(value));
     memcpy(bytes, &value, sizeof(value));
     return (jint)result;
@@ -336,13 +336,13 @@ Java_com_thorium_preview_NativeAdapterHost_nativeQuerySourceImage(
         jlong surface_epoch, jlong timestamp_ns, jobject output) {
     (void)type;
     emufusion_adapter_jni_session *session = from_handle(handle);
-    if (!session) return LUCENT_SOURCE_CLOSED;
+    if (!session) return EMUFUSION_SOURCE_CLOSED;
     if (!output || session_epoch <= 0 || surface_epoch <= 0 || timestamp_ns <= 0)
-        return LUCENT_SOURCE_BAD_ARGUMENT;
+        return EMUFUSION_SOURCE_BAD_ARGUMENT;
     void *bytes = (*env)->GetDirectBufferAddress(env, output);
     jlong capacity = (*env)->GetDirectBufferCapacity(env, output);
-    if (!bytes || capacity < (jlong)sizeof(lucent_source_image_v1)) return LUCENT_SOURCE_BAD_ARGUMENT;
-    lucent_source_image_v1 value = {0};
+    if (!bytes || capacity < (jlong)sizeof(emufusion_source_image_v1)) return EMUFUSION_SOURCE_BAD_ARGUMENT;
+    emufusion_source_image_v1 value = {0};
     uint32_t result = emufusion_native_adapter_query_source_image(session->host,
             (uint64_t)session_epoch, (uint64_t)surface_epoch, (uint64_t)timestamp_ns,
             &value, sizeof(value));
@@ -357,7 +357,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeSetPacedVideoHz(
     (void)type;
     emufusion_adapter_jni_session *session = from_handle(handle);
     if (!session) return JNI_FALSE;
-    return lucent_native_adapter_set_paced_video_hz(session->host, hz) ?
+    return emufusion_native_adapter_set_paced_video_hz(session->host, hz) ?
             JNI_TRUE : JNI_FALSE;
 }
 
@@ -379,7 +379,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeLoadContent(
     (void)type;
     char error[ERROR_SIZE] = {0};
     emufusion_adapter_jni_session *session = from_handle(handle);
-    lucent_native_load_request request;
+    emufusion_native_load_request request;
     const char *system = system_directory ?
             (*env)->GetStringUTFChars(env, system_directory, NULL) : NULL;
     const char *save = save_directory ?
@@ -406,7 +406,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeStart(
     (void)type;
     char error[ERROR_SIZE] = {0};
     emufusion_adapter_jni_session *session = from_handle(handle);
-    lucent_native_io io;
+    emufusion_native_io io;
     ANativeWindow *old_primary = NULL;
     ANativeWindow *old_lower = NULL;
     if (!session) {
@@ -433,7 +433,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeSurfaceRecreated(
     (void)type;
     char error[ERROR_SIZE] = {0};
     emufusion_adapter_jni_session *session = from_handle(handle);
-    lucent_native_io io;
+    emufusion_native_io io;
     ANativeWindow *old_primary = NULL;
     ANativeWindow *old_lower = NULL;
     if (!session) {
@@ -474,7 +474,7 @@ Java_com_thorium_preview_NativeAdapterHost_nativeSetControl(
     if (control < 0 || controllerIndex < 0 || !session ||
             !emufusion_native_adapter_set_control(
             session->host, (uint32_t)controllerIndex,
-            (lucent_native_control)control, (float)value,
+            (emufusion_native_control)control, (float)value,
             error, sizeof(error)))
         throw_state(env, "invalid adapter control input");
 }

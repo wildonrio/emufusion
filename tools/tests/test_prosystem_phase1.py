@@ -45,7 +45,7 @@ class ProSystemPhase1Test(unittest.TestCase):
             ROOT / "engines/qualification-opt-in.json"
         ).read_text(encoding="utf-8"))
         selected = next(row for row in opt_in["engines"] if row["id"] == "prosystem")
-        self.assertEqual("liblucent_core_prosystem.so", selected["libraryName"])
+        self.assertEqual("libemufusion_core_prosystem.so", selected["libraryName"])
         self.assertFalse(opt_in["autoSelect"])
 
 

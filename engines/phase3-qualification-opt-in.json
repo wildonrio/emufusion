@@ -7,7 +7,7 @@
     {
       "id": "eden",
       "commit": "c0ffc900cdf19b9373549c59a7e6b22c33615ea4",
-      "libraryName": "liblucent_native_adapter_eden.so",
+      "libraryName": "libemufusion_native_adapter_eden.so",
       "runtime": "native-adapter",
       "libraryRouteSystems": ["switch"],
       "sourceLock": "engines/eden-source-lock.json",
@@ -21,7 +21,7 @@
     {
       "id": "cemu",
       "commit": "5897c6d3092612ef410137ba2f7c35043b9b3061",
-      "libraryName": "liblucent_native_adapter_cemu.so",
+      "libraryName": "libemufusion_native_adapter_cemu.so",
       "runtime": "native-adapter",
       "libraryRouteSystems": ["wiiu"],
       "sourceLock": "engines/cemu-source-lock.json",
@@ -35,7 +35,7 @@
     {
       "id": "aps3e",
       "commit": "b5ae1af50d5e2f3b705506e7380a4504e086840b",
-      "libraryName": "liblucent_native_adapter_aps3e.so",
+      "libraryName": "libemufusion_native_adapter_aps3e.so",
       "runtime": "native-adapter",
       "libraryRouteSystems": ["ps3"],
       "sourceLock": "engines/aps3e-source-lock.json",

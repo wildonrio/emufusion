@@ -3331,11 +3331,11 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
         apk = Path(temporary.name) / "engines.apk"
         with zipfile.ZipFile(apk, "w") as archive:
             archive.writestr(
-                "lib/arm64-v8a/liblucent_core_azahar.so", b"azahar")
+                "lib/arm64-v8a/libemufusion_core_azahar.so", b"azahar")
             archive.writestr(
-                "lib/arm64-v8a/liblucent_native_adapter_eden.so", b"eden")
+                "lib/arm64-v8a/libemufusion_native_adapter_eden.so", b"eden")
             archive.writestr(
-                "lib/arm64-v8a/liblucent_native_adapter_cemu.so", b"cemu")
+                "lib/arm64-v8a/libemufusion_native_adapter_cemu.so", b"cemu")
         self.assertEqual(hashlib.sha256(b"azahar").hexdigest(),
                          MODULE.packaged_engine_sha256(apk, "azahar"))
         self.assertEqual(hashlib.sha256(b"eden").hexdigest(),

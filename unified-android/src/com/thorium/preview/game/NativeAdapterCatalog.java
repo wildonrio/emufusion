@@ -32,13 +32,13 @@ import java.util.concurrent.TimeUnit;
  * A default/release APK packages none of those assets, so the catalog is empty
  * and every Phase 3 system stays on its external route. Only a qualification
  * build that explicitly opted in has them, and the opt-in is PER ENGINE:
- * Switch/Eden via {@code LUCENT_INCLUDE_PHASE3_EDEN=1}, Wii U/Cemu via
- * {@code LUCENT_INCLUDE_PHASE3_CEMU=1}, and PS3/aPS3e via
- * {@code LUCENT_INCLUDE_PHASE3_APS3E=1}. The adapters are staged independently,
+ * Switch/Eden via {@code EMUFUSION_INCLUDE_PHASE3_EDEN=1}, Wii U/Cemu via
+ * {@code EMUFUSION_INCLUDE_PHASE3_CEMU=1}, and PS3/aPS3e via
+ * {@code EMUFUSION_INCLUDE_PHASE3_APS3E=1}. The adapters are staged independently,
  * so a build that omits a corresponding flag does not fall back to a "not built yet"
  * state -- it silently strips a working internal engine and drops that system
  * onto its external route. Wii U in particular is expected to run INTERNALLY,
- * so {@code LUCENT_INCLUDE_PHASE3_CEMU=1} belongs in every qualification
+ * so {@code EMUFUSION_INCLUDE_PHASE3_CEMU=1} belongs in every qualification
  * build alongside the Eden flag.
  */
 public final class NativeAdapterCatalog {
@@ -203,7 +203,7 @@ public final class NativeAdapterCatalog {
         String id = normalize(enabled.optString("id"));
         String commit = enabled.optString("commit").toLowerCase(Locale.US);
         String libraryName = enabled.optString("libraryName");
-        String expectedName = "liblucent_native_adapter_" +
+        String expectedName = "libemufusion_native_adapter_" +
                 id.replace('-', '_') + ".so";
         List<String> libraryRouteSystems = strings(
                 enabled.optJSONArray("libraryRouteSystems"));

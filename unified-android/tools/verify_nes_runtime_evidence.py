@@ -1431,7 +1431,7 @@ def verify_manifest(path: Path) -> dict[str, object]:
                 archive.read("assets/cheats/cheat-database.json").decode("utf-8")
             )
             packaged_core = archive.read(
-                "lib/arm64-v8a/liblucent_core_mesen.so"
+                "lib/arm64-v8a/libemufusion_core_mesen.so"
             )
         if hashlib.sha256(packaged_core).hexdigest() != identity.get(
                 "coreArtifactSha256") or packaged_core != bound(

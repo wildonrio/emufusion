@@ -60,7 +60,7 @@ class DosboxPurePhase1Test(unittest.TestCase):
             ROOT / "engines/qualification-opt-in.json"
         ).read_text(encoding="utf-8"))
         selected = next(row for row in opt_in["engines"] if row["id"] == "dosbox-pure")
-        self.assertEqual("liblucent_core_dosbox_pure.so", selected["libraryName"])
+        self.assertEqual("libemufusion_core_dosbox_pure.so", selected["libraryName"])
         self.assertTrue(opt_in["qualificationOnly"])
         self.assertFalse(opt_in["autoSelect"])
 

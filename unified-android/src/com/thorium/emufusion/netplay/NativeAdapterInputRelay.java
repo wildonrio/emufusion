@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class NativeAdapterInputRelay implements NetplaySession.DataListener {
     private static final String TAG = "EmuFusionNetplayNativeRelay";
-    private static final int CONTROL_COUNT = 32; // lucent_native_control has 22 today; room to grow
+    private static final int CONTROL_COUNT = 32; // emufusion_native_control has 22 today; room to grow
 
     private final NetplaySession session;
     private final NativeControlSink localTarget;

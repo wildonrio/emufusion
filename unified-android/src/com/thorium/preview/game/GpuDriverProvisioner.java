@@ -48,7 +48,7 @@ import java.util.zip.ZipInputStream;
  */
 public final class GpuDriverProvisioner {
     private static final String TAG = "EmuFusionGpuDriver";
-    /** Read by the Eden adapter (engines/patches/eden-lucent-adapter.cpp). */
+    /** Read by the Eden adapter (source pinned in engines/eden-source-lock.json). */
     static final String ENV_DIR = "EMUFUSION_GPU_DRIVER_DIR";
     static final String ENV_LIBRARY = "EMUFUSION_GPU_DRIVER_LIBRARY";
     static final String PREFS = "gpu-driver";

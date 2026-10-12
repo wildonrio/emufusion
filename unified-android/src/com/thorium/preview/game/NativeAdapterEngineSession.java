@@ -53,13 +53,13 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Drives a Phase 3 native-adapter engine in-process. Three are described by the
  * Phase 3 registry and each has an independently opted-in, hash-pinned adapter:
- * Switch/Eden ({@code LUCENT_INCLUDE_PHASE3_EDEN=1}), Wii U/Cemu
- * ({@code LUCENT_INCLUDE_PHASE3_CEMU=1}), and PlayStation 3/aPS3e
- * ({@code LUCENT_INCLUDE_PHASE3_APS3E=1}).
+ * Switch/Eden ({@code EMUFUSION_INCLUDE_PHASE3_EDEN=1}), Wii U/Cemu
+ * ({@code EMUFUSION_INCLUDE_PHASE3_CEMU=1}), and PlayStation 3/aPS3e
+ * ({@code EMUFUSION_INCLUDE_PHASE3_APS3E=1}).
  *
  * It reuses the render-owner discipline proven by {@link PpssppGlesEngineSession}:
  * one dedicated thread owns every adapter call, the surface is quiesced before
- * detach, input maps to the {@code lucent_native_control} ordinals, and audio is
+ * detach, input maps to the {@code emufusion_native_control} ordinals, and audio is
  * pulled into a EmuFusion-owned {@link AudioTrack}. Capabilities are reported
  * honestly. Eden and Cemu report no Quick Resume; aPS3e reports it only because
  * its RPCS3-derived core serializes and validates a real savestate. Held-Stop
@@ -147,7 +147,7 @@ final class NativeAdapterEngineSession implements EngineSession,
      */
     private static final long SECONDARY_SURFACE_WAIT_MS = 2_000L;
 
-    /* lucent_native_control ordinals (stable across ABI v1). */
+    /* emufusion_native_control ordinals (stable across ABI v1). */
     private static final int PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3;
     private static final int PAD_L = 4, PAD_R = 5, PAD_ZL = 6, PAD_ZR = 7;
     private static final int PAD_DPAD_UP = 8, PAD_DPAD_DOWN = 9;

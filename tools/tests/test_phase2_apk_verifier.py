@@ -144,7 +144,7 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
             entry = {
                 "id": engine_id,
                 "commit": commits[engine_id],
-                "libraryName": f"liblucent_core_{engine_id.replace('-', '_')}.so",
+                "libraryName": f"libemufusion_core_{engine_id.replace('-', '_')}.so",
                 "runtime": ("vulkan-libretro" if engine_id in {"armsx2", "azahar"}
                             else "gles-libretro"),
                 **({"firmwareProfiles": firmware_profiles(engine_id)}
@@ -205,12 +205,12 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
         artifacts = {"artifacts": [{
             "engineId": engine_id,
             "sourceCommit": commits[engine_id],
-            "fileName": f"liblucent_core_{engine_id.replace('-', '_')}.so",
+            "fileName": f"libemufusion_core_{engine_id.replace('-', '_')}.so",
             "sha256": hashlib.sha256(payload).hexdigest(),
         } for engine_id, payload in payloads.items()]}
         ps2_variant_payload = b"armsx2-16k-core"
         ps2_variant = {
-            "hostPageSize": 16384, "fileName": "liblucent_core_armsx2_16k.so",
+            "hostPageSize": 16384, "fileName": "libemufusion_core_armsx2_16k.so",
             "sourceCommit": commits["armsx2"],
             "sha256": hashlib.sha256(ps2_variant_payload).hexdigest(),
         }
@@ -493,7 +493,7 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
         azahar_binary_id = "SPDXRef-azahar-binary"
         for package in sbom["packages"]:
             if package.get("name") == "azahar":
-                package["name"] = "liblucent_core_azahar.so"
+                package["name"] = "libemufusion_core_azahar.so"
                 package["SPDXID"] = azahar_binary_id
                 break
         sbom["packages"].append({
@@ -511,14 +511,14 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
             "relatedSpdxElement": azahar_archive_id,
         })
         with zipfile.ZipFile(path, "w") as apk:
-            apk.writestr("lib/arm64-v8a/liblucent_core_armsx2_16k.so", ps2_variant_payload)
+            apk.writestr("lib/arm64-v8a/libemufusion_core_armsx2_16k.so", ps2_variant_payload)
             sbom["packages"].append({
                 "name": ps2_variant["fileName"], "versionInfo": commits["armsx2"],
                 "checksums": [{"algorithm": "SHA256", "checksumValue": ps2_variant["sha256"]}],
             })
             for engine_id, payload in payloads.items():
                 normalized = engine_id.replace("-", "_")
-                apk.writestr(f"lib/arm64-v8a/liblucent_core_{normalized}.so", payload)
+                apk.writestr(f"lib/arm64-v8a/libemufusion_core_{normalized}.so", payload)
             apk.writestr(MODULE.REGISTRY, json.dumps(registry))
             apk.writestr(MODULE.OPT_IN, json.dumps(opt_in))
             apk.writestr(MODULE.ARTIFACTS, json.dumps(artifacts))
@@ -561,7 +561,7 @@ class PhaseTwoApkVerifierTest(unittest.TestCase):
             with zipfile.ZipFile(path) as source, zipfile.ZipFile(replacement, "w") as out:
                 for item in source.infolist():
                     payload = b"drift" if item.filename == \
-                        "lib/arm64-v8a/liblucent_core_ppsspp.so" \
+                        "lib/arm64-v8a/libemufusion_core_ppsspp.so" \
                         else source.read(item.filename)
                     out.writestr(item, payload)
             errors = MODULE.verify(replacement)

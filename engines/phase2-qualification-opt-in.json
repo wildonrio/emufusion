@@ -6,7 +6,7 @@
     {
       "id": "applewin",
       "commit": "2045a52d89363005476e670e45df048655edccf7",
-      "libraryName": "liblucent_core_applewin.so",
+      "libraryName": "libemufusion_core_applewin.so",
       "runtime": "gles-libretro",
       "firmwareProfiles": [
         {
@@ -29,7 +29,7 @@
     {
       "id": "puae",
       "commit": "96ebfcfc2c66233ad37f6dc99ee991211dc719ad",
-      "libraryName": "liblucent_core_puae.so",
+      "libraryName": "libemufusion_core_puae.so",
       "runtime": "gles-libretro",
       "firmwareProfiles": [
         {
@@ -56,7 +56,7 @@
     {
       "id": "beetle-saturn",
       "commit": "84461434f249c1b5cd10c83ae922feae84e1acf8",
-      "libraryName": "liblucent_core_beetle_saturn.so",
+      "libraryName": "libemufusion_core_beetle_saturn.so",
       "runtime": "gles-libretro",
       "firmwareProfiles": [
         {
@@ -76,7 +76,7 @@
     {
       "id": "dolphin",
       "commit": "0ff12a5a2835762e0665afe6a161a648b433f996",
-      "libraryName": "liblucent_core_dolphin.so",
+      "libraryName": "libemufusion_core_dolphin.so",
       "systemAssetRoot": "phase2-system/dolphin/dolphin-emu",
       "systemAssetDestination": "dolphin-emu",
       "systemAssetProbe": "dolphin-emu/Sys/GC/dsp_rom.bin",
@@ -96,7 +96,7 @@
     {
       "id": "ppsspp",
       "commit": "fa50bb1976065c4f8b1b47af227d367fe9771555",
-      "libraryName": "liblucent_core_ppsspp.so",
+      "libraryName": "libemufusion_core_ppsspp.so",
       "systemAssetRoot": "phase2-system/ppsspp/PPSSPP",
       "systemAssetDestination": "PPSSPP",
       "systemAssetProbe": "PPSSPP/compat.ini",
@@ -108,13 +108,13 @@
     {
       "id": "play",
       "commit": "50aedca2639521bc498ace0b2be1ea012801a86a",
-      "libraryName": "liblucent_core_play.so",
+      "libraryName": "libemufusion_core_play.so",
       "runtime": "gles-libretro"
     },
     {
       "id": "armsx2",
       "commit": "788a59d641c777cb7f70726ea573d420508e0931",
-      "libraryName": "liblucent_core_armsx2.so",
+      "libraryName": "libemufusion_core_armsx2.so",
       "systemAssetRoot": "phase2-system/armsx2/pcsx2",
       "systemAssetDestination": "pcsx2",
       "systemAssetProbe": "pcsx2/resources/GameIndex.yaml",
@@ -129,21 +129,21 @@
     {
       "id": "flycast",
       "commit": "d4fc0774107c4c307346b469499b9303a6ca0ffa",
-      "libraryName": "liblucent_core_flycast.so",
+      "libraryName": "libemufusion_core_flycast.so",
       "libraryRouteSystems": ["dreamcast"],
       "runtime": "gles-libretro"
     },
     {
       "id": "azahar",
       "commit": "b42d0916ba9799297ae0e27c07d56801da1b5de5",
-      "libraryName": "liblucent_core_azahar.so",
+      "libraryName": "libemufusion_core_azahar.so",
       "libraryRouteSystems": ["3ds"],
       "runtime": "vulkan-libretro"
     },
     {
       "id": "scummvm",
       "commit": "6aa8fa9b6f9e5a7ae670cc355af1b727ff75c995",
-      "libraryName": "liblucent_core_scummvm.so",
+      "libraryName": "libemufusion_core_scummvm.so",
       "systemAssetRoot": "phase2-system/scummvm/scummvm",
       "systemAssetDestination": "scummvm",
       "systemAssetProbe": "scummvm/extra/encoding.dat",
@@ -158,7 +158,7 @@
     {
       "id": "virtualjaguar",
       "commit": "59f7f9cc594ae6c6982c2bd8fc0dbf36873f9869",
-      "libraryName": "liblucent_core_virtualjaguar.so",
+      "libraryName": "libemufusion_core_virtualjaguar.so",
       "runtime": "gles-libretro"
     }
   ]

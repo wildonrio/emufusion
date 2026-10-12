@@ -255,12 +255,12 @@ def packaged_engine_sha256(apk: Path, engine: str) -> str:
     # Retain the build's canonical hyphen->underscore spelling
     # (mesen-s -> mesen_s); normalize() intentionally removes separators and
     # therefore cannot name APK members. Phase 3 engines are native adapters,
-    # not libretro cores, so asking for liblucent_core_eden/cemu made physical
+    # not libretro cores, so asking for libemufusion_core_eden/cemu made physical
     # QA fail before those games were launched even though both adapters were
     # present and independently verified.
     stem = re.sub(r"[^a-z0-9]+", "_", engine.lower()).strip("_")
-    prefix = ("liblucent_native_adapter_" if engine.lower() in
-              {"eden", "cemu", "aps3e"} else "liblucent_core_")
+    prefix = ("libemufusion_native_adapter_" if engine.lower() in
+              {"eden", "cemu", "aps3e"} else "libemufusion_core_")
     member = "lib/arm64-v8a/" + prefix + stem + ".so"
     with zipfile.ZipFile(apk) as archive:
         try:
@@ -6714,7 +6714,7 @@ def write_nes_qualification_manifest(
         raise RuntimeError("could not pull exact NES qualification ROM")
     core = output / f"{prefix}-nes-core-mesen.so"
     with zipfile.ZipFile(apk) as archive:
-        core.write_bytes(archive.read("lib/arm64-v8a/liblucent_core_mesen.so"))
+        core.write_bytes(archive.read("lib/arm64-v8a/libemufusion_core_mesen.so"))
     if (sha256_file(rom) != rom_identity["sha256"] or
             sha256_file(core) != core_sha256 or
             sha256_file(candidate) != expected_apk_sha256):

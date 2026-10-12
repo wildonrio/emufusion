@@ -107,7 +107,7 @@ bool emufusion_hw_mock_interface_ok(void) { return interface_ok; }
 bool emufusion_hw_mock_shared_ok(void) { return shared_ok; }
 bool emufusion_hw_mock_backend_hooks_ok(void) { return backend_hooks_ok; }
 bool emufusion_hw_mock_variable_default_ok(void) { return variable_default_ok; }
-bool retro_lucent_mupen_current_run_has_vi_origin_change(void) {
+bool retro_emufusion_mupen_current_run_has_vi_origin_change(void) {
     return EMUFUSION_MOCK_MUPEN_GLES && run_count != 0u && run_count % 3u == 0u;
 }
 int16_t emufusion_hw_mock_pointer_state(unsigned id) {
@@ -116,7 +116,7 @@ int16_t emufusion_hw_mock_pointer_state(unsigned id) {
 unsigned emufusion_hw_mock_frontend_framebuffer(void) {
     return supplied_frontend_framebuffer;
 }
-void lucent_set_frontend_framebuffer(unsigned framebuffer) {
+void emufusion_set_frontend_framebuffer(unsigned framebuffer) {
     supplied_frontend_framebuffer = framebuffer;
 }
 
@@ -124,7 +124,7 @@ static uint32_t *mock_active_rect;
 void emufusion_hw_mock_set_active_rect(const uint32_t *rect) {
     if (mock_active_rect) memcpy(mock_active_rect, rect, 7u * sizeof(uint32_t));
 }
-bool retro_lucent_get_hw_active_rect(uint32_t *rect, unsigned count) {
+bool retro_emufusion_get_hw_active_rect(uint32_t *rect, unsigned count) {
     if (!rect || count != 7u || !mock_active_rect || !mock_active_rect[0]) return false;
     memcpy(rect, mock_active_rect, 7u * sizeof(uint32_t));
     return true;

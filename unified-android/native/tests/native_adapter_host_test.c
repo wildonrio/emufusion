@@ -31,9 +31,9 @@ static size_t capture_audio(void *ctx, const int16_t *frames, size_t frame_count
 int main(int argc, char **argv) {
     char error[512] = {0};
     emufusion_native_adapter_host *host;
-    lucent_native_capabilities caps;
-    lucent_native_load_request request;
-    lucent_native_io io;
+    emufusion_native_capabilities caps;
+    emufusion_native_load_request request;
+    emufusion_native_io io;
     uint32_t primary_window = 0;
     uint32_t lower_window = 0;
     audio_capture audio;
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
     CHECK(host, "valid adapter failed to open");
     CHECK(emufusion_native_adapter_describe(host, &caps, error, sizeof(error)),
           "describe failed before create");
-    CHECK(caps.abi_version == LUCENT_NATIVE_ADAPTER_ABI_VERSION,
+    CHECK(caps.abi_version == EMUFUSION_NATIVE_ADAPTER_ABI_VERSION,
           "describe reported the wrong ABI");
     CHECK(strcmp(caps.engine_id, "mock-wiiu") == 0, "engine id mismatch");
     CHECK(!caps.has_quick_resume, "mock must not advertise Quick Resume");
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     /* Calls before create() fail closed. */
     CHECK(!emufusion_native_adapter_run_frame(host, error, sizeof(error)),
           "run_frame ran before create");
-    CHECK(lucent_native_adapter_declared_video_hz(host) == 0.0,
+    CHECK(emufusion_native_adapter_declared_video_hz(host) == 0.0,
           "declared video clock reported before content load");
     CHECK(!emufusion_native_adapter_set_fg_presentation(host, true),
           "presentation configuration accepted before load");
@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
 
     /* start before a successful load fails closed. */
     memset(&io, 0, sizeof(io));
-    io.kind = LUCENT_NATIVE_RENDER_VULKAN_WINDOW;
+    io.kind = EMUFUSION_NATIVE_RENDER_VULKAN_WINDOW;
     io.primary_window = &primary_window;
     io.lower_window = &lower_window;
     io.audio_sink = capture_audio;
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
 
     /* start requires a primary window. */
     {
-        lucent_native_io no_window = io;
+        emufusion_native_io no_window = io;
         no_window.primary_window = NULL;
         CHECK(!emufusion_native_adapter_start(host, &no_window, error, sizeof(error)),
               "start accepted a NULL primary window");
@@ -141,11 +141,11 @@ int main(int argc, char **argv) {
     /* Timing, declarations and mutation remain start-gated. */
     CHECK(emufusion_native_adapter_timing_capabilities(host) == 0u,
           "timing capabilities reported before start");
-    CHECK(lucent_native_adapter_producer_timeline_hz(host) == 0.0,
+    CHECK(emufusion_native_adapter_producer_timeline_hz(host) == 0.0,
           "source timeline reported before start");
-    CHECK(lucent_native_adapter_declared_video_hz(host) == 0.0,
+    CHECK(emufusion_native_adapter_declared_video_hz(host) == 0.0,
           "video declaration reported before start");
-    CHECK(!lucent_native_adapter_set_paced_video_hz(host, 40.0),
+    CHECK(!emufusion_native_adapter_set_paced_video_hz(host, 40.0),
           "pace accepted before start");
     {
         void *library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
@@ -181,27 +181,27 @@ int main(int argc, char **argv) {
     CHECK(audio.frames == 128u, "second frame did not emit more audio");
 
     /* Native dlsym path must enforce the same bounded clock contract as Java. */
-    CHECK(lucent_native_adapter_declared_video_hz(host) == 60.0,
+    CHECK(emufusion_native_adapter_declared_video_hz(host) == 60.0,
           "declared video clock not read from the adapter");
-    CHECK(!lucent_native_adapter_set_paced_video_hz(host, 40.0),
+    CHECK(!emufusion_native_adapter_set_paced_video_hz(host, 40.0),
           "large load-tier slowdown accepted");
-    CHECK(lucent_native_adapter_set_paced_video_hz(host, 59.94),
+    CHECK(emufusion_native_adapter_set_paced_video_hz(host, 59.94),
           "bounded fractional correction refused");
-    CHECK(lucent_native_adapter_set_paced_video_hz(host, 59.55),
+    CHECK(emufusion_native_adapter_set_paced_video_hz(host, 59.55),
           "lower inclusive 0.75-percent boundary refused");
-    CHECK(!lucent_native_adapter_set_paced_video_hz(host, 59.549999),
+    CHECK(!emufusion_native_adapter_set_paced_video_hz(host, 59.549999),
           "correction below 0.75-percent boundary accepted");
-    CHECK(!lucent_native_adapter_set_paced_video_hz(host, NAN) &&
-          !lucent_native_adapter_set_paced_video_hz(host, INFINITY) &&
-          !lucent_native_adapter_set_paced_video_hz(host, -1.0),
+    CHECK(!emufusion_native_adapter_set_paced_video_hz(host, NAN) &&
+          !emufusion_native_adapter_set_paced_video_hz(host, INFINITY) &&
+          !emufusion_native_adapter_set_paced_video_hz(host, -1.0),
           "invalid correction accepted");
-    CHECK(!lucent_native_adapter_set_paced_video_hz(host, 61.0),
+    CHECK(!emufusion_native_adapter_set_paced_video_hz(host, 61.0),
           "pace above the declared clock accepted");
-    CHECK(lucent_native_adapter_set_paced_video_hz(host, 0.0),
+    CHECK(emufusion_native_adapter_set_paced_video_hz(host, 0.0),
           "lifting the pace refused");
     CHECK(emufusion_native_adapter_timing_capabilities(host) == 0u,
           "old adapter gained invented timing capabilities");
-    CHECK(lucent_native_adapter_producer_timeline_hz(host) == 0.0,
+    CHECK(emufusion_native_adapter_producer_timeline_hz(host) == 0.0,
           "old adapter gained invented 60-Hz source authority");
 
     /* pause stops advancement; resume restarts it. */
@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
           "paused run_frame failed");
     CHECK(primary_window == (0xC0DE0000u | 2u), "pause did not stop advancement");
     CHECK(emufusion_native_adapter_resume(host, error, sizeof(error)), "resume failed");
-    CHECK(emufusion_native_adapter_set_control(host, 0u, LUCENT_PAD_A, 1.0f,
+    CHECK(emufusion_native_adapter_set_control(host, 0u, EMUFUSION_PAD_A, 1.0f,
                                             error, sizeof(error)),
           "set_control failed while running");
     CHECK(emufusion_native_adapter_run_frame(host, error, sizeof(error)),
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
     /* surface_recreated re-binds the render target. */
     {
         uint32_t new_window = 0;
-        lucent_native_io recreated = io;
+        emufusion_native_io recreated = io;
         recreated.primary_window = &new_window;
         recreated.lower_window = NULL;
         CHECK(emufusion_native_adapter_surface_recreated(host, &recreated,

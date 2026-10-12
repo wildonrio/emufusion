@@ -4,7 +4,7 @@
 
 static void check(const char *choices, const char *override, const char *expected) {
     emufusion_retro_host host = {0};
-    host.core_path = "liblucent_core_flycast.so";
+    host.core_path = "libemufusion_core_flycast.so";
     struct retro_variable definitions[] = {
         {"reicast_internal_resolution", choices}, {NULL, NULL}
     };

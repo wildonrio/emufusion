@@ -86,7 +86,7 @@ class PhaseTwoAzaharTest(unittest.TestCase):
         self.assertIn("DualScreenLayout.lowerScreenPointerY", session)
         host = (ROOT / "unified-android" / "native" /
                 "emufusion_libretro_host.c").read_text(encoding="utf-8")
-        azahar = host.split('strstr(host->core_path, "lucent_core_azahar")', 1)[1]
+        azahar = host.split('strstr(host->core_path, "emufusion_core_azahar")', 1)[1]
         azahar = azahar.split("} else if", 1)[0]
         self.assertIn('options, "side_by_side", &value_size', azahar)
         self.assertIn("active.detachSecondarySurfaceAndWait()", session)

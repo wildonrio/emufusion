@@ -256,7 +256,7 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                 @Override public boolean supportsPresentationRecovery() {
                     // Qualified separately: never silently change another core,
                     // direct-window renderer, Vulkan path or FG source stream.
-                    return "liblucent_core_ppsspp.so".equals(core.getName()) &&
+                    return "libemufusion_core_ppsspp.so".equals(core.getName()) &&
                             presentationPolicy == ExperimentalGlesLibretroHost.PRESENT_FRONTEND_FBO;
                 }
                 @Override public void runWithoutPresent() {
@@ -266,7 +266,7 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                     return nativeHost.didRunFrame();
                 }
                 @Override public boolean usesAudioPacing() {
-                    return "liblucent_core_flycast.so".equals(core.getName());
+                    return "libemufusion_core_flycast.so".equals(core.getName());
                 }
                 @Override public long lastRunAudioDurationNanos() {
                     return nativeHost.lastRunAudioDurationNanos();
@@ -1283,8 +1283,8 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
         // step still acquires, submits and presents through the Vulkan host,
         // including when its destination is a frame-generation input surface.
         // Keep unrelated Vulkan cores on their existing policy.
-        return "liblucent_core_armsx2.so".equals(coreFileName) ||
-                "liblucent_core_armsx2_16k.so".equals(coreFileName);
+        return "libemufusion_core_armsx2.so".equals(coreFileName) ||
+                "libemufusion_core_armsx2_16k.so".equals(coreFileName);
     }
 
     static boolean shouldRebaseFrameClock(long now, long deadline, long period) {

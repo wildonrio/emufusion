@@ -21,7 +21,7 @@ class EngineArtifactManifestTest(unittest.TestCase):
             root = Path(directory)
             libraries = root / "lib"
             libraries.mkdir()
-            (libraries / "liblucent_core_test_core.so").write_bytes(b"qualified")
+            (libraries / "libemufusion_core_test_core.so").write_bytes(b"qualified")
             (libraries / "libunrelated.so").write_bytes(b"ignored")
             registry = root / "registry.json"
             registry.write_text(json.dumps({"engines": [{
@@ -51,7 +51,7 @@ class EngineArtifactManifestTest(unittest.TestCase):
         for index in range(core_count):
             engines.append({"id": f"core-{index}",
                             "source": {"commit": "a" * 40}})
-            (libraries / f"liblucent_core_core_{index}.so").write_bytes(b"x")
+            (libraries / f"libemufusion_core_core_{index}.so").write_bytes(b"x")
         (root / "registry.json").write_text(
             json.dumps({"engines": engines}), encoding="utf-8")
 

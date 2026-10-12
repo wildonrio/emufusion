@@ -237,7 +237,7 @@ class RealApkCompletenessTest(unittest.TestCase):
             with zipfile.ZipFile(apk) as old, zipfile.ZipFile(reduced, 'w') as new:
                 for item in old.infolist():
                     if item.filename.startswith('META-INF/') or item.filename in {
-                        'lib/arm64-v8a/liblucent_native_adapter_eden.so',
+                        'lib/arm64-v8a/libemufusion_native_adapter_eden.so',
                         'assets/phase3-eden-source-lock.json', 'assets/phase3-eden-lucent-adapter.cpp'}:
                         continue
                     data = old.read(item.filename)

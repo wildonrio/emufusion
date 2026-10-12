@@ -34,10 +34,10 @@ def generate(registry_path: Path, library_dir: Path,
             # NativeAdapterCatalog reconstructs from the engine id.
             if row.get("route") != "native-adapter":
                 continue
-            by_filename[f"liblucent_native_adapter_{normalized}.so"] = row
+            by_filename[f"libemufusion_native_adapter_{normalized}.so"] = row
             continue
         for filename in (
-            f"liblucent_core_{normalized}.so",
+            f"libemufusion_core_{normalized}.so",
             f"{engine_id}_libretro.so",
             f"{normalized}_libretro.so",
             f"lib{engine_id}_libretro.so",
@@ -58,7 +58,7 @@ def generate(registry_path: Path, library_dir: Path,
             "sourceCommit": source.get("commit", ""),
         }
         if row["id"] == "armsx2":
-            variant = library_dir / "liblucent_core_armsx2_16k.so"
+            variant = library_dir / "libemufusion_core_armsx2_16k.so"
             if not variant.is_file():
                 raise ValueError("PS2 APK requires its bundled 16 KiB host-page variant")
             artifact["hostPageSize"] = 4096

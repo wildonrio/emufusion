@@ -48,7 +48,7 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
             BUILD,
         )
         self.assertIn(
-            '"$DECODED/lib/arm64-v8a/liblucent_core_${normalized_core}.so"', BUILD
+            '"$DECODED/lib/arm64-v8a/libemufusion_core_${normalized_core}.so"', BUILD
         )
         self.assertIn('"$DECODED/assets/engine-qualification-opt-in.json"', BUILD)
         self.assertFalse(any(row.get("shipped") for row in REGISTRY["engines"]))
@@ -335,7 +335,7 @@ Window #1 Window{def u0 com.thorium.preview/com.thorium.preview.PreviewActivity}
             release = MODULE.generate(ROOT / "engines" / "registry.json", libraries)
             self.assertEqual([], release["artifacts"])
 
-            (libraries / "liblucent_core_mesen.so").write_bytes(b"qualification core")
+            (libraries / "libemufusion_core_mesen.so").write_bytes(b"qualification core")
             qualification = MODULE.generate(ROOT / "engines" / "registry.json", libraries)
             self.assertEqual(["mesen"], [row["engineId"] for row in qualification["artifacts"]])
             self.assertRegex(qualification["artifacts"][0]["sha256"], r"^[0-9a-f]{64}$")

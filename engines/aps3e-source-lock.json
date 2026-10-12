@@ -18,7 +18,7 @@
       "version": 1,
       "note": "The unified host calls this versioned setter before its JNI_OnLoad fallback so the embedded adapter receives the process JavaVM without registering the upstream Activity frontend classes. A present setter must accept the exact version or adapter open fails closed."
     },
-    "expectedLibraryName": "liblucent_native_adapter_aps3e.so",
+    "expectedLibraryName": "libemufusion_native_adapter_aps3e.so",
     "renderKind": "LUCENT_NATIVE_RENDER_VULKAN_WINDOW"
   },
   "core": {
@@ -277,7 +277,7 @@
     }
   ],
   "artifact": {
-    "fileName": "liblucent_native_adapter_aps3e.so",
+    "fileName": "libemufusion_native_adapter_aps3e.so",
     "stagedPath": "engines/build/arm64-v8a/liblucent_native_adapter_aps3e.so",
     "sha256": "e9eccc214e3f9a055eec4ba195a87f515b2bdcd21d6d11e11585ec83dce192e0",
     "bytes": 58620480,

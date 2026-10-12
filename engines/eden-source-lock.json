@@ -41,7 +41,7 @@
     "header": "unified-android/native/include/lucent_native_adapter.h",
     "abiVersion": 2,
     "entrySymbol": "lucent_native_adapter_entry",
-    "expectedLibraryName": "liblucent_native_adapter_eden.so",
+    "expectedLibraryName": "libemufusion_native_adapter_eden.so",
     "renderKind": "LUCENT_NATIVE_RENDER_VULKAN_WINDOW",
     "note": "2026-09-07: bumped 1 -> 2 for the local-multiplayer ABI change (lucent_native_capabilities gained max_controllers; set_control gained a controller_index parameter ahead of the control enum). The host loader, JNI bridge, Java wrapper, engine-session class, and C test mocks were updated for the new signature elsewhere this session; this lock records only the eden adapter translation unit's own conforming update, described in the patches[] entry and the artifact note below."
   },
@@ -383,7 +383,7 @@
     ]
   },
   "artifact": {
-    "fileName": "liblucent_native_adapter_eden.so",
+    "fileName": "libemufusion_native_adapter_eden.so",
     "stagedPath": "engines/build/arm64-v8a/liblucent_native_adapter_eden.so",
     "sha256": "b974cd99ba9583628367e0ecce3bd749d470fc962b8d4790717d0ff90c0ec54c",
     "sizeBytes": 35560856,

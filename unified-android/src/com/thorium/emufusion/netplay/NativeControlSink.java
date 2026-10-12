@@ -13,7 +13,7 @@ package com.thorium.emufusion.netplay;
  * takes a boolean-pressed retro joypad ID on a port; a native-adapter
  * session takes a float value (buttons arrive as 0f/1f, but sticks and the
  * Wii U GamePad touch controls are genuinely analog) against the
- * {@code lucent_native_control} ordinal space on a controller_index. Forcing
+ * {@code emufusion_native_control} ordinal space on a controller_index. Forcing
  * both through one method would mean lying about one side's actual value
  * type.
  */

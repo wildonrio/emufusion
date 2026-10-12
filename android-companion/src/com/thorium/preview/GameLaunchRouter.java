@@ -44,7 +44,7 @@ public final class GameLaunchRouter {
         // Phase 3 native-adapter engines resolve INTERNAL only when the adapter
         // .so is bundled and hash-verified. Switch (Eden) and Wii U (Cemu) both
         // do so in an opted-in qualification build, each behind its own flag:
-        // LUCENT_INCLUDE_PHASE3_EDEN=1 and LUCENT_INCLUDE_PHASE3_CEMU=1. A build
+        // EMUFUSION_INCLUDE_PHASE3_EDEN=1 and EMUFUSION_INCLUDE_PHASE3_CEMU=1. A build
         // that omits a flag bundles no adapter for that engine, the catalog has
         // no entry. A missing bundled engine is not permission to switch apps.
         String nativeAdapter =

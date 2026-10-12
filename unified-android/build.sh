@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.emufusion-build-lock"
-VERSION_NAME=3.2.43
-VERSION_CODE=117
+VERSION_NAME=3.2.44
+VERSION_CODE=118
 
 case "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -647,8 +647,8 @@ for lib_path in "$DECODED/lib/arm64-v8a/"*.so; do
     lib_name=${lib_path##*/}
     case "$lib_name" in
         libemufusion_free_trace.so) notice_heading='## EmuFusion optional local crash tracer' ;;
-        liblucent_*|libpegasus-fe_*) continue ;;
-        # Not liblucent_-prefixed and not ours: these are libadrenotools' own
+        libemufusion_*|libpegasus-fe_*) continue ;;
+        # Not libemufusion_-prefixed and not ours: these are libadrenotools' own
         # hook libraries, packaged beside the Eden adapter because adrenotools
         # dlopens them by name from the app's native library directory.
         libhook_impl.so|libmain_hook.so) notice_heading='## libadrenotools' ;;
@@ -734,7 +734,7 @@ if [ "$INCLUDE_EXPERIMENTAL_CORES" = 1 ]; then
     for qualification_core in mesen mesen-s sameboy mgba gearsystem swanstation melonds-ds fuse mame dosbox-pure prosystem beetle-pce-fast beetle-neopop beetle-cygne blastem mupen64plus-next; do
         normalized_core=$(printf '%s' "$qualification_core" | tr '-' '_')
         cp "$ROOT_DIR/engines/build/arm64-v8a/${qualification_core}_libretro.so" \
-            "$DECODED/lib/arm64-v8a/liblucent_core_${normalized_core}.so"
+            "$DECODED/lib/arm64-v8a/libemufusion_core_${normalized_core}.so"
         PHASE1_STAGED_CORE_COUNT=$((PHASE1_STAGED_CORE_COUNT + 1))
     done
     cp "$ROOT_DIR/engines/qualification-opt-in.json" \
@@ -767,11 +767,11 @@ if [ "$INCLUDE_PHASE2_PPSSPP" = 1 ]; then
         phase2_input_dir="$ROOT_DIR/engines/build/arm64-v8a"
         if [ "$phase2_core" = armsx2 ]; then phase2_input_dir="$ARMSX2_CORE_DIR"; fi
         cp "$phase2_input_dir/${phase2_core}_libretro.so" \
-            "$DECODED/lib/arm64-v8a/liblucent_core_${normalized_core}.so"
+            "$DECODED/lib/arm64-v8a/libemufusion_core_${normalized_core}.so"
         PHASE2_STAGED_CORE_COUNT=$((PHASE2_STAGED_CORE_COUNT + 1))
     done
     cp "$ARMSX2_CORE_DIR/armsx2_16k_libretro.so" \
-        "$DECODED/lib/arm64-v8a/liblucent_core_armsx2_16k.so"
+        "$DECODED/lib/arm64-v8a/libemufusion_core_armsx2_16k.so"
     cp "$ROOT_DIR/engines/phase2-registry.json" \
         "$DECODED/assets/phase2-engine-registry.json"
     if [ -n "${EMUFUSION_ARMSX2_QUALIFICATION_DIR:-}" ]; then
@@ -877,7 +877,7 @@ if [ "$INCLUDE_PHASE3_EDEN" = 1 ]; then
     # hashed into its own manifest. The catalog then re-verifies that hash on
     # device, so a swapped or truncated adapter fails closed at runtime too.
     cp "$PHASE3_EDEN_ADAPTER" \
-        "$DECODED/lib/arm64-v8a/liblucent_native_adapter_eden.so"
+        "$DECODED/lib/arm64-v8a/libemufusion_native_adapter_eden.so"
     # adrenotools resolves these two by name from the hook directory, which is
     # the app's own native library directory. They are Eden build outputs, not
     # adapters, so they are deliberately not counted as staged adapters.
@@ -904,7 +904,7 @@ if [ "$INCLUDE_PHASE3_CEMU" = 1 ]; then
     # regenerated here against the running staged-adapter count -- staging both
     # engines in one build must produce a manifest naming both.
     cp "$PHASE3_CEMU_ADAPTER" \
-        "$DECODED/lib/arm64-v8a/liblucent_native_adapter_cemu.so"
+        "$DECODED/lib/arm64-v8a/libemufusion_native_adapter_cemu.so"
     PHASE3_STAGED_ADAPTER_COUNT=$((PHASE3_STAGED_ADAPTER_COUNT + 1))
     cp "$ROOT_DIR/engines/phase3-qualification-opt-in.json" \
         "$DECODED/assets/phase3-qualification-opt-in.json"
@@ -921,7 +921,7 @@ if [ "$INCLUDE_PHASE3_CEMU" = 1 ]; then
 fi
 if [ "$INCLUDE_PHASE3_APS3E" = 1 ]; then
     cp "$PHASE3_APS3E_ADAPTER" \
-        "$DECODED/lib/arm64-v8a/liblucent_native_adapter_aps3e.so"
+        "$DECODED/lib/arm64-v8a/libemufusion_native_adapter_aps3e.so"
     PHASE3_STAGED_ADAPTER_COUNT=$((PHASE3_STAGED_ADAPTER_COUNT + 1))
     cp "$ROOT_DIR/engines/phase3-qualification-opt-in.json" \
         "$DECODED/assets/phase3-qualification-opt-in.json"
@@ -1063,25 +1063,25 @@ libQt5Sql_arm64-v8a.so
 libQt5Svg_arm64-v8a.so
 libc++_shared.so
 libcrypto.so
-liblucent_core_applewin.so
-liblucent_core_azahar.so
-liblucent_core_beetle_cygne.so
-liblucent_core_beetle_neopop.so
-liblucent_core_beetle_pce_fast.so
-liblucent_core_beetle_saturn.so
-liblucent_core_flycast.so
-liblucent_core_fuse.so
-liblucent_core_gearsystem.so
-liblucent_core_mame.so
-liblucent_core_mesen.so
-liblucent_core_mesen_s.so
-liblucent_core_mgba.so
-liblucent_core_play.so
-liblucent_core_ppsspp.so
-liblucent_core_prosystem.so
-liblucent_core_puae.so
-liblucent_core_sameboy.so
-liblucent_core_virtualjaguar.so
+libemufusion_core_applewin.so
+libemufusion_core_azahar.so
+libemufusion_core_beetle_cygne.so
+libemufusion_core_beetle_neopop.so
+libemufusion_core_beetle_pce_fast.so
+libemufusion_core_beetle_saturn.so
+libemufusion_core_flycast.so
+libemufusion_core_fuse.so
+libemufusion_core_gearsystem.so
+libemufusion_core_mame.so
+libemufusion_core_mesen.so
+libemufusion_core_mesen_s.so
+libemufusion_core_mgba.so
+libemufusion_core_play.so
+libemufusion_core_ppsspp.so
+libemufusion_core_prosystem.so
+libemufusion_core_puae.so
+libemufusion_core_sameboy.so
+libemufusion_core_virtualjaguar.so
 libpegasus-fe_arm64-v8a.so
 libplugins_audio_qtaudio_opensles_arm64-v8a.so
 libplugins_gamepads_androidgamepad_arm64-v8a.so

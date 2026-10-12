@@ -788,8 +788,9 @@ public final class InWindowGameHost
             // marker: reject it instead of altering production state routing.
             return null;
         }
-        FrameGenerationSettings.Mode launchMode =
-                FrameGenerationSettings.forEngine(activity, FrameGenerationSettings.mode(activity), engine);
+        // Every engine, the in-process native adapters included, presents
+        // through the generator when frame generation is on.
+        FrameGenerationSettings.Mode launchMode = FrameGenerationSettings.mode(activity);
         GameLaunchRequest request = new GameLaunchRequest(engine, system, gameId,
                 title, uri, SessionReturnState.from(source), qualificationSession,
                 launchMode);

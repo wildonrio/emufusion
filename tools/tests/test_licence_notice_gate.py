@@ -216,7 +216,7 @@ class InventoryCoverageTest(unittest.TestCase):
                 self.assertEqual(heading, required_heading(lib_name))
 
     def test_lucent_and_pegasus_binaries_are_exempt(self) -> None:
-        for lib_name in ("liblucent_core_mgba.so", "libpegasus-fe_arm64-v8a.so"):
+        for lib_name in ("libemufusion_core_mgba.so", "libpegasus-fe_arm64-v8a.so"):
             with self.subTest(lib=lib_name):
                 self.assertIsNone(required_heading(lib_name))
 

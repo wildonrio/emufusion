@@ -1,6 +1,7 @@
 #define _XOPEN_SOURCE 700
 
 #include "include/emufusion_native_adapter_host.h"
+#include "include/emufusion_legacy_engine_abi.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -72,7 +73,7 @@ static bool supply_java_vm_to_adapter(void *library,
         }
     }
     dlerror();
-    setter_symbol = dlsym(library, EMUFUSION_NATIVE_ADAPTER_JAVA_VM_SYMBOL);
+    setter_symbol = emufusion_engine_dlsym(library, EMUFUSION_NATIVE_ADAPTER_JAVA_VM_SYMBOL);
     if (setter_symbol) {
         int accepted;
         memcpy(&set_vm, &setter_symbol, sizeof(set_vm));
@@ -127,11 +128,11 @@ static bool supply_java_vm_to_adapter(void *library,
 
 struct emufusion_native_adapter_host {
     void *library;
-    const lucent_native_adapter *vtable;
-    lucent_native_engine *engine;
-    lucent_native_capabilities capabilities;
-    uint32_t (*source_binding)(lucent_source_binding_v1 *, uint32_t);
-    uint32_t (*source_query)(uint64_t, uint64_t, uint64_t, lucent_source_image_v1 *, uint32_t);
+    const emufusion_native_adapter *vtable;
+    emufusion_native_engine *engine;
+    emufusion_native_capabilities capabilities;
+    uint32_t (*source_binding)(emufusion_source_binding_v1 *, uint32_t);
+    uint32_t (*source_query)(uint64_t, uint64_t, uint64_t, emufusion_source_image_v1 *, uint32_t);
     bool loaded;
     bool started;
     bool stopped;
@@ -157,7 +158,7 @@ static bool path_is_inside(const char *path, const char *root) {
 
 /* Every vtable function pointer is required. A no-op is expressed by a function
  * that returns the documented failure value, never by a NULL slot. */
-static bool vtable_is_complete(const lucent_native_adapter *vtable) {
+static bool vtable_is_complete(const emufusion_native_adapter *vtable) {
     return vtable->describe && vtable->create && vtable->load &&
            vtable->start && vtable->run_frame && vtable->set_control &&
            vtable->pause && vtable->resume && vtable->flush_save &&
@@ -170,12 +171,12 @@ emufusion_native_adapter_host *emufusion_native_adapter_open(
         char *error, size_t error_size) {
     char resolved_adapter[PATH_MAX];
     char resolved_root[PATH_MAX];
-    lucent_native_adapter_entry_fn entry;
-    const lucent_native_adapter *vtable;
+    emufusion_native_adapter_entry_fn entry;
+    const emufusion_native_adapter *vtable;
     emufusion_native_adapter_host *host;
     void *library;
     void *symbol;
-    lucent_native_capabilities capabilities;
+    emufusion_native_capabilities capabilities;
 
     if (!adapter_path || !trusted_root) {
         set_error(error, error_size, "adapter path and trusted root are required");
@@ -206,10 +207,10 @@ emufusion_native_adapter_host *emufusion_native_adapter_open(
         return NULL;
     }
     dlerror();
-    symbol = dlsym(library, LUCENT_NATIVE_ADAPTER_ENTRY_SYMBOL);
+    symbol = emufusion_engine_dlsym(library, EMUFUSION_NATIVE_ADAPTER_ENTRY_SYMBOL);
     if (!symbol || dlerror()) {
         set_error(error, error_size, "adapter is missing required symbol %s",
-                  LUCENT_NATIVE_ADAPTER_ENTRY_SYMBOL);
+                  EMUFUSION_NATIVE_ADAPTER_ENTRY_SYMBOL);
         dlclose(library);
         return NULL;
     }
@@ -220,10 +221,10 @@ emufusion_native_adapter_host *emufusion_native_adapter_open(
         dlclose(library);
         return NULL;
     }
-    if (vtable->abi_version != LUCENT_NATIVE_ADAPTER_ABI_VERSION) {
+    if (vtable->abi_version != EMUFUSION_NATIVE_ADAPTER_ABI_VERSION) {
         set_error(error, error_size,
                   "unsupported adapter ABI %u (expected %u)",
-                  vtable->abi_version, LUCENT_NATIVE_ADAPTER_ABI_VERSION);
+                  vtable->abi_version, EMUFUSION_NATIVE_ADAPTER_ABI_VERSION);
         dlclose(library);
         return NULL;
     }
@@ -237,7 +238,7 @@ emufusion_native_adapter_host *emufusion_native_adapter_open(
      * report now and cache it so capability gating never re-enters the adapter. */
     memset(&capabilities, 0, sizeof(capabilities));
     vtable->describe(&capabilities);
-    if (capabilities.abi_version != LUCENT_NATIVE_ADAPTER_ABI_VERSION ||
+    if (capabilities.abi_version != EMUFUSION_NATIVE_ADAPTER_ABI_VERSION ||
             !capabilities.engine_id || !capabilities.engine_id[0] ||
             capabilities.max_controllers == 0) {
         set_error(error, error_size,
@@ -257,8 +258,8 @@ emufusion_native_adapter_host *emufusion_native_adapter_open(
     host->capabilities = capabilities;
     /* Resolve optional hot-path queries once during setup, not under a live
      * renderer deadline where dlsym may contend on the dynamic-linker lock. */
-    void *binding_symbol = dlsym(library, "lucent_native_adapter_source_image_binding_v1");
-    void *query_symbol = dlsym(library, "lucent_native_adapter_query_source_image_v1");
+    void *binding_symbol = emufusion_engine_dlsym(library, "emufusion_native_adapter_source_image_binding_v1");
+    void *query_symbol = emufusion_engine_dlsym(library, "emufusion_native_adapter_query_source_image_v1");
     if (binding_symbol) memcpy(&host->source_binding, &binding_symbol, sizeof(host->source_binding));
     if (query_symbol) memcpy(&host->source_query, &query_symbol, sizeof(host->source_query));
 #if defined(__ANDROID__)
@@ -276,7 +277,7 @@ emufusion_native_adapter_host *emufusion_native_adapter_open(
 }
 
 bool emufusion_native_adapter_describe(const emufusion_native_adapter_host *host,
-                                    lucent_native_capabilities *out,
+                                    emufusion_native_capabilities *out,
                                     char *error, size_t error_size) {
     if (!host || !out) {
         set_error(error, error_size, "host and output record are required");
@@ -308,7 +309,7 @@ bool emufusion_native_adapter_create(emufusion_native_adapter_host *host,
 }
 
 bool emufusion_native_adapter_load(emufusion_native_adapter_host *host,
-                                const lucent_native_load_request *request,
+                                const emufusion_native_load_request *request,
                                 char *error, size_t error_size) {
     char adapter_error[256] = {0};
     if (!host || !host->engine) {
@@ -331,7 +332,7 @@ bool emufusion_native_adapter_load(emufusion_native_adapter_host *host,
 }
 
 bool emufusion_native_adapter_start(emufusion_native_adapter_host *host,
-                                 const lucent_native_io *io,
+                                 const emufusion_native_io *io,
                                  char *error, size_t error_size) {
     char adapter_error[256] = {0};
     if (!host || !host->engine || !host->loaded) {
@@ -368,7 +369,7 @@ bool emufusion_native_adapter_run_frame(emufusion_native_adapter_host *host,
 
 bool emufusion_native_adapter_set_control(emufusion_native_adapter_host *host,
                                        uint32_t controller_index,
-                                       lucent_native_control control,
+                                       emufusion_native_control control,
                                        float value,
                                        char *error, size_t error_size) {
     if (!host || !host->engine || !host->started) {
@@ -476,7 +477,7 @@ bool emufusion_native_adapter_unserialize(emufusion_native_adapter_host *host,
 }
 
 bool emufusion_native_adapter_surface_recreated(emufusion_native_adapter_host *host,
-                                             const lucent_native_io *io,
+                                             const emufusion_native_io *io,
                                              char *error, size_t error_size) {
     if (!host || !host->engine || !host->started) {
         set_error(error, error_size, "adapter is not running");
@@ -584,19 +585,19 @@ double emufusion_native_adapter_average_fps(emufusion_native_adapter_host *host)
     /* Optional and resolved per call rather than cached at open(), because an
      * adapter is free to publish the hook only once a session is live. */
     static const char standard_symbol[] =
-            "lucent_native_adapter_average_game_fps";
-    static const char fps_symbol[] = "lucent_eden_average_game_fps";
+            "emufusion_native_adapter_average_game_fps";
+    static const char fps_symbol[] = "emufusion_eden_average_game_fps";
     double (*reader)(void) = NULL;
     void *symbol;
     if (!host || !host->library || !host->started) {
         return EMUFUSION_NATIVE_ADAPTER_FPS_UNSUPPORTED;
     }
     dlerror();
-    symbol = dlsym(host->library, standard_symbol);
+    symbol = emufusion_engine_dlsym(host->library, standard_symbol);
     if (!symbol && host->capabilities.engine_id &&
             strcmp(host->capabilities.engine_id, "eden") == 0) {
         dlerror();
-        symbol = dlsym(host->library, fps_symbol);
+        symbol = emufusion_engine_dlsym(host->library, fps_symbol);
     }
     if (!symbol) return EMUFUSION_NATIVE_ADAPTER_FPS_UNSUPPORTED;
     memcpy(&reader, &symbol, sizeof(reader));
@@ -609,37 +610,37 @@ bool emufusion_native_adapter_set_fg_presentation(emufusion_native_adapter_host 
     void *symbol;
     if (!host || !host->library || !host->loaded) return false;
     dlerror();
-    symbol = dlsym(host->library, "lucent_native_adapter_set_fg_presentation_v1");
+    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_set_fg_presentation_v1");
     if (!symbol) return false;
     memcpy(&setter, &symbol, sizeof(setter));
     setter(enabled);
     return true;
 }
 
-double lucent_native_adapter_declared_video_hz(emufusion_native_adapter_host *host) {
+double emufusion_native_adapter_declared_video_hz(emufusion_native_adapter_host *host) {
     double (*reader)(void) = NULL;
     void *symbol;
     if (!host || !host->library || !host->started) return 0.0;
     dlerror();
-    symbol = dlsym(host->library, "lucent_native_adapter_declared_video_hz");
+    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_declared_video_hz");
     if (!symbol) return 0.0;
     memcpy(&reader, &symbol, sizeof(reader));
     return reader();
 }
 
-bool lucent_native_adapter_set_paced_video_hz(emufusion_native_adapter_host *host,
+bool emufusion_native_adapter_set_paced_video_hz(emufusion_native_adapter_host *host,
                                               double hz) {
     bool (*setter)(double) = NULL;
     void *symbol;
     if (!host || !host->library || !host->started) return false;
     if (hz != 0.0) {
-        double declared = lucent_native_adapter_declared_video_hz(host);
+        double declared = emufusion_native_adapter_declared_video_hz(host);
         if (!isfinite(declared) || declared <= 1.0 || declared >= 1000.0 ||
             !isfinite(hz) || hz <= 1.0 || hz >= 1000.0 ||
             fabs(hz / declared - 1.0) > 0.0075 + 1.0e-12) return false;
     }
     dlerror();
-    symbol = dlsym(host->library, "lucent_native_adapter_set_paced_video_hz");
+    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_set_paced_video_hz");
     if (!symbol) return false;
     memcpy(&setter, &symbol, sizeof(setter));
     return setter(hz);
@@ -650,21 +651,21 @@ uint32_t emufusion_native_adapter_timing_capabilities(emufusion_native_adapter_h
     void *symbol;
     if (!host || !host->library || !host->started) return 0u;
     dlerror();
-    symbol = dlsym(host->library, "lucent_native_adapter_timing_capabilities_v1");
+    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_timing_capabilities_v1");
     if (!symbol) return 0u;
     memcpy(&reader, &symbol, sizeof(reader));
-    return reader() & (LUCENT_NATIVE_TIMING_BASE_CLOCK_CORRECTION |
-                       LUCENT_NATIVE_TIMING_SUBMISSION_TIMESTAMPS |
-                       LUCENT_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE);
+    return reader() & (EMUFUSION_NATIVE_TIMING_BASE_CLOCK_CORRECTION |
+                       EMUFUSION_NATIVE_TIMING_SUBMISSION_TIMESTAMPS |
+                       EMUFUSION_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE);
 }
 
-double lucent_native_adapter_producer_timeline_hz(emufusion_native_adapter_host *host) {
+double emufusion_native_adapter_producer_timeline_hz(emufusion_native_adapter_host *host) {
     double (*reader)(void) = NULL;
     void *symbol;
     if (!(emufusion_native_adapter_timing_capabilities(host) &
-            LUCENT_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE)) return 0.0;
+            EMUFUSION_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE)) return 0.0;
     dlerror();
-    symbol = dlsym(host->library, "lucent_native_adapter_producer_timeline_hz");
+    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_producer_timeline_hz");
     if (!symbol) return 0.0;
     memcpy(&reader, &symbol, sizeof(reader));
     double hz = reader();
@@ -672,39 +673,39 @@ double lucent_native_adapter_producer_timeline_hz(emufusion_native_adapter_host 
 }
 
 uint32_t emufusion_native_adapter_source_image_binding(emufusion_native_adapter_host *host,
-        lucent_source_binding_v1 *out, uint32_t out_size) {
-    if (!out || out_size < sizeof(*out)) return LUCENT_SOURCE_BAD_ARGUMENT;
+        emufusion_source_binding_v1 *out, uint32_t out_size) {
+    if (!out || out_size < sizeof(*out)) return EMUFUSION_SOURCE_BAD_ARGUMENT;
     memset(out, 0, sizeof(*out));
-    if (!host || !host->library || !host->started) return LUCENT_SOURCE_CLOSED;
-    if (!host->source_binding) return LUCENT_SOURCE_UNSUPPORTED;
+    if (!host || !host->library || !host->started) return EMUFUSION_SOURCE_CLOSED;
+    if (!host->source_binding) return EMUFUSION_SOURCE_UNSUPPORTED;
     uint32_t result = host->source_binding(out, out_size);
-    if (result == LUCENT_SOURCE_MATCH_ACCEPTED &&
-            (out->version != LUCENT_SOURCE_IMAGE_VERSION || out->struct_size != sizeof(*out) ||
+    if (result == EMUFUSION_SOURCE_MATCH_ACCEPTED &&
+            (out->version != EMUFUSION_SOURCE_IMAGE_VERSION || out->struct_size != sizeof(*out) ||
              !out->session_epoch || !out->surface_epoch)) {
         memset(out, 0, sizeof(*out));
-        return LUCENT_SOURCE_BAD_ARGUMENT;
+        return EMUFUSION_SOURCE_BAD_ARGUMENT;
     }
     return result;
 }
 
 uint32_t emufusion_native_adapter_query_source_image(emufusion_native_adapter_host *host,
         uint64_t session_epoch, uint64_t surface_epoch, uint64_t buffer_timestamp_ns,
-        lucent_source_image_v1 *out, uint32_t out_size) {
+        emufusion_source_image_v1 *out, uint32_t out_size) {
     if (!out || out_size < sizeof(*out) || !session_epoch || !surface_epoch || !buffer_timestamp_ns)
-        return LUCENT_SOURCE_BAD_ARGUMENT;
+        return EMUFUSION_SOURCE_BAD_ARGUMENT;
     memset(out, 0, sizeof(*out));
-    if (!host || !host->library || !host->started) return LUCENT_SOURCE_CLOSED;
-    if (!host->source_query) return LUCENT_SOURCE_UNSUPPORTED;
+    if (!host || !host->library || !host->started) return EMUFUSION_SOURCE_CLOSED;
+    if (!host->source_query) return EMUFUSION_SOURCE_UNSUPPORTED;
     uint32_t result = host->source_query(session_epoch, surface_epoch, buffer_timestamp_ns, out, out_size);
-    if (result == LUCENT_SOURCE_MATCH_ACCEPTED || result == LUCENT_SOURCE_PENDING ||
-            result == LUCENT_SOURCE_AMBIGUOUS || result == LUCENT_SOURCE_REJECTED) {
-        if (out->version != LUCENT_SOURCE_IMAGE_VERSION || out->struct_size != sizeof(*out) ||
+    if (result == EMUFUSION_SOURCE_MATCH_ACCEPTED || result == EMUFUSION_SOURCE_PENDING ||
+            result == EMUFUSION_SOURCE_AMBIGUOUS || result == EMUFUSION_SOURCE_REJECTED) {
+        if (out->version != EMUFUSION_SOURCE_IMAGE_VERSION || out->struct_size != sizeof(*out) ||
                 out->state != result || out->buffer_timestamp_ns != buffer_timestamp_ns ||
                 out->composition.header.session_epoch != session_epoch ||
                 out->composition.header.surface_epoch != surface_epoch ||
-                out->composition.retained_layer_count > LUCENT_SOURCE_IMAGE_MAX_LAYERS) {
+                out->composition.retained_layer_count > EMUFUSION_SOURCE_IMAGE_MAX_LAYERS) {
             memset(out, 0, sizeof(*out));
-            return LUCENT_SOURCE_BAD_ARGUMENT;
+            return EMUFUSION_SOURCE_BAD_ARGUMENT;
         }
     }
     return result;

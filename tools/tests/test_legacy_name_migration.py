@@ -17,6 +17,8 @@ COMPANION = ROOT / 'android-companion/src/com/thorium/preview'
 INSTALLER = (COMPANION / 'ThemeInstaller.java').read_text()
 LEGACY = (COMPANION / 'LegacyNames.java').read_text()
 JSON_JAR = Path.home() / '.m2/repository/org/json/json'
+LEGACY_ABI_HEADERS = [ROOT / 'unified-android/native/include' / name for name in (
+    'lucent_native_adapter.h', 'lucent_native_source_image.h')]
 
 
 def method(source, signature):
@@ -37,20 +39,44 @@ def constants(source):
 
 class LegacyNameMigrationTest(unittest.TestCase):
     def test_old_name_lives_only_in_legacy_names(self):
-        # Java package, classes, tags, preferences, files and QML memory keys
-        # are renamed; native libraries and engine ABI names are a later phase.
-        native = re.compile(r'liblucent_core_|liblucent_native_adapter_|lucent_native_|LUCENT_INCLUDE_PHASE3|'
-                            r'eden-lucent-adapter|translucent', re.I)
+        # Java package, classes, tags, preferences, files, QML memory keys,
+        # packaged engine library names and the engine ABI are all renamed.
         offenders = []
         for base in (ROOT / 'unified-android/src', ROOT / 'android-companion/src', ROOT / 'theme'):
             for path in base.rglob('*'):
                 if path.suffix not in ('.java', '.qml') or path.name == 'LegacyNames.java':
                     continue
                 for number, line in enumerate(path.read_text(errors='replace').splitlines(), 1):
-                    if 'lucent' in line.lower() and not native.search(line):
+                    if re.search(r'(?i)(?<!trans)lucent', line):
                         offenders.append(f'{path.relative_to(ROOT)}:{number}: {line.strip()}')
         self.assertEqual([], offenders)
         self.assertEqual(1, LEGACY.count('"lucent"'))
+
+    def test_native_host_names_former_engine_hooks_in_one_header(self):
+        # Prebuilt engines still export their hooks under the former names
+        # until each is rebuilt (rename phase C2); only the fallback header
+        # and the two ABI headers those engines were compiled against name it.
+        native = ROOT / 'unified-android/native'
+        allowed = {native / 'include/emufusion_legacy_engine_abi.h'} | set(LEGACY_ABI_HEADERS)
+        offenders = []
+        for path in native.rglob('*'):
+            if not path.is_file() or path in allowed or path.suffix not in (
+                    '.c', '.h', '.cpp', '.java', '.sh', '.txt'):
+                continue
+            for number, line in enumerate(path.read_text(errors='replace').splitlines(), 1):
+                if re.search(r'(?i)(?<!trans)lucent', line):
+                    offenders.append(f'{path.relative_to(ROOT)}:{number}: {line.strip()}')
+        self.assertEqual([], offenders)
+
+    def test_emufusion_abi_headers_are_the_pinned_headers_renamed(self):
+        # Same ABI, new names: each EmuFusion header must be exactly the
+        # header the prebuilt adapters compiled against, renamed.
+        def renamed(text):
+            spelling = {'lucent': 'emufusion', 'Lucent': 'EmuFusion', 'LUCENT': 'EMUFUSION'}
+            return re.sub(r'(?i)(?<!trans)lucent', lambda m: spelling[m.group(0)], text)
+        for legacy in LEGACY_ABI_HEADERS:
+            current = legacy.with_name(legacy.name.replace('lucent_', 'emufusion_'))
+            self.assertEqual(renamed(legacy.read_text()), current.read_text(), current.name)
 
     def test_theme_memory_settings_metadata_and_markers_move_once(self):
         bodies = '\n'.join(method(INSTALLER, signature) for signature in (

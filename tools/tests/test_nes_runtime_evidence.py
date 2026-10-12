@@ -666,7 +666,7 @@ class NesRuntimeEvidenceTest(unittest.TestCase):
                                        "code": "6000:3F",
                                        "description": f"fixture {rom_sha}"}]}]
             }))
-            archive.writestr("lib/arm64-v8a/liblucent_core_mesen.so", b"core")
+            archive.writestr("lib/arm64-v8a/libemufusion_core_mesen.so", b"core")
         bind("candidate-apk", candidate_apk)
         menu = self.root / "menu.png"
         Image.new("RGB", (1920, 1080), (4, 4, 4)).save(menu)

@@ -109,7 +109,7 @@ class Phase3RegistryCemuTest(unittest.TestCase):
         self.assertGreater(local_archive["sizeBytes"], 0)
         self.assertEqual("lucent_native_adapter_entry",
                          SOURCE_LOCK["adapterAbi"]["entrySymbol"])
-        self.assertEqual("liblucent_native_adapter_cemu.so",
+        self.assertEqual("libemufusion_native_adapter_cemu.so",
                          SOURCE_LOCK["adapterAbi"]["expectedLibraryName"])
 
     def test_cemu_lock_matches_every_local_patch_and_staged_artifact(self):
@@ -133,8 +133,8 @@ class Phase3RegistryCemuTest(unittest.TestCase):
         self.assertIn("lucent_native_adapter_average_game_fps",
                       CEMU_ANDROID_WINDOW)
         self.assertIn("g_lucent_average_game_fps.store", CEMU_ANDROID_WINDOW)
-        self.assertIn("lucent_native_adapter_average_game_fps", HOST_C)
-        self.assertIn("lucent_eden_average_game_fps", HOST_C)
+        self.assertIn("emufusion_native_adapter_average_game_fps", HOST_C)
+        self.assertIn("emufusion_eden_average_game_fps", HOST_C)
 
     def test_cemu_exports_tier_pacing_hooks(self):
         # Frame-generation protocol 2026-09-01: the host paces a hardware
@@ -144,8 +144,8 @@ class Phase3RegistryCemuTest(unittest.TestCase):
         self.assertIn("lucent_native_adapter_set_paced_video_hz", adapter)
         self.assertIn("lucent_native_adapter_declared_video_hz", adapter)
         self.assertIn("LatteTiming_setCustomVsyncFrequency", adapter)
-        self.assertIn("lucent_native_adapter_set_paced_video_hz", HOST_C)
-        self.assertIn("lucent_native_adapter_declared_video_hz", HOST_C)
+        self.assertIn("emufusion_native_adapter_set_paced_video_hz", HOST_C)
+        self.assertIn("emufusion_native_adapter_declared_video_hz", HOST_C)
         renderer = _read(CEMU_TREE / "src" / "Cafe" / "HW" / "Latte" /
                          "Renderer" / "Vulkan" / "VulkanRenderer.cpp")
         self.assertIn("LatteTiming_getCustomVsyncFrequency(lucentVsyncHz)", renderer)

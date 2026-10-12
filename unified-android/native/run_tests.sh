@@ -59,31 +59,31 @@ case "$(uname -s)" in Darwin) JNI_PLATFORM=darwin ;; *) JNI_PLATFORM=linux ;; es
 
 "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS -shared \
     "$NATIVE_DIR/tests/mock_core.c" $LDFLAGS -o "$TEST_DIR/mock_core.so"
-cp "$TEST_DIR/mock_core.so" "$TEST_DIR/liblucent_core_puae.so"
+cp "$TEST_DIR/mock_core.so" "$TEST_DIR/libemufusion_core_puae.so"
 mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
 "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    -DLUCENT_MOCK_DLCLOSE_MARKER=1 -shared \
+    -DEMUFUSION_MOCK_DLCLOSE_MARKER=1 -shared \
     "$NATIVE_DIR/tests/mock_core.c" $LDFLAGS \
-    -o "$TEST_DIR/dolphin-completed/liblucent_core_dolphin.so"
+    -o "$TEST_DIR/dolphin-completed/libemufusion_core_dolphin.so"
 "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    -DLUCENT_MOCK_DLCLOSE_MARKER=1 -DLUCENT_MOCK_REJECT_GAME=1 -shared \
+    -DEMUFUSION_MOCK_DLCLOSE_MARKER=1 -DEMUFUSION_MOCK_REJECT_GAME=1 -shared \
     "$NATIVE_DIR/tests/mock_core.c" $LDFLAGS \
-    -o "$TEST_DIR/dolphin-rejected/liblucent_core_dolphin.so"
+    -o "$TEST_DIR/dolphin-rejected/libemufusion_core_dolphin.so"
 "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS -o "$TEST_DIR/hw_gles_core.so"
 "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    -DLUCENT_MOCK_HW_VULKAN=1 -shared \
+    -DEMUFUSION_MOCK_HW_VULKAN=1 -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS -o "$TEST_DIR/hw_vulkan_core.so"
 "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    -DLUCENT_MOCK_ANDROID_GLES=1 -shared \
+    -DEMUFUSION_MOCK_ANDROID_GLES=1 -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
     -o "$TEST_DIR/android_gles_core.so"
 "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    -DLUCENT_MOCK_ANDROID_GLES=1 -DLUCENT_MOCK_ARMSX2=1 -shared \
+    -DEMUFUSION_MOCK_ANDROID_GLES=1 -DEMUFUSION_MOCK_ARMSX2=1 -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
-    -o "$TEST_DIR/liblucent_core_armsx2.so"
+    -o "$TEST_DIR/libemufusion_core_armsx2.so"
 "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    -DLUCENT_MOCK_MUPEN_GLES=1 -shared \
+    -DEMUFUSION_MOCK_MUPEN_GLES=1 -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
     -o "$TEST_DIR/mupen_gles_core.so"
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
@@ -131,6 +131,19 @@ mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
     -DMOCK_JAVA_VM_SETTER_FAILURE=1 -shared \
     "$NATIVE_DIR/tests/mock_native_adapter.c" $LDFLAGS \
     -o "$TEST_DIR/mock_native_adapter_setter_failure.so"
+# The same adapters exporting their hooks under the names used before the
+# EmuFusion rename: the host must still find every one of them.
+for legacy in "" _setter _setter_failure; do
+    case "$legacy" in
+        _setter) legacy_flags=-DMOCK_JAVA_VM_SETTER_SUCCESS=1 ;;
+        _setter_failure) legacy_flags=-DMOCK_JAVA_VM_SETTER_FAILURE=1 ;;
+        *) legacy_flags= ;;
+    esac
+    "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
+        -DMOCK_LEGACY_EXPORTS=1 $legacy_flags -shared \
+        "$NATIVE_DIR/tests/mock_native_adapter.c" $LDFLAGS \
+        -o "$TEST_DIR/mock_native_adapter_legacy$legacy.so"
+done
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
     "$NATIVE_DIR/emufusion_native_adapter_host.c" \
     "$NATIVE_DIR/tests/native_adapter_host_test.c" \
@@ -139,14 +152,14 @@ mkdir -p "$TEST_DIR/system" "$TEST_DIR/save"
 printf '\007' > "$TEST_DIR/game.mock"
 "$TEST_DIR/host_test" "$TEST_DIR/mock_core.so" "$TEST_DIR" \
     "$TEST_DIR/system" "$TEST_DIR/save" "$TEST_DIR/game.mock"
-"$TEST_DIR/host_test" "$TEST_DIR/liblucent_core_puae.so" "$TEST_DIR" \
+"$TEST_DIR/host_test" "$TEST_DIR/libemufusion_core_puae.so" "$TEST_DIR" \
     "$TEST_DIR/system" "$TEST_DIR/save" "$TEST_DIR/game.mock"
 "$TEST_DIR/dolphin_quarantine_test" \
-    "$TEST_DIR/dolphin-completed/liblucent_core_dolphin.so" "$TEST_DIR" \
+    "$TEST_DIR/dolphin-completed/libemufusion_core_dolphin.so" "$TEST_DIR" \
     "$TEST_DIR/system" "$TEST_DIR/save" "$TEST_DIR/game.mock" \
     "$TEST_DIR/dolphin-completed.marker" success
 "$TEST_DIR/dolphin_quarantine_test" \
-    "$TEST_DIR/dolphin-rejected/liblucent_core_dolphin.so" "$TEST_DIR" \
+    "$TEST_DIR/dolphin-rejected/libemufusion_core_dolphin.so" "$TEST_DIR" \
     "$TEST_DIR/system" "$TEST_DIR/save" "$TEST_DIR/game.mock" \
     "$TEST_DIR/dolphin-rejected.marker" reject
 "$TEST_DIR/hw_host_test" "$TEST_DIR/hw_gles_core.so" \
@@ -155,7 +168,7 @@ printf '\007' > "$TEST_DIR/game.mock"
 "$TEST_DIR/android_gles_backend_test" "$TEST_DIR/android_gles_core.so" \
     "$TEST_DIR/mupen_gles_core.so" "$TEST_DIR" "$TEST_DIR/system" \
     "$TEST_DIR/save" "$TEST_DIR/game.mock"
-"$TEST_DIR/android_gles_backend_test" "$TEST_DIR/liblucent_core_armsx2.so" \
+"$TEST_DIR/android_gles_backend_test" "$TEST_DIR/libemufusion_core_armsx2.so" \
     "$TEST_DIR/mupen_gles_core.so" "$TEST_DIR" "$TEST_DIR/system" \
     "$TEST_DIR/save" "$TEST_DIR/game.mock"
 "$TEST_DIR/framegen_timer_test"
@@ -164,6 +177,12 @@ printf '\007' > "$TEST_DIR/game.mock"
     "$TEST_DIR/mock_native_adapter_setter.so" \
     "$TEST_DIR/mock_native_adapter_setter_failure.so" "$TEST_DIR" \
     "$TEST_DIR/save" "$TEST_DIR/game.mock"
+"$TEST_DIR/native_adapter_host_test" "$TEST_DIR/mock_native_adapter_legacy.so" \
+    "$TEST_DIR/mock_native_adapter_mismatch.so" \
+    "$TEST_DIR/mock_native_adapter_legacy_setter.so" \
+    "$TEST_DIR/mock_native_adapter_legacy_setter_failure.so" "$TEST_DIR" \
+    "$TEST_DIR/save" "$TEST_DIR/game.mock"
+printf 'native-adapter hooks under their former names passed\n'
 
 # The adapter loader must reject an otherwise-valid adapter outside its trusted
 # root, exactly as the libretro core loader does below.
@@ -204,25 +223,25 @@ printf '\007' > "$SANITIZED/game.mock"
 "$CC" -std=c11 -O1 -g -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
     $SANITIZER_FLAGS -shared "$NATIVE_DIR/tests/mock_core.c" $LDFLAGS \
     -o "$SANITIZED/mock_core.so"
-cp "$SANITIZED/mock_core.so" "$SANITIZED/liblucent_core_puae.so"
+cp "$SANITIZED/mock_core.so" "$SANITIZED/libemufusion_core_puae.so"
 "$CC" -std=c11 -O1 -g -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
     $SANITIZER_FLAGS -shared "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
     -o "$SANITIZED/hw_gles_core.so"
 "$CC" -std=c11 -O1 -g -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    $SANITIZER_FLAGS -DLUCENT_MOCK_HW_VULKAN=1 -shared \
+    $SANITIZER_FLAGS -DEMUFUSION_MOCK_HW_VULKAN=1 -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
     -o "$SANITIZED/hw_vulkan_core.so"
 "$CC" -std=c11 -O1 -g -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    $SANITIZER_FLAGS -DLUCENT_MOCK_ANDROID_GLES=1 -shared \
+    $SANITIZER_FLAGS -DEMUFUSION_MOCK_ANDROID_GLES=1 -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
     -o "$SANITIZED/android_gles_core.so"
 "$CC" -std=c11 -O1 -g -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    $SANITIZER_FLAGS -DLUCENT_MOCK_ANDROID_GLES=1 \
-    -DLUCENT_MOCK_ARMSX2=1 -shared \
+    $SANITIZER_FLAGS -DEMUFUSION_MOCK_ANDROID_GLES=1 \
+    -DEMUFUSION_MOCK_ARMSX2=1 -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
-    -o "$SANITIZED/liblucent_core_armsx2.so"
+    -o "$SANITIZED/libemufusion_core_armsx2.so"
 "$CC" -std=c11 -O1 -g -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-    $SANITIZER_FLAGS -DLUCENT_MOCK_MUPEN_GLES=1 -shared \
+    $SANITIZER_FLAGS -DEMUFUSION_MOCK_MUPEN_GLES=1 -shared \
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
     -o "$SANITIZED/mupen_gles_core.so"
 "$CC" -std=c11 -O1 -g -pthread -Wall -Wextra -Werror $CFLAGS \
@@ -265,7 +284,7 @@ ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
     "$SANITIZED/host_test" "$SANITIZED/mock_core.so" "$SANITIZED" \
     "$SANITIZED/system" "$SANITIZED/save" "$SANITIZED/game.mock"
 ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
-    "$SANITIZED/host_test" "$SANITIZED/liblucent_core_puae.so" "$SANITIZED" \
+    "$SANITIZED/host_test" "$SANITIZED/libemufusion_core_puae.so" "$SANITIZED" \
     "$SANITIZED/system" "$SANITIZED/save" "$SANITIZED/game.mock"
 ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
     "$SANITIZED/hw_host_test" "$SANITIZED/hw_gles_core.so" \
@@ -278,7 +297,7 @@ ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
     "$SANITIZED/game.mock"
 ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
     "$SANITIZED/android_gles_backend_test" \
-    "$SANITIZED/liblucent_core_armsx2.so" "$SANITIZED/mupen_gles_core.so" \
+    "$SANITIZED/libemufusion_core_armsx2.so" "$SANITIZED/mupen_gles_core.so" \
     "$SANITIZED" "$SANITIZED/system" "$SANITIZED/save" \
     "$SANITIZED/game.mock"
 ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \

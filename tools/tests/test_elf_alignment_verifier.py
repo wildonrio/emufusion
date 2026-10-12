@@ -97,14 +97,14 @@ class ElfAlignmentVerifierTest(unittest.TestCase):
         for aligned in (
             "libemufusion_libretro_host.so",
             "libemufusion_vulkan_host.so",
-            "liblucent_core_blastem.so",
-            "liblucent_core_mupen64plus_next.so",
-            "liblucent_core_melonds_ds.so",
-            "liblucent_core_swanstation.so",
-            "liblucent_core_dosbox_pure.so",
-            "liblucent_core_armsx2.so",
-            "liblucent_core_dolphin.so",
-            "liblucent_core_scummvm.so",
+            "libemufusion_core_blastem.so",
+            "libemufusion_core_mupen64plus_next.so",
+            "libemufusion_core_melonds_ds.so",
+            "libemufusion_core_swanstation.so",
+            "libemufusion_core_dosbox_pure.so",
+            "libemufusion_core_armsx2.so",
+            "libemufusion_core_dolphin.so",
+            "libemufusion_core_scummvm.so",
         ):
             self.assertNotIn(aligned, allowlist.split())
 

@@ -22,7 +22,7 @@ import java.util.zip.ZipFile;
 
 /**
  * Resolves the validated per-engine system directory a Phase 3 native adapter
- * is handed as {@code lucent_native_load_request.system_directory}.
+ * is handed as {@code emufusion_native_load_request.system_directory}.
  *
  * This mirrors {@link LibretroEngineSpec}'s {@code installSystem}/
  * {@code installRuntime} contract: the engine root is always the app-private

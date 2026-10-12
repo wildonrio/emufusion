@@ -198,7 +198,7 @@ class PhaseTwoArmsx2Test(unittest.TestCase):
     def test_armsx2_accuracy_defaults_to_full(self):
         host = (ROOT / "unified-android" / "native" /
                 "emufusion_libretro_host.c").read_text(encoding="utf-8")
-        self.assertIn('strstr(host->core_path, "lucent_core_armsx2")', host)
+        self.assertIn('strstr(host->core_path, "emufusion_core_armsx2")', host)
         self.assertIn('strcmp(variable->key, "armsx2_blending_accuracy") == 0',
                       host)
         self.assertIn('find_option_token(\n                    options, "Full"', host)

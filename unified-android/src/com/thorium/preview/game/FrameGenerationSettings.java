@@ -27,39 +27,6 @@ public final class FrameGenerationSettings {
 
     private FrameGenerationSettings() {}
 
-    /**
-     * AUTO for engines whose generated path does not yet present evenly:
-     * the in-process native adapters (Switch, Wii U, PS3) render through
-     * their own swapchains, and on the Thor AUTO's generator admitted almost
-     * none of Eden's frames and showed an uneven 1/2/3-scan cadence where Off
-     * is a perfect 60 (2026-10-11). AUTO there presents directly, exactly
-     * like Off, so choosing AUTO never makes a game less smooth. Explicit
-     * experimental modes are left as chosen.
-     */
-    /**
-     * As {@link #forEngine(Mode, String)}, except that the QA-only global
-     * {@code emufusion_framegen_native_engines=1} lets Switch, Wii U and PS3
-     * through, to work on their generated path. Delete it after testing.
-     */
-    public static Mode forEngine(Context context, Mode selected, String engineId) {
-        boolean qa = false;
-        try {
-            qa = context != null && android.provider.Settings.Global.getInt(
-                    context.getContentResolver(), "emufusion_framegen_native_engines", 0) != 0;
-        } catch (RuntimeException ignored) {
-            // Unreadable settings: the production exclusion applies.
-        }
-        return qa ? (selected == null ? Mode.OFF : selected) : forEngine(selected, engineId);
-    }
-
-    public static Mode forEngine(Mode selected, String engineId) {
-        if ((selected == Mode.AUTO || selected == Mode.AUTO_TRIPLE) &&
-                ("eden".equals(engineId) || "cemu".equals(engineId) ||
-                        "aps3e".equals(engineId)))
-            return Mode.OFF;
-        return selected == null ? Mode.OFF : selected;
-    }
-
     /** One explicit owner choice. No package, shell global, or probe may override it. */
     public enum Mode {
         OFF("off"),

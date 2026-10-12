@@ -242,7 +242,7 @@ bool retro_load_game(const struct retro_game_info *game) {
 bool retro_load_game_special(unsigned type, const struct retro_game_info *games, size_t count) {
     (void)type; (void)games; (void)count; return false;
 }
-bool retro_lucent_prepare_exit_autosave(void) {
+bool retro_emufusion_prepare_exit_autosave(void) {
     prepare_exit_count++;
     return prepare_exit_result;
 }

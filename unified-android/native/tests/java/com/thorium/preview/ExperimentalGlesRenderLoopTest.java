@@ -163,12 +163,12 @@ public final class ExperimentalGlesRenderLoopTest {
     }
 
     private static void checkClockDebtWithoutSkippingPresentation() throws Exception {
-        check(ExperimentalGlesRenderLoop.retainsVulkanFrameDebt("liblucent_core_armsx2.so"),
+        check(ExperimentalGlesRenderLoop.retainsVulkanFrameDebt("libemufusion_core_armsx2.so"),
                 "4K PS2 clock recovery missing");
-        check(ExperimentalGlesRenderLoop.retainsVulkanFrameDebt("liblucent_core_armsx2_16k.so"),
+        check(ExperimentalGlesRenderLoop.retainsVulkanFrameDebt("libemufusion_core_armsx2_16k.so"),
                 "16K PS2 clock recovery missing");
-        for (String name : new String[] {null, "", "liblucent_core_dolphin.so",
-                "liblucent_core_play.so", "liblucent_core_armsx2_other.so"})
+        for (String name : new String[] {null, "", "libemufusion_core_dolphin.so",
+                "libemufusion_core_play.so", "libemufusion_core_armsx2_other.so"})
             check(!ExperimentalGlesRenderLoop.retainsVulkanFrameDebt(name),
                     "clock recovery escaped PS2 qualification: " + name);
         CountDownLatch ready = new CountDownLatch(1), complete = new CountDownLatch(1);

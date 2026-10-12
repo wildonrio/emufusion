@@ -99,13 +99,13 @@ class ScummvmPhase2Test(unittest.TestCase):
                 self.assertEqual(entry["archiveSha256"],
                                  hashlib.sha256(path.read_bytes()).hexdigest())
 
-    def test_exit_extension_is_wired_fail_closed_through_lucent(self):
+    def test_exit_extension_is_wired_fail_closed_through_the_host(self):
         host = HOST.read_text()
         jni = JNI.read_text()
         java_host = JAVA_HOST.read_text()
         session = SESSION.read_text()
         native_test = HOST_TEST.read_text()
-        self.assertIn('resolve_optional_symbol(host->library, "retro_lucent_prepare_exit_autosave"',
+        self.assertIn('resolve_optional_symbol(host->library, "retro_emufusion_prepare_exit_autosave"',
                       host)
         self.assertIn("host->prepare_exit && !host->prepare_exit()", host)
         self.assertIn("Java_com_thorium_preview_LibretroHost_nativeUnloadGame", jni)
@@ -154,7 +154,7 @@ class ScummvmPhase2Test(unittest.TestCase):
         bootstrap = BOOTSTRAP.read_text()
         enabled = {entry["id"]: entry for entry in opt_in["engines"]}["scummvm"]
         row = {entry["id"]: entry for entry in registry["engines"]}["scummvm"]
-        self.assertEqual("liblucent_core_scummvm.so", enabled["libraryName"])
+        self.assertEqual("libemufusion_core_scummvm.so", enabled["libraryName"])
         self.assertEqual("phase2-system/scummvm/scummvm", enabled["systemAssetRoot"])
         self.assertEqual(["scummvm"], enabled["libraryRouteSystems"])
         self.assertEqual("libretro-core", row["route"])

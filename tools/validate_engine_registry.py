@@ -252,7 +252,7 @@ def validate_qualification_opt_in(path: Path, registry_path: Path) -> list[str]:
             errors.append(f"{engine_id}: qualification opt-in requires unshipped experimental status")
         if row.get("commit") != engine.get("source", {}).get("commit"):
             errors.append(f"{engine_id}: qualification commit does not match registry")
-        expected_library = "liblucent_core_" + str(engine_id).replace("-", "_") + ".so"
+        expected_library = "libemufusion_core_" + str(engine_id).replace("-", "_") + ".so"
         if row.get("libraryName") != expected_library:
             errors.append(f"{engine_id}: qualification libraryName must be {expected_library}")
     return errors

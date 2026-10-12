@@ -229,7 +229,7 @@ public final class InternalEngineCatalog {
         String normalized = id.replace('-', '_');
         String[] names = {
                 exactName == null ? "" : exactName,
-                "liblucent_core_" + normalized + ".so",
+                "libemufusion_core_" + normalized + ".so",
                 id + "_libretro.so", normalized + "_libretro.so",
                 "lib" + id + "_libretro.so", "lib" + normalized + "_libretro.so"
         };
@@ -295,7 +295,7 @@ public final class InternalEngineCatalog {
                 String commit = row.optString("commit");
                 String library = row.optString("libraryName");
                 if (!id.isEmpty() && commit.matches("[0-9a-f]{40}") &&
-                        library.matches("liblucent_core_[a-z0-9_]+\\.so"))
+                        library.matches("libemufusion_core_[a-z0-9_]+\\.so"))
                     result.put(id, new QualificationOptIn(commit, library, autoSelect));
             }
         } catch (Exception ignored) {

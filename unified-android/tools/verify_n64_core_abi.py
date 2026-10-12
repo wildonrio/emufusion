@@ -17,7 +17,7 @@ import sys
 import zipfile
 
 
-CORE_MEMBER = "lib/arm64-v8a/liblucent_core_mupen64plus_next.so"
+CORE_MEMBER = "lib/arm64-v8a/libemufusion_core_mupen64plus_next.so"
 ELF_MAGIC = b"\x7fELF"
 ELFCLASS64 = 2
 ELFDATA2LSB = 1

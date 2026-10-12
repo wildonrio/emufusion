@@ -103,7 +103,7 @@ def _asset_tree_sha256(archive: zipfile.ZipFile, root: str) -> str:
 
 def verify_ps2_page_variant(archive, artifact, commit, sbom_checksums):
     """Both memory geometries must be in this APK, with exact identities."""
-    name = "liblucent_core_armsx2_16k.so"
+    name = "libemufusion_core_armsx2_16k.so"
     variants = artifact.get("pageSizeVariants", [])
     if artifact.get("hostPageSize") != 4096 or len(variants) != 1:
         return ["PS2 requires exactly the 4 KiB base and one 16 KiB variant"]
@@ -518,7 +518,7 @@ def verify(path: Path) -> list[str]:
                    checksum.get("checksumValue") == AZAHAR_RELEASE_ARCHIVE_SHA256
                    for checksum in package.get("checksums", []))
         ), None)
-        azahar_binary_package = sbom_by_name.get("liblucent_core_azahar.so")
+        azahar_binary_package = sbom_by_name.get("libemufusion_core_azahar.so")
         if azahar_source_build is not None:
             source_package = sbom_by_name.get("Azahar source")
             if (azahar_binary_package is None or source_package is None or not any(
@@ -567,7 +567,7 @@ def verify(path: Path) -> list[str]:
                 continue
             commit = (row.get("source") or {}).get("commit")
             expected_hash = (row.get("build") or {}).get("proofArtifactSha256")
-            core = f"lib/arm64-v8a/liblucent_core_{engine_id.replace('-', '_')}.so"
+            core = f"lib/arm64-v8a/libemufusion_core_{engine_id.replace('-', '_')}.so"
             if core not in names:
                 errors.append(f"missing qualification core: {core}")
                 continue

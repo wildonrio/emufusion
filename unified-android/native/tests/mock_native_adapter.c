@@ -1,7 +1,7 @@
 /*
  * Deterministic mock native adapter for EmuFusion Phase 3 host testing.
  *
- * It implements the full lucent_native_adapter vtable with no real emulation so
+ * It implements the full emufusion_native_adapter vtable with no real emulation so
  * the host, its vtable/ABI validation, capability gating, the create->load->
  * start->run_frame->flush_save->stop->destroy lifecycle, and every fail-closed
  * path can be proven without the multi-week Cemu core.
@@ -22,8 +22,17 @@
 /* strdup is POSIX; glibc hides it under -std=c11 without this, and the
  * implicit int declaration then truncates the returned pointer. */
 #define _POSIX_C_SOURCE 200809L
-#include "../include/lucent_native_adapter.h"
-#include "../include/lucent_native_source_image.h"
+#include "../include/emufusion_native_adapter.h"
+#include "../include/emufusion_native_source_image.h"
+
+/* MOCK_LEGACY_EXPORTS builds the same adapter with the hook names engines
+ * exported before the EmuFusion rename, for the host's fallback lookup. */
+#ifdef MOCK_LEGACY_EXPORTS
+#include "../include/emufusion_legacy_engine_abi.h"
+#define MOCK_EXPORT(suffix) EMUFUSION_LEGACY_ENGINE_SYMBOL(suffix)
+#else
+#define MOCK_EXPORT(suffix) emufusion_##suffix
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,11 +41,11 @@
 #define MOCK_TONE_FRAMES 64u
 #define MOCK_PATTERN_BASE 0xC0DE0000u
 #define MOCK_SAVE_FILE "mock-wiiu.sav"
-static const char MOCK_SENTINEL[] = "LUCENT-MOCK-WIIU-SAVE\n";
+static const char MOCK_SENTINEL[] = "EMUFUSION-MOCK-WIIU-SAVE\n";
 #ifndef MOCK_NO_FG_PRESENTATION
 static bool mock_fg_presentation;
 __attribute__((visibility("default")))
-void lucent_native_adapter_set_fg_presentation_v1(bool enabled) {
+void MOCK_EXPORT(native_adapter_set_fg_presentation_v1)(bool enabled) {
     mock_fg_presentation = enabled;
 }
 __attribute__((visibility("default")))
@@ -45,7 +54,7 @@ bool emufusion_mock_fg_presentation(void) { return mock_fg_presentation; }
 
 #if defined(MOCK_JAVA_VM_SETTER_SUCCESS) || defined(MOCK_JAVA_VM_SETTER_FAILURE)
 __attribute__((visibility("default")))
-int lucent_native_adapter_set_java_vm(uint32_t version, void *java_vm) {
+int MOCK_EXPORT(native_adapter_set_java_vm)(uint32_t version, void *java_vm) {
 #ifdef MOCK_JAVA_VM_SETTER_FAILURE
     (void)version;
     (void)java_vm;
@@ -57,16 +66,16 @@ int lucent_native_adapter_set_java_vm(uint32_t version, void *java_vm) {
 #endif
 
 #ifdef MOCK_ABI_MISMATCH
-#define MOCK_ABI_VERSION (LUCENT_NATIVE_ADAPTER_ABI_VERSION + 1u)
+#define MOCK_ABI_VERSION (EMUFUSION_NATIVE_ADAPTER_ABI_VERSION + 1u)
 #else
-#define MOCK_ABI_VERSION LUCENT_NATIVE_ADAPTER_ABI_VERSION
+#define MOCK_ABI_VERSION EMUFUSION_NATIVE_ADAPTER_ABI_VERSION
 #endif
 
-struct lucent_native_engine {
+struct emufusion_native_engine {
     char *save_directory;
     void *primary_window;
     void *lower_window;
-    lucent_native_audio_sink audio_sink;
+    emufusion_native_audio_sink audio_sink;
     void *audio_sink_ctx;
     uint32_t frame_count;
     bool loaded;
@@ -80,24 +89,24 @@ static double mock_paced_video_hz;
 
 #ifdef MOCK_SOURCE_IMAGE_SIDEBAND
 __attribute__((visibility("default")))
-uint32_t lucent_native_adapter_source_image_binding_v1(lucent_source_binding_v1 *out, uint32_t size) {
-    if (!out || size < sizeof(*out)) return LUCENT_SOURCE_BAD_ARGUMENT;
+uint32_t MOCK_EXPORT(native_adapter_source_image_binding_v1)(emufusion_source_binding_v1 *out, uint32_t size) {
+    if (!out || size < sizeof(*out)) return EMUFUSION_SOURCE_BAD_ARGUMENT;
     memset(out, 0, sizeof(*out));
-    out->version = LUCENT_SOURCE_IMAGE_VERSION;
+    out->version = EMUFUSION_SOURCE_IMAGE_VERSION;
 #ifdef MOCK_SOURCE_BAD_BINDING
     out->version = 2;
 #endif
     out->struct_size = sizeof(*out);
     out->session_epoch = 11; out->surface_epoch = 12; out->swapchain_epoch = 13;
-    return LUCENT_SOURCE_MATCH_ACCEPTED;
+    return EMUFUSION_SOURCE_MATCH_ACCEPTED;
 }
 __attribute__((visibility("default")))
-uint32_t lucent_native_adapter_query_source_image_v1(uint64_t session, uint64_t surface,
-        uint64_t timestamp, lucent_source_image_v1 *out, uint32_t size) {
-    if (!out || size < sizeof(*out)) return LUCENT_SOURCE_BAD_ARGUMENT;
+uint32_t MOCK_EXPORT(native_adapter_query_source_image_v1)(uint64_t session, uint64_t surface,
+        uint64_t timestamp, emufusion_source_image_v1 *out, uint32_t size) {
+    if (!out || size < sizeof(*out)) return EMUFUSION_SOURCE_BAD_ARGUMENT;
     memset(out, 0, sizeof(*out));
-    out->version = LUCENT_SOURCE_IMAGE_VERSION; out->struct_size = sizeof(*out);
-    out->state = LUCENT_SOURCE_MATCH_ACCEPTED;
+    out->version = EMUFUSION_SOURCE_IMAGE_VERSION; out->struct_size = sizeof(*out);
+    out->state = EMUFUSION_SOURCE_MATCH_ACCEPTED;
     out->buffer_timestamp_ns = timestamp;
 #ifdef MOCK_SOURCE_BAD_ROW
     ++out->buffer_timestamp_ns;
@@ -106,34 +115,34 @@ uint32_t lucent_native_adapter_query_source_image_v1(uint64_t session, uint64_t 
     out->composition.header.surface_epoch = surface;
     out->composition.header.swapchain_epoch = 13;
     out->composition.layers[0].queue_frame_number = 42;
-    return LUCENT_SOURCE_MATCH_ACCEPTED;
+    return EMUFUSION_SOURCE_MATCH_ACCEPTED;
 }
 #endif
 
 #ifdef MOCK_TIMING_CAPABILITIES
 __attribute__((visibility("default")))
-uint32_t lucent_native_adapter_timing_capabilities_v1(void) {
+uint32_t MOCK_EXPORT(native_adapter_timing_capabilities_v1)(void) {
     return MOCK_TIMING_CAPABILITIES;
 }
 #endif
 #ifdef MOCK_PRODUCER_TIMELINE_HZ
 __attribute__((visibility("default")))
-double lucent_native_adapter_producer_timeline_hz(void) {
+double MOCK_EXPORT(native_adapter_producer_timeline_hz)(void) {
     return MOCK_PRODUCER_TIMELINE_HZ;
 }
 #endif
 
 __attribute__((visibility("default")))
-double lucent_native_adapter_declared_video_hz(void) { return 60.0; }
+double MOCK_EXPORT(native_adapter_declared_video_hz)(void) { return 60.0; }
 
 __attribute__((visibility("default")))
-bool lucent_native_adapter_set_paced_video_hz(double hz) {
+bool MOCK_EXPORT(native_adapter_set_paced_video_hz)(double hz) {
     if (hz > 60.0) return false;
     mock_paced_video_hz = hz > 0.0 ? hz : 0.0;
     return true;
 }
 
-static void mock_describe(lucent_native_capabilities *out) {
+static void mock_describe(emufusion_native_capabilities *out) {
     if (!out) return;
     out->abi_version = MOCK_ABI_VERSION;
     out->engine_id = "mock-wiiu";
@@ -145,12 +154,12 @@ static void mock_describe(lucent_native_capabilities *out) {
     out->max_controllers = 1;           /* This mock drives only controller_index 0. */
 }
 
-static lucent_native_engine *mock_create(void) {
-    return (lucent_native_engine *)calloc(1, sizeof(lucent_native_engine));
+static emufusion_native_engine *mock_create(void) {
+    return (emufusion_native_engine *)calloc(1, sizeof(emufusion_native_engine));
 }
 
-static bool mock_load(lucent_native_engine *engine,
-                      const lucent_native_load_request *request,
+static bool mock_load(emufusion_native_engine *engine,
+                      const emufusion_native_load_request *request,
                       char *error, size_t error_size) {
     if (!engine) return false;
     /* Fail closed when content is absent, mirroring a real firmware/content
@@ -166,11 +175,11 @@ static bool mock_load(lucent_native_engine *engine,
     return true;
 }
 
-static bool mock_start(lucent_native_engine *engine,
-                       const lucent_native_io *io,
+static bool mock_start(emufusion_native_engine *engine,
+                       const emufusion_native_io *io,
                        char *error, size_t error_size) {
     if (!engine || !engine->loaded) return false;
-    if (!io || io->kind != LUCENT_NATIVE_RENDER_VULKAN_WINDOW ||
+    if (!io || io->kind != EMUFUSION_NATIVE_RENDER_VULKAN_WINDOW ||
             !io->primary_window) {
         if (error && error_size)
             snprintf(error, error_size, "a Vulkan primary window is required");
@@ -194,7 +203,7 @@ static void mock_present(void *window, uint32_t frame, bool lower) {
     *(uint32_t *)window = pattern;
 }
 
-static bool mock_run_frame(lucent_native_engine *engine) {
+static bool mock_run_frame(emufusion_native_engine *engine) {
     int16_t tone[MOCK_TONE_FRAMES * 2u];
     unsigned i;
     if (!engine || !engine->started) return false;
@@ -211,22 +220,22 @@ static bool mock_run_frame(lucent_native_engine *engine) {
     return true;
 }
 
-static void mock_set_control(lucent_native_engine *engine, uint32_t controller_index,
-                             lucent_native_control control, float value) {
+static void mock_set_control(emufusion_native_engine *engine, uint32_t controller_index,
+                             emufusion_native_control control, float value) {
     (void)controller_index;
     (void)control;
     if (engine) engine->last_control_value = value;
 }
 
-static void mock_pause(lucent_native_engine *engine) {
+static void mock_pause(emufusion_native_engine *engine) {
     if (engine) engine->paused = true;
 }
 
-static void mock_resume(lucent_native_engine *engine) {
+static void mock_resume(emufusion_native_engine *engine) {
     if (engine) engine->paused = false;
 }
 
-static bool mock_flush_save(lucent_native_engine *engine) {
+static bool mock_flush_save(emufusion_native_engine *engine) {
     char path[4096];
     FILE *file;
     if (!engine || !engine->loaded) return false;
@@ -236,7 +245,7 @@ static bool mock_flush_save(lucent_native_engine *engine) {
      * short literal passed as its own separate %s argument here previously
      * tripped an ASan global-buffer-overflow false positive on this
      * toolchain's vsnprintf once an unrelated struct-layout change (adding
-     * lucent_native_capabilities.max_controllers) shifted nearby global
+     * emufusion_native_capabilities.max_controllers) shifted nearby global
      * string placement -- Apple's libc %s scan for short literals can read
      * in fixed-size chunks past the terminator, which ASan's redzone then
      * flags even though the extra bytes are never used. */
@@ -255,25 +264,25 @@ static bool mock_flush_save(lucent_native_engine *engine) {
 
 /* has_quick_resume is false, so these fail closed exactly as a Wii U engine
  * without reliable full-state serialization must. */
-static size_t mock_serialize_size(lucent_native_engine *engine) {
+static size_t mock_serialize_size(emufusion_native_engine *engine) {
     (void)engine;
     return 0;
 }
 
-static size_t mock_serialize(lucent_native_engine *engine, void *out,
+static size_t mock_serialize(emufusion_native_engine *engine, void *out,
                              size_t capacity) {
     (void)engine; (void)out; (void)capacity;
     return 0;
 }
 
-static bool mock_unserialize(lucent_native_engine *engine, const void *data,
+static bool mock_unserialize(emufusion_native_engine *engine, const void *data,
                              size_t size) {
     (void)engine; (void)data; (void)size;
     return false;
 }
 
-static bool mock_surface_recreated(lucent_native_engine *engine,
-                                   const lucent_native_io *io) {
+static bool mock_surface_recreated(emufusion_native_engine *engine,
+                                   const emufusion_native_io *io) {
     if (!engine || !engine->started) return false;
     if (!io || !io->primary_window) return false;
     engine->primary_window = io->primary_window;
@@ -283,7 +292,7 @@ static bool mock_surface_recreated(lucent_native_engine *engine,
     return true;
 }
 
-static void mock_stop(lucent_native_engine *engine) {
+static void mock_stop(emufusion_native_engine *engine) {
     if (!engine) return;
     engine->started = false;
     engine->primary_window = NULL;
@@ -292,13 +301,13 @@ static void mock_stop(lucent_native_engine *engine) {
     engine->audio_sink_ctx = NULL;
 }
 
-static void mock_destroy(lucent_native_engine *engine) {
+static void mock_destroy(emufusion_native_engine *engine) {
     if (!engine) return;
     free(engine->save_directory);
     free(engine);
 }
 
-static const lucent_native_adapter MOCK_ADAPTER = {
+static const emufusion_native_adapter MOCK_ADAPTER = {
     MOCK_ABI_VERSION,
     mock_describe,
     mock_create,
@@ -317,6 +326,6 @@ static const lucent_native_adapter MOCK_ADAPTER = {
     mock_destroy,
 };
 
-const lucent_native_adapter *lucent_native_adapter_entry(void) {
+const emufusion_native_adapter *MOCK_EXPORT(native_adapter_entry)(void) {
     return &MOCK_ADAPTER;
 }

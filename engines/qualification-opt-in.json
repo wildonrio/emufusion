@@ -6,82 +6,82 @@
     {
       "id": "prosystem",
       "commit": "363b6dfbd3e240762e022c2b4897b4fe55722be3",
-      "libraryName": "liblucent_core_prosystem.so"
+      "libraryName": "libemufusion_core_prosystem.so"
     },
     {
       "id": "mesen",
       "commit": "0102910c39ad1a62bc3f784466f3f67ca9eae335",
-      "libraryName": "liblucent_core_mesen.so"
+      "libraryName": "libemufusion_core_mesen.so"
     },
     {
       "id": "mesen-s",
       "commit": "1d475abd174d16ecb1fb030961ff26076ab51ee6",
-      "libraryName": "liblucent_core_mesen_s.so"
+      "libraryName": "libemufusion_core_mesen_s.so"
     },
     {
       "id": "sameboy",
       "commit": "213a12ce93d66b105a113debd9396306066a7cfc",
-      "libraryName": "liblucent_core_sameboy.so"
+      "libraryName": "libemufusion_core_sameboy.so"
     },
     {
       "id": "mgba",
       "commit": "afd6f14eaf8bd35214ed3fb9dc69a92bfc3877a9",
-      "libraryName": "liblucent_core_mgba.so"
+      "libraryName": "libemufusion_core_mgba.so"
     },
     {
       "id": "gearsystem",
       "commit": "3c4cfcf54dfe9e36070815e76ee2bab9e754104f",
-      "libraryName": "liblucent_core_gearsystem.so"
+      "libraryName": "libemufusion_core_gearsystem.so"
     },
     {
       "id": "swanstation",
       "commit": "5430a4a53b89fa5827c97b84ada29d23317245bc",
-      "libraryName": "liblucent_core_swanstation.so"
+      "libraryName": "libemufusion_core_swanstation.so"
     },
     {
       "id": "melonds-ds",
       "commit": "2748dfb9409c94e6828d937d04e334f35127ba7c",
-      "libraryName": "liblucent_core_melonds_ds.so"
+      "libraryName": "libemufusion_core_melonds_ds.so"
     },
     {
       "id": "fuse",
       "commit": "000a8ae51a5141d75c109a22150e37ba06d57910",
-      "libraryName": "liblucent_core_fuse.so"
+      "libraryName": "libemufusion_core_fuse.so"
     },
     {
       "id": "mame",
       "commit": "85eaed9c22242206b68eaca8310cf0dbde331b43",
-      "libraryName": "liblucent_core_mame.so"
+      "libraryName": "libemufusion_core_mame.so"
     },
     {
       "id": "dosbox-pure",
       "commit": "7f6e8fb7385fa446d1444d671063268520bf9b54",
-      "libraryName": "liblucent_core_dosbox_pure.so"
+      "libraryName": "libemufusion_core_dosbox_pure.so"
     },
     {
       "id": "beetle-pce-fast",
       "commit": "b211204c7026dff6e86e79b00185512e2421fff8",
-      "libraryName": "liblucent_core_beetle_pce_fast.so"
+      "libraryName": "libemufusion_core_beetle_pce_fast.so"
     },
     {
       "id": "beetle-neopop",
       "commit": "a50d5ac288a81f2104ddf43195a4efdd15c72227",
-      "libraryName": "liblucent_core_beetle_neopop.so"
+      "libraryName": "libemufusion_core_beetle_neopop.so"
     },
     {
       "id": "beetle-cygne",
       "commit": "4b01295838ea89e3f1355bbe4cb5cf98aa6108cd",
-      "libraryName": "liblucent_core_beetle_cygne.so"
+      "libraryName": "libemufusion_core_beetle_cygne.so"
     },
     {
       "id": "blastem",
       "commit": "84e567e17b6fb3cea23146c4209c18d50d46cbf0",
-      "libraryName": "liblucent_core_blastem.so"
+      "libraryName": "libemufusion_core_blastem.so"
     },
     {
       "id": "mupen64plus-next",
       "commit": "f275caf4b2bfa1e6d1c51636746ea793f3d80320",
-      "libraryName": "liblucent_core_mupen64plus_next.so"
+      "libraryName": "libemufusion_core_mupen64plus_next.so"
     }
   ]
 }

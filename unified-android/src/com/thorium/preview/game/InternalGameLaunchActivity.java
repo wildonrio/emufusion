@@ -49,8 +49,7 @@ public final class InternalGameLaunchActivity extends Activity {
                 uri,
                 SessionReturnState.from(source),
                 "",
-                FrameGenerationSettings.forEngine(this, FrameGenerationSettings.mode(this),
-                        source.getStringExtra("engine_id")));
+                FrameGenerationSettings.mode(this));
         if (!request.isValid()) {
             finish();
             return;

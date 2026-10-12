@@ -2,7 +2,7 @@ package com.thorium.emufusion.netplay;
 
 /**
  * The binary message one peer sends over its DataChannel to report one of
- * ITS OWN local {@code lucent_native_control} value changes, for the Phase 3
+ * ITS OWN local {@code emufusion_native_control} value changes, for the Phase 3
  * native-adapter engine family (Eden/Cemu/aPS3e). See
  * {@link NetplayInputMessage} for the libretro/PPSSPP-family equivalent and
  * why this is a separate, differently shaped message rather than a shared
@@ -12,7 +12,7 @@ package com.thorium.emufusion.netplay;
  *
  * <p>Fixed 6-byte frame. Byte 0: message kind (only
  * {@link #KIND_NATIVE_CONTROL} exists today). Byte 1: the
- * {@code lucent_native_control} ordinal (0-21 today). Bytes 2-5: the float
+ * {@code emufusion_native_control} ordinal (0-21 today). Bytes 2-5: the float
  * value, IEEE-754 big-endian. There is deliberately no controller-index
  * field: like {@link NetplayInputMessage}'s port, which controller_index a
  * message's sender should land on is assigned out-of-band per peer (see

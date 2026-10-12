@@ -20,7 +20,7 @@ class PhaseTwoSbomTest(unittest.TestCase):
         self.artifacts = {"artifacts": [{
             "engineId": "ppsspp",
             "sourceCommit": row["source"]["commit"],
-            "fileName": "liblucent_core_ppsspp.so",
+            "fileName": "libemufusion_core_ppsspp.so",
             "sha256": row["build"]["proofArtifactSha256"],
         }]}
 
@@ -33,7 +33,7 @@ class PhaseTwoSbomTest(unittest.TestCase):
 
         packages = {package["name"]: package for package in first["packages"]}
         self.assertIn("PPSSPP source", packages)
-        self.assertIn("liblucent_core_ppsspp.so", packages)
+        self.assertIn("libemufusion_core_ppsspp.so", packages)
         for dependency in self.lock["dependencies"]:
             package = packages[dependency["path"]]
             self.assertEqual(dependency["commit"], package["versionInfo"])
@@ -50,12 +50,12 @@ class PhaseTwoSbomTest(unittest.TestCase):
     def test_ps2_page_variant_is_a_separate_binary_from_same_source(self):
         row = next(r for r in self.registry["engines"] if r["id"] == "armsx2")
         artifact = {"engineId": "armsx2", "sourceCommit": row["source"]["commit"],
-                    "fileName": "liblucent_core_armsx2.so", "sha256": "a" * 64,
+                    "fileName": "libemufusion_core_armsx2.so", "sha256": "a" * 64,
                     "pageSizeVariants": [{"hostPageSize": 16384,
-                        "fileName": "liblucent_core_armsx2_16k.so", "sha256": "b" * 64}]}
+                        "fileName": "libemufusion_core_armsx2_16k.so", "sha256": "b" * 64}]}
         lock = json.loads((ROOT / "engines/armsx2-source-lock.json").read_text())
         result = MODULE.generate(self.registry, {"armsx2": lock}, {"artifacts": [artifact]})
-        variant = next(p for p in result["packages"] if p["name"] == "liblucent_core_armsx2_16k.so")
+        variant = next(p for p in result["packages"] if p["name"] == "libemufusion_core_armsx2_16k.so")
         self.assertEqual(variant["checksums"][0]["checksumValue"], "b" * 64)
         self.assertEqual(variant["versionInfo"], row["source"]["commit"])
         self.assertTrue(any(r["relationshipType"] == "GENERATED_FROM" and
@@ -65,7 +65,7 @@ class PhaseTwoSbomTest(unittest.TestCase):
         row = next(r for r in self.registry['engines'] if r['id'] == 'azahar')
         lock = dict(sourceDateEpoch=1782740760, dependencies=[dict(path='externals/test',
             repository='https://github.com/example/test.git', commit='1' * 40, gitTreeSha1='2' * 40)])
-        artifact = dict(engineId='azahar', fileName='liblucent_core_azahar.so', sha256='3' * 64,
+        artifact = dict(engineId='azahar', fileName='libemufusion_core_azahar.so', sha256='3' * 64,
             sourceCommit=row['source']['commit'])
         result = MODULE.generate(self.registry, {'azahar': lock}, {'artifacts': [artifact]})
         dep = next(p for p in result['packages'] if p['name'] == 'externals/test')
@@ -81,7 +81,7 @@ class PhaseTwoSbomTest(unittest.TestCase):
         artifacts = {"artifacts": [{
             "engineId": "play",
             "sourceCommit": row["source"]["commit"],
-            "fileName": "liblucent_core_play.so",
+            "fileName": "libemufusion_core_play.so",
             "sha256": row["build"]["proofArtifactSha256"],
         }]}
         sbom = MODULE.generate(self.registry, {"play": lock}, artifacts)

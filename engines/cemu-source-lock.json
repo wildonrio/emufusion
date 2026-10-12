@@ -28,7 +28,7 @@
     "header": "unified-android/native/include/lucent_native_adapter.h",
     "abiVersion": 2,
     "entrySymbol": "lucent_native_adapter_entry",
-    "expectedLibraryName": "liblucent_native_adapter_cemu.so",
+    "expectedLibraryName": "libemufusion_native_adapter_cemu.so",
     "renderKind": "LUCENT_NATIVE_RENDER_VULKAN_WINDOW"
   },
   "core": {
@@ -378,7 +378,7 @@
     "note": "Cemu has no savestate or full-machine snapshot API at all, so serialize_size/serialize return 0 and unserialize returns false. describe() reports has_quick_resume = false and Lucent must expose only 'flush normal saves and exit'."
   },
   "artifact": {
-    "fileName": "liblucent_native_adapter_cemu.so",
+    "fileName": "libemufusion_native_adapter_cemu.so",
     "stagedPath": "engines/build/arm64-v8a/liblucent_native_adapter_cemu.so",
     "sha256": "73ac70a94fc25466a91cd15f3f9e5194684642a9048454444387d4d251f1730c",
     "sizeBytes": 23590000,

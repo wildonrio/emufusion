@@ -106,7 +106,7 @@ class Ps2CandidateInputsTest(unittest.TestCase):
         libs = decoded / 'lib/arm64-v8a'
         libs.mkdir(parents=True)
         for name in ('armsx2', 'armsx2_16k'):
-            shutil.copyfile(self.cores / (name + '_libretro.so'), libs / ('liblucent_core_' + name + '.so'))
+            shutil.copyfile(self.cores / (name + '_libretro.so'), libs / ('libemufusion_core_' + name + '.so'))
         registry = dict(engines=[dict(id='other', preserved='untouched'), dict(id='armsx2',
             source=dict(commit='pinned'), shipped=False, gates=dict(runtime=False, distribution=False),
             build=dict(recipe='same recipe', proofArtifactSha256='old', proofArtifactPath='old', reproducible=False))])
@@ -127,7 +127,7 @@ class Ps2CandidateInputsTest(unittest.TestCase):
 
     def test_registry_rejects_unverified_packaged_bytes_without_mutating(self):
         decoded, target, original = self.decoded_fixture()
-        (decoded / 'lib/arm64-v8a/liblucent_core_armsx2_16k.so').write_bytes(b'wrong')
+        (decoded / 'lib/arm64-v8a/libemufusion_core_armsx2_16k.so').write_bytes(b'wrong')
         with self.assertRaisesRegex(ValueError, 'packaged bytes'):
             staging.stage(self.root, self.cores, decoded)
         self.assertEqual(json.loads(target.read_text()), original)

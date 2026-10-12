@@ -20,7 +20,7 @@ class N64HardwareRuntimeEvidenceTest(unittest.TestCase):
     def test_00616_style_gl_rejection_fails_closed(self):
         result = MODULE.audit("""
 I/EmuFusionInWindow: In-window route accepted engine=mupen64plus-next system=n64
-I/EmuFusionNativeHost: core library loaded path=liblucent_core_mupen64plus_next.so
+I/EmuFusionNativeHost: core library loaded path=libemufusion_core_mupen64plus_next.so
 I/EmuFusionNativeHost: retro_load_game begin path=game.z64 needFullpath=0
 E/EmuFusionLibretroCore: mupen64plus: libretro frontend doesn't have OpenGL support
 E/EmuFusionPhase2Engine: Renderer stopped engine=mupen64plus-next system=n64
@@ -34,7 +34,7 @@ E/EmuFusionPhase2Engine: java.lang.IllegalStateException: core rejected game con
     def test_core_load_alone_is_never_a_pass(self):
         result = MODULE.audit("""
 I/EmuFusionInWindow: In-window route accepted engine=mupen64plus-next system=n64
-I/EmuFusionNativeHost: core library loaded path=liblucent_core_mupen64plus_next.so
+I/EmuFusionNativeHost: core library loaded path=libemufusion_core_mupen64plus_next.so
 """)
         self.assertFalse(result.passed)
         self.assertIn("retro_load_game never completed", result.errors)

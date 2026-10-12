@@ -467,7 +467,7 @@ public final class Phase2QualificationCatalog {
         String id = normalize(enabled.optString("id"));
         String commit = enabled.optString("commit").toLowerCase(Locale.US);
         String libraryName = enabled.optString("libraryName");
-        String expectedName = "liblucent_core_" + id.replace('-', '_') + ".so";
+        String expectedName = "libemufusion_core_" + id.replace('-', '_') + ".so";
         String assetRoot = enabled.optString("systemAssetRoot");
         String assetDestination = enabled.optString("systemAssetDestination");
         String assetProbe = enabled.optString("systemAssetProbe");
@@ -561,7 +561,7 @@ public final class Phase2QualificationCatalog {
         if (pageSize != 16384) return null;
         JSONObject variant = find(base.optJSONArray("pageSizeVariants"), "16384", "hostPageSize");
         if (variant == null ||
-                !"liblucent_core_armsx2_16k.so".equals(variant.optString("fileName")) ||
+                !"libemufusion_core_armsx2_16k.so".equals(variant.optString("fileName")) ||
                 !base.optString("sourceCommit").equals(variant.optString("sourceCommit"))) return null;
         Log.i(TAG, "Selected PS2 host-page variant bytes=" + pageSize +
                 " library=" + variant.optString("fileName"));

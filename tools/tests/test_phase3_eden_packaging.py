@@ -49,7 +49,7 @@ SUPERSEDED_COMMIT = "5ec94b19714f75489cdfc62d890d2f94d45514ce"
 # October 11 passes the frontend-provisioned per-GPU driver (Turnip) to Eden.
 # 3.2.34 runs the guest natively (NCE) and flushes saves for process replacement.
 ADAPTER_SHA256 = "b974cd99ba9583628367e0ecce3bd749d470fc962b8d4790717d0ff90c0ec54c"
-ADAPTER_LIBRARY = "liblucent_native_adapter_eden.so"
+ADAPTER_LIBRARY = "libemufusion_native_adapter_eden.so"
 STAGED_ADAPTER = ROOT / "engines" / "build" / "arm64-v8a" / ADAPTER_LIBRARY
 ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-lucent-adapter.cpp"
 MEMORY_TRACKER = (ROOT / "engines" / "build" / "switch-src" / "eden" / "src" /
@@ -501,7 +501,7 @@ class Phase3BuildFlagTest(unittest.TestCase):
     def test_every_phase3_asset_is_staged_only_under_the_flag(self):
         block = BUILD[BUILD.index('if [ "$INCLUDE_PHASE3_EDEN" = 1 ]; then\n    # Phase 3 stages'):]
         block = block[:block.index("\nfi\n")]
-        for staged in ('"$DECODED/lib/arm64-v8a/liblucent_native_adapter_eden.so"',
+        for staged in ('"$DECODED/lib/arm64-v8a/libemufusion_native_adapter_eden.so"',
                        '"$DECODED/assets/phase3-qualification-opt-in.json"',
                        '"$DECODED/assets/phase3-eden-source-lock.json"',
                        '"$DECODED/assets/phase3-engine-artifacts.json"'):
@@ -607,7 +607,7 @@ class Phase3RoutingTest(unittest.TestCase):
         self.assertIn('optIn.optBoolean("autoSelect", true)', CATALOG)
         self.assertIn("readAssetOrNull(context, OPT_IN)", CATALOG)
         self.assertIn("if (optInRaw == null) return result;", CATALOG)
-        self.assertIn('"liblucent_native_adapter_" +', CATALOG)
+        self.assertIn('"libemufusion_native_adapter_" +', CATALOG)
 
 
 class Phase3SystemDirectoryTest(unittest.TestCase):

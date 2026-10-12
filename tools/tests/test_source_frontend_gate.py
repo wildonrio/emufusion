@@ -106,7 +106,7 @@ class SourceFrontendGateTest(unittest.TestCase):
         for name, data in self.payloads.items():
             (source/Path(name).name).write_bytes(data)
             (decoded/name).write_bytes(b'old frontend')
-        (decoded/gate.PREFIX/'liblucent_core_fixture.so').write_bytes(b'unchanged engine')
+        (decoded/gate.PREFIX/'libemufusion_core_fixture.so').write_bytes(b'unchanged engine')
         return source, decoded
 
     def test_stage_full_cohort_and_preserve_engines(self):
@@ -114,7 +114,7 @@ class SourceFrontendGateTest(unittest.TestCase):
         self.assertEqual(staging.stage(source,self.lock,decoded),49)
         for name,data in self.payloads.items():
             self.assertEqual((decoded/name).read_bytes(),data)
-        self.assertEqual((decoded/gate.PREFIX/'liblucent_core_fixture.so').read_bytes(),b'unchanged engine')
+        self.assertEqual((decoded/gate.PREFIX/'libemufusion_core_fixture.so').read_bytes(),b'unchanged engine')
 
     def test_install_generated_kit_and_repeat_without_replacing_it(self):
         source, _ = self.stage_fixture()

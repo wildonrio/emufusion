@@ -52,7 +52,7 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
             self.build,
         )
         self.assertIn("build_scummvm_core.sh", self.build)
-        self.assertIn("liblucent_core_${normalized_core}.so", self.build)
+        self.assertIn("libemufusion_core_${normalized_core}.so", self.build)
         self.assertIn("phase2-engine-artifacts.json", self.build)
         self.assertIn("generate_phase2_sbom.py", self.build)
         self.assertIn("phase2-sbom.spdx.json", self.build)
@@ -117,7 +117,7 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
         self.assertEqual(["apple2"], applewin["libraryRouteSystems"])
         self.assertEqual("user-files", applewin["firmwareProfiles"][0]["mode"])
         self.assertEqual(6, len(applewin["firmwareProfiles"][0]["alternatives"][0]))
-        self.assertIn("liblucent_core_${normalized_core}.so", self.build)
+        self.assertIn("libemufusion_core_${normalized_core}.so", self.build)
         self.assertIn("applewin-firmware-policy.json", self.build)
         puae = next(row for row in self.opt_in["engines"] if row["id"] == "puae")
         profiles = {row["system"]: row for row in puae["firmwareProfiles"]}

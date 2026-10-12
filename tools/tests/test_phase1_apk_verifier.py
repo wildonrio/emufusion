@@ -25,7 +25,7 @@ class Phase1ApkVerifierTest(unittest.TestCase):
         archive_sha = "1" * 64
         core = b"core"
         core_sha = hashlib.sha256(core).hexdigest()
-        library = "liblucent_core_mesen.so"
+        library = "libemufusion_core_mesen.so"
         registry = {"engines": [{
             "id": engine_id, "phase": 1, "shipped": False,
             "source": {"commit": commit, "archiveSha256": archive_sha},

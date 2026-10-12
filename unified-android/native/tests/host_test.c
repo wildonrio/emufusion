@@ -160,7 +160,7 @@ int main(int argc, char **argv) {
             "software core option defaults were not retained");
     CHECK(option_value("puae_kickstart") &&
             strcmp(option_value("puae_kickstart"),
-                    strstr(argv[1], "lucent_core_puae") ? "aros" : "auto") == 0,
+                    strstr(argv[1], "emufusion_core_puae") ? "aros" : "auto") == 0,
             "PUAE curated AROS profile was not applied exactly");
     CHECK(option_value("dolphin_widescreen") &&
             strcmp(option_value("dolphin_widescreen"), "enabled") == 0 &&

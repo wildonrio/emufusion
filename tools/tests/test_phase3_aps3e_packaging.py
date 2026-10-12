@@ -11,8 +11,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 COMMIT = "b5ae1af50d5e2f3b705506e7380a4504e086840b"
-LIBRARY = "liblucent_native_adapter_aps3e.so"
-STAGED = ROOT / "engines" / "build" / "arm64-v8a" / LIBRARY
+LIBRARY = "libemufusion_native_adapter_aps3e.so"
+# Staged under its build name until aPS3e is rebuilt (rename phase C2).
+STAGED = ROOT / "engines" / "build" / "arm64-v8a" / "liblucent_native_adapter_aps3e.so"
 LOCK_PATH = ROOT / "engines" / "aps3e-source-lock.json"
 ADAPTER_PATH = ROOT / "engines" / "patches" / "aps3e-lucent-adapter.cpp"
 TAGGED_POINTER_PATCH = (ROOT / "engines" / "patches" /
@@ -179,9 +180,9 @@ class Aps3eIdentityTest(unittest.TestCase):
             "return reinterpret_cast<lf_queue_item<T>*>(value >> 16);", source)
 
     def test_versioned_java_vm_handoff_precedes_activity_jni_fallback(self):
-        self.assertIn('"lucent_native_adapter_set_java_vm"', HOST_HEADER)
+        self.assertIn('"emufusion_native_adapter_set_java_vm"', HOST_HEADER)
         self.assertIn("EMUFUSION_NATIVE_ADAPTER_JAVA_VM_VERSION 1u", HOST_HEADER)
-        setter = HOST.index("setter_symbol = dlsym")
+        setter = HOST.index("setter_symbol = emufusion_engine_dlsym")
         fallback = HOST.index('on_load_symbol = dlsym(library, "JNI_OnLoad")')
         self.assertLess(setter, fallback)
         self.assertIn("if (!accepted)", HOST[setter:fallback])

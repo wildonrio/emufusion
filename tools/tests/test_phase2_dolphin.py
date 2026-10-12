@@ -347,7 +347,7 @@ class DolphinCompilerProofTests(unittest.TestCase):
         # from DSO finalizers beneath dlclose. Keep only those failed mappings
         # process-resident; completed sessions retain their existing unload.
         host = LIBRETRO_HOST.read_text(encoding="utf-8")
-        self.assertIn('strcmp(name, "liblucent_core_dolphin.so") == 0', host)
+        self.assertIn('strcmp(name, "libemufusion_core_dolphin.so") == 0', host)
         self.assertIn("!is_dolphin_core_path(host->core_path)", host)
         self.assertIn("!host->completed_game_load", host)
         self.assertIn("host->completed_game_load = false;", host)

@@ -55,7 +55,7 @@ class PhaseOneMednafenCandidatesTest(unittest.TestCase):
             with self.subTest(engine=engine_id):
                 self.assertIn(engine_id, selected)
                 self.assertEqual(
-                    "liblucent_core_" + engine_id.replace("-", "_") + ".so",
+                    "libemufusion_core_" + engine_id.replace("-", "_") + ".so",
                     selected[engine_id]["libraryName"],
                 )
                 self.assertEqual(self.rows[engine_id]["source"]["commit"],

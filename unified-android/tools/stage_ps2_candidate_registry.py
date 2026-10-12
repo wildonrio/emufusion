@@ -22,12 +22,12 @@ def stage(root, core_dir, decoded):
     for name, pages in [('armsx2', 4096), ('armsx2_16k', 16384)]:
         source = core_dir / (name + '_libretro.so')
         identity.verify(root, source, pages)
-        packaged = decoded / 'lib/arm64-v8a' / ('liblucent_core_' + name + '.so')
+        packaged = decoded / 'lib/arm64-v8a' / ('libemufusion_core_' + name + '.so')
         if identity.sha256(source) != identity.sha256(packaged):
             raise ValueError('PS2 packaged bytes differ from verified candidate')
     row['build'].update(
         proofArtifactSha256=identity.sha256(core_dir / 'armsx2_libretro.so'),
-        proofArtifactPath='lib/arm64-v8a/liblucent_core_armsx2.so',
+        proofArtifactPath='lib/arm64-v8a/libemufusion_core_armsx2.so',
         reproducible=False,
         notes='Debug qualification inputs: both page-specific compiler receipts match locked sources and packaged bytes. Not normal-staging promotion, independent reproducibility, performance or release acceptance.')
     registry_path.write_text(json.dumps(registry, indent=2) + '\n')

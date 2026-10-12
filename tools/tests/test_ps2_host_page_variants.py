@@ -38,7 +38,7 @@ public class Ps2PageProbe {
   public static void main(String[] a){
     JSONObject base=new JSONObject().with("hostPageSize",4096).with("sourceCommit","abc");
     JSONObject v=new JSONObject().with("hostPageSize",16384).with("sourceCommit","abc")
-      .with("fileName","liblucent_core_armsx2_16k.so");
+      .with("fileName","libemufusion_core_armsx2_16k.so");
     check(selectPageSizeArtifact("armsx2",base,4096)==base);
     check(selectPageSizeArtifact("armsx2",base,16384)==null);
     JSONArray vs=new JSONArray();vs.add(v);base.put("pageSizeVariants",vs);
@@ -47,7 +47,7 @@ public class Ps2PageProbe {
     for(long n:new long[]{-1,0,8192,65536})check(selectPageSizeArtifact("armsx2",base,n)==null);
     vs.add(v);check(selectPageSizeArtifact("armsx2",base,16384)==null);vs.remove(1);
     v.put("fileName","../wrong.so");check(selectPageSizeArtifact("armsx2",base,16384)==null);
-    v.put("fileName","liblucent_core_armsx2_16k.so");v.put("sourceCommit","wrong");
+    v.put("fileName","libemufusion_core_armsx2_16k.so");v.put("sourceCommit","wrong");
     check(selectPageSizeArtifact("armsx2",base,16384)==null);
     check(selectPageSizeArtifact("dolphin",base,16384)==base);
     base.put("hostPageSize",16384);check(selectPageSizeArtifact("armsx2",base,4096)==null);
@@ -67,9 +67,9 @@ public class Ps2PageProbe {
             root=Path(temp)
             registry=root/'registry.json'
             registry.write_text(json.dumps({'engines':[{'id':'armsx2','source':{'commit':'a'*40}}]}))
-            (root/'liblucent_core_armsx2.so').write_bytes(b'4k')
+            (root/'libemufusion_core_armsx2.so').write_bytes(b'4k')
             with self.assertRaises(ValueError): MANIFEST.generate(registry,root)
-            (root/'liblucent_core_armsx2_16k.so').write_bytes(b'16k')
+            (root/'libemufusion_core_armsx2_16k.so').write_bytes(b'16k')
             artifacts=MANIFEST.generate(registry,root)['artifacts']
             self.assertEqual(len(artifacts),1)
             self.assertEqual(artifacts[0]['hostPageSize'],4096)
@@ -78,7 +78,7 @@ public class Ps2PageProbe {
 
     def test_package_gate_rejects_missing_tampered_duplicate_and_mislabelled_variants(self):
         payload=b'16k'; digest=hashlib.sha256(payload).hexdigest()
-        variant={'hostPageSize':16384,'fileName':'liblucent_core_armsx2_16k.so',
+        variant={'hostPageSize':16384,'fileName':'libemufusion_core_armsx2_16k.so',
                  'sourceCommit':'a'*40,'sha256':digest}
         artifact={'hostPageSize':4096,'pageSizeVariants':[variant]}
         buf=io.BytesIO()

@@ -2,6 +2,7 @@
 
 #include "include/emufusion_libretro_host.h"
 #include "include/libretro.h"
+#include "include/emufusion_legacy_engine_abi.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -197,7 +198,7 @@ static bool is_dolphin_core_path(const char *path) {
     if (!path) return false;
     name = strrchr(path, '/');
     name = name ? name + 1 : path;
-    return strcmp(name, "liblucent_core_dolphin.so") == 0;
+    return strcmp(name, "libemufusion_core_dolphin.so") == 0;
 }
 
 static void *load_core_library(const char *path, bool force_fresh) {
@@ -777,7 +778,7 @@ static bool register_core_variable_defaults(
              * 4:3 frontend box makes NES output too wide. */
             const char *profile = find_option_token(options, "Auto", &value_size);
             if (profile) options = profile;
-        } else if (strstr(host->core_path, "lucent_core_armsx2") &&
+        } else if (strstr(host->core_path, "emufusion_core_armsx2") &&
                 strcmp(variable->key, "armsx2_blending_accuracy") == 0) {
             /* Shadow of the Colossus is explicitly tagged by PCSX2 as needing
              * Full blending. EmuFusion has no core-options UI, so retaining the
@@ -789,20 +790,20 @@ static bool register_core_variable_defaults(
             const char *profile = find_option_token(
                     options, "Full", &value_size);
             if (profile) options = profile;
-        } else if (strstr(host->core_path, "lucent_core_melonds_ds") &&
+        } else if (strstr(host->core_path, "emufusion_core_melonds_ds") &&
                 strcmp(variable->key, "melonds_number_of_screen_layouts") == 0) {
             const char *profile = find_option_token(options, "1", &value_size);
             if (profile) options = profile;
-        } else if (strstr(host->core_path, "lucent_core_melonds_ds") &&
+        } else if (strstr(host->core_path, "emufusion_core_melonds_ds") &&
                 strcmp(variable->key, "melonds_screen_layout1") == 0) {
             const char *profile = find_option_token(
                     options, "top-bottom", &value_size);
             if (profile) options = profile;
-        } else if (strstr(host->core_path, "lucent_core_melonds_ds") &&
+        } else if (strstr(host->core_path, "emufusion_core_melonds_ds") &&
                 strcmp(variable->key, "melonds_touch_mode") == 0) {
             const char *profile = find_option_token(options, "touch", &value_size);
             if (profile) options = profile;
-        } else if (strstr(host->core_path, "lucent_core_azahar") &&
+        } else if (strstr(host->core_path, "emufusion_core_azahar") &&
                 strcmp(variable->key, "citra_layout_option") == 0) {
             /* Keep the two native 3DS viewports independently addressable.
              * Azahar's reviewed SideScreen geometry is exactly 720x240 at 1x:
@@ -814,7 +815,7 @@ static bool register_core_variable_defaults(
             const char *profile = find_option_token(
                     options, "side_by_side", &value_size);
             if (profile) options = profile;
-        } else if (strstr(host->core_path, "lucent_core_azahar") &&
+        } else if (strstr(host->core_path, "emufusion_core_azahar") &&
                 strcmp(variable->key, "citra_enable_touch_touchscreen") == 0) {
             const char *profile = find_option_token(options, "enabled", &value_size);
             if (profile) options = profile;
@@ -830,7 +831,7 @@ static bool register_core_variable_defaults(
              * cheats stay enabled; live toggles need the continuous path. */
             const char *profile = find_option_token(options, "enabled", &value_size);
             if (profile) options = profile;
-        } else if (strstr(host->core_path, "lucent_core_puae") &&
+        } else if (strstr(host->core_path, "emufusion_core_puae") &&
                 strcmp(variable->key, "puae_kickstart") == 0) {
             /* PUAE contains its GPL-compatible AROS replacement ROM. Make it
              * the explicit baseline instead of probing for or silently using
@@ -1334,7 +1335,7 @@ static bool resolve_symbol(void *library, const char *name, void *target,
 static void resolve_optional_symbol(void *library, const char *name, void *target) {
     void *symbol;
     dlerror();
-    symbol = dlsym(library, name);
+    symbol = emufusion_engine_dlsym(library, name);
     if (dlerror()) symbol = NULL;
     memcpy(target, &symbol, sizeof(symbol));
 }
@@ -1487,16 +1488,16 @@ emufusion_retro_host *emufusion_retro_create_with_preferences(
     RESOLVE(host, load_game, "retro_load_game");
     RESOLVE(host, load_game_special, "retro_load_game_special");
     RESOLVE(host, unload_game, "retro_unload_game");
-    resolve_optional_symbol(host->library, "retro_lucent_prepare_exit_autosave",
+    resolve_optional_symbol(host->library, "retro_emufusion_prepare_exit_autosave",
                             &host->prepare_exit);
     RESOLVE(host, get_region, "retro_get_region");
     RESOLVE(host, get_memory_data, "retro_get_memory_data");
     RESOLVE(host, get_memory_size, "retro_get_memory_size");
     resolve_optional_symbol(
             host->library,
-            "retro_lucent_mupen_current_run_has_vi_origin_change",
+            "retro_emufusion_mupen_current_run_has_vi_origin_change",
             &host->mupen_vi_origin_boundary);
-    resolve_optional_symbol(host->library, "retro_lucent_get_hw_active_rect",
+    resolve_optional_symbol(host->library, "retro_emufusion_get_hw_active_rect",
                             &host->hw_active_rect);
     if ((host->hw_options.source_timeline_policy &
                     EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_VI_ORIGIN) &&
@@ -1561,7 +1562,7 @@ emufusion_retro_host *emufusion_retro_create(const char *core_path,
 
 bool emufusion_retro_supply_android_java_vm(emufusion_retro_host *host, void *java_vm,
                                          char *error, size_t error_size) {
-    static const char play_setter_name[] = "lucent_set_android_java_vm";
+    static const char play_setter_name[] = "emufusion_set_android_java_vm";
     fn_set_android_java_vm setter = NULL;
     void *symbol;
     lock_host();
@@ -1570,7 +1571,7 @@ bool emufusion_retro_supply_android_java_vm(emufusion_retro_host *host, void *ja
         RETURN_UNLOCKED(false);
     }
     dlerror();
-    symbol = dlsym(host->library, play_setter_name);
+    symbol = emufusion_engine_dlsym(host->library, play_setter_name);
     if (!symbol) {
         /* This hook is optional and deliberately invisible to normal cores. */
 #if defined(__ANDROID__)
@@ -1597,7 +1598,7 @@ bool emufusion_retro_supply_android_java_vm(emufusion_retro_host *host, void *ja
 bool emufusion_retro_supply_output_size(emufusion_retro_host *host,
                                      unsigned width, unsigned height,
                                      char *error, size_t error_size) {
-    static const char setter_name[] = "lucent_set_output_size";
+    static const char setter_name[] = "emufusion_set_output_size";
     fn_set_output_size setter = NULL;
     void *symbol;
     lock_host();
@@ -1606,7 +1607,7 @@ bool emufusion_retro_supply_output_size(emufusion_retro_host *host,
         RETURN_UNLOCKED(false);
     }
     dlerror();
-    symbol = dlsym(host->library, setter_name);
+    symbol = emufusion_engine_dlsym(host->library, setter_name);
     if (!symbol) RETURN_UNLOCKED(true);
     memcpy(&setter, &symbol, sizeof(setter));
     setter(width, height);
@@ -1621,7 +1622,7 @@ bool emufusion_retro_supply_frontend_framebuffer(emufusion_retro_host *host,
                                               unsigned framebuffer,
                                               char *error,
                                               size_t error_size) {
-    static const char setter_name[] = "lucent_set_frontend_framebuffer";
+    static const char setter_name[] = "emufusion_set_frontend_framebuffer";
     fn_set_frontend_framebuffer setter = NULL;
     void *symbol;
     lock_host();
@@ -1630,7 +1631,7 @@ bool emufusion_retro_supply_frontend_framebuffer(emufusion_retro_host *host,
         RETURN_UNLOCKED(false);
     }
     dlerror();
-    symbol = dlsym(host->library, setter_name);
+    symbol = emufusion_engine_dlsym(host->library, setter_name);
     if (!symbol) RETURN_UNLOCKED(true);
     memcpy(&setter, &symbol, sizeof(setter));
     setter(framebuffer);

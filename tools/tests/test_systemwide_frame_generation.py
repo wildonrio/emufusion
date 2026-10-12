@@ -1300,7 +1300,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("SOURCE_TIMELINE_DEFAULT", session)
         self.assertIn("mupen_vi_origin_boundary", native)
         self.assertIn(
-            '"retro_lucent_mupen_current_run_has_vi_origin_change"', native
+            '"retro_emufusion_mupen_current_run_has_vi_origin_change"', native
         )
         self.assertIn("!active_host->mupen_vi_origin_boundary()", native)
         self.assertNotIn('"mupen64plus-BufferSwapMode"', native)
