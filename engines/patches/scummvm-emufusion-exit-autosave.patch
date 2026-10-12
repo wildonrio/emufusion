@@ -4,7 +4,7 @@
  	void saveAutosaveIfEnabled();
  
  	/**
-+	 * Save a synchronous, non-interactive autosave before Lucent exits.
++	 * Save a synchronous, non-interactive autosave before EmuFusion exits.
 +	 *
 +	 * Unlike periodic autosaves this ignores the configured autosave interval,
 +	 * but it still refuses to save when the engine cannot safely save at the
@@ -14,7 +14,7 @@
 +	 * @param slot Receives the engine-specific autosave slot on success.
 +	 * @return true only after the engine reports that the save completed.
 +	 */
-+	bool saveLucentExitAutosave(int &slot);
++	bool saveEmuFusionExitAutosave(int &slot);
 +
 +	/**
  	 * Indicate whether an autosave can currently be done.
@@ -27,7 +27,7 @@
  	_autoSaving = false;
  }
 +
-+bool Engine::saveLucentExitAutosave(int &slot) {
++bool Engine::saveEmuFusionExitAutosave(int &slot) {
 +	slot = -1;
 +	if (_autoSaving)
 +		return false;
@@ -45,7 +45,7 @@
 +
 +	_autoSaving = true;
 +	const Common::Error result = saveGameState(
-+		autoSaveSlot, Common::String("Lucent Quick Resume"), true);
++		autoSaveSlot, Common::String("EmuFusion Quick Resume"), true);
 +	_autoSaving = false;
 +	_lastAutosaveTime = _system->getMillis();
 +
@@ -66,7 +66,7 @@
  #include "gui/message.h"
  
 +#ifdef __LIBRETRO__
-+#include "backends/platform/libretro/include/libretro-lucent.h"
++#include "backends/platform/libretro/include/libretro-emufusion.h"
 +#endif
 +
  DefaultEventManager::DefaultEventManager(Common::EventSource *boss) :
@@ -79,13 +79,13 @@
 +#ifdef __LIBRETRO__
 +	// The request originates on the frontend thread, but engine save methods
 +	// must run here on the emulation thread. A failed save consumes the quit
-+	// event, leaving the game alive so Lucent can report the failure.
++	// event, leaving the game alive so EmuFusion can report the failure.
 +	if (event.type == Common::EVENT_QUIT &&
-+			(lucent_scummvm_exit_autosave_requested() || lucent_scummvm_exit_autosave_canceled())) {
++			(emufusion_scummvm_exit_autosave_requested() || emufusion_scummvm_exit_autosave_canceled())) {
 +		int slot = -1;
-+		const bool saved = !lucent_scummvm_exit_autosave_canceled() &&
-+			g_engine && g_engine->saveLucentExitAutosave(slot);
-+		lucent_scummvm_exit_autosave_completed(saved, slot);
++		const bool saved = !emufusion_scummvm_exit_autosave_canceled() &&
++			g_engine && g_engine->saveEmuFusionExitAutosave(slot);
++		emufusion_scummvm_exit_autosave_completed(saved, slot);
 +		if (!saved)
 +			return false;
 +	}
@@ -100,7 +100,7 @@
  #include "backends/platform/libretro/include/libretro-core-options.h"
  #include "backends/platform/libretro/include/libretro-os.h"
  #include "backends/platform/libretro/include/libretro-mapper.h"
-+#include "backends/platform/libretro/include/libretro-lucent.h"
++#include "backends/platform/libretro/include/libretro-emufusion.h"
  
  static struct retro_game_info game_buf;
  static struct retro_game_info *game_buf_ptr;
@@ -108,18 +108,18 @@
  static bool input_bitmask_supported = false;
  static bool updating_variables = false;
  
-+enum LucentExitAutosaveStatus {
-+	LUCENT_EXIT_AUTOSAVE_IDLE = 0,
-+	LUCENT_EXIT_AUTOSAVE_PENDING,
-+	LUCENT_EXIT_AUTOSAVE_SUCCEEDED,
-+	LUCENT_EXIT_AUTOSAVE_FAILED,
-+	LUCENT_EXIT_AUTOSAVE_CANCELED
++enum EmuFusionExitAutosaveStatus {
++	EMUFUSION_EXIT_AUTOSAVE_IDLE = 0,
++	EMUFUSION_EXIT_AUTOSAVE_PENDING,
++	EMUFUSION_EXIT_AUTOSAVE_SUCCEEDED,
++	EMUFUSION_EXIT_AUTOSAVE_FAILED,
++	EMUFUSION_EXIT_AUTOSAVE_CANCELED
 +};
 +
-+static volatile LucentExitAutosaveStatus lucent_exit_autosave_status = LUCENT_EXIT_AUTOSAVE_IDLE;
-+static char lucent_resume_marker_path[1024] = {0};
++static volatile EmuFusionExitAutosaveStatus emufusion_exit_autosave_status = EMUFUSION_EXIT_AUTOSAVE_IDLE;
++static char emufusion_resume_marker_path[1024] = {0};
 +
-+static uint64 lucent_fnv1a(const char *value) {
++static uint64 emufusion_fnv1a(const char *value) {
 +	uint64 hash = UINT64_C(14695981039346656037);
 +	for (const unsigned char *cursor = (const unsigned char *)value; cursor && *cursor; ++cursor) {
 +		hash ^= *cursor;
@@ -128,20 +128,20 @@
 +	return hash;
 +}
 +
-+static void lucent_set_resume_marker_path(const char *content_path) {
-+	lucent_resume_marker_path[0] = '\0';
++static void emufusion_set_resume_marker_path(const char *content_path) {
++	emufusion_resume_marker_path[0] = '\0';
 +	const char *save_dir = retro_get_save_dir();
 +	if (!save_dir || !*save_dir || !content_path || !*content_path)
 +		return;
-+	snprintf(lucent_resume_marker_path, sizeof(lucent_resume_marker_path),
-+		"%s/.lucent-scummvm-%016llx.resume", save_dir,
-+		(unsigned long long)lucent_fnv1a(content_path));
++	snprintf(emufusion_resume_marker_path, sizeof(emufusion_resume_marker_path),
++		"%s/.emufusion-scummvm-%016llx.resume", save_dir,
++		(unsigned long long)emufusion_fnv1a(content_path));
 +}
 +
-+static int lucent_read_resume_slot(void) {
-+	if (!lucent_resume_marker_path[0])
++static int emufusion_read_resume_slot(void) {
++	if (!emufusion_resume_marker_path[0])
 +		return -1;
-+	RFILE *marker = filestream_open(lucent_resume_marker_path,
++	RFILE *marker = filestream_open(emufusion_resume_marker_path,
 +		RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
 +	if (!marker)
 +		return -1;
@@ -155,10 +155,10 @@
 +	return end != value && slot >= 0 && slot <= 999 ? (int)slot : -1;
 +}
 +
-+static bool lucent_write_resume_slot(int slot) {
-+	if (!lucent_resume_marker_path[0] || slot < 0 || slot > 999)
++static bool emufusion_write_resume_slot(int slot) {
++	if (!emufusion_resume_marker_path[0] || slot < 0 || slot > 999)
 +		return false;
-+	RFILE *marker = filestream_open(lucent_resume_marker_path,
++	RFILE *marker = filestream_open(emufusion_resume_marker_path,
 +		RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE);
 +	if (!marker)
 +		return false;
@@ -170,32 +170,32 @@
 +	return count == length;
 +}
 +
-+bool lucent_scummvm_exit_autosave_requested(void) {
-+	return lucent_exit_autosave_status == LUCENT_EXIT_AUTOSAVE_PENDING;
++bool emufusion_scummvm_exit_autosave_requested(void) {
++	return emufusion_exit_autosave_status == EMUFUSION_EXIT_AUTOSAVE_PENDING;
 +}
 +
-+bool lucent_scummvm_exit_autosave_canceled(void) {
-+	return lucent_exit_autosave_status == LUCENT_EXIT_AUTOSAVE_CANCELED;
++bool emufusion_scummvm_exit_autosave_canceled(void) {
++	return emufusion_exit_autosave_status == EMUFUSION_EXIT_AUTOSAVE_CANCELED;
 +}
 +
-+void lucent_scummvm_exit_autosave_completed(bool success, int slot) {
-+	if (success && !lucent_write_resume_slot(slot))
++void emufusion_scummvm_exit_autosave_completed(bool success, int slot) {
++	if (success && !emufusion_write_resume_slot(slot))
 +		success = false;
-+	lucent_exit_autosave_status = success ? LUCENT_EXIT_AUTOSAVE_SUCCEEDED : LUCENT_EXIT_AUTOSAVE_FAILED;
++	emufusion_exit_autosave_status = success ? EMUFUSION_EXIT_AUTOSAVE_SUCCEEDED : EMUFUSION_EXIT_AUTOSAVE_FAILED;
 +}
 +
-+bool retro_lucent_prepare_exit_autosave(void) {
++bool retro_emufusion_prepare_exit_autosave(void) {
 +	if (!retro_emu_thread_started() || retro_emu_thread_exited())
 +		return false;
-+	lucent_exit_autosave_status = LUCENT_EXIT_AUTOSAVE_PENDING;
++	emufusion_exit_autosave_status = EMUFUSION_EXIT_AUTOSAVE_PENDING;
 +	LIBRETRO_G_SYSTEM->requestQuit();
 +	for (int frames = 0; frames < 120 &&
-+			lucent_exit_autosave_status == LUCENT_EXIT_AUTOSAVE_PENDING &&
++			emufusion_exit_autosave_status == EMUFUSION_EXIT_AUTOSAVE_PENDING &&
 +			!retro_emu_thread_exited(); ++frames)
 +		retro_switch_to_emu_thread();
-+	if (lucent_exit_autosave_status == LUCENT_EXIT_AUTOSAVE_PENDING)
-+		lucent_exit_autosave_status = LUCENT_EXIT_AUTOSAVE_CANCELED;
-+	return lucent_exit_autosave_status == LUCENT_EXIT_AUTOSAVE_SUCCEEDED;
++	if (emufusion_exit_autosave_status == EMUFUSION_EXIT_AUTOSAVE_PENDING)
++		emufusion_exit_autosave_status = EMUFUSION_EXIT_AUTOSAVE_CANCELED;
++	return emufusion_exit_autosave_status == EMUFUSION_EXIT_AUTOSAVE_SUCCEEDED;
 +}
 +
  #ifdef USE_OPENGL
@@ -205,8 +205,8 @@
  #endif
  
  	if (game) {
-+		lucent_exit_autosave_status = LUCENT_EXIT_AUTOSAVE_IDLE;
-+		lucent_set_resume_marker_path(game->path);
++		emufusion_exit_autosave_status = EMUFUSION_EXIT_AUTOSAVE_IDLE;
++		emufusion_set_resume_marker_path(game->path);
  		game_buf_ptr = &game_buf;
  		memcpy(game_buf_ptr, game, sizeof(retro_game_info));
  		// Retrieve the game path.
@@ -214,7 +214,7 @@
  			test_game_status = LIBRETRO_G_SYSTEM->testGame(parent_dir.getPath().toString().c_str(), true);
  		}
  
-+		const int lucent_resume_slot = lucent_read_resume_slot();
++		const int emufusion_resume_slot = emufusion_read_resume_slot();
 +
  		// Preliminary game scan results
  		switch (test_game_status) {
@@ -222,16 +222,16 @@
 -			sprintf(buffer, "-p \"%s\" %s", parent_dir.getPath().toString().c_str(), target_id);
 +			snprintf(buffer, sizeof(buffer), "-p \"%s\"%s%s %s",
 +				parent_dir.getPath().toString().c_str(),
-+				lucent_resume_slot >= 0 ? " -x " : "",
-+				lucent_resume_slot >= 0 ? Common::String::format("%d", lucent_resume_slot).c_str() : "",
++				emufusion_resume_slot >= 0 ? " -x " : "",
++				emufusion_resume_slot >= 0 ? Common::String::format("%d", emufusion_resume_slot).c_str() : "",
 +				target_id);
  			retro_log_cb(RETRO_LOG_DEBUG, "[scummvm] launch via target id and game dir\n");
  			break;
  		case TEST_GAME_OK_TARGET_FOUND:
 -			sprintf(buffer, "%s", target_id);
 +			snprintf(buffer, sizeof(buffer), "%s%s%s",
-+				lucent_resume_slot >= 0 ? "-x " : "",
-+				lucent_resume_slot >= 0 ? Common::String::format("%d ", lucent_resume_slot).c_str() : "",
++				emufusion_resume_slot >= 0 ? "-x " : "",
++				emufusion_resume_slot >= 0 ? Common::String::format("%d ", emufusion_resume_slot).c_str() : "",
 +				target_id);
  			retro_log_cb(RETRO_LOG_DEBUG, "[scummvm] launch via target id and scummvm.ini\n");
  			break;
@@ -239,22 +239,22 @@
 -			sprintf(buffer, "-p \"%s\" --auto-detect", parent_dir.getPath().toString().c_str());
 +			snprintf(buffer, sizeof(buffer), "-p \"%s\"%s%s --auto-detect",
 +				parent_dir.getPath().toString().c_str(),
-+				lucent_resume_slot >= 0 ? " -x " : "",
-+				lucent_resume_slot >= 0 ? Common::String::format("%d", lucent_resume_slot).c_str() : "");
++				emufusion_resume_slot >= 0 ? " -x " : "",
++				emufusion_resume_slot >= 0 ? Common::String::format("%d", emufusion_resume_slot).c_str() : "");
  			retro_log_cb(RETRO_LOG_DEBUG, "[scummvm] launch via autodetect\n");
  			break;
  		case TEST_GAME_KO_MULTIPLE_RESULTS:
 --- /dev/null
-+++ b/backends/platform/libretro/include/libretro-lucent.h
++++ b/backends/platform/libretro/include/libretro-emufusion.h
 @@ -0,0 +1,30 @@
 +/* ScummVM - Graphic Adventure Engine
 + *
-+ * Lucent lifecycle bridge for the in-process libretro backend.
++ * EmuFusion lifecycle bridge for the in-process libretro backend.
 + * This file is distributed under the same GPL-3.0-or-later terms as ScummVM.
 + */
 +
-+#ifndef BACKENDS_LIBRETRO_LUCENT_H
-+#define BACKENDS_LIBRETRO_LUCENT_H
++#ifndef BACKENDS_LIBRETRO_EMUFUSION_H
++#define BACKENDS_LIBRETRO_EMUFUSION_H
 +
 +#ifdef __cplusplus
 +extern "C" {
@@ -265,12 +265,12 @@
 + * Returns false without unloading the game when saving is unsupported or
 + * unsafe at the current point.
 + */
-+bool retro_lucent_prepare_exit_autosave(void);
++bool retro_emufusion_prepare_exit_autosave(void);
 +
-+/** Internal event-manager bridge; not called by the Lucent host. */
-+bool lucent_scummvm_exit_autosave_requested(void);
-+bool lucent_scummvm_exit_autosave_canceled(void);
-+void lucent_scummvm_exit_autosave_completed(bool success, int slot);
++/** Internal event-manager bridge; not called by the EmuFusion host. */
++bool emufusion_scummvm_exit_autosave_requested(void);
++bool emufusion_scummvm_exit_autosave_canceled(void);
++void emufusion_scummvm_exit_autosave_completed(bool success, int slot);
 +
 +#ifdef __cplusplus
 +}

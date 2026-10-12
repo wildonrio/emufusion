@@ -3,7 +3,7 @@
 Date: 2026-08-07
 
 October 4 normal integration: staged core is now
-`5a25b2987d95711a7e2462438babf6b2b494917be2988a1a18fd55eab7090464`.
+`e20094b23d4e2dac1551a7518e4fa6becc2686326f887b1b82a1bd6f993dec8b`.
 The ordinary source recipe's 16 KiB shared/module link flags and path maps
 reproduce the exact runtime-tested artifact in a fresh separate build root.
 The registry proof was updated and the previous `938709bb` artifact backed up.

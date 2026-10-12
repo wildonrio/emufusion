@@ -110,7 +110,7 @@ class Phase2RegistryTest(unittest.TestCase):
         self.assertTrue(any("registry and dependency lock disagree" in error
                             for error in self.validate_copy(data)))
 
-    def test_ppsspp_fixture_is_lucent_cc0_source_only(self):
+    def test_ppsspp_fixture_is_emufusion_cc0_source_only(self):
         row = self.row(self.data, "ppsspp")
         self.assertEqual(MODULE.PPSSPP_FIXTURE_PATH,
                          row["legalTestContent"]["sourcePath"])
@@ -161,7 +161,7 @@ class Phase2RegistryTest(unittest.TestCase):
         jaguar["build"].pop("proofArtifactSha256")
         row = self.row(data, "ppsspp")
         row["build"]["proofArtifactPath"] = "artifacts/ppsspp.so"
-        payload = b"lucent-ppsspp-proof\0" * 1000
+        payload = b"emufusion-ppsspp-proof\0" * 1000
         row["build"]["proofArtifactSha256"] = hashlib.sha256(payload).hexdigest()
         with TemporaryDirectory() as directory:
             artifact_root = Path(directory)

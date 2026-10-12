@@ -28,13 +28,13 @@ This is compile verification only, not save-state, device, performance, or
 reproducibility qualification. In particular, `build.reproducible` remains
 false until clean independent builds produce matching normalized artifacts.
 The unified build has an explicit
-`LUCENT_INCLUDE_EXPERIMENTAL_CORES=1` qualification flag; release builds leave
-it unset. Qualification filenames are `liblucent_core_mesen.so` and
-`liblucent_core_mgba.so`. Such builds also carry the explicit
+`EMUFUSION_INCLUDE_EXPERIMENTAL_CORES=1` qualification flag; release builds leave
+it unset. Qualification filenames are `libemufusion_core_mesen.so` and
+`libemufusion_core_mgba.so`. Such builds also carry the explicit
 `engine-qualification-opt-in.json` asset. Its `qualificationOnly` field keeps
 the cores visibly outside the release gate, while `autoSelect` defaults to
 false. A hardware-test artifact may additionally set
-`LUCENT_AUTOSELECT_EXPERIMENTAL_CORES=1`; this is rejected unless experimental
+`EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES=1`; this is rejected unless experimental
 cores are also explicitly included, and it never affects a default build.
 
 The independent JNI host lives in `unified-android/native`. It implements the
@@ -104,4 +104,4 @@ notices, an independent clean-build comparison, physical-device performance,
 and a legal Neo Geo CD/CDZ main BIOS path are still required. The build recipe
 will reuse only the exact emulator-qualified binary after matching the pinned
 source archive, upstream Makefile, NDK metadata, recipe identity, and core
-SHA-256; `LUCENT_FORCE_REBUILD=1` opts into the expensive clean rebuild.
+SHA-256; `EMUFUSION_FORCE_REBUILD=1` opts into the expensive clean rebuild.

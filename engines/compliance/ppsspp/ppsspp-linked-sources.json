@@ -1,7 +1,7 @@
 {
   "artifact": {
     "path": "ppsspp_libretro.so",
-    "sha256": "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d"
+    "sha256": "43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c"
   },
   "compiledSourceFileCount": 967,
   "compiledSources": [
@@ -4768,7 +4768,7 @@
     {
       "component": "ppsspp",
       "path": "libretro/LibretroGraphicsContext.cpp",
-      "sha256": "43f9f3d39c7475ce2bd9548dd417d9295f271e03dc8ec294b06e5242ca1ab31b"
+      "sha256": "cc6e6ebd46ff79046c4611855250bbf9a5394480b213f42c36a49829089ab8af"
     },
     {
       "component": "ppsspp",
@@ -4993,7 +4993,7 @@
     ],
     "recipePatch": {
       "path": "engines/patches/ppsspp-pin-version-without-git.patch",
-      "sha256": "a4029bd6a82ff26f8b6d8c3e7d519342fbbae685c0d266cc77045393b2287e99"
+      "sha256": "2dda48359013e753f16d111290adc5ea6645c76c4e00b68cdd690949356d1625"
     },
     "toolchain": {
       "androidAbi": "arm64-v8a",
@@ -5344,7 +5344,7 @@
       "androidApi": 21,
       "gplEnabled": false,
       "nonfreeEnabled": false,
-      "notes": "These are exact upstream static-archive build identities; the final PPSSPP shared object is linked and gated with Lucent's pinned API 23/NDK 27 toolchain.",
+      "notes": "These are exact upstream static-archive build identities; the final PPSSPP shared object is linked and gated with EmuFusion's pinned API 23/NDK 27 toolchain.",
       "sha256WithTrailingNewline": "0446f0f71d2552a237a302791bfe54c20c62b128415bd8a9ccfb04bf8f8d1253",
       "upstreamBuilderNdk": "29.0.14206865",
       "version3Enabled": false

@@ -1,4 +1,4 @@
-// Package protocol defines the JSON message contract between a Lucent
+// Package protocol defines the JSON message contract between a EmuFusion
 // device and the multiplayer backend over one persistent WebSocket per
 // device. The backend only ever carries presence, roster, scheduling, and
 // WebRTC signaling data here -- game input/video/audio always travels

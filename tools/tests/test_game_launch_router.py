@@ -88,7 +88,7 @@ class GameLaunchRouterTest(unittest.TestCase):
         self.assertIn("com.thorium.preview/org.pegasus_frontend.android.MainActivity", BRIDGE)
         self.assertNotIn("startActivity(", BRIDGE)
         self.assertIn("InProcessGameLaunchCommand;->tryLaunch", PATCHER)
-        self.assertIn(":lucent_normal_am_launch", PATCHER)
+        self.assertIn(":emufusion_normal_am_launch", PATCHER)
         self.assertIn("WeakReference<Activity>", APPLICATION)
         self.assertIn("activity.isDestroyed()", APPLICATION)
         self.assertNotIn("GameLaunchReceiver", BUILD)

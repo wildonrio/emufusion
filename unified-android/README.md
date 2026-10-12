@@ -23,7 +23,7 @@ the internal engines for all 20 systems in the portability matrix, including
 Switch, Wii U and PS3. It sets the inclusion/normal-library flags together and
 rejects a conflicting flag rather than silently producing a reduced APK.
 It reuses staged cores by default; their existing source, hash and asset checks
-still run. Set the relevant `LUCENT_REUSE_...` flag to `0` to rebuild cores.
+still run. Set the relevant `EMUFUSION_REUSE_...` flag to `0` to rebuild cores.
 Optional frame-generation flags are not changed by this profile. Match those
 flags to the intended deployment before replacing an existing RIFE build;
 the default emulator-only profile is not feature-equivalent to those builds.
@@ -46,7 +46,7 @@ its performance qualification is pending; the existing PS2 identity gate rejects
 the older normal staging rather than relabeling it with the current source lock.
 
 For a full qualification build using an unpromoted PS2 candidate, set
-`LUCENT_ARMSX2_QUALIFICATION_DIR` to an absolute directory containing both
+`EMUFUSION_ARMSX2_QUALIFICATION_DIR` to an absolute directory containing both
 `armsx2_libretro.so` and `armsx2_16k_libretro.so` and their original `.so.build.json`
 receipts. This requires debug signing and Phase 2 reuse. Both page-specific source
 identities are checked before dependency/build work and again before packaging.
@@ -112,13 +112,13 @@ Pinned development builds for mGBA and Mesen are available through
 `../engines/build_core.sh`; their outputs are neither committed nor packaged.
 
 For an emulator-only qualification APK, set
-`LUCENT_INCLUDE_EXPERIMENTAL_CORES=1`. This compiles the pinned, source-audited
+`EMUFUSION_INCLUDE_EXPERIMENTAL_CORES=1`. This compiles the pinned, source-audited
 Mesen, Mesen-S, SameBoy, mGBA, Gearsystem, SwanStation, melonDS DS, Fuse, and
 MAME candidates. The flag is off by default, qualification cores are absent
 from the release APK, and they are not selected automatically. Gearcoleco and
 its ColecoVision BIOS are deliberately excluded because the pinned upstream
 source/build path does not reproduce the candidate BIOS byte-for-byte. Add
-`LUCENT_AUTOSELECT_EXPERIMENTAL_CORES=1` only for an explicitly labeled
+`EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES=1` only for an explicitly labeled
 qualification build; that second flag is rejected unless the first is also
 present and can never affect a default build.
 
@@ -168,12 +168,12 @@ opt-in, artifact identity, core, and runtime-asset payload. The ordinary engine
 catalog never auto-selects it.
 
 Build that isolated multi-core package with
-`LUCENT_INCLUDE_PHASE2_PPSSPP=1 LUCENT_REUSE_PHASE2_PPSSPP=1 ./build.sh` after
+`EMUFUSION_INCLUDE_PHASE2_PPSSPP=1 EMUFUSION_REUSE_PHASE2_PPSSPP=1 ./build.sh` after
 all six pinned Phase 2 artifacts exist. It packages PPSSPP, Play!, ARMSX2,
 Flycast, Azahar, and Virtual Jaguar; each binary remains explicitly
 qualification-only and non-auto-selected. It produces
-`build/lucent-3.2.15-phase2-qualification.apk`, verifies the signed APK payload,
-and leaves the normal `lucent-3.2.15.apk` untouched. The qualification session
+`build/emufusion-3.2.15-phase2-qualification.apk`, verifies the signed APK payload,
+and leaves the normal `emufusion-3.2.15.apk` untouched. The qualification session
 now includes PCM audio, durable save RAM, and Quick Resume keyed by the ROM and
 their exact source/artifact locks. This is not a production package: checkpoint history,
 100-cycle/process-death/version-migration state QA, FFmpeg, Vulkan, legal

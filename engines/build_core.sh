@@ -8,10 +8,10 @@ NDK_DIR=${ANDROID_NDK_ROOT:-$SDK_DIR/ndk/$NDK_VERSION}
 CMAKE_VERSION=${CMAKE_VERSION:-3.31.6}
 CMAKE=${CMAKE:-$SDK_DIR/cmake/$CMAKE_VERSION/bin/cmake}
 NINJA=${NINJA:-$SDK_DIR/cmake/$CMAKE_VERSION/bin/ninja}
-API=${LUCENT_NATIVE_API:-23}
-ABI=${LUCENT_NATIVE_ABI:-arm64-v8a}
+API=${EMUFUSION_NATIVE_API:-23}
+ABI=${EMUFUSION_NATIVE_ABI:-arm64-v8a}
 ENGINE=${1:-}
-BUILD_ROOT=${LUCENT_ENGINE_BUILD_DIR:-$ROOT/engines/build}
+BUILD_ROOT=${EMUFUSION_ENGINE_BUILD_DIR:-$ROOT/engines/build}
 SOURCE_DIR="$BUILD_ROOT/sources"
 OUTPUT_DIR="$BUILD_ROOT/$ABI"
 mkdir -p "$SOURCE_DIR" "$OUTPUT_DIR"
@@ -103,7 +103,7 @@ fetch_file() {
 # PPSSPP's FFmpeg gitlink contains the complete FFmpeg source tree plus more
 # than a gigabyte of unrelated, already-built libraries for other platforms.
 # Fetch the exact git object while materializing only the corresponding source,
-# build controls, and Android ARM64 inputs used by Lucent.  The SHA-256 closure
+# build controls, and Android ARM64 inputs used by EmuFusion.  The SHA-256 closure
 # digest covers every checked-out path and byte, not merely the five archives
 # consumed by CMake.
 fetch_ppsspp_ffmpeg_fresh() {
@@ -221,14 +221,14 @@ build_mednafen_software_core() {
         CXX="$core_toolchain/$core_target$API-clang++" \
         LD="$core_toolchain/$core_target$API-clang++"
     if [ "$link_mode" = no-librt ]; then
-        /usr/bin/make -C "$core_stage" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$core_stage" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix CC="$core_toolchain/$core_target$API-clang" \
             CXX="$core_toolchain/$core_target$API-clang++" \
             LD="$core_toolchain/$core_target$API-clang++" \
             GIT_VERSION="$core_commit" \
             LDFLAGS="-fPIC -shared -Wl,--no-undefined -Wl,--version-script=link.T -Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
     else
-        /usr/bin/make -C "$core_stage" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$core_stage" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix CC="$core_toolchain/$core_target$API-clang" \
             CXX="$core_toolchain/$core_target$API-clang++" \
             LD="$core_toolchain/$core_target$API-clang++" \
@@ -241,7 +241,7 @@ build_mednafen_software_core() {
 
 case "$ENGINE" in
     applewin)
-        # AppleWin's libretro frontend is technically suitable for Lucent's
+        # AppleWin's libretro frontend is technically suitable for EmuFusion's
         # in-process software host.  The pinned GitHub archive preserves a
         # symlink into an SDL-only ImGui submodule as a dangling link, even
         # though CMake's common resource target still consumes that font.  Pin
@@ -272,7 +272,7 @@ case "$ENGINE" in
             -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
             -DCMAKE_MODULE_LINKER_FLAGS="-Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
         SOURCE_DATE_EPOCH=0 "$CMAKE" --build "$stage" --target applewin_libretro \
-            -j"${LUCENT_BUILD_JOBS:-4}"
+            -j"${EMUFUSION_BUILD_JOBS:-4}"
         cp "$stage/source/frontends/libretro/applewin_libretro.so" \
             "$OUTPUT_DIR/applewin_libretro.so"
         cp "$source/LICENSE" "$OUTPUT_DIR/applewin-LICENSE.txt"
@@ -303,7 +303,7 @@ case "$ENGINE" in
             AR="$toolchain/llvm-ar" LD="$toolchain/$target$API-clang++" \
             TARGET=puae_libretro.so
         SOURCE_DATE_EPOCH=0 /usr/bin/make -C "$stage" \
-            -j"${LUCENT_BUILD_JOBS:-4}" \
+            -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" AR="$toolchain/llvm-ar" \
             LD="$toolchain/$target$API-clang++" TARGET=puae_libretro.so \
@@ -371,7 +371,7 @@ case "$ENGINE" in
         /usr/bin/make -C "$staged_source" clean \
             platform=unix CC="$toolchain/$target$API-clang" \
             LD="$toolchain/$target$API-clang"
-        /usr/bin/make -C "$staged_source" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$staged_source" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix CC="$toolchain/$target$API-clang" \
             LD="$toolchain/$target$API-clang" GIT_VERSION="$commit" \
             LDFLAGS="-shared -Wl,--no-undefined -Wl,--version-script=link.T -Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
@@ -398,7 +398,7 @@ case "$ENGINE" in
             NDK_APPLICATION_MK="$staged_source/jni/Application.mk" \
             APP_ABI="$ABI" APP_PLATFORM="android-$API" \
             LDFLAGS="-Wl,--build-id=none" \
-            -j"${LUCENT_BUILD_JOBS:-4}"
+            -j"${EMUFUSION_BUILD_JOBS:-4}"
         cp "$staged_source/libs/$ABI/libretro.so" \
             "$OUTPUT_DIR/dosbox-pure_libretro.so"
         cp "$staged_source/LICENSE" "$OUTPUT_DIR/dosbox-pure-LICENSE.txt"
@@ -477,7 +477,7 @@ case "$ENGINE" in
             -DENABLE_OPENGL=OFF -DENABLE_NETWORKING=ON -DENABLE_JIT=OFF \
             -DENABLE_THREADED_RENDERER=OFF -DBUILD_TESTING=OFF
         "$CMAKE" --build "$build" --target melondsds_libretro \
-            -j"${LUCENT_BUILD_JOBS:-4}"
+            -j"${EMUFUSION_BUILD_JOBS:-4}"
         cp "$build/src/libretro/melondsds_libretro_android.so" \
             "$OUTPUT_DIR/melonds-ds_libretro.so"
         cp "$build/melondsds-LICENSE.txt" \
@@ -509,12 +509,12 @@ case "$ENGINE" in
             -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
             -DCMAKE_BUILD_TYPE=Release \
-            -DLUCENT_DISABLE_IPO=ON -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
+            -DEMUFUSION_DISABLE_IPO=ON -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
             -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
             -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
-            -DCMAKE_C_FLAGS="-ffile-prefix-map=$source=/usr/src/lucent/swanstation -fmacro-prefix-map=$source=/usr/src/lucent/swanstation -ffile-prefix-map=$canonical_source=/usr/src/lucent/swanstation -fmacro-prefix-map=$canonical_source=/usr/src/lucent/swanstation -ffile-prefix-map=$build=/usr/src/lucent/swanstation-build -fmacro-prefix-map=$build=/usr/src/lucent/swanstation-build" \
-            -DCMAKE_CXX_FLAGS="-ffile-prefix-map=$source=/usr/src/lucent/swanstation -fmacro-prefix-map=$source=/usr/src/lucent/swanstation -ffile-prefix-map=$canonical_source=/usr/src/lucent/swanstation -fmacro-prefix-map=$canonical_source=/usr/src/lucent/swanstation -ffile-prefix-map=$build=/usr/src/lucent/swanstation-build -fmacro-prefix-map=$build=/usr/src/lucent/swanstation-build"
-        "$CMAKE" --build "$build" -j"${LUCENT_BUILD_JOBS:-4}"
+            -DCMAKE_C_FLAGS="-ffile-prefix-map=$source=/usr/src/emufusion/swanstation -fmacro-prefix-map=$source=/usr/src/emufusion/swanstation -ffile-prefix-map=$canonical_source=/usr/src/emufusion/swanstation -fmacro-prefix-map=$canonical_source=/usr/src/emufusion/swanstation -ffile-prefix-map=$build=/usr/src/emufusion/swanstation-build -fmacro-prefix-map=$build=/usr/src/emufusion/swanstation-build" \
+            -DCMAKE_CXX_FLAGS="-ffile-prefix-map=$source=/usr/src/emufusion/swanstation -fmacro-prefix-map=$source=/usr/src/emufusion/swanstation -ffile-prefix-map=$canonical_source=/usr/src/emufusion/swanstation -fmacro-prefix-map=$canonical_source=/usr/src/emufusion/swanstation -ffile-prefix-map=$build=/usr/src/emufusion/swanstation-build -fmacro-prefix-map=$build=/usr/src/emufusion/swanstation-build"
+        "$CMAKE" --build "$build" -j"${EMUFUSION_BUILD_JOBS:-4}"
         cp "$build/swanstation_libretro_android.so" \
             "$OUTPUT_DIR/swanstation_libretro.so"
         ;;
@@ -541,7 +541,7 @@ case "$ENGINE" in
             -DBUILD_STATIC=OFF -DBUILD_TEST=OFF -DBUILD_SUITE=OFF \
             -DBUILD_CINEMA=OFF -DBUILD_EXAMPLE=OFF -DBUILD_PYTHON=OFF
         GIT_CEILING_DIRECTORIES="$SOURCE_DIR" \
-        "$CMAKE" --build "$build" --target mgba_libretro -j"${LUCENT_BUILD_JOBS:-4}"
+        "$CMAKE" --build "$build" --target mgba_libretro -j"${EMUFUSION_BUILD_JOBS:-4}"
         cp "$build/mgba_libretro.so" "$OUTPUT_DIR/mgba_libretro.so"
         ;;
     mesen)
@@ -557,7 +557,7 @@ case "$ENGINE" in
         [ "$(uname -s)" = Linux ] && host=linux-x86_64
         toolchain="$NDK_DIR/toolchains/llvm/prebuilt/$host/bin"
         /usr/bin/make -C "$source/Libretro" clean
-        /usr/bin/make -C "$source/Libretro" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$source/Libretro" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix ARCHFLAGS=-march=armv8-a \
             CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" \
@@ -585,7 +585,7 @@ case "$ENGINE" in
         [ "$(uname -s)" = Linux ] && host=linux-x86_64
         toolchain="$NDK_DIR/toolchains/llvm/prebuilt/$host/bin"
         /usr/bin/make -C "$source/Libretro" clean
-        /usr/bin/make -C "$source/Libretro" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$source/Libretro" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix ARCHFLAGS=-march=armv8-a \
             CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" \
@@ -607,7 +607,7 @@ case "$ENGINE" in
         cp -R "$source/." "$build/"
         apply_locked_patch "$build" \
             engines/patches/sameboy-libretro-cheat-support.patch \
-            546c488029fcf7e7817aa8cf120236c1d3e3ea83a3e96f7421a6849a2fa258c7
+            4ba8e12e0d6e6fec7991ebbcb0239952cc81d6ad5d1ec8149436d4d294d24e7a
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -640,7 +640,7 @@ case "$ENGINE" in
         /usr/bin/make -C "$source" bootroms RGBDS="$rgbds_dir/" GIT_VERSION="$commit"
         /usr/bin/make -C "$source/libretro" clean
         LDFLAGS='-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
-        /usr/bin/make -C "$source/libretro" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$source/libretro" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix ARCHFLAGS=-march=armv8-a GIT_VERSION="$commit" \
             BOOTROMS_DIR="$source/build/bin/BootROMs" BIN="$source/build/bin" \
             CC="$toolchain/$target$API-clang" \
@@ -679,7 +679,7 @@ case "$ENGINE" in
         toolchain="$NDK_DIR/toolchains/llvm/prebuilt/$host/bin"
         make_dir="$source/platforms/libretro"
         /usr/bin/make -C "$make_dir" clean
-        /usr/bin/make -C "$make_dir" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$make_dir" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix ARCHFLAGS=-march=armv8-a GIT_VERSION="$commit" \
             CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" \
@@ -700,7 +700,7 @@ case "$ENGINE" in
         [ "$(uname -s)" = Linux ] && host=linux-x86_64
         toolchain="$NDK_DIR/toolchains/llvm/prebuilt/$host/bin"
         /usr/bin/make -C "$source" clean
-        /usr/bin/make -C "$source" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$source" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix ARCHFLAGS=-march=armv8-a GIT_VERSION="$commit" \
             CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" \
@@ -721,7 +721,7 @@ case "$ENGINE" in
         toolchain="$NDK_DIR/toolchains/llvm/prebuilt/$host/bin"
         /usr/bin/make -C "$source" clean platform=unix
         LDFLAGS='-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
-        /usr/bin/make -C "$source" -j"${LUCENT_BUILD_JOBS:-4}" \
+        /usr/bin/make -C "$source" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=unix ARCHFLAGS=-march=armv8-a GIT_VERSION="$commit" \
             CC="$toolchain/$target$API-clang" \
             CXX="$toolchain/$target$API-clang++" \
@@ -750,8 +750,12 @@ case "$ENGINE" in
         rm -rf "$stage"
         mkdir -p "$stage"
         cp -R "$source/." "$stage/"
-        PYTHONHASHSEED=0 /usr/bin/make -C "$stage" -f Makefile.libretro \
-            -j"${LUCENT_BUILD_JOBS:-4}" core \
+        # cpu_dsl.py (#!/usr/bin/env python3) generates the 68000/Z80/SH-2
+        # cores; even with a fixed hash seed its output differs between
+        # Python 3.9 and 3.14, so the interpreter is pinned, not taken from
+        # the caller's PATH (a Homebrew-first PATH produced another binary).
+        PATH="/usr/bin:$PATH" PYTHONHASHSEED=0 /usr/bin/make -C "$stage" -f Makefile.libretro \
+            -j"${EMUFUSION_BUILD_JOBS:-4}" core \
             UNAME=Linux UNAMEM=aarch64 OS=Linux CPU=aarch64 ABI=aarch64 \
             CC="$toolchain/$target$API-clang" AR="$toolchain/llvm-ar" \
             NOLTO=1 \
@@ -767,7 +771,7 @@ case "$ENGINE" in
             https://github.com/libretro/mupen64plus-libretro-nx)
         apply_locked_patch "$source" \
             engines/patches/mupen64plus-next-android-arm64.patch \
-            751a6ace68e14da2562210e20ee5c88ac9f5c4616dd5c8ae5c51160071c30b35
+            816d6f8f6847736e73c2b0614e71941497e3d18b974239440994b575a5f25761
         apply_locked_patch "$source" \
             engines/patches/mupen64plus-next-context-setup.patch \
             8396947b663386db0eb1358dd201c2bcc3005e6faf3fd64d010a1287ea7be066
@@ -791,10 +795,10 @@ case "$ENGINE" in
         # The Pegasus/Qt base APK carries its own older libc++_shared.so.
         # Binding this pinned NDK-r27 core to that process-wide library caused
         # an unresolved basic_stringstream VTT on the Thor. Link the exact NDK
-        # libc++ statically into the core so Lucent does not replace or depend
+        # libc++ statically into the core so EmuFusion does not replace or depend
         # on Qt's C++ runtime.
         LDFLAGS='-Wl,--build-id=none -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -static-libstdc++' \
-            /usr/bin/make -C "$stage" -j"${LUCENT_BUILD_JOBS:-4}" \
+            /usr/bin/make -C "$stage" -j"${EMUFUSION_BUILD_JOBS:-4}" \
             platform=android-arm64-gles3 ANDROID_GRAPHIC_BUFFER=0 \
             ARCH=aarch64 GIT_VERSION="$commit" \
             CC="$toolchain/$target$API-clang" \
@@ -812,7 +816,7 @@ case "$ENGINE" in
         # PCSX2 has compile-time host-page geometry. Keep both variants in the
         # same APK and select the matching one at runtime; do not waive its
         # hardware check or replace the working 4 KiB core with a 16 KiB build.
-        armsx2_host_page_size=${LUCENT_ARMSX2_HOST_PAGE_SIZE:-0x1000}
+        armsx2_host_page_size=${EMUFUSION_ARMSX2_HOST_PAGE_SIZE:-0x1000}
         armsx2_variant_suffix=
         armsx2_link_flags='-Wl,--build-id=none'
         case "$armsx2_host_page_size" in
@@ -888,7 +892,7 @@ case "$ENGINE" in
         done
         apply_locked_patch "$staged_source" \
             engines/patches/armsx2-libretro-android-build.patch \
-            f8d1f6c46125ab953c9333eb57400a8f4ff339ea91ebc3221ab8638514bded78
+            5181a335e770f63a89e83ff757421a92813213d21860a312d18b12d679e6ff95
         apply_locked_patch "$staged_source" \
             engines/patches/armsx2-libretro-frame-clock.patch \
             c94ef2e4fc1440fbbfceef124433343df8f1bbddd320307dc6719effd838d49f
@@ -943,7 +947,7 @@ case "$ENGINE" in
             -DCMAKE_CXX_FLAGS="$path_map_flags"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH="$source_date_epoch" \
         "$armsx2_cmake" --build "$build/out" --target pcsx2-libretro \
-            -j"${LUCENT_BUILD_JOBS:-4}"
+            -j"${EMUFUSION_BUILD_JOBS:-4}"
         "$armsx2_ndk_dir/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip" \
             --strip-unneeded "$build/out/pcsx2-libretro/armsx2_libretro.so" \
             -o "$OUTPUT_DIR/armsx2${armsx2_variant_suffix}_libretro.so"
@@ -968,8 +972,8 @@ case "$ENGINE" in
         fi
         "${PYTHON:-python3}" "$ROOT/engines/tools/build_azahar.py" \
             --sdk "$SDK_DIR" \
-            --work "${LUCENT_AZAHAR_WORK_DIR:-$BUILD_ROOT/azahar-source-arm64}" \
-            --output "$OUTPUT_DIR" --jobs "${LUCENT_BUILD_JOBS:-4}"
+            --work "${EMUFUSION_AZAHAR_WORK_DIR:-$BUILD_ROOT/azahar-source-arm64}" \
+            --output "$OUTPUT_DIR" --jobs "${EMUFUSION_BUILD_JOBS:-4}"
         ;;
     play)
         # Phase 2 compiler/linker proof for Play!'s upstream Android libretro
@@ -1102,19 +1106,19 @@ case "$ENGINE" in
 
         apply_locked_patch "$staged_source" \
             engines/patches/play-expose-android-javavm-hook.patch \
-            decbff7956d8b4817f15fc360588bb8338d4cccf6038089c4df87b66ced47de3
+            88a92e147dc90229739a144ca6c1a7121abafa781ba53d7ac9e4371459ed465e
         # Upstream stores PS2VM.cpp with CRLF. Normalize the staged copy so the
         # exact reviewed patch applies identically on Darwin and Linux.
         LC_ALL=C perl -pi -e 's/\r$//' "$staged_source/Source/PS2VM.cpp"
         apply_locked_patch "$staged_source" \
             engines/patches/play-libretro-no-jni-thread-attach.patch \
-            ea5f4ca8243f614638287581a5d2d72894aa4b998726f7aaeb5b26e21a0df350
+            114e17388b7a790d192713cacac25717d7d61db5a08488ddf5ddb7ddcfdef188
         apply_locked_patch "$staged_source" \
             engines/patches/play-libretro-chain-ee-signal-handler.patch \
-            3d1297d9d76acc380ba4bad650b827dc1dbe1001fa149c61145e1bd3b3b02a56
+            70cc767689604b6e2c47f09d9dc6aa1d1076ebf72efc77389e6c348bf3fc6337
         apply_locked_patch "$staged_source" \
             engines/patches/play-libretro-output-size-hook.patch \
-            76111c03a3ebf4d579b6a555259bb211ad53ee4e63ba9e2da0692643f9aab3c2
+            37fb92fe5d1d2fd850403ed879b5337d616794af9d28f561dd0bbdde2b092cf3
         apply_locked_patch "$staged_source" \
             engines/patches/play-libretro-lossless-audio-fifo.patch \
             f6871409fefe83709f85aaa50b8d223681f9be34f5d825b3e26b98f7d1899398
@@ -1122,7 +1126,7 @@ case "$ENGINE" in
             engines/patches/play-libretro-safe-state.patch \
             fa6f7891fe25080d630af3ee0f24af0505153ad5d795bd0a00b5e11127a2520d
 
-        path_map_flags="-DLUCENT_LIBRETRO=1 -ffile-prefix-map=$ROOT=. -fdebug-prefix-map=$ROOT=. -fmacro-prefix-map=$ROOT=. -ffile-prefix-map=$build=play-build -fdebug-prefix-map=$build=play-build -fmacro-prefix-map=$build=play-build -ffile-prefix-map=$staged_source=play-source -fdebug-prefix-map=$staged_source=play-source -fmacro-prefix-map=$staged_source=play-source"
+        path_map_flags="-DEMUFUSION_LIBRETRO=1 -ffile-prefix-map=$ROOT=. -fdebug-prefix-map=$ROOT=. -fmacro-prefix-map=$ROOT=. -ffile-prefix-map=$build=play-build -fdebug-prefix-map=$build=play-build -fmacro-prefix-map=$build=play-build -ffile-prefix-map=$staged_source=play-source -fdebug-prefix-map=$staged_source=play-source -fmacro-prefix-map=$staged_source=play-source"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1783783385 \
             "$play_cmake" -S "$staged_source" -B "$build/out" -G Ninja \
                 -DCMAKE_MAKE_PROGRAM="$play_ninja" \
@@ -1136,7 +1140,7 @@ case "$ENGINE" in
                 -DCMAKE_CXX_FLAGS="$path_map_flags"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1783783385 \
             "$play_cmake" --build "$build/out" --target play_libretro \
-                -j"${LUCENT_BUILD_JOBS:-4}"
+                -j"${EMUFUSION_BUILD_JOBS:-4}"
         built="$build/out/Source/ui_libretro/play_libretro_android.so"
         if [ ! -f "$built" ]; then
             printf 'Play! build completed without an Android ARM64 core\n' >&2
@@ -1148,7 +1152,7 @@ case "$ENGINE" in
         cp "$staged_source/License.txt" "$OUTPUT_DIR/play-LICENSE.txt"
         ;;
     flycast)
-        # Flycast's Android libretro adapter is hosted directly by Lucent. It
+        # Flycast's Android libretro adapter is hosted directly by EmuFusion. It
         # does not include or launch the RetroArch frontend. Keep the closure
         # deliberately small for the first Dreamcast qualification: GLES3,
         # no standalone UI, no Lua, no breakpad, and no OpenMP. Vulkan remains
@@ -1236,7 +1240,7 @@ case "$ENGINE" in
         # in flycast-source-lock.json.
         apply_locked_patch "$staged_source" \
             engines/patches/flycast-libretro-cheat-support.patch \
-            058b22158921a14d0bd965449e8fd4c25235ac27db379bfd4cb865748aad54d6
+            2bb97397181bbf59845673e107583178c9c51e3972d3af371ce5c0bd45731a5f
         apply_locked_patch "$staged_source" \
             engines/patches/flycast-android-shared-memory.patch \
             61335599add3e70cbaab2e8a3dad8062eb0cae97df2cf15c54935b87e8c95f62
@@ -1257,7 +1261,7 @@ case "$ENGINE" in
                 -DCMAKE_CXX_FLAGS="$path_map_flags"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1750281767 \
             "$flycast_cmake" --build "$build/out" \
-                --target flycast_libretro -j"${LUCENT_BUILD_JOBS:-4}"
+                --target flycast_libretro -j"${EMUFUSION_BUILD_JOBS:-4}"
         built="$build/out/flycast_libretro.so"
         if [ ! -f "$built" ]; then
             printf 'Flycast build completed without an Android ARM64 core\n' >&2
@@ -1291,7 +1295,7 @@ case "$ENGINE" in
                 NDK_APPLICATION_MK=jni/Application.mk APP_ABI="$ABI" \
                 APP_PLATFORM="android-$API" \
                 APP_LDFLAGS='-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
-                -j"${LUCENT_BUILD_JOBS:-4}"
+                -j"${EMUFUSION_BUILD_JOBS:-4}"
         built="$staged_source/libs/$ABI/libretro.so"
         if [ ! -f "$built" ]; then
             printf 'Virtual Jaguar build completed without an Android ARM64 core\n' >&2
@@ -1301,7 +1305,7 @@ case "$ENGINE" in
         cp "$staged_source/LICENSE" "$OUTPUT_DIR/virtualjaguar-LICENSE.txt"
         ;;
     dolphin)
-        # Build the maintained Dolphin libretro fork used by Lucent's
+        # Build the maintained Dolphin libretro fork used by EmuFusion's
         # single-activity GLES host.  The exact source/dependency closure and
         # toolchain identities are mirrored in dolphin-source-lock.json.
         case "$ABI" in
@@ -1348,8 +1352,8 @@ case "$ENGINE" in
         # stable, explicitly owned temporary root so the checksum proof is
         # independent of the caller's workspace path.  Refuse to touch a
         # pre-existing directory unless this recipe created it previously.
-        build=/tmp/lucent-dolphin-libretro-clone
-        dolphin_owner_marker="$build/.lucent-deterministic-build-root"
+        build=/tmp/emufusion-dolphin-libretro-clone
+        dolphin_owner_marker="$build/.emufusion-deterministic-build-root"
         if [ -e "$build" ] && [ ! -f "$dolphin_owner_marker" ]; then
             printf 'Refusing to replace unowned Dolphin build root: %s\n' "$build" >&2
             exit 1
@@ -1358,7 +1362,7 @@ case "$ENGINE" in
         mkdir -p "$build"
         : > "$dolphin_owner_marker"
         staged_source="$build"
-        out="$build/build/lucent-android-arm64"
+        out="$build/build/emufusion-android-arm64"
         cp -R "$source/." "$staged_source/"
 
         apply_locked_patch "$staged_source" \
@@ -1442,7 +1446,7 @@ DOLPHIN_DEPENDENCIES
         PATH="$dolphin_git_path:$PATH" SOURCE_DATE_EPOCH=1785987178 \
             "$dolphin_cmake" --build "$out" \
             --target dolphin_libretro \
-            -j"${LUCENT_BUILD_JOBS:-4}"
+            -j"${EMUFUSION_BUILD_JOBS:-4}"
         host=darwin-x86_64
         [ "$(uname -s)" = Linux ] && host=linux-x86_64
         dolphin_strip="$dolphin_ndk_dir/toolchains/llvm/prebuilt/$host/bin/llvm-strip"
@@ -1457,7 +1461,7 @@ DOLPHIN_DEPENDENCIES
         rm -f "$stripped_core"
         normalized_sha=$(shasum -a 256 "$normalized_core" | awk '{print $1}')
         if [ "$normalized_sha" != \
-                12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6 ]; then
+                093db3423313ed0b9413d218c0694df2dd784f726f6672099539fa5ab1c43555 ]; then
             printf 'Normalized Dolphin core checksum mismatch: %s\n' \
                 "$normalized_sha" >&2
             rm -rf "$candidate_dir"
@@ -1474,7 +1478,7 @@ DOLPHIN_DEPENDENCIES
             "$OUTPUT_DIR/dolphin-system/dolphin-emu/Sys/"
         ;;
     ppsspp)
-        # This uses PPSSPP's own libretro adapter behind Lucent's host; it does
+        # This uses PPSSPP's own libretro adapter behind EmuFusion's host; it does
         # not import RetroArch frontend code.  Production compatibility keeps
         # PPSSPP's exact FFmpeg gitlink enabled.  Its complete source/build
         # controls and only the Android ARM64 prebuilt inputs are sparse-fetched
@@ -1524,12 +1528,12 @@ DOLPHIN_DEPENDENCIES
         # Source extraction is intentionally destructive within BUILD_ROOT.
         # Serialize builds that share that root so concurrent runs cannot
         # remove one another's staged inputs.  Callers may instead provide a
-        # distinct LUCENT_ENGINE_BUILD_DIR for an isolated build root.
+        # distinct EMUFUSION_ENGINE_BUILD_DIR for an isolated build root.
         ppsspp_lock_dir="$BUILD_ROOT/locks/ppsspp"
         ppsspp_candidate_dir=
         mkdir -p "$BUILD_ROOT/locks"
         if ! mkdir "$ppsspp_lock_dir" 2>/dev/null; then
-            printf 'Another PPSSPP build owns %s; use a unique LUCENT_ENGINE_BUILD_DIR or wait\n' \
+            printf 'Another PPSSPP build owns %s; use a unique EMUFUSION_ENGINE_BUILD_DIR or wait\n' \
                 "$ppsspp_lock_dir" >&2
             exit 1
         fi
@@ -1670,7 +1674,7 @@ DOLPHIN_DEPENDENCIES
         mkdir -p "$staged_source"
         cp -R "$source/." "$staged_source/"
         patch_path="$ROOT/engines/patches/ppsspp-pin-version-without-git.patch"
-        expected_patch_sha=a4029bd6a82ff26f8b6d8c3e7d519342fbbae685c0d266cc77045393b2287e99
+        expected_patch_sha=2dda48359013e753f16d111290adc5ea6645c76c4e00b68cdd690949356d1625
         actual_patch_sha=$(shasum -a 256 "$patch_path" | awk '{print $1}')
         if [ "$actual_patch_sha" != "$expected_patch_sha" ]; then
             printf 'Pinned PPSSPP patch checksum mismatch: %s\n' \
@@ -1727,7 +1731,7 @@ DOLPHIN_DEPENDENCIES
             -DUSE_SYSTEM_RAPIDJSON=OFF
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH="$source_date_epoch" \
         "$ppsspp_cmake" --build "$build" --target ppsspp_libretro \
-            -j"${LUCENT_BUILD_JOBS:-4}"
+            -j"${EMUFUSION_BUILD_JOBS:-4}"
         # LLD's default build-ID note varies with the absolute build root even
         # when the linked payload is byte-identical.  Remove only that note,
         # then gate the normalized ELF before publishing any canonical file.
@@ -1740,7 +1744,7 @@ DOLPHIN_DEPENDENCIES
             "$stripped_core" "$normalized_core"
         rm -f "$stripped_core"
         normalized_sha=$(shasum -a 256 "$normalized_core" | awk '{print $1}')
-        expected_normalized_sha=376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d
+        expected_normalized_sha=43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c
         if [ "$normalized_sha" != "$expected_normalized_sha" ]; then
             printf 'Normalized FFmpeg-enabled PPSSPP checksum mismatch: %s\n' \
                 "$normalized_sha" >&2
@@ -1819,7 +1823,7 @@ DOLPHIN_DEPENDENCIES
         # driver translation units pull their complete dependency closure via
         # MAME's makedep generator; no commercial ROM or BIOS data is embedded.
         sources=src/mame/atari/pong.cpp,src/mame/snk/neogeo.cpp,src/mame/snk/neogeocd.cpp
-        subtarget=lucent
+        subtarget=emufusion
         # This core is large enough that rebuilding it for every qualification
         # APK is counterproductive. Reuse is deliberately stricter than a
         # timestamp check: source archive, upstream makefile, recipe revision,
@@ -1855,7 +1859,7 @@ DOLPHIN_DEPENDENCIES
         cache_core="$cache_dir/mame_libretro.so"
         cache_identity="$cache_dir/build-fingerprint.sha256"
         output_core="$OUTPUT_DIR/mame_libretro.so"
-        if [ "${LUCENT_FORCE_REBUILD:-0}" != 1 ]; then
+        if [ "${EMUFUSION_FORCE_REBUILD:-0}" != 1 ]; then
             for candidate in "$output_core" "$cache_core"; do
                 if [ -f "$candidate" ] && \
                     [ "$(shasum -a 256 "$candidate" | awk '{print $1}')" = "$expected_core_sha" ]; then
@@ -1867,7 +1871,7 @@ DOLPHIN_DEPENDENCIES
                         cp "$candidate" "$cache_core"
                     fi
                     printf '%s\n' "$identity" > "$cache_identity"
-                    printf 'Reusing checksum-qualified MAME core (%s). Set LUCENT_FORCE_REBUILD=1 to rebuild.\n' "$identity" >&2
+                    printf 'Reusing checksum-qualified MAME core (%s). Set EMUFUSION_FORCE_REBUILD=1 to rebuild.\n' "$identity" >&2
                     printf '%s\n' "$output_core"
                     exit 0
                 fi
@@ -1879,14 +1883,14 @@ DOLPHIN_DEPENDENCIES
                 SUBTARGET="$subtarget" SOURCES="$sources"
         ANDROID_NDK_HOME="$NDK_DIR" ANDROID_NDK_ROOT="$NDK_DIR" \
             /usr/bin/make -C "$source" -f Makefile.libretro \
-                -j"${LUCENT_BUILD_JOBS:-4}" platform="$platform" \
+                -j"${EMUFUSION_BUILD_JOBS:-4}" platform="$platform" \
                 ARCHITECTURE= \
                 SUBTARGET="$subtarget" SOURCES="$sources" \
                 LDOPTS='-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384' \
                 PYTHON_EXECUTABLE=python3
         # Makefile.libretro inherits the host suffix on macOS even though the
         # linker target and resulting file are Android AArch64 ELF. Accept the
-        # mislabeled upstream suffix and normalize Lucent's staged filename.
+        # mislabeled upstream suffix and normalize EmuFusion's staged filename.
         built=$(find "$source" -type f \( \
             -name "${subtarget}_libretro_android.so" -o \
             -name "${subtarget}_libretro_android.dylib" \

@@ -142,7 +142,7 @@ public final class CheatGameIdentityTest {
     }
 
     private static void ps3Folder() throws IOException {
-        File dir = Files.createTempDirectory("lucent-ps3").toFile();
+        File dir = Files.createTempDirectory("emufusion-ps3").toFile();
         File root = new File(dir, "Demons Souls [BLUS30443]");
         File usrdir = new File(new File(root, "PS3_GAME"), "USRDIR");
         usrdir.mkdirs();
@@ -156,7 +156,7 @@ public final class CheatGameIdentityTest {
     }
 
     private static void wiiU() throws IOException {
-        File dir = Files.createTempDirectory("lucent-wiiu").toFile();
+        File dir = Files.createTempDirectory("emufusion-wiiu").toFile();
         File code = new File(dir, "code"); code.mkdirs();
         File meta = new File(dir, "meta"); meta.mkdirs();
         File rpx = new File(code, "U-King.rpx");
@@ -170,7 +170,7 @@ public final class CheatGameIdentityTest {
     }
 
     private static void dreamcast() throws IOException {
-        File dir = Files.createTempDirectory("lucent-dc").toFile();
+        File dir = Files.createTempDirectory("emufusion-dc").toFile();
         byte[] sector = new byte[2352];
         byte[] ip = new byte[0x100];
         System.arraycopy("SEGA SEGAKATANA ".getBytes(StandardCharsets.US_ASCII), 0, ip, 0, 16);
@@ -186,7 +186,7 @@ public final class CheatGameIdentityTest {
     }
 
     private static void names() throws IOException {
-        File dir = Files.createTempDirectory("lucent-names").toFile();
+        File dir = Files.createTempDirectory("emufusion-names").toFile();
         File nsp = new File(dir, "Game [0100ABCDEF123456][v0].nsp");
         write(nsp, new byte[4]);
         Map<String, String> sw = CheatGameIdentity.identify("switch", nsp, "");

@@ -170,31 +170,31 @@ class QtTerminalBindingPatchTest(unittest.TestCase):
         self.assertLess(pos, helper.index("invoke-static {v0}, Ljava/lang/System;->exit(I)V"))
         self.assertNotIn("killProcess", method(result, "onDestroy()V"))
         self.assertEqual(method(DELEGATE, "untouched()V"), method(result, "untouched()V"))
-        self.assertEqual(1, result.count(".field private lucent_terminal_started:Z"))
+        self.assertEqual(1, result.count(".field private emufusion_terminal_started:Z"))
 
     def test_owner_and_one_shot_guards_precede_all_terminal_work(self):
         helper = method(PATCH.patch_delegate(DELEGATE),
                         "emufusionCompleteTerminalShutdown(Landroid/app/Activity;)V")
         ordered = ["if-ne v1, p1, :cond_0", "if-nez v1, :cond_0",
-                   "if-eqz v0, :cond_0", "->lucent_terminal_started:Z",
+                   "if-eqz v0, :cond_0", "->emufusion_terminal_started:Z",
                    "->terminateQt()V"]
         # The field has a read and a write; specifically require the latch write
         # after all guards and before terminateQt, not merely its declaration.
-        ordered[3] = f"iput-boolean v1, p0, {QT}->lucent_terminal_started:Z"
+        ordered[3] = f"iput-boolean v1, p0, {QT}->emufusion_terminal_started:Z"
         positions = [helper.index(item) for item in ordered]
         self.assertEqual(sorted(positions), positions)
         self.assertIn(".locals 2", helper)
 
     def test_config_handoff_bypasses_callback_and_accepted_terminal_does_not_run_inline(self):
         wrapper = method(PATCH.patch_delegate(DELEGATE), "onDestroy()V")
-        self.assertLess(wrapper.index("if-eqz v0, :lucent_destroy_return"),
+        self.assertLess(wrapper.index("if-eqz v0, :emufusion_destroy_return"),
                         wrapper.index("new-instance v2"))
         self.assertIn(f"invoke-direct {{v2, p0, v1}}, {PATCH.CALLBACK}-><init>", wrapper)
         self.assertIn(f"{HOST}->requestQtTerminalShutdown(Landroid/app/Activity;Ljava/lang/Runnable;)Z", wrapper)
-        self.assertLess(wrapper.index("if-nez v0, :lucent_destroy_return"),
+        self.assertLess(wrapper.index("if-nez v0, :emufusion_destroy_return"),
                         wrapper.index("->emufusionCompleteTerminalShutdown"))
         self.assertNotIn("->terminateQt", wrapper)
-        self.assertEqual(["return-void"], instructions(wrapper.rsplit("    :lucent_destroy_return\n", 1)[1]))
+        self.assertEqual(["return-void"], instructions(wrapper.rsplit("    :emufusion_destroy_return\n", 1)[1]))
 
     def test_callback_captures_concrete_delegate_and_owner_without_global_lookup(self):
         source = PATCH.callback_source()
@@ -214,9 +214,9 @@ class QtTerminalBindingPatchTest(unittest.TestCase):
         for signature, (words, kind) in {**REQUIRED, **VARIANTS}.items():
             with self.subTest(signature=signature):
                 body = method(result, signature)
-                fast, normal = body.split("    :lucent_qt_delegate_allowed\n", 1)
+                fast, normal = body.split("    :emufusion_qt_delegate_allowed\n", 1)
                 self.assertIn(f"{HOST}->shouldSkipQtDelegate(Landroid/app/Activity;)Z", fast)
-                self.assertIn("if-eqz v0, :lucent_qt_delegate_allowed", fast)
+                self.assertIn("if-eqz v0, :emufusion_qt_delegate_allowed", fast)
                 self.assertIn(f"invoke-super/range {{p0 .. p{words}}}, Landroid/app/Activity;->{signature}", fast)
                 self.assertIn(return_ops(kind), fast)
                 self.assertNotIn("invokeDelegate", fast)
@@ -252,7 +252,7 @@ class QtTerminalBindingPatchTest(unittest.TestCase):
                 PATCH.patch_binding(changed)
 
     def test_cli_validates_both_inputs_before_any_generated_write(self):
-        with tempfile.TemporaryDirectory(prefix="lucent-qt-patch-") as temp:
+        with tempfile.TemporaryDirectory(prefix="emufusion-qt-patch-") as temp:
             qt = Path(temp) / "org/qtproject/qt5/android"
             (qt / "bindings").mkdir(parents=True)
             delegate = qt / "QtActivityDelegate.smali"

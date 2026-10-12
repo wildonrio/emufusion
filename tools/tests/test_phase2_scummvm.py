@@ -7,7 +7,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 LOCK = ROOT / "engines" / "scummvm-source-lock.json"
 BUILD = ROOT / "engines" / "build_scummvm_core.sh"
-LIFECYCLE_PATCH = ROOT / "engines" / "patches" / "scummvm-lucent-exit-autosave.patch"
+LIFECYCLE_PATCH = ROOT / "engines" / "patches" / "scummvm-emufusion-exit-autosave.patch"
 CONTENT_LOCK = ROOT / "engines" / "scummvm-test-content-lock.json"
 HOST = ROOT / "unified-android" / "native" / "emufusion_libretro_host.c"
 JNI = ROOT / "unified-android" / "native" / "emufusion_libretro_jni.c"
@@ -41,7 +41,7 @@ class ScummvmPhase2Test(unittest.TestCase):
             self.assertRegex(dependency["archiveSha256"], r"^[0-9a-f]{64}$")
 
     def test_recipe_is_offline_after_locked_archive_fetch(self):
-        self.assertIn("LUCENT_OFFLINE_PINNED_DEPS=1", self.recipe)
+        self.assertIn("EMUFUSION_OFFLINE_PINNED_DEPS=1", self.recipe)
         self.assertIn("configure_submodules.sh", self.recipe)
         self.assertIn("libmad/version", self.recipe)
         self.assertIn("APP_ABI=arm64-v8a", self.recipe)
@@ -53,16 +53,16 @@ class ScummvmPhase2Test(unittest.TestCase):
 
     def test_lifecycle_patch_is_locked_and_applied(self):
         locked_patch = self.lock["patches"][0]
-        self.assertEqual("engines/patches/scummvm-lucent-exit-autosave.patch",
+        self.assertEqual("engines/patches/scummvm-emufusion-exit-autosave.patch",
                          locked_patch["path"])
         self.assertEqual(locked_patch["sha256"],
                          hashlib.sha256(LIFECYCLE_PATCH.read_bytes()).hexdigest())
         self.assertIn("patch -d \"$WORK/source\" -p1", self.recipe)
-        self.assertIn("retro_lucent_prepare_exit_autosave", self.lifecycle_patch)
-        self.assertIn("saveLucentExitAutosave", self.lifecycle_patch)
+        self.assertIn("retro_emufusion_prepare_exit_autosave", self.lifecycle_patch)
+        self.assertIn("saveEmuFusionExitAutosave", self.lifecycle_patch)
         self.assertIn("canSaveAutosaveCurrently", self.lifecycle_patch)
-        self.assertIn("LUCENT_EXIT_AUTOSAVE_CANCELED", self.lifecycle_patch)
-        self.assertIn("lucent_write_resume_slot", self.lifecycle_patch)
+        self.assertIn("EMUFUSION_EXIT_AUTOSAVE_CANCELED", self.lifecycle_patch)
+        self.assertIn("emufusion_write_resume_slot", self.lifecycle_patch)
         self.assertIn('" -x "', self.lifecycle_patch)
 
     def test_state_claim_is_fail_closed(self):
@@ -70,7 +70,7 @@ class ScummvmPhase2Test(unittest.TestCase):
         self.assertFalse(configuration["genericSerialization"])
         self.assertEqual("engine-native-fail-closed-exit-autosave",
                          configuration["statePolicy"])
-        self.assertEqual("retro_lucent_prepare_exit_autosave",
+        self.assertEqual("retro_emufusion_prepare_exit_autosave",
                          configuration["hostPrepareExitSymbol"])
         self.assertEqual(120, configuration["prepareExitMaximumCoreFrames"])
         artifact = self.lock["artifact"]

@@ -23,7 +23,7 @@
     "freshBuildCount": 2,
     "byteIdentical": true,
     "artifactPath": "engines/build/arm64-v8a/ppsspp_libretro.so",
-    "artifactSha256": "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
+    "artifactSha256": "43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c",
     "gnuBuildId": null,
     "normalization": "llvm-strip --strip-unneeded followed by llvm-objcopy --remove-section=.note.gnu.build-id",
     "absoluteBuilderPathMatches": 0,
@@ -32,7 +32,7 @@
   },
   "recipePatch": {
     "path": "engines/patches/ppsspp-pin-version-without-git.patch",
-    "sha256": "a4029bd6a82ff26f8b6d8c3e7d519342fbbae685c0d266cc77045393b2287e99"
+    "sha256": "2dda48359013e753f16d111290adc5ea6645c76c4e00b68cdd690949356d1625"
   },
   "core": {
     "repository": "https://github.com/hrydgard/ppsspp",
@@ -73,7 +73,7 @@
       "version3Enabled": false,
       "androidApi": 21,
       "upstreamBuilderNdk": "29.0.14206865",
-      "notes": "These are exact upstream static-archive build identities; the final PPSSPP shared object is linked and gated with Lucent's pinned API 23/NDK 27 toolchain."
+      "notes": "These are exact upstream static-archive build identities; the final PPSSPP shared object is linked and gated with EmuFusion's pinned API 23/NDK 27 toolchain."
     },
     "androidArm64Archives": [
       {"path":"android/arm64/lib/libavcodec.a","sha256":"12932e1719efb45ce1298841b3f65b7e99fff07cad8f7403efba4a7fdcf1948d","memberCount":158},

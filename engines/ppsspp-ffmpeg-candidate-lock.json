@@ -10,7 +10,7 @@
     "artifactSha256": "1c1b192451375445badc7b69c917b82058d411fd94d66bd6bc00bc781e205487",
     "gnuBuildId": null,
     "normalization": "llvm-strip --strip-unneeded followed by llvm-objcopy --remove-section=.note.gnu.build-id",
-    "absoluteLucentBuilderPathMatches": 0,
+    "absoluteEmuFusionBuilderPathMatches": 0,
     "scope": "historical candidate record; canonical lock and recipe now live in engines/ppsspp-source-lock.json"
   },
   "ffmpeg": {

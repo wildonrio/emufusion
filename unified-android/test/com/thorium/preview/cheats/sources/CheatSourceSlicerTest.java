@@ -18,7 +18,7 @@ public final class CheatSourceSlicerTest {
     private static File dir;
 
     public static void main(String[] args) throws Exception {
-        dir = Files.createTempDirectory("lucent-slicer").toFile();
+        dir = Files.createTempDirectory("emufusion-slicer").toFile();
         CheatFetch fetch = new CheatFetch() {
             @Override public File fetch(CheatSource source, String url) { return CACHE.get(url); }
         };

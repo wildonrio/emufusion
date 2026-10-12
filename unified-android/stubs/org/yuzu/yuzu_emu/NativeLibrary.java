@@ -12,24 +12,24 @@ import java.io.OutputStream;
  * The Java half of Eden's JNI contract.
  *
  * <p>Eden's {@code JNI_OnLoad} (common/android/id_cache.cpp) caches this class
- * and nine static methods before it returns. Lucent opens the adapter with
+ * and nine static methods before it returns. EmuFusion opens the adapter with
  * dlopen and supplies the process JavaVM itself, so that lookup runs against
- * Lucent's own dex: without these declarations {@code FindClass} raises
+ * EmuFusion's own dex: without these declarations {@code FindClass} raises
  * ClassNotFoundException, {@code JNI_OnLoad} leaves it pending, and ART aborts
  * the process. Every signature here is copied from the cache site and must
  * match it exactly.
  *
- * <p>Lucent owns the session lifecycle, the surface and the audio track, so the
+ * <p>EmuFusion owns the session lifecycle, the surface and the audio track, so the
  * callbacks Eden's own Activity would service are recorded and dropped. The
  * three filesystem helpers are real, because Eden calls them while it walks
  * content.
  */
 public final class NativeLibrary {
-    private static final String TAG = "LucentEdenBridge";
+    private static final String TAG = "EmuFusionEdenBridge";
 
     private NativeLibrary() {}
 
-    /** Eden asking its Activity to finish. Lucent retires the session instead. */
+    /** Eden asking its Activity to finish. EmuFusion retires the session instead. */
     public static void exitEmulationActivity(int resultCode) {
         Log.i(TAG, "eden requested exit resultCode=" + resultCode);
     }
@@ -46,7 +46,7 @@ public final class NativeLibrary {
         Log.i(TAG, "eden reported program change index=" + programIndex);
     }
 
-    /** Netplay is not surfaced by Lucent; the messages are still logged. */
+    /** Netplay is not surfaced by EmuFusion; the messages are still logged. */
     public static void addNetPlayMessage(int type, String message) {
         Log.i(TAG, "eden netplay message type=" + type + " message=" + message);
     }
@@ -108,7 +108,7 @@ public final class NativeLibrary {
     // ---------------------------------------------------------------------
     // Common::FS::Android::RegisterCallbacks binds the six methods below at
     // load time and aborts if any is missing. Eden routes real filesystem work
-    // through them, so these are implemented rather than stubbed: Lucent hands
+    // through them, so these are implemented rather than stubbed: EmuFusion hands
     // the engine ordinary absolute paths, which java.io.File answers directly.
     // ---------------------------------------------------------------------
 
@@ -138,18 +138,18 @@ public final class NativeLibrary {
 
     /**
      * Storage Access Framework hook. Eden only reaches this for a
-     * {@code content://} URI (see Common::FS::Android::IsContentUri) and Lucent
+     * {@code content://} URI (see Common::FS::Android::IsContentUri) and EmuFusion
      * always supplies ordinary filesystem paths, so it is never expected to
      * fire. Returning -1 is the documented "could not open" answer; a static
      * method has no Context with which to resolve a URI anyway.
      */
     public static int openContentUri(String uri, String openMode) {
-        Log.w(TAG, "eden asked to open a content URI Lucent does not provide: " + uri);
+        Log.w(TAG, "eden asked to open a content URI EmuFusion does not provide: " + uri);
         return -1;
     }
 
-    /** Bound by Common::Android::WebBrowser::InitJNI. Lucent owns browsing. */
+    /** Bound by Common::Android::WebBrowser::InitJNI. EmuFusion owns browsing. */
     public static void openExternalUrl(String url) {
-        Log.i(TAG, "eden requested an external URL, ignored by Lucent: " + url);
+        Log.i(TAG, "eden requested an external URL, ignored by EmuFusion: " + url);
     }
 }

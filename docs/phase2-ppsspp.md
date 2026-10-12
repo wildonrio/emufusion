@@ -3,7 +3,7 @@
 ## Android 16 KiB loader repair (2026-10-04)
 
 The pinned PPSSPP recipe now sets 16 KiB shared/module linker alignment. Two
-clean different-path builds produce `376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d`;
+clean different-path builds produce `43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c`;
 the full normal recipe also passes its updated artifact/compliance gates. The
 old core fails the real Android16/16KiB loader; the rebuilt core loads and answers
 libretro system-info. Exact artifacts and generated hash-only notices promoted;
@@ -190,7 +190,7 @@ live submodule checkouts.
 The recipe ignores generic CMake, Ninja, NDK-version, and NDK-root overrides
 for this proof and verifies the locked Darwin binaries/metadata before fetching
 source. Builds sharing one `BUILD_ROOT` are serialized by an atomic lock;
-callers may instead use a distinct `LUCENT_ENGINE_BUILD_DIR`. The checked-in
+callers may instead use a distinct `EMUFUSION_ENGINE_BUILD_DIR`. The checked-in
 version patch is SHA-256 verified before application.
 
 The archive has no `.git` directory, so EmuFusion applies a narrow checked-in

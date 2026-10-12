@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "purpose": "Opt-in Android qualification fixture; never bundled in Lucent artifacts",
+  "purpose": "Opt-in Android qualification fixture; never bundled in EmuFusion artifacts",
   "fixtures": [
     {
       "title": "Flight of the Amazon Queen - Freeware Floppy Version",

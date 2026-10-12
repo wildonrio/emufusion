@@ -43,7 +43,7 @@
   },
   "legalTestContent": {
     "path": "engines/puae-test-content-lock.json",
-    "sha256": "13570b612dc8546308a4a01fc1b5e03654647ceae11809f1b474837d507bdcfa"
+    "sha256": "eea84093028c1aa657f63dde79f08d54ec3b91c97dc18c41baf69ba8f73396b2"
   },
   "artifact": {
     "path": "engines/build/arm64-v8a/puae_libretro.so",

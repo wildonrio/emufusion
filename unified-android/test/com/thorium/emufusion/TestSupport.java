@@ -17,7 +17,7 @@ public final class TestSupport {
     }
 
     public static File temporaryDirectory(String name) throws IOException {
-        return Files.createTempDirectory("lucent-" + name + "-").toFile();
+        return Files.createTempDirectory("emufusion-" + name + "-").toFile();
     }
 
     public static void deleteTree(File file) {

@@ -52,6 +52,7 @@ public final class EmuFusionApplication
                 LegacyNames.SOUND_EFFECTS_KEY, MenuSoundPlayer.PREF_ENABLED,
                 MenuSoundPlayer.DEFAULT_ENABLED);
         LegacyNames.moveEngineMarkers(getDir("engine-system", MODE_PRIVATE));
+        LegacyNames.moveSaveMarkers(getFilesDir());
         ThemeInstaller.migrateLegacyTheme(this);
     }
 

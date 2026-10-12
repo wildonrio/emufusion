@@ -67,7 +67,7 @@ index c8c72f9..a96afbe 100644
 +		return;
 +	}
 +
-+	// Lucent shares the process with Android Runtime and other native engines.
++	// EmuFusion shares the process with Android Runtime and other native engines.
 +	// Preserve the handler that was installed before Play!, and forward faults
 +	// outside EE RAM instead of replacing ART's signal chain or forcing SIG_DFL.
 +	if(!m_hasPreviousSigSegvAction)

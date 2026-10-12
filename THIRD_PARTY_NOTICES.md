@@ -296,7 +296,7 @@ The ScummVM qualification core is built from commit
 small EmuFusion exit-autosave patch. It contains only the 32 engine identifiers in
 the pinned upstream `lite_engines.list`; it is not a claim of universal
 ScummVM compatibility. The exact binary SHA-256 is
-`668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d`.
+`9d8d2b51b55ab799ad8e8931dbe1caabfe9035efde0512b2359205e6d2032775`.
 
 Packaging runs a binary-specific compliance gate over all 337 linked external
 objects and four identified embedded subcomponents. The generated

@@ -14,7 +14,7 @@ import java.util.Map;
 /** The per-game file round-trips, survives corruption, and keeps ids stable; plus the source switches. */
 public final class DownloadedCheatFileTest {
     public static void main(String[] args) throws Exception {
-        File dir = Files.createTempDirectory("lucent-downloaded").toFile();
+        File dir = Files.createTempDirectory("emufusion-downloaded").toFile();
         codec(dir);
         ids();
         pathDerivation(dir);

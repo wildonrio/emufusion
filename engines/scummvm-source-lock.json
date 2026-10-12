@@ -37,9 +37,9 @@
   ],
   "patches": [
     {
-      "path": "engines/patches/scummvm-lucent-exit-autosave.patch",
-      "sha256": "48ed9e33df1838a8cfa6cf9a8dc7b405612854bfa88e72a2746d7e74e266437b",
-      "purpose": "Synchronous fail-closed engine-native exit autosave and per-content resume-slot restoration for the Lucent in-process host."
+      "path": "engines/patches/scummvm-emufusion-exit-autosave.patch",
+      "sha256": "f397b52f9314021b74c6b4af4e7682fb25d657c30fbc4c32716a986191327038",
+      "purpose": "Synchronous fail-closed engine-native exit autosave and per-content resume-slot restoration for the EmuFusion in-process host."
     }
   ],
   "configuration": {
@@ -48,7 +48,7 @@
     "liteEnginesListSha256": "2ca429dcf99521e021e6cbc2ccf668e381335652ac88ff4ee00613189308aa5e",
     "genericSerialization": false,
     "statePolicy": "engine-native-fail-closed-exit-autosave",
-    "hostPrepareExitSymbol": "retro_lucent_prepare_exit_autosave",
+    "hostPrepareExitSymbol": "retro_emufusion_prepare_exit_autosave",
     "resumeMarkerScope": "per-content-path-fnv1a64",
     "prepareExitMaximumCoreFrames": 120
   },
@@ -66,16 +66,16 @@
       "reason": "Add -Wl,-z,max-page-size=16384 so every PT_LOAD segment is compatible with Android devices using 16 KiB pages."
     },
     {
-      "path": "engines/patches/scummvm-lucent-exit-autosave.patch",
+      "path": "engines/patches/scummvm-emufusion-exit-autosave.patch",
       "reason": "Fail held-Stop closed unless an engine-native autosave and per-content resume marker both complete, then restore that engine-specific slot at next launch."
     }
   ],
   "artifact": {
     "path": "engines/build/arm64-v8a/scummvm_libretro.so",
-    "sha256": "668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d",
-    "size": 25793128,
-    "firstCleanBuildSha256": "668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d",
-    "secondCleanBuildSha256": "668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d",
+    "sha256": "9d8d2b51b55ab799ad8e8931dbe1caabfe9035efde0512b2359205e6d2032775",
+    "size": 25792792,
+    "firstCleanBuildSha256": "9d8d2b51b55ab799ad8e8931dbe1caabfe9035efde0512b2359205e6d2032775",
+    "secondCleanBuildSha256": "9d8d2b51b55ab799ad8e8931dbe1caabfe9035efde0512b2359205e6d2032775",
     "ptLoadAlignment": "0x4000",
     "reproducible": true
   },

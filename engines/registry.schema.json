@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wildonrio.github.io/emufusion/engines/registry.schema.json",
-  "title": "Lucent emulation engine registry",
+  "title": "EmuFusion emulation engine registry",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "generatedAt", "engines"],

@@ -15,100 +15,102 @@
       "id": "prosystem",
       "sourceCommit": "363b6dfbd3e240762e022c2b4897b4fe55722be3",
       "sourceArchiveSha256": "7abed225b58d306bd3988c6950f851aa52a4c7b30d97cedcf626aa18fbf05282",
-      "recipeSha256": "f6dee872e4e74319c53ffbda18094a81e985bee2504597fe455c2213d65bd38d",
+      "recipeSha256": "676d5d67eee084972c232391af6d090ed27e8a23c165cf79dcea38e3d0d9ef0f",
       "patches": {},
       "artifactSha256": "82a9d935a628461134a95cf896c885401a679e52b375dc98c6f479fe3183b21f",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-04",
-      "proofScope": "Two clean builds at different isolated source/build paths; strict 16 KiB Android library loading verified, not new gameplay qualification.",
-      "evidence": "docs/qa/android-portability-2026-10-04-software-pages/promotion.json"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-prosystem) with the EmuFusion-renamed recipe; byte-identical to the previously proven artifact (Two clean builds at different isolated source/build paths; strict 16 KiB Android library loading verified, not new gameplay qualification); not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     },
     {
       "id": "dosbox-pure",
       "sourceCommit": "7f6e8fb7385fa446d1444d671063268520bf9b54",
       "sourceArchiveSha256": "b413767bf4d61e03c9a779cb0001bcc1bb68c78afbb058fd68d947a9f065f300",
-      "recipeSha256": "f658bf4ea3f2f7f7b6fc4a775245bc8e54e6c5705f7e6a0befb0d99b51b249e0",
+      "recipeSha256": "451ca4a0b2f10df4a37867985e3fffeeab07af07a4bacd4dae80d34bcd291a79",
       "patches": {},
       "artifactSha256": "76bf9d996af849966074673bbdb759a14143ce495a8d75d8539d69764d1ce190",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-08-07"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-dosbox-pure) with the EmuFusion-renamed recipe; byte-identical to the previously proven artifact (earlier proof); not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     },
     {
       "id": "melonds-ds",
       "sourceCommit": "2748dfb9409c94e6828d937d04e334f35127ba7c",
       "sourceArchiveSha256": "502d33556397836b32c2b81d0ef066558710eb1e22758d53c3463a63b91796a5",
-      "recipeSha256": "145b5f891363e304cbaa5aef3af0d32a0bf50e3aa5531cb3c99b1ae6d736f3c3",
+      "recipeSha256": "119f9c39629e67a3ff66f1729f929015dbd0f630e780d2dfbdd95d062c462f7f",
       "patches": {
         "engines/patches/melonds-ds-no-pcap-without-direct-networking.patch": "1623aba2b8365c06ed16fbacb99d1588567badc47cd69a472dbb1c2f4fc6fe42"
       },
-      "artifactSha256": "3f473b02098fb7ff6210d4453fcfacfda48513cfa65f68df38c9a1629fdb8f78",
+      "artifactSha256": "2f42509049edd3790aa9b952c58875502b43f0f0ff1aabd64e9c9364dabb9d54",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-04",
-      "proofScope": "Two consecutive clean builds at the same isolated root; not a path-isolated proof.",
-      "evidence": "docs/qa/android-portability-2026-10-04-core-pages/promotion.json"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-melonds-ds) with the EmuFusion-renamed recipe and patches; not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     },
     {
       "id": "swanstation",
       "sourceCommit": "5430a4a53b89fa5827c97b84ada29d23317245bc",
       "sourceArchiveSha256": "df747c49b9038499b8d8762cd2662f0b8c128ee3999b74b19979e5ab20dd622d",
-      "recipeSha256": "bf7b05a6c40471b4d307625ca2d1c668eed2bb303ccce5566bbf7b8a84f427fd",
+      "recipeSha256": "d9c51fb98844d035bb4ee0c00e48cb9696e10353010b317b329689686531ead6",
       "patches": {
-        "engines/patches/swanstation-disable-forced-ipo.patch": "5164ff807ff796ed0740524eb46447d757bc1a73a9bbfabdf522ed790610aa49"
+        "engines/patches/swanstation-disable-forced-ipo.patch": "8d312fb06736b0577d05e0b0694592112632f3a659c247f801185f9acbbb881f"
       },
-      "artifactSha256": "d3c9498c1d35525b1761104c57d97f220d0498a819424f9902c5c16dc25cc3fe",
+      "artifactSha256": "032a04bcb4bc924f73c49769bc4848ddee132c40448b472aaab49f5eec48f239",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-04",
-      "proofScope": "Two consecutive clean builds at the same isolated root; not a path-isolated proof.",
-      "evidence": "docs/qa/android-portability-2026-10-04-core-pages/promotion.json"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-swanstation) with the EmuFusion-renamed recipe and patches; not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     },
     {
       "id": "beetle-pce-fast",
       "sourceCommit": "b211204c7026dff6e86e79b00185512e2421fff8",
       "sourceArchiveSha256": "ec3ef1874f0590ab6d5cd4bba86969ee085e8bef2de4b4e5f2422fe38a2c2d3d",
-      "recipeSha256": "3106677ccd699e2ae87204fa9b6bc159ff781eb2c9f3b5f26ffd1ae53485b22a",
+      "recipeSha256": "cba20a78b834f87bd6e1305f7400d2b036d2227a4c05e935201ab6f7057e8f3d",
       "patches": {},
       "artifactSha256": "fafe860e48508f371548fa7dcd58d78cf19df085826b47be4033a32a92b54943",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-04",
-      "proofScope": "Two clean builds at different isolated source/build paths; strict 16 KiB Android library loading verified, not new gameplay qualification.",
-      "evidence": "docs/qa/android-portability-2026-10-04-software-pages/promotion.json"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-beetle-pce-fast) with the EmuFusion-renamed recipe; byte-identical to the previously proven artifact (Two clean builds at different isolated source/build paths; strict 16 KiB Android library loading verified, not new gameplay qualification); not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     },
     {
       "id": "beetle-neopop",
       "sourceCommit": "a50d5ac288a81f2104ddf43195a4efdd15c72227",
       "sourceArchiveSha256": "ffeabf2a357548f3a55423d542c31bb1e08571d81d7104f8213df3bfa2eb9c9f",
-      "recipeSha256": "3e5da36a7a308a98a4186766cb6044d919399ad50664f30be3be86e3e2bd097a",
+      "recipeSha256": "d2a8792a4c88def3806d169f1791f76677b39461c14a3e1ae9c5f93a11fc1938",
       "patches": {},
       "artifactSha256": "4b4d3fdc9c9910bfc86ad2fac5e6aff874efb9140102639cca2117512a345e21",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-04",
-      "proofScope": "Two clean builds at different isolated source/build paths; strict 16 KiB Android library loading verified, not new gameplay qualification.",
-      "evidence": "docs/qa/android-portability-2026-10-04-software-pages/promotion.json"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-beetle-neopop) with the EmuFusion-renamed recipe; byte-identical to the previously proven artifact (Two clean builds at different isolated source/build paths; strict 16 KiB Android library loading verified, not new gameplay qualification); not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     },
     {
       "id": "beetle-cygne",
       "sourceCommit": "4b01295838ea89e3f1355bbe4cb5cf98aa6108cd",
       "sourceArchiveSha256": "bce15c0e2505e15b7b55fa1d51b4a12219d07a67be62bbca5c26678d0d89c659",
-      "recipeSha256": "1a74a3335db4377743eb3c053b677752e466b5b608a93d0616e4541ad850388c",
+      "recipeSha256": "456a88a5cab30a4b714ebd6c03f78b1a32185fac08f3e7c69339fdd78e71c907",
       "patches": {},
       "artifactSha256": "0707f63a69593dd99b13a60c3bab7ef3e48558dc357988bd9b21f3d3010481ea",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-04",
-      "proofScope": "Two clean builds at different isolated source/build paths; strict 16 KiB Android library loading verified, not new gameplay qualification.",
-      "evidence": "docs/qa/android-portability-2026-10-04-software-pages/promotion.json"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-beetle-cygne) with the EmuFusion-renamed recipe; byte-identical to the previously proven artifact (Two clean builds at different isolated source/build paths; strict 16 KiB Android library loading verified, not new gameplay qualification); not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     },
     {
       "id": "blastem",
       "sourceCommit": "84e567e17b6fb3cea23146c4209c18d50d46cbf0",
       "sourceArchiveSha256": "7bf9a28959fbced50479e59b7832bf9b2a9746bb06620bdd5c28c89d205e8fc7",
-      "recipeSha256": "6d7e8648cd6e0161468908addcdd766a6ca1acc349d217682ca70c10c8cc678c",
+      "recipeSha256": "40f6e1167c8464c1f9c381e254402973990c9f2a4a1b1158e665a526cb5859ac",
       "patches": {
         "engines/patches/blastem-libretro-android-portability.patch": "4966522359464467f8b9f150356fdc03ba7f056a12f24ca822f71a9c8b173eed",
         "engines/patches/blastem-new-core-frame-end-rebase-hang.patch": "d899b13fe0728e5e927e30736e1c1c7c57d2906a6814c6150823e911cc73686c"
@@ -116,25 +118,27 @@
       "artifactSha256": "e479c08debbf0399a8e3eaed57add952bcc1848c78eed3104bea775ae9128a77",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-08",
-      "proofScope": "Two clean builds at different isolated source/build paths with the frame-end rebase hang fix; host-verified freeze removal, not new gameplay qualification.",
-      "evidence": "docs/qa/android-portability-2026-10-08-current-build-survey/blastem-freeze/promotion.json"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-blastem) with the EmuFusion-renamed recipe; byte-identical to the previously proven artifact (Two clean builds at different isolated source/build paths with the frame-end rebase hang fix; host-verified freeze removal, not new gameplay qualification); not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     },
     {
       "id": "mupen64plus-next",
       "sourceCommit": "f275caf4b2bfa1e6d1c51636746ea793f3d80320",
       "sourceArchiveSha256": "1810b7bbdc4abfdeee8a9f7f99c4a91dab601a228935802317c25a43d7cf9dbb",
-      "recipeSha256": "291b5e15afd5b624d434ca05c558c13e20e6b0bb920a90404c9dccf1962369c9",
+      "recipeSha256": "8552db2fdc44517d5bca88720c2dcd08b2db2ecb5f7d878cc3644cae08d9a7ce",
       "patches": {
-        "engines/patches/mupen64plus-next-android-arm64.patch": "751a6ace68e14da2562210e20ee5c88ac9f5c4616dd5c8ae5c51160071c30b35",
+        "engines/patches/mupen64plus-next-android-arm64.patch": "816d6f8f6847736e73c2b0614e71941497e3d18b974239440994b575a5f25761",
         "engines/patches/mupen64plus-next-context-setup.patch": "8396947b663386db0eb1358dd201c2bcc3005e6faf3fd64d010a1287ea7be066",
         "engines/patches/mupen64plus-next-host-page-protection.patch": "d1562bd10b82830ccb1524401354c5360b5aaf7745b9122eb7d5d41134ae6d67",
         "engines/patches/mupen64plus-next-egl-reader-capability.patch": "611c2d214989ebfc985258bb12d9cadf61c8248cd0bbf3bfedf18ea00ab1530e"
       },
-      "artifactSha256": "05c1270d18ce61f51a34766dca07b23bd1061cc43f0dac61e85e3dfefb7533d3",
+      "artifactSha256": "c94dc30f45783f09825a5806344361119078917e1896abdccafca9f2753d3657",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-06"
+      "proofDate": "2026-10-12",
+      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-mupen64plus-next) with the EmuFusion-renamed recipe and patches; not new gameplay qualification.",
+      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
     }
   ]
 }

@@ -68,9 +68,9 @@ FLYCAST_DEPENDENCY_LOCK = "engines/flycast-source-lock.json"
 ARMSX2_COMMIT = "788a59d641c777cb7f70726ea573d420508e0931"
 ARMSX2_ARCHIVE_SHA = "bc2bb2f106ca499252e3bfe0a40366de5e9749fd84bebbbe80ed52c4b07abf63"
 ARMSX2_DEPENDENCY_LOCK = "engines/armsx2-source-lock.json"
-ARMSX2_DEPENDENCY_LOCK_SHA = "987ff5aed12bfb029484d968a47d9b6a957e64434846357be3c0471090a5bf2a"
+ARMSX2_DEPENDENCY_LOCK_SHA = "ef3e35a48753ed0b582c9e208db6aaa916664f47f3234026f2245cce9604fe64"
 ARMSX2_PATCH = "engines/patches/armsx2-libretro-android-build.patch"
-ARMSX2_PATCH_SHA = "f8d1f6c46125ab953c9333eb57400a8f4ff339ea91ebc3221ab8638514bded78"
+ARMSX2_PATCH_SHA = "5181a335e770f63a89e83ff757421a92813213d21860a312d18b12d679e6ff95"
 ARMSX2_CLOCK_PATCH = "engines/patches/armsx2-libretro-frame-clock.patch"
 ARMSX2_CLOCK_PATCH_SHA = "c94ef2e4fc1440fbbfceef124433343df8f1bbddd320307dc6719effd838d49f"
 ARMSX2_DESCRIPTOR_PATCH = "engines/patches/armsx2-libretro-descriptor-batch.patch"
@@ -88,7 +88,7 @@ DOLPHIN_REPOSITORY = "https://github.com/libretro/dolphin"
 DOLPHIN_COMMIT = "0ff12a5a2835762e0665afe6a161a648b433f996"
 DOLPHIN_ARCHIVE_SHA = "3c6698d6da772065194be118871ce24620f0fdc76894bc568e34d48f93de7494"
 DOLPHIN_DEPENDENCY_LOCK = "engines/dolphin-source-lock.json"
-DOLPHIN_ARTIFACT_SHA = "12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6"
+DOLPHIN_ARTIFACT_SHA = "093db3423313ed0b9413d218c0694df2dd784f726f6672099539fa5ab1c43555"
 DOLPHIN_PATCH = "engines/patches/dolphin-libretro-submit-rendered-duplicate-xfb.patch"
 DOLPHIN_PATCH_SHA = "5dd844b8546eea62706a4dd84304077cddaf83c68987459a532f6055f2f5919b"
 DOLPHIN_STACK_PATCH = "engines/patches/dolphin-libretro-own-signal-stack.patch"
@@ -100,7 +100,7 @@ SCUMMVM_ARCHIVE_SHA = "8e2080a442b4e78c045795714ac4b699023f631e2045fb133d496cd29
 SCUMMVM_DEPENDENCY_LOCK = "engines/scummvm-source-lock.json"
 SCUMMVM_AUDIT = "engines/scummvm-dependency-audit.json"
 SCUMMVM_CONTENT_LOCK = "engines/scummvm-test-content-lock.json"
-SCUMMVM_ARTIFACT_SHA = "668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d"
+SCUMMVM_ARTIFACT_SHA = "9d8d2b51b55ab799ad8e8931dbe1caabfe9035efde0512b2359205e6d2032775"
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -625,7 +625,7 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                         "purpose": (
                             "Submit the OpenGL framebuffer rendered for duplicate XFB "
                             "presentation instead of incorrectly reporting a null duplicate "
-                            "frame to Lucent."
+                            "frame to EmuFusion."
                         ),
                     }, {
                         "path": DOLPHIN_STACK_PATCH,

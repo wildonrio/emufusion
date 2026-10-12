@@ -9,8 +9,8 @@ diff --git a/Source/ee/EeExecutor.cpp b/Source/ee/EeExecutor.cpp
 +// protected EE code pages.  An in-process libretro core shares Android's ART
 +// signal chain with its Java host, where replacing SIGSEGV is not safe.  Play!
 +// already supports this correctness-first invalidation mode on other ARM
-+// targets; use it for Lucent's embedded Android route as well.
-+#if defined(__ANDROID__) && defined(LUCENT_LIBRETRO)
++// targets; use it for EmuFusion's embedded Android route as well.
++#if defined(__ANDROID__) && defined(EMUFUSION_LIBRETRO)
 +#define DISABLE_PROTECTION
 +#endif
 +

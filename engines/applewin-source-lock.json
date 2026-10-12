@@ -30,9 +30,9 @@
   "artifact": {
     "path": "engines/build/arm64-v8a/applewin_libretro.so",
     "size": 19644528,
-    "sha256": "e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84",
-    "firstCleanBuildSha256": "e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84",
-    "secondCleanBuildSha256": "e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84",
+    "sha256": "930dfc035a2c2fd63ad585c9c4dcb8a4a82fd5f13472b92c396c203faa426926",
+    "firstCleanBuildSha256": "930dfc035a2c2fd63ad585c9c4dcb8a4a82fd5f13472b92c396c203faa426926",
+    "secondCleanBuildSha256": "930dfc035a2c2fd63ad585c9c4dcb8a4a82fd5f13472b92c396c203faa426926",
     "proofScope": "Two consecutive clean builds at the same isolated path; not path-independent. Recipe firmware checks pass in both logs.",
     "embeddedUpstreamFirmwareByteMatches": 0
   }

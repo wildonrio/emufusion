@@ -6,7 +6,7 @@ index b385de5..e03bad5 100644
  	// Returns true if using 16:9 anamorphic screen ratio
  	bool isWidescreen() const { return widescreen_cheat != nullptr; }
  	void addGameSharkCheat(const std::string& name, const std::string& s);
-+	// Lucent: retro_cheat_set addresses live cheats by a frontend-owned
++	// EmuFusion: retro_cheat_set addresses live cheats by a frontend-owned
 +	// index and the libretro contract is retro_cheat_reset() followed by one
 +	// retro_cheat_set() per currently active code, so the whole list is
 +	// rebuilt on every change instead of edited by index. Disk cheat files
@@ -47,14 +47,14 @@ index a4444c9..f27b8d8 100644
 +		return;
 +	size_t countBefore = cheatManager.cheatCount();
 +	try {
-+		cheatManager.addGameSharkCheat("Lucent live cheat " + std::to_string(index), code);
++		cheatManager.addGameSharkCheat("EmuFusion live cheat " + std::to_string(index), code);
 +	}
 +	catch (const FlycastException& e) {
 +		WARN_LOG(COMMON, "retro_cheat_set: rejected code for index %u: %s", index, e.what());
 +		return;
 +	}
 +	// One retro_cheat_set() call carries a whole cheat's code verbatim, but
-+	// Lucent's multi-line convention ('+'-joined lines = one cheat) can make
++	// EmuFusion's multi-line convention ('+'-joined lines = one cheat) can make
 +	// addGameSharkCheat() push several Cheat entries for it (e.g. two
 +	// independent GameShark write pairs). Every pushed entry defaults to
 +	// disabled, so all of them -- not just the last -- must be enabled here

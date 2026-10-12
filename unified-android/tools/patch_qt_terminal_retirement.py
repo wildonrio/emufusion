@@ -15,7 +15,7 @@ QT = "Lorg/qtproject/qt5/android/QtActivityDelegate;"
 HOST = "Lcom/thorium/preview/game/InWindowGameHost;"
 CALLBACK = "Lorg/qtproject/qt5/android/EmuFusionTerminalShutdown;"
 QT_THREAD = "Lorg/qtproject/qt5/android/QtThread;"
-MARKER = "lucent_terminal_retirement"
+MARKER = "emufusion_terminal_retirement"
 METHOD = re.compile(r"^\.method ([^\n]+)\n(.*?)^\.end method", re.M | re.S)
 
 
@@ -55,28 +55,28 @@ return-void"""
     .locals 3
     # {MARKER}: Android Activity.super.onDestroy has already run.
     iget-boolean v0, p0, {QT}->m_quitApp:Z
-    if-eqz v0, :lucent_destroy_return
+    if-eqz v0, :emufusion_destroy_return
     iget-object v1, p0, {QT}->m_activity:Landroid/app/Activity;
     new-instance v2, {CALLBACK}
     invoke-direct {{v2, p0, v1}}, {CALLBACK}-><init>({QT}Landroid/app/Activity;)V
     invoke-static {{v1, v2}}, {HOST}->requestQtTerminalShutdown(Landroid/app/Activity;Ljava/lang/Runnable;)Z
     move-result v0
-    if-nez v0, :lucent_destroy_return
+    if-nez v0, :emufusion_destroy_return
     invoke-virtual {{p0, v1}}, {QT}->emufusionCompleteTerminalShutdown(Landroid/app/Activity;)V
-    :lucent_destroy_return
+    :emufusion_destroy_return
     return-void
 .end method
 """
     guard = f"""    .locals 2
     iget-object v1, p0, {QT}->m_activity:Landroid/app/Activity;
     if-ne v1, p1, :cond_0
-    iget-boolean v1, p0, {QT}->lucent_terminal_started:Z
+    iget-boolean v1, p0, {QT}->emufusion_terminal_started:Z
     if-nez v1, :cond_0
 """
     helper = body.replace("    .locals 1\n", guard, 1)
     helper = helper.replace("    if-eqz v0, :cond_0", f"""    if-eqz v0, :cond_0
     const/4 v1, 0x1
-    iput-boolean v1, p0, {QT}->lucent_terminal_started:Z""", 1)
+    iput-boolean v1, p0, {QT}->emufusion_terminal_started:Z""", 1)
     # Only the managed Main retirement uses Android's terminal process exit.
     # Its host disables Qt's earlier libc exit before terminateQt, so this is
     # reached after QtThread.exit; the host verifies the captured backing
@@ -94,7 +94,7 @@ return-void"""
     if source.count(fields) != 1:
         raise ValueError("Qt quit flag declaration changed")
     result = source[:match.start()] + wrapper + helper + source[match.end():]
-    return result.replace(fields, fields + "\n.field private lucent_terminal_started:Z", 1)
+    return result.replace(fields, fields + "\n.field private emufusion_terminal_started:Z", 1)
 
 
 def argument_words(descriptor):
@@ -142,10 +142,10 @@ def patch_binding(source):
     # {MARKER}: never forward a replacement owner into the old delegate.
     invoke-static/range {{p0 .. p0}}, {HOST}->shouldSkipQtDelegate(Landroid/app/Activity;)Z
     move-result v0
-    if-eqz v0, :lucent_qt_delegate_allowed
+    if-eqz v0, :emufusion_qt_delegate_allowed
     {call}
     {returns}
-    :lucent_qt_delegate_allowed
+    :emufusion_qt_delegate_allowed
 """
         guarded.append(name_descriptor)
         body = body[:local.start()] + guard + body[local.end():]

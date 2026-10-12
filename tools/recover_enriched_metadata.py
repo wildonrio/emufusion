@@ -120,7 +120,7 @@ def donor_managed(fields: dict[str, str]) -> dict[str, str]:
     return {
         key: value
         for key, value in fields.items()
-        if key in CORE_FIELDS or (key.startswith("x-") and key != "x-lucent-id")
+        if key in CORE_FIELDS or (key.startswith("x-") and key != "x-emufusion-id")
     }
 
 
@@ -190,7 +190,7 @@ def recover(current: Path, donor_dir: Path, output: Path) -> list[dict[str, int 
         if source.name == "08-windows.metadata.pegasus.txt":
             header = re.sub(r"^collection:\s*Windows 10$", "collection: Microsoft Windows",
                             header, flags=re.MULTILINE)
-        elif source.name == "99-lucent-auto-pcenginecd.metadata.pegasus.txt":
+        elif source.name == "99-emufusion-auto-pcenginecd.metadata.pegasus.txt":
             header = re.sub(r"^collection:\s*NEC PC Engine CD$",
                             "collection: Microsoft Windows", header, flags=re.MULTILINE)
         rewritten: list[str] = []

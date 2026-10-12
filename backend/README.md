@@ -1,7 +1,7 @@
-# Lucent Multiplayer Backend (alpha)
+# EmuFusion Multiplayer Backend (alpha)
 
 The self-hosted presence, matchmaking, and WebRTC-signaling service behind
-Lucent's alpha multiplayer feature. It is intentionally small and does
+EmuFusion's alpha multiplayer feature. It is intentionally small and does
 exactly one job: help two (or more) devices find each other and exchange
 a WebRTC handshake. It never sees, stores, or relays game input, video,
 or audio -- once two devices are matched, gameplay traffic goes directly
@@ -28,14 +28,14 @@ Requires Go 1.27+.
 
 ```sh
 cd backend
-go run ./cmd/lucent-multiplayer
+go run ./cmd/emufusion-multiplayer
 ```
 
 Environment variables (both optional):
 
-- `LUCENT_MULTIPLAYER_ADDR` -- listen address, default `:8787`.
-- `LUCENT_MULTIPLAYER_DB` -- path to the bbolt database file, default
-  `lucent-multiplayer.db` in the working directory.
+- `EMUFUSION_MULTIPLAYER_ADDR` -- listen address, default `:8787`.
+- `EMUFUSION_MULTIPLAYER_DB` -- path to the bbolt database file, default
+  `emufusion-multiplayer.db` in the working directory.
 
 Health check: `GET /healthz` returns `200 ok` once the server is ready.
 
@@ -48,7 +48,7 @@ go test ./... -race
 
 `internal/hub`'s tests exercise the matching logic directly (instant
 match, minPlayers gating, schedule overlap, participant validation).
-`cmd/lucent-multiplayer`'s test exercises the real HTTP registration and
+`cmd/emufusion-multiplayer`'s test exercises the real HTTP registration and
 WebSocket auth flow end to end via `httptest`.
 
 For a fuller, cross-implementation check (registration, roster,
@@ -86,8 +86,8 @@ required. Any of the following work:
 
 ```sh
 cd backend
-go build -o lucent-multiplayer ./cmd/lucent-multiplayer
-# copy the binary + set LUCENT_MULTIPLAYER_ADDR/LUCENT_MULTIPLAYER_DB as needed
+go build -o emufusion-multiplayer ./cmd/emufusion-multiplayer
+# copy the binary + set EMUFUSION_MULTIPLAYER_ADDR/EMUFUSION_MULTIPLAYER_DB as needed
 ```
 
 Put a TLS-terminating reverse proxy (Caddy, nginx, or the PaaS's own

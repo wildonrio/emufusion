@@ -43,7 +43,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 ENGINE=${1:-cemu}
 LOCK="$ROOT/engines/$ENGINE-source-lock.json"
-ABI=${LUCENT_NATIVE_ABI:-arm64-v8a}
+ABI=${EMUFUSION_NATIVE_ABI:-arm64-v8a}
 
 if [ ! -f "$LOCK" ]; then
     printf 'No native-adapter source lock for engine "%s": %s\n' "$ENGINE" "$LOCK" >&2

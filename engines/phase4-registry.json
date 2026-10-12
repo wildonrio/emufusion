@@ -5,7 +5,7 @@
   "generatedAt": "2026-08-08",
   "oneAppContract": true,
   "distributionLicense": "GPL-3.0-only",
-  "intent": "Complete console coverage. Phase 4 closes the gaps left by Phases 1-3: systems whose Phase 1 engine was recorded as licence-blocked, systems whose engine is built but never packaged, systems whose hardware an approved engine already emulates but which Lucent never routes, and notable consoles with no engine in any registry. Every row starts with all gates false and shipped false, exactly like Phases 1-3. Phase 4 identifies candidates and evidence; it pins no source and qualifies nothing.",
+  "intent": "Complete console coverage. Phase 4 closes the gaps left by Phases 1-3: systems whose Phase 1 engine was recorded as licence-blocked, systems whose engine is built but never packaged, systems whose hardware an approved engine already emulates but which EmuFusion never routes, and notable consoles with no engine in any registry. Every row starts with all gates false and shipped false, exactly like Phases 1-3. Phase 4 identifies candidates and evidence; it pins no source and qualifies nothing.",
   "licensePolicy": {
     "compatible": [
       "GPL-3.0-only", "GPL-3.0-or-later", "GPL-2.0-or-later",
@@ -19,14 +19,14 @@
       "GPL-2.0-only", "GPL-1.0-only", "Artistic-1.0", "Artistic-1.0-Perl",
       "CC-BY-NC-4.0", "SSPL-1.0", "BUSL-1.1", "NOASSERTION"
     ],
-    "note": "Lucent distributes one combined work under GPL-3.0-only. Inbound GPL-2.0-or-later is compatible because the or-later option permits version 3; GPL-2.0-only is not. A bare GPLv2 COPYING or LICENSE document does NOT establish only-versus-or-later: only the per-file grant or an explicit project declaration does. Phase 1 read several COPYING files as GPL-2.0-only and was wrong six times."
+    "note": "EmuFusion distributes one combined work under GPL-3.0-only. Inbound GPL-2.0-or-later is compatible because the or-later option permits version 3; GPL-2.0-only is not. A bare GPLv2 COPYING or LICENSE document does NOT establish only-versus-or-later: only the per-file grant or an explicit project declaration does. Phase 1 read several COPYING files as GPL-2.0-only and was wrong six times."
   },
   "categories": {
     "misaudited": "An earlier phase recorded a blocking licence for this system's engine, but the pinned upstream licence text contradicts that record. Phase 4 must re-audit the incumbent at file level; it does not need a different engine.",
     "blocked-replacement": "The incumbent engine is genuinely incompatible with GPL-3.0-only distribution. Phase 4 must record a different licence-compatible engine or escalate a product decision.",
     "unpackaged": "An approved, licence-compatible engine already builds but is never staged into the APK.",
-    "unadvertised": "An approved, licence-compatible engine already emulates this hardware, but Lucent advertises no system id for it and the id does not resolve to any engine.",
-    "missing": "No engine exists in any Lucent registry for this system."
+    "unadvertised": "An approved, licence-compatible engine already emulates this hardware, but EmuFusion advertises no system id for it and the id does not resolve to any engine.",
+    "missing": "No engine exists in any EmuFusion registry for this system."
   },
   "expectedSystems": [
     "atari2600", "atari5200", "atari800", "amstradcpc", "atarist", "c64",
@@ -50,7 +50,7 @@
           "spdx": "GPL-2.0-or-later",
           "correctsRecordedSpdx": "GPL-2.0-only",
           "distributionGate": "audit-required",
-          "evidence": "Copyright.txt grants the work \"under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or any later version.\" Lucent's own registry recorded GPL-2.0-only with an empty evidence field. Stella's License.txt is the bare GPLv2 document, which is what the Phase 1 reading appears to have been based on; a GPLv2 document does not decide only-versus-or-later.",
+          "evidence": "Copyright.txt grants the work \"under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or any later version.\" EmuFusion's own registry recorded GPL-2.0-only with an empty evidence field. Stella's License.txt is the bare GPLv2 document, which is what the Phase 1 reading appears to have been based on; a GPLv2 document does not decide only-versus-or-later.",
           "evidenceUrl": "https://raw.githubusercontent.com/stella-emu/stella/master/Copyright.txt"
         },
         "androidArm64": {
@@ -61,13 +61,13 @@
           "required": false,
           "note": "The Atari 2600 needs no BIOS. Phase 1 already recorded firmware.required=false for this system, so no firmware gate work is implied."
         },
-        "rationale": "The incumbent engine was never actually incompatible, so the accurate and actively maintained upstream is available at no cost. Preferring upstream Stella over the libretro/stella2023 fork Lucent pinned also moves Lucent onto a core the Stella team maintains themselves.",
+        "rationale": "The incumbent engine was never actually incompatible, so the accurate and actively maintained upstream is available at no cost. Preferring upstream Stella over the libretro/stella2023 fork EmuFusion pinned also moves EmuFusion onto a core the Stella team maintains themselves.",
         "rejectedAlternatives": [
           {
             "name": "Gopher2600",
             "repository": "https://github.com/JetSetIlly/Gopher2600",
             "license": "GPL-3.0-or-later",
-            "reason": "Licence is a perfect match and the project is very active, but it is a Go plus SDL plus imgui desktop application with no libretro core and no Android target, so it cannot enter Lucent's in-process host."
+            "reason": "Licence is a perfect match and the project is very active, but it is a Go plus SDL plus imgui desktop application with no libretro core and no Android target, so it cannot enter EmuFusion's in-process host."
           },
           {
             "name": "stella2014-libretro",
@@ -120,7 +120,7 @@
             "name": "AltirraSDL",
             "repository": "https://github.com/ilmenit/AltirraSDL",
             "license": "GPL-2.0-or-later",
-            "reason": "More accurate than atari800 and licence-compatible (its headers inherit Altirra's version 2 or later grant, contradicting the project website's GPLv2 summary), but its libretro core targets only Linux, Windows and macOS; the Android target is a standalone SDL3 app, not a core Lucent could host."
+            "reason": "More accurate than atari800 and licence-compatible (its headers inherit Altirra's version 2 or later grant, contradicting the project website's GPLv2 summary), but its libretro core targets only Linux, Windows and macOS; the Android target is a standalone SDL3 app, not a core EmuFusion could host."
           },
           {
             "name": "MAME a5200/a800 drivers",
@@ -157,7 +157,7 @@
         },
         "firmware": {
           "required": true,
-          "note": "BLOCKER, and it is not the code licence. libretro-cap32 #includes rom/464.h, rom/6128.h and rom/amsdos.h, compiling Amstrad's firmware into the core, and those ROM headers carry a GPL notice that upstream's own debian/copyright contradicts with Files: rom/* Copyright: 1984-1990 Amstrad License: Commercial. Amstrad's 1999 permission is a bare attribution grant that does not cover Locomotive BASIC and states that no one should be charging for the ROM code. Lucent must strip the embedded ROMs and load user-supplied firmware, exactly as engines/patches already does for AppleWin."
+          "note": "BLOCKER, and it is not the code licence. libretro-cap32 #includes rom/464.h, rom/6128.h and rom/amsdos.h, compiling Amstrad's firmware into the core, and those ROM headers carry a GPL notice that upstream's own debian/copyright contradicts with Files: rom/* Copyright: 1984-1990 Amstrad License: Commercial. Amstrad's 1999 permission is a bare attribution grant that does not cover Locomotive BASIC and states that no one should be charging for the ROM code. EmuFusion must strip the embedded ROMs and load user-supplied firmware, exactly as engines/patches already does for AppleWin."
         },
         "rationale": "The incumbent engine was never incompatible and it far outclasses the alternatives, supporting eight disc and tape formats and selectable 464/664/6128/6128+ models. The re-audit must move the recorded blocker from the code licence, where it does not belong, to the embedded firmware, where it does.",
         "rejectedAlternatives": [
@@ -170,7 +170,7 @@
           {
             "name": "Arnold",
             "license": "GPL-2.0-or-later",
-            "reason": "Compatible across all 217 licence-carrying files, but it has no Android or libretro core, so there is no route into Lucent's host."
+            "reason": "Compatible across all 217 licence-carrying files, but it has no Android or libretro core, so there is no route into EmuFusion's host."
           },
           {
             "name": "ACE-DL",
@@ -207,14 +207,14 @@
         "firmware": {
           "required": true,
           "freeReplacement": "EmuTOS (GPL-2.0-or-later)",
-          "note": "Phase 1 recorded that a user-supplied tos.img is required. EmuTOS removes that: bios/bios.c states \"This file is distributed under the GPL, version 2 or at your option any later version\", so Lucent may ship it as the default OS ROM and offer a user-supplied TOS as an override. Honest limitation: EmuTOS runs GEM applications and many games well, but a minority of ST games and demos that poke TOS internals still need genuine TOS."
+          "note": "Phase 1 recorded that a user-supplied tos.img is required. EmuTOS removes that: bios/bios.c states \"This file is distributed under the GPL, version 2 or at your option any later version\", so EmuFusion may ship it as the default OS ROM and offer a user-supplied TOS as an override. Honest limitation: EmuTOS runs GEM applications and many games well, but a minority of ST games and demos that poke TOS internals still need genuine TOS."
         },
         "rationale": "Hatari is the only accurate ST, STE, TT and Falcon emulator with a maintained libretro Android core, and it was never licence-incompatible. Pairing it with EmuTOS converts a mandatory proprietary-firmware system into one that boots out of the box.",
         "rejectedAlternatives": [
           {
             "name": "Hatari with IPF/libcapsimage support enabled",
             "license": "proprietary (Software Preservation Society)",
-            "reason": "Hatari's readme grants a special exception permitting linking against libcapsimage, but that is a permission and not an obligation. Enabling IPF would inject a proprietary dependency into a GPL-3.0-only work, so the Lucent build must leave it off."
+            "reason": "Hatari's readme grants a special exception permitting linking against libcapsimage, but that is a permission and not an obligation. Enabling IPF would inject a proprietary dependency into a GPL-3.0-only work, so the EmuFusion build must leave it off."
           }
         ]
       },
@@ -245,7 +245,7 @@
         },
         "firmware": {
           "required": true,
-          "note": "BLOCKER, and it is not the code licence. VICE's own README states that the ROM files in the C128 and C64 directories are copyright Commodore Business Machines. Lucent must strip them and require user-supplied ROMs. A free replacement exists, MEGA65 open-roms under LGPL-3.0-or-later, but its own STATUS.md admits most BASIC commands and BASIC variables and arrays are still missing, so it is not yet a drop-in default the way EmuTOS and AltirraOS are."
+          "note": "BLOCKER, and it is not the code licence. VICE's own README states that the ROM files in the C128 and C64 directories are copyright Commodore Business Machines. EmuFusion must strip them and require user-supplied ROMs. A free replacement exists, MEGA65 open-roms under LGPL-3.0-or-later, but its own STATUS.md admits most BASIC commands and BASIC variables and arrays are still missing, so it is not yet a drop-in default the way EmuTOS and AltirraOS are."
         },
         "rationale": "The incumbent engine was never incompatible, and it beats every alternative outright: Frodo is marked experimental with no save states and a narrow format list, and VirtualC64's genuinely separable core has no Android or libretro port at all.",
         "rejectedAlternatives": [
@@ -259,7 +259,7 @@
             "name": "Frodo",
             "repository": "https://github.com/libretro/Frodo-libretro",
             "license": "GPL-2.0-or-later",
-            "reason": "Compatible and already on the Android buildbot, but its core-info marks it is_experimental=true with savestate=false, and it accepts neither .crt nor .tap, which fails Lucent's state and compatibility requirements."
+            "reason": "Compatible and already on the Android buildbot, but its core-info marks it is_experimental=true with savestate=false, and it accepts neither .crt nor .tap, which fails EmuFusion's state and compatibility requirements."
           },
           {
             "name": "MEGA65 open-roms",
@@ -330,18 +330,18 @@
           "spdx": "GPL-3.0-or-later AND Zlib",
           "auditRef": "engines/audits/blastem-license.json",
           "distributionGate": "compatible-candidate",
-          "evidence": "blastem.c states \"BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater\", the repository COPYING is the GPLv3 text, and Lucent's own audit at engines/audits/blastem-license.json already concluded \"Compatible candidate. BlastEm is GPL-3.0-or-later and the only selected third-party implementation is zlib under the Zlib license.\"",
+          "evidence": "blastem.c states \"BlastEm is free software distributed under the terms of the GNU General Public License version 3 or greater\", the repository COPYING is the GPLv3 text, and EmuFusion's own audit at engines/audits/blastem-license.json already concluded \"Compatible candidate. BlastEm is GPL-3.0-or-later and the only selected third-party implementation is zlib under the Zlib license.\"",
           "evidenceUrl": "https://github.com/libretro/blastem"
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "Lucent already builds this exact engine for arm64-v8a. engines/reproducibility-lock.json records blastem at commit 84e567e1 with two independent byte-identical builds and the checked-in patch engines/patches/blastem-libretro-android-portability.patch, and unified-android/build.sh already stages liblucent_core_blastem.so. BlastEm is absent from the libretro Android buildbot, but that is irrelevant because Lucent does not use it."
+          "evidence": "EmuFusion already builds this exact engine for arm64-v8a. engines/reproducibility-lock.json records blastem at commit 84e567e1 with two independent byte-identical builds and the checked-in patch engines/patches/blastem-libretro-android-portability.patch, and unified-android/build.sh already stages libemufusion_core_blastem.so. BlastEm is absent from the libretro Android buildbot, but that is irrelevant because EmuFusion does not use it."
         },
         "firmware": {
           "required": true,
-          "note": "Sega CD requires a regional BIOS; libblastem.c reads bios_CD_U/E/J.bin from an external path, so a user-supplied fail-closed firmware contract fits Lucent's existing model with no ROM stripping needed. 32X requires no BIOS at all."
+          "note": "Sega CD requires a regional BIOS; libblastem.c reads bios_CD_U/E/J.bin from an external path, so a user-supplied fail-closed firmware contract fits EmuFusion's existing model with no ROM stripping needed. 32X requires no BIOS at all."
         },
-        "rationale": "BlastEm is already a registered, licence-audited, reproducibly built and APK-staged Lucent engine, and its source tree already contains complete Sega CD support (segacd.c, cd_graphics.c, cdd_mcu.c, lc8951.c, rf5c164.c, cdimage.c) and 32X support (32x.c, 32x_video.c, sh7095.c, with libblastem.c registering the 32x and 32xcd system types). Phase 4 therefore only has to enable two extra system targets on an engine it already ships, rather than integrate a new one.",
+        "rationale": "BlastEm is already a registered, licence-audited, reproducibly built and APK-staged EmuFusion engine, and its source tree already contains complete Sega CD support (segacd.c, cd_graphics.c, cdd_mcu.c, lc8951.c, rf5c164.c, cdimage.c) and 32X support (32x.c, 32x_video.c, sh7095.c, with libblastem.c registering the 32x and 32xcd system types). Phase 4 therefore only has to enable two extra system targets on an engine it already ships, rather than integrate a new one.",
         "rejectedAlternatives": [
           {
             "name": "Genesis Plus GX",
@@ -371,9 +371,9 @@
       "category": "blocked-replacement",
       "priorEngine": "beetle-vb",
       "priorPhase": 1,
-      "blocker": "The pinned beetle-vb tree carries SoftFloat release 2b, whose terms restrict use to organisations that indemnify the author and take full responsibility for all losses incurred by their customers and clients, which is why Lucent's audit concluded compatibility was not established. The evidence now suggests that block is over-strict, but it is cheaper to delete the component than to argue it.",
+      "blocker": "The pinned beetle-vb tree carries SoftFloat release 2b, whose terms restrict use to organisations that indemnify the author and take full responsibility for all losses incurred by their customers and clients, which is why EmuFusion's audit concluded compatibility was not established. The evidence now suggests that block is over-strict, but it is cheaper to delete the component than to argue it.",
       "status": "research",
-      "note": "The FSF objection to SoftFloat 2b that the QEMU project acted on in 2014 was a GPLv2 finding, and GPLv2 section 6 tolerates no additional terms at all. Lucent distributes under GPLv3, whose section 7 expressly permits limiting liability (a), requiring preservation of legal notices (b) and requiring indemnification of licensors (f); 2b's own text even lets the indemnity be discharged \"possibly via similar legal warning\". Debian ships this exact package in main, classifying the SoftFloat files as permissive-Hauser. Two corrections for anyone re-reading the trail: SoftFloat release 2c did NOT relax these terms, it broadened them, and only release 3 is BSD-3-Clause; and the replacement discussed here is Mednafen's own clean-room code, not BSD SoftFloat 3. Separately, mednafen/hw_cpu/v810/v810_cpu.cpp is dual-licensed GPL-2.0-or-later OR the non-commercial Reality Boy terms, so the Lucent build must adopt the GPL arm and delete the Reality Boy header, never the reverse.",
+      "note": "The FSF objection to SoftFloat 2b that the QEMU project acted on in 2014 was a GPLv2 finding, and GPLv2 section 6 tolerates no additional terms at all. EmuFusion distributes under GPLv3, whose section 7 expressly permits limiting liability (a), requiring preservation of legal notices (b) and requiring indemnification of licensors (f); 2b's own text even lets the indemnity be discharged \"possibly via similar legal warning\". Debian ships this exact package in main, classifying the SoftFloat files as permissive-Hauser. Two corrections for anyone re-reading the trail: SoftFloat release 2c did NOT relax these terms, it broadened them, and only release 3 is BSD-3-Clause; and the replacement discussed here is Mednafen's own clean-room code, not BSD SoftFloat 3. Separately, mednafen/hw_cpu/v810/v810_cpu.cpp is dual-licensed GPL-2.0-or-later OR the non-commercial Reality Boy terms, so the EmuFusion build must adopt the GPL arm and delete the Reality Boy header, never the reverse.",
       "candidate": {
         "name": "Beetle VB rebased onto Mednafen's own V810 FP implementation",
         "repository": "https://github.com/libretro/beetle-vb-libretro",
@@ -385,7 +385,7 @@
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "beetle-vb already builds for Android ARM64 through Lucent's own engines/build_core.sh Mednafen software-core recipe, which is the same recipe that produced byte-identical beetle-cygne, beetle-neopop and beetle-pce-fast artifacts."
+          "evidence": "beetle-vb already builds for Android ARM64 through EmuFusion's own engines/build_core.sh Mednafen software-core recipe, which is the same recipe that produced byte-identical beetle-cygne, beetle-neopop and beetle-pce-fast artifacts."
         },
         "firmware": {
           "required": false,
@@ -402,7 +402,7 @@
           {
             "name": "beetle-vb as currently pinned, keeping SoftFloat 2b",
             "license": "GPL-2.0-or-later AND LicenseRef-SoftFloat-2b",
-            "reason": "Not rejected on the merits so much as on cost of proof. SoftFloat 2b permits commercial derivative works, its clauses map onto GPLv3 section 7 paragraphs (a), (b) and (f), and Debian ships this exact package in main. But no published FSF, Debian or Fedora assessment of 2b against GPLv3 specifically could be found, and Lucent's model is fail-closed on unresolved third-party terms. Removing the component is a bounded change that retires the question instead of relying on an argument."
+            "reason": "Not rejected on the merits so much as on cost of proof. SoftFloat 2b permits commercial derivative works, its clauses map onto GPLv3 section 7 paragraphs (a), (b) and (f), and Debian ships this exact package in main. But no published FSF, Debian or Fedora assessment of 2b against GPLv3 specifically could be found, and EmuFusion's model is fail-closed on unresolved third-party terms. Removing the component is a bounded change that retires the question instead of relying on an argument."
           }
         ]
       },
@@ -418,7 +418,7 @@
       "blocker": "blueMSX's own license.txt admits its sources are \"either under BSD license, GPL or freeware\", and freeware is not a free-software licence. Src/VideoChips/V9938.c additionally carries a field-of-use restriction stating the command engine may not be used in any other kind of software, which no GPL permits. The block is correct.",
       "status": "research",
       "noCompatibleCandidate": {
-        "reason": "Every MSX core with a working Android build is licence-blocked, and the only clearly-licensed MSX emulator has neither an Android build nor a libretro core. openMSX declares license: 'GPL-2.0-only' in its meson.build and contains third-party GPL-2.0-only code that nobody can upgrade, its own release notes say the Android build is totally broken and unplanned, and no openMSX libretro core exists. The one technically compatible path is MAME's MSX drivers under the GPL-2.0-or-later MAME aggregate, but that means MAME romset conventions, no C-BIOS machine and a very large core for a system Lucent would otherwise serve with a dedicated emulator. MSX therefore needs a product decision rather than an invented candidate.",
+        "reason": "Every MSX core with a working Android build is licence-blocked, and the only clearly-licensed MSX emulator has neither an Android build nor a libretro core. openMSX declares license: 'GPL-2.0-only' in its meson.build and contains third-party GPL-2.0-only code that nobody can upgrade, its own release notes say the Android build is totally broken and unplanned, and no openMSX libretro core exists. The one technically compatible path is MAME's MSX drivers under the GPL-2.0-or-later MAME aggregate, but that means MAME romset conventions, no C-BIOS machine and a very large core for a system EmuFusion would otherwise serve with a dedicated emulator. MSX therefore needs a product decision rather than an invented candidate.",
         "productDecision": "needs-product-decision",
         "rejectedAlternatives": [
           {
@@ -457,26 +457,26 @@
       "priorPhase": 1,
       "blocker": "The engine is licence-compatible and compiles, but unified-android/build.sh stages neither of its core lists, so ColecoVision has no engine in any APK. The BIOS position has improved but does not clear: a legal open BIOS is now reproducible and shippable as a default, yet it cannot run commercial cartridges, so the firmware gate stays closed for the actual library.",
       "status": "research",
-      "note": "Gearcoleco's Memory::LoadBios validates only that the image is 0x2000 bytes and performs no hash check, so Lucent must enforce the accepted firmware identity itself rather than relying on the core to reject an unexpected image.",
+      "note": "Gearcoleco's Memory::LoadBios validates only that the image is 0x2000 bytes and performs no hash check, so EmuFusion must enforce the accepted firmware identity itself rather than relying on the core to reject an unexpected image.",
       "candidate": {
         "name": "Gearcoleco",
         "repository": "https://github.com/drhelius/Gearcoleco",
         "license": {
           "spdx": "GPL-3.0-only",
           "distributionGate": "compatible-candidate",
-          "evidence": "The repository LICENSE is the GNU General Public License Version 3, 29 June 2007, and libretro's gearcoleco_libretro.info records license = \"GPLv3\". Lucent's own registry already records this engine as a compatible candidate; nothing about the licence is in dispute.",
+          "evidence": "The repository LICENSE is the GNU General Public License Version 3, 29 June 2007, and libretro's gearcoleco_libretro.info records license = \"GPLv3\". EmuFusion's own registry already records this engine as a compatible candidate; nothing about the licence is in dispute.",
           "evidenceUrl": "https://raw.githubusercontent.com/drhelius/Gearcoleco/master/LICENSE"
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "Lucent's engines/build_core.sh already has a gearcoleco recipe with a checked-in patch, and engines/build/arm64-v8a/gearcoleco_libretro.so exists locally. gearcoleco_libretro_android.so.zip is also published on the libretro arm64-v8a buildbot."
+          "evidence": "EmuFusion's engines/build_core.sh already has a gearcoleco recipe with a checked-in patch, and engines/build/arm64-v8a/gearcoleco_libretro.so exists locally. gearcoleco_libretro_android.so.zip is also published on the libretro arm64-v8a buildbot."
         },
         "firmware": {
           "required": true,
           "freeReplacement": "8bitworkshop minbios (GPL-3.0-only), reproducible but boot-only",
-          "note": "PARTIALLY SOLVED, and the Phase 1 record is now out of date. engines/firmware/README.md says the 8bitworkshop minbios.asm could not be assembled, but reproducibility has since been PROVEN: building naken_asm from source and applying three syntax ports for the modern assembler (EQU to equ, DS to resb, .DB to .db), then zero-padding to 8192 bytes, yields a byte-identical ROM at sha1 5a84aad05fabab07a48738bdeea7cd620d1ece8b. It is genuinely clean-room rather than a disassembly: 20 instructions and 47 code bytes against roughly 7418 non-filler bytes in the real BIOS, and its font was cleared as a generic 6x8 typeface rather than the BIOS font. Lucent may therefore ship it as a lawful default so the core boots instead of showing a no-BIOS splash. It does NOT clear the firmware gate for the library: it has no BIOS jump table, 0x0F00-0x1FFF is all zero, and its cold-start path accepts only a 55 AA header while commercial cartridges use AA 55 because Coleco mandated the branded title screen, so real cartridges hit RST 0 and hang. Keep a user-supplied slot for the original NTSC BIOS at sha1 45bedc4cbdeac66c7df59e9e599195c778d86a92 and surface ColecoVision as needing the user's own BIOS."
+          "note": "PARTIALLY SOLVED, and the Phase 1 record is now out of date. engines/firmware/README.md says the 8bitworkshop minbios.asm could not be assembled, but reproducibility has since been PROVEN: building naken_asm from source and applying three syntax ports for the modern assembler (EQU to equ, DS to resb, .DB to .db), then zero-padding to 8192 bytes, yields a byte-identical ROM at sha1 5a84aad05fabab07a48738bdeea7cd620d1ece8b. It is genuinely clean-room rather than a disassembly: 20 instructions and 47 code bytes against roughly 7418 non-filler bytes in the real BIOS, and its font was cleared as a generic 6x8 typeface rather than the BIOS font. EmuFusion may therefore ship it as a lawful default so the core boots instead of showing a no-BIOS splash. It does NOT clear the firmware gate for the library: it has no BIOS jump table, 0x0F00-0x1FFF is all zero, and its cold-start path accepts only a 55 AA header while commercial cartridges use AA 55 because Coleco mandated the branded title screen, so real cartridges hit RST 0 and hang. Keep a user-supplied slot for the original NTSC BIOS at sha1 45bedc4cbdeac66c7df59e9e599195c778d86a92 and surface ColecoVision as needing the user's own BIOS."
         },
-        "rationale": "There is nothing to replace: the incumbent is already GPL-3.0-only, already has a working Lucent build recipe, and is by the same author as Gearsystem, which Lucent already stages. The Phase 4 work is packaging plus a two-tier firmware contract, not engine selection.",
+        "rationale": "There is nothing to replace: the incumbent is already GPL-3.0-only, already has a working EmuFusion build recipe, and is by the same author as Gearsystem, which EmuFusion already stages. The Phase 4 work is packaging plus a two-tier firmware contract, not engine selection.",
         "rejectedAlternatives": [
           {
             "name": "8bitworkshop minbios as a full BIOS replacement",
@@ -508,23 +508,23 @@
         "license": {
           "spdx": "GPL-2.0-or-later",
           "distributionGate": "compatible-candidate",
-          "evidence": "The FreeIntv copyright header grants the work under the GNU General Public License \"either version 2 of the License, or (at your option) any later version\", confirmed in both LICENSE and every source header, and libretro's freeintv_libretro.info records license = \"GPLv2+\". Ignore GitHub's NOASSERTION on libretro/FreeIntv: it is a detector artefact caused by a custom preamble sitting before the verbatim GPL body, not a licensing problem. Lucent's own registry already records this engine as a compatible candidate.",
+          "evidence": "The FreeIntv copyright header grants the work under the GNU General Public License \"either version 2 of the License, or (at your option) any later version\", confirmed in both LICENSE and every source header, and libretro's freeintv_libretro.info records license = \"GPLv2+\". Ignore GitHub's NOASSERTION on libretro/FreeIntv: it is a detector artefact caused by a custom preamble sitting before the verbatim GPL body, not a licensing problem. EmuFusion's own registry already records this engine as a compatible candidate.",
           "evidenceUrl": "https://raw.githubusercontent.com/libretro/FreeIntv/master/LICENSE"
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "Lucent's engines/build_core.sh already has a freeintv recipe and engines/build/arm64-v8a/freeintv_libretro.so exists locally. freeintv_libretro_android.so.zip is also published on the libretro arm64-v8a buildbot."
+          "evidence": "EmuFusion's engines/build_core.sh already has a freeintv recipe and engines/build/arm64-v8a/freeintv_libretro.so exists locally. freeintv_libretro_android.so.zip is also published on the libretro arm64-v8a buildbot."
         },
         "firmware": {
           "required": true,
           "note": "BLOCKER with no alternative path. Both exec.bin and grom.bin are mandatory, marked firmware0_opt=false and firmware1_opt=false, with no HLE and no core option to bypass them. engines/firmware/README.md records that jzIntv's miniexec.bin and minigrom.bin ship without corresponding assembly source or file-scoped licence notices; they are additionally useless as a substitute because only 557 of 4096 EXEC words are populated, about 13.6 percent, which drives only the author's own homebrew. No free replacement exists anywhere, so unlike ColecoVision this system has no lawful default at all and can only ship with a fail-closed user-supplied firmware contract."
         },
-        "rationale": "There is nothing to replace: the incumbent is GPL-2.0-or-later, already compiles under Lucent's own recipe, and is the standard free Intellivision core. The Phase 4 work is packaging plus a firmware contract, not engine selection.",
+        "rationale": "There is nothing to replace: the incumbent is GPL-2.0-or-later, already compiles under EmuFusion's own recipe, and is the standard free Intellivision core. The Phase 4 work is packaging plus a firmware contract, not engine selection.",
         "rejectedAlternatives": [
           {
             "name": "jzIntv miniexec.bin and minigrom.bin",
             "license": "NOASSERTION",
-            "reason": "Already evaluated and rejected by Lucent. The jzIntv source archive distributes these as binaries with no corresponding assembly source and no file-scoped copyright or licence notices; a top-level GPL text beside binary-only firmware is not sufficient evidence to redistribute them, and they are deliberately incomplete."
+            "reason": "Already evaluated and rejected by EmuFusion. The jzIntv source archive distributes these as binaries with no corresponding assembly source and no file-scoped copyright or licence notices; a top-level GPL text beside binary-only firmware is not sufficient evidence to redistribute them, and they are deliberately incomplete."
           }
         ]
       },
@@ -537,7 +537,7 @@
       "category": "unadvertised",
       "priorEngine": "beetle-cygne",
       "priorPhase": 1,
-      "blocker": "Beetle Cygne is the Mednafen WonderSwan core and emulates the monochrome model in the same binary, but Lucent advertises only the wonderswancolor system id. EngineSystemIdResolver has no alias mapping wonderswan onto it, so a library entry for the monochrome model resolves to a system id no engine claims and cannot launch.",
+      "blocker": "Beetle Cygne is the Mednafen WonderSwan core and emulates the monochrome model in the same binary, but EmuFusion advertises only the wonderswancolor system id. EngineSystemIdResolver has no alias mapping wonderswan onto it, so a library entry for the monochrome model resolves to a system id no engine claims and cannot launch.",
       "status": "research",
       "candidate": {
         "name": "Beetle Cygne",
@@ -546,12 +546,12 @@
           "spdx": "GPL-2.0-or-later AND LicenseRef-V30MZ-Permissive",
           "auditRef": "engines/audits/beetle-cygne-license.json",
           "distributionGate": "compatible-candidate",
-          "evidence": "Lucent's own audit at engines/audits/beetle-cygne-license.json concluded \"GPL-3.0-compatible candidate through the GPL-2.0-or-later option; the permissive V30MZ component additionally requires author credit.\" No new licence work is needed for this row.",
+          "evidence": "EmuFusion's own audit at engines/audits/beetle-cygne-license.json concluded \"GPL-3.0-compatible candidate through the GPL-2.0-or-later option; the permissive V30MZ component additionally requires author credit.\" No new licence work is needed for this row.",
           "evidenceUrl": "https://github.com/libretro/beetle-wswan-libretro"
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "Already solved. The pinned source produced byte-identical Android ARM64 artifacts and unified-android/build.sh already stages liblucent_core_beetle_cygne.so, so no new build work is required for this row."
+          "evidence": "Already solved. The pinned source produced byte-identical Android ARM64 artifacts and unified-android/build.sh already stages libemufusion_core_beetle_cygne.so, so no new build work is required for this row."
         },
         "firmware": {
           "required": false,
@@ -562,7 +562,7 @@
           {
             "name": "Adding a second WonderSwan engine",
             "license": "n/a",
-            "reason": "Rejected on principle. The hardware is already emulated by a staged, reproducible, licence-audited Lucent core; the missing pieces are a redistributable monochrome fixture and an id alias, so introducing another engine would add compliance surface for no capability."
+            "reason": "Rejected on principle. The hardware is already emulated by a staged, reproducible, licence-audited EmuFusion core; the missing pieces are a redistributable monochrome fixture and an id alias, so introducing another engine would add compliance surface for no capability."
           }
         ]
       },
@@ -584,12 +584,12 @@
           "spdx": "GPL-2.0-or-later",
           "auditRef": "engines/audits/beetle-neopop-license.json",
           "distributionGate": "compatible-candidate",
-          "evidence": "Lucent's own audit at engines/audits/beetle-neopop-license.json concluded \"GPL-3.0-compatible candidate through the GPL-2.0-or-later option, subject to complete release notice and corresponding-source review.\" No new licence work is needed for this row.",
+          "evidence": "EmuFusion's own audit at engines/audits/beetle-neopop-license.json concluded \"GPL-3.0-compatible candidate through the GPL-2.0-or-later option, subject to complete release notice and corresponding-source review.\" No new licence work is needed for this row.",
           "evidenceUrl": "https://github.com/libretro/beetle-ngp-libretro"
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "Already solved. The pinned source produced byte-identical Android ARM64 artifacts, it passed 100 exact serialized-state cycles on ARM64 Android, and unified-android/build.sh already stages liblucent_core_beetle_neopop.so."
+          "evidence": "Already solved. The pinned source produced byte-identical Android ARM64 artifacts, it passed 100 exact serialized-state cycles on ARM64 Android, and unified-android/build.sh already stages libemufusion_core_beetle_neopop.so."
         },
         "firmware": {
           "required": false,
@@ -611,7 +611,7 @@
       "id": "gearlynx",
       "systems": ["atarilynx"],
       "category": "missing",
-      "blocker": "No Lucent engine exists for the Atari Lynx in any registry, and the system does not even appear in the external fallback catalog, so it is entirely uncovered.",
+      "blocker": "No EmuFusion engine exists for the Atari Lynx in any registry, and the system does not even appear in the external fallback catalog, so it is entirely uncovered.",
       "status": "research",
       "candidate": {
         "name": "Gearlynx",
@@ -624,13 +624,13 @@
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "platforms/libretro/ contains libretro.cpp, Makefile.common and gearlynx_libretro.info, and platforms/libretro/jni/Application.mk contains \"APP_STL := c++_static\", \"APP_ABI := all\" and \"NDK_TOOLCHAIN_VERSION := clang\". Honest caveat: it is not yet in libretro-super recipes/android/cores-android, so no buildbot binary exists and Lucent must build it, exactly as it already does for its sibling Gearsystem which has a byte-identical jni layout."
+          "evidence": "platforms/libretro/ contains libretro.cpp, Makefile.common and gearlynx_libretro.info, and platforms/libretro/jni/Application.mk contains \"APP_STL := c++_static\", \"APP_ABI := all\" and \"NDK_TOOLCHAIN_VERSION := clang\". Honest caveat: it is not yet in libretro-super recipes/android/cores-android, so no buildbot binary exists and EmuFusion must build it, exactly as it already does for its sibling Gearsystem which has a byte-identical jni layout."
         },
         "firmware": {
           "required": false,
           "note": "The Lynx boot ROM is optional for the common libretro Lynx cores; this must be confirmed against Gearlynx specifically during qualification rather than assumed."
         },
-        "rationale": "It is by Ignacio Sanchez, the author of Gearsystem and Gearcoleco which Lucent already builds, so the recipe shape and code conventions are already understood in-house. Its GPL-3.0-or-later licence needs no version-compatibility argument at all, and it is under active daily development.",
+        "rationale": "It is by Ignacio Sanchez, the author of Gearsystem and Gearcoleco which EmuFusion already builds, so the recipe shape and code conventions are already understood in-house. Its GPL-3.0-or-later licence needs no version-compatibility argument at all, and it is under active daily development.",
         "rejectedAlternatives": [
           {
             "name": "Beetle Lynx",
@@ -641,7 +641,7 @@
           {
             "name": "libretro-handy",
             "license": "Zlib",
-            "reason": "The same Zlib-licensed Handy core, but it carries no root LICENSE or COPYING file at all and no licence headers on its libretro glue, which is weaker provenance than Lucent's compliance model accepts."
+            "reason": "The same Zlib-licensed Handy core, but it carries no root LICENSE or COPYING file at all and no licence headers on its libretro glue, which is weaker provenance than EmuFusion's compliance model accepts."
           }
         ]
       },
@@ -652,7 +652,7 @@
       "id": "vecx",
       "systems": ["vectrex"],
       "category": "missing",
-      "blocker": "No Lucent engine exists for the Vectrex. The only Android-capable core, libretro-vecx, hard-compiles the copyrighted GCE executive ROM into its binary with no external BIOS path whatsoever, so it cannot be packaged as-is.",
+      "blocker": "No EmuFusion engine exists for the Vectrex. The only Android-capable core, libretro-vecx, hard-compiles the copyrighted GCE executive ROM into its binary with no external BIOS path whatsoever, so it cannot be packaged as-is.",
       "status": "research",
       "candidate": {
         "name": "VecX",
@@ -669,9 +669,9 @@
         },
         "firmware": {
           "required": true,
-          "note": "BLOCKER, and it requires patching the core rather than only a firmware contract. libretro.c contains \"#define STANDARD_BIOS\", \"#include \\\"bios/system.h\\\"\" and \"memcpy(rom, bios_data, bios_data_size);\" with no code path that reads a BIOS from the system directory. bios/system.bin is byte-identical to MAME's copyrighted exec_rom.bin at SHA1 65d07426b520ddd3115d40f255511e0fd2e20ae7, and bios/fast.bin matches MAME's us-fastboot.bin, a hack of the original and therefore still derivative. Smith Engineering's permission covers not-for-profit circulation only, which is a non-commercial restriction that GPLv3 sections 7 and 10 forbid adding. No clean-room replacement exists; circulating BIOS.ASM files are disassemblies. Lucent must strip the embedded ROM and add an external user-supplied BIOS path, the same pattern as its existing AppleWin ROM-removal patch."
+          "note": "BLOCKER, and it requires patching the core rather than only a firmware contract. libretro.c contains \"#define STANDARD_BIOS\", \"#include \\\"bios/system.h\\\"\" and \"memcpy(rom, bios_data, bios_data_size);\" with no code path that reads a BIOS from the system directory. bios/system.bin is byte-identical to MAME's copyrighted exec_rom.bin at SHA1 65d07426b520ddd3115d40f255511e0fd2e20ae7, and bios/fast.bin matches MAME's us-fastboot.bin, a hack of the original and therefore still derivative. Smith Engineering's permission covers not-for-profit circulation only, which is a non-commercial restriction that GPLv3 sections 7 and 10 forbid adding. No clean-room replacement exists; circulating BIOS.ASM files are disassemblies. EmuFusion must strip the embedded ROM and add an external user-supplied BIOS path, the same pattern as its existing AppleWin ROM-removal patch."
         },
-        "rationale": "It is the only GPL-3-compatible Vectrex engine with a shipping Android arm64 core, and the fix required is a small, well-understood patch of the kind Lucent has already written once for AppleWin. Recording it as audit-required rather than compatible-candidate is deliberate given the missing per-file headers.",
+        "rationale": "It is the only GPL-3-compatible Vectrex engine with a shipping Android arm64 core, and the fix required is a small, well-understood patch of the kind EmuFusion has already written once for AppleWin. Recording it as audit-required rather than compatible-candidate is deliberate given the missing per-file headers.",
         "rejectedAlternatives": [
           {
             "name": "MAME vectrex driver",
@@ -688,7 +688,7 @@
       "id": "beetle-pcfx",
       "systems": ["pcfx"],
       "category": "missing",
-      "blocker": "No Lucent engine exists for the PC-FX, leaving the NEC family incomplete alongside the already-approved Beetle PCE Fast. The system requires a proprietary 1 MB BIOS with no free replacement and no high-level-emulation path.",
+      "blocker": "No EmuFusion engine exists for the PC-FX, leaving the NEC family incomplete alongside the already-approved Beetle PCE Fast. The system requires a proprietary 1 MB BIOS with no free replacement and no high-level-emulation path.",
       "status": "research",
       "candidate": {
         "name": "Beetle PC-FX",
@@ -701,13 +701,13 @@
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "jni/Android.mk and jni/Application.mk with APP_ABI := all are present, and mednafen_pcfx_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot. It is also a Mednafen core, so Lucent's existing build_mednafen_software_core() recipe shape applies."
+          "evidence": "jni/Android.mk and jni/Application.mk with APP_ABI := all are present, and mednafen_pcfx_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot. It is also a Mednafen core, so EmuFusion's existing build_mednafen_software_core() recipe shape applies."
         },
         "firmware": {
           "required": true,
           "note": "pcfx.rom is mandatory, exactly 1 MB, md5 08e36edbea28a017f79f8d4f7ff9b6d7, marked firmware_opt=false. libretro.cpp opens it from the system directory and hard-fails without it. It is proprietary NEC firmware with no free replacement and no HLE path, so this system can only ever ship with a fail-closed user-supplied firmware contract."
         },
-        "rationale": "It is the cleanest licence result of the entire missing set, verified by whole-tree grep rather than by sampling, and it slots into a Mednafen recipe Lucent has already used to produce byte-identical artifacts three times. The firmware requirement is the only real obstacle and it matches the contract Lucent already needs for PC Engine CD.",
+        "rationale": "It is the cleanest licence result of the entire missing set, verified by whole-tree grep rather than by sampling, and it slots into a Mednafen recipe EmuFusion has already used to produce byte-identical artifacts three times. The firmware requirement is the only real obstacle and it matches the contract EmuFusion already needs for PC Engine CD.",
         "rejectedAlternatives": [
           {
             "name": "MAME pcfx driver",
@@ -724,9 +724,9 @@
       "id": "same-cdi",
       "systems": ["cdi"],
       "category": "missing",
-      "blocker": "No Lucent engine exists for the Philips CD-i. The system needs a Philips system ROM plus two MC68HC705C8A servo and slave MCU dumps, both of which MAME marks BAD_DUMP, and there is no free replacement for any of them.",
+      "blocker": "No EmuFusion engine exists for the Philips CD-i. The system needs a Philips system ROM plus two MC68HC705C8A servo and slave MCU dumps, both of which MAME marks BAD_DUMP, and there is no free replacement for any of them.",
       "status": "research",
-      "note": "MAME is a registered trademark and docs/source/license.rst requires permission to use the MAME name, logo or wordmark. Copyright compatibility does not carry trademark permission, so any Lucent surface naming this engine, and any compliance notice generated for it, must respect that obligation. The same applies to the X68000 row.",
+      "note": "MAME is a registered trademark and docs/source/license.rst requires permission to use the MAME name, logo or wordmark. Copyright compatibility does not carry trademark permission, so any EmuFusion surface naming this engine, and any compliance notice generated for it, must respect that obligation. The same applies to the X68000 row.",
       "candidate": {
         "name": "SAME CDi",
         "repository": "https://github.com/libretro/same_cdi",
@@ -734,7 +734,7 @@
           "spdx": "GPL-2.0-or-later",
           "auditRef": "engines/audits/mame-license.json",
           "distributionGate": "audit-required",
-          "evidence": "The COPYING ambiguity is now closed. Lucent's own audit at engines/audits/mame-license.json enumerated every licence tag under src/ and found zero GPL-2.0-only tags against 434 GPL-2.0+ ones, concluding copyright compatibility is established at both file and aggregate level. MAME's docs/source/license.rst states \"The MAME project as a whole is distributed under the terms of the GNU General Public License, version 2 or later (GPL-2.0+)\" and the same_cdi README repeats it; the COPYING file's bare \"version 2\" phrasing is stale boilerplate. The CD-i driver itself is marked \"// license:BSD-3-Clause\". This stays audit-required rather than compatible-candidate because the same_cdi fork's own file selection has not been audited, only upstream MAME's.",
+          "evidence": "The COPYING ambiguity is now closed. EmuFusion's own audit at engines/audits/mame-license.json enumerated every licence tag under src/ and found zero GPL-2.0-only tags against 434 GPL-2.0+ ones, concluding copyright compatibility is established at both file and aggregate level. MAME's docs/source/license.rst states \"The MAME project as a whole is distributed under the terms of the GNU General Public License, version 2 or later (GPL-2.0+)\" and the same_cdi README repeats it; the COPYING file's bare \"version 2\" phrasing is stale boilerplate. The CD-i driver itself is marked \"// license:BSD-3-Clause\". This stays audit-required rather than compatible-candidate because the same_cdi fork's own file selection has not been audited, only upstream MAME's.",
           "evidenceUrl": "https://raw.githubusercontent.com/mamedev/mame/master/docs/source/license.rst"
         },
         "androidArm64": {
@@ -761,9 +761,9 @@
       "id": "x68000",
       "systems": ["x68000"],
       "category": "missing",
-      "blocker": "No Lucent engine exists for the Sharp X68000. The obvious candidate, px68k, presents a bare GPLv2 COPYING file that no upstream grant supports, and its true origin licenses the code for non-profit use only.",
+      "blocker": "No EmuFusion engine exists for the Sharp X68000. The obvious candidate, px68k, presents a bare GPLv2 COPYING file that no upstream grant supports, and its true origin licenses the code for non-profit use only.",
       "status": "research",
-      "note": "MAME is a registered trademark and docs/source/license.rst requires permission to use the MAME name, logo or wordmark. That obligation is separate from copyright and applies to any Lucent surface or compliance notice naming this engine. It is one more reason this row is recorded as the honest floor rather than a recommendation.",
+      "note": "MAME is a registered trademark and docs/source/license.rst requires permission to use the MAME name, logo or wordmark. That obligation is separate from copyright and applies to any EmuFusion surface or compliance notice naming this engine. It is one more reason this row is recorded as the honest floor rather than a recommendation.",
       "candidate": {
         "name": "MAME x68000 driver",
         "repository": "https://github.com/mamedev/mame",
@@ -771,12 +771,12 @@
           "spdx": "GPL-2.0-or-later",
           "auditRef": "engines/audits/mame-license.json",
           "distributionGate": "audit-required",
-          "evidence": "src/mame/sharp/x68k.cpp is marked \"// license:BSD-3-Clause\" and sits inside the MAME aggregate. Lucent's own audit at engines/audits/mame-license.json establishes copyright compatibility at both file and aggregate level, finding zero GPL-2.0-only tags anywhere in the tree, so the COPYING file's bare \"version 2\" phrasing does not block. This stays audit-required because a MAME build that includes the x68000 driver is a different file selection from the pinned arcade-only configuration that audit covers, and because of the trademark obligation noted on the row.",
+          "evidence": "src/mame/sharp/x68k.cpp is marked \"// license:BSD-3-Clause\" and sits inside the MAME aggregate. EmuFusion's own audit at engines/audits/mame-license.json establishes copyright compatibility at both file and aggregate level, finding zero GPL-2.0-only tags anywhere in the tree, so the COPYING file's bare \"version 2\" phrasing does not block. This stays audit-required because a MAME build that includes the x68000 driver is a different file selection from the pinned arcade-only configuration that audit covers, and because of the trademark obligation noted on the row.",
           "evidenceUrl": "https://raw.githubusercontent.com/mamedev/mame/master/docs/source/license.rst"
         },
         "androidArm64": {
           "route": "libretro-core",
-          "evidence": "mamemess_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot, and Lucent already has a working constrained MAME build recipe in engines/build_core.sh."
+          "evidence": "mamemess_libretro_android.so.zip is published on the libretro arm64-v8a nightly buildbot, and EmuFusion already has a working constrained MAME build recipe in engines/build_core.sh."
         },
         "firmware": {
           "required": true,

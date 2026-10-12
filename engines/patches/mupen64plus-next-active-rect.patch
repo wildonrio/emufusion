@@ -15,20 +15,20 @@
 +// Optional EmuFusion final-video geometry. Render-thread only, queried after
 +// retro_run. Keep black source pixels (including cutscene bands) inside the
 +// copied VI rectangle; do not infer geometry from framebuffer colors.
-+static u32 lucentActiveRect[7] = {};
++static u32 emufusionActiveRect[7] = {};
 +extern "C" __attribute__((visibility("default")))
-+bool retro_lucent_get_hw_active_rect(u32 *out, unsigned count)
++bool retro_emufusion_get_hw_active_rect(u32 *out, unsigned count)
 +{
-+	if (out == nullptr || count != 7 || lucentActiveRect[0] != 1)
++	if (out == nullptr || count != 7 || emufusionActiveRect[0] != 1)
 +		return false;
-+	std::memcpy(out, lucentActiveRect, sizeof(lucentActiveRect));
++	std::memcpy(out, emufusionActiveRect, sizeof(emufusionActiveRect));
 +	return true;
 +}
 +
-+static void lucentSetActiveRect(s32 x0, s32 y0, s32 x1, s32 y1,
++static void emufusionSetActiveRect(s32 x0, s32 y0, s32 x1, s32 y1,
 +								u32 width, u32 height, bool invertY)
 +{
-+	lucentActiveRect[0] = 0;
++	emufusionActiveRect[0] = 0;
 +	if (invertY) {
 +		const s32 bottom = static_cast<s32>(height) - y1;
 +		y1 = static_cast<s32>(height) - y0;
@@ -37,13 +37,13 @@
 +	if (x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0 ||
 +		static_cast<u32>(x1) > width || static_cast<u32>(y1) > height)
 +		return;
-+	lucentActiveRect[1] = static_cast<u32>(x0);
-+	lucentActiveRect[2] = static_cast<u32>(y0);
-+	lucentActiveRect[3] = static_cast<u32>(x1 - x0);
-+	lucentActiveRect[4] = static_cast<u32>(y1 - y0);
-+	lucentActiveRect[5] = width;
-+	lucentActiveRect[6] = height;
-+	lucentActiveRect[0] = 1;
++	emufusionActiveRect[1] = static_cast<u32>(x0);
++	emufusionActiveRect[2] = static_cast<u32>(y0);
++	emufusionActiveRect[3] = static_cast<u32>(x1 - x0);
++	emufusionActiveRect[4] = static_cast<u32>(y1 - y0);
++	emufusionActiveRect[5] = width;
++	emufusionActiveRect[6] = height;
++	emufusionActiveRect[0] = 1;
 +}
 +
  FrameBuffer::FrameBuffer()
@@ -53,7 +53,7 @@
  
  void FrameBuffer_Init()
  {
-+	lucentActiveRect[0] = 0;
++	emufusionActiveRect[0] = 0;
  	frameBufferList().init();
  	if (config.frameBufferEmulation.enable != 0) {
  	ColorBufferToRDRAM::get().init();
@@ -61,7 +61,7 @@
  
  void FrameBuffer_Destroy()
  {
-+	lucentActiveRect[0] = 0;
++	emufusionActiveRect[0] = 0;
  	RDRAMtoColorBuffer::get().destroy();
  	DepthBufferToRDRAM::get().destroy();
  	ColorBufferToRDRAM::get().destroy();
@@ -69,7 +69,7 @@
  
  void FrameBufferList::renderBuffer()
  {
-+	lucentActiveRect[0] = 0;
++	emufusionActiveRect[0] = 0;
  	if (g_debugger.isDebugMode()) {
  		g_debugger.draw();
  		return;
@@ -80,7 +80,7 @@
 +	if (config.frameBufferEmulation.enableOverscan == 0) {
 +		// The optional second VI buffer follows the first vertically. Publish
 +		// their union in the final target's bottom-left pixel coordinates.
-+		lucentSetActiveRect(dstCoord[0], min(dstCoord[1], blitParams.dstY0),
++		emufusionSetActiveRect(dstCoord[0], min(dstCoord[1], blitParams.dstY0),
 +			dstCoord[2], max(dstCoord[3], blitParams.dstY1),
 +			blitParams.dstWidth, blitParams.dstHeight, true);
 +	}

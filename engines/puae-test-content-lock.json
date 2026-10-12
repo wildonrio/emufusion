@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "lucent-puae-minimal-bootblock",
+  "id": "emufusion-puae-minimal-bootblock",
   "license": "CC0-1.0",
   "sourcePath": "engines/qa/fixtures/puae-minimal",
   "buildCommand": "python3 engines/qa/fixtures/puae-minimal/build_fixture.py OUTPUT.adf",

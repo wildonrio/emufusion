@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed policy validation for Lucent's Phase 4 console-coverage research set.
+"""Fail-closed policy validation for EmuFusion's Phase 4 console-coverage research set.
 
 Phase 4 closes the console-coverage gaps left by Phases 1-3. Every row is
 research only: all ten qualification gates stay false and ``shipped`` stays
@@ -55,7 +55,7 @@ PHASE_FOUR_SYSTEMS = {
     "vectrex", "pcfx", "cdi", "x68000",
 }
 
-# Inbound licences that may be combined into Lucent's GPL-3.0-only
+# Inbound licences that may be combined into EmuFusion's GPL-3.0-only
 # distribution. Anything not on this list is rejected, including every
 # LicenseRef-* placeholder: "unknown" is not "compatible".
 COMPATIBLE_LICENSES = {
@@ -103,7 +103,7 @@ def check_license_expression(expression: str, *,
 
     ``LicenseRef-*`` atoms name a custom licence that SPDX cannot describe, so
     they are refused by default. They are only tolerated when the caller has
-    already confirmed a Lucent licence audit that concluded compatibility, which
+    already confirmed a EmuFusion licence audit that concluded compatibility, which
     is how an engine such as beetle-cygne carries its permissive V30MZ term.
     """
     problems: list[str] = []
@@ -121,7 +121,7 @@ def check_license_expression(expression: str, *,
             if not allow_audited_refs:
                 problems.append(
                     f"{term} is an unresolved custom licence and needs a cited "
-                    f"Lucent audit before it can be a compatible candidate")
+                    f"EmuFusion audit before it can be a compatible candidate")
         elif term not in COMPATIBLE_LICENSES:
             problems.append(
                 f"{term} is not on the GPL-3.0-only inbound allowlist")
@@ -129,7 +129,7 @@ def check_license_expression(expression: str, *,
 
 
 def audit_clears_custom_terms(reference: str, root: Path | None = None) -> list[str]:
-    """Confirm a cited Lucent licence audit exists and concluded compatibility."""
+    """Confirm a cited EmuFusion licence audit exists and concluded compatibility."""
     base = root or ROOT
     if not reference.startswith("engines/audits/") or not reference.endswith(".json"):
         return [f"auditRef {reference!r} must name a file under engines/audits/"]
@@ -285,7 +285,7 @@ def validate(
 
         gates = row.get("gates") or {}
         if set(gates) != GATES:
-            errors.append(f"{engine}: gate set must match the Lucent qualification gates")
+            errors.append(f"{engine}: gate set must match the EmuFusion qualification gates")
         # The general release rule, stated independently of the research pin so a
         # future promotion still cannot ship on unfinished evidence.
         if row.get("shipped") is True and not all(

@@ -3,8 +3,8 @@ package org.yuzu.yuzu_emu.overlay.model;
 import kotlin.Pair;
 
 /**
- * One touch-overlay control in Eden's own on-screen layout. Lucent draws no
- * overlay -- the Thor has physical controls and the second screen is Lucent's
+ * One touch-overlay control in Eden's own on-screen layout. EmuFusion draws no
+ * overlay -- the Thor has physical controls and the second screen is EmuFusion's
  * -- but Eden's JNI cache resolves the constructor and all six fields at load
  * time, including three {@code kotlin/Pair} positions. See {@link kotlin.Pair}
  * for why that type is declared locally.

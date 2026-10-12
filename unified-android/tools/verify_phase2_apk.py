@@ -20,7 +20,7 @@ FLYCAST_LOCK = "assets/phase2-flycast-source-lock.json"
 ARMSX2_LOCK = "assets/phase2-armsx2-source-lock.json"
 ARMSX2_PATCHES = [
     {"path": "engines/patches/armsx2-libretro-android-build.patch",
-     "sha256": "f8d1f6c46125ab953c9333eb57400a8f4ff339ea91ebc3221ab8638514bded78"},
+     "sha256": "5181a335e770f63a89e83ff757421a92813213d21860a312d18b12d679e6ff95"},
     {"path": "engines/patches/armsx2-libretro-frame-clock.patch",
      "sha256": "c94ef2e4fc1440fbbfceef124433343df8f1bbddd320307dc6719effd838d49f"},
     {"path": "engines/patches/armsx2-libretro-descriptor-batch.patch",

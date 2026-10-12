@@ -155,7 +155,7 @@ public final class ChdIdentityTest {
         putBe32(header, 12, 5);
         System.arraycopy(raw, 0, header, 64, 20);
         System.arraycopy(combined, 0, header, 84, 20);
-        File dir = Files.createTempDirectory("lucent-chd").toFile();
+        File dir = Files.createTempDirectory("emufusion-chd").toFile();
         File chd = new File(dir, "Some Game (USA).chd");
         write(chd, header);
         for (String system : new String[] {"psx", "ps2", "dreamcast", "segacd", "pcenginecd",
@@ -172,7 +172,7 @@ public final class ChdIdentityTest {
         putBe32(header, 8, 76);
         putBe32(header, 12, 1);
         System.arraycopy(md5("irrelevant"), 0, header, 44, 16);
-        File dir = Files.createTempDirectory("lucent-chd-2").toFile();
+        File dir = Files.createTempDirectory("emufusion-chd-2").toFile();
         File chd = new File(dir, "not-a-disc-system.chd");
         write(chd, header);
         Map<String, String> id = CheatGameIdentity.identify("gba", chd, "");

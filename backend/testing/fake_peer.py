@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end test harness for the Lucent multiplayer backend.
+"""End-to-end test harness for the EmuFusion multiplayer backend.
 
 This drives the *real* Go backend (built and started as a subprocess by
 this script) through its actual HTTP registration endpoint and WebSocket
@@ -47,7 +47,7 @@ def free_port() -> int:
 
 @dataclass
 class BackendProcess:
-    """Builds and runs the real lucent-multiplayer binary against a
+    """Builds and runs the real emufusion-multiplayer binary against a
     throwaway database, so this harness never touches a real deployment.
     """
 
@@ -67,10 +67,10 @@ class BackendProcess:
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         go_bin = shutil.which("go") or "/opt/homebrew/bin/go"
         env = dict(os.environ)
-        env["LUCENT_MULTIPLAYER_ADDR"] = f":{self.port}"
-        env["LUCENT_MULTIPLAYER_DB"] = self.db_path
+        env["EMUFUSION_MULTIPLAYER_ADDR"] = f":{self.port}"
+        env["EMUFUSION_MULTIPLAYER_DB"] = self.db_path
         self.process = subprocess.Popen(
-            [go_bin, "run", "./cmd/lucent-multiplayer"],
+            [go_bin, "run", "./cmd/emufusion-multiplayer"],
             cwd=backend_dir,
             env=env,
             stdout=subprocess.PIPE,
@@ -118,7 +118,7 @@ def register(base_url: str, nickname: str) -> dict[str, str]:
 
 @dataclass
 class FakeDevice:
-    """One simulated Lucent client: a real HTTP-registered identity plus a
+    """One simulated EmuFusion client: a real HTTP-registered identity plus a
     real WebSocket connection to the backend, with a tiny inbox so test
     code can await a specific message type without hand-rolling a
     dispatch loop for every check.

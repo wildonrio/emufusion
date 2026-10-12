@@ -124,7 +124,7 @@ public final class WidescreenHackPolicyTest {
     }
 
     private static void overrideFileRoundTrip() throws Exception {
-        File root = File.createTempFile("lucent-overrides", "");
+        File root = File.createTempFile("emufusion-overrides", "");
         expect(root.delete());
         File engineRoot = new File(root, "mupen64plus-next");
         File file = CoreOptionOverrideFile.in(engineRoot);
@@ -180,7 +180,7 @@ public final class WidescreenHackPolicyTest {
         expect(!reparsed.containsKey("empty"));
 
         // An oversized file on disk reads as empty rather than being parsed.
-        File root = File.createTempFile("lucent-overrides-big", "");
+        File root = File.createTempFile("emufusion-overrides-big", "");
         expect(root.delete());
         expect(root.mkdirs());
         File big = CoreOptionOverrideFile.in(root);

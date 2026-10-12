@@ -7,13 +7,13 @@ import android.util.Log;
  * {@code LoadCallbackStage}, and the static {@code loadProgress} callback at
  * load time, so all three must exist before the adapter is opened.
  *
- * <p>Eden calls loadProgress while it compiles a title's shaders. Lucent has no
+ * <p>Eden calls loadProgress while it compiles a title's shaders. EmuFusion has no
  * progress UI for it yet, so the callback logs; a title with a cold cache will
  * still stutter through its first minutes, and that shows up here rather than
  * silently.
  */
 public final class DiskShaderCacheProgress {
-    private static final String TAG = "LucentEdenBridge";
+    private static final String TAG = "EmuFusionEdenBridge";
 
     private DiskShaderCacheProgress() {}
 

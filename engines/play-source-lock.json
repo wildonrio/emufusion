@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "verifiedAt": "2026-10-04",
   "alignmentProof": {
-    "artifactSha256": "911fad87e54c22fa328347fc908e7af8fa7fd7e8d10c272d620171d4681f5bc4",
+    "artifactSha256": "d6c69e579ba65a18e4c67af0cebe8a5cf121d736e2f5fa60c8b8b22e558c3323",
     "freshBuildCount": 2,
     "byteIdentical": true,
     "pageAlignment": 16384,
@@ -28,10 +28,10 @@
     "archiveSha256": "a1dffa7cff03de6e40297a2a16ce6a61da31305b74b9233de9fa97238888758f"
   },
   "patches": [
-    {"path": "engines/patches/play-expose-android-javavm-hook.patch", "sha256": "decbff7956d8b4817f15fc360588bb8338d4cccf6038089c4df87b66ced47de3"},
-    {"path": "engines/patches/play-libretro-no-jni-thread-attach.patch", "sha256": "ea5f4ca8243f614638287581a5d2d72894aa4b998726f7aaeb5b26e21a0df350"},
-    {"path": "engines/patches/play-libretro-chain-ee-signal-handler.patch", "sha256": "3d1297d9d76acc380ba4bad650b827dc1dbe1001fa149c61145e1bd3b3b02a56"},
-    {"path": "engines/patches/play-libretro-output-size-hook.patch", "sha256": "76111c03a3ebf4d579b6a555259bb211ad53ee4e63ba9e2da0692643f9aab3c2"},
+    {"path": "engines/patches/play-expose-android-javavm-hook.patch", "sha256": "88a92e147dc90229739a144ca6c1a7121abafa781ba53d7ac9e4371459ed465e"},
+    {"path": "engines/patches/play-libretro-no-jni-thread-attach.patch", "sha256": "114e17388b7a790d192713cacac25717d7d61db5a08488ddf5ddb7ddcfdef188"},
+    {"path": "engines/patches/play-libretro-chain-ee-signal-handler.patch", "sha256": "70cc767689604b6e2c47f09d9dc6aa1d1076ebf72efc77389e6c348bf3fc6337"},
+    {"path": "engines/patches/play-libretro-output-size-hook.patch", "sha256": "37fb92fe5d1d2fd850403ed879b5337d616794af9d28f561dd0bbdde2b092cf3"},
     {"path": "engines/patches/play-libretro-lossless-audio-fifo.patch", "sha256": "f6871409fefe83709f85aaa50b8d223681f9be34f5d825b3e26b98f7d1899398"},
     {"path": "engines/patches/play-libretro-safe-state.patch", "sha256": "fa6f7891fe25080d630af3ee0f24af0505153ad5d795bd0a00b5e11127a2520d"}
   ],

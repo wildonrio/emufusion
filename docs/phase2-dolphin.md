@@ -76,7 +76,7 @@ The original fails the corresponding allocation check.33 focused host tests pass
 including original-fails/fixed-passes allocation methods under ASan/UBSan.
 
 The cached original native build first reproduced3d45f067 byte-for-byte, then the
-single-method correction built12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6.
+single-method correction built093db3423313ed0b9413d218c0694df2dd784f726f6672099539fa5ab1c43555.
 The source lock, normal recipe/registry and staged native now identify this build.
 This is a controlled incremental build, not a second independent fresh build.
 Actual GC/Wii gameplay with the corrected core still needs acceptance; this

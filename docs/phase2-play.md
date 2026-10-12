@@ -4,7 +4,7 @@
 
 The existing source recipe now aligns shared/module libraries to 16 KiB. Two
 clean different-path builds match SHA-256
-`911fad87e54c22fa328347fc908e7af8fa7fd7e8d10c272d620171d4681f5bc4`.
+`d6c69e579ba65a18e4c67af0cebe8a5cf121d736e2f5fa60c8b8b22e558c3323`.
 The old core is rejected by the actual Android16/16KiB loader; the new core
 loads and reports Play! 0.30. The verified artifact is promoted, preserving
 source pins/assets/licenses. This is loader/API proof only: **no new Play ROM

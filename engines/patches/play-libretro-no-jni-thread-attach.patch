@@ -6,7 +6,7 @@ diff --git a/Source/PS2VM.cpp b/Source/PS2VM.cpp
  	FpUtils::SetDenormalHandlingMode();
  	CProfiler::GetInstance().SetWorkThread();
 -#ifdef __ANDROID__
-+#if defined(__ANDROID__) && !defined(LUCENT_LIBRETRO)
++#if defined(__ANDROID__) && !defined(EMUFUSION_LIBRETRO)
  	JNIEnv* env = nullptr;
  	Framework::CJavaVM::AttachCurrentThread(&env, THREAD_NAME);
  #endif
@@ -15,7 +15,7 @@ diff --git a/Source/PS2VM.cpp b/Source/PS2VM.cpp
  	}
  	static_cast<CEeExecutor*>(m_ee->m_EE.m_executor.get())->RemoveExceptionHandler();
 -#ifdef __ANDROID__
-+#if defined(__ANDROID__) && !defined(LUCENT_LIBRETRO)
++#if defined(__ANDROID__) && !defined(EMUFUSION_LIBRETRO)
  	Framework::CJavaVM::DetachCurrentThread();
  #endif
  }

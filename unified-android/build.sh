@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.emufusion-build-lock"
-VERSION_NAME=3.2.44
-VERSION_CODE=118
+VERSION_NAME=3.2.45
+VERSION_CODE=119
 
 case "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -410,7 +410,7 @@ if [ "$INCLUDE_PHASE2_PPSSPP" = 1 ]; then
     done
     if [ "$REUSE_PHASE2_PPSSPP" != 1 ] ||
             [ ! -f "$ARMSX2_CORE_DIR/armsx2_16k_libretro.so" ]; then
-        LUCENT_ARMSX2_HOST_PAGE_SIZE=0x4000 "$ROOT_DIR/engines/build_core.sh" armsx2
+        EMUFUSION_ARMSX2_HOST_PAGE_SIZE=0x4000 "$ROOT_DIR/engines/build_core.sh" armsx2
     fi
     # An existing filename is not evidence that the binary includes today's
     # PS2 timing patches. Never stamp the current source lock onto an old core.
@@ -1039,7 +1039,7 @@ fi
 python3 "$PROJECT_DIR/tools/verify_one_app_apk.py" \
     "$@" --aapt "$BUILD_TOOLS/aapt" "$OUTPUT"
 # 16 KiB page-size policy. The allowlist below is the exact 4 KiB-aligned
-# set measured in lucent-3.2.15-phase2-qualification-cc15c076... (the pinned
+# set measured in the 3.2.15 phase-2 qualification build cc15c076... (the pinned
 # Qt/frontend base libraries plus the cores whose recipes do not yet pin
 # max-page-size). Every library NOT named here must be 16 KiB aligned, so a
 # new or regressed 4 KiB library fails the build immediately.

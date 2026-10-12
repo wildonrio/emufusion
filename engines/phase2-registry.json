@@ -55,7 +55,7 @@
         "integrationEvidence": "build-reproduced",
         "jit": false,
         "multiScreen": false,
-        "notes": "The exact source and ImGui font dependency build offline for Android ARM64 with networking disabled. Lucent's checksum-locked patch removes all ROM and firmware resources from the binary and loads them only from the app-private system directory. This is qualification packaging evidence, not release approval."
+        "notes": "The exact source and ImGui font dependency build offline for Android ARM64 with networking disabled. EmuFusion's checksum-locked patch removes all ROM and firmware resources from the binary and loads them only from the app-private system directory. This is qualification packaging evidence, not release approval."
       },
       "firmware": {
         "required": true,
@@ -63,7 +63,7 @@
           "apple2"
         ],
         "acceptedHashes": [],
-        "notes": "The qualification catalog recognizes one exact six-file Apple IIe Enhanced runtime profile copied only from user storage. Lucent distributes none of those bytes. The firmware gate remains false until lawful provenance and device execution are independently evidenced."
+        "notes": "The qualification catalog recognizes one exact six-file Apple IIe Enhanced runtime profile copied only from user storage. EmuFusion distributes none of those bytes. The firmware gate remains false until lawful provenance and device execution are independently evidenced."
       },
       "state": {
         "capability": "libretro-serialize",
@@ -88,7 +88,7 @@
       "build": {
         "recipe": "engines/build_core.sh applewin",
         "proofArtifactPath": "engines/build/arm64-v8a/applewin_libretro.so",
-        "proofArtifactSha256": "e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84",
+        "proofArtifactSha256": "930dfc035a2c2fd63ad585c9c4dcb8a4a82fd5f13472b92c396c203faa426926",
         "reproducible": false,
         "notes": "October 5: the 16 KiB-aligned source candidate is in normal staging. Two clean builds at the same isolated path match; path independence is not proven. Exact Android 16 KiB loader accepts it and firmware checks pass. No new game/runtime/release qualification; existing gates remain false."
       },
@@ -142,7 +142,7 @@
         "integrationEvidence": "build-reproduced",
         "jit": false,
         "multiScreen": false,
-        "notes": "Lucent reproduces the exact pinned core with the NDK 27 AArch64 toolchain and fixed SOURCE_DATE_EPOCH. The conservative proof uses the interpreter; JIT and physical-device performance remain separate gates."
+        "notes": "EmuFusion reproduces the exact pinned core with the NDK 27 AArch64 toolchain and fixed SOURCE_DATE_EPOCH. The conservative proof uses the interpreter; JIT and physical-device performance remain separate gates."
       },
       "firmware": {
         "required": true,
@@ -150,7 +150,7 @@
           "amigacd32"
         ],
         "acceptedHashes": [],
-        "notes": "Amiga qualification uses the exact built-in AROS image bound by SHA-256 in engines/puae-firmware-policy.json. CD32 fails closed on exact-size, upstream-compatible user files; Lucent never packages or downloads proprietary Kickstart/CD32 ROMs. The firmware release gate remains false because the embedded AROS image has not been reproduced from a pinned AROS source revision and lawful user-ROM provenance is not inferred from compatibility hashes."
+        "notes": "Amiga qualification uses the exact built-in AROS image bound by SHA-256 in engines/puae-firmware-policy.json. CD32 fails closed on exact-size, upstream-compatible user files; EmuFusion never packages or downloads proprietary Kickstart/CD32 ROMs. The firmware release gate remains false because the embedded AROS image has not been reproduced from a pinned AROS source revision and lawful user-ROM provenance is not inferred from compatibility hashes."
       },
       "state": {
         "capability": "libretro-serialize",
@@ -256,7 +256,7 @@
         "sourcePath": null,
         "license": "Candidate source license requires pinned artifact audit",
         "artifactSha256": null,
-        "notes": "Jo Engine is a candidate homebrew path, but Lucent has not pinned its SDK closure or produced a reproducible disc image."
+        "notes": "Jo Engine is a candidate homebrew path, but EmuFusion has not pinned its SDK closure or produced a reproducible disc image."
       },
       "build": {
         "recipe": "engines/build_core.sh beetle-saturn",
@@ -287,7 +287,7 @@
       ],
       "route": "benchmark-only",
       "status": "experimental",
-      "statusReason": "Ymir is pinned as a modern accuracy benchmark, but upstream does not currently provide an Android integration path for Lucent.",
+      "statusReason": "Ymir is pinned as a modern accuracy benchmark, but upstream does not currently provide an Android integration path for EmuFusion.",
       "selectedFirstRunnable": false,
       "source": {
         "status": "pinned",
@@ -326,7 +326,7 @@
         "capability": "native-save-state",
         "qualified": false,
         "migrationQualified": false,
-        "notes": "Desktop state behavior does not establish Lucent lifecycle compatibility."
+        "notes": "Desktop state behavior does not establish EmuFusion lifecycle compatibility."
       },
       "renderer": {
         "requested": "vulkan",
@@ -345,7 +345,7 @@
       "build": {
         "recipe": null,
         "reproducible": false,
-        "notes": "Remain benchmark-only until upstream or Lucent has a maintainable Android port."
+        "notes": "Remain benchmark-only until upstream or EmuFusion has a maintainable Android port."
       },
       "gates": {
         "source": true,
@@ -369,7 +369,7 @@
       ],
       "route": "benchmark-only",
       "status": "source-blocked",
-      "statusReason": "The historically referenced official source URL was unavailable when audited, so Lucent will not silently substitute an unverified fork.",
+      "statusReason": "The historically referenced official source URL was unavailable when audited, so EmuFusion will not silently substitute an unverified fork.",
       "selectedFirstRunnable": false,
       "source": {
         "status": "unavailable",
@@ -455,7 +455,7 @@
       ],
       "route": "libretro-core",
       "status": "experimental",
-      "statusReason": "Flycast now has an exact, reproducible Android ARM64 GLES3 libretro proof hosted in Lucent. Dreamcast device behavior plus arcade firmware, licensing, renderer, state, compatibility, and performance gates remain unqualified.",
+      "statusReason": "Flycast now has an exact, reproducible Android ARM64 GLES3 libretro proof hosted in EmuFusion. Dreamcast device behavior plus arcade firmware, licensing, renderer, state, compatibility, and performance gates remain unqualified.",
       "selectedFirstRunnable": false,
       "source": {
         "status": "pinned",
@@ -542,7 +542,7 @@
       "build": {
         "recipe": "engines/build_core.sh flycast",
         "proofArtifactPath": "engines/build/arm64-v8a/flycast_libretro.so",
-        "proofArtifactSha256": "5a25b2987d95711a7e2462438babf6b2b494917be2988a1a18fd55eab7090464",
+        "proofArtifactSha256": "e20094b23d4e2dac1551a7518e4fa6becc2686326f887b1b82a1bd6f993dec8b",
         "reproducible": false,
         "notes": "2026-10-04: 16 KiB shared/module linking and normalized build paths retain the Android shared-memory and cheat patches. A fresh separate build matches the exact 5a25 core tested in the simulator; normal staging now uses that core. Old 938 is rejected by the strict 16 KiB loader; 5a25 loads. Bounded Sonic Adventure boss entry and save recovery are recorded, not sustained gameplay/audio acceptance. See docs/qa/android-portability-2026-10-04-portable-integration/build-comparison.json and the flycast-input-compare/state-growth evidence. Production runtime/release gates remain unchanged. Previous 4 KiB artifact 938709bb4f39c788a3938d4906806ff0358b98b0abd4eafbdb9f766f36f7c5f2 is backed up."
       },
@@ -669,7 +669,7 @@
         "integrationEvidence": "build-reproduced",
         "jit": true,
         "multiScreen": false,
-        "notes": "Two clean exact-pin integration-patched OpenGL libretro builds matched for Android AArch64. The core loads through Lucent's private dlopen host using the narrow JavaVM hook and has physical AYN Thor rendering, audio, input, and process-death restore evidence."
+        "notes": "Two clean exact-pin integration-patched OpenGL libretro builds matched for Android AArch64. The core loads through EmuFusion's private dlopen host using the narrow JavaVM hook and has physical AYN Thor rendering, audio, input, and process-death restore evidence."
       },
       "firmware": {
         "required": false,
@@ -702,7 +702,7 @@
         "recipe": "engines/build_core.sh play",
         "reproducible": false,
         "proofArtifactPath": "engines/build/arm64-v8a/play_libretro.so",
-        "proofArtifactSha256": "911fad87e54c22fa328347fc908e7af8fa7fd7e8d10c272d620171d4681f5bc4",
+        "proofArtifactSha256": "d6c69e579ba65a18e4c67af0cebe8a5cf121d736e2f5fa60c8b8b22e558c3323",
         "notes": "Two clean builds of the exact pinned Darwin CMake/Ninja and NDK 27 profile matched byte-for-byte after applying six SHA-256-locked reviewed patches covering JavaVM, libretro-thread behavior, Android tagged-address normalization plus ART-safe chained/restored EE page-protection fault handling, frontend output size, bounded audio FIFO with observable overflow telemetry, and bounded VM-paused complete-state handling. Production remains reproducible=false until the dependency/license, fixture, runtime, and release pipeline gates close."
       },
       "gates": {
@@ -727,7 +727,7 @@
       ],
       "route": "libretro-core",
       "status": "experimental",
-      "statusReason": "ARMSX2 is the Vulkan-first AArch64 PS2 replacement candidate for Play!. Its exact source builds as an Android ARM64 libretro core and is wired into Lucent's in-process Vulkan host; physical-device performance, state, firmware, compatibility, and distribution audits remain release gates.",
+      "statusReason": "ARMSX2 is the Vulkan-first AArch64 PS2 replacement candidate for Play!. Its exact source builds as an Android ARM64 libretro core and is wired into EmuFusion's in-process Vulkan host; physical-device performance, state, firmware, compatibility, and distribution audits remain release gates.",
       "selectedFirstRunnable": false,
       "source": {
         "status": "pinned",
@@ -738,7 +738,7 @@
         "verifiedAt": "2026-08-07",
         "dependencyLock": "engines/armsx2-source-lock.json",
         "submodules": [],
-        "notes": "The repository vendors its compile closure except shaderc's seven exact DEPS revisions; those inputs and Lucent's Android libretro patch are separately locked."
+        "notes": "The repository vendors its compile closure except shaderc's seven exact DEPS revisions; those inputs and EmuFusion's Android libretro patch are separately locked."
       },
       "license": {
         "spdx": "GPL-3.0-only",
@@ -755,7 +755,7 @@
         "integrationEvidence": "build-reproduced",
         "jit": true,
         "multiScreen": false,
-        "notes": "The exact source plus locked Lucent patch builds an Android ARM64 Vulkan libretro core with NDK 27 and Lucent's API-24 Vulkan host."
+        "notes": "The exact source plus locked EmuFusion patch builds an Android ARM64 Vulkan libretro core with NDK 27 and EmuFusion's API-24 Vulkan host."
       },
       "firmware": {
         "required": true,
@@ -775,7 +775,7 @@
       "renderer": {
         "requested": "vulkan",
         "qualified": false,
-        "notes": "Lucent negotiates Vulkan render-interface v1 and presents the core image in its own activity. Surface loss, sustained pacing, and device-specific correctness remain under qualification."
+        "notes": "EmuFusion negotiates Vulkan render-interface v1 and presents the core image in its own activity. Surface loss, sustained pacing, and device-specific correctness remain under qualification."
       },
       "legalTestContent": {
         "status": "candidate",
@@ -789,7 +789,7 @@
       "build": {
         "recipe": "engines/build_core.sh armsx2",
         "proofArtifactPath": "engines/build/arm64-v8a/armsx2_libretro.so",
-        "proofArtifactSha256": "a763df4dd4b49c3e5eda713f058e46b95b4579ce7d51fe6a9a51ad7f154bdf50",
+        "proofArtifactSha256": "83b71de18ed7e1f4f20f0a833983c59e52e297afc7e4afb322cf6033b236d62e",
         "reproducible": false,
         "notes": "October 6 qualification staging: normal-recipe, source-receipt-verified 4 KiB and 16 KiB descriptor-batching/input-attachment fixes. Both page variants pass bounded internal Training input and normal exit; 4 KiB external Vulkan core/synchronization validation passes. Same-scene landscape 4 KiB package comparison: corrected 59.46/59.45 callbacks per second with 8/14 underruns, older 57.75/55.15 with 201/329. Zero sampled PCM drops. Sequential host-GPU comparison, not isolated patch attribution or universal speed/audio acceptance. No two-clean-build reproducibility, state, physical-device or release acceptance. Backup and evidence: docs/qa/android-portability-2026-10-06-ps2-performance."
       },
@@ -844,7 +844,7 @@
         "integrationEvidence": "build-reproduced",
         "jit": true,
         "multiScreen": false,
-        "notes": "The exact maintained libretro target builds as one AArch64 shared object with no Dolphin Activity/package dependency. It uses Lucent's existing same-MainActivity hardware host."
+        "notes": "The exact maintained libretro target builds as one AArch64 shared object with no Dolphin Activity/package dependency. It uses EmuFusion's existing same-MainActivity hardware host."
       },
       "firmware": {
         "required": false,
@@ -863,7 +863,7 @@
       "renderer": {
         "requested": "opengl",
         "qualified": false,
-        "notes": "Lucent requests the maintained core's Android GLES path first and applies its 2x EFB profile, the highest integer scale that wholly fits a 1920x1080 frontend target. Vulkan, GLES lifecycle, shader caches, surface loss, and frame pacing remain unqualified."
+        "notes": "EmuFusion requests the maintained core's Android GLES path first and applies its 2x EFB profile, the highest integer scale that wholly fits a 1920x1080 frontend target. Vulkan, GLES lifecycle, shader caches, surface loss, and frame pacing remain unqualified."
       },
       "legalTestContent": {
         "status": "candidate",
@@ -877,7 +877,7 @@
       "build": {
         "recipe": "engines/build_core.sh dolphin",
         "proofArtifactPath": "engines/build/arm64-v8a/dolphin_libretro.so",
-        "proofArtifactSha256": "12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6",
+        "proofArtifactSha256": "093db3423313ed0b9413d218c0694df2dd784f726f6672099539fa5ab1c43555",
         "reproducible": false,
         "notes": "The checksum-locked callback, signal-stack and descriptor-allocation error patches are included. The October5 incremental build first reproduced the previous normalized artifact exactly, then built the descriptor correction. Independent fresh rebuild and corrected-core gameplay qualification remain pending; release qualification stays false."
       },
@@ -1042,7 +1042,7 @@
         "integrationEvidence": "build-reproduced",
         "jit": true,
         "multiScreen": false,
-        "notes": "The exact pin and dependency lock produced a byte-identical normalized ELF64 AArch64 libretro shared object with FFmpeg enabled. APK SHA-256 12e0e83494a75b0f709b93b2a0c4efed9810f7c1632dc5272f2e9278ead37006 passed Lucent's bounded one-window AYN Thor checkpoint with the earlier FFmpeg-off artifact; it is not runtime evidence for the current binary or broad device qualification."
+        "notes": "The exact pin and dependency lock produced a byte-identical normalized ELF64 AArch64 libretro shared object with FFmpeg enabled. APK SHA-256 12e0e83494a75b0f709b93b2a0c4efed9810f7c1632dc5272f2e9278ead37006 passed EmuFusion's bounded one-window AYN Thor checkpoint with the earlier FFmpeg-off artifact; it is not runtime evidence for the current binary or broad device qualification."
       },
       "firmware": {
         "required": false,
@@ -1069,12 +1069,12 @@
         "sourcePath": "engines/qa/fixtures/ppsspp-minimal",
         "license": "CC0-1.0",
         "artifactSha256": null,
-        "notes": "Lucent-owned source-only fixture; no EBOOT.PBP is checked in or approved. PSPSDK commit 314b2083f2e1eaf145fc5de342736336fe1f0148 (archive SHA-256 dac46dbb30b8ceaf0780e61f6f23252c2c788315d0f9b57fc694f7a5bc16b562) is candidate SDK provenance, not an approved toolchain. Do not use pspautotests binaries: its placeholder LICENSE is not a redistribution grant."
+        "notes": "EmuFusion-owned source-only fixture; no EBOOT.PBP is checked in or approved. PSPSDK commit 314b2083f2e1eaf145fc5de342736336fe1f0148 (archive SHA-256 dac46dbb30b8ceaf0780e61f6f23252c2c788315d0f9b57fc694f7a5bc16b562) is candidate SDK provenance, not an approved toolchain. Do not use pspautotests binaries: its placeholder LICENSE is not a redistribution grant."
       },
       "build": {
         "recipe": "engines/build_core.sh ppsspp",
         "proofArtifactPath": "engines/build/arm64-v8a/ppsspp_libretro.so",
-        "proofArtifactSha256": "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
+        "proofArtifactSha256": "43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c",
         "reproducible": false,
         "notes": "Two fresh isolated LIBRETRO=ON, USE_FFMPEG=ON Android AArch64 builds produced byte-identical normalized ELFs at the recorded SHA-256 after removing only LLD's absolute-root-sensitive GNU build-ID note. The recipe now gates the exact hash, ELF64/AArch64/DYN identity, Android-only DT_NEEDED closure, required libretro exports, and linked-source compliance bundle before atomically publishing the core last. Runtime FMV/game transition, legal content, renderer, state, performance, and device gates remain open."
       },
@@ -1134,7 +1134,7 @@
         "required": false,
         "requiredForSystems": [],
         "acceptedHashes": [],
-        "notes": "The qualified scope is decrypted user-owned CCI content, which needs no external keys or system archives. Encrypted content remains unsupported until a separate user-file identity policy is audited; Lucent accepts and distributes no keys."
+        "notes": "The qualified scope is decrypted user-owned CCI content, which needs no external keys or system archives. Encrypted content remains unsupported until a separate user-file identity policy is audited; EmuFusion accepts and distributes no keys."
       },
       "state": {
         "capability": "libretro-serialize",
@@ -1186,7 +1186,7 @@
       ],
       "route": "libretro-core",
       "status": "experimental",
-      "statusReason": "Lucent reproducibly builds and packages the exact 32-engine lite-profile Android ARM64 core, runtime data, linked-component notices, and fail-closed engine-native exit autosave path. Direct launch, audio/input, persistence cycles, performance, and device compatibility remain unqualified.",
+      "statusReason": "EmuFusion reproducibly builds and packages the exact 32-engine lite-profile Android ARM64 core, runtime data, linked-component notices, and fail-closed engine-native exit autosave path. Direct launch, audio/input, persistence cycles, performance, and device compatibility remain unqualified.",
       "selectedFirstRunnable": false,
       "source": {
         "status": "pinned",
@@ -1227,7 +1227,7 @@
         "integrationEvidence": "build-reproduced",
         "jit": false,
         "multiScreen": false,
-        "notes": "Two isolated clean NDK r27 builds are byte-identical; every PT_LOAD is 0x4000-aligned for Android 16 KiB pages. Lucent hosts the software-frame libretro core in-process and does not launch ScummVM or RetroArch UI."
+        "notes": "Two isolated clean NDK r27 builds are byte-identical; every PT_LOAD is 0x4000-aligned for Android 16 KiB pages. EmuFusion hosts the software-frame libretro core in-process and does not launch ScummVM or RetroArch UI."
       },
       "firmware": {
         "required": false,
@@ -1239,12 +1239,12 @@
         "capability": "engine-saves-only",
         "qualified": false,
         "migrationQualified": false,
-        "notes": "Generic libretro serialization is unavailable. The optional retro_lucent_prepare_exit_autosave extension saves on the ScummVM co-thread and fails held-Stop closed; SCI/SCI32 and any title without a safe native autosave slot reject exit rather than claim persistence."
+        "notes": "Generic libretro serialization is unavailable. The optional retro_emufusion_prepare_exit_autosave extension saves on the ScummVM co-thread and fails held-Stop closed; SCI/SCI32 and any title without a safe native autosave slot reject exit rather than claim persistence."
       },
       "renderer": {
         "requested": "software",
         "qualified": false,
-        "notes": "The exact core emits software frames through Lucent's in-process GLES presentation host. Visible rendering, pacing, context-loss, and multi-device behavior remain device gates."
+        "notes": "The exact core emits software frames through EmuFusion's in-process GLES presentation host. Visible rendering, pacing, context-loss, and multi-device behavior remain device gates."
       },
       "legalTestContent": {
         "status": "candidate",
@@ -1253,12 +1253,12 @@
         "sourcePath": "engines/scummvm-test-content-lock.json",
         "license": "Official ScummVM freeware download; qualification download only",
         "artifactSha256": "2e59de85f708cdb32bf85c85b394ac091c05f7647e856b71f5b3ae73fde761e0",
-        "notes": "Flight of the Amazon Queen Freeware Floppy Version is hash-pinned for direct official download during qualification and is never bundled in Lucent. Its freeware label is not treated as a third-party redistribution grant."
+        "notes": "Flight of the Amazon Queen Freeware Floppy Version is hash-pinned for direct official download during qualification and is never bundled in EmuFusion. Its freeware label is not treated as a third-party redistribution grant."
       },
       "build": {
         "recipe": "engines/build_scummvm_core.sh",
         "proofArtifactPath": "engines/build/arm64-v8a/scummvm_libretro.so",
-        "proofArtifactSha256": "668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d",
+        "proofArtifactSha256": "9d8d2b51b55ab799ad8e8931dbe1caabfe9035efde0512b2359205e6d2032775",
         "reproducible": false,
         "notes": "Two clean builds produced the same 25,793,128-byte Android ARM64 artifact. The 207 runtime-data files and exact compliance bundle are mandatory. Production remains reproducible=false until legal-content execution, runtime, persistence, performance, and device matrices pass."
       },
@@ -1284,7 +1284,7 @@
       ],
       "route": "libretro-core",
       "status": "experimental",
-      "statusReason": "Lucent reproducibly builds the exact pin for Android ARM64, but embedded/required firmware provenance, legal test content, compatibility, state determinism, performance, and device qualification remain blocked or open.",
+      "statusReason": "EmuFusion reproducibly builds the exact pin for Android ARM64, but embedded/required firmware provenance, legal test content, compatibility, state determinism, performance, and device qualification remain blocked or open.",
       "selectedFirstRunnable": false,
       "source": {
         "status": "pinned",

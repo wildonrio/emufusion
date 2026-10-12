@@ -15,7 +15,7 @@
   "patches": [
     {
       "path": "engines/patches/sameboy-libretro-cheat-support.patch",
-      "sha256": "546c488029fcf7e7817aa8cf120236c1d3e3ea83a3e96f7421a6849a2fa258c7",
+      "sha256": "4ba8e12e0d6e6fec7991ebbcb0239952cc81d6ad5d1ec8149436d4d294d24e7a",
       "purpose": "Implement retro_cheat_reset/retro_cheat_set for real using the Core's own GB_import_cheat/GB_remove_all_cheats/GB_set_cheats_enabled (GameShark and Game Genie codes), instead of the empty stubs libretro.c shipped with. The libretro build compiles the Core with -DGB_DISABLE_CHEATS and excludes Core/cheats.c entirely (libretro/Makefile.common), so the patch also drops that define and adds cheats.c to SOURCES_C -- otherwise the added calls fail to compile/link."
     }
   ],

@@ -42,7 +42,8 @@ class LegacyNameMigrationTest(unittest.TestCase):
         # Java package, classes, tags, preferences, files, QML memory keys,
         # packaged engine library names and the engine ABI are all renamed.
         offenders = []
-        for base in (ROOT / 'unified-android/src', ROOT / 'android-companion/src', ROOT / 'theme'):
+        for base in (ROOT / 'unified-android/src', ROOT / 'unified-android/stubs',
+                     ROOT / 'android-companion/src', ROOT / 'theme'):
             for path in base.rglob('*'):
                 if path.suffix not in ('.java', '.qml') or path.name == 'LegacyNames.java':
                     continue
@@ -68,6 +69,19 @@ class LegacyNameMigrationTest(unittest.TestCase):
                     offenders.append(f'{path.relative_to(ROOT)}:{number}: {line.strip()}')
         self.assertEqual([], offenders)
 
+    def test_libretro_core_recipes_and_patches_use_the_new_name(self):
+        # Rename phase C2b rebuilt every libretro core from renamed recipes and
+        # patches; only the in-process adapters (Eden, Cemu, aPS3e) remain.
+        adapters = ('aps3e-', 'cemu-', 'eden-')
+        offenders = []
+        recipes = [ROOT / 'engines/build_core.sh', ROOT / 'engines/build_scummvm_core.sh']
+        recipes += [p for p in (ROOT / 'engines/patches').iterdir() if not p.name.startswith(adapters)]
+        for path in recipes:
+            for number, line in enumerate(path.read_text(errors='replace').splitlines(), 1):
+                if re.search(r'(?i)(?<!trans)lucent', line):
+                    offenders.append(f'{path.relative_to(ROOT)}:{number}: {line.strip()}')
+        self.assertEqual([], offenders)
+
     def test_emufusion_abi_headers_are_the_pinned_headers_renamed(self):
         # Same ABI, new names: each EmuFusion header must be exactly the
         # header the prebuilt adapters compiled against, renamed.
@@ -87,7 +101,11 @@ class LegacyNameMigrationTest(unittest.TestCase):
             'private static String readText(',
             'private static void writeText(',
         ))
-        marker = method(LEGACY, 'static void moveEngineMarkers(')
+        marker = '\n'.join(method(LEGACY, signature) for signature in (
+            'static void moveEngineMarkers(', 'static void moveSaveMarkers(',
+            'private static File[] children(', 'private static void renameMarkers(',
+            'private static void renameMarker(',
+        ))
         harness = r'''
 import java.io.*;
 import java.util.*;
@@ -143,11 +161,17 @@ public class MigrationProbe {
     write(new File(engine, ".lucent-runtime-assets"), "rev");
     write(new File(engine, "pcsx2-keep"), "user data");
     write(new File(engine, "emufusion-core-overrides.txt"), "keep");
+    File scummvm = new File(root, "files/engine-saves/scummvm/0123456789abcdef0123456789abcdef");
+    write(new File(scummvm, ".lucent-scummvm-00000000000000ab.resume"), "3");
+    write(new File(scummvm, "monkey.s03"), "save");
+    File qaScummvm = new File(root, "files/engine-saves-qa/session/scummvm/fedcba9876543210fedcba9876543210");
+    write(new File(qaScummvm, ".lucent-scummvm-00000000000000cd.resume"), "4");
 
     migrateThemeMemory(memory);
     rewriteSelectedTheme(new File(config, "settings.txt"), legacyPath);
     renameGeneratedMetadata(metafiles);
     moveEngineMarkers(new File(root, "engine-system"));
+    moveSaveMarkers(new File(root, "files"));
 
     File current = new File(memory, "emufusion.json");
     check(current.isFile() && !new File(memory, "lucent.json").exists(), "memory file moved");
@@ -163,6 +187,10 @@ public class MigrationProbe {
           new File(metafiles, "owner.metadata.pegasus.txt").isFile(), "generated metadata renamed only");
     check(new File(engine, ".emufusion-runtime-assets").isFile() && !new File(engine, ".lucent-runtime-assets").exists() &&
           new File(engine, "emufusion-core-overrides.txt").isFile(), "markers renamed only");
+    check("3".equals(read(new File(scummvm, ".emufusion-scummvm-00000000000000ab.resume"))) &&
+          !new File(scummvm, ".lucent-scummvm-00000000000000ab.resume").exists() &&
+          "save".equals(read(new File(scummvm, "monkey.s03"))) &&
+          new File(qaScummvm, ".emufusion-scummvm-00000000000000cd.resume").isFile(), "save markers renamed only");
 
     // The previous QML can write old keys once more before the new theme
     // loads; the next start folds them in without overriding newer values.

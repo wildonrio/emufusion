@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
   "generatedAt": "2026-08-08",
-  "title": "Lucent Android handheld device-profile dataset",
-  "purpose": "Per-device screen geometry, physical control inventory and Android input-reporting behaviour, plus a small set of shared layout classes, so Lucent can size its game list, box art and preview video correctly and can name on-screen button hints by the label physically printed on the device in the user's hands.",
+  "title": "EmuFusion Android handheld device-profile dataset",
+  "purpose": "Per-device screen geometry, physical control inventory and Android input-reporting behaviour, plus a small set of shared layout classes, so EmuFusion can size its game list, box art and preview video correctly and can name on-screen button hints by the label physically printed on the device in the user's hands.",
 
   "conventions": {
     "unverifiedSentinel": "UNVERIFIED",
     "unverifiedRule": "Any scalar that could not be confirmed from a real source carries the exact string \"UNVERIFIED\" instead of a guessed value. Every such path is ALSO listed in that device's `unverified` array, so a consumer can find the gaps without walking the whole object. Absence of a key means the concept does not apply to that device (e.g. `screens[1]` on a single-screen handheld); it never means \"unknown\".",
     "conflictRule": "Where two credible sources disagree, the field is set to \"UNVERIFIED\" and the disagreement is recorded in that device's `conflicts` array with both claims and both URLs. A conflict is never silently resolved in favour of the more convenient value.",
-    "positionalSlots": "Face buttons are recorded by PHYSICAL POSITION (north = top, south = bottom, east = right, west = left) mapped to the LABEL SILKSCREENED at that position. This matches Lucent's CanonicalControl enum (NORTH/SOUTH/EAST/WEST) in unified-android/src/com/thorium/emufusion/input/CanonicalControl.java. The legend renderer must look up the label by slot; it must never hard-code a letter.",
+    "positionalSlots": "Face buttons are recorded by PHYSICAL POSITION (north = top, south = bottom, east = right, west = left) mapped to the LABEL SILKSCREENED at that position. This matches EmuFusion's CanonicalControl enum (NORTH/SOUTH/EAST/WEST) in unified-android/src/com/thorium/emufusion/input/CanonicalControl.java. The legend renderer must look up the label by slot; it must never hard-code a letter.",
     "aspectDecimals": "aspectRatio.decimal is width/height IN THE ORIENTATION THE SCREEN IS ACTUALLY USED, rounded to 4 significant places. Panels whose native scan orientation is portrait but which are used in landscape record both `nativeResolution` and `usedResolution`.",
     "sourceKinds": {
-      "on-device": "Measured by the Lucent team on physical hardware. Highest confidence.",
+      "on-device": "Measured by the EmuFusion team on physical hardware. Highest confidence.",
       "primary-code": "Read out of source that runs on the device or drives it: AOSP key layouts, RetroArch/libretro autoconfig, SDL_GameControllerDB, Unreal Engine's Android input table, vendor firmware/driver source.",
       "manufacturer": "Vendor spec page, official store listing, or official manual PDF.",
       "review": "Named hands-on review by a reputable outlet.",
@@ -21,7 +21,7 @@
   },
 
   "schemaNotes": [
-    "Six-button face clusters (Sega Saturn style) do not fit the four-slot diamond. Those devices set controls.faceButtons.arrangement to \"sega-six-arc\" and populate `slots` with the LOWER arc plus `upperArcSlots` with the upper arc. Lucent's SystemControlLayouts currently routes Sega six-button games through L1/NORTH/R1 on a four-button device; on a real six-button device that remap is wrong and must be bypassed. This is a known assumption-breaker.",
+    "Six-button face clusters (Sega Saturn style) do not fit the four-slot diamond. Those devices set controls.faceButtons.arrangement to \"sega-six-arc\" and populate `slots` with the LOWER arc plus `upperArcSlots` with the upper arc. EmuFusion's SystemControlLayouts currently routes Sega six-button games through L1/NORTH/R1 on a four-button device; on a real six-button device that remap is wrong and must be bypassed. This is a known assumption-breaker.",
     "Devices with a trackpad standing in for a second stick (AYANEO Pocket DMG) or with a slidepad instead of a thumbstick (Retroid Pocket 2, Retroid Pocket Flip) report sticks.count for real thumbsticks only and describe the substitute in controls.alternateAnalog. A consumer that reads sticks.count alone will under-count the device's analog capability.",
     "Phone-clamp controllers have no display of their own. They carry `hostDisplay: true`, an empty `screens` array, and a `layoutClassId` chosen from the HOST PHONE's runtime geometry, not from any baked-in panel. Their `layoutClassId` is advisory only: the app must query real window metrics at runtime.",
     "Several devices expose a user-selectable trigger reporting mode (digital / analog / both) and a user-selectable face-button style (Nintendo / Xbox). On those devices the reported keycodes are NOT a fixed property of the hardware. triggerReporting.userSelectableMode and controls.faceButtons.softwareSwappable flag this; a profile keyed only on VID/PID will be wrong for one of the modes. On the Retroid Pocket 5 and the original AYN Odin the mode change alters the USB product ID itself.",
@@ -39,7 +39,7 @@
 
   "boxArtNominalAspects": {
     "precision": "editorial-default",
-    "note": "These are art-convention defaults for sizing a frame, NOT device facts, and are not marked UNVERIFIED because they are a Lucent editorial choice rather than a claim about hardware. Real scraped artwork varies per title and per region; the layout rule below is what actually guarantees nothing crops.",
+    "note": "These are art-convention defaults for sizing a frame, NOT device facts, and are not marked UNVERIFIED because they are a EmuFusion editorial choice rather than a claim about hardware. Real scraped artwork varies per title and per region; the layout rule below is what actually guarantees nothing crops.",
     "rule": "Fit-to-CONTAIN inside a frame whose HEIGHT is fixed by the layout class. Width is whatever the individual image's ratio yields, centred, with the slack absorbed by the surrounding pane. Never fix the width first, never crop to fill, never upscale past 1.0 device-pixel-per-source-pixel.",
     "byFamily": {
       "cartridge-3x4": { "decimal": 0.75, "systems": ["nes", "snes", "gb", "gbc", "gba", "n64", "genesis", "megadrive", "mastersystem", "gamegear", "virtualboy", "pcengine", "neogeo", "wonderswan"] },
@@ -55,7 +55,7 @@
   "controlTiers": [
     {
       "id": "full",
-      "description": "Two clickable thumbsticks (L3/R3), D-pad, four face buttons, four shoulders. The Lucent reference inventory.",
+      "description": "Two clickable thumbsticks (L3/R3), D-pad, four face buttons, four shoulders. The EmuFusion reference inventory.",
       "requires": { "sticks": 2, "stickClick": true, "faceButtons": 4, "shoulders": 4 }
     },
     {
@@ -316,7 +316,7 @@
     "confirmPolicyByLabelFamily": {
       "xbox": { "confirmSlot": "south", "backSlot": "east", "note": "Android's own convention. KEYCODE_BUTTON_A is the bottom button." },
       "nintendo": { "confirmSlot": "east", "backSlot": "south", "note": "The bottom button is printed B. Confirming on SOUTH here would tell the user to press B to launch a game." },
-      "playstation": { "confirmSlot": "south", "backSlot": "east", "note": "Modern PlayStation convention: Cross confirms, Circle backs out. Regional Japanese titles historically inverted this; Lucent's own frontend does not." },
+      "playstation": { "confirmSlot": "south", "backSlot": "east", "note": "Modern PlayStation convention: Cross confirms, Circle backs out. Regional Japanese titles historically inverted this; EmuFusion's own frontend does not." },
       "sega6": { "confirmSlot": "south", "backSlot": "west", "note": "Lower arc reads A-B-C left to right, so SOUTH is B and WEST is A. Confirm on the middle button, back on the left, matching Saturn menu convention." },
       "unlabelled": { "confirmSlot": "south", "backSlot": "east", "note": "Device ships blank caps. Legend must fall back to a rendered glyph of the button's POSITION (a small diamond with one pip filled), never a letter." },
       "unknown": { "confirmSlot": "south", "backSlot": "east", "note": "Used only where the silkscreen could not be verified. Legend must render the positional glyph, not a letter, until the device is confirmed. Rendering a letter we are not sure of is worse than rendering no letter." }
@@ -340,7 +340,7 @@
         "applies": "controls.sticks.count < 2",
         "dropHints": ["scrollFast"],
         "remap": { "viewSwap": "shoulder.r1", "sort": "system.select+shoulder.r1" },
-        "layout": "No layout change. Any view reachable only by the right stick must gain a second route before this device is shipped to; Lucent's RightStickViewRouter is the code path to check."
+        "layout": "No layout change. Any view reachable only by the right stick must gain a second route before this device is shipped to; EmuFusion's RightStickViewRouter is the code path to check."
       },
       "noStickClick": {
         "applies": "controls.sticks.clickable == false",
@@ -469,8 +469,8 @@
         "userSelectableMode": true,
         "modes": ["digital", "analog", "both"],
         "verification": "on-device",
-        "note": "Confirmed by the Lucent team on physical hardware: the analog triggers arrive as MotionEvent AXES, and KEYCODE_BUTTON_L2 / KEYCODE_BUTTON_R2 do nothing. Which of the two axis pairs carries them (AXIS_LTRIGGER/AXIS_RTRIGGER versus AXIS_BRAKE/AXIS_GAS) has not been pinned down; Lucent's InputRouter accepts either pair, which is why it works without the distinction being recorded.",
-        "sources": [{ "kind": "on-device", "url": null, "detail": "Lucent team measurement on AYN Thor hardware" }]
+        "note": "Confirmed by the EmuFusion team on physical hardware: the analog triggers arrive as MotionEvent AXES, and KEYCODE_BUTTON_L2 / KEYCODE_BUTTON_R2 do nothing. Which of the two axis pairs carries them (AXIS_LTRIGGER/AXIS_RTRIGGER versus AXIS_BRAKE/AXIS_GAS) has not been pinned down; EmuFusion's InputRouter accepts either pair, which is why it works without the distinction being recorded.",
+        "sources": [{ "kind": "on-device", "url": null, "detail": "EmuFusion team measurement on AYN Thor hardware" }]
       },
       "quirks": ["dual screen", "clamshell", "near-square 31:27 secondary panel", "dual OLED", "Nintendo-position ABXY", "RGB stick rings", "top screen treated as primary display", "stylus-capable secondary for DS/3DS"],
       "confidence": "high",
@@ -484,7 +484,7 @@
       "conflicts": [
         {
           "field": "screens[1].refreshRateMaxHz",
-          "claimA": { "value": 120, "kind": "on-device", "url": null, "detail": "Lucent team measurement" },
+          "claimA": { "value": 120, "kind": "on-device", "url": null, "detail": "EmuFusion team measurement" },
           "claimB": { "value": 60, "kind": "review", "url": "https://www.joeysretrohandhelds.com/reviews/ayn-thor-review/", "detail": "review describes the lower panel as 1240x1080 60Hz 31:27 OLED" },
           "resolution": "Recorded as 120 on the strength of the on-device measurement, which outranks a review. Flagged because a consumer sizing a frame pacer off this value should know the published spec disagrees."
         }
@@ -2330,7 +2330,7 @@
         "axisLeft": "AXIS_LTRIGGER", "axisRight": "AXIS_RTRIGGER",
         "axisLeftPreAndroid12": "AXIS_Z", "axisRightPreAndroid12": "AXIS_RZ",
         "verification": "primary-code",
-        "note": "THE MOST DANGEROUS ENTRY IN THIS DATASET. Unreal Engine's Android input code branches on API level for this exact device. On Android 12+ (API >= 31) triggers arrive on AXIS_LTRIGGER / AXIS_RTRIGGER. On PRE-Android-12 the engine sets bMapZRZToTriggers, so triggers arrive on AXIS_Z / AXIS_RZ RESTING AT -1.0 and travelling to +1.0, AND THE RIGHT STICK MOVES TO AXIS_RX / AXIS_RY. Lucent's DeviceCatalog maps the right stick to AXIS_Z / AXIS_RZ, so on a pre-Android-12 host this device would drive the camera with its triggers. No discrete L2/R2 keycode is delivered in either case.",
+        "note": "THE MOST DANGEROUS ENTRY IN THIS DATASET. Unreal Engine's Android input code branches on API level for this exact device. On Android 12+ (API >= 31) triggers arrive on AXIS_LTRIGGER / AXIS_RTRIGGER. On PRE-Android-12 the engine sets bMapZRZToTriggers, so triggers arrive on AXIS_Z / AXIS_RZ RESTING AT -1.0 and travelling to +1.0, AND THE RIGHT STICK MOVES TO AXIS_RX / AXIS_RY. EmuFusion's DeviceCatalog maps the right stick to AXIS_Z / AXIS_RZ, so on a pre-Android-12 host this device would drive the camera with its triggers. No discrete L2/R2 keycode is delivered in either case.",
         "sources": [{ "kind": "primary-code", "url": "https://github.com/EpicGames/UnrealEngine" }]
       },
       "quirks": ["axis routing depends on the HOST Android version, not the controller", "has a 3.5mm audio+mic port unlike the plain V2", "HyperSense haptics"],
@@ -3018,8 +3018,8 @@
         "It genuinely is a DUAL-SCREEN ANDROID handheld with a Qualcomm SoC. The manufacturer's own site title reads 双屏安卓掌机 (dual-screen Android handheld) and 高通掌机 (Qualcomm handheld).",
         "The ONEXPLAYER brand is separately positioned by the same parent company as Windows x86 (Windows掌机 / PC掌机), so ONEXSUGAR appears to be One-Netbook's entire Android line."
       ],
-      "quirks": ["swivel dual-screen", "the second most important dual-screen device to Lucent after the Thor, and the least documented"],
-      "criticalGap": "How the SECOND DISPLAY IS EXPOSED TO ANDROID — a real DisplayManager display like the Thor's Display 4, a vendor SDK, or a mirror — is completely unknown, and that is precisely the thing Lucent's dual-screen path depends on. This device needs a dedicated research pass with a JavaScript-rendering browser; onexsugar.com is a JS-rendered site that returns only its title to a plain fetch, and the device appears in no controller database, no ES-DE compatibility table, and no Google Play device catalog.",
+      "quirks": ["swivel dual-screen", "the second most important dual-screen device to EmuFusion after the Thor, and the least documented"],
+      "criticalGap": "How the SECOND DISPLAY IS EXPOSED TO ANDROID — a real DisplayManager display like the Thor's Display 4, a vendor SDK, or a mirror — is completely unknown, and that is precisely the thing EmuFusion's dual-screen path depends on. This device needs a dedicated research pass with a JavaScript-rendering browser; onexsugar.com is a JS-rendered site that returns only its title to a plain fetch, and the device appears in no controller database, no ES-DE compatibility table, and no Google Play device catalog.",
       "confidence": "low",
       "unverified": ["releaseYear", "os", "soc.name", "soc.codename", "gpu", "screens[0]", "screens[1]", "layoutClassId", "controls", "controlTierId", "triggerReporting", "secondDisplayExposureModel"],
       "conflicts": [],
@@ -3268,7 +3268,7 @@
     "keycodes": { "KEYCODE_BUTTON_A": 96, "KEYCODE_BUTTON_B": 97, "KEYCODE_BUTTON_X": 99, "KEYCODE_BUTTON_Y": 100, "KEYCODE_BUTTON_L1": 102, "KEYCODE_BUTTON_R1": 103, "KEYCODE_BUTTON_L2": 104, "KEYCODE_BUTTON_R2": 105, "KEYCODE_BUTTON_THUMBL": 106, "KEYCODE_BUTTON_THUMBR": 107, "KEYCODE_BUTTON_START": 108, "KEYCODE_BUTTON_SELECT": 109, "KEYCODE_BUTTON_MODE": 110 },
     "libretroAutoconfigDecoder": "In any libretro android/*.cfg: input_l2_axis=\"+6\"/\"+7\" means AXIS_LTRIGGER/AXIS_RTRIGGER; \"+8\"/\"+9\" means AXIS_BRAKE/AXIS_GAS. input_l2_btn=\"104\" means KEYCODE_BUTTON_L2. RetroArch's android_input.c writes analog_state[6]=ltrig, [7]=rtrig, [8]=brake, [9]=gas.",
     "sdlDecoder": "In SDL_GameControllerDB: lefttrigger:aN means an AXIS; lefttrigger:bN means a digital BUTTON. Do NOT read VID/PID from every platform:Android row — SDL falls back to a hash of the device descriptor string when real IDs are unavailable, and those GUIDs decode to ASCII garbage. Decode chars 8-11 as VID and 16-19 as PID little-endian, then sanity-check the VID against a known vendor.",
-    "aospGenericKl": "Devices with no vendor-specific key layout inherit AOSP's Generic.kl, which maps ABS_GAS to AXIS_RTRIGGER, ABS_BRAKE to AXIS_LTRIGGER, and BTN_TL2/BTN_TR2 to keycodes 104/105 — but maps ABS_Z/ABS_RZ to the RIGHT STICK. A pad using the xpad ABS_Z/ABS_RZ trigger convention will therefore have its triggers masquerade as the right stick. This is the single biggest correctness trap in Android gamepad handling and it is why Lucent's InputRouter accepts both AXIS_LTRIGGER/AXIS_BRAKE for L2 and both AXIS_RTRIGGER/AXIS_GAS for R2.",
+    "aospGenericKl": "Devices with no vendor-specific key layout inherit AOSP's Generic.kl, which maps ABS_GAS to AXIS_RTRIGGER, ABS_BRAKE to AXIS_LTRIGGER, and BTN_TL2/BTN_TR2 to keycodes 104/105 — but maps ABS_Z/ABS_RZ to the RIGHT STICK. A pad using the xpad ABS_Z/ABS_RZ trigger convention will therefore have its triggers masquerade as the right stick. This is the single biggest correctness trap in Android gamepad handling and it is why EmuFusion's InputRouter accepts both AXIS_LTRIGGER/AXIS_BRAKE for L2 and both AXIS_RTRIGGER/AXIS_GAS for R2.",
     "swapWarning": "L/R index swaps are common in community-contributed mappings. Several devices in this dataset have two rows with left and right reversed. A profile format needs an explicit per-device axis-source field and a swap flag; one convention cannot be assumed."
   },
 
@@ -3310,7 +3310,7 @@
       "ayaneo-pocket-ds.screens[1].touch — manufacturer says touch, hands-on review says not",
       "ayaneo-pocket-vert.screens[0].nativeResolution — manufacturer and two reviews disagree on orientation, which makes even the layout class uncertain",
       "razer-kishi-v2-pro.triggerReporting — axis routing changes with the HOST Android version and can collide with the right stick",
-      "onexsugar-sugar-1.secondDisplayExposureModel — the one thing Lucent's dual-screen path depends on, and it is entirely unknown"
+      "onexsugar-sugar-1.secondDisplayExposureModel — the one thing EmuFusion's dual-screen path depends on, and it is entirely unknown"
     ]
   }
 }

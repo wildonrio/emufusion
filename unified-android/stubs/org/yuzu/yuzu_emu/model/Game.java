@@ -1,7 +1,7 @@
 package org.yuzu.yuzu_emu.model;
 
 /**
- * Eden's game record. Lucent never reads one — its own library owns metadata —
+ * Eden's game record. EmuFusion never reads one — its own library owns metadata —
  * but Eden's JNI cache resolves the constructor and all six fields at load
  * time, so the shape has to exist exactly as declared in
  * common/android/id_cache.cpp.

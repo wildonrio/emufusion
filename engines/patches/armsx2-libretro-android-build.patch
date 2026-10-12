@@ -5,7 +5,7 @@ index 000000000..0206974e0
 +++ b/pcsx2-libretro/AndroidLibretroStubs.cpp
 @@ -0,0 +1,24 @@
 +// SPDX-License-Identifier: GPL-3.0+
-+// The Lucent libretro host uses app-private filesystem paths and supplies
++// The EmuFusion libretro host uses app-private filesystem paths and supplies
 +// controller haptics itself.  These Android application-frontend hooks are
 +// therefore intentionally unavailable in the in-process core.
 +

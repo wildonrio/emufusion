@@ -4,8 +4,9 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 LOCK="$ROOT/engines/scummvm-source-lock.json"
 SOURCE_CACHE="$ROOT/engines/build/sources"
-WORK="$ROOT/engines/build/scummvm-arm64-work"
-OUTPUT="$ROOT/engines/build/arm64-v8a"
+# Candidate builds may redirect both; the defaults are the staged output.
+WORK=${EMUFUSION_SCUMMVM_WORK_DIR:-$ROOT/engines/build/scummvm-arm64-work}
+OUTPUT=${EMUFUSION_SCUMMVM_OUTPUT_DIR:-$ROOT/engines/build/arm64-v8a}
 
 json_value() {
     /usr/bin/python3 -c 'import json,sys
@@ -78,15 +79,15 @@ tar -xzf "$deps_archive" --strip-components=1 \
 tar -xzf "$common_archive" --strip-components=1 \
     -C "$WORK/source/backends/platform/libretro/deps/libretro-common"
 
-lucent_patch="$ROOT/engines/patches/scummvm-lucent-exit-autosave.patch"
-if [ "$(sha256 "$lucent_patch")" != "$(json_value patches.0.sha256)" ]; then
-    printf 'Lucent ScummVM lifecycle patch does not match the source lock.\n' >&2
+lifecycle_patch="$ROOT/engines/patches/scummvm-emufusion-exit-autosave.patch"
+if [ "$(sha256 "$lifecycle_patch")" != "$(json_value patches.0.sha256)" ]; then
+    printf 'EmuFusion ScummVM lifecycle patch does not match the source lock.\n' >&2
     exit 1
 fi
-patch -d "$WORK/source" -p1 < "$lucent_patch"
+patch -d "$WORK/source" -p1 < "$lifecycle_patch"
 
 helper="$WORK/source/backends/platform/libretro/scripts/configure_submodules.sh"
-perl -0pi -e 's/set -e\n/set -e\nif [ "\${LUCENT_OFFLINE_PINNED_DEPS:-0}" = "1" ]; then echo 0; exit 0; fi\n/' \
+perl -0pi -e 's/set -e\n/set -e\nif [ "\${EMUFUSION_OFFLINE_PINNED_DEPS:-0}" = "1" ]; then echo 0; exit 0; fi\n/' \
     "$helper"
 chmod +x "$helper"
 rm -f "$WORK/source/backends/platform/libretro/deps/libretro-deps/libmad/version"
@@ -99,7 +100,7 @@ if ! grep -q 'max-page-size=16384' "$android_mk"; then
 fi
 
 base="$WORK/source/backends/platform/libretro"
-export LUCENT_OFFLINE_PINNED_DEPS=1
+export EMUFUSION_OFFLINE_PINNED_DEPS=1
 export SOURCE_DATE_EPOCH=$(json_value sourceDateEpoch)
 "$ndk/ndk-build" -C "$base" \
     NDK_PROJECT_PATH="$base" \
@@ -107,7 +108,7 @@ export SOURCE_DATE_EPOCH=$(json_value sourceDateEpoch)
     NDK_APPLICATION_MK="$base/jni/Application.mk" \
     APP_ABI=arm64-v8a APP_PLATFORM=android-21 \
     NDK_OUT="$WORK/obj" NDK_LIBS_OUT="$WORK/libs" \
-    -j"${LUCENT_BUILD_JOBS:-4}" LITE=1 NO_WIP=1
+    -j"${EMUFUSION_BUILD_JOBS:-4}" LITE=1 NO_WIP=1
 
 core="$WORK/libs/arm64-v8a/libretro.so"
 if [ ! -f "$core" ]; then

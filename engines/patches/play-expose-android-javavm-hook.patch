@@ -20,7 +20,7 @@ index 1eb8a54..f1b1081 100644
 +#if defined(__ANDROID__)
 +// Libretro frontends load cores with dlopen, so Android does not invoke the
 +// application JNI_OnLoad entry point that normally initializes Play!'s VM.
-+extern "C" __attribute__((visibility("default"))) void lucent_set_android_java_vm(JavaVM* vm)
++extern "C" __attribute__((visibility("default"))) void emufusion_set_android_java_vm(JavaVM* vm)
 +{
 +	Framework::CJavaVM::SetJavaVM(vm);
 +}

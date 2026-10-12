@@ -100,12 +100,41 @@ public final class LegacyNames {
                     if (!file.delete()) Log.w(TAG, "Unable to remove " + name);
                     continue;
                 }
-                if (!file.isFile() || !name.startsWith(ENGINE_MARKER_PREFIX)) continue;
-                File current = new File(engine,
-                        ".emufusion-" + name.substring(ENGINE_MARKER_PREFIX.length()));
-                if (!current.exists() && !file.renameTo(current))
-                    Log.w(TAG, "Unable to rename engine marker " + name);
+                renameMarker(file);
             }
         }
+    }
+
+    /**
+     * Renames per-game markers engines keep beside their saves (ScummVM's
+     * {@code .<old>-scummvm-<hash>.resume} Quick Resume slot), in
+     * {@code files/engine-saves/<engine>/<game>/} and the QA namespaces
+     * {@code files/engine-saves-qa/<session>/<engine>/<game>/}. Saves are never touched.
+     */
+    static void moveSaveMarkers(File filesDir) {
+        if (filesDir == null) return;
+        for (File engine : children(new File(filesDir, "engine-saves")))
+            for (File game : children(engine)) renameMarkers(game);
+        for (File session : children(new File(filesDir, "engine-saves-qa")))
+            for (File engine : children(session))
+                for (File game : children(engine)) renameMarkers(game);
+    }
+
+    private static File[] children(File directory) {
+        File[] files = directory.isDirectory() ? directory.listFiles() : null;
+        return files == null ? new File[0] : files;
+    }
+
+    private static void renameMarkers(File directory) {
+        for (File file : children(directory)) renameMarker(file);
+    }
+
+    private static void renameMarker(File file) {
+        String name = file.getName();
+        if (!file.isFile() || !name.startsWith(ENGINE_MARKER_PREFIX)) return;
+        File current = new File(file.getParentFile(),
+                ".emufusion-" + name.substring(ENGINE_MARKER_PREFIX.length()));
+        if (!current.exists() && !file.renameTo(current))
+            Log.w(TAG, "Unable to rename marker " + name);
     }
 }

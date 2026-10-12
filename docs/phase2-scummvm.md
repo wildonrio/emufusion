@@ -51,7 +51,7 @@ set and must not be presented as universal ScummVM compatibility.
 
 Two path-isolated clean builds completed byte-identically. The exact stripped
 core is 25,793,128 bytes with SHA-256
-`668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d`.
+`9d8d2b51b55ab799ad8e8931dbe1caabfe9035efde0512b2359205e6d2032775`.
 All three `PT_LOAD` segments have `0x4000` alignment. The 207 runtime-data
 files have deterministic path/content tree hash
 `e84d2de3dd5ff482e186f1cf6820ecf91e99bfacc586e97b3e795245bdfbb7f1`.

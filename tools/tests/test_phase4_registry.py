@@ -191,7 +191,7 @@ class PhaseFourRegistryTest(unittest.TestCase):
                 row["candidate"]["license"].pop("auditRef", None)
                 break
         errors = MODULE.validate(data)
-        self.assertTrue(any("needs a cited Lucent audit" in error
+        self.assertTrue(any("needs a cited EmuFusion audit" in error
                             for error in errors), errors)
 
     def test_declared_licence_policy_cannot_drift_from_the_validator(self):

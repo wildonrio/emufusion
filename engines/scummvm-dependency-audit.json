@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "coreArtifactSha256": "668aa27dd70990921372d95338dab6384610f721b7bcb4f224b67e63e44d1f4d",
+  "coreArtifactSha256": "9d8d2b51b55ab799ad8e8931dbe1caabfe9035efde0512b2359205e6d2032775",
   "externalObjectCount": 337,
   "policy": "Every external object emitted by the pinned Android build must map to exactly one audited component. Unknown, missing, or count-mismatched components fail packaging.",
   "embeddedComponents": [

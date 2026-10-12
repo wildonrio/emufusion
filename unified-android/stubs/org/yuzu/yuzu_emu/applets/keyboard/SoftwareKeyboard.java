@@ -15,14 +15,14 @@ import android.util.Log;
  * common/android/applets/software_keyboard.cpp when a title actually opens a
  * text field, so every field it names is declared here with its exact type.
  *
- * <p>Lucent has no on-screen keyboard yet -- the planned one lives on the
+ * <p>EmuFusion has no on-screen keyboard yet -- the planned one lives on the
  * second screen -- so {@link #executeNormal} reports Cancel rather than
  * inventing input. A title that demands text will see the user having dismissed
  * the keyboard, which is a state games already handle, instead of receiving a
  * fabricated string.
  */
 public final class SoftwareKeyboard {
-    private static final String TAG = "LucentEdenBridge";
+    private static final String TAG = "EmuFusionEdenBridge";
 
     private SoftwareKeyboard() {}
 
@@ -31,10 +31,10 @@ public final class SoftwareKeyboard {
 
     /**
      * Inline mode: the game draws its own text and expects incremental edits.
-     * Lucent sends none, which leaves the game's field untouched.
+     * EmuFusion sends none, which leaves the game's field untouched.
      */
     public static void executeInline(KeyboardConfig config) {
-        Log.i(TAG, "eden requested the inline software keyboard; Lucent has no "
+        Log.i(TAG, "eden requested the inline software keyboard; EmuFusion has no "
                 + "keyboard surface yet, so no text is delivered");
     }
 
@@ -47,7 +47,7 @@ public final class SoftwareKeyboard {
     /**
      * Resolved as {@code SoftwareKeyboard$KeyboardConfig}. Field names and types
      * are copied from software_keyboard.cpp and must match it exactly; the
-     * snake_case is Eden's, not Lucent's style.
+     * snake_case is Eden's, not EmuFusion's style.
      */
     public static final class KeyboardConfig {
         public int type;

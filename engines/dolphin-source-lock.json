@@ -26,7 +26,7 @@
     "ENABLE_QT": false,
     "androidMaxPageSize": 16384,
     "normalizedByRemovingSection": ".note.gnu.build-id",
-    "normalizedArtifactSha256": "12fecae4b12872ff80d6c677cbb2c65504cae439d86e0cad204cd1166642c6a6",
+    "normalizedArtifactSha256": "093db3423313ed0b9413d218c0694df2dd784f726f6672099539fa5ab1c43555",
     "rawBuildIds": [
       "e48dde89c6c5a1a07bcfa11ee1252c669ed420db"
     ]
@@ -35,7 +35,7 @@
     {
       "path": "engines/patches/dolphin-libretro-submit-rendered-duplicate-xfb.patch",
       "sha256": "5dd844b8546eea62706a4dd84304077cddaf83c68987459a532f6055f2f5919b",
-      "purpose": "Submit the OpenGL framebuffer rendered for duplicate XFB presentation instead of incorrectly reporting a null duplicate frame to Lucent."
+      "purpose": "Submit the OpenGL framebuffer rendered for duplicate XFB presentation instead of incorrectly reporting a null duplicate frame to EmuFusion."
     },
     {
       "path": "engines/patches/dolphin-libretro-own-signal-stack.patch",

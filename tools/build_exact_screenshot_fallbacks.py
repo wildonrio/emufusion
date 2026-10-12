@@ -24,7 +24,7 @@ def read_tsv(path: Path) -> list[dict[str, str]]:
 
 
 def load_pipeline(path: Path):
-    spec = importlib.util.spec_from_file_location("lucent_wallpaper_pipeline", path)
+    spec = importlib.util.spec_from_file_location("emufusion_wallpaper_pipeline", path)
     if not spec or not spec.loader:
         raise RuntimeError(f"cannot load wallpaper pipeline: {path}")
     module = importlib.util.module_from_spec(spec)

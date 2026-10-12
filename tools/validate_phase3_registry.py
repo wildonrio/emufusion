@@ -19,7 +19,7 @@ def validate(data):
         if row.get("status") != "research" or row.get("shipped") is not False:
             errors.append(f"{engine}: Phase 3 must remain research/unshipped")
         if row.get("route") not in {"libretro-core","native-adapter","container-adapter"}:
-            errors.append(f"{engine}: route must remain inside Lucent")
+            errors.append(f"{engine}: route must remain inside EmuFusion")
         source=row.get("source") or {}
         if not str(source.get("repository","")).startswith("https://") or not re.fullmatch(r"[0-9a-f]{40}",str(source.get("commit",""))):
             errors.append(f"{engine}: current upstream identity is missing")

@@ -1,7 +1,7 @@
 package org.yuzu.yuzu_emu.model;
 
 /**
- * Eden's title-patch record. Lucent ships no patch UI, but the constructor and
+ * Eden's title-patch record. EmuFusion ships no patch UI, but the constructor and
  * all six cached fields are resolved at load time and must match
  * common/android/id_cache.cpp exactly.
  */

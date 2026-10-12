@@ -21,11 +21,11 @@ METHODS = r'''
 
     move-result v0
 
-    if-nez v0, :lucent_skip_retiring_qt_bootstrap
+    if-nez v0, :emufusion_skip_retiring_qt_bootstrap
 
     invoke-super {p0, p1}, Lorg/qtproject/qt5/android/bindings/QtActivity;->onCreateHook(Landroid/os/Bundle;)V
 
-    :lucent_skip_retiring_qt_bootstrap
+    :emufusion_skip_retiring_qt_bootstrap
     return-void
 .end method
 
@@ -88,13 +88,13 @@ METHODS = r'''
 
     move-result v0
 
-    if-eqz v0, :lucent_call_qt_key
+    if-eqz v0, :emufusion_call_qt_key
 
     const/4 v0, 0x1
 
     return v0
 
-    :lucent_call_qt_key
+    :emufusion_call_qt_key
     invoke-super {p0, p1}, Lorg/qtproject/qt5/android/bindings/QtActivity;->dispatchKeyEvent(Landroid/view/KeyEvent;)Z
 
     move-result v0
@@ -109,11 +109,11 @@ METHODS = r'''
 
     move-result v0
 
-    if-eqz v0, :lucent_call_qt_back
+    if-eqz v0, :emufusion_call_qt_back
 
     return-void
 
-    :lucent_call_qt_back
+    :emufusion_call_qt_back
     invoke-super {p0}, Lorg/qtproject/qt5/android/bindings/QtActivity;->onBackPressed()V
 
     return-void
@@ -126,20 +126,20 @@ METHODS = r'''
 
     move-result v0
 
-    if-nez v0, :lucent_motion_handled
+    if-nez v0, :emufusion_motion_handled
 
     invoke-static {p0, p1}, Lcom/thorium/emufusion/navigation/RightStickMotionBridge;->dispatch(Landroid/app/Activity;Landroid/view/MotionEvent;)Z
 
     move-result v0
 
-    if-eqz v0, :lucent_call_qt
+    if-eqz v0, :emufusion_call_qt
 
-    :lucent_motion_handled
+    :emufusion_motion_handled
     const/4 v0, 0x1
 
     return v0
 
-    :lucent_call_qt
+    :emufusion_call_qt
     invoke-super {p0, p1}, Lorg/qtproject/qt5/android/bindings/QtActivity;->dispatchGenericMotionEvent(Landroid/view/MotionEvent;)Z
 
     move-result v0
@@ -172,7 +172,7 @@ def main() -> int:
 
     move-result v0
 
-    if-nez v0, :lucent_skip_retiring_qt_start
+    if-nez v0, :emufusion_skip_retiring_qt_start
 
     invoke-static {p0}, Lcom/thorium/preview/game/InWindowGameHost;->onStart(Landroid/app/Activity;)V
 
@@ -182,7 +182,7 @@ def main() -> int:
 
     invoke-static {p0}, Lcom/thorium/preview/LegalNoticeOverlay;->begin(Landroid/app/Activity;)V
 
-    :lucent_skip_retiring_qt_start
+    :emufusion_skip_retiring_qt_start
     return-void
 .end method'''
     if source.count(start_tail) != 1:
@@ -196,13 +196,13 @@ def main() -> int:
 
     move-result v0
 
-    if-eqz v0, :lucent_normal_am_launch
+    if-eqz v0, :emufusion_normal_am_launch
 
     const/4 v0, 0x0
 
     return-object v0
 
-    :lucent_normal_am_launch
+    :emufusion_normal_am_launch
 '''
     if source.count(am_entry) != 1:
         raise SystemExit(f"could not locate exact MainActivity.launchAmCommand entry: {args.smali}")

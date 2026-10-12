@@ -5,7 +5,7 @@ index f983a35..8277db0 100644
 @@ -1,9 +1,10 @@
  set(GIT_VERSION_FILE "${OUTPUT_DIR}/git-version.cpp")
 -set(GIT_VERSION "unknown")
-+# Lucent builds the SHA-256-pinned release archive without a .git directory.
++# EmuFusion builds the SHA-256-pinned release archive without a .git directory.
 +set(GIT_VERSION "v1.20.4-fa50bb1")
  set(GIT_VERSION_UPDATE "1")
  
@@ -32,14 +32,14 @@ index 75334a7..a3d4852 100644
     retro_hw_get_proc_address_t libretro_get_proc_address;
  };
  
-+/* Lucent creates its Android presentation framebuffer after libretro's
++/* EmuFusion creates its Android presentation framebuffer after libretro's
 + * hardware negotiation but before context_reset.  Export a narrow adapter so
 + * the pinned in-process host can supply that final framebuffer name at the
 + * lifecycle boundary instead of depending on PPSSPP's later emulation-thread
 + * callback timing.  This is intentionally not a general configuration API. */
 +extern GLuint g_defaultFBO;
 +extern "C" __attribute__((visibility("default")))
-+void lucent_set_frontend_framebuffer(unsigned framebuffer) {
++void emufusion_set_frontend_framebuffer(unsigned framebuffer) {
 +	g_defaultFBO = (GLuint)framebuffer;
 +}
 +

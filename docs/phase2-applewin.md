@@ -15,7 +15,7 @@ is stored in this repository or APK.
   `engines/patches/applewin-external-firmware.patch`, SHA-256
   `83c6b91f7af264a6e868a01a1684094a60a85f4441c717f160593b056cce1569`
 - Android ARM64 proof artifact SHA-256:
-  `e3d45ec269f2ea558225a55e70e4c34661fa7162c6e7d217edd10f0e8c2efc84`
+  `930dfc035a2c2fd63ad585c9c4dcb8a4a82fd5f13472b92c396c203faa426926`
 
 October 5 normal staging uses the 16 KiB-aligned candidate accepted by the
 strict Android loader. Two clean builds at the same isolated path produced

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "verifiedAt": "2026-08-10",
-  "artifactSha256": "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
+  "artifactSha256": "43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c",
   "combinedLicenseConcluded": "GPL-3.0-only",
   "ppssppSourceFileCount": 527,
   "ppsspp": {

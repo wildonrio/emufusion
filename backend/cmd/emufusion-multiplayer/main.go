@@ -1,5 +1,5 @@
-// Command lucent-multiplayer is the self-hosted presence, matchmaking,
-// and WebRTC-signaling backend for Lucent's alpha multiplayer feature. It
+// Command emufusion-multiplayer is the self-hosted presence, matchmaking,
+// and WebRTC-signaling backend for EmuFusion's alpha multiplayer feature. It
 // deliberately never carries game input, video, or audio -- only small,
 // infrequent presence/roster/schedule/handshake messages. Actual gameplay
 // traffic between matched devices goes directly peer-to-peer over a
@@ -25,8 +25,8 @@ import (
 )
 
 func main() {
-	dbPath := envOr("LUCENT_MULTIPLAYER_DB", "lucent-multiplayer.db")
-	addr := envOr("LUCENT_MULTIPLAYER_ADDR", ":8787")
+	dbPath := envOr("EMUFUSION_MULTIPLAYER_DB", "emufusion-multiplayer.db")
+	addr := envOr("EMUFUSION_MULTIPLAYER_ADDR", ":8787")
 
 	db, err := store.Open(dbPath)
 	if err != nil {
@@ -41,7 +41,7 @@ func main() {
 
 	server := &http.Server{Addr: addr, Handler: newMux(db, h), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
-		log.Printf("lucent-multiplayer listening on %s (db=%s)", addr, dbPath)
+		log.Printf("emufusion-multiplayer listening on %s (db=%s)", addr, dbPath)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("serve: %v", err)
 		}
@@ -130,7 +130,7 @@ func handleRegister(db *store.Store) http.HandlerFunc {
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
-	// This backend is meant to be reached only by the Lucent app itself
+	// This backend is meant to be reached only by the EmuFusion app itself
 	// (over TLS, in front of a reverse proxy in production); it is not a
 	// browser-facing API, so a permissive origin check is appropriate
 	// here rather than a browser CORS-style allowlist.

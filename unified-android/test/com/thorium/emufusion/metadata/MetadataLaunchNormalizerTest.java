@@ -11,8 +11,8 @@ public final class MetadataLaunchNormalizerTest {
     }
 
     private static String route(String system) {
-        return "psp".equals(system) ? "lucent --system psp" :
-                "dreamcast".equals(system) ? "lucent --system dreamcast" : "";
+        return "psp".equals(system) ? "emufusion --system psp" :
+                "dreamcast".equals(system) ? "emufusion --system dreamcast" : "";
     }
 
     private static void restoresMissingLaunchPerCollection() {
@@ -21,12 +21,12 @@ public final class MetadataLaunchNormalizerTest {
         String output = MetadataLaunchNormalizer.rewrite(
                 input, MetadataLaunchNormalizerTest::route);
         TestSupport.truth(output.contains(
-                "shortname: psp\nlaunch: lucent --system psp\ngame: One"),
+                "shortname: psp\nlaunch: emufusion --system psp\ngame: One"),
                 "PSP launch must be restored");
         TestSupport.truth(output.contains(
-                "shortname: dreamcast\nlaunch: lucent --system dreamcast\ngame: Two"),
+                "shortname: dreamcast\nlaunch: emufusion --system dreamcast\ngame: Two"),
                 "Dreamcast launch must be restored");
-        TestSupport.equal(2, count(output, "launch: lucent"),
+        TestSupport.equal(2, count(output, "launch: emufusion"),
                 "each supported collection gets one route");
     }
 
@@ -37,7 +37,7 @@ public final class MetadataLaunchNormalizerTest {
                 input, MetadataLaunchNormalizerTest::route);
         TestSupport.equal(1, count(output, "launch:"),
                 "duplicate collection launches must collapse");
-        TestSupport.truth(output.contains("launch: lucent --system psp"),
+        TestSupport.truth(output.contains("launch: emufusion --system psp"),
                 "current route must replace stale routes");
         TestSupport.truth(!output.contains("old-one") && !output.contains("old-two"),
                 "stale routes must be gone");
@@ -62,7 +62,7 @@ public final class MetadataLaunchNormalizerTest {
                 input, MetadataLaunchNormalizerTest::route);
         TestSupport.equal(1, count(output, "launch:"),
                 "only the authoritative collection route may remain");
-        TestSupport.truth(output.contains("launch: lucent --system psp"),
+        TestSupport.truth(output.contains("launch: emufusion --system psp"),
                 "internal collection route must win");
         TestSupport.truth(!output.contains("standalone-one") &&
                         !output.contains("standalone-two"),

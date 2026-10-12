@@ -47,16 +47,16 @@ index 7665666..e3e58fb 100644
  uint32_t EnableTextureCache = 0;
  uint32_t EnableFBEmulation = 0;
  uint32_t EnableFrameDuping = 0;
-+static bool lucent_mupen_vi_origin_changed = false;
++static bool emufusion_mupen_vi_origin_changed = false;
 +
-+void lucent_mupen_note_vi_origin_change(void)
++void emufusion_mupen_note_vi_origin_change(void)
 +{
-+   lucent_mupen_vi_origin_changed = true;
++   emufusion_mupen_vi_origin_changed = true;
 +}
 +
-+RETRO_API bool retro_lucent_mupen_current_run_has_vi_origin_change(void)
++RETRO_API bool retro_emufusion_mupen_current_run_has_vi_origin_change(void)
 +{
-+   return lucent_mupen_vi_origin_changed;
++   return emufusion_mupen_vi_origin_changed;
 +}
 +
  uint32_t EnableLODEmulation = 0;
@@ -66,7 +66,7 @@ index 7665666..e3e58fb 100644
  
  void retro_run (void)
  {
-+    lucent_mupen_vi_origin_changed = false;
++    emufusion_mupen_vi_origin_changed = false;
      libretro_swap_buffer = false;
      static bool updated = false;
  
@@ -78,8 +78,8 @@ index 1ce8b90..73721f5 100644
  extern retro_environment_t environ_cb;
  extern bool libretro_swap_buffer;
  
-+void lucent_mupen_note_vi_origin_change(void);
-+RETRO_API bool retro_lucent_mupen_current_run_has_vi_origin_change(void);
++void emufusion_mupen_note_vi_origin_change(void);
++RETRO_API bool retro_emufusion_mupen_current_run_has_vi_origin_change(void);
  // Misc Globals
  extern CONTROL Controls[4];
  extern struct xoshiro256pp_state l_mpk_idgen;
@@ -99,7 +99,7 @@ index 559f031..89cb6ab 100644
  	bool bVIUpdated = false;
  	if (*REG.VI_ORIGIN != VI.lastOrigin) {
  		VI_UpdateSize();
-+		lucent_mupen_note_vi_origin_change();
++		emufusion_mupen_note_vi_origin_change();
  		bVIUpdated = true;
  		wnd.updateScale();
  		perf.increaseFramesCount();

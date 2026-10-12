@@ -1,7 +1,7 @@
 package org.yuzu.yuzu_emu.features.input.model;
 
 /**
- * Eden's per-player controller profile. Lucent routes input through its own
+ * Eden's per-player controller profile. EmuFusion routes input through its own
  * InputRouter and never builds one of these, but Eden's JNI cache resolves the
  * constructor and all twelve fields at load time, so the declared types must
  * match common/android/id_cache.cpp exactly.

@@ -24,7 +24,7 @@ class MamePageAlignmentTest(unittest.TestCase):
             (source/'fixture.c').write_text('int core_fixture(void) { return 42; }\n')
             (source/'Makefile.libretro').write_text('.PHONY: all clean\nall:\n\t$(CC) -shared -fPIC fixture.c $(LDOPTS) -o fixture.so\nclean:\n\t@:\n')
             env = dict(os.environ, NDK_DIR=str(NDK), source=folder, CC=str(cc),
-                       platform='android-arm64',subtarget='lucent',sources='fixture.c',LUCENT_BUILD_JOBS='1')
+                       platform='android-arm64',subtarget='emufusion',sources='fixture.c',EMUFUSION_BUILD_JOBS='1')
             subprocess.run(['sh','-eu','-c',branch[start:end]], env=env, check=True, capture_output=True)
             self.assertGreaterEqual(min(alignment.load_alignments((source/'fixture.so').read_bytes())),16384)
 

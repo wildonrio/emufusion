@@ -4,20 +4,20 @@ diff --git a/Source/ui_libretro/main_libretro.cpp b/Source/ui_libretro/main_libr
 @@ -45,5 +45,7 @@ int g_res_factor = 1;
  CGSHandler::PRESENTATION_MODE g_presentation_mode = CGSHandler::PRESENTATION_MODE::PRESENTATION_MODE_FIT;
  bool g_forceBilinearTextures = false;
-+unsigned g_lucent_output_width = 0;
-+unsigned g_lucent_output_height = 0;
++unsigned g_emufusion_output_width = 0;
++unsigned g_emufusion_output_height = 0;
  
  static std::vector<struct retro_variable> m_vars =
      {
-@@ -58,6 +60,12 @@ extern "C" __attribute__((visibility("default"))) void lucent_set_android_java_vm(JavaVM* vm)
+@@ -58,6 +60,12 @@ extern "C" __attribute__((visibility("default"))) void emufusion_set_android_java_vm(JavaVM* vm)
  {
  	Framework::CJavaVM::SetJavaVM(vm);
  }
 +
-+extern "C" __attribute__((visibility("default"))) void lucent_set_output_size(unsigned width, unsigned height)
++extern "C" __attribute__((visibility("default"))) void emufusion_set_output_size(unsigned width, unsigned height)
 +{
-+	g_lucent_output_width = width;
-+	g_lucent_output_height = height;
++	g_emufusion_output_width = width;
++	g_emufusion_output_height = height;
 +}
  #endif
  
@@ -29,8 +29,8 @@ diff --git a/Source/ui_libretro/GSH_OpenGL_Libretro.cpp b/Source/ui_libretro/GSH
  extern CGSHandler::PRESENTATION_MODE g_presentation_mode;
  extern retro_video_refresh_t g_video_cb;
  extern struct retro_hw_render_callback g_hw_render;
-+extern unsigned g_lucent_output_width;
-+extern unsigned g_lucent_output_height;
++extern unsigned g_emufusion_output_width;
++extern unsigned g_emufusion_output_height;
  
  CGSH_OpenGL_Libretro::CGSH_OpenGL_Libretro()
      : CGSH_OpenGL(false)
@@ -40,10 +40,10 @@ diff --git a/Source/ui_libretro/GSH_OpenGL_Libretro.cpp b/Source/ui_libretro/GSH
  	presentationParams.mode = g_presentation_mode;
 -	presentationParams.windowWidth = GetCrtWidth() * g_res_factor;
 -	presentationParams.windowHeight = GetCrtHeight() * g_res_factor;
-+	presentationParams.windowWidth = g_lucent_output_width ?
-+	    g_lucent_output_width : GetCrtWidth() * g_res_factor;
-+	presentationParams.windowHeight = g_lucent_output_height ?
-+	    g_lucent_output_height : GetCrtHeight() * g_res_factor;
++	presentationParams.windowWidth = g_emufusion_output_width ?
++	    g_emufusion_output_width : GetCrtWidth() * g_res_factor;
++	presentationParams.windowHeight = g_emufusion_output_height ?
++	    g_emufusion_output_height : GetCrtHeight() * g_res_factor;
  
  	SetPresentationParams(presentationParams);
  	NotifyPreferencesChanged();

@@ -30,7 +30,7 @@ public final class CheatIdentityCrcTest {
     }
 
     private static void crc32MatchesJavaUtilZip() throws IOException {
-        File dir = Files.createTempDirectory("lucent-crc").toFile();
+        File dir = Files.createTempDirectory("emufusion-crc").toFile();
         File file = new File(dir, "game.nes");
         byte[] data = new byte[70_000];
         for (int i = 0; i < data.length; i++) data[i] = (byte) (i * 31 + 7);
@@ -44,7 +44,7 @@ public final class CheatIdentityCrcTest {
 
     private static void crc32BoundedAndTolerant() throws IOException {
         check(CheatGameIdentity.crc32(null).isEmpty(), "null file");
-        File dir = Files.createTempDirectory("lucent-crc-2").toFile();
+        File dir = Files.createTempDirectory("emufusion-crc-2").toFile();
         File missing = new File(dir, "does-not-exist.nes");
         check(CheatGameIdentity.crc32(missing).isEmpty(), "missing file");
         File empty = new File(dir, "empty.nes");
@@ -56,7 +56,7 @@ public final class CheatIdentityCrcTest {
     }
 
     private static void crc32RespectsWallClockBudget() throws IOException {
-        File dir = Files.createTempDirectory("lucent-crc-budget").toFile();
+        File dir = Files.createTempDirectory("emufusion-crc-budget").toFile();
         File file = new File(dir, "game.nes");
         write(file, new byte[70_000]);
         String unbounded = CheatGameIdentity.crc32(file);
@@ -70,7 +70,7 @@ public final class CheatIdentityCrcTest {
     }
 
     private static void identifyRomCrc32BudgetIsLazyAndBounded() throws IOException {
-        File dir = Files.createTempDirectory("lucent-crc-4").toFile();
+        File dir = Files.createTempDirectory("emufusion-crc-4").toFile();
         File rom = new File(dir, "Kirby (World).nes");
         write(rom, new byte[50_000]);
         Map<String, String> exhausted = CheatGameIdentity.identify("nes", rom, "", 0L);
@@ -83,7 +83,7 @@ public final class CheatIdentityCrcTest {
     }
 
     private static void identifyPopulatesRomCrc32ForCartSystemsOnly() throws IOException {
-        File dir = Files.createTempDirectory("lucent-crc-3").toFile();
+        File dir = Files.createTempDirectory("emufusion-crc-3").toFile();
         File rom = new File(dir, "Super Mario Bros. (World).nes");
         byte[] data = "not a real ines rom, just needs bytes to crc".getBytes(StandardCharsets.US_ASCII);
         write(rom, data);
@@ -181,7 +181,7 @@ public final class CheatIdentityCrcTest {
 
     private static void writeDatFile(Map<String, File> cache, String url, String content) {
         try {
-            File dir = Files.createTempDirectory("lucent-dat").toFile();
+            File dir = Files.createTempDirectory("emufusion-dat").toFile();
             File file = new File(dir, "index.dat");
             write(file, content.getBytes(StandardCharsets.UTF_8));
             cache.put(url, file);

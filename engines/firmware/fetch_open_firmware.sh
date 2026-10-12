@@ -3,7 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 TARGET=${1:-}
-BUILD_ROOT=${LUCENT_ENGINE_BUILD_DIR:-$ROOT/engines/build}
+BUILD_ROOT=${EMUFUSION_ENGINE_BUILD_DIR:-$ROOT/engines/build}
 SOURCE_DIR="$BUILD_ROOT/sources"
 OUTPUT_DIR="$BUILD_ROOT/firmware/$TARGET"
 mkdir -p "$SOURCE_DIR" "$OUTPUT_DIR"

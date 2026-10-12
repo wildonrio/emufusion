@@ -177,7 +177,7 @@ class Phase1AQATest(unittest.TestCase):
             "1160d48a52f0271e3a83bb57498fe5f86069336be6eb175be9d3842795fc0d07",
             "1c4a54b31c5ed242a901b4a472d412819b5e08405df1c58066bd555f9dd52515",
             "08e3e6f9e21ea6ec1c9d9b0882f576a9abb03aa5aeeeefb3ad8bc4a3f13d96de",
-            "LUCENT_FORCE_REBUILD",
+            "EMUFUSION_FORCE_REBUILD",
             "recipeRevision=3",
             "elfMaxPageSize=16384",
             "elfCommonPageSize=16384",

@@ -56,7 +56,7 @@ class PhaseTwoPpssppTest(unittest.TestCase):
             "1e3b4965632f60b1d85360261d1b9dd45444bc71",
             "93b942daa799dedf4f7a1a3f143c081c1945f2a67b7d13717f9fbb5c0ef4dd51",
             "--remove-section=.note.gnu.build-id",
-            "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
+            "43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c",
             "PPSSPP DT_NEEDED closure changed",
             "PPSSPP core is missing required export",
             'defined_symbols_file="$ppsspp_candidate_dir/ppsspp-defined-symbols.txt"',
@@ -94,7 +94,7 @@ class PhaseTwoPpssppTest(unittest.TestCase):
             cwd=ROOT,
             env={
                 "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-                "LUCENT_NATIVE_API": "24",
+                "EMUFUSION_NATIVE_API": "24",
                 "ANDROID_SDK_ROOT": "/Users/tyleryoung/Code/cemu/Cemu-0.5/android-sdk",
                 "CMAKE": "/bin/false",
                 "ANDROID_NDK_ROOT": "/definitely/not/the/pinned/ndk",
@@ -139,7 +139,7 @@ class PhaseTwoPpssppTest(unittest.TestCase):
         self.assertEqual(2, proof["freshBuildCount"])
         self.assertTrue(proof["byteIdentical"])
         self.assertEqual(
-            "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d",
+            "43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c",
             proof["artifactSha256"],
         )
         self.assertIsNone(proof["gnuBuildId"])
@@ -190,7 +190,7 @@ class PhaseTwoPpssppTest(unittest.TestCase):
             self.assertIn(row["archiveSha256"], self.recipe)
 
     def test_dependency_audit_and_staged_artifact_use_normalized_identity(self):
-        expected = "376659948724e422876d31d61cc5dd130bfe5a2e941d64c6bf4225c2f2a23c6d"
+        expected = "43dd53db9bd6ac588be75e7ba8d008c3feaee48351764ce0111156379248f08c"
         audit = json.loads(AUDIT.read_text(encoding="utf-8"))
         self.assertEqual(expected, audit["artifactSha256"])
         if ARTIFACT.is_file():

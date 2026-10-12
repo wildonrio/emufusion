@@ -115,8 +115,8 @@ def main():
         "",
         "Artifact SHA-256: " + manifest["artifact"]["sha256"],
         "External object files audited: " + str(len(objects)),
-        "ScummVM and Lucent core changes: GPL-3.0-or-later.",
-        "Complete corresponding pinned source/build scripts are supplied by Lucent's source offer.",
+        "ScummVM and EmuFusion core changes: GPL-3.0-or-later.",
+        "Complete corresponding pinned source/build scripts are supplied by EmuFusion's source offer.",
         "",
         "Linked external components:",
     ]

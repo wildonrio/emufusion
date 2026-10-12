@@ -1304,11 +1304,11 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         )
         self.assertIn("!active_host->mupen_vi_origin_boundary()", native)
         self.assertNotIn('"mupen64plus-BufferSwapMode"', native)
-        self.assertIn("lucent_mupen_note_vi_origin_change", patch)
+        self.assertIn("emufusion_mupen_note_vi_origin_change", patch)
         self.assertIn(
-            "retro_lucent_mupen_current_run_has_vi_origin_change", patch
+            "retro_emufusion_mupen_current_run_has_vi_origin_change", patch
         )
-        self.assertIn("lucent_mupen_vi_origin_changed = false", patch)
+        self.assertIn("emufusion_mupen_vi_origin_changed = false", patch)
         self.assertNotIn('CORE_NAME "-BufferSwapMode"', patch)
         self.assertNotIn("Config::bsOnVIOriginChange", patch)
 

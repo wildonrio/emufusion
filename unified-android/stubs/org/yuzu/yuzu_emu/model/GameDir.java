@@ -1,7 +1,7 @@
 package org.yuzu.yuzu_emu.model;
 
 /**
- * Eden's scanned-directory record. Lucent supplies content paths directly, so
+ * Eden's scanned-directory record. EmuFusion supplies content paths directly, so
  * nothing here is consulted; the constructor exists because Eden's JNI cache
  * resolves it during load.
  */

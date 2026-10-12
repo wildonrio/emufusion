@@ -14,8 +14,8 @@ ALIASES = {"megadrive": "genesis", "3ds": "n3ds"}
 
 def system_from_metadata(name: str) -> str:
     stem = name.split(".metadata.pegasus.txt", 1)[0]
-    if stem.startswith("99-lucent-auto-"):
-        system = stem.removeprefix("99-lucent-auto-")
+    if stem.startswith("99-emufusion-auto-"):
+        system = stem.removeprefix("99-emufusion-auto-")
     elif "-" in stem:
         system = stem.split("-", 1)[1]
     else:

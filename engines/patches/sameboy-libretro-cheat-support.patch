@@ -6,12 +6,12 @@ index 4f6640f..bb298ff 100644
      return size;
  }
  
-+/* Lucent: apply one live cheat line (GameShark or Game Genie, the same
++/* EmuFusion: apply one live cheat line (GameShark or Game Genie, the same
 + * dialect RetroArchChtParser/CwCheatParser already store for gb/gbc rows) to
 + * a single GB_gameboy_t instance. Multi-line codes arrive joined with '+',
 + * the same separator every other libretro core in this build treats as
 + * "one cheat, several lines" (see mgba's retro_cheat_set for precedent). */
-+static void lucent_gb_apply_cheat_lines(GB_gameboy_t *gb, const char *code, bool enabled)
++static void emufusion_gb_apply_cheat_lines(GB_gameboy_t *gb, const char *code, bool enabled)
 +{
 +    if (!code || !*code) return;
 +    GB_set_cheats_enabled(gb, true);
@@ -29,7 +29,7 @@ index 4f6640f..bb298ff 100644
 +            *(--stop) = 0;
 +        }
 +        if (*start) {
-+            GB_import_cheat(gb, start, "Lucent cheat", enabled);
++            GB_import_cheat(gb, start, "EmuFusion cheat", enabled);
 +        }
 +        if (!split) break;
 +        cursor = split + 1;
@@ -51,9 +51,9 @@ index 4f6640f..bb298ff 100644
      (void)index;
 -    (void)enabled;
 -    (void)code;
-+    lucent_gb_apply_cheat_lines(&gameboy[0], code, enabled);
++    emufusion_gb_apply_cheat_lines(&gameboy[0], code, enabled);
 +    if (emulated_devices == 2) {
-+        lucent_gb_apply_cheat_lines(&gameboy[1], code, enabled);
++        emufusion_gb_apply_cheat_lines(&gameboy[1], code, enabled);
 +    }
  }
 
