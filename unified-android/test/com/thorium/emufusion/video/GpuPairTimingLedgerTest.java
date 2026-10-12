@@ -65,7 +65,7 @@ public final class GpuPairTimingLedgerTest {
         }
         ledger.beginEvidenceEpoch();
         policy.beginEvidenceEpoch();
-        eq(2L, policy.workLevel(), "resetting timing ownership cannot restore shed work");
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, policy.workLevel(), "resetting timing ownership cannot restore shed work");
         eq(32L, policy.failureCount(), "epoch reset preserves failure accounting");
     }
 

@@ -7210,6 +7210,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             int iterations = DENSE_LEVEL_ITERATIONS[level];
             if (level == DENSE_LEVELS - 1 && denseWorkLevel > 0)
                 iterations = Math.max(4, iterations - 2 * denseWorkLevel);
+            // Work level 3: the two finer levels sample the full-resolution
+            // history and dominate the solve; halve them when the engine
+            // already saturates the GPU (each direction keeps two passes).
+            if (level < DENSE_LEVELS - 1 && denseWorkLevel >= 3)
+                iterations = Math.max(2, iterations / 2);
             for (int iteration = 0; iteration < iterations; ++iteration) {
                 int output = denseFlowTextures[direction][level][iteration & 1];
                 attachDenseTarget(output, width, height);
@@ -8691,8 +8696,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             outputFrameRateReassertedAfterSwap = true;
             requestOutputFrameRate("first-successful-swap");
         }
-        if (swapStarted != 0L)
-            recordDenseWall(DENSE_WALL_SWAP, System.nanoTime() - swapStarted);
+        if (swapStarted != 0L) {
+            long swapNs = System.nanoTime() - swapStarted;
+            recordDenseWall(DENSE_WALL_SWAP, swapNs);
+            // A swap that blocks longer than a scan has already cost the next
+            // vsync callback: the GPU is saturated (Cemu SM3DW, 12.5 ms p95).
+            if (densePyramidEnabled && frameRate.panelPeriodNs() > 0L &&
+                    swapNs > frameRate.panelPeriodNs())
+                applyDenseGpuDecision(denseGpuAdaptation.onPresentationBackpressure(),
+                        "present-backpressure");
+        }
         int endpointAdvance = timelineActive ? timeline.pendingAdvance() :
                 frameRate.bufferedEndpointAdvanceAfterPresentation();
         boolean advanceCrossesGap = bufferedAdvanceWouldCrossGap(endpointAdvance);
@@ -10305,6 +10318,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " workLevel=" + denseGpuAdaptation.workLevel() +
                 " disabled=" + (denseGpuAdaptation.generationDisabled() ? 1 : 0) +
                 " suspensions=" + denseOverloadSuspensions +
+                " presentBackpressure=" + denseGpuAdaptation.backpressureEventCount() +
                 " resumes=" + denseGpuAdaptation.resumeCount() +
                 " completeEstimatorAndOwnWarpPairs=" + denseGpuCompletePairs +
                 " pendingPairs=" + denseGpuPairLedger.pendingPairCount() +

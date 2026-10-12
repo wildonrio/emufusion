@@ -35,7 +35,15 @@ package com.thorium.emufusion.video;
  * more than 9 misses in 10 s of 30->60, then 54 in the 3 s of two screenshots).</p>
  */
 public final class GpuWorkAdaptationPolicy {
-    public static final int DEFAULT_MAX_WORK_LEVEL = 2;
+    /**
+     * Work levels: 1 trims the coarsest solve and refinement, 2 drops the
+     * reciprocal refinement and the phase field, 3 halves the finer solve
+     * levels (a GPU an engine already saturates: Cemu blocked our swaps 12.5 ms
+     * p95 at level 2, 2026-10-12). Levels 1 and 2 follow the first misses;
+     * level 3 needs three consecutive blocks at level 2 each with at least 5%
+     * of pairs missed, so a startup hitch alone never costs motion reach.
+     */
+    public static final int DEFAULT_MAX_WORK_LEVEL = 3;
     public static final int DEFAULT_RECOVERY_GOOD_PAIRS = 1200;
     public static final int DEFAULT_FAILURES_AT_MINIMUM = 30;
     /** Completed pairs without a failure that clear the minimum-work count (~10 s at 60). */
@@ -63,6 +71,10 @@ public final class GpuWorkAdaptationPolicy {
     private int blockObservations;
     private int blockMisses;
     private int overloadedBlocks;
+    // Consecutive blocks each with at least 5% of pairs missed: steady misses,
+    // which a single hitch (its misses inside one or two blocks) cannot give.
+    private int steadyMissBlocks;
+    private static final int LAST_STEP_BLOCKS = 3;
     private int pairsSinceFailure;
     // Observations (completed or failed) since the current burst's first failure.
     private int burstObservations;
@@ -81,6 +93,7 @@ public final class GpuWorkAdaptationPolicy {
     private long restorations;
     private long disableTransitions;
     private long resumes;
+    private long backpressureEvents;
     private long evidenceEpochs;
 
     public GpuWorkAdaptationPolicy() {
@@ -149,7 +162,7 @@ public final class GpuWorkAdaptationPolicy {
         if (totalGpuUs > shaderBudgetUs) return onFailure(Failure.GPU_OVER_BUDGET);
         if (disabled) return Decision.DISABLE_GENERATION;
         if (failuresAtMinimum > 0) ++burstObservations;
-        if (workLevel == maxWorkLevel) observeAtMinimum(false);
+        if (workLevel >= blockObservedLevel()) observeAtMinimum(false);
         // A window of failure-free pairs ends a burst; isolated misses spread
         // across a long session never add up to a disable.
         if (++pairsSinceFailure >= failureWindowPairs) clearBurst();
@@ -191,6 +204,14 @@ public final class GpuWorkAdaptationPolicy {
         ++failuresByReason[reason.ordinal()];
         consecutiveHealthyPairs = 0;
         if (disabled) return Decision.DISABLE_GENERATION;
+        if (workLevel < maxWorkLevel && workLevel == maxWorkLevel - 1 && lastStepNeedsBlock()) {
+            // The last level costs motion reach; take it only for misses that
+            // keep coming, not for a startup hitch or for shader time alone.
+            boolean visible = reason != Failure.GPU_OVER_BUDGET;
+            if (visible) pairsSinceFailure = 0;
+            observeAtMinimum(visible);
+            if (steadyMissBlocks < LAST_STEP_BLOCKS) return Decision.UNCHANGED;
+        }
         if (workLevel < maxWorkLevel) {
             ++workLevel;
             ++reductions;
@@ -219,11 +240,42 @@ public final class GpuWorkAdaptationPolicy {
         return Decision.DISABLE_GENERATION;
     }
 
+    /**
+     * A present that blocked for longer than a scan: the GPU is saturated and
+     * an output slot was lost even though the frame itself was on time (Cemu
+     * SM3DW blocked 12.5 ms p95 with few deadline misses, 2026-10-12). It
+     * counts toward the last work level like a steady miss, never toward a
+     * disable.
+     */
+    public Decision onPresentationBackpressure() {
+        if (disabled || !lastStepNeedsBlock() || workLevel != maxWorkLevel - 1)
+            return Decision.UNCHANGED;
+        ++backpressureEvents;
+        observeAtMinimum(true);
+        if (steadyMissBlocks < LAST_STEP_BLOCKS) return Decision.UNCHANGED;
+        ++workLevel;
+        ++reductions;
+        clearBurst();
+        pairsSinceFailure = 0;
+        return Decision.REDUCE_WORK;
+    }
+
+    /** The product policy's last work level must be earned by a sustained block. */
+    private boolean lastStepNeedsBlock() {
+        return persistenceBlocks > 0 && maxWorkLevel >= 3;
+    }
+
+    /** Lowest level at which observations fill overload blocks. */
+    private int blockObservedLevel() {
+        return lastStepNeedsBlock() ? maxWorkLevel - 1 : maxWorkLevel;
+    }
+
     /** One minimum-work observation; a block closes as overloaded or not. */
     private void observeAtMinimum(boolean miss) {
         if (miss) ++blockMisses;
         if (++blockObservations < persistenceBlockPairs) return;
         overloadedBlocks = (long) blockMisses * 4L >= blockObservations ? overloadedBlocks + 1 : 0;
+        steadyMissBlocks = (long) blockMisses * 20L >= blockObservations ? steadyMissBlocks + 1 : 0;
         blockObservations = 0;
         blockMisses = 0;
     }
@@ -234,6 +286,7 @@ public final class GpuWorkAdaptationPolicy {
         blockObservations = 0;
         blockMisses = 0;
         overloadedBlocks = 0;
+        steadyMissBlocks = 0;
     }
 
     /**
@@ -283,5 +336,6 @@ public final class GpuWorkAdaptationPolicy {
     public long restorationCount() { return restorations; }
     public long disableTransitionCount() { return disableTransitions; }
     public long resumeCount() { return resumes; }
+    public long backpressureEventCount() { return backpressureEvents; }
     public long evidenceEpochCount() { return evidenceEpochs; }
 }

@@ -7,6 +7,8 @@ public final class GpuWorkAdaptationPolicyTest {
         oneEmulatorHitchDoesNotDisable();
         screenshotSpikeAfterStrayMissesDoesNotDisable();
         suspensionResumesAtMinimumWorkAndCanDisableAgain();
+        lastLevelNeedsSteadyMisses();
+        steadyPresentBackpressureEarnsTheLastLevelOnly();
         isolatedPhysicalMissesDoNotAccumulate();
         everyFailureInvalidatesRecoveryAtMinimumWork();
         restorationRequiresConsecutiveEvidenceAndHeadroom();
@@ -28,12 +30,12 @@ public final class GpuWorkAdaptationPolicyTest {
                     "an over-budget pair never restores quality");
             eq(0, value.consecutiveHealthyPairs(), "bad sample always clears recovery");
         }
-        eq(2, value.workLevel(), "minimum work level reached");
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "shader time alone stops before the last level");
         eq(1200, value.failureCount(), "all bad observations remain counted");
         eq(1200, value.failureCount(GpuWorkAdaptationPolicy.Failure.GPU_OVER_BUDGET),
                 "overload reason accounting remains intact");
         eq(0, value.restorationCount(), "1200 bad pairs cannot earn restoration");
-        eq(2, value.reductionCount(), "only two work reductions exist");
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.reductionCount(), "the last level needs visible misses");
     }
 
     private static void overBudgetShaderTimeAloneNeverDisables() {
@@ -60,8 +62,7 @@ public final class GpuWorkAdaptationPolicyTest {
         // Over the burst that was a quarter of all pairs and it disabled
         // generation for the session; the misses were not sustained.
         GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
-        long pair = 0;
-        for (int i = 0; i < 2; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        long pair = reachMinimumWork(value);
         for (int good = 0; good < 60; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
         for (int i = 0; i < 120; ++i) {
             if (i % 17 == 0) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
@@ -87,8 +88,8 @@ public final class GpuWorkAdaptationPolicyTest {
         // GameCube 2026-10-11: one 0.35 s stall missed thirty frames at once.
         GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
         long pair = 0;
-        for (int i = 0; i < 2; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
-        eq(2, value.workLevel(), "the first misses shed work");
+        for (int i = 0; i < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "the first misses shed work, but not the last level");
         for (int hitch = 0; hitch < 3; ++hitch) {
             for (int miss = 0; miss < 40; ++miss)
                 value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
@@ -101,6 +102,62 @@ public final class GpuWorkAdaptationPolicyTest {
             value.onCompletedPair(++pair, 500L, 1000L, true);
         }
         check(value.generationDisabled(), "half the frames missing for seconds is overload");
+    }
+
+    /** Steady misses earn the last level; a clean window then clears the burst. */
+    private static long reachMinimumWork(GpuWorkAdaptationPolicy value) {
+        long pair = 0;
+        while (value.workLevel() < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            for (int good = 0; good < 9; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+            check(pair < 10_000, "steady 10% misses reach the last level");
+        }
+        for (int good = 0; good < 600; ++good) value.onCompletedPair(++pair, 500L, 1000L, false);
+        eq(0, value.failuresAtMinimum(), "a clean window clears the burst");
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL, value.workLevel(), "and keeps the minimum work level");
+        return pair;
+    }
+
+    private static void lastLevelNeedsSteadyMisses() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        for (int i = 0; i < 2; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "the first misses shed the cheap levels");
+        // One 0.35 s hitch: thirty misses at once, then clean pairs.
+        for (int miss = 0; miss < 30; ++miss) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        for (int good = 0; good < 600; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "a hitch never costs the last level");
+        // Steady 1-in-10 misses (a saturated GPU) earn it within three blocks.
+        int rounds = 0;
+        while (value.workLevel() < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL && rounds < 100) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            for (int good = 0; good < 9; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+            ++rounds;
+        }
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL, value.workLevel(), "steady misses earn the last level");
+        check(rounds <= 19, "within three blocks: " + rounds);
+    }
+
+    private static void steadyPresentBackpressureEarnsTheLastLevelOnly() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        check(value.onPresentationBackpressure() == GpuWorkAdaptationPolicy.Decision.UNCHANGED,
+                "backpressure alone does not shed the cheap levels");
+        for (int i = 0; i < 2; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "fixture at the level below the last");
+        int rounds = 0;
+        while (value.workLevel() < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL && rounds < 100) {
+            value.onPresentationBackpressure();
+            for (int good = 0; good < 6; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+            ++rounds;
+        }
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL, value.workLevel(), "steady blocked presents earn the last level");
+        for (int i = 0; i < 2000; ++i) {
+            check(value.onPresentationBackpressure() == GpuWorkAdaptationPolicy.Decision.UNCHANGED,
+                    "at the last level backpressure changes nothing");
+            value.onCompletedPair(++pair, 500L, 1000L, true);
+        }
+        check(!value.generationDisabled(), "backpressure never disables generation");
     }
 
     private static void suspensionResumesAtMinimumWorkAndCanDisableAgain() {
@@ -116,7 +173,7 @@ public final class GpuWorkAdaptationPolicyTest {
         value.resumeAfterSuspension();
         check(!value.generationDisabled(), "the owner's suspension ended: generation retries");
         eq(1, value.resumeCount(), "the resume is counted");
-        eq(2, value.workLevel(), "it retries at minimum work");
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL, value.workLevel(), "it retries at minimum work");
         eq(0, value.failuresAtMinimum(), "with a fresh burst");
         eq(0, value.overloadedBlocks(), "and no overloaded blocks carried over");
         eq(failures, value.failureCount(), "failure accounting is kept");
