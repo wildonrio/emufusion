@@ -31,7 +31,7 @@ HOST_RETURN = re.compile(
 )
 VISIBLE_RESET = re.compile(
     r"PREPARING|SAVING\s+AND\s+RETURNING|POWERED\s+BY\s+PEGASUS|"
-    r"\bLUCENT\b|\bPEGASUS\b",
+    r"\bPEGASUS\b",
     re.I,
 )
 

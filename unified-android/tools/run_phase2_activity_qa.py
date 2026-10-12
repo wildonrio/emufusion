@@ -536,7 +536,7 @@ def strict_frame_match(reference: Path, candidate: Path) -> dict[str, float | bo
     }
 
 
-def exit_to_lucent(adb_path: Path, serial: str, case: Case,
+def exit_to_emufusion(adb_path: Path, serial: str, case: Case,
                    event_node: str) -> None:
     marker = f"Exit to EmuFusion invoked engine={case.engine} system={case.system}"
     # Exercise the Thor's user-facing Stop/Select contract itself: a short
@@ -709,7 +709,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
         visible_burst_frames = 0
     if delta < 5_000:
         raise RuntimeError(f"physical A did not produce a visible response ({delta} pixels)")
-    exit_to_lucent(adb_path, serial, case, event_node)
+    exit_to_emufusion(adb_path, serial, case, event_node)
     returned_identity = main_activity_identity(adb_path, serial)
     if returned_identity != library_identity:
         raise RuntimeError(

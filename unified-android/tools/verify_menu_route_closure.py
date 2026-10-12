@@ -102,8 +102,8 @@ def routes_from_text(value: str) -> set[Route]:
     for line in value.splitlines():
         if "engine_id" not in line:
             continue
-        engine = re.search(r"--es\s+(?:lucent\.)?engine_id\s+[\"']?([^\s\"']+)", line)
-        system = re.search(r"--es\s+(?:lucent\.)?(?:system|system_id)\s+[\"']?([^\s\"']+)", line)
+        engine = re.search(r"--es\s+(?:emufusion\.)?engine_id\s+[\"']?([^\s\"']+)", line)
+        system = re.search(r"--es\s+(?:emufusion\.)?(?:system|system_id)\s+[\"']?([^\s\"']+)", line)
         if engine is not None and system is not None:
             routes.add(Route(normalized(system.group(1)), normalized(engine.group(1))))
     return routes
@@ -171,9 +171,9 @@ def launcher_audit(value: str) -> list[dict[str, object]]:
                 reasons.append("does not use Pegasus-compatible am-start syntax")
             if cross_user:
                 reasons.append("uses a forbidden cross-user flag")
-            if re.search(r"--es\s+(?:lucent\.)?engine_id\s+", command) is None:
+            if re.search(r"--es\s+(?:emufusion\.)?engine_id\s+", command) is None:
                 reasons.append("has no in-window engine_id")
-            if re.search(r"--es\s+(?:lucent\.)?(?:system|system_id)\s+", command) is None:
+            if re.search(r"--es\s+(?:emufusion\.)?(?:system|system_id)\s+", command) is None:
                 reasons.append("has no in-window system id")
         elif am_start and (external_view_install or external_component) and not am_broadcast:
             # External route: still forbid the cross-user flag, but the internal
@@ -259,7 +259,7 @@ def dex_bootstrap_evidence(apk: Path, dexdump: Path) -> tuple[bool, str]:
         "com.thorium.preview.game.PpssppGlesEngineSession",
     )
     with zipfile.ZipFile(apk) as archive, tempfile.TemporaryDirectory(
-            prefix="lucent-route-closure-") as directory:
+            prefix="emufusion-route-closure-") as directory:
         combined = []
         for name in archive.namelist():
             if not re.fullmatch(r"classes\d*\.dex", name):
@@ -289,7 +289,7 @@ def dex_alias_contract_evidence(apk: Path, dexdump: Path) -> tuple[bool, str]:
     if alias_map_sha256() != SYSTEM_SHORTNAME_ALIASES_SHA256:
         return False, "QA shortname alias contract checksum differs from locked value"
     with zipfile.ZipFile(apk) as archive, tempfile.TemporaryDirectory(
-            prefix="lucent-alias-contract-") as directory:
+            prefix="emufusion-alias-contract-") as directory:
         combined = []
         for name in archive.namelist():
             if not re.fullmatch(r"classes\d*\.dex", name):
@@ -411,7 +411,7 @@ def libcxx_abi_evidence(archive: zipfile.ZipFile,
     tool = llvm_nm_tool()
     if tool is None:
         return False, "llvm-nm is unavailable for packaged C++ ABI closure"
-    with tempfile.TemporaryDirectory(prefix="lucent-libcxx-closure-") as directory:
+    with tempfile.TemporaryDirectory(prefix="emufusion-libcxx-closure-") as directory:
         core_file = Path(directory) / "core.so"
         runtime_file = Path(directory) / "libc++_shared.so"
         core_file.write_bytes(core)

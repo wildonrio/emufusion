@@ -19,7 +19,7 @@ LSFG_SELF_TEST_ACTIVITY = (
     "com.thorium.preview.game.LsfgQualificationSelfTestActivity"
 )
 LSFG_QUALIFICATION_LIBRARY = (
-    "lib/arm64-v8a/liblucent_lsfg_qualification.so"
+    "lib/arm64-v8a/libemufusion_lsfg_qualification.so"
 )
 VOICE_FEEDBACK_ACTIVITY = "com.thorium.preview.VoiceFeedbackActivity"
 UPDATE_COMPLETE_ACTIVITY = "com.thorium.preview.UpdateCompleteActivity"
@@ -364,7 +364,7 @@ def verify_dex(apk: Path) -> list[str]:
 
 def _branding_replacements() -> dict[str, str]:
     module_path = Path(__file__).with_name("patch_emufusion_branding.py")
-    spec = importlib.util.spec_from_file_location("lucent_branding_patch", module_path)
+    spec = importlib.util.spec_from_file_location("emufusion_branding_patch", module_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load branding policy: {module_path}")
     module = importlib.util.module_from_spec(spec)

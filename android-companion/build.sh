@@ -72,10 +72,10 @@ mv "$THEME_ARCHIVE.partial.zip" "$THEME_ARCHIVE"
 (cd "$BUILD_DIR/dex" && "$BUILD_TOOLS/aapt" add "$BUILD_DIR/unsigned.apk" classes.dex)
 "$BUILD_TOOLS/zipalign" -f 4 "$BUILD_DIR/unsigned.apk" "$BUILD_DIR/aligned.apk"
 
-KEYSTORE=${LUCENT_KEYSTORE:-$PROJECT_DIR/debug.keystore}
-STORE_PASS=${LUCENT_STORE_PASS:-android}
-KEY_PASS=${LUCENT_KEY_PASS:-$STORE_PASS}
-KEY_ALIAS=${LUCENT_KEY_ALIAS:-androiddebugkey}
+KEYSTORE=${EMUFUSION_KEYSTORE:-$PROJECT_DIR/debug.keystore}
+STORE_PASS=${EMUFUSION_STORE_PASS:-android}
+KEY_PASS=${EMUFUSION_KEY_PASS:-$STORE_PASS}
+KEY_ALIAS=${EMUFUSION_KEY_ALIAS:-androiddebugkey}
 if [ ! -f "$KEYSTORE" ]; then
     "$JAVA_HOME/bin/keytool" -genkeypair -keystore "$KEYSTORE" -storepass "$STORE_PASS" \
         -keypass "$KEY_PASS" -alias "$KEY_ALIAS" -dname 'CN=EmuFusion,O=WildOnRio,C=US' \

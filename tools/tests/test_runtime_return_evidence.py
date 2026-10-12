@@ -39,7 +39,7 @@ I/EmuFusionInWindow: Returned to EmuFusion immediately in same window engine=mes
         )
         result = MODULE.audit(log, {
             "return-01.png": "gameplay",
-            "return-02.png": "LUCENT POWERED BY PEGASUS",
+            "return-02.png": "POWERED BY PEGASUS",
         })
         self.assertFalse(result.passed)
         self.assertEqual(result.host_return_latencies_ms, (1,))
@@ -116,12 +116,12 @@ I/EmuFusionInWindow: Returned to EmuFusion immediately in same window engine=mes
                 "hostReturnLatencyMs": 3,
                 "interstitialOcr": [{
                     "path": "/evidence/megadrive-return-02.png",
-                    "ocr": "G<_ LUCENT",
+                    "ocr": "G<_ PEGASUS",
                 }],
             }}]}],
         }), encoding="utf-8")
         ocr, latencies, reports = MODULE.stored_result_evidence(path)
-        self.assertEqual(ocr, {"megadrive-return-02.png": "G<_ LUCENT"})
+        self.assertEqual(ocr, {"megadrive-return-02.png": "G<_ PEGASUS"})
         self.assertEqual(latencies, (3,))
         self.assertEqual(reports, ())
         result = MODULE.audit(
