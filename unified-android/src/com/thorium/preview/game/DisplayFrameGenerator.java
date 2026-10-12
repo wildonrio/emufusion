@@ -2133,6 +2133,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private boolean verifyResourcesReady, verifyUnavailable;
     private long verifyWindowStartNs;
     private long verifyWindowReal, verifyWindowVerified;
+    // Source images the timeline passed (used only as endpoints, never shown).
+    private long verifyWindowPassed;
     private long verifyLastRealSequence;
     private long verifyPresented, verifyVerified, verifyDuplicate, verifyBlendLike,
             verifyStatic, verifySkipped;
@@ -5689,6 +5691,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         ++promotedFrameCount;
     }
 
+    /**
+     * Whether the image after the active right one is already queued and
+     * contiguous, so the pair may advance after a generated output without
+     * showing its right image (the next pair's motion is estimated after the
+     * swap, exactly as after a real one).
+     */
+    private boolean successorQueuedForPass() {
+        return activeRightSequence > 0L && activeRightSequence == activeLeftSequence + 1L &&
+                endpointFifoCount > 0 &&
+                endpointFifoSequence[endpointFifoHead] == activeRightSequence + 1L;
+    }
+
     private boolean bufferedAdvanceWouldCrossGap(int advance) {
         if (advance != 1 || activeRightSequence != activeLeftSequence + 1L ||
                 endpointFifoCount <= 0) return false;
@@ -8030,7 +8044,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 activePairReady && motionEstimateReady &&
                         builtinGenerationPlanned(),
                 activeRightSequence > 0L ?
-                        endpointFifoCount - (requiredEndpointPrimeDepth(true) - 2) : 0);
+                        endpointFifoCount - (requiredEndpointPrimeDepth(true) - 2) : 0,
+                successorQueuedForPass());
         if (kind == TimelineFrameScheduler.GENERATED)
             return AdaptiveFrameRateController.PRESENT_SYNTHETIC;
         if (kind == TimelineFrameScheduler.REAL_LEFT || kind == TimelineFrameScheduler.REAL_RIGHT)
@@ -8520,6 +8535,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             bufferedLastSelectedSyntheticPair = activeLeftSequence;
         }
         ++presents;
+        if (timelineActive && renderedSynthetic && endpointAdvance == 1 && activeRightSequence > 0L &&
+                activeRightSequence != verifyLastRealSequence) {
+            // The timeline passed this real image without showing it.
+            verifyLastRealSequence = activeRightSequence;
+            ++verifyWindowPassed;
+        }
         if (renderedSynthetic || realThisTick) {
             try {
                 commitBufferedEndpointAdvance(presentation, endpointAdvance);
@@ -10983,16 +11004,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (verifyWindowStartNs == 0L) { verifyWindowStartNs = now; return; }
         long elapsedNs = now - verifyWindowStartNs;
         if (elapsedNs < 1_000_000_000L) return;
-        double real = verifyWindowReal * 1e9 / elapsedNs;
+        double shown = verifyWindowReal * 1e9 / elapsedNs;
+        double real = (verifyWindowReal + verifyWindowPassed) * 1e9 / elapsedNs;
         double generated = verifyWindowVerified * 1e9 / elapsedNs;
         verifyWindowStartNs = now;
         verifyWindowReal = 0L;
+        verifyWindowPassed = 0L;
         verifyWindowVerified = 0L;
         FrameGenerationRenderer.StatsListener callback = statsListener;
-        if (callback != null) callback.onDisplayedFrameRate(real, real + generated);
+        if (callback != null) callback.onDisplayedFrameRate(real, shown + generated);
         Log.i(TAG, "Generated frame verification generator=" + generatorId +
                 String.format(java.util.Locale.US, " realFps=%.1f displayedFps=%.1f", real,
-                        real + generated) +
+                        shown + generated) +
                 " presented=" + verifyPresented + " verified=" + verifyVerified +
                 " duplicate=" + verifyDuplicate + " blendLike=" + verifyBlendLike +
                 " static=" + verifyStatic + " skipped=" + verifySkipped +

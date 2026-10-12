@@ -22,6 +22,9 @@ public final class TimelineFrameSchedulerTest {
         queuedLatencyIsTrimmed();
         oneHitchDoesNotInflateTheExpectedSpan();
         driftingSourceKeepsGenerating();
+        passesRealImagesNoOutputLandsNear();
+        passingKeepsWholeCadencesExact();
+        passingNeedsAQueuedSuccessor();
         System.out.println("TimelineFrameSchedulerTest passed");
     }
 
@@ -31,6 +34,7 @@ public final class TimelineFrameSchedulerTest {
         final List<long[]> fifo = new ArrayList<>();   // {sequence, timestamp}
         long leftSeq, leftTs, rightSeq, rightTs;
         boolean motionReady = true;
+        boolean passing;
         int steadyQueued = 100;  // no trimming unless a test sets its steady depth
         final List<String> shown = new ArrayList<>();
 
@@ -49,8 +53,11 @@ public final class TimelineFrameSchedulerTest {
         }
 
         void vsync(long displayNs) {
-            int kind = scheduler.select(displayNs, leftSeq, leftTs, rightSeq, rightTs, motionReady,
-                    fifo.size() - steadyQueued);
+            int kind = passing ?
+                    scheduler.select(displayNs, leftSeq, leftTs, rightSeq, rightTs, motionReady,
+                            fifo.size() - steadyQueued, rightSeq != 0 && !fifo.isEmpty()) :
+                    scheduler.select(displayNs, leftSeq, leftTs, rightSeq, rightTs, motionReady,
+                            fifo.size() - steadyQueued);
             if (kind == TimelineFrameScheduler.NONE) { shown.add("-"); return; }
             if (kind == TimelineFrameScheduler.GENERATED)
                 shown.add(String.format(java.util.Locale.ROOT, "g%.2f", scheduler.pendingPhase()));
@@ -61,6 +68,65 @@ public final class TimelineFrameSchedulerTest {
                 leftSeq = rightSeq; leftTs = rightTs; rightSeq = 0; rightTs = 0; fill();
             }
         }
+    }
+
+    /** 50 fps on a 120 Hz lattice: outputs land 2.4 per pair, drifting across it. */
+    private static List<String> drift(boolean passing) {
+        long source50 = 20_000_000L;
+        Rig rig = new Rig(PANEL, source50);
+        rig.passing = passing;
+        long t0 = 1_000_000_000L;
+        int produced = 0;
+        for (; produced < 6; ++produced) rig.produce(produced + 1, t0 + produced * source50);
+        for (int v = 0; v < 120; ++v) {
+            long now = t0 + 30_000_000L + v * PANEL;
+            // Images arrive when they are made, a pair or so ahead of the
+            // timeline (which anchors 30 ms after the first image).
+            while (t0 + produced * source50 <= now) {
+                rig.produce(produced + 1, t0 + produced * source50);
+                ++produced;
+            }
+            rig.vsync(now);
+        }
+        return rig.shown;
+    }
+
+    private static void passesRealImagesNoOutputLandsNear() {
+        List<String> before = drift(false);
+        List<String> after = drift(true);
+        long realBefore = before.stream().filter(s -> s.startsWith("R")).count();
+        long realAfter = after.stream().filter(s -> s.startsWith("R")).count();
+        check(!after.contains("-") && !before.contains("-"), "no repeated outputs " + after);
+        // Every real image used to be shown, some up to half an output off its
+        // time; now only those an output lands within a quarter period of.
+        check(realBefore >= 48 && realAfter < realBefore * 3 / 4 && realAfter > 10,
+                "real images shown " + realBefore + " -> " + realAfter);
+    }
+
+    private static void passingKeepsWholeCadencesExact() {
+        Rig rig = new Rig(PANEL, SOURCE60);
+        rig.passing = true;
+        long t0 = 1_000_000_000L;
+        for (int i = 0; i < 4; ++i) rig.produce(i + 1, t0 + i * SOURCE60);
+        for (int v = 0; v < 12; ++v) {
+            rig.vsync(t0 + 30_000_000L + v * PANEL);
+            if (v % 2 == 0) rig.produce(5 + v / 2, t0 + (4 + v / 2) * SOURCE60);
+        }
+        String expect = "[L1, g0.50, R2, g0.50, R3, g0.50, R4, g0.50, R5, g0.50, R6, g0.50]";
+        check(rig.shown.toString().equals(expect), "x2 cadence with passing " + rig.shown);
+    }
+
+    private static void passingNeedsAQueuedSuccessor() {
+        // Without a queued successor the pair cannot advance past its right
+        // image, so it is still shown (never a repeat or a skipped image).
+        long source50 = 20_000_000L;
+        Rig rig = new Rig(PANEL, source50);
+        rig.passing = true;
+        long t0 = 1_000_000_000L;
+        rig.produce(1, t0);
+        rig.produce(2, t0 + source50);
+        for (int v = 0; v < 6; ++v) rig.vsync(t0 + 30_000_000L + v * PANEL);
+        check(rig.shown.contains("R2"), "right image shown without a successor " + rig.shown);
     }
 
     private static void doublesSixtyEvenly() {

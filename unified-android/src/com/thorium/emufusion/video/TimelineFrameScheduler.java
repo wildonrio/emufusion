@@ -43,6 +43,15 @@ public final class TimelineFrameScheduler {
      * less comes no more than every couple of seconds.
      */
     public static final double PLAN_RELATIVE_TOLERANCE = 0.005;
+    /**
+     * When a pair does not span a whole number of outputs (a 55 fps source
+     * on a 120 Hz output), a real image is shown only if an output lands
+     * within this fraction of an output period of its timestamp. Showing
+     * every real image instead puts some of them up to half a period off
+     * their time (uneven motion steps of up to +-50%); passing such an image
+     * shows its moment of the next pair instead.
+     */
+    public static final long REAL_SNAP_DIVISOR = 4L;
     /** Frames queued beyond the steady depth before latency is trimmed. */
     public static final int TRIM_EXCESS_QUEUED = 2;
     // Each trimmed output advances the timeline this fraction of an output
@@ -64,6 +73,10 @@ public final class TimelineFrameScheduler {
     // own slot: a source drifting late against its timestamps sits there
     // pair after pair without ever forcing a re-anchor.
     private boolean midpointLostThisPair;
+    // A real image shown off its time because its successor was not queued
+    // yet when this pair could have passed it.
+    private boolean passBlockedThisPair;
+    private int consecutivePassBlockedPairs;
     private int consecutiveLatePairs;
     private int pairsSinceGenerated = Integer.MAX_VALUE / 2;
     private long slackSteps;
@@ -72,6 +85,10 @@ public final class TimelineFrameScheduler {
     private long shownTargetNs = Long.MIN_VALUE;
 
     private int pendingKind = NONE;
+    // A generated output after which the pair advances without showing its
+    // right image (no output lands near it; the successor is queued).
+    private boolean pendingPassRight;
+    private long pendingIdealNs;
     private float pendingPhase;
     private long pendingTargetNs;
     private long pendingSlot;
@@ -82,6 +99,10 @@ public final class TimelineFrameScheduler {
     private long pendingSpanNs;
 
     private long reanchors;
+    private long passedReals;
+    private long timingSamples;
+    private double timingErrorSquares;
+    private long timingErrorMaxNs;
     private long motionNotReadyHolds;
     private long successorLateHolds;
     private long pauseHolds;
@@ -121,6 +142,8 @@ public final class TimelineFrameScheduler {
         consecutiveLongSpans = 0;
         midpointLostThisPair = false;
         consecutiveLatePairs = 0;
+        passBlockedThisPair = false;
+        consecutivePassBlockedPairs = 0;
         pairsSinceGenerated = Integer.MAX_VALUE / 2;
         shownSequence = 0L;
         shownTargetNs = Long.MIN_VALUE;
@@ -158,6 +181,25 @@ public final class TimelineFrameScheduler {
     public int select(long displayNs, long leftSequence, long leftTimestampNs,
                       long rightSequence, long rightTimestampNs, boolean motionReady,
                       int excessQueued) {
+        return decide(displayNs, leftSequence, leftTimestampNs, rightSequence,
+                rightTimestampNs, motionReady, excessQueued, false, false);
+    }
+
+    /**
+     * @param successorQueued whether the image after the right one is
+     *        already waiting, so the pair can advance after a generated output
+     *        without showing its right image.
+     */
+    public int select(long displayNs, long leftSequence, long leftTimestampNs,
+                      long rightSequence, long rightTimestampNs, boolean motionReady,
+                      int excessQueued, boolean successorQueued) {
+        return decide(displayNs, leftSequence, leftTimestampNs, rightSequence,
+                rightTimestampNs, motionReady, excessQueued, true, successorQueued);
+    }
+
+    private int decide(long displayNs, long leftSequence, long leftTimestampNs,
+                       long rightSequence, long rightTimestampNs, boolean motionReady,
+                       int excessQueued, boolean passing, boolean successorQueued) {
         clearPending();
         if (outputPeriodNs <= 0L || leftSequence <= 0L || leftTimestampNs <= 0L) return NONE;
         boolean hasRight = rightSequence > 0L && rightTimestampNs > leftTimestampNs;
@@ -181,13 +223,22 @@ public final class TimelineFrameScheduler {
         }
         long target = anchorSourceNs + slot * outputPeriodNs;
         long tolerance = outputPeriodNs / 2L;
-        if (hasRight && target >= rightTimestampNs - tolerance) {
+        // Narrow the snap to real images only where outputs drift across the
+        // pair (non-integer cadence) and the pair can advance past an image.
+        boolean drifting = passing && hasRight &&
+                !wholeOutputs(rightTimestampNs - leftTimestampNs);
+        boolean passable = drifting && successorQueued;
+        long realTolerance = passable ? outputPeriodNs / REAL_SNAP_DIVISOR : tolerance;
+        // Generating a small step into the pair needs only the pair itself.
+        long leftTolerance = drifting ? outputPeriodNs / REAL_SNAP_DIVISOR : tolerance;
+        pendingIdealNs = target;
+        if (hasRight && target >= rightTimestampNs - realTolerance) {
             ++real;
             int kind = propose(REAL_RIGHT, 1f, rightTimestampNs, slot, rightSequence, false, 0L, 0L);
             pendingSpanNs = rightTimestampNs - leftTimestampNs;
             return kind;
         }
-        if (target <= leftTimestampNs + tolerance) {
+        if (target <= leftTimestampNs + leftTolerance) {
             if (shownSequence == leftSequence && shownTargetNs == leftTimestampNs) {
                 lastSlot = slot;
                 return NONE;
@@ -243,7 +294,27 @@ public final class TimelineFrameScheduler {
         if (!(fraction > 0.0 && fraction < 1.0)) return NONE;
         long selected = leftTimestampNs + Math.round(fraction * span);
         ++generated;
-        return propose(GENERATED, (float) fraction, selected, slot, leftSequence, false, 0L, 0L);
+        int kind = propose(GENERATED, (float) fraction, selected, slot, leftSequence, false, 0L, 0L);
+        pendingIdealNs = target;
+        if (drifting && !successorQueued &&
+                target + outputPeriodNs > rightTimestampNs + outputPeriodNs / REAL_SNAP_DIVISOR)
+            passBlockedThisPair = true;
+        if (passable && target + outputPeriodNs > rightTimestampNs + realTolerance) {
+            // The next output lands past the right image by more than the
+            // snap: show its own moment of the next pair rather than this
+            // image late.
+            pendingPassRight = true;
+            pendingSpanNs = span;
+        }
+        return kind;
+    }
+
+    /** Whether a pair spans (within 5%) a whole number of outputs. */
+    private boolean wholeOutputs(long spanNs) {
+        if (outputPeriodNs <= 0L || spanNs <= 0L) return true;
+        double outputs = (double) spanNs / (double) outputPeriodNs;
+        long n = Math.round(outputs);
+        return n >= 1L && n <= 12L && Math.abs(outputs - n) <= 0.05 * n;
     }
 
     private int propose(int kind, float phase, long targetNs, long slot, long sequence,
@@ -257,6 +328,7 @@ public final class TimelineFrameScheduler {
         pendingAnchorDisplayNs = anchorDisplayNs;
         pendingAnchorSourceNs = anchorSourceNs;
         pendingSpanNs = 0L;
+        pendingPassRight = false;
         return kind;
     }
 
@@ -276,11 +348,29 @@ public final class TimelineFrameScheduler {
         if (swapSucceeded) {
             shownSequence = pendingKind == GENERATED ? 0L : pendingSequence;
             shownTargetNs = pendingTargetNs;
+            if (primed && !pendingPrime) {
+                long error = Math.abs(pendingTargetNs - pendingIdealNs);
+                ++timingSamples;
+                timingErrorSquares += (double) error * (double) error;
+                timingErrorMaxNs = Math.max(timingErrorMaxNs, error);
+            }
+            if (pendingPassRight) ++passedReals;
         }
         if (swapSucceeded && pendingKind == GENERATED) pairsSinceGenerated = 0;
-        if (swapSucceeded && pendingKind == REAL_RIGHT) {
+        if (swapSucceeded && (pendingKind == REAL_RIGHT || pendingPassRight)) {
             consecutiveLatePairs = midpointLostThisPair ? consecutiveLatePairs + 1 : 0;
             midpointLostThisPair = false;
+            consecutivePassBlockedPairs = passBlockedThisPair ? consecutivePassBlockedPairs + 1 : 0;
+            passBlockedThisPair = false;
+            if (consecutivePassBlockedPairs >= 2 && primed) {
+                // Two pairs in a row could not pass a real image that no
+                // output lands near because its successor was not queued yet:
+                // one more output period of slack (trimmed later if frames
+                // queue up) so the successor is there in time.
+                anchorSourceNs -= outputPeriodNs;
+                consecutivePassBlockedPairs = 0;
+                ++slackSteps;
+            }
             if (pairsSinceGenerated < Integer.MAX_VALUE / 2) ++pairsSinceGenerated;
             if (consecutiveLatePairs >= 2 && pairsSinceGenerated <= 4 && primed) {
                 // Generation was running and two pairs in a row lost their
@@ -318,13 +408,15 @@ public final class TimelineFrameScheduler {
         pendingSequence = 0L;
         pendingPrime = false;
         pendingSpanNs = 0L;
+        pendingPassRight = false;
+        pendingIdealNs = 0L;
     }
 
     public int pendingKind() { return pendingKind; }
     public float pendingPhase() { return pendingPhase; }
     public long pendingTargetNs() { return pendingTargetNs; }
     /** One when the pending decision shows the right image and rotates the pair. */
-    public int pendingAdvance() { return pendingKind == REAL_RIGHT ? 1 : 0; }
+    public int pendingAdvance() { return pendingKind == REAL_RIGHT || pendingPassRight ? 1 : 0; }
     public boolean primed() { return primed; }
     public long expectedSpanNs() { return expectedSpanNs; }
     public long outputPeriodNs() { return outputPeriodNs; }
@@ -338,6 +430,10 @@ public final class TimelineFrameScheduler {
                 " timelineTrims=" + trims +
                 " timelineSlackSteps=" + slackSteps +
                 " timelineExpectedSpanUs=" + expectedSpanNs / 1000L +
+                " timelinePassedReals=" + passedReals +
+                " timelineTimingErrRmsUs=" + (timingSamples > 0L ?
+                        Math.round(Math.sqrt(timingErrorSquares / timingSamples) / 1000.0) : 0L) +
+                " timelineTimingErrMaxUs=" + timingErrorMaxNs / 1000L +
                 " timelineLastHold=" + lastHoldReason;
     }
 }
