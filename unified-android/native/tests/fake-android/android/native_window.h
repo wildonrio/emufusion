@@ -1,5 +1,5 @@
-#ifndef LUCENT_FAKE_NATIVE_WINDOW_H
-#define LUCENT_FAKE_NATIVE_WINDOW_H
+#ifndef EMUFUSION_FAKE_NATIVE_WINDOW_H
+#define EMUFUSION_FAKE_NATIVE_WINDOW_H
 #include <stdint.h>
 typedef struct ANativeWindow { int marker; } ANativeWindow;
 void ANativeWindow_acquire(ANativeWindow *window);

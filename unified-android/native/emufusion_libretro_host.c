@@ -1,6 +1,6 @@
 #define _XOPEN_SOURCE 700
 
-#include "include/lucent_libretro_host.h"
+#include "include/emufusion_libretro_host.h"
 #include "include/libretro.h"
 
 #include <dlfcn.h>
@@ -32,17 +32,17 @@
 #define MAX_CORE_VARIABLE_KEY_BYTES 256u
 #define MAX_CORE_VARIABLE_VALUE_BYTES 4096u
 /* Launch-time core-option overrides written by the Java WidescreenHackPolicy
- * into <system_directory>/lucent-core-overrides.txt (one key=value per line).
+ * into <system_directory>/emufusion-core-overrides.txt (one key=value per line).
  * Mirrors CoreOptionOverrideFile.java: 64 entries, 64 KiB, bounded lines. */
-#define CORE_OVERRIDE_FILE_NAME "lucent-core-overrides.txt"
+#define CORE_OVERRIDE_FILE_NAME "emufusion-core-overrides.txt"
 #define MAX_CORE_OVERRIDES 64u
 #define MAX_CORE_OVERRIDE_FILE_BYTES (64u * 1024u)
 #define MAX_CORE_OVERRIDE_LINE_BYTES 1536u
 
-typedef struct lucent_core_variable {
+typedef struct emufusion_core_variable {
     char *key;
     char *value;
-} lucent_core_variable;
+} emufusion_core_variable;
 
 typedef void (*fn_void)(void);
 typedef unsigned (*fn_api_version)(void);
@@ -71,7 +71,7 @@ typedef void (*fn_set_frontend_framebuffer)(unsigned);
 typedef bool (*fn_mupen_vi_origin_boundary)(void);
 typedef bool (*fn_hw_active_rect)(uint32_t *, unsigned);
 
-struct lucent_retro_host {
+struct emufusion_retro_host {
     void *library;
     char *core_path;
     char *system_directory;
@@ -90,7 +90,7 @@ struct lucent_retro_host {
     bool hw_negotiated;
     bool hw_context_ready;
     bool hw_shared_requested;
-    lucent_retro_hw_options hw_options;
+    emufusion_retro_hw_options hw_options;
     struct retro_hw_render_callback hw_callback;
     const struct retro_hw_render_context_negotiation_interface
             *hw_context_negotiation_interface;
@@ -146,10 +146,10 @@ struct lucent_retro_host {
     int16_t pointer_x[MAX_PORTS];
     int16_t pointer_y[MAX_PORTS];
     bool pointer_pressed[MAX_PORTS];
-    lucent_core_variable core_variables[MAX_CORE_VARIABLES];
+    emufusion_core_variable core_variables[MAX_CORE_VARIABLES];
     bool widescreen_enhancements_enabled;
     size_t core_variable_count;
-    lucent_core_variable core_overrides[MAX_CORE_OVERRIDES];
+    emufusion_core_variable core_overrides[MAX_CORE_OVERRIDES];
     size_t core_override_count;
 
     fn_void init;
@@ -184,7 +184,7 @@ struct lucent_retro_host {
 
 /* A single in-process game session is intentional for the initial host. Core
  * callbacks have no userdata pointer, so the active host owns their context. */
-static lucent_retro_host *active_host;
+static emufusion_retro_host *active_host;
 static pthread_mutex_t host_mutex;
 static pthread_once_t host_mutex_once = PTHREAD_ONCE_INIT;
 /* A rejected/partial Dolphin mapping cannot safely pass through dlclose: its
@@ -248,7 +248,7 @@ static void core_log_callback(enum retro_log_level level,
                               const char *format, ...) {
     va_list args;
     if (!format) return;
-#if defined(__ANDROID__) && !defined(LUCENT_VERBOSE_CORE_LOGS)
+#if defined(__ANDROID__) && !defined(EMUFUSION_VERBOSE_CORE_LOGS)
     /* Release gameplay must not synchronously format and write hundreds of
      * per-frame INFO messages. mGBA, for example, logs every DMA start and was
      * producing more than one hundred logcat writes per second on the Thor.
@@ -275,7 +275,7 @@ static void core_log_callback(enum retro_log_level level,
             if ((value < 0x20u && value != '\n' && value != '\r' &&
                     value != '\t') || value >= 0x7fu) message[i] = '?';
         }
-        __android_log_print(priority, "LucentLibretroCore", "%s", message);
+        __android_log_print(priority, "EmuFusionLibretroCore", "%s", message);
     }
 #else
     (void)level;
@@ -308,20 +308,20 @@ static uintptr_t hardware_get_current_framebuffer(void) {
 
 static uint32_t context_capability(enum retro_hw_context_type type) {
     switch (type) {
-        case RETRO_HW_CONTEXT_OPENGLES2: return LUCENT_RETRO_HW_GLES2;
-        case RETRO_HW_CONTEXT_OPENGLES3: return LUCENT_RETRO_HW_GLES3;
-        case RETRO_HW_CONTEXT_OPENGLES_VERSION: return LUCENT_RETRO_HW_GLES_VERSION;
-        case RETRO_HW_CONTEXT_VULKAN: return LUCENT_RETRO_HW_VULKAN;
+        case RETRO_HW_CONTEXT_OPENGLES2: return EMUFUSION_RETRO_HW_GLES2;
+        case RETRO_HW_CONTEXT_OPENGLES3: return EMUFUSION_RETRO_HW_GLES3;
+        case RETRO_HW_CONTEXT_OPENGLES_VERSION: return EMUFUSION_RETRO_HW_GLES_VERSION;
+        case RETRO_HW_CONTEXT_VULKAN: return EMUFUSION_RETRO_HW_VULKAN;
         default: return 0;
     }
 }
 
-static enum retro_hw_context_type preferred_context(const lucent_retro_host *host) {
+static enum retro_hw_context_type preferred_context(const emufusion_retro_host *host) {
     switch (host->hw_options.preferred_context) {
-        case LUCENT_RETRO_HW_GLES2: return RETRO_HW_CONTEXT_OPENGLES2;
-        case LUCENT_RETRO_HW_GLES3: return RETRO_HW_CONTEXT_OPENGLES3;
-        case LUCENT_RETRO_HW_GLES_VERSION: return RETRO_HW_CONTEXT_OPENGLES_VERSION;
-        case LUCENT_RETRO_HW_VULKAN: return RETRO_HW_CONTEXT_VULKAN;
+        case EMUFUSION_RETRO_HW_GLES2: return RETRO_HW_CONTEXT_OPENGLES2;
+        case EMUFUSION_RETRO_HW_GLES3: return RETRO_HW_CONTEXT_OPENGLES3;
+        case EMUFUSION_RETRO_HW_GLES_VERSION: return RETRO_HW_CONTEXT_OPENGLES_VERSION;
+        case EMUFUSION_RETRO_HW_VULKAN: return RETRO_HW_CONTEXT_VULKAN;
         default: return RETRO_HW_CONTEXT_NONE;
     }
 }
@@ -337,7 +337,7 @@ static const char *hardware_context_name(enum retro_hw_context_type type) {
 }
 
 static const char *hardware_request_rejection(
-        lucent_retro_host *host, const struct retro_hw_render_callback *request) {
+        emufusion_retro_host *host, const struct retro_hw_render_callback *request) {
     uint32_t capability;
     uint32_t features;
     if (!host->hw_configured || host->hw_negotiated || !request ||
@@ -358,15 +358,15 @@ static const char *hardware_request_rejection(
             (!host->hw_options.get_current_framebuffer ||
              !host->hw_options.get_proc_address))
         return "GLES framebuffer/proc-address hooks are unavailable";
-    if (request->depth && !(features & LUCENT_RETRO_HW_DEPTH))
+    if (request->depth && !(features & EMUFUSION_RETRO_HW_DEPTH))
         return "requested depth buffer is unavailable";
-    if (request->stencil && !(features & LUCENT_RETRO_HW_STENCIL))
+    if (request->stencil && !(features & EMUFUSION_RETRO_HW_STENCIL))
         return "requested stencil buffer is unavailable";
     if (request->stencil && !request->depth)
         return "stencil without depth is invalid";
-    if (request->cache_context && !(features & LUCENT_RETRO_HW_CACHE_CONTEXT))
+    if (request->cache_context && !(features & EMUFUSION_RETRO_HW_CACHE_CONTEXT))
         return "requested cached-context lifecycle is unavailable";
-    if (request->debug_context && !(features & LUCENT_RETRO_HW_DEBUG_CONTEXT))
+    if (request->debug_context && !(features & EMUFUSION_RETRO_HW_DEBUG_CONTEXT))
         return "requested debug context is unavailable";
     return NULL;
 }
@@ -377,7 +377,7 @@ static bool set_hardware_render(struct retro_hw_render_callback *request) {
     rejection = hardware_request_rejection(active_host, request);
     if (rejection) {
         core_log_callback(RETRO_LOG_ERROR,
-                "Lucent rejected hardware render request: %s "
+                "EmuFusion rejected hardware render request: %s "
                 "(type=%u version=%u.%u depth=%u stencil=%u cache=%u debug=%u)\n",
                 rejection, request ? (unsigned)request->context_type : 0u,
                 request ? request->version_major : 0u,
@@ -407,7 +407,7 @@ static bool set_hardware_render(struct retro_hw_render_callback *request) {
     return true;
 }
 
-static const char *find_core_variable(const lucent_retro_host *host,
+static const char *find_core_variable(const emufusion_retro_host *host,
                                       const char *key) {
     size_t index;
     if (!host || !key) return NULL;
@@ -437,7 +437,7 @@ static const char *find_option_token(const char *options, const char *wanted,
     return NULL;
 }
 
-static const char *find_core_override(const lucent_retro_host *host,
+static const char *find_core_override(const emufusion_retro_host *host,
                                       const char *key) {
     size_t index;
     if (!host || !key) return NULL;
@@ -459,7 +459,7 @@ static bool core_override_key_is_valid(const char *key, size_t size) {
     return true;
 }
 
-static void free_core_overrides(lucent_retro_host *host) {
+static void free_core_overrides(emufusion_retro_host *host) {
     size_t index;
     if (!host) return;
     for (index = 0; index < host->core_override_count; index++) {
@@ -469,11 +469,11 @@ static void free_core_overrides(lucent_retro_host *host) {
     host->core_override_count = 0;
 }
 
-/* Reads <system_directory>/lucent-core-overrides.txt once per host. Missing,
+/* Reads <system_directory>/emufusion-core-overrides.txt once per host. Missing,
  * oversized, or malformed files are ignored line by line and never fail the
  * launch: the override channel is launch-time only and purely additive to the
  * reviewed defaults in register_core_variable_defaults(). */
-static void load_core_overrides(lucent_retro_host *host) {
+static void load_core_overrides(emufusion_retro_host *host) {
     char path[4096];
     char line[MAX_CORE_OVERRIDE_LINE_BYTES];
     FILE *file;
@@ -498,7 +498,7 @@ static void load_core_overrides(lucent_retro_host *host) {
         char *separator;
         size_t key_size;
         size_t value_size;
-        lucent_core_variable *entry;
+        emufusion_core_variable *entry;
         if (length && line[length - 1] != '\n' && !feof(file)) {
             /* Discard the remainder of an over-long line. */
             int c;
@@ -558,13 +558,13 @@ static void load_core_overrides(lucent_retro_host *host) {
                 (unsigned)host->core_override_count, path);
 }
 
-/* Core-options-v0 declarations put the default first after "; ". Lucent has
+/* Core-options-v0 declarations put the default first after "; ". EmuFusion has
  * no RetroArch-style core-options UI, so both software and hardware cores need
  * deterministic values instead of NULL. Engine-specific overrides are kept
  * here as a deliberately tiny, reviewed profile rather than exposing hundreds
  * of emulator knobs to the user. */
 static bool register_core_variable_defaults(
-        lucent_retro_host *host, const struct retro_variable *variables) {
+        emufusion_retro_host *host, const struct retro_variable *variables) {
     const struct retro_variable *variable;
     if (!host || !variables) return true;
     for (variable = variables; variable->key; variable++) {
@@ -573,7 +573,7 @@ static bool register_core_variable_defaults(
         const char *end;
         size_t key_size;
         size_t value_size;
-        lucent_core_variable *entry;
+        emufusion_core_variable *entry;
         if (!variable->value || find_core_variable(host, variable->key)) continue;
         if (host->core_variable_count >= MAX_CORE_VARIABLES) return false;
         key_size = strlen(variable->key);
@@ -643,7 +643,7 @@ static bool register_core_variable_defaults(
             const char *profile = find_option_token(options, "hle", &value_size);
             if (profile) options = profile;
         } else if (strcmp(variable->key, "mupen64plus-ThreadedRenderer") == 0) {
-            /* One EGL context stays owned by Lucent's in-window render loop;
+            /* One EGL context stays owned by EmuFusion's in-window render loop;
              * the core must not create a competing threaded GL context. */
             const char *profile = find_option_token(options, "False", &value_size);
             if (profile) options = profile;
@@ -734,7 +734,7 @@ static bool register_core_variable_defaults(
             if (profile) options = profile;
         } else if (strcmp(variable->key,
                           "dolphin_shader_compilation_mode") == 0) {
-            /* Lucent owns one EGL context. Do not select an asynchronous mode
+            /* EmuFusion owns one EGL context. Do not select an asynchronous mode
              * whose worker requires a second shared context on Android. */
             const char *profile = find_option_token(
                     options, "0", &value_size);
@@ -780,7 +780,7 @@ static bool register_core_variable_defaults(
         } else if (strstr(host->core_path, "lucent_core_armsx2") &&
                 strcmp(variable->key, "armsx2_blending_accuracy") == 0) {
             /* Shadow of the Colossus is explicitly tagged by PCSX2 as needing
-             * Full blending. Lucent has no core-options UI, so retaining the
+             * Full blending. EmuFusion has no core-options UI, so retaining the
              * libretro default Basic guarantees a known-bad configuration for
              * that title. Full is the accuracy-first system default requested
              * by the product contract; per-title performance qualification may
@@ -821,7 +821,7 @@ static bool register_core_variable_defaults(
         } else if (strcmp(variable->key, "dolphin_cheats_enabled") == 0) {
             /* Dolphin refuses retro_cheat_set with an OSD message unless its
              * internal cheat support is on. Every downloaded Gecko/AR code is
-             * an explicit user switch in Lucent's own cheat panel, so the
+             * an explicit user switch in EmuFusion's own cheat panel, so the
              * core-level gate must not silently discard them. Restart-time. */
             const char *profile = find_option_token(options, "enabled", &value_size);
             if (profile) options = profile;
@@ -840,7 +840,7 @@ static bool register_core_variable_defaults(
             if (profile) options = profile;
         }
         {
-            /* Launch-time overrides from <system>/lucent-core-overrides.txt
+            /* Launch-time overrides from <system>/emufusion-core-overrides.txt
              * are applied after the reviewed defaults, but only when the
              * requested token is one the core itself advertises. */
             const char *override = find_core_override(host, variable->key);
@@ -882,7 +882,7 @@ static bool register_core_variable_defaults(
     return true;
 }
 
-static void reset_audio_resampler(lucent_retro_host *host) {
+static void reset_audio_resampler(emufusion_retro_host *host) {
     if (!host) return;
     host->audio_resample_accumulator = 0.0;
     host->audio_resample_left_sum = 0;
@@ -894,7 +894,7 @@ static void reset_audio_resampler(lucent_retro_host *host) {
     host->audio_upsample_phase = 0.0;
 }
 
-static void correct_gearsystem_timing(lucent_retro_host *host) {
+static void correct_gearsystem_timing(emufusion_retro_host *host) {
     /* This pinned Gearsystem build reports 60/44100 for NTSC Game Gear.
      * Each vblank actually spans 228 * 262 ticks of its 3579545 Hz clock.
      * Its PSG Blip_Buffer uses 16-bit fractional precision: rounding
@@ -918,7 +918,7 @@ static void correct_gearsystem_timing(lucent_retro_host *host) {
     }
 }
 
-static void correct_known_core_timing(lucent_retro_host *host) {
+static void correct_known_core_timing(emufusion_retro_host *host) {
     correct_gearsystem_timing(host);
     /* Official Azahar 2125.1.3 reports 60/32728, but each retro_run advances
      * one 4481136-tick GPU vblank and DSP PCM advances once per 8192 ARM11
@@ -1030,11 +1030,11 @@ static bool environment_callback(unsigned command, void *data) {
                     (struct retro_hw_render_context_negotiation_interface *)data;
             if (!active_host->hw_configured ||
                     !(active_host->hw_options.context_capabilities &
-                      LUCENT_RETRO_HW_VULKAN) ||
+                      EMUFUSION_RETRO_HW_VULKAN) ||
                     interface->interface_type !=
                       RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN)
                 return false;
-            /* Lucent implements Vulkan negotiation v1. A v2 core may still
+            /* EmuFusion implements Vulkan negotiation v1. A v2 core may still
              * register its newer struct; only the v1 prefix is consumed. */
             interface->interface_version = 1;
             return true;
@@ -1044,7 +1044,7 @@ static bool environment_callback(unsigned command, void *data) {
                     (const struct retro_hw_render_context_negotiation_interface *)data;
             if (!active_host->hw_configured ||
                     !(active_host->hw_options.context_capabilities &
-                      LUCENT_RETRO_HW_VULKAN) ||
+                      EMUFUSION_RETRO_HW_VULKAN) ||
                     interface->interface_type !=
                       RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN ||
                     interface->interface_version < 1)
@@ -1063,7 +1063,7 @@ static bool environment_callback(unsigned command, void *data) {
         case RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT:
             if (!active_host->hw_configured ||
                     !(active_host->hw_options.feature_capabilities &
-                      LUCENT_RETRO_HW_SHARED_CONTEXT)) return false;
+                      EMUFUSION_RETRO_HW_SHARED_CONTEXT)) return false;
             active_host->hw_shared_requested = true;
             return true;
         case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
@@ -1098,10 +1098,10 @@ static void video_callback(const void *data, unsigned width, unsigned height,
         if (!active_host->hw_negotiated || !active_host->hw_context_ready ||
                 width > MAX_VIDEO_DIMENSION || height > MAX_VIDEO_DIMENSION) return;
         if (active_host->hw_options.source_timeline_policy &
-                LUCENT_RETRO_SOURCE_TIMELINE_MUPEN_VI_ORIGIN) {
+                EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_VI_ORIGIN) {
             /* GLideN64 must keep its ordinary vertical-interrupt rendering;
              * suppressing those swaps produced only its startup/clear buffer
-             * in Lucent's frontend FBO on the Thor. The patched core instead
+             * in EmuFusion's frontend FBO on the Thor. The patched core instead
              * attests whether this exact retro_run crossed a VI-origin
              * boundary. Ignore unmarked callbacks without fabricating a
              * contiguous callback sequence. */
@@ -1266,7 +1266,7 @@ static int16_t input_state_callback(unsigned port, unsigned device,
                 kind = "held-sample";
             }
             if (kind) {
-                __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+                __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
                         "input callback host=%p run=%llu port=%u device=%u "
                         "index=%u id=%u result=%d mask=0x%04x kind=%s "
                         "transitions=%u/16 samples=%u/32 marker=input-consumed",
@@ -1300,7 +1300,7 @@ static int16_t input_state_callback(unsigned port, unsigned device,
                 active_host->pointer_trace_read_pressed[port] =
                         active_host->pointer_pressed[port];
                 ++active_host->pointer_trace_callback_count;
-                __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+                __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
                         "pointer callback host=%p run=%llu port=%u index=%u "
                         "x=%d y=%d pressed=%d sample=%u/12 marker=pointer-consumed",
                         (void *)active_host,
@@ -1342,23 +1342,23 @@ static void resolve_optional_symbol(void *library, const char *name, void *targe
 #define RESOLVE(host, field, symbol) \
     if (!resolve_symbol((host)->library, symbol, &(host)->field, error, error_size)) goto fail
 
-static bool validate_hw_options(const lucent_retro_hw_options *options,
+static bool validate_hw_options(const emufusion_retro_hw_options *options,
                                 char *error, size_t error_size) {
-    const uint32_t contexts = LUCENT_RETRO_HW_GLES2 | LUCENT_RETRO_HW_GLES3 |
-            LUCENT_RETRO_HW_GLES_VERSION | LUCENT_RETRO_HW_VULKAN;
-    const uint32_t features = LUCENT_RETRO_HW_DEPTH | LUCENT_RETRO_HW_STENCIL |
-            LUCENT_RETRO_HW_CACHE_CONTEXT | LUCENT_RETRO_HW_DEBUG_CONTEXT |
-            LUCENT_RETRO_HW_SHARED_CONTEXT;
+    const uint32_t contexts = EMUFUSION_RETRO_HW_GLES2 | EMUFUSION_RETRO_HW_GLES3 |
+            EMUFUSION_RETRO_HW_GLES_VERSION | EMUFUSION_RETRO_HW_VULKAN;
+    const uint32_t features = EMUFUSION_RETRO_HW_DEPTH | EMUFUSION_RETRO_HW_STENCIL |
+            EMUFUSION_RETRO_HW_CACHE_CONTEXT | EMUFUSION_RETRO_HW_DEBUG_CONTEXT |
+            EMUFUSION_RETRO_HW_SHARED_CONTEXT;
     const struct retro_hw_render_interface *render_interface;
     if (!options) return true;
     if (options->struct_size != sizeof(*options) ||
-            options->api_version != LUCENT_RETRO_HW_OPTIONS_VERSION) {
+            options->api_version != EMUFUSION_RETRO_HW_OPTIONS_VERSION) {
         set_error(error, error_size, "unsupported hardware options layout/version");
         return false;
     }
     if (options->source_timeline_policy &
-            ~(uint32_t)(LUCENT_RETRO_SOURCE_TIMELINE_MUPEN_VI_ORIGIN |
-                    LUCENT_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS)) {
+            ~(uint32_t)(EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_VI_ORIGIN |
+                    EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS)) {
         set_error(error, error_size, "unknown source timeline policy");
         return false;
     }
@@ -1372,19 +1372,19 @@ static bool validate_hw_options(const lucent_retro_hw_options *options,
         return false;
     }
     if ((options->context_capabilities &
-            (LUCENT_RETRO_HW_GLES2 | LUCENT_RETRO_HW_GLES3 |
-             LUCENT_RETRO_HW_GLES_VERSION)) &&
+            (EMUFUSION_RETRO_HW_GLES2 | EMUFUSION_RETRO_HW_GLES3 |
+             EMUFUSION_RETRO_HW_GLES_VERSION)) &&
             (!options->get_current_framebuffer || !options->get_proc_address)) {
         set_error(error, error_size, "GLES requires framebuffer and proc-address hooks");
         return false;
     }
-    if ((options->context_capabilities & LUCENT_RETRO_HW_GLES_VERSION) &&
+    if ((options->context_capabilities & EMUFUSION_RETRO_HW_GLES_VERSION) &&
             (options->max_gles_major < 3 ||
              (options->max_gles_major == 3 && options->max_gles_minor < 1))) {
         set_error(error, error_size, "versioned GLES capability requires GLES 3.1 or newer");
         return false;
     }
-    if (options->context_capabilities & LUCENT_RETRO_HW_VULKAN) {
+    if (options->context_capabilities & EMUFUSION_RETRO_HW_VULKAN) {
         render_interface = (const struct retro_hw_render_interface *)
                 options->render_interface;
         if (!render_interface ||
@@ -1397,15 +1397,15 @@ static bool validate_hw_options(const lucent_retro_hw_options *options,
     return true;
 }
 
-lucent_retro_host *lucent_retro_create_with_preferences(
+emufusion_retro_host *emufusion_retro_create_with_preferences(
         const char *core_path, const char *trusted_root,
         const char *system_directory, const char *save_directory,
-        const lucent_retro_hw_options *hw_options,
+        const emufusion_retro_hw_options *hw_options,
         bool widescreen_enhancements_enabled,
         char *error, size_t error_size) {
     char resolved_core[4096];
     char resolved_root[4096];
-    lucent_retro_host *host = NULL;
+    emufusion_retro_host *host = NULL;
     lock_host();
     if (!core_path || !trusted_root || !system_directory || !save_directory) {
         set_error(error, error_size, "core, trusted root, system, and save paths are required");
@@ -1413,7 +1413,7 @@ lucent_retro_host *lucent_retro_create_with_preferences(
     }
     if (!validate_hw_options(hw_options, error, error_size)) RETURN_UNLOCKED(NULL);
     if (active_host) {
-        set_error(error, error_size, "only one Lucent core session may be active");
+        set_error(error, error_size, "only one EmuFusion core session may be active");
         RETURN_UNLOCKED(NULL);
     }
     if (!realpath(core_path, resolved_core) || !realpath(trusted_root, resolved_root)) {
@@ -1421,10 +1421,10 @@ lucent_retro_host *lucent_retro_create_with_preferences(
         RETURN_UNLOCKED(NULL);
     }
     if (strcmp(resolved_root, "/") == 0 || !path_is_inside(resolved_core, resolved_root)) {
-        set_error(error, error_size, "core must be inside Lucent's trusted app-private directory");
+        set_error(error, error_size, "core must be inside EmuFusion's trusted app-private directory");
         RETURN_UNLOCKED(NULL);
     }
-    host = (lucent_retro_host *)calloc(1, sizeof(*host));
+    host = (emufusion_retro_host *)calloc(1, sizeof(*host));
     if (!host) {
         set_error(error, error_size, "out of memory creating core host");
         RETURN_UNLOCKED(NULL);
@@ -1452,7 +1452,7 @@ lucent_retro_host *lucent_retro_create_with_preferences(
                 dolphin_mapping_quarantined;
 #if defined(__ANDROID__)
         if (force_fresh_dolphin)
-            __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+            __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
                     "forcing fresh Dolphin linker image after quarantine");
 #endif
         host->library = load_core_library(host->core_path, force_fresh_dolphin);
@@ -1462,7 +1462,7 @@ lucent_retro_host *lucent_retro_create_with_preferences(
         goto fail;
     }
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "core library loaded path=%s", host->core_path);
 #endif
     RESOLVE(host, init, "retro_init");
@@ -1499,7 +1499,7 @@ lucent_retro_host *lucent_retro_create_with_preferences(
     resolve_optional_symbol(host->library, "retro_lucent_get_hw_active_rect",
                             &host->hw_active_rect);
     if ((host->hw_options.source_timeline_policy &
-                    LUCENT_RETRO_SOURCE_TIMELINE_MUPEN_VI_ORIGIN) &&
+                    EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_VI_ORIGIN) &&
             !host->mupen_vi_origin_boundary) {
         set_error(error, error_size,
                   "Mupen VI-origin timeline marker is unavailable");
@@ -1520,11 +1520,11 @@ lucent_retro_host *lucent_retro_create_with_preferences(
      * and input callbacks. The Phase 1 core probe uses the same ordering.
      */
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost", "retro_init begin");
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost", "retro_init begin");
 #endif
     host->init();
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost", "retro_init complete");
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost", "retro_init complete");
 #endif
     host->initialized = true;
     host->set_video_refresh(video_callback);
@@ -1535,31 +1535,31 @@ lucent_retro_host *lucent_retro_create_with_preferences(
     RETURN_UNLOCKED(host);
 
 fail:
-    lucent_retro_destroy(host);
+    emufusion_retro_destroy(host);
     RETURN_UNLOCKED(NULL);
 }
 
-lucent_retro_host *lucent_retro_create_with_options(
+emufusion_retro_host *emufusion_retro_create_with_options(
         const char *core_path, const char *trusted_root,
         const char *system_directory, const char *save_directory,
-        const lucent_retro_hw_options *hw_options,
+        const emufusion_retro_hw_options *hw_options,
         char *error, size_t error_size) {
-    return lucent_retro_create_with_preferences(
+    return emufusion_retro_create_with_preferences(
             core_path, trusted_root, system_directory, save_directory,
             hw_options, true, error, error_size);
 }
 
-lucent_retro_host *lucent_retro_create(const char *core_path,
+emufusion_retro_host *emufusion_retro_create(const char *core_path,
                                        const char *trusted_root,
                                        const char *system_directory,
                                        const char *save_directory,
                                        char *error, size_t error_size) {
-    return lucent_retro_create_with_options(
+    return emufusion_retro_create_with_options(
             core_path, trusted_root, system_directory, save_directory,
             NULL, error, error_size);
 }
 
-bool lucent_retro_supply_android_java_vm(lucent_retro_host *host, void *java_vm,
+bool emufusion_retro_supply_android_java_vm(emufusion_retro_host *host, void *java_vm,
                                          char *error, size_t error_size) {
     static const char play_setter_name[] = "lucent_set_android_java_vm";
     fn_set_android_java_vm setter = NULL;
@@ -1574,10 +1574,10 @@ bool lucent_retro_supply_android_java_vm(lucent_retro_host *host, void *java_vm,
     if (!symbol) {
         /* This hook is optional and deliberately invisible to normal cores. */
 #if defined(__ANDROID__)
-        __android_log_print(ANDROID_LOG_WARN, "LucentNativeHost",
+        __android_log_print(ANDROID_LOG_WARN, "EmuFusionNativeHost",
                 "optional Android JavaVM hook unavailable: %s", dlerror());
 #else
-        fprintf(stderr, "Lucent optional Android JavaVM hook unavailable: %s\n",
+        fprintf(stderr, "EmuFusion optional Android JavaVM hook unavailable: %s\n",
                 dlerror());
 #endif
         RETURN_UNLOCKED(true);
@@ -1585,16 +1585,16 @@ bool lucent_retro_supply_android_java_vm(lucent_retro_host *host, void *java_vm,
     memcpy(&setter, &symbol, sizeof(setter));
     setter(java_vm);
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "supplied Android JavaVM %p to optional core hook %p", java_vm, symbol);
 #else
-    fprintf(stderr, "Lucent supplied Android JavaVM %p to optional core hook %p\n",
+    fprintf(stderr, "EmuFusion supplied Android JavaVM %p to optional core hook %p\n",
             java_vm, symbol);
 #endif
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_supply_output_size(lucent_retro_host *host,
+bool emufusion_retro_supply_output_size(emufusion_retro_host *host,
                                      unsigned width, unsigned height,
                                      char *error, size_t error_size) {
     static const char setter_name[] = "lucent_set_output_size";
@@ -1611,13 +1611,13 @@ bool lucent_retro_supply_output_size(lucent_retro_host *host,
     memcpy(&setter, &symbol, sizeof(setter));
     setter(width, height);
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "supplied output size %ux%u to optional core hook", width, height);
 #endif
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_supply_frontend_framebuffer(lucent_retro_host *host,
+bool emufusion_retro_supply_frontend_framebuffer(emufusion_retro_host *host,
                                               unsigned framebuffer,
                                               char *error,
                                               size_t error_size) {
@@ -1635,7 +1635,7 @@ bool lucent_retro_supply_frontend_framebuffer(lucent_retro_host *host,
     memcpy(&setter, &symbol, sizeof(setter));
     setter(framebuffer);
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "supplied frontend framebuffer %u to optional core hook",
             framebuffer);
 #endif
@@ -1673,7 +1673,7 @@ static bool read_game(const char *path, char **bytes, size_t *size,
     return true;
 }
 
-bool lucent_retro_load_game(lucent_retro_host *host, const char *game_path,
+bool emufusion_retro_load_game(emufusion_retro_host *host, const char *game_path,
                             char *error, size_t error_size) {
     struct retro_game_info game;
     lock_host();
@@ -1696,7 +1696,7 @@ bool lucent_retro_load_game(lucent_retro_host *host, const char *game_path,
      * title's successful-load evidence. */
     host->completed_game_load = false;
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "retro_load_game begin path=%s needFullpath=%d", game_path,
             host->system_info.need_fullpath ? 1 : 0);
 #endif
@@ -1711,7 +1711,7 @@ bool lucent_retro_load_game(lucent_retro_host *host, const char *game_path,
         RETURN_UNLOCKED(false);
     }
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "retro_load_game complete");
 #endif
     host->game_loaded = true;
@@ -1730,7 +1730,7 @@ bool lucent_retro_load_game(lucent_retro_host *host, const char *game_path,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_set_controller_port_device(lucent_retro_host *host,
+bool emufusion_retro_set_controller_port_device(emufusion_retro_host *host,
                                              unsigned port, unsigned device,
                                              char *error, size_t error_size) {
     lock_host();
@@ -1744,13 +1744,13 @@ bool lucent_retro_set_controller_port_device(lucent_retro_host *host,
     }
     host->set_controller_port_device(port, device);
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "controller port %u device 0x%x", port, device);
 #endif
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_cheat_reset(lucent_retro_host *host, char *error,
+bool emufusion_retro_cheat_reset(emufusion_retro_host *host, char *error,
                               size_t error_size) {
     lock_host();
     if (!host || !host->game_loaded || !host->cheat_reset) {
@@ -1767,7 +1767,7 @@ bool lucent_retro_cheat_reset(lucent_retro_host *host, char *error,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_cheat_set(lucent_retro_host *host, unsigned index,
+bool emufusion_retro_cheat_set(emufusion_retro_host *host, unsigned index,
                             bool enabled, const char *code, char *error,
                             size_t error_size) {
     lock_host();
@@ -1784,7 +1784,7 @@ bool lucent_retro_cheat_set(lucent_retro_host *host, unsigned index,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_reset(lucent_retro_host *host, char *error,
+bool emufusion_retro_reset(emufusion_retro_host *host, char *error,
                         size_t error_size) {
     lock_host();
     if (!host || !host->game_loaded || !host->reset) {
@@ -1799,13 +1799,13 @@ bool lucent_retro_reset(lucent_retro_host *host, char *error,
     active_host = host;
     host->reset();
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "retro_reset complete");
 #endif
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_unload_game(lucent_retro_host *host,
+bool emufusion_retro_unload_game(emufusion_retro_host *host,
                               char *error, size_t error_size) {
     lock_host();
     if (!host || !host->game_loaded || !host->unload_game) {
@@ -1827,14 +1827,14 @@ bool lucent_retro_unload_game(lucent_retro_host *host,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_game_loaded(const lucent_retro_host *host) {
+bool emufusion_retro_game_loaded(const emufusion_retro_host *host) {
     bool loaded;
     lock_host();
     loaded = host && host->game_loaded;
     RETURN_UNLOCKED(loaded);
 }
 
-bool lucent_retro_run_frame(lucent_retro_host *host, char *error,
+bool emufusion_retro_run_frame(emufusion_retro_host *host, char *error,
                             size_t error_size) {
     lock_host();
     if (!host || !host->game_loaded) {
@@ -1853,7 +1853,7 @@ bool lucent_retro_run_frame(lucent_retro_host *host, char *error,
     RETURN_UNLOCKED(true);
 }
 
-uint64_t lucent_retro_last_run_audio_duration_ns(lucent_retro_host *host) {
+uint64_t emufusion_retro_last_run_audio_duration_ns(emufusion_retro_host *host) {
     uint64_t duration = 0;
     lock_host();
     if (host && host->game_loaded && isfinite(host->audio_output_rate) &&
@@ -1866,13 +1866,13 @@ uint64_t lucent_retro_last_run_audio_duration_ns(lucent_retro_host *host) {
     RETURN_UNLOCKED(duration);
 }
 
-void lucent_retro_set_paused(lucent_retro_host *host, bool paused) {
+void emufusion_retro_set_paused(emufusion_retro_host *host, bool paused) {
     lock_host();
     if (host) host->paused = paused;
     unlock_host();
 }
 
-bool lucent_retro_set_joypad_button(lucent_retro_host *host, unsigned port,
+bool emufusion_retro_set_joypad_button(emufusion_retro_host *host, unsigned port,
                                     unsigned button, bool pressed) {
     lock_host();
     if (!host || port >= MAX_PORTS || button >= MAX_JOYPAD_BUTTONS)
@@ -1888,7 +1888,7 @@ bool lucent_retro_set_joypad_button(lucent_retro_host *host, unsigned port,
              button == RETRO_DEVICE_ID_JOYPAD_A) &&
             previous_mask != host->joypad_mask[port]) {
         ++host->input_trace_applied_count;
-        __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
                 "input applied host=%p run=%llu port=%u id=%u pressed=%d "
                 "mask=0x%04x event=%u/16 marker=input-applied",
                 (void *)host, (unsigned long long)host->run_sequence,
@@ -1899,7 +1899,7 @@ bool lucent_retro_set_joypad_button(lucent_retro_host *host, unsigned port,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_set_analog_axis(lucent_retro_host *host, unsigned port,
+bool emufusion_retro_set_analog_axis(emufusion_retro_host *host, unsigned port,
                                   unsigned index, unsigned id, int16_t value) {
     lock_host();
     if (!host || port >= MAX_PORTS || index >= MAX_ANALOG_INDEXES ||
@@ -1910,7 +1910,7 @@ bool lucent_retro_set_analog_axis(lucent_retro_host *host, unsigned port,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_set_pointer(lucent_retro_host *host, unsigned port,
+bool emufusion_retro_set_pointer(emufusion_retro_host *host, unsigned port,
                               int16_t x, int16_t y, bool pressed) {
     lock_host();
     if (!host || port >= MAX_PORTS) RETURN_UNLOCKED(false);
@@ -1924,7 +1924,7 @@ bool lucent_retro_set_pointer(lucent_retro_host *host, unsigned port,
     if (host->hw_negotiated && host->pointer_trace_applied_count < 12u &&
             previous_pressed != pressed) {
         ++host->pointer_trace_applied_count;
-        __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
                 "pointer applied host=%p run=%llu port=%u x=%d y=%d "
                 "pressed=%d event=%u/12 marker=pointer-applied",
                 (void *)host, (unsigned long long)host->run_sequence,
@@ -1935,8 +1935,8 @@ bool lucent_retro_set_pointer(lucent_retro_host *host, unsigned port,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_latest_video_info(const lucent_retro_host *host,
-                                    lucent_retro_video_info *info) {
+bool emufusion_retro_latest_video_info(const emufusion_retro_host *host,
+                                    emufusion_retro_video_info *info) {
     lock_host();
     if (!host || !info || !host->video_bytes || !host->video_size)
         RETURN_UNLOCKED(false);
@@ -1949,7 +1949,7 @@ bool lucent_retro_latest_video_info(const lucent_retro_host *host,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_copy_video_frame(const lucent_retro_host *host, void *buffer,
+bool emufusion_retro_copy_video_frame(const emufusion_retro_host *host, void *buffer,
                                    size_t size) {
     lock_host();
     if (!host || !buffer || !host->video_bytes || size < host->video_size)
@@ -1958,7 +1958,7 @@ bool lucent_retro_copy_video_frame(const lucent_retro_host *host, void *buffer,
     RETURN_UNLOCKED(true);
 }
 
-size_t lucent_retro_drain_audio(lucent_retro_host *host, int16_t *samples,
+size_t emufusion_retro_drain_audio(emufusion_retro_host *host, int16_t *samples,
                                 size_t max_frames) {
     size_t available_samples;
     size_t index;
@@ -1975,8 +1975,8 @@ size_t lucent_retro_drain_audio(lucent_retro_host *host, int16_t *samples,
     RETURN_UNLOCKED(available_samples / 2);
 }
 
-bool lucent_retro_get_av_info(lucent_retro_host *host,
-                              lucent_retro_av_info *info) {
+bool emufusion_retro_get_av_info(emufusion_retro_host *host,
+                              emufusion_retro_av_info *info) {
     lock_host();
     if (!host || !info || !host->game_loaded) RETURN_UNLOCKED(false);
     if (!host->has_av_info) RETURN_UNLOCKED(false);
@@ -1990,7 +1990,7 @@ bool lucent_retro_get_av_info(lucent_retro_host *host,
     RETURN_UNLOCKED(true);
 }
 
-double lucent_retro_synchronized_video_hz(lucent_retro_host *host) {
+double emufusion_retro_synchronized_video_hz(emufusion_retro_host *host) {
     double declared;
     double multiplier;
     lock_host();
@@ -2001,8 +2001,8 @@ double lucent_retro_synchronized_video_hz(lucent_retro_host *host) {
     RETURN_UNLOCKED(declared * multiplier);
 }
 
-bool lucent_retro_set_synchronized_video_rate(
-        lucent_retro_host *host, double declared_hz, double synchronized_hz,
+bool emufusion_retro_set_synchronized_video_rate(
+        emufusion_retro_host *host, double declared_hz, double synchronized_hz,
         char *error, size_t error_size) {
     lock_host();
     if (!host || !host->game_loaded || !isfinite(declared_hz) ||
@@ -2034,12 +2034,12 @@ bool lucent_retro_set_synchronized_video_rate(
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_get_hw_active_rect(lucent_retro_host *host, uint32_t rect[7]) {
+bool emufusion_retro_get_hw_active_rect(emufusion_retro_host *host, uint32_t rect[7]) {
     uint32_t value[7] = {0};
     lock_host();
     if (!host || !rect || !host->game_loaded || !host->hw_context_ready ||
             !(host->hw_options.source_timeline_policy &
-              LUCENT_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS) ||
+              EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS) ||
             !host->hw_active_rect || !host->hw_active_rect(value, 7u) ||
             value[0] != 1u || !value[3] || !value[4] ||
             !value[5] || !value[6] || value[1] >= value[5] ||
@@ -2049,8 +2049,8 @@ bool lucent_retro_get_hw_active_rect(lucent_retro_host *host, uint32_t rect[7]) 
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_get_hw_info(lucent_retro_host *host,
-                              lucent_retro_hw_info *info) {
+bool emufusion_retro_get_hw_info(emufusion_retro_host *host,
+                              emufusion_retro_hw_info *info) {
     lock_host();
     if (!host || !info) RETURN_UNLOCKED(false);
     memset(info, 0, sizeof(*info));
@@ -2073,15 +2073,15 @@ bool lucent_retro_get_hw_info(lucent_retro_host *host,
     RETURN_UNLOCKED(true);
 }
 
-const void *lucent_retro_hw_context_negotiation_interface(
-        lucent_retro_host *host) {
+const void *emufusion_retro_hw_context_negotiation_interface(
+        emufusion_retro_host *host) {
     const void *result;
     lock_host();
     result = host ? (const void *)host->hw_context_negotiation_interface : NULL;
     RETURN_UNLOCKED(result);
 }
 
-bool lucent_retro_hw_context_reset(lucent_retro_host *host,
+bool emufusion_retro_hw_context_reset(emufusion_retro_host *host,
                                    char *error, size_t error_size) {
     lock_host();
     if (!host || !host->game_loaded || !host->hw_negotiated ||
@@ -2100,7 +2100,7 @@ bool lucent_retro_hw_context_reset(lucent_retro_host *host,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_hw_context_destroy(lucent_retro_host *host,
+bool emufusion_retro_hw_context_destroy(emufusion_retro_host *host,
                                      char *error, size_t error_size) {
     lock_host();
     if (!host || !host->hw_negotiated) {
@@ -2115,7 +2115,7 @@ bool lucent_retro_hw_context_destroy(lucent_retro_host *host,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_hw_context_lost(lucent_retro_host *host,
+bool emufusion_retro_hw_context_lost(emufusion_retro_host *host,
                                   char *error, size_t error_size) {
     lock_host();
     if (!host || !host->hw_negotiated) {
@@ -2129,7 +2129,7 @@ bool lucent_retro_hw_context_lost(lucent_retro_host *host,
     RETURN_UNLOCKED(true);
 }
 
-size_t lucent_retro_serialize_size(lucent_retro_host *host) {
+size_t emufusion_retro_serialize_size(emufusion_retro_host *host) {
     size_t size;
     lock_host();
     if (!host || !host->game_loaded) RETURN_UNLOCKED(0);
@@ -2142,7 +2142,7 @@ size_t lucent_retro_serialize_size(lucent_retro_host *host) {
     RETURN_UNLOCKED(size <= MAX_STATE_BYTES ? size : 0);
 }
 
-bool lucent_retro_serialize_alloc(lucent_retro_host *host, void **buffer,
+bool emufusion_retro_serialize_alloc(emufusion_retro_host *host, void **buffer,
                                   size_t *size, char *error,
                                   size_t error_size) {
     void *bytes;
@@ -2185,7 +2185,7 @@ bool lucent_retro_serialize_alloc(lucent_retro_host *host, void **buffer,
             size_t next = host->serialize_size();
             if (next <= required || next > MAX_STATE_BYTES) break;
 #if defined(__ANDROID__)
-            __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+            __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
                     "State capture size grew from %zu to %zu; retry %u/2",
                     required, next, attempt + 1);
 #endif
@@ -2196,10 +2196,10 @@ bool lucent_retro_serialize_alloc(lucent_retro_host *host, void **buffer,
     RETURN_UNLOCKED(false);
 }
 
-bool lucent_retro_serialize(lucent_retro_host *host, void *buffer, size_t size,
+bool emufusion_retro_serialize(emufusion_retro_host *host, void *buffer, size_t size,
                             char *error, size_t error_size) {
     lock_host();
-    size_t required = lucent_retro_serialize_size(host);
+    size_t required = emufusion_retro_serialize_size(host);
     if (!required || !buffer || size != required) {
         set_error(error, error_size, "state buffer size mismatch");
         RETURN_UNLOCKED(false);
@@ -2212,7 +2212,7 @@ bool lucent_retro_serialize(lucent_retro_host *host, void *buffer, size_t size,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_unserialize(lucent_retro_host *host, const void *buffer,
+bool emufusion_retro_unserialize(emufusion_retro_host *host, const void *buffer,
                               size_t size, char *error, size_t error_size) {
     lock_host();
     if (!host || !host->game_loaded || !buffer || !size || size > MAX_STATE_BYTES) {
@@ -2241,7 +2241,7 @@ bool lucent_retro_unserialize(lucent_retro_host *host, const void *buffer,
         host->video_size = 0;
         host->video_sequence = 0;
 #if defined(__ANDROID__)
-        __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
                 "BlastEm cold restore initialized before state load; bootstrap media discarded");
 #endif
     }
@@ -2252,28 +2252,28 @@ bool lucent_retro_unserialize(lucent_retro_host *host, const void *buffer,
     RETURN_UNLOCKED(true);
 }
 
-const char *lucent_retro_library_name(const lucent_retro_host *host) {
+const char *emufusion_retro_library_name(const emufusion_retro_host *host) {
     const char *result;
     lock_host();
     result = host && host->system_info.library_name ? host->system_info.library_name : "";
     RETURN_UNLOCKED(result);
 }
 
-const char *lucent_retro_library_version(const lucent_retro_host *host) {
+const char *emufusion_retro_library_version(const emufusion_retro_host *host) {
     const char *result;
     lock_host();
     result = host && host->system_info.library_version ? host->system_info.library_version : "";
     RETURN_UNLOCKED(result);
 }
 
-unsigned lucent_retro_api_version(const lucent_retro_host *host) {
+unsigned emufusion_retro_api_version(const emufusion_retro_host *host) {
     unsigned result;
     lock_host();
     result = host ? host->api_version() : 0;
     RETURN_UNLOCKED(result);
 }
 
-size_t lucent_retro_save_ram_size(lucent_retro_host *host) {
+size_t emufusion_retro_save_ram_size(emufusion_retro_host *host) {
     size_t size;
     lock_host();
     if (!host || !host->game_loaded) RETURN_UNLOCKED(0);
@@ -2282,10 +2282,10 @@ size_t lucent_retro_save_ram_size(lucent_retro_host *host) {
     RETURN_UNLOCKED(size <= MAX_SAVE_RAM_BYTES ? size : 0);
 }
 
-bool lucent_retro_read_save_ram(lucent_retro_host *host, void *buffer,
+bool emufusion_retro_read_save_ram(emufusion_retro_host *host, void *buffer,
                                 size_t size) {
     lock_host();
-    size_t available = lucent_retro_save_ram_size(host);
+    size_t available = emufusion_retro_save_ram_size(host);
     void *source;
     if (!available || available != size || !buffer) RETURN_UNLOCKED(false);
     source = host->get_memory_data(RETRO_MEMORY_SAVE_RAM);
@@ -2294,10 +2294,10 @@ bool lucent_retro_read_save_ram(lucent_retro_host *host, void *buffer,
     RETURN_UNLOCKED(true);
 }
 
-bool lucent_retro_write_save_ram(lucent_retro_host *host, const void *buffer,
+bool emufusion_retro_write_save_ram(emufusion_retro_host *host, const void *buffer,
                                  size_t size) {
     lock_host();
-    size_t available = lucent_retro_save_ram_size(host);
+    size_t available = emufusion_retro_save_ram_size(host);
     void *destination;
     if (!available || available != size || !buffer) RETURN_UNLOCKED(false);
     destination = host->get_memory_data(RETRO_MEMORY_SAVE_RAM);
@@ -2306,12 +2306,12 @@ bool lucent_retro_write_save_ram(lucent_retro_host *host, const void *buffer,
     RETURN_UNLOCKED(true);
 }
 
-void lucent_retro_destroy(lucent_retro_host *host) {
+void emufusion_retro_destroy(emufusion_retro_host *host) {
     size_t variable_index;
     bool quarantine_dolphin;
     if (!host) return;
     lock_host();
-    /* Android must call lucent_retro_hw_context_destroy while its EGL/Vulkan
+    /* Android must call emufusion_retro_hw_context_destroy while its EGL/Vulkan
      * context is current. Never invoke core GL/Vulkan cleanup opportunistically
      * here after the Java surface may already have disappeared. */
     host->hw_context_ready = false;
@@ -2334,13 +2334,13 @@ void lucent_retro_destroy(lucent_retro_host *host) {
          * ANDROID_DLEXT_FORCE_LOAD above and never re-enter these globals. */
         dolphin_mapping_quarantined = true;
 #if defined(__ANDROID__)
-        __android_log_print(ANDROID_LOG_WARN, "LucentNativeHost",
+        __android_log_print(ANDROID_LOG_WARN, "EmuFusionNativeHost",
                 "quarantined rejected/partial Dolphin linker image without dlclose");
 #endif
     } else if (host->library) {
 #if defined(__ANDROID__)
         if (is_dolphin_core_path(host->core_path))
-            __android_log_print(ANDROID_LOG_INFO, "LucentNativeHost",
+            __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
                     "unloading completed Dolphin linker image without retro_deinit");
 #endif
         dlclose(host->library);

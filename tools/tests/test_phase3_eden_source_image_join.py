@@ -20,7 +20,7 @@ class SourceImageJoinTest(unittest.TestCase):
     def test_actual_native_host_optional_dlsym_and_exact_identity_checks(self):
         native = ROOT / "unified-android/native"
         source = r'''
-#include "lucent_native_adapter_host.h"
+#include "emufusion_native_adapter_host.h"
 #include <assert.h>
 #include <stdlib.h>
 static size_t audio(void* context, const int16_t* frames, size_t count) {
@@ -29,26 +29,26 @@ static size_t audio(void* context, const int16_t* frames, size_t count) {
 int main(int argc, char** argv) {
     assert(argc == 6); char error[512] = {0}; uint32_t window = 0;
     lucent_source_image_v1 row; lucent_source_binding_v1 binding;
-    lucent_native_adapter_host* host = lucent_native_adapter_open(argv[1], argv[2], error, sizeof(error));
+    emufusion_native_adapter_host* host = emufusion_native_adapter_open(argv[1], argv[2], error, sizeof(error));
     assert(host);
-    assert(lucent_native_adapter_source_image_binding(host, &binding, sizeof(binding)) == LUCENT_SOURCE_CLOSED);
-    assert(lucent_native_adapter_create(host, error, sizeof(error)));
+    assert(emufusion_native_adapter_source_image_binding(host, &binding, sizeof(binding)) == LUCENT_SOURCE_CLOSED);
+    assert(emufusion_native_adapter_create(host, error, sizeof(error)));
     lucent_native_load_request request = {argv[2], argv[2], argv[3]};
-    assert(lucent_native_adapter_load(host, &request, error, sizeof(error)));
+    assert(emufusion_native_adapter_load(host, &request, error, sizeof(error)));
     lucent_native_io io = {LUCENT_NATIVE_RENDER_VULKAN_WINDOW, &window, NULL, audio, NULL};
-    assert(lucent_native_adapter_start(host, &io, error, sizeof(error)));
-    assert(lucent_native_adapter_source_image_binding(host, &binding, sizeof(binding)) == strtoul(argv[4], NULL, 10));
-    const uint32_t status = lucent_native_adapter_query_source_image(host, 11, 12, 1000, &row, sizeof(row));
+    assert(emufusion_native_adapter_start(host, &io, error, sizeof(error)));
+    assert(emufusion_native_adapter_source_image_binding(host, &binding, sizeof(binding)) == strtoul(argv[4], NULL, 10));
+    const uint32_t status = emufusion_native_adapter_query_source_image(host, 11, 12, 1000, &row, sizeof(row));
     assert(status == strtoul(argv[5], NULL, 10));
     if (status == LUCENT_SOURCE_MATCH_ACCEPTED) {
         assert(row.buffer_timestamp_ns == 1000 && row.composition.layers[0].queue_frame_number == 42);
     }
-    assert(lucent_native_adapter_query_source_image(host, 11, 12, 1000, &row, 1) == LUCENT_SOURCE_BAD_ARGUMENT);
-    assert(lucent_native_adapter_query_source_image(host, 11, 12, 0, &row, sizeof(row)) == LUCENT_SOURCE_BAD_ARGUMENT);
+    assert(emufusion_native_adapter_query_source_image(host, 11, 12, 1000, &row, 1) == LUCENT_SOURCE_BAD_ARGUMENT);
+    assert(emufusion_native_adapter_query_source_image(host, 11, 12, 0, &row, sizeof(row)) == LUCENT_SOURCE_BAD_ARGUMENT);
     assert(lucent_native_adapter_producer_timeline_hz(host) == 0.0); // Metadata grants no clock authority.
-    assert(lucent_native_adapter_stop(host, error, sizeof(error)));
-    assert(lucent_native_adapter_query_source_image(host, 11, 12, 1000, &row, sizeof(row)) == LUCENT_SOURCE_CLOSED);
-    lucent_native_adapter_destroy(host);
+    assert(emufusion_native_adapter_stop(host, error, sizeof(error)));
+    assert(emufusion_native_adapter_query_source_image(host, 11, 12, 1000, &row, sizeof(row)) == LUCENT_SOURCE_CLOSED);
+    emufusion_native_adapter_destroy(host);
 }
 '''
         compiler = shutil.which("cc")
@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
             game.write_bytes(b"\x07")
             executable = directory / "host"
             run([compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", native / "include",
-                 native / "lucent_native_adapter_host.c", main, "-ldl", "-o", executable])
+                 native / "emufusion_native_adapter_host.c", main, "-ldl", "-o", executable])
             for name, defines, binding_status, row_status in (
                     ("old", [], 7, 7),
                     ("value", ["MOCK_SOURCE_IMAGE_SIDEBAND"], 1, 1),

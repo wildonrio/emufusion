@@ -1,5 +1,5 @@
-#ifndef LUCENT_TEST_ANDROID_DLEXT_H
-#define LUCENT_TEST_ANDROID_DLEXT_H
+#ifndef EMUFUSION_TEST_ANDROID_DLEXT_H
+#define EMUFUSION_TEST_ANDROID_DLEXT_H
 
 #include <dlfcn.h>
 #include <stdint.h>

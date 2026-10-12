@@ -210,7 +210,7 @@ stanza so the theme can show that cheats are available.
 | 3ds, nds, 2D consoles | not available (no geometry to extend); reported as "not available" |
 
 - Plumbing without touching the JNI signatures: the policy writes
-  `<engine root>/lucent-core-overrides.txt` (`key=value` per line) before
+  `<engine root>/emufusion-core-overrides.txt` (`key=value` per line) before
   launch, and `register_core_variable_defaults()` in
   `lucent_libretro_host.c` applies those overrides after its defaults.
   Overrides are launch-time only, matching the cores' "restart required".

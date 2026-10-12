@@ -1,6 +1,6 @@
 /* Recording Vulkan boundary for test_vulkan_semaphore_reuse.py. */
-#include "lucent_android_vulkan_backend.h"
-#include "lucent_libretro_vulkan.h"
+#include "emufusion_android_vulkan_backend.h"
+#include "emufusion_libretro_vulkan.h"
 #include <assert.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -71,30 +71,30 @@ VkResult vkQueuePresentKHR(VkQueue q, const VkPresentInfoKHR *present) {
         presented_sem[ID(present->pSwapchains[i])-1][present->pImageIndices[i]] = s;
     return present_result;
 }
-bool lucent_retro_run_frame(lucent_retro_host *host, char *error, size_t size) {
-    lucent_android_vulkan_backend *b = (void *)host;
+bool emufusion_retro_run_frame(emufusion_retro_host *host, char *error, size_t size) {
+    emufusion_android_vulkan_backend *b = (void *)host;
     /* The core can wait on its recycled index; never reset before retro_run. */
     assert(fence_ready[ID(b->fences[b->current_index])]);
     ++core_calls;
     return true;
 }
-bool lucent_retro_get_hw_info(lucent_retro_host *host, lucent_retro_hw_info *info) {
+bool emufusion_retro_get_hw_info(emufusion_retro_host *host, emufusion_retro_hw_info *info) {
     memset(info, 0, sizeof(*info)); info->frame_width = 640; info->frame_height = 480;
     return true;
 }
-enum { LUCENT_SCREEN_TOP, LUCENT_SCREEN_FULL, LUCENT_SCREEN_BOTTOM };
-static bool record_present_commands(lucent_android_vulkan_backend *b,
+enum { EMUFUSION_SCREEN_TOP, EMUFUSION_SCREEN_FULL, EMUFUSION_SCREEN_BOTTOM };
+static bool record_present_commands(emufusion_android_vulkan_backend *b,
         unsigned width, unsigned height, int crop, char *error, size_t size) { return true; }
-static bool record_present_commands_for_target(lucent_android_vulkan_backend *b,
+static bool record_present_commands_for_target(emufusion_android_vulkan_backend *b,
         VkCommandBuffer command, VkImage image, bool initialized, VkExtent2D extent,
         unsigned width, unsigned height, int crop, bool rotation, char *error, size_t size) {
     return true;
 }
-static bool stamp_core_frame_timestamp(lucent_android_vulkan_backend *b,
+static bool stamp_core_frame_timestamp(emufusion_android_vulkan_backend *b,
         uint64_t sequence, int64_t *stamp) { *stamp = 0; return false; }
 /* PRODUCTION_RUN */
 
-static void init(lucent_android_vulkan_backend *b, bool dual) {
+static void init(emufusion_android_vulkan_backend *b, bool dual) {
     memset(b, 0, sizeof(*b));
     memset(acquire_calls, 0, sizeof(acquire_calls));
     memset(acquire_busy, 0, sizeof(acquire_busy));
@@ -118,14 +118,14 @@ static void init(lucent_android_vulkan_backend *b, bool dual) {
     }
 }
 int main(void) {
-    lucent_android_vulkan_backend b;
+    emufusion_android_vulkan_backend b;
     char error[256]; bool presented;
     for (unsigned dual = 0; dual < 2; ++dual) {
         for (unsigned suboptimal = 0; suboptimal < 2; ++suboptimal) {
             init(&b, dual);
             present_result = suboptimal ? VK_SUBOPTIMAL_KHR : VK_SUCCESS;
             for (unsigned i = 0; i < 64; ++i) {
-                assert(lucent_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
+                assert(emufusion_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
                 assert(presented && b.presented_sequence == i+1);
             }
             assert(present_reuse_errors == 0);
@@ -134,17 +134,17 @@ int main(void) {
         }
     }
     init(&b, false); fail_wait = true;
-    assert(!lucent_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
+    assert(!emufusion_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
     assert(!presented && core_calls == 0);
     init(&b, false);
     for (unsigned i = 0; i < 3; ++i)
-        assert(lucent_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
+        assert(emufusion_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
     fail_wait = true;
-    assert(!lucent_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
+    assert(!emufusion_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
     assert(!presented && core_calls == 3 && acquire_calls[0] == 3);
     assert(strstr(error, "acquire semaphore"));
     init(&b, false); fail_submit = true;
-    assert(!lucent_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
+    assert(!emufusion_android_vulkan_run_and_present(&b, &presented, error, sizeof(error)));
     assert(!presented && b.presented_sequence == 0);
     puts("nonroundrobin primary/secondary, delayed present, suboptimal, errors PASS");
 }

@@ -1,5 +1,5 @@
 /* Exercise real load/runtime AV handling and PCM resampling without Android. */
-#include "../lucent_libretro_host.c"
+#include "../emufusion_libretro_host.c"
 #include <assert.h>
 
 static double mock_fps = 60.0;
@@ -16,8 +16,8 @@ static void av(struct retro_system_av_info *info) {
 }
 
 int main(void) {
-    lucent_retro_host host = {0};
-    lucent_retro_av_info result;
+    emufusion_retro_host host = {0};
+    emufusion_retro_av_info result;
     char error[256] = {0};
     const double native_video = 268111856.0 / 4481136.0;
     const double native_audio = 268111856.0 / 8192.0;
@@ -29,14 +29,14 @@ int main(void) {
     host.get_system_av_info = av;
     host.audio_ring = calloc(AUDIO_RING_SAMPLES, sizeof(int16_t));
     assert(host.audio_ring);
-    assert(lucent_retro_load_game(&host, "timing-fixture", error, sizeof(error)));
-    assert(lucent_retro_get_av_info(&host, &result));
+    assert(emufusion_retro_load_game(&host, "timing-fixture", error, sizeof(error)));
+    assert(emufusion_retro_get_av_info(&host, &result));
     assert(fabs(result.frames_per_second - native_video) < 1e-10);
     assert(result.sample_rate == 32728.0); /* Actual integer Android sink. */
     assert(fabs(host.audio_input_rate - native_audio) < 1e-10);
     assert(result.base_width == 720 && result.base_height == 240);
     assert(60.0 / result.frames_per_second - 1.0 < 0.0075);
-    assert(lucent_retro_set_synchronized_video_rate(
+    assert(emufusion_retro_set_synchronized_video_rate(
             &host, result.frames_per_second, 60.0, error, sizeof(error)));
     uint64_t input_frames = 0;
     uint64_t output_frames = 0;
@@ -70,7 +70,7 @@ int main(void) {
         host.system_info.library_version = versions[i];
         mock_fps = i == 3 ? native_video : 60.0;
         mock_rate = i == 4 ? 48000.0 : 32728.0;
-        assert(lucent_retro_load_game(&host, "timing-fixture", error, sizeof(error)));
+        assert(emufusion_retro_load_game(&host, "timing-fixture", error, sizeof(error)));
         assert(host.current_av_info.timing.fps == mock_fps);
         assert(host.audio_input_rate == mock_rate);
     }

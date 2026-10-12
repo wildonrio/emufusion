@@ -13,7 +13,7 @@ from tools.tests.test_first_install_startup import JAVA, ROOT, method
 
 POLICY = ROOT / 'unified-android/src/com/thorium/preview/game/RenderResolutionPolicy.java'
 WIDESCREEN = ROOT / 'unified-android/src/com/thorium/preview/game/WidescreenHackPolicy.java'
-HOST = ROOT / 'unified-android/native/lucent_libretro_host.c'
+HOST = ROOT / 'unified-android/native/emufusion_libretro_host.c'
 
 
 class RenderResolutionPolicyTest(unittest.TestCase):

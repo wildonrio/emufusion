@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.41
-VERSION_CODE=115
+VERSION_NAME=3.2.42
+VERSION_CODE=116
 
 case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -698,18 +698,18 @@ cp "$ROOT_DIR/engines/phase3-registry.json" "$DECODED/assets/phase3-engine-regis
 cp "$ROOT_DIR/engines/phase3-registry.schema.json" \
     "$DECODED/assets/phase3-engine-registry.schema.json"
 mkdir -p "$DECODED/lib/arm64-v8a"
-cp "$BUILD_DIR/native/arm64-v8a/liblucent_libretro_host.so" \
-    "$DECODED/lib/arm64-v8a/liblucent_libretro_host.so"
-cp "$BUILD_DIR/native/arm64-v8a/liblucent_framegen_timer.so" \
-    "$DECODED/lib/arm64-v8a/liblucent_framegen_timer.so"
-cp "$BUILD_DIR/native/arm64-v8a/liblucent_vulkan_host.so" \
-    "$DECODED/lib/arm64-v8a/liblucent_vulkan_host.so"
+cp "$BUILD_DIR/native/arm64-v8a/libemufusion_libretro_host.so" \
+    "$DECODED/lib/arm64-v8a/libemufusion_libretro_host.so"
+cp "$BUILD_DIR/native/arm64-v8a/libemufusion_framegen_timer.so" \
+    "$DECODED/lib/arm64-v8a/libemufusion_framegen_timer.so"
+cp "$BUILD_DIR/native/arm64-v8a/libemufusion_vulkan_host.so" \
+    "$DECODED/lib/arm64-v8a/libemufusion_vulkan_host.so"
 # The Phase 3 loader is packaged with the other EmuFusion hosts, not with the
 # adapter itself: NativeAdapterHost loads it in its static initializer, so a
 # build that stages an adapter without this library fails at dlopen with the
 # engine already approved.
-cp "$BUILD_DIR/native/arm64-v8a/liblucent_native_adapter_host.so" \
-    "$DECODED/lib/arm64-v8a/liblucent_native_adapter_host.so"
+cp "$BUILD_DIR/native/arm64-v8a/libemufusion_native_adapter_host.so" \
+    "$DECODED/lib/arm64-v8a/libemufusion_native_adapter_host.so"
 # Alpha multiplayer's WebRTC DataChannel transport. org.webrtc's Java classes
 # (staged into the dex above) load this exact native library by name.
 cp "$WEBRTC_NATIVE_SO" \

@@ -1,5 +1,5 @@
 /* A render-threaded core can grow its state after serialize_size resumes it. */
-#include "../lucent_libretro_host.c"
+#include "../emufusion_libretro_host.c"
 #include <stdio.h>
 
 static size_t reported;
@@ -23,7 +23,7 @@ static bool capture(void *data, size_t size) {
 }
 #define CHECK(c) do { if (!(c)) { fprintf(stderr, "mode=%d line=%d error=%s\n", mode, __LINE__, error); return 1; } } while (0)
 int main(void) {
-    lucent_retro_host host = {0};
+    emufusion_retro_host host = {0};
     char error[128] = {0};
     host.game_loaded = true;
     host.serialize_size = query;
@@ -32,7 +32,7 @@ int main(void) {
         void *data = (void *)1;
         size_t size = 1;
         reported = 4; queries = writes = 0;
-        bool result = lucent_retro_serialize_alloc(&host, &data, &size, error, sizeof(error));
+        bool result = emufusion_retro_serialize_alloc(&host, &data, &size, error, sizeof(error));
         if (mode <= 1) {
             CHECK(result && data && size == (mode == 1 ? 8u : 4u));
             for (size_t i = 0; i < size; ++i) CHECK(((unsigned char *)data)[i] == 0x5a);

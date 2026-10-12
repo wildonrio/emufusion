@@ -22,9 +22,9 @@ OPT_IN = json.loads((ROOT / "engines" / "phase3-qualification-opt-in.json").read
 LOCK = json.loads(LOCK_PATH.read_text())
 BUILD = (ROOT / "unified-android" / "build.sh").read_text()
 HOST = (ROOT / "unified-android" / "native" /
-        "lucent_native_adapter_host.c").read_text()
+        "emufusion_native_adapter_host.c").read_text()
 HOST_HEADER = (ROOT / "unified-android" / "native" / "include" /
-               "lucent_native_adapter_host.h").read_text()
+               "emufusion_native_adapter_host.h").read_text()
 SYSTEM_DIR = (ROOT / "unified-android" / "src" / "com" / "thorium" /
               "preview" / "game" / "NativeAdapterSystemDirectory.java").read_text()
 SESSION = (ROOT / "unified-android" / "src" / "com" / "thorium" /
@@ -180,7 +180,7 @@ class Aps3eIdentityTest(unittest.TestCase):
 
     def test_versioned_java_vm_handoff_precedes_activity_jni_fallback(self):
         self.assertIn('"lucent_native_adapter_set_java_vm"', HOST_HEADER)
-        self.assertIn("LUCENT_NATIVE_ADAPTER_JAVA_VM_VERSION 1u", HOST_HEADER)
+        self.assertIn("EMUFUSION_NATIVE_ADAPTER_JAVA_VM_VERSION 1u", HOST_HEADER)
         setter = HOST.index("setter_symbol = dlsym")
         fallback = HOST.index('on_load_symbol = dlsym(library, "JNI_OnLoad")')
         self.assertLess(setter, fallback)

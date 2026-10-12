@@ -1,9 +1,9 @@
-#include "include/lucent_android_gles_backend.h"
+#include "include/emufusion_android_gles_backend.h"
 #include "include/libretro.h"
-#include "include/lucent_presentation_resume.h"
+#include "include/emufusion_presentation_resume.h"
 
 #if !defined(__ANDROID__)
-#error "lucent_android_gles_backend.c is Android-only"
+#error "emufusion_android_gles_backend.c is Android-only"
 #endif
 
 #include <EGL/egl.h>
@@ -21,12 +21,12 @@
 #include <string.h>
 #include <time.h>
 
-typedef struct lucent_gles_resume_frame {
+typedef struct emufusion_gles_resume_frame {
     EGLuint64KHR id;
     bool pending;
-} lucent_gles_resume_frame;
+} emufusion_gles_resume_frame;
 
-typedef struct lucent_gles_resume_warmup {
+typedef struct emufusion_gles_resume_warmup {
     bool required;
     bool collecting;
     unsigned submitted;
@@ -34,17 +34,17 @@ typedef struct lucent_gles_resume_warmup {
     EGLnsecsANDROID interval_ns;
     PFNEGLGETNEXTFRAMEIDANDROIDPROC next_id;
     PFNEGLGETFRAMETIMESTAMPSANDROIDPROC timestamps;
-    lucent_gles_resume_frame frames[16];
-    lucent_presentation_resume cadence;
-} lucent_gles_resume_warmup;
+    emufusion_gles_resume_frame frames[16];
+    emufusion_presentation_resume cadence;
+} emufusion_gles_resume_warmup;
 
-struct lucent_android_gles_backend {
+struct emufusion_android_gles_backend {
     EGLDisplay display;
     EGLConfig config;
     EGLContext context;
     EGLSurface surface;
     ANativeWindow *window;
-    lucent_retro_host *host;
+    emufusion_retro_host *host;
     pthread_t render_thread;
     bool render_thread_set;
     unsigned max_major;
@@ -72,7 +72,7 @@ struct lucent_android_gles_backend {
     float presentation_aspect;
     uint64_t presented_sequence;
     bool has_presented_game_frame;
-    lucent_gles_resume_warmup resume_warmup;
+    emufusion_gles_resume_warmup resume_warmup;
     bool fg_timestamp_enabled;
     bool direct_timestamp_bypass_logged;
     /* SurfaceTexture.getTimestamp() is only a source-timeline timestamp when
@@ -102,11 +102,11 @@ struct lucent_android_gles_backend {
 };
 
 enum {
-    LUCENT_GLES_PRESENTATION_UNKNOWN = LUCENT_ANDROID_GLES_PRESENT_AUTO,
-    LUCENT_GLES_PRESENTATION_FRONTEND_FBO =
-            LUCENT_ANDROID_GLES_PRESENT_FRONTEND_FBO,
-    LUCENT_GLES_PRESENTATION_DIRECT_WINDOW =
-            LUCENT_ANDROID_GLES_PRESENT_DIRECT_WINDOW
+    EMUFUSION_GLES_PRESENTATION_UNKNOWN = EMUFUSION_ANDROID_GLES_PRESENT_AUTO,
+    EMUFUSION_GLES_PRESENTATION_FRONTEND_FBO =
+            EMUFUSION_ANDROID_GLES_PRESENT_FRONTEND_FBO,
+    EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW =
+            EMUFUSION_ANDROID_GLES_PRESENT_DIRECT_WINDOW
 };
 
 static const GLubyte framebuffer_sentinel[4] = {23u, 179u, 241u, 255u};
@@ -124,12 +124,12 @@ static void set_error(char *buffer, size_t size, const char *format, ...) {
     va_end(arguments);
 }
 
-static bool on_render_thread(const lucent_android_gles_backend *backend) {
+static bool on_render_thread(const emufusion_android_gles_backend *backend) {
     return backend && backend->render_thread_set &&
             pthread_equal(backend->render_thread, pthread_self());
 }
 
-static bool claim_render_thread(lucent_android_gles_backend *backend,
+static bool claim_render_thread(emufusion_android_gles_backend *backend,
                                 char *error, size_t error_size) {
     if (!backend) {
         set_error(error, error_size, "GLES backend is required");
@@ -147,8 +147,8 @@ static bool claim_render_thread(lucent_android_gles_backend *backend,
     return true;
 }
 
-bool lucent_android_gles_set_fg_timestamp(
-        lucent_android_gles_backend *backend, bool enabled,
+bool emufusion_android_gles_set_fg_timestamp(
+        emufusion_android_gles_backend *backend, bool enabled,
         char *error, size_t error_size) {
     if (!claim_render_thread(backend, error, error_size)) return false;
     backend->fg_timestamp_enabled = enabled;
@@ -160,7 +160,7 @@ bool lucent_android_gles_set_fg_timestamp(
     return true;
 }
 
-static bool choose_config(lucent_android_gles_backend *backend,
+static bool choose_config(emufusion_android_gles_backend *backend,
                           unsigned major, unsigned depth, unsigned stencil,
                           EGLConfig *config, char *error, size_t error_size) {
     EGLint count = 0;
@@ -218,7 +218,7 @@ static void parse_gles_version(const char *version, unsigned fallback_major,
     *minor = parsed_major ? parsed_minor : 0;
 }
 
-static bool probe_context(lucent_android_gles_backend *backend,
+static bool probe_context(emufusion_android_gles_backend *backend,
                           unsigned requested_major, unsigned requested_minor,
                           unsigned *actual_major, unsigned *actual_minor) {
     EGLConfig config = NULL;
@@ -251,8 +251,8 @@ fail:
 }
 
 static uintptr_t current_framebuffer(void *userdata) {
-    lucent_android_gles_backend *backend =
-            (lucent_android_gles_backend *)userdata;
+    emufusion_android_gles_backend *backend =
+            (emufusion_android_gles_backend *)userdata;
     uintptr_t result;
     /* Some valid hardware cores (notably PPSSPP) ask for the frontend FBO
      * while configuring a deferred render target, before that worker has made
@@ -264,10 +264,10 @@ static uintptr_t current_framebuffer(void *userdata) {
     if (!backend) return 0;
     result = (!backend->host || backend->surface == EGL_NO_SURFACE ||
             backend->configured_presentation_path ==
-                    LUCENT_GLES_PRESENTATION_DIRECT_WINDOW) ?
+                    EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW) ?
             0 : (uintptr_t)backend->framebuffer;
     if (backend->framebuffer_callback_diagnostics < 4u) {
-        __android_log_print(ANDROID_LOG_INFO, "LucentGlesBackend",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionGlesBackend",
                 "frontend framebuffer callback value=%lu policy=%u "
                 "surface=%s renderThread=%s",
                 (unsigned long)result,
@@ -279,7 +279,7 @@ static uintptr_t current_framebuffer(void *userdata) {
     return result;
 }
 
-static void abandon_framebuffer(lucent_android_gles_backend *backend) {
+static void abandon_framebuffer(emufusion_android_gles_backend *backend) {
     if (!backend) return;
     backend->framebuffer = 0;
     backend->color_texture = 0;
@@ -304,7 +304,7 @@ static void abandon_framebuffer(lucent_android_gles_backend *backend) {
     backend->content_source_height = 0;
 }
 
-static void delete_framebuffer(lucent_android_gles_backend *backend) {
+static void delete_framebuffer(emufusion_android_gles_backend *backend) {
     if (!backend) return;
     if (backend->depth_stencil_buffer)
         glDeleteRenderbuffers(1, &backend->depth_stencil_buffer);
@@ -327,12 +327,12 @@ static bool plausible_aspect(float aspect) {
  * directly into Android's window framebuffer leaves a native-size image in
  * one corner because the core is not responsible for presentation scaling.
  * Keep render capacity separate from the centered Android destination. */
-static bool create_framebuffer(lucent_android_gles_backend *backend,
-                               lucent_retro_host *host,
+static bool create_framebuffer(emufusion_android_gles_backend *backend,
+                               emufusion_retro_host *host,
                                unsigned window_width, unsigned window_height,
                                char *error, size_t error_size) {
-    lucent_retro_av_info av;
-    lucent_retro_hw_info hw;
+    emufusion_retro_av_info av;
+    emufusion_retro_hw_info hw;
     float aspect;
     GLenum attachment;
     GLenum format;
@@ -351,7 +351,7 @@ static bool create_framebuffer(lucent_android_gles_backend *backend,
         return false;
     }
     memset(&av, 0, sizeof(av));
-    if (!lucent_retro_get_av_info(host, &av)) {
+    if (!emufusion_retro_get_av_info(host, &av)) {
         set_error(error, error_size, "core AV geometry is unavailable");
         return false;
     }
@@ -385,9 +385,9 @@ static bool create_framebuffer(lucent_android_gles_backend *backend,
      * display scaling still uses the independent destination above. Other
      * cores retain their existing window-sized minimum contracts. */
     memset(&hw, 0, sizeof(hw));
-    if (lucent_retro_get_hw_info(host, &hw) &&
+    if (emufusion_retro_get_hw_info(host, &hw) &&
             (hw.source_timeline_policy &
-             LUCENT_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS) &&
+             EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS) &&
             (av.base_width || av.max_width) &&
             (av.base_height || av.max_height)) {
         backend->framebuffer_width = 0;
@@ -471,7 +471,7 @@ static bool create_framebuffer(lucent_android_gles_backend *backend,
 }
 
 static bool frontend_framebuffer_was_rendered(
-        const lucent_android_gles_backend *backend) {
+        const emufusion_android_gles_backend *backend) {
     static const unsigned sample_numerators[][2] = {
         {1, 1}, {1, 2}, {1, 3}, {2, 1}, {2, 2},
         {2, 3}, {3, 1}, {3, 2}, {3, 3}
@@ -505,7 +505,7 @@ static bool frontend_framebuffer_was_rendered(
  * completely untouched frame, 0 when content exists but no safe large bounds
  * can yet be established, and 1 for usable complete bounds. */
 static int probe_frontend_content_bounds(
-        lucent_android_gles_backend *backend,
+        emufusion_android_gles_backend *backend,
         unsigned *source_x, unsigned *source_y,
         unsigned *source_width, unsigned *source_height) {
     GLubyte *rows;
@@ -640,7 +640,7 @@ static int probe_frontend_content_bounds(
  * core callback.  Sampling at startup and again near three and six seconds
  * catches cores whose first video callback arrives after initial boot work,
  * while remaining bounded to three records per surface. */
-static void log_framebuffer_pixels(lucent_android_gles_backend *backend,
+static void log_framebuffer_pixels(emufusion_android_gles_backend *backend,
                                    uint64_t frame_sequence) {
     GLubyte window_pixel[4] = {0, 0, 0, 0};
     GLubyte frontend_pixel[4] = {0, 0, 0, 0};
@@ -666,7 +666,7 @@ static void log_framebuffer_pixels(lucent_android_gles_backend *backend,
         glReadPixels(frontend_x, frontend_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE,
                      frontend_pixel);
     }
-    __android_log_print(ANDROID_LOG_INFO, "LucentGlesBackend",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionGlesBackend",
             "pre-swap pixels sequence=%llu policy=%u path=%u window=%u,%u,%u,%u "
             "frontend=%u,%u,%u,%u fbo=%u",
             (unsigned long long)frame_sequence,
@@ -699,13 +699,13 @@ static void force_opaque_surface_alpha(void) {
     if (scissor_enabled) glEnable(GL_SCISSOR_TEST);
 }
 
-static lucent_retro_proc_address get_proc_address(void *userdata,
+static emufusion_retro_proc_address get_proc_address(void *userdata,
                                                   const char *symbol) {
-    lucent_android_gles_backend *backend =
-            (lucent_android_gles_backend *)userdata;
+    emufusion_android_gles_backend *backend =
+            (emufusion_android_gles_backend *)userdata;
     __eglMustCastToProperFunctionPointerType address;
     void *fallback;
-    lucent_retro_proc_address result = NULL;
+    emufusion_retro_proc_address result = NULL;
     if (!backend || !backend->host || !on_render_thread(backend) ||
             backend->surface == EGL_NO_SURFACE || !symbol) return NULL;
     address = eglGetProcAddress(symbol);
@@ -727,9 +727,9 @@ static void *resolve_egl_symbol(const char *symbol) {
 }
 
 static bool stamp_core_frame_timestamp(
-        lucent_android_gles_backend *backend,
+        emufusion_android_gles_backend *backend,
         uint64_t frame_sequence) {
-    lucent_retro_av_info av;
+    emufusion_retro_av_info av;
     long double offset_ns;
     EGLnsecsANDROID timestamp;
     void *address;
@@ -744,11 +744,11 @@ static bool stamp_core_frame_timestamp(
                    sizeof(backend->presentation_time_android));
     }
     if (!backend->presentation_time_android ||
-            !lucent_retro_get_av_info(backend->host, &av) ||
+            !emufusion_retro_get_av_info(backend->host, &av) ||
             !isfinite(av.frames_per_second) ||
             av.frames_per_second <= 1.0 || av.frames_per_second >= 1000.0) {
         if (!backend->timestamp_failure_logged) {
-            __android_log_print(ANDROID_LOG_ERROR, "LucentGlesBackend",
+            __android_log_print(ANDROID_LOG_ERROR, "EmuFusionGlesBackend",
                     "immutable source timestamp unavailable sequence=%llu fps=%.9f",
                     (unsigned long long)frame_sequence,
                     av.frames_per_second);
@@ -762,7 +762,7 @@ static bool stamp_core_frame_timestamp(
      * time by 1001 ppm, forcing the resampler to skip one generated frame
      * every second (GameCube/PSP runs, 2026-09-01).  A clock change re-bases
      * the timeline continuously from the last stamp below. */
-    stamp_hz = lucent_retro_synchronized_video_hz(backend->host);
+    stamp_hz = emufusion_retro_synchronized_video_hz(backend->host);
     if (!isfinite(stamp_hz) || stamp_hz <= 1.0 || stamp_hz >= 1000.0)
         stamp_hz = av.frames_per_second;
     if (!backend->timestamp_timeline_ready ||
@@ -797,7 +797,7 @@ static bool stamp_core_frame_timestamp(
     if (!backend->presentation_time_android(
             backend->display, backend->surface, timestamp)) {
         if (!backend->timestamp_failure_logged) {
-            __android_log_print(ANDROID_LOG_ERROR, "LucentGlesBackend",
+            __android_log_print(ANDROID_LOG_ERROR, "EmuFusionGlesBackend",
                     "eglPresentationTimeANDROID failed sequence=%llu error=0x%x",
                     (unsigned long long)frame_sequence, eglGetError());
             backend->timestamp_failure_logged = true;
@@ -808,10 +808,10 @@ static bool stamp_core_frame_timestamp(
     return true;
 }
 
-lucent_android_gles_backend *lucent_android_gles_create(
+emufusion_android_gles_backend *emufusion_android_gles_create(
         char *error, size_t error_size) {
-    lucent_android_gles_backend *backend =
-            (lucent_android_gles_backend *)calloc(1, sizeof(*backend));
+    emufusion_android_gles_backend *backend =
+            (emufusion_android_gles_backend *)calloc(1, sizeof(*backend));
     unsigned major = 0, minor = 0;
     unsigned gles3_major = 0, gles3_minor = 0;
     bool has_gles2;
@@ -828,19 +828,19 @@ lucent_android_gles_backend *lucent_android_gles_create(
             !eglBindAPI(EGL_OPENGL_ES_API)) {
         set_error(error, error_size, "cannot initialize Android EGL (0x%x)",
                   eglGetError());
-        lucent_android_gles_destroy(backend);
+        emufusion_android_gles_destroy(backend);
         return NULL;
     }
     has_gles2 = probe_context(backend, 2, 0, &major, &minor) && major >= 2;
     has_gles3 = probe_context(backend, 3, 0, &gles3_major, &gles3_minor) &&
             gles3_major >= 3;
     if (has_gles2)
-        backend->context_capabilities |= LUCENT_RETRO_HW_GLES2;
+        backend->context_capabilities |= EMUFUSION_RETRO_HW_GLES2;
     if (has_gles3) {
-        backend->context_capabilities |= LUCENT_RETRO_HW_GLES3;
+        backend->context_capabilities |= EMUFUSION_RETRO_HW_GLES3;
         backend->max_major = gles3_major;
         /* A GLES 3 context created with CLIENT_VERSION may expose 3.1/3.2,
-         * but Lucent advertises versioned GLES only after the exact KHR
+         * but EmuFusion advertises versioned GLES only after the exact KHR
          * major/minor creation path is independently proven. */
         backend->max_minor = 0;
         minor = gles3_minor;
@@ -848,20 +848,20 @@ lucent_android_gles_backend *lucent_android_gles_create(
                 (major > 3 || (major == 3 && minor >= 2))) {
             backend->max_major = major;
             backend->max_minor = minor;
-            backend->context_capabilities |= LUCENT_RETRO_HW_GLES_VERSION;
+            backend->context_capabilities |= EMUFUSION_RETRO_HW_GLES_VERSION;
         } else if (gles3_minor >= 1 &&
                 probe_context(backend, 3, 1, &major, &minor) &&
                 (major > 3 || (major == 3 && minor >= 1))) {
             backend->max_major = major;
             backend->max_minor = minor;
-            backend->context_capabilities |= LUCENT_RETRO_HW_GLES_VERSION;
+            backend->context_capabilities |= EMUFUSION_RETRO_HW_GLES_VERSION;
         }
     } else if (has_gles2) {
         backend->max_major = major;
         backend->max_minor = minor;
     } else {
         set_error(error, error_size, "Android EGL exposes no usable GLES2 context");
-        lucent_android_gles_destroy(backend);
+        emufusion_android_gles_destroy(backend);
         return NULL;
     }
     {
@@ -870,19 +870,19 @@ lucent_android_gles_backend *lucent_android_gles_create(
                                    &feature_config, NULL, 0);
         bool stencil = depth && choose_config(backend, backend->max_major,
                                               24, 8, &feature_config, NULL, 0);
-        if ((backend->context_capabilities & LUCENT_RETRO_HW_GLES2) &&
+        if ((backend->context_capabilities & EMUFUSION_RETRO_HW_GLES2) &&
                 backend->max_major >= 3) {
             depth = depth && choose_config(backend, 2, 16, 0,
                                            &feature_config, NULL, 0);
             stencil = stencil && choose_config(backend, 2, 24, 8,
                                                &feature_config, NULL, 0);
         }
-        if (depth) backend->feature_capabilities |= LUCENT_RETRO_HW_DEPTH;
-        if (stencil) backend->feature_capabilities |= LUCENT_RETRO_HW_STENCIL;
+        if (depth) backend->feature_capabilities |= EMUFUSION_RETRO_HW_DEPTH;
+        if (stencil) backend->feature_capabilities |= EMUFUSION_RETRO_HW_STENCIL;
     }
     /* RETRO_HW_RENDER's cache_context flag is a lifecycle policy request, not
      * a demand that an EGLContext survive an unrecoverable Android surface or
-     * driver loss. Lucent keeps the in-window Surface and its EGLContext alive
+     * driver loss. EmuFusion keeps the in-window Surface and its EGLContext alive
      * for the entire foreground game session. On an actual Surface replacement
      * it performs the required ordered context_destroy -> EGL teardown -> new
      * EGL context -> context_reset transition; on EGL_CONTEXT_LOST it omits the
@@ -890,10 +890,10 @@ lucent_android_gles_backend *lucent_android_gles_create(
      * complete libretro contract used by GLideN64/Mupen64Plus-Next, so advertise
      * cache_context while continuing to reject debug requests that the backend
      * does not implement. */
-    backend->feature_capabilities |= LUCENT_RETRO_HW_CACHE_CONTEXT;
+    backend->feature_capabilities |= EMUFUSION_RETRO_HW_CACHE_CONTEXT;
     /* Shared contexts are genuinely supported, not merely advertised. A core
      * that asks for them creates its own worker contexts from the display and
-     * context that are current on the render thread, so Lucent's obligations
+     * context that are current on the render thread, so EmuFusion's obligations
      * are: (1) choose a config that can back an off-screen worker surface --
      * choose_config always requests EGL_PBUFFER_BIT alongside EGL_WINDOW_BIT;
      * (2) keep one context current on the render thread while the core runs,
@@ -903,13 +903,13 @@ lucent_android_gles_backend *lucent_android_gles_create(
      * rebuild its worker contexts. Refusing this stalled Dolphin: with no
      * shader-compiler worker it fell back to draw-skipping and then blocked
      * inside retro_run waiting on a compile that could never be signalled. */
-    backend->feature_capabilities |= LUCENT_RETRO_HW_SHARED_CONTEXT;
+    backend->feature_capabilities |= EMUFUSION_RETRO_HW_SHARED_CONTEXT;
     return backend;
 }
 
-bool lucent_android_gles_get_host_options(
-        lucent_android_gles_backend *backend,
-        lucent_retro_hw_options *options,
+bool emufusion_android_gles_get_host_options(
+        emufusion_android_gles_backend *backend,
+        emufusion_retro_hw_options *options,
         char *error, size_t error_size) {
     if (!backend || !options || backend->display == EGL_NO_DISPLAY ||
             backend->host || backend->surface != EGL_NO_SURFACE) {
@@ -918,13 +918,13 @@ bool lucent_android_gles_get_host_options(
     }
     memset(options, 0, sizeof(*options));
     options->struct_size = sizeof(*options);
-    options->api_version = LUCENT_RETRO_HW_OPTIONS_VERSION;
+    options->api_version = EMUFUSION_RETRO_HW_OPTIONS_VERSION;
     options->context_capabilities = backend->context_capabilities;
     options->preferred_context =
-            (backend->context_capabilities & LUCENT_RETRO_HW_GLES_VERSION) ?
-                    LUCENT_RETRO_HW_GLES_VERSION :
-            (backend->context_capabilities & LUCENT_RETRO_HW_GLES3) ?
-                    LUCENT_RETRO_HW_GLES3 : LUCENT_RETRO_HW_GLES2;
+            (backend->context_capabilities & EMUFUSION_RETRO_HW_GLES_VERSION) ?
+                    EMUFUSION_RETRO_HW_GLES_VERSION :
+            (backend->context_capabilities & EMUFUSION_RETRO_HW_GLES3) ?
+                    EMUFUSION_RETRO_HW_GLES3 : EMUFUSION_RETRO_HW_GLES2;
     /* A matching depth/stencil config is required again during attach. */
     options->feature_capabilities = backend->feature_capabilities;
     options->max_gles_major = backend->max_major;
@@ -935,8 +935,8 @@ bool lucent_android_gles_get_host_options(
     return true;
 }
 
-bool lucent_android_gles_set_presentation_policy(
-        lucent_android_gles_backend *backend,
+bool emufusion_android_gles_set_presentation_policy(
+        emufusion_android_gles_backend *backend,
         unsigned policy,
         char *error, size_t error_size) {
     if (!backend || backend->host || backend->surface != EGL_NO_SURFACE) {
@@ -944,9 +944,9 @@ bool lucent_android_gles_set_presentation_policy(
                   "presentation policy requires an idle GLES backend");
         return false;
     }
-    if (policy != LUCENT_ANDROID_GLES_PRESENT_AUTO &&
-            policy != LUCENT_ANDROID_GLES_PRESENT_FRONTEND_FBO &&
-            policy != LUCENT_ANDROID_GLES_PRESENT_DIRECT_WINDOW) {
+    if (policy != EMUFUSION_ANDROID_GLES_PRESENT_AUTO &&
+            policy != EMUFUSION_ANDROID_GLES_PRESENT_FRONTEND_FBO &&
+            policy != EMUFUSION_ANDROID_GLES_PRESENT_DIRECT_WINDOW) {
         set_error(error, error_size, "unknown GLES presentation policy %u", policy);
         return false;
     }
@@ -955,8 +955,8 @@ bool lucent_android_gles_set_presentation_policy(
     return true;
 }
 
-bool lucent_android_gles_set_presentation_aspect(
-        lucent_android_gles_backend *backend,
+bool emufusion_android_gles_set_presentation_aspect(
+        emufusion_android_gles_backend *backend,
         float aspect,
         char *error, size_t error_size) {
     if (!backend) {
@@ -977,12 +977,12 @@ bool lucent_android_gles_set_presentation_aspect(
     return true;
 }
 
-bool lucent_android_gles_attach(
-        lucent_android_gles_backend *backend,
-        lucent_retro_host *host,
+bool emufusion_android_gles_attach(
+        emufusion_android_gles_backend *backend,
+        emufusion_retro_host *host,
         void *native_window,
         char *error, size_t error_size) {
-    lucent_retro_hw_info info;
+    emufusion_retro_hw_info info;
     EGLint visual_id = 0;
     unsigned major;
     unsigned minor;
@@ -999,7 +999,7 @@ bool lucent_android_gles_attach(
             set_error(error, error_size, "host and ANativeWindow are required");
         return false;
     }
-    if (!lucent_retro_get_hw_info(host, &info) || !info.negotiated ||
+    if (!emufusion_retro_get_hw_info(host, &info) || !info.negotiated ||
             info.context_ready ||
             (info.context_type != RETRO_HW_CONTEXT_OPENGLES2 &&
              info.context_type != RETRO_HW_CONTEXT_OPENGLES3 &&
@@ -1055,27 +1055,27 @@ bool lucent_android_gles_attach(
     window_width = (unsigned)ANativeWindow_getWidth(backend->window);
     window_height = (unsigned)ANativeWindow_getHeight(backend->window);
     direct_fit_required = backend->configured_presentation_path ==
-            LUCENT_GLES_PRESENTATION_DIRECT_WINDOW &&
+            EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW &&
             plausible_aspect(backend->presentation_aspect) && window_height &&
             fabsf(backend->presentation_aspect -
                     (float)window_width / (float)window_height) > 0.001f;
     if ((backend->configured_presentation_path !=
-            LUCENT_GLES_PRESENTATION_DIRECT_WINDOW || direct_fit_required) &&
+            EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW || direct_fit_required) &&
             !create_framebuffer(
                     backend, host, window_width, window_height,
                     error, error_size)) goto fail;
     if (direct_fit_required)
         glViewport(0, 0, (GLsizei)window_width, (GLsizei)window_height);
-    if (!lucent_retro_supply_output_size(
+    if (!emufusion_retro_supply_output_size(
             host, window_width, window_height,
             error, error_size)) goto fail;
-    if (!lucent_retro_hw_context_reset(host, error, error_size)) goto fail;
-    if (!lucent_retro_supply_frontend_framebuffer(
+    if (!emufusion_retro_hw_context_reset(host, error, error_size)) goto fail;
+    if (!emufusion_retro_supply_frontend_framebuffer(
             host, backend->configured_presentation_path ==
-                    LUCENT_GLES_PRESENTATION_DIRECT_WINDOW ?
+                    EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW ?
                     0u : backend->framebuffer,
             error, error_size)) goto fail;
-    __android_log_print(ANDROID_LOG_INFO, "LucentGlesBackend",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionGlesBackend",
             "hardware context reset complete type=%u GLES=%u.%u depth=%u stencil=%u "
             "cache=%u presentation=%u surface=%dx%d",
             info.context_type, backend->active_major, backend->active_minor,
@@ -1107,7 +1107,7 @@ fail:
  * The core still receives framebuffer zero, so this changes presentation only
  * and does not alter its rendering contract. */
 static bool fit_direct_window_frame(
-        lucent_android_gles_backend *backend, const GLint core_viewport[4],
+        emufusion_android_gles_backend *backend, const GLint core_viewport[4],
         char *error, size_t error_size) {
     GLfloat prior_clear[4];
     GLboolean prior_mask[4];
@@ -1191,8 +1191,8 @@ static bool fit_direct_window_frame(
     return true;
 }
 
-bool lucent_android_gles_make_current(
-        lucent_android_gles_backend *backend,
+bool emufusion_android_gles_make_current(
+        emufusion_android_gles_backend *backend,
         char *error, size_t error_size) {
     if (!claim_render_thread(backend, error, error_size) || !backend->host ||
             backend->surface == EGL_NO_SURFACE || backend->context == EGL_NO_CONTEXT) {
@@ -1204,7 +1204,7 @@ bool lucent_android_gles_make_current(
                         backend->context)) {
         EGLint failure = eglGetError();
         if (failure == EGL_CONTEXT_LOST) {
-            lucent_retro_hw_context_lost(backend->host, NULL, 0);
+            emufusion_retro_hw_context_lost(backend->host, NULL, 0);
             set_error(error, error_size,
                       "Android EGL context lost while making GLES current");
         } else {
@@ -1222,14 +1222,14 @@ static int64_t resume_monotonic_ns(void) {
     return (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
 }
 
-static void finish_resume_warmup(lucent_android_gles_backend *backend,
+static void finish_resume_warmup(emufusion_android_gles_backend *backend,
                                   const char *reason) {
-    lucent_gles_resume_warmup *warmup = &backend->resume_warmup;
+    emufusion_gles_resume_warmup *warmup = &backend->resume_warmup;
     if (warmup->collecting)
         eglSurfaceAttrib(backend->display, backend->surface,
                          EGL_TIMESTAMPS_ANDROID, EGL_FALSE);
     if (warmup->required && reason)
-        __android_log_print(ANDROID_LOG_INFO, "LucentGLESResume",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionGLESResume",
                 "warmup=%s submitted=%u elapsedMs=%.3f intervalNs=%lld",
                 reason, warmup->submitted,
                 warmup->started_ns ? (resume_monotonic_ns() - warmup->started_ns) / 1e6 : 0.0,
@@ -1237,14 +1237,14 @@ static void finish_resume_warmup(lucent_android_gles_backend *backend,
     memset(warmup, 0, sizeof(*warmup));
 }
 
-bool lucent_android_gles_prepare_resume(
-        lucent_android_gles_backend *backend, bool *ready,
+bool emufusion_android_gles_prepare_resume(
+        emufusion_android_gles_backend *backend, bool *ready,
         char *error, size_t error_size) {
     if (ready) *ready = false;
     if (!ready || !claim_render_thread(backend, error, error_size)) return false;
-    lucent_gles_resume_warmup *warmup = &backend->resume_warmup;
+    emufusion_gles_resume_warmup *warmup = &backend->resume_warmup;
     if (!warmup->required) { *ready = true; return true; }
-    if (!lucent_android_gles_make_current(backend, error, error_size)) return false;
+    if (!emufusion_android_gles_make_current(backend, error, error_size)) return false;
     if (backend->fg_timestamp_enabled) {
         finish_resume_warmup(backend, "fg-bypass");
         *ready = true;
@@ -1298,21 +1298,21 @@ bool lucent_android_gles_prepare_resume(
      * Failed/dropped IDs never block progress on newer, displayed frames. */
     unsigned first = warmup->submitted > 16 ? warmup->submitted - 16 : 0;
     for (unsigned i = first; i < warmup->submitted; ++i) {
-        lucent_gles_resume_frame *frame = &warmup->frames[i % 16];
+        emufusion_gles_resume_frame *frame = &warmup->frames[i % 16];
         if (!frame->pending) continue;
         EGLnsecsANDROID presented = EGL_TIMESTAMP_PENDING_ANDROID;
         bool ok = warmup->timestamps(backend->display, backend->surface,
                                     frame->id, 1, &name, &presented);
         if (ok && presented == EGL_TIMESTAMP_PENDING_ANDROID) continue;
         frame->pending = false;
-        if (ok && lucent_presentation_resume_observe(&warmup->cadence, frame->id,
+        if (ok && emufusion_presentation_resume_observe(&warmup->cadence, frame->id,
                 presented, resume_monotonic_ns(), warmup->interval_ns)) {
             finish_resume_warmup(backend, "physical-cadence-ready");
             *ready = true;
             return true;
         }
     }
-    lucent_gles_resume_frame *frame = &warmup->frames[warmup->submitted % 16];
+    emufusion_gles_resume_frame *frame = &warmup->frames[warmup->submitted % 16];
     if (!warmup->next_id(backend->display, backend->surface, &frame->id)) {
         finish_resume_warmup(backend, "frame-id-unavailable");
         *ready = true;
@@ -1340,7 +1340,7 @@ bool lucent_android_gles_prepare_resume(
         EGLint failure = eglGetError();
         finish_resume_warmup(backend, "swap-failed");
         if (failure == EGL_CONTEXT_LOST) {
-            lucent_retro_hw_context_lost(backend->host, NULL, 0);
+            emufusion_retro_hw_context_lost(backend->host, NULL, 0);
             set_error(error, error_size, "Android EGL context lost during resume warmup");
         } else set_error(error, error_size, "Android EGL resume warmup swap failed (0x%x)", failure);
         return false;
@@ -1351,10 +1351,10 @@ bool lucent_android_gles_prepare_resume(
 }
 
 static bool present_current_frame(
-        lucent_android_gles_backend *backend,
+        emufusion_android_gles_backend *backend,
         bool *presented,
         char *error, size_t error_size) {
-    lucent_retro_hw_info info;
+    emufusion_retro_hw_info info;
     unsigned source_width;
     unsigned source_height;
     GLint source_x = 0;
@@ -1367,9 +1367,9 @@ static bool present_current_frame(
     unsigned destination_width, destination_height;
     EGLint failure;
     if (presented) *presented = false;
-    if (!presented || !lucent_android_gles_make_current(backend, error, error_size))
+    if (!presented || !emufusion_android_gles_make_current(backend, error, error_size))
         return false;
-    if (!lucent_retro_get_hw_info(backend->host, &info) || !info.context_ready) {
+    if (!emufusion_retro_get_hw_info(backend->host, &info) || !info.context_ready) {
         set_error(error, error_size, "core hardware context is not ready");
         return false;
     }
@@ -1379,11 +1379,11 @@ static bool present_current_frame(
     destination_width = backend->destination_width;
     destination_height = backend->destination_height;
     log_framebuffer_pixels(backend, info.frame_sequence);
-    if (backend->presentation_path == LUCENT_GLES_PRESENTATION_UNKNOWN) {
+    if (backend->presentation_path == EMUFUSION_GLES_PRESENTATION_UNKNOWN) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, backend->framebuffer);
         backend->presentation_path = frontend_framebuffer_was_rendered(backend) ?
-                LUCENT_GLES_PRESENTATION_FRONTEND_FBO :
-                LUCENT_GLES_PRESENTATION_DIRECT_WINDOW;
+                EMUFUSION_GLES_PRESENTATION_FRONTEND_FBO :
+                EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW;
     }
     glGetIntegerv(GL_VIEWPORT, core_viewport);
     core_viewport_valid =
@@ -1416,7 +1416,7 @@ static bool present_current_frame(
      * Blitting the complete 1920x1080 allocation includes unwritten
      * padding and clips the game's right edge. Prefer the actual post-run
      * viewport when it is a valid origin-anchored region of our FBO. */
-    if (backend->presentation_path == LUCENT_GLES_PRESENTATION_FRONTEND_FBO &&
+    if (backend->presentation_path == EMUFUSION_GLES_PRESENTATION_FRONTEND_FBO &&
             core_viewport_valid) {
         source_width = (unsigned)core_viewport[2];
         source_height = (unsigned)core_viewport[3];
@@ -1439,10 +1439,10 @@ static bool present_current_frame(
     /* Patched cores can report the actual final VI copy without GPU readback.
      * Preserve its display-pixel proportions while fitting the active rectangle,
      * rather than forcing a smaller active picture back into nominal 4:3. */
-    if (backend->presentation_path == LUCENT_GLES_PRESENTATION_FRONTEND_FBO &&
+    if (backend->presentation_path == EMUFUSION_GLES_PRESENTATION_FRONTEND_FBO &&
             (info.source_timeline_policy &
-             LUCENT_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS) &&
-            lucent_retro_get_hw_active_rect(backend->host, active_rect) &&
+             EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS) &&
+            emufusion_retro_get_hw_active_rect(backend->host, active_rect) &&
             active_rect[5] <= backend->framebuffer_width &&
             active_rect[6] <= backend->framebuffer_height &&
             backend->content_width && backend->content_height) {
@@ -1474,9 +1474,9 @@ static bool present_current_frame(
         }
     }
     if (!has_active_rect &&
-            backend->presentation_path == LUCENT_GLES_PRESENTATION_FRONTEND_FBO &&
+            backend->presentation_path == EMUFUSION_GLES_PRESENTATION_FRONTEND_FBO &&
             (info.source_timeline_policy &
-                    LUCENT_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS)) {
+                    EMUFUSION_RETRO_SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS)) {
         if (backend->content_bounds_stable_count < 4u &&
                 backend->content_bounds_probe_count < 600u) {
             unsigned detected_x = 0;
@@ -1503,7 +1503,7 @@ static bool present_current_frame(
                 backend->content_source_width = detected_width;
                 backend->content_source_height = detected_height;
                 if (changed) {
-                    __android_log_print(ANDROID_LOG_INFO, "LucentGlesBackend",
+                    __android_log_print(ANDROID_LOG_INFO, "EmuFusionGlesBackend",
                             "title-dynamic source bounds=%u,%u,%ux%u "
                             "allocation=%ux%u probe=%u",
                             detected_x, detected_y, detected_width,
@@ -1537,12 +1537,12 @@ static bool present_current_frame(
     }
     if (!backend->presentation_geometry_logged) {
         bool source_padding = backend->presentation_path ==
-                LUCENT_GLES_PRESENTATION_FRONTEND_FBO &&
+                EMUFUSION_GLES_PRESENTATION_FRONTEND_FBO &&
                 core_viewport[0] == 0 && core_viewport[1] == 0 &&
                 core_viewport[2] > 0 && core_viewport[3] > 0 &&
                 (source_width > (unsigned)core_viewport[2] ||
                  source_height > (unsigned)core_viewport[3]);
-        __android_log_print(ANDROID_LOG_INFO, "LucentGlesBackend",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionGlesBackend",
                 "presentation geometry source=%d,%d,%ux%u viewport=%d,%d,%dx%d "
                 "fbo=%ux%u destination=%d,%d,%ux%u sourcePadding=%u",
                 source_x, source_y, source_width, source_height,
@@ -1553,7 +1553,7 @@ static bool present_current_frame(
                 destination_height, source_padding ? 1u : 0u);
         backend->presentation_geometry_logged = true;
     }
-    if (backend->presentation_path == LUCENT_GLES_PRESENTATION_FRONTEND_FBO) {
+    if (backend->presentation_path == EMUFUSION_GLES_PRESENTATION_FRONTEND_FBO) {
         GLfloat prior_clear[4];
         GLboolean prior_mask[4];
         GLboolean scissor_enabled;
@@ -1611,7 +1611,7 @@ static bool present_current_frame(
         if (read_status != GL_FRAMEBUFFER_COMPLETE ||
                 draw_status != GL_FRAMEBUFFER_COMPLETE ||
                 blit_error != GL_NO_ERROR) {
-            __android_log_print(ANDROID_LOG_ERROR, "LucentGlesBackend",
+            __android_log_print(ANDROID_LOG_ERROR, "EmuFusionGlesBackend",
                     "frontend blit failed readStatus=0x%x drawStatus=0x%x "
                     "glError=0x%x scissorWasEnabled=%u",
                     read_status, draw_status, blit_error,
@@ -1623,7 +1623,7 @@ static bool present_current_frame(
             return false;
         }
         if (backend->framebuffer_blit_diagnostics < 3u) {
-            __android_log_print(ANDROID_LOG_INFO, "LucentGlesBackend",
+            __android_log_print(ANDROID_LOG_INFO, "EmuFusionGlesBackend",
                     "frontend blit complete sequence=%llu scissorWasEnabled=%u "
                     "readStatus=0x%x drawStatus=0x%x preexistingGlError=0x%x "
                     "glError=0x%x "
@@ -1639,7 +1639,7 @@ static bool present_current_frame(
             backend->framebuffer_blit_diagnostics++;
         }
     }
-    if (backend->presentation_path == LUCENT_GLES_PRESENTATION_DIRECT_WINDOW &&
+    if (backend->presentation_path == EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW &&
             !fit_direct_window_frame(backend, core_viewport,
                                      error, error_size)) return false;
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1650,14 +1650,14 @@ static bool present_current_frame(
     if (backend->fg_timestamp_enabled) {
         stamp_core_frame_timestamp(backend, info.frame_sequence);
     } else if (!backend->direct_timestamp_bypass_logged) {
-        __android_log_print(ANDROID_LOG_INFO, "LucentGLES",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionGLES",
                 "Direct surface: FG source timestamp bypassed");
         backend->direct_timestamp_bypass_logged = true;
     }
     if (!eglSwapBuffers(backend->display, backend->surface)) {
         failure = eglGetError();
         if (failure == EGL_CONTEXT_LOST) {
-            lucent_retro_hw_context_lost(backend->host, NULL, 0);
+            emufusion_retro_hw_context_lost(backend->host, NULL, 0);
             set_error(error, error_size, "Android EGL context lost during swap");
         } else {
             set_error(error, error_size, "Android EGL swap failed (0x%x)", failure);
@@ -1670,14 +1670,14 @@ static bool present_current_frame(
     return true;
 }
 
-bool lucent_android_gles_present_if_ready(
-        lucent_android_gles_backend *backend, bool *presented,
+bool emufusion_android_gles_present_if_ready(
+        emufusion_android_gles_backend *backend, bool *presented,
         char *error, size_t error_size) {
     GLint prior_read = 0;
     GLint prior_draw = 0;
-    lucent_retro_hw_info info;
+    emufusion_retro_hw_info info;
     if (presented) *presented = false;
-    if (!presented || !lucent_android_gles_make_current(backend, error, error_size))
+    if (!presented || !emufusion_android_gles_make_current(backend, error, error_size))
         return false;
     /* The core owns this context between presents. Dolphin caches its FBO
      * binding, so leaving framebuffer zero bound redirects its next draws
@@ -1686,7 +1686,7 @@ bool lucent_android_gles_present_if_ready(
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prior_read);
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prior_draw);
     const bool result = present_current_frame(backend, presented, error, error_size);
-    if (lucent_retro_get_hw_info(backend->host, &info) && info.context_ready) {
+    if (emufusion_retro_get_hw_info(backend->host, &info) && info.context_ready) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prior_read);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prior_draw);
     }
@@ -1694,15 +1694,15 @@ bool lucent_android_gles_present_if_ready(
 }
 
 /* A resize notification keeps the same live Android Surface; only its buffer
- * geometry changed. Rebuild Lucent-owned presentation state inside the
+ * geometry changed. Rebuild EmuFusion-owned presentation state inside the
  * existing EGL context. This deliberately performs no core
  * context_destroy/context_reset and no EGL teardown: a duplicate attach or
  * resize notification must never pay the destructive recreate price, which
  * double-resets cores such as Mupen64Plus-Next and crashes before gameplay
  * (2026-08-21 F-Zero X evidence). Genuine surface replacement still goes
  * through detach -> attach below. */
-bool lucent_android_gles_surface_resized(
-        lucent_android_gles_backend *backend,
+bool emufusion_android_gles_surface_resized(
+        emufusion_android_gles_backend *backend,
         char *error, size_t error_size) {
     unsigned window_width;
     unsigned window_height;
@@ -1713,49 +1713,49 @@ bool lucent_android_gles_surface_resized(
         return false;
     }
     if (!claim_render_thread(backend, error, error_size)) return false;
-    if (!lucent_android_gles_make_current(backend, error, error_size)) return false;
+    if (!emufusion_android_gles_make_current(backend, error, error_size)) return false;
     window_width = (unsigned)ANativeWindow_getWidth(backend->window);
     window_height = (unsigned)ANativeWindow_getHeight(backend->window);
     direct_fit_required = backend->configured_presentation_path ==
-            LUCENT_GLES_PRESENTATION_DIRECT_WINDOW &&
+            EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW &&
             plausible_aspect(backend->presentation_aspect) && window_height &&
             fabsf(backend->presentation_aspect -
                     (float)window_width / (float)window_height) > 0.001f;
     delete_framebuffer(backend);
     if ((backend->configured_presentation_path !=
-            LUCENT_GLES_PRESENTATION_DIRECT_WINDOW || direct_fit_required) &&
+            EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW || direct_fit_required) &&
             !create_framebuffer(
                     backend, backend->host, window_width, window_height,
                     error, error_size)) return false;
     if (direct_fit_required)
         glViewport(0, 0, (GLsizei)window_width, (GLsizei)window_height);
-    if (!lucent_retro_supply_output_size(
+    if (!emufusion_retro_supply_output_size(
             backend->host, window_width, window_height,
             error, error_size)) return false;
-    return lucent_retro_supply_frontend_framebuffer(
+    return emufusion_retro_supply_frontend_framebuffer(
             backend->host,
             backend->configured_presentation_path ==
-                    LUCENT_GLES_PRESENTATION_DIRECT_WINDOW ?
+                    EMUFUSION_GLES_PRESENTATION_DIRECT_WINDOW ?
                     0u : backend->framebuffer,
             error, error_size);
 }
 
-bool lucent_android_gles_detach(
-        lucent_android_gles_backend *backend,
+bool emufusion_android_gles_detach(
+        emufusion_android_gles_backend *backend,
         char *error, size_t error_size) {
     bool ok = true;
     if (!claim_render_thread(backend, error, error_size)) return false;
-    lucent_android_gles_set_fg_timestamp(backend, false, NULL, 0);
+    emufusion_android_gles_set_fg_timestamp(backend, false, NULL, 0);
     finish_resume_warmup(backend, "cancelled");
     if (!backend->host) return true;
-    if (!lucent_android_gles_make_current(backend, error, error_size)) {
-        lucent_retro_hw_context_lost(backend->host, NULL, 0);
+    if (!emufusion_android_gles_make_current(backend, error, error_size)) {
+        emufusion_retro_hw_context_lost(backend->host, NULL, 0);
         abandon_framebuffer(backend);
         ok = false;
     } else {
-        if (!lucent_retro_hw_context_destroy(backend->host, error, error_size))
+        if (!emufusion_retro_hw_context_destroy(backend->host, error, error_size))
             ok = false;
-        if (!lucent_retro_supply_frontend_framebuffer(
+        if (!emufusion_retro_supply_frontend_framebuffer(
                 backend->host, 0, error, error_size)) ok = false;
     }
     if (eglGetCurrentContext() == backend->context)
@@ -1777,9 +1777,9 @@ bool lucent_android_gles_detach(
     return ok;
 }
 
-bool lucent_android_gles_get_info(
-        const lucent_android_gles_backend *backend,
-        lucent_android_gles_info *info) {
+bool emufusion_android_gles_get_info(
+        const emufusion_android_gles_backend *backend,
+        emufusion_android_gles_info *info) {
     if (!backend || !info) return false;
     memset(info, 0, sizeof(*info));
     info->display_ready = backend->display != EGL_NO_DISPLAY;
@@ -1796,13 +1796,13 @@ bool lucent_android_gles_get_info(
     return true;
 }
 
-void lucent_android_gles_destroy(lucent_android_gles_backend *backend) {
+void emufusion_android_gles_destroy(emufusion_android_gles_backend *backend) {
     if (!backend) return;
     /* A wrong-thread destructor cannot safely invalidate callback userdata or
      * terminate a display that is current elsewhere. Fail closed by retaining
      * the backend; integration must return to the render thread and detach. */
     if (backend->host && !on_render_thread(backend)) return;
-    if (backend->host) lucent_android_gles_detach(backend, NULL, 0);
+    if (backend->host) emufusion_android_gles_detach(backend, NULL, 0);
     if (backend->display != EGL_NO_DISPLAY) eglTerminate(backend->display);
     free(backend);
 }

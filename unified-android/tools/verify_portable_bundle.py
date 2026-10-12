@@ -27,8 +27,8 @@ REQUIRED = {
 }
 PHASES = {1: phase1, 2: phase2, 3: phase3}
 SUPPORT_LIBRARIES = (
-    'liblucent_libretro_host.so', 'liblucent_vulkan_host.so',
-    'liblucent_native_adapter_host.so', 'libhook_impl.so', 'libmain_hook.so',
+    'libemufusion_libretro_host.so', 'libemufusion_vulkan_host.so',
+    'libemufusion_native_adapter_host.so', 'libhook_impl.so', 'libmain_hook.so',
 )
 
 def rows(archive, asset, key, id_key):

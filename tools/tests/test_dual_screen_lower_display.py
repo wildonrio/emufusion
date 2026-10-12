@@ -317,7 +317,7 @@ class LowerScreenRoutingTest(unittest.TestCase):
 
     def test_vulkan_ds_crop_accounts_for_image_coordinate_origin(self):
         backend = (ROOT / "unified-android" / "native" /
-                   "lucent_android_vulkan_backend.c").read_text(encoding="utf-8")
+                   "emufusion_android_vulkan_backend.c").read_text(encoding="utf-8")
         resolver = body(backend, "static bool resolve_source_region(",
                         "static bool record_present_commands_for_target(")
         # The Vulkan transfer image follows the software path: top-first, so
@@ -325,14 +325,14 @@ class LowerScreenRoutingTest(unittest.TestCase):
         # crop y=0.  (melonds-ds is pinned to the software renderer; this
         # path is unverified on a device.)
         self.assertIn(
-            "region->y = crop == LUCENT_SCREEN_BOTTOM ? source_height / 2u : 0u;",
+            "region->y = crop == EMUFUSION_SCREEN_BOTTOM ? source_height / 2u : 0u;",
             resolver,
         )
         # Azahar uses an independently reviewed horizontal SideScreen split
         # and must not inherit the DS-specific vertical correction.
         self.assertIn("if (backend->secondary_clockwise_quarter_turn)", resolver)
         self.assertIn(
-            "region->x = crop == LUCENT_SCREEN_BOTTOM ? top_width : 0u;",
+            "region->x = crop == EMUFUSION_SCREEN_BOTTOM ? top_width : 0u;",
             resolver,
         )
 
@@ -371,7 +371,7 @@ class ThreeDsLowerScreenRotationTest(unittest.TestCase):
         cls.router = ROUTER.read_text(encoding="utf-8")
         cls.session = PPSSPP.read_text(encoding="utf-8")
         cls.backend = (ROOT / "unified-android" / "native" /
-                       "lucent_android_vulkan_backend.c").read_text(encoding="utf-8")
+                       "emufusion_android_vulkan_backend.c").read_text(encoding="utf-8")
 
     def test_3ds_side_crop_selects_the_clockwise_android_layer(self):
         predicate = body(self.router,
@@ -393,7 +393,7 @@ class ThreeDsLowerScreenRotationTest(unittest.TestCase):
                     "private void leaveGameplaySurface")
         self.assertIn("showClockwiseGameplaySurface();", show)
         self.assertIn('"3ds".equals(requestedSystem)', self.router)
-        self.assertIn("LUCENT_SCREEN_BOTTOM,\n                "
+        self.assertIn("EMUFUSION_SCREEN_BOTTOM,\n                "
                       "backend->secondary_clockwise_quarter_turn,", self.backend)
 
     def test_clockwise_surface_rotates_the_buffer_not_only_the_view(self):
@@ -426,7 +426,7 @@ class ThreeDsLowerScreenRotationTest(unittest.TestCase):
         self.assertIn("source_height * 3u", resolver)
         self.assertIn("source_width * 5u", resolver)
         self.assertIn("source_width - top_width", resolver)
-        self.assertIn("lucent_surface_fit(destination_extent.width,", present)
+        self.assertIn("emufusion_surface_fit(destination_extent.width,", present)
         self.assertIn("destination_extent.height, destination_extent.height,", present)
         self.assertIn("destination_extent.width, aspect, &fitted)", present)
         self.assertIn("destination_width = fitted.width;", present)
@@ -436,10 +436,10 @@ class ThreeDsLowerScreenRotationTest(unittest.TestCase):
         # it must not rotate or exchange the ordinary source blit's axes.
         self.assertIn("blit.srcOffsets[0].x = (int32_t)source_x;", present)
         self.assertIn("blit.srcOffsets[0].y = (int32_t)source_y;", present)
-        self.assertIn("LUCENT_SCREEN_BOTTOM,\n                "
+        self.assertIn("EMUFUSION_SCREEN_BOTTOM,\n                "
                       "backend->secondary_clockwise_quarter_turn,", self.backend)
         primary = body(self.backend, "static bool record_present_commands(",
-                       "lucent_android_vulkan_backend *lucent_android_vulkan_create(")
+                       "emufusion_android_vulkan_backend *emufusion_android_vulkan_create(")
         self.assertIn("source_width, source_height, crop, false,", primary)
         secondary_swapchain = body(
             self.backend, "static bool create_secondary_swapchain(",

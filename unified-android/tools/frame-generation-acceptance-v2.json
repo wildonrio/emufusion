@@ -116,7 +116,7 @@
       "summary": "All native adapters are labelled trusted 60-Hz producers, although aPS3e has no declared/paced clock or measured-FPS hook.",
       "sources": [
         {"path": "unified-android/src/com/thorium/preview/game/InWindowGameHost.java", "line": 1861},
-        {"path": "unified-android/native/lucent_native_adapter_host.c", "line": 562},
+        {"path": "unified-android/native/emufusion_native_adapter_host.c", "line": 562},
         {"path": "engines/patches/aps3e-lucent-adapter.cpp", "line": 365}
       ]
     },

@@ -67,7 +67,7 @@ class DirectCadenceNormalizationTest(unittest.TestCase):
 
     def test_steady_state_video_transfer_uses_three_owned_buffers_without_jni_alloc(self):
         java = self.read("unified-android/src/com/thorium/preview/LibretroHost.java")
-        jni = self.read("unified-android/native/lucent_libretro_jni.c")
+        jni = self.read("unified-android/native/emufusion_libretro_jni.c")
         session = self.read(
             "unified-android/src/com/thorium/preview/game/LibretroEngineSession.java")
         self.assertIn("VIDEO_BUFFER_POOL_SIZE = 3", java)

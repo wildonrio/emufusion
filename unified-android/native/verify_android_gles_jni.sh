@@ -6,8 +6,8 @@ SDK_DIR=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/Users/tyleryoung/Code/cemu/Cemu-0.5
 NDK_VERSION=${NDK_VERSION:-27.0.12077973}
 NDK_DIR=${ANDROID_NDK_ROOT:-$SDK_DIR/ndk/$NDK_VERSION}
 JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}
-ANDROID_JAR=${LUCENT_ANDROID_JAR:-$SDK_DIR/platforms/android-35/android.jar}
-ABI=${LUCENT_NATIVE_ABI:-arm64-v8a}
+ANDROID_JAR=${EMUFUSION_ANDROID_JAR:-$SDK_DIR/platforms/android-35/android.jar}
+ABI=${EMUFUSION_NATIVE_ABI:-arm64-v8a}
 CHECK_DIR=$(mktemp -d)
 trap 'rm -rf "$CHECK_DIR"' EXIT INT TERM
 
@@ -17,13 +17,13 @@ case "$(uname -s)" in
     *) printf 'Unsupported JNI verification host\n' >&2; exit 1 ;;
 esac
 
-if [ -n "${LUCENT_GLES_VERIFY_LIBRARY:-}" ]; then
+if [ -n "${EMUFUSION_GLES_VERIFY_LIBRARY:-}" ]; then
     # Qualification candidates can verify the Java/native contract without
     # rebuilding or replacing the unrelated normal staging artifacts.
-    LIBRARY="$LUCENT_GLES_VERIFY_LIBRARY"
+    LIBRARY="$EMUFUSION_GLES_VERIFY_LIBRARY"
 else
     "$PROJECT_DIR/native/build.sh" >/dev/null
-    LIBRARY="$PROJECT_DIR/build/native/$ABI/liblucent_libretro_host.so"
+    LIBRARY="$PROJECT_DIR/build/native/$ABI/libemufusion_libretro_host.so"
 fi
 READELF="$NDK_DIR/toolchains/llvm/prebuilt/$HOST/bin/llvm-readelf"
 if [ ! -f "$ANDROID_JAR" ] || [ ! -x "$JAVA_HOME/bin/javac" ] ||

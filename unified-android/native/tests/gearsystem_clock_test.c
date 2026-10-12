@@ -1,5 +1,5 @@
 /* Execute the production load/runtime AV and PCM paths, not a formula copy. */
-#include "../lucent_libretro_host.c"
+#include "../emufusion_libretro_host.c"
 #include <assert.h>
 
 static double mock_fps = 60.0;
@@ -19,8 +19,8 @@ int main(void) {
     const char *version = "3c4cfcf54dfe9e36070815e76ee2bab9e754104f";
     const double video_clock = 3579545.0 / (228.0 * 262.0);
     const double pcm_clock = 807.0 * 3579545.0 / 65536.0;
-    lucent_retro_host host = {0};
-    lucent_retro_av_info result;
+    emufusion_retro_host host = {0};
+    emufusion_retro_av_info result;
     char error[256] = {0};
     host.system_info.library_name = "Gearsystem";
     host.system_info.library_version = version;
@@ -34,14 +34,14 @@ int main(void) {
     const double targets[] = {60.0, 59.98785, 60.025};
     for (unsigned test = 0; test < sizeof(targets) / sizeof(targets[0]); ++test) {
         host.game_loaded = false;
-        assert(lucent_retro_load_game(&host, "timing-fixture", error, sizeof(error)));
-        assert(lucent_retro_get_av_info(&host, &result));
+        assert(emufusion_retro_load_game(&host, "timing-fixture", error, sizeof(error)));
+        assert(emufusion_retro_get_av_info(&host, &result));
         assert(fabs(result.frames_per_second - video_clock) < 1e-10);
         assert(result.sample_rate == 44100.0 && host.audio_output_rate == 44100.0);
         assert(fabs(host.audio_input_rate - pcm_clock) < 1e-10);
         assert(result.base_width == 160 && result.base_height == 144);
         assert(fabs(targets[test] / video_clock - 1.0) < 0.0075);
-        assert(lucent_retro_set_synchronized_video_rate(
+        assert(emufusion_retro_set_synchronized_video_rate(
                 &host, result.frames_per_second, targets[test], error, sizeof(error)));
         uint64_t input_frames = 0, output_frames = 0;
         for (uint64_t frame = 1; frame <= 18000; ++frame) {
@@ -77,7 +77,7 @@ int main(void) {
         mock_rate = test == 6 ? 48000.0 : 44100.0;
         mock_width = test == 7 ? 256 : 160;
         mock_height = test == 8 ? 192 : 144;
-        assert(lucent_retro_load_game(&host, "timing-fixture", error, sizeof(error)));
+        assert(emufusion_retro_load_game(&host, "timing-fixture", error, sizeof(error)));
         assert(host.current_av_info.timing.fps == mock_fps);
         assert(host.audio_input_rate == mock_rate);
     }

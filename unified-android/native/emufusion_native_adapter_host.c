@@ -1,6 +1,6 @@
 #define _XOPEN_SOURCE 700
 
-#include "include/lucent_native_adapter_host.h"
+#include "include/emufusion_native_adapter_host.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -19,11 +19,11 @@ static pthread_mutex_t adapter_jni_onload_lock = PTHREAD_MUTEX_INITIALIZER;
 static void *adapter_jni_initialized[MAX_JNI_INITIALIZED_ADAPTERS];
 static size_t adapter_jni_initialized_count;
 
-typedef int (*fn_lucent_set_java_vm)(uint32_t, void *);
+typedef int (*fn_emufusion_set_java_vm)(uint32_t, void *);
 
 static void set_error(char *buffer, size_t size, const char *format, ...);
 
-void lucent_native_adapter_supply_java_vm(void *java_vm) {
+void emufusion_native_adapter_supply_java_vm(void *java_vm) {
     adapter_java_vm = java_vm;
 }
 
@@ -32,14 +32,14 @@ void lucent_native_adapter_supply_java_vm(void *java_vm) {
 #include <jni.h>
 
 /* Android invokes JNI_OnLoad only for libraries opened through
- * System.loadLibrary. Lucent opens an adapter with dlopen, so an adapter that
+ * System.loadLibrary. EmuFusion opens an adapter with dlopen, so an adapter that
  * embeds an Android frontend never gets its JNI state initialised: Eden caches
  * the process JavaVM there, and without it Common::Android::GetEnvForThread()
  * returns null and the first helper thread that reaches for a JNIEnv dies on a
  * null dereference. The bridge hands us the VM in JNI_OnLoad and we perform the
  * call Android would have made. The same problem is solved for libretro cores
- * by lucent_retro_supply_android_java_vm; an adapter differs only in exporting
- * the standard entry point rather than a Lucent-specific setter. */
+ * by emufusion_retro_supply_android_java_vm; an adapter differs only in exporting
+ * the standard entry point rather than a EmuFusion-specific setter. */
 /* Android's linker returns the same soinfo/handle when the same absolute
  * adapter path is opened again. JNI_OnLoad is a process-lifetime hook, not a
  * per-session hook, so invoking it on every NativeAdapterHost construction is
@@ -50,13 +50,13 @@ void lucent_native_adapter_supply_java_vm(void *java_vm) {
 typedef jint (*fn_jni_on_load)(JavaVM *, void *);
 #endif
 
-/* Prefer a Lucent-specific, ABI-versioned handoff. aPS3e uses this because its
+/* Prefer a EmuFusion-specific, ABI-versioned handoff. aPS3e uses this because its
  * JNI_OnLoad unconditionally registers upstream Activity classes; invoking it
  * in the unified app aborts ART before a Java error can be reported. Adapters
  * without the setter retain the old JNI_OnLoad path exactly. */
 static bool supply_java_vm_to_adapter(void *library,
                                       char *error, size_t error_size) {
-    fn_lucent_set_java_vm set_vm = NULL;
+    fn_emufusion_set_java_vm set_vm = NULL;
     void *setter_symbol;
 #if defined(__ANDROID__)
     fn_jni_on_load on_load = NULL;
@@ -72,16 +72,16 @@ static bool supply_java_vm_to_adapter(void *library,
         }
     }
     dlerror();
-    setter_symbol = dlsym(library, LUCENT_NATIVE_ADAPTER_JAVA_VM_SYMBOL);
+    setter_symbol = dlsym(library, EMUFUSION_NATIVE_ADAPTER_JAVA_VM_SYMBOL);
     if (setter_symbol) {
         int accepted;
         memcpy(&set_vm, &setter_symbol, sizeof(set_vm));
-        accepted = set_vm(LUCENT_NATIVE_ADAPTER_JAVA_VM_VERSION,
+        accepted = set_vm(EMUFUSION_NATIVE_ADAPTER_JAVA_VM_VERSION,
                           adapter_java_vm);
         if (!accepted) {
             set_error(error, error_size,
                       "adapter rejected JavaVM handoff version %u",
-                      LUCENT_NATIVE_ADAPTER_JAVA_VM_VERSION);
+                      EMUFUSION_NATIVE_ADAPTER_JAVA_VM_VERSION);
             pthread_mutex_unlock(&adapter_jni_onload_lock);
             return false;
         }
@@ -89,9 +89,9 @@ static bool supply_java_vm_to_adapter(void *library,
             adapter_jni_initialized[adapter_jni_initialized_count++] = library;
         pthread_mutex_unlock(&adapter_jni_onload_lock);
 #if defined(__ANDROID__)
-        __android_log_print(ANDROID_LOG_INFO, "LucentNativeAdapter",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeAdapter",
                 "adapter accepted versioned JavaVM handoff version=%u",
-                LUCENT_NATIVE_ADAPTER_JAVA_VM_VERSION);
+                EMUFUSION_NATIVE_ADAPTER_JAVA_VM_VERSION);
 #endif
         return true;
     }
@@ -111,7 +111,7 @@ static bool supply_java_vm_to_adapter(void *library,
     pthread_mutex_unlock(&adapter_jni_onload_lock);
     __android_log_print(version >= JNI_VERSION_1_6 ? ANDROID_LOG_INFO
                                                    : ANDROID_LOG_ERROR,
-            "LucentNativeAdapter",
+            "EmuFusionNativeAdapter",
             "adapter JNI_OnLoad returned 0x%x for JavaVM %p", version,
             adapter_java_vm);
     if (version < JNI_VERSION_1_6) {
@@ -125,7 +125,7 @@ static bool supply_java_vm_to_adapter(void *library,
 #endif
 }
 
-struct lucent_native_adapter_host {
+struct emufusion_native_adapter_host {
     void *library;
     const lucent_native_adapter *vtable;
     lucent_native_engine *engine;
@@ -165,14 +165,14 @@ static bool vtable_is_complete(const lucent_native_adapter *vtable) {
            vtable->surface_recreated && vtable->stop && vtable->destroy;
 }
 
-lucent_native_adapter_host *lucent_native_adapter_open(
+emufusion_native_adapter_host *emufusion_native_adapter_open(
         const char *adapter_path, const char *trusted_root,
         char *error, size_t error_size) {
     char resolved_adapter[PATH_MAX];
     char resolved_root[PATH_MAX];
     lucent_native_adapter_entry_fn entry;
     const lucent_native_adapter *vtable;
-    lucent_native_adapter_host *host;
+    emufusion_native_adapter_host *host;
     void *library;
     void *symbol;
     lucent_native_capabilities capabilities;
@@ -190,7 +190,7 @@ lucent_native_adapter_host *lucent_native_adapter_open(
     if (strcmp(resolved_root, "/") == 0 ||
             !path_is_inside(resolved_adapter, resolved_root)) {
         set_error(error, error_size,
-                  "adapter must be inside Lucent's trusted directory");
+                  "adapter must be inside EmuFusion's trusted directory");
         return NULL;
     }
 
@@ -246,7 +246,7 @@ lucent_native_adapter_host *lucent_native_adapter_open(
         return NULL;
     }
 
-    host = (lucent_native_adapter_host *)calloc(1, sizeof(*host));
+    host = (emufusion_native_adapter_host *)calloc(1, sizeof(*host));
     if (!host) {
         set_error(error, error_size, "out of memory creating adapter host");
         dlclose(library);
@@ -262,7 +262,7 @@ lucent_native_adapter_host *lucent_native_adapter_open(
     if (binding_symbol) memcpy(&host->source_binding, &binding_symbol, sizeof(host->source_binding));
     if (query_symbol) memcpy(&host->source_query, &query_symbol, sizeof(host->source_query));
 #if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "LucentNativeAdapter",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeAdapter",
             "adapter loaded engine=%s version=%s abi=%u quickResume=%d "
             "persistentSave=%d dualScreen=%d maxControllers=%u",
             capabilities.engine_id,
@@ -275,7 +275,7 @@ lucent_native_adapter_host *lucent_native_adapter_open(
     return host;
 }
 
-bool lucent_native_adapter_describe(const lucent_native_adapter_host *host,
+bool emufusion_native_adapter_describe(const emufusion_native_adapter_host *host,
                                     lucent_native_capabilities *out,
                                     char *error, size_t error_size) {
     if (!host || !out) {
@@ -286,7 +286,7 @@ bool lucent_native_adapter_describe(const lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_create(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_create(emufusion_native_adapter_host *host,
                                   char *error, size_t error_size) {
     if (!host) {
         set_error(error, error_size, "host is required");
@@ -307,7 +307,7 @@ bool lucent_native_adapter_create(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_load(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_load(emufusion_native_adapter_host *host,
                                 const lucent_native_load_request *request,
                                 char *error, size_t error_size) {
     char adapter_error[256] = {0};
@@ -330,7 +330,7 @@ bool lucent_native_adapter_load(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_start(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_start(emufusion_native_adapter_host *host,
                                  const lucent_native_io *io,
                                  char *error, size_t error_size) {
     char adapter_error[256] = {0};
@@ -353,7 +353,7 @@ bool lucent_native_adapter_start(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_run_frame(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_run_frame(emufusion_native_adapter_host *host,
                                      char *error, size_t error_size) {
     if (!host || !host->engine || !host->started || host->stopped) {
         set_error(error, error_size, "adapter is not running");
@@ -366,7 +366,7 @@ bool lucent_native_adapter_run_frame(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_set_control(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_set_control(emufusion_native_adapter_host *host,
                                        uint32_t controller_index,
                                        lucent_native_control control,
                                        float value,
@@ -379,7 +379,7 @@ bool lucent_native_adapter_set_control(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_pause(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_pause(emufusion_native_adapter_host *host,
                                  char *error, size_t error_size) {
     if (!host || !host->engine || !host->started) {
         set_error(error, error_size, "adapter is not running");
@@ -389,7 +389,7 @@ bool lucent_native_adapter_pause(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_resume(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_resume(emufusion_native_adapter_host *host,
                                   char *error, size_t error_size) {
     if (!host || !host->engine || !host->started) {
         set_error(error, error_size, "adapter is not running");
@@ -399,7 +399,7 @@ bool lucent_native_adapter_resume(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_flush_save(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_flush_save(emufusion_native_adapter_host *host,
                                       char *error, size_t error_size) {
     if (!host || !host->engine || !host->loaded) {
         set_error(error, error_size, "adapter content is not loaded");
@@ -412,14 +412,14 @@ bool lucent_native_adapter_flush_save(lucent_native_adapter_host *host,
     return true;
 }
 
-size_t lucent_native_adapter_serialize_size(lucent_native_adapter_host *host) {
+size_t emufusion_native_adapter_serialize_size(emufusion_native_adapter_host *host) {
     if (!host || !host->engine || !host->started) return 0;
     /* Never advertise a Quick Resume the engine cannot guarantee. */
     if (!host->capabilities.has_quick_resume) return 0;
     return host->vtable->serialize_size(host->engine);
 }
 
-bool lucent_native_adapter_serialize(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_serialize(emufusion_native_adapter_host *host,
                                      void *out, size_t capacity,
                                      size_t *written,
                                      char *error, size_t error_size) {
@@ -452,7 +452,7 @@ bool lucent_native_adapter_serialize(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_unserialize(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_unserialize(emufusion_native_adapter_host *host,
                                        const void *data, size_t size,
                                        char *error, size_t error_size) {
     if (!host || !host->engine || !host->started) {
@@ -475,7 +475,7 @@ bool lucent_native_adapter_unserialize(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_surface_recreated(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_surface_recreated(emufusion_native_adapter_host *host,
                                              const lucent_native_io *io,
                                              char *error, size_t error_size) {
     if (!host || !host->engine || !host->started) {
@@ -493,7 +493,7 @@ bool lucent_native_adapter_surface_recreated(lucent_native_adapter_host *host,
     return true;
 }
 
-bool lucent_native_adapter_stop(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_stop(emufusion_native_adapter_host *host,
                                 char *error, size_t error_size) {
     if (!host) {
         set_error(error, error_size, "adapter session is not created");
@@ -510,7 +510,7 @@ bool lucent_native_adapter_stop(lucent_native_adapter_host *host,
     return true;
 }
 
-void lucent_native_adapter_destroy(lucent_native_adapter_host *host) {
+void emufusion_native_adapter_destroy(emufusion_native_adapter_host *host) {
     if (!host) return;
     if (host->engine) {
         if (host->started && !host->stopped) host->vtable->stop(host->engine);
@@ -538,7 +538,7 @@ void lucent_native_adapter_destroy(lucent_native_adapter_host *host) {
      *     #06 __cxa_finalize
      *     #07 soinfo::call_destructors()
      *     #09 do_dlclose
-     *     #12 lucent_native_adapter_destroy
+     *     #12 emufusion_native_adapter_destroy
      *     #18 NativeAdapterEngineSession.closeHost
      *
      * Even without that abort the unload would be unsound: both engines spawn
@@ -560,27 +560,27 @@ void lucent_native_adapter_destroy(lucent_native_adapter_host *host) {
     free(host);
 }
 
-bool lucent_native_adapter_has_quick_resume(
-        const lucent_native_adapter_host *host) {
+bool emufusion_native_adapter_has_quick_resume(
+        const emufusion_native_adapter_host *host) {
     return host && host->capabilities.has_quick_resume;
 }
 
-bool lucent_native_adapter_has_persistent_save(
-        const lucent_native_adapter_host *host) {
+bool emufusion_native_adapter_has_persistent_save(
+        const emufusion_native_adapter_host *host) {
     return host && host->capabilities.has_persistent_save;
 }
 
-uint32_t lucent_native_adapter_max_controllers(
-        const lucent_native_adapter_host *host) {
+uint32_t emufusion_native_adapter_max_controllers(
+        const emufusion_native_adapter_host *host) {
     return host ? host->capabilities.max_controllers : 1u;
 }
 
-bool lucent_native_adapter_dual_screen(
-        const lucent_native_adapter_host *host) {
+bool emufusion_native_adapter_dual_screen(
+        const emufusion_native_adapter_host *host) {
     return host && host->capabilities.dual_screen;
 }
 
-double lucent_native_adapter_average_fps(lucent_native_adapter_host *host) {
+double emufusion_native_adapter_average_fps(emufusion_native_adapter_host *host) {
     /* Optional and resolved per call rather than cached at open(), because an
      * adapter is free to publish the hook only once a session is live. */
     static const char standard_symbol[] =
@@ -589,7 +589,7 @@ double lucent_native_adapter_average_fps(lucent_native_adapter_host *host) {
     double (*reader)(void) = NULL;
     void *symbol;
     if (!host || !host->library || !host->started) {
-        return LUCENT_NATIVE_ADAPTER_FPS_UNSUPPORTED;
+        return EMUFUSION_NATIVE_ADAPTER_FPS_UNSUPPORTED;
     }
     dlerror();
     symbol = dlsym(host->library, standard_symbol);
@@ -598,12 +598,12 @@ double lucent_native_adapter_average_fps(lucent_native_adapter_host *host) {
         dlerror();
         symbol = dlsym(host->library, fps_symbol);
     }
-    if (!symbol) return LUCENT_NATIVE_ADAPTER_FPS_UNSUPPORTED;
+    if (!symbol) return EMUFUSION_NATIVE_ADAPTER_FPS_UNSUPPORTED;
     memcpy(&reader, &symbol, sizeof(reader));
     return reader();
 }
 
-bool lucent_native_adapter_set_fg_presentation(lucent_native_adapter_host *host,
+bool emufusion_native_adapter_set_fg_presentation(emufusion_native_adapter_host *host,
                                               bool enabled) {
     void (*setter)(bool) = NULL;
     void *symbol;
@@ -616,7 +616,7 @@ bool lucent_native_adapter_set_fg_presentation(lucent_native_adapter_host *host,
     return true;
 }
 
-double lucent_native_adapter_declared_video_hz(lucent_native_adapter_host *host) {
+double lucent_native_adapter_declared_video_hz(emufusion_native_adapter_host *host) {
     double (*reader)(void) = NULL;
     void *symbol;
     if (!host || !host->library || !host->started) return 0.0;
@@ -627,7 +627,7 @@ double lucent_native_adapter_declared_video_hz(lucent_native_adapter_host *host)
     return reader();
 }
 
-bool lucent_native_adapter_set_paced_video_hz(lucent_native_adapter_host *host,
+bool lucent_native_adapter_set_paced_video_hz(emufusion_native_adapter_host *host,
                                               double hz) {
     bool (*setter)(double) = NULL;
     void *symbol;
@@ -645,7 +645,7 @@ bool lucent_native_adapter_set_paced_video_hz(lucent_native_adapter_host *host,
     return setter(hz);
 }
 
-uint32_t lucent_native_adapter_timing_capabilities(lucent_native_adapter_host *host) {
+uint32_t emufusion_native_adapter_timing_capabilities(emufusion_native_adapter_host *host) {
     uint32_t (*reader)(void) = NULL;
     void *symbol;
     if (!host || !host->library || !host->started) return 0u;
@@ -658,10 +658,10 @@ uint32_t lucent_native_adapter_timing_capabilities(lucent_native_adapter_host *h
                        LUCENT_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE);
 }
 
-double lucent_native_adapter_producer_timeline_hz(lucent_native_adapter_host *host) {
+double lucent_native_adapter_producer_timeline_hz(emufusion_native_adapter_host *host) {
     double (*reader)(void) = NULL;
     void *symbol;
-    if (!(lucent_native_adapter_timing_capabilities(host) &
+    if (!(emufusion_native_adapter_timing_capabilities(host) &
             LUCENT_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE)) return 0.0;
     dlerror();
     symbol = dlsym(host->library, "lucent_native_adapter_producer_timeline_hz");
@@ -671,7 +671,7 @@ double lucent_native_adapter_producer_timeline_hz(lucent_native_adapter_host *ho
     return isfinite(hz) && hz > 1.0 && hz < 1000.0 ? hz : 0.0;
 }
 
-uint32_t lucent_native_adapter_source_image_binding(lucent_native_adapter_host *host,
+uint32_t emufusion_native_adapter_source_image_binding(emufusion_native_adapter_host *host,
         lucent_source_binding_v1 *out, uint32_t out_size) {
     if (!out || out_size < sizeof(*out)) return LUCENT_SOURCE_BAD_ARGUMENT;
     memset(out, 0, sizeof(*out));
@@ -687,7 +687,7 @@ uint32_t lucent_native_adapter_source_image_binding(lucent_native_adapter_host *
     return result;
 }
 
-uint32_t lucent_native_adapter_query_source_image(lucent_native_adapter_host *host,
+uint32_t emufusion_native_adapter_query_source_image(emufusion_native_adapter_host *host,
         uint64_t session_epoch, uint64_t surface_epoch, uint64_t buffer_timestamp_ns,
         lucent_source_image_v1 *out, uint32_t out_size) {
     if (!out || out_size < sizeof(*out) || !session_epoch || !surface_epoch || !buffer_timestamp_ns)

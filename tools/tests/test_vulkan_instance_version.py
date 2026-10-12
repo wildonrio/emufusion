@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "unified-android/native/lucent_android_vulkan_backend.c"
+SOURCE = ROOT / "unified-android/native/emufusion_android_vulkan_backend.c"
 
 
 def harness(source):
@@ -42,7 +42,7 @@ typedef struct { int sType; const void *pNext; uint32_t flags; void *window; }
     VkAndroidSurfaceCreateInfoKHR;
 typedef struct { const VkApplicationInfo *(*get_application_info)(void); } Negotiation;
 typedef struct { Negotiation *negotiation; void *window; int instance, surface; }
-    lucent_android_vulkan_backend;
+    emufusion_android_vulkan_backend;
 static VkApplicationInfo recorded, requested;
 static int create_result, surface_calls;
 static bool null_request;
@@ -66,7 +66,7 @@ static int vkCreateAndroidSurfaceKHR(int instance,
 ''' + body + r'''
 int main(void) {
     Negotiation negotiation = { get_app };
-    lucent_android_vulkan_backend backend = { NULL, (void *)42, 0, 0 };
+    emufusion_android_vulkan_backend backend = { NULL, (void *)42, 0, 0 };
     char error[128] = {0};
     assert(create_instance_and_surface(&backend, error, sizeof(error)));
     assert(recorded.apiVersion == VK_API_VERSION_1_1);

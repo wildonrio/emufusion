@@ -36,7 +36,7 @@ import java.util.Map;
  * </ul>
  * <p>Both libretro sessions pass that directory to the native host as
  * {@code system_directory}; {@code register_core_variable_defaults()} in
- * {@code lucent_libretro_host.c} reads the override file from it after its
+ * {@code emufusion_libretro_host.c} reads the override file from it after its
  * own reviewed defaults. Native adapters have no core-option channel, so for
  * them the file is informational only. The cheat launch hooks (owner B)
  * reuse {@link #engineRoot} for their boot-delivered patch files.</p>
@@ -84,6 +84,25 @@ public final class WidescreenHackPolicy {
         prepareLaunch(context, request, engineId, false);
     }
 
+    /** QA only: global "emufusion_qa_core_options" = "key=value;key=value", applied last. */
+    static Map<String, String> qaCoreOptionOverrides(Context context) {
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        String value = null;
+        try {
+            value = android.provider.Settings.Global.getString(
+                    context.getContentResolver(), "emufusion_qa_core_options");
+        } catch (RuntimeException ignored) {
+            // Unreadable settings: no QA overrides.
+        }
+        if (value == null) return out;
+        for (String pair : value.split(";")) {
+            int equals = pair.indexOf('=');
+            if (equals > 0) out.put(pair.substring(0, equals).trim(), pair.substring(equals + 1).trim());
+        }
+        if (!out.isEmpty()) Log.w(TAG, "QA core-option overrides " + out);
+        return out;
+    }
+
     /**
      * As {@link #prepareLaunch(Context, GameLaunchRequest, String)}; the cheat
      * launch hooks pass {@code true} once they have enabled a per-game 16:9
@@ -106,6 +125,7 @@ public final class WidescreenHackPolicy {
         overrides.putAll(RenderResolutionPolicy.coreOptionOverrides(context, engine));
         // ...and without emulator-side shader stutter.
         overrides.putAll(SmoothnessPolicy.coreOptionOverrides(engine));
+        overrides.putAll(qaCoreOptionOverrides(context));
         File file = CoreOptionOverrideFile.in(root);
         try {
             if (overrides.isEmpty()) {

@@ -156,7 +156,7 @@ public final class LibretroEngineSession implements EngineSession,
     /**
      * The netplay integration point: applies one remote player's input to
      * a non-local port. The native host already supports up to 8
-     * controllers (lucent_libretro_host.c's MAX_PORTS), unused by
+     * controllers (emufusion_libretro_host.c's MAX_PORTS), unused by
      * anything else in this class, which only ever drives port 0 for the
      * player physically holding this device. Safe to call from any
      * thread -- LibretroHost's setters only record the state --

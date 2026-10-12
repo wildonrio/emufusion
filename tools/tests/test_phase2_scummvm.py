@@ -9,8 +9,8 @@ LOCK = ROOT / "engines" / "scummvm-source-lock.json"
 BUILD = ROOT / "engines" / "build_scummvm_core.sh"
 LIFECYCLE_PATCH = ROOT / "engines" / "patches" / "scummvm-lucent-exit-autosave.patch"
 CONTENT_LOCK = ROOT / "engines" / "scummvm-test-content-lock.json"
-HOST = ROOT / "unified-android" / "native" / "lucent_libretro_host.c"
-JNI = ROOT / "unified-android" / "native" / "lucent_libretro_jni.c"
+HOST = ROOT / "unified-android" / "native" / "emufusion_libretro_host.c"
+JNI = ROOT / "unified-android" / "native" / "emufusion_libretro_jni.c"
 JAVA_HOST = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "LibretroHost.java"
 SESSION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game" / "LibretroEngineSession.java"
 HOST_TEST = ROOT / "unified-android" / "native" / "tests" / "host_test.c"
@@ -113,7 +113,7 @@ class ScummvmPhase2Test(unittest.TestCase):
         self.assertIn("active.unloadGame();", session)
         self.assertIn("callback.onSessionStopRejected", session)
         self.assertIn("unload_count() == 0", native_test)
-        self.assertIn("lucent_retro_run_frame(host, error, sizeof(error))", native_test)
+        self.assertIn("emufusion_retro_run_frame(host, error, sizeof(error))", native_test)
 
     def test_official_freeware_device_fixture_is_pinned_but_not_bundled(self):
         fixture = self.content_lock["fixtures"][0]

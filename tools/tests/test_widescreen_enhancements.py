@@ -26,7 +26,7 @@ class WidescreenEnhancementsTest(unittest.TestCase):
         self.assertIn('getBoolean(HACK_ENABLED, false)', settings)
 
     def test_only_native_game_controlled_widescreen_is_selected(self):
-        host = self.read("unified-android/native/lucent_libretro_host.c")
+        host = self.read("unified-android/native/emufusion_libretro_host.c")
         for key in (
             "dolphin_widescreen",
             "dolphin_widescreen_hack",
@@ -49,7 +49,7 @@ class WidescreenEnhancementsTest(unittest.TestCase):
         # The launch-time override channel is the only path off these defaults:
         # it must read the file the Java policy writes, apply a token only when
         # the core advertises it, and never be driven by the old boolean.
-        self.assertIn('"lucent-core-overrides.txt"', host)
+        self.assertIn('"emufusion-core-overrides.txt"', host)
         self.assertIn("load_core_overrides(host)", host)
         self.assertIn("find_core_override(host, variable->key)", host)
         self.assertIn("declared_options, override, &override_size", host)
@@ -63,7 +63,7 @@ class WidescreenEnhancementsTest(unittest.TestCase):
             "Dolphin transport fill must not depend on widescreen preference")
 
     def test_dolphin_transport_fill_is_separate_from_display_aspect(self):
-        host = self.read("unified-android/native/lucent_libretro_host.c")
+        host = self.read("unified-android/native/emufusion_libretro_host.c")
         block = host.split('strcmp(variable->key, "dolphin_aspect_ratio") == 0')[1]
         block = block.split('} else if', 1)[0]
         self.assertIn('find_option_token(options, "3", &value_size)', block)

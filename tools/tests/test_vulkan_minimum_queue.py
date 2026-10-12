@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / 'unified-android/native/lucent_android_vulkan_backend.c'
+SOURCE = ROOT / 'unified-android/native/emufusion_android_vulkan_backend.c'
 
 
 def harness(source):
@@ -22,7 +22,7 @@ def harness(source):
     return r'''
 #include <assert.h>
 #include <stdint.h>
-#define LUCENT_VK_MAX_IMAGES 8
+#define EMUFUSION_VK_MAX_IMAGES 8
 typedef struct { uint32_t minImageCount, maxImageCount; } Caps;
 static uint32_t primary(Caps capabilities) {
  uint32_t desired;
@@ -35,14 +35,14 @@ static uint32_t secondary(Caps capabilities) {
  return desired;
 }
 int main(void) {
- for (uint32_t low=1; low<=LUCENT_VK_MAX_IMAGES; ++low) {
+ for (uint32_t low=1; low<=EMUFUSION_VK_MAX_IMAGES; ++low) {
   for (uint32_t high=0; high<=64; ++high) {
    if (high && high<low) continue;
    Caps caps={low,high};
    assert(primary(caps)==low);
    uint32_t expected=low+1;
    if (high && expected>high) expected=high;
-   if (expected>LUCENT_VK_MAX_IMAGES) expected=LUCENT_VK_MAX_IMAGES;
+   if (expected>EMUFUSION_VK_MAX_IMAGES) expected=EMUFUSION_VK_MAX_IMAGES;
    assert(secondary(caps)==expected);
   }
  }

@@ -71,7 +71,7 @@ public final class LibretroHost implements Closeable {
     }
 
     static {
-        System.loadLibrary("lucent_libretro_host");
+        System.loadLibrary("emufusion_libretro_host");
     }
 
     // Volatile: checkOpen() is also read by the unsynchronized input setters.

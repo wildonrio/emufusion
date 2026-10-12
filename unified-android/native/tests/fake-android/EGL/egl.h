@@ -1,5 +1,5 @@
-#ifndef LUCENT_FAKE_EGL_H
-#define LUCENT_FAKE_EGL_H
+#ifndef EMUFUSION_FAKE_EGL_H
+#define EMUFUSION_FAKE_EGL_H
 #include <stdint.h>
 typedef void *EGLDisplay;
 typedef void *EGLConfig;

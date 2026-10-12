@@ -42,9 +42,9 @@ GLES_HOST = (ROOT / "unified-android" / "src" / "com" / "thorium" /
              "preview" / "ExperimentalGlesLibretroHost.java")
 VULKAN_HOST = (ROOT / "unified-android" / "src" / "com" / "thorium" /
                "preview" / "ExperimentalVulkanLibretroHost.java")
-GLES_NATIVE = ROOT / "unified-android" / "native" / "lucent_android_gles_backend.c"
+GLES_NATIVE = ROOT / "unified-android" / "native" / "emufusion_android_gles_backend.c"
 VULKAN_NATIVE = (ROOT / "unified-android" / "native" /
-                 "lucent_android_vulkan_backend.c")
+                 "emufusion_android_vulkan_backend.c")
 TEST_RUNNER = ROOT / "unified-android" / "test.sh"
 
 # The Thor's top panel, and the short canvas a separate defect can produce.
@@ -265,17 +265,17 @@ class ProportionalVideoScalingTest(unittest.TestCase):
                       "direct-window GLES cores need an explicit fit path")
         self.assertGreaterEqual(gles.count("glBlitFramebuffer("), 3,
                                 "direct-window fit needs capture and final blits")
-        self.assertIn("crop == LUCENT_SCREEN_FULL", vulkan,
+        self.assertIn("crop == EMUFUSION_SCREEN_FULL", vulkan,
                       "whole-frame aspect must not be imposed on screen crops")
         scaled_fit = vulkan.split(
-            "if (crop != LUCENT_SCREEN_FULL && scaled_portrait_surface)", 1)[1]
+            "if (crop != EMUFUSION_SCREEN_FULL && scaled_portrait_surface)", 1)[1]
         scaled_fit = scaled_fit.split("} else if", 1)[0]
-        self.assertIn("lucent_surface_fit(destination_extent.width,", scaled_fit)
+        self.assertIn("emufusion_surface_fit(destination_extent.width,", scaled_fit)
         self.assertIn("destination_extent.height, destination_extent.height,", scaled_fit)
         self.assertIn("destination_extent.width, aspect, &fitted)", scaled_fit)
         self.assertIn("destination_width = fitted.width;", scaled_fit)
         self.assertIn("destination_height = fitted.height;", scaled_fit)
-        self.assertIn("crop != LUCENT_SCREEN_FULL", vulkan,
+        self.assertIn("crop != EMUFUSION_SCREEN_FULL", vulkan,
                       "screen crops must be contained rather than side-cropped")
         self.assertNotIn("source_x += (cropped_width - visible_width) / 2u;", vulkan,
                          "Vulkan presentation must never crop source pixels")
@@ -306,7 +306,7 @@ class ProportionalVideoScalingTest(unittest.TestCase):
         # reviewed, physically-proven 256x224 active picture (OverscanTop=7,
         # OverscanBottom=8, matching docs/HANDOVER-2026-08-09.md).
         native_host = (ROOT / "unified-android" / "native" /
-                       "lucent_libretro_host.c").read_text(encoding="utf-8")
+                       "emufusion_libretro_host.c").read_text(encoding="utf-8")
         self.assertIn('strcmp(variable->key, "mesen-s_overscan_vertical") == 0',
                       native_host)
         self.assertIn('find_option_token(options, "8px", &value_size)',
@@ -316,7 +316,7 @@ class ProportionalVideoScalingTest(unittest.TestCase):
 
     def test_no_generic_presenter_or_psp_profile_crops_source_pixels(self):
         native_host = (ROOT / "unified-android" / "native" /
-                       "lucent_libretro_host.c").read_text(encoding="utf-8")
+                       "emufusion_libretro_host.c").read_text(encoding="utf-8")
         gles = GLES_NATIVE.read_text(encoding="utf-8")
         self.assertNotIn("centre_crop_to_aspect", gles)
         self.assertRegex(
@@ -332,7 +332,7 @@ class ProportionalVideoScalingTest(unittest.TestCase):
         # docs/strict-off-physical-qa-2026-08-30.md, the original fix for
         # BlastEm's previously-undefined overscan query result).
         native_host = (ROOT / "unified-android" / "native" /
-                       "lucent_libretro_host.c").read_text(encoding="utf-8")
+                       "emufusion_libretro_host.c").read_text(encoding="utf-8")
         overscan = native_host.split("RETRO_ENVIRONMENT_GET_OVERSCAN:", 1)[1]
         overscan = overscan.split("RETRO_ENVIRONMENT_GET_CAN_DUPE", 1)[0]
         self.assertIn("*(bool *)data = false;", overscan,
@@ -340,7 +340,7 @@ class ProportionalVideoScalingTest(unittest.TestCase):
 
     def test_n64_never_crops_game_pixels_with_fixed_overscan_offsets(self):
         native_host = (ROOT / "unified-android" / "native" /
-                       "lucent_libretro_host.c").read_text(encoding="utf-8")
+                       "emufusion_libretro_host.c").read_text(encoding="utf-8")
         self.assertIn('strcmp(variable->key, "mupen64plus-EnableOverscan") == 0',
                       native_host)
         self.assertIn('options, "Disabled", &value_size', native_host)

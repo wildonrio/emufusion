@@ -26,7 +26,7 @@ final class PhysicalPresentationTracker implements AutoCloseable {
 
     static synchronized PhysicalPresentationTracker create() {
         if (!libraryLoaded) {
-            System.loadLibrary("lucent_framegen_timer");
+            System.loadLibrary("emufusion_framegen_timer");
             libraryLoaded = true;
         }
         long value = nativeCreate();

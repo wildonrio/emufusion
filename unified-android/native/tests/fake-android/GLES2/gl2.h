@@ -1,5 +1,5 @@
-#ifndef LUCENT_FAKE_GLES2_H
-#define LUCENT_FAKE_GLES2_H
+#ifndef EMUFUSION_FAKE_GLES2_H
+#define EMUFUSION_FAKE_GLES2_H
 typedef unsigned char GLubyte;
 typedef unsigned int GLenum;
 typedef unsigned int GLuint;

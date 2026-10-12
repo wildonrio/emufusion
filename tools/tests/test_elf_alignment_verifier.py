@@ -95,8 +95,8 @@ class ElfAlignmentVerifierTest(unittest.TestCase):
         # Libraries known to be correctly 16 KiB aligned must never be waived.
         allowlist = build.split("ALLOWED_4K_LIBS=\"", 1)[1].split('"', 1)[0]
         for aligned in (
-            "liblucent_libretro_host.so",
-            "liblucent_vulkan_host.so",
+            "libemufusion_libretro_host.so",
+            "libemufusion_vulkan_host.so",
             "liblucent_core_blastem.so",
             "liblucent_core_mupen64plus_next.so",
             "liblucent_core_melonds_ds.so",

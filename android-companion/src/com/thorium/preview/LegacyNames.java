@@ -33,6 +33,8 @@ public final class LegacyNames {
     static final String METADATA_ID_FIELD = "x-" + OLD + "-id";
     /** Provisioning markers (".OLD-firmware-source", ...) in each engine root. */
     private static final String ENGINE_MARKER_PREFIX = "." + OLD + "-";
+    /** Launch-time core-option file each launch regenerates under its new name. */
+    private static final String CORE_OPTION_OVERRIDES = OLD + "-core-overrides.txt";
 
     private LegacyNames() {}
 
@@ -93,6 +95,11 @@ public final class LegacyNames {
             if (files == null) continue;
             for (File file : files) {
                 String name = file.getName();
+                if (file.isFile() && name.equals(CORE_OPTION_OVERRIDES)) {
+                    // Generated at every launch; a stale copy is never read again.
+                    if (!file.delete()) Log.w(TAG, "Unable to remove " + name);
+                    continue;
+                }
                 if (!file.isFile() || !name.startsWith(ENGINE_MARKER_PREFIX)) continue;
                 File current = new File(engine,
                         ".emufusion-" + name.substring(ENGINE_MARKER_PREFIX.length()));

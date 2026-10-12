@@ -119,7 +119,7 @@ public final class ExperimentalGlesLibretroHostLifecycleTest {
     }
 
     public static void main(String[] args) throws Exception {
-        File root = Files.createTempDirectory("lucent-gles-java").toFile();
+        File root = Files.createTempDirectory("emufusion-gles-java").toFile();
         File core = new File(root, "core.so");
         File game = new File(root, "game.iso");
         try (FileOutputStream output = new FileOutputStream(core)) { output.write(1); }

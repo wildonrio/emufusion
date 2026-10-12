@@ -27,7 +27,7 @@ final class PendingHostInput {
     }
 
     // Mirrors MAX_PORTS, MAX_JOYPAD_BUTTONS, MAX_ANALOG_INDEXES and
-    // MAX_ANALOG_IDS in native/lucent_libretro_host.c.
+    // MAX_ANALOG_IDS in native/emufusion_libretro_host.c.
     static final int PORTS = 8;
     static final int JOYPAD_BUTTONS = 16;
     static final int ANALOG_INDEXES = 3;

@@ -35,8 +35,8 @@ ROUTE_STORE = _read(ROOT / "android-companion" / "src" / "com" / "thorium" /
                     "preview" / "EngineRouteStore.java")
 ABI_HEADER = _read(ROOT / "unified-android" / "native" / "include" /
                    "lucent_native_adapter.h")
-HOST_C = _read(ROOT / "unified-android" / "native" / "lucent_native_adapter_host.c")
-JNI_C = _read(ROOT / "unified-android" / "native" / "lucent_native_adapter_jni.c")
+HOST_C = _read(ROOT / "unified-android" / "native" / "emufusion_native_adapter_host.c")
+JNI_C = _read(ROOT / "unified-android" / "native" / "emufusion_native_adapter_jni.c")
 MOCK_C = _read(ROOT / "unified-android" / "native" / "tests" /
                "mock_native_adapter.c")
 HOST_TEST_C = _read(ROOT / "unified-android" / "native" / "tests" /
@@ -399,7 +399,7 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
                       "adapter entry returned no vtable",
                       "unsupported adapter ABI",
                       "adapter vtable has a null function pointer",
-                      "adapter must be inside Lucent's trusted directory"):
+                      "adapter must be inside EmuFusion's trusted directory"):
             self.assertIn(guard, HOST_C)
         # Serialize/unserialize are refused without Quick Resume.
         self.assertIn("if (!host->capabilities.has_quick_resume) return 0;", HOST_C)

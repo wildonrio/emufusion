@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "../include/lucent_libretro_host.h"
+#include "../include/emufusion_libretro_host.h"
 
 #include <errno.h>
 #include <stdbool.h>
@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
     char error[512] = {0};
     bool expect_success;
     bool loaded;
-    lucent_retro_host *host;
+    emufusion_retro_host *host;
     if (argc != 8) {
         fprintf(stderr, "usage: dolphin_quarantine_test CORE TRUSTED_ROOT "
                 "SYSTEM_DIR SAVE_DIR GAME MARKER success|reject\n");
@@ -32,20 +32,20 @@ int main(int argc, char **argv) {
         return 2;
     }
     unlink(argv[6]);
-    CHECK(setenv("LUCENT_MOCK_DLCLOSE_MARKER_PATH", argv[6], 1) == 0,
+    CHECK(setenv("EMUFUSION_MOCK_DLCLOSE_MARKER_PATH", argv[6], 1) == 0,
           "could not configure DSO finalizer marker");
-    host = lucent_retro_create(
+    host = emufusion_retro_create(
             argv[1], argv[2], argv[3], argv[4], error, sizeof(error));
     CHECK(host, "could not create Dolphin mock host");
-    loaded = lucent_retro_load_game(host, argv[5], error, sizeof(error));
+    loaded = emufusion_retro_load_game(host, argv[5], error, sizeof(error));
     if (expect_success) {
         CHECK(loaded, "completed Dolphin mock rejected content");
-        CHECK(lucent_retro_unload_game(host, error, sizeof(error)),
+        CHECK(emufusion_retro_unload_game(host, error, sizeof(error)),
               "completed Dolphin mock did not unload game");
     } else {
         CHECK(!loaded, "rejecting Dolphin mock accepted content");
     }
-    lucent_retro_destroy(host);
+    emufusion_retro_destroy(host);
     if (expect_success) {
         CHECK(access(argv[6], F_OK) == 0,
               "completed Dolphin mapping was not finalized by dlclose");

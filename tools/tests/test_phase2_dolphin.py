@@ -19,7 +19,7 @@ LIBRETRO_INPUT = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusi
 SYSTEM_LAYOUTS = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "input" / "SystemControlLayouts.java"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_controller_mapping import layout_blocks  # noqa: E402
-LIBRETRO_HOST = ROOT / "unified-android" / "native" / "lucent_libretro_host.c"
+LIBRETRO_HOST = ROOT / "unified-android" / "native" / "emufusion_libretro_host.c"
 RENDERED_DUPLICATE_PATCH = (
     ROOT / "engines" / "patches" /
     "dolphin-libretro-submit-rendered-duplicate-xfb.patch"
@@ -27,7 +27,7 @@ RENDERED_DUPLICATE_PATCH = (
 PHASE2_SESSION = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game" / "PpssppGlesEngineSession.java"
 GLES_HOST = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "ExperimentalGlesLibretroHost.java"
 GLES_LOOP = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "ExperimentalGlesRenderLoop.java"
-GLES_JNI = ROOT / "unified-android" / "native" / "lucent_libretro_jni.c"
+GLES_JNI = ROOT / "unified-android" / "native" / "emufusion_libretro_jni.c"
 WII_POINTER = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "input" / "WiiIrPointer.java"
 DISC_PREFLIGHT = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game" / "DiscImagePreflight.java"
 CORRUPT_FBO_FIXTURE = (
@@ -197,10 +197,10 @@ class DolphinCompilerProofTests(unittest.TestCase):
 
     def test_activity_qa_accepts_android_logcat_pid_tag_format(self):
         harness = ACTIVITY_QA.read_text(encoding="utf-8")
-        self.assertIn(r"LucentGlesBackend(?:\(\s*\d+\))?: ", harness)
+        self.assertIn(r"EmuFusionGlesBackend(?:\(\s*\d+\))?: ", harness)
         self.assertIn(r"presentation geometry.*sourcePadding=0", harness)
         self.assertNotIn(
-            '"LucentGlesBackend: presentation geometry"', harness
+            '"EmuFusionGlesBackend: presentation geometry"', harness
         )
 
     def test_dolphin_controller_geometry_and_semantic_qa_are_explicit(self):
@@ -286,7 +286,7 @@ class DolphinCompilerProofTests(unittest.TestCase):
         self.assertIn("nativeHost.setPointer(port, x, y, pressed)", loop)
         self.assertIn("nativeSetPointerGles", host)
         self.assertIn("nativeSetPointerGles", jni)
-        self.assertIn("lucent_retro_set_pointer", jni)
+        self.assertIn("emufusion_retro_set_pointer", jni)
         self.assertIn("Short.MIN_VALUE", pointer)
         self.assertIn("Short.MAX_VALUE", pointer)
 
@@ -336,11 +336,11 @@ class DolphinCompilerProofTests(unittest.TestCase):
                   "preview" / "ExperimentalVulkanLibretroHost.java").read_text(
                       encoding="utf-8")
         jni = (ROOT / "unified-android" / "native" /
-               "lucent_libretro_vulkan_jni.c").read_text(encoding="utf-8")
+               "emufusion_libretro_vulkan_jni.c").read_text(encoding="utf-8")
         self.assertIn("nativeSetControllerPortDeviceVulkan(handle, port, device)",
                       vulkan)
         self.assertIn("nativeSetControllerPortDeviceVulkan", jni)
-        self.assertIn("lucent_retro_set_controller_port_device", jni)
+        self.assertIn("emufusion_retro_set_controller_port_device", jni)
 
     def test_rejected_dolphin_dso_is_quarantined_before_dlclose(self):
         # Exact Thor tombstones showed rejected/partial Dolphin globals crashing

@@ -1,5 +1,5 @@
 /*
- * Deterministic mock native adapter for Lucent Phase 3 host testing.
+ * Deterministic mock native adapter for EmuFusion Phase 3 host testing.
  *
  * It implements the full lucent_native_adapter vtable with no real emulation so
  * the host, its vtable/ABI validation, capability gating, the create->load->
@@ -40,7 +40,7 @@ void lucent_native_adapter_set_fg_presentation_v1(bool enabled) {
     mock_fg_presentation = enabled;
 }
 __attribute__((visibility("default")))
-bool lucent_mock_fg_presentation(void) { return mock_fg_presentation; }
+bool emufusion_mock_fg_presentation(void) { return mock_fg_presentation; }
 #endif
 
 #if defined(MOCK_JAVA_VM_SETTER_SUCCESS) || defined(MOCK_JAVA_VM_SETTER_FAILURE)

@@ -1,9 +1,9 @@
 /* Exercise production core-option selection, including explicit overrides. */
-#include "../lucent_libretro_host.c"
+#include "../emufusion_libretro_host.c"
 #include <assert.h>
 
 static void check(const char *choices, const char *override, const char *expected) {
-    lucent_retro_host host = {0};
+    emufusion_retro_host host = {0};
     host.core_path = "liblucent_core_flycast.so";
     struct retro_variable definitions[] = {
         {"reicast_internal_resolution", choices}, {NULL, NULL}

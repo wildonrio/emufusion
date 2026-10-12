@@ -1,26 +1,26 @@
-#ifndef LUCENT_SURFACE_FIT_H
-#define LUCENT_SURFACE_FIT_H
+#ifndef EMUFUSION_SURFACE_FIT_H
+#define EMUFUSION_SURFACE_FIT_H
 
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef struct lucent_surface_rect {
+typedef struct emufusion_surface_rect {
     uint32_t x;
     uint32_t y;
     uint32_t width;
     uint32_t height;
-} lucent_surface_rect;
+} emufusion_surface_rect;
 
 /* Contain the complete image in logical View coordinates, then undo the
  * compositor's independent producer-to-View scale on each axis. This does
  * not rotate pixels: orientation belongs to the Android SurfaceControl.
  * Keeping producer and logical extents separate also handles ordinary
  * surfaces, where both extents are equal. */
-static inline bool lucent_surface_fit(
+static inline bool emufusion_surface_fit(
         uint32_t producer_width, uint32_t producer_height,
         uint32_t logical_width, uint32_t logical_height,
-        double aspect, lucent_surface_rect *rect) {
+        double aspect, emufusion_surface_rect *rect) {
     double width;
     double height;
     double mapped_width;

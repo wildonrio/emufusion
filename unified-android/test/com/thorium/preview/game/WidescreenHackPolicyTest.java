@@ -128,7 +128,7 @@ public final class WidescreenHackPolicyTest {
         expect(root.delete());
         File engineRoot = new File(root, "mupen64plus-next");
         File file = CoreOptionOverrideFile.in(engineRoot);
-        expectEquals("lucent-core-overrides.txt", file.getName());
+        expectEquals("emufusion-core-overrides.txt", file.getName());
         expect(CoreOptionOverrideFile.read(file).isEmpty());
 
         Map<String, String> overrides =

@@ -94,7 +94,7 @@ class PhaseTwoArmsx2Test(unittest.TestCase):
 
     def test_vulkan_presentation_owns_every_published_window_pixel(self):
         backend = (ROOT / "unified-android" / "native" /
-                   "lucent_android_vulkan_backend.c").read_text(encoding="utf-8")
+                   "emufusion_android_vulkan_backend.c").read_text(encoding="utf-8")
         record = backend.split(
             "static bool record_present_commands_for_target", 1)[1].split(
                 "\nstatic bool record_present_commands(", 1)[0]
@@ -197,7 +197,7 @@ class PhaseTwoArmsx2Test(unittest.TestCase):
 
     def test_armsx2_accuracy_defaults_to_full(self):
         host = (ROOT / "unified-android" / "native" /
-                "lucent_libretro_host.c").read_text(encoding="utf-8")
+                "emufusion_libretro_host.c").read_text(encoding="utf-8")
         self.assertIn('strstr(host->core_path, "lucent_core_armsx2")', host)
         self.assertIn('strcmp(variable->key, "armsx2_blending_accuracy") == 0',
                       host)

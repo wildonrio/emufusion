@@ -241,11 +241,11 @@ jboolean Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(JNIEnv *, jclas
 jboolean Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(JNIEnv *, jclass, jlong);
 void Java_com_thorium_preview_game_DenseGpuTimer_nativeDestroy(JNIEnv *, jclass, jlong);
 void Java_com_thorium_preview_game_DenseGpuTimer_nativeDiscard(JNIEnv *, jclass, jlong);
-int lucent_framegen_timer_poll_raw(jlong, jlong, jlong, jlong *, int);
-int lucent_framegen_signature_begin_raw(jlong, int64_t);
-int lucent_framegen_signature_end_raw(jlong);
-int lucent_framegen_signature_poll_raw(jlong, int64_t, jlong *, int);
-int lucent_framegen_proof_atlas_poll_raw(jlong, jlong, void *, int, jlong *, int);
+int emufusion_framegen_timer_poll_raw(jlong, jlong, jlong, jlong *, int);
+int emufusion_framegen_signature_begin_raw(jlong, int64_t);
+int emufusion_framegen_signature_end_raw(jlong);
+int emufusion_framegen_signature_poll_raw(jlong, int64_t, jlong *, int);
+int emufusion_framegen_proof_atlas_poll_raw(jlong, jlong, void *, int, jlong *, int);
 jint Java_com_thorium_preview_game_DenseGpuTimer_nativeConfigureProofAtlas(
         JNIEnv *, jclass, jlong, jint, jint, jint, jint);
 jint Java_com_thorium_preview_game_DenseGpuTimer_nativeProofAtlasCapability(
@@ -254,20 +254,20 @@ jint Java_com_thorium_preview_game_DenseGpuTimer_nativeEnqueueProofAtlas(
         JNIEnv *, jclass, jlong, jlong, jlong);
 jint Java_com_thorium_preview_game_DenseGpuTimer_nativePendingProofAtlases(
         JNIEnv *, jclass, jlong);
-jlong lucent_physical_present_create_raw(void);
-int lucent_physical_present_next_raw(jlong, uint64_t *);
-int lucent_physical_present_commit_raw(jlong, uint64_t, int, int64_t);
-int lucent_physical_present_poll_raw(jlong, jlong *, int);
-int lucent_physical_present_pending_raw(jlong);
-int lucent_physical_present_ready_enabled_raw(jlong, int);
-void lucent_physical_present_destroy_raw(jlong);
-int lucent_physical_compositor_timing_raw(jlong, jlong *, int);
+jlong emufusion_physical_present_create_raw(void);
+int emufusion_physical_present_next_raw(jlong, uint64_t *);
+int emufusion_physical_present_commit_raw(jlong, uint64_t, int, int64_t);
+int emufusion_physical_present_poll_raw(jlong, jlong *, int);
+int emufusion_physical_present_pending_raw(jlong);
+int emufusion_physical_present_ready_enabled_raw(jlong, int);
+void emufusion_physical_present_destroy_raw(jlong);
+int emufusion_physical_compositor_timing_raw(jlong, jlong *, int);
 
 int main(void) {
-    jlong timing_handle = lucent_physical_present_create_raw();
+    jlong timing_handle = emufusion_physical_present_create_raw();
     assert(timing_handle);
     jlong timing[3] = {7, 8, 9};
-    assert(lucent_physical_compositor_timing_raw(timing_handle, timing, 3));
+    assert(emufusion_physical_compositor_timing_raw(timing_handle, timing, 3));
     assert(timing[0] == 1000000000 && timing[1] == 8333333 && timing[2] == 10000000);
     for (int failure = 0; failure < 6; ++failure) {
         compositor_missing = failure == 0;
@@ -277,13 +277,13 @@ int main(void) {
         compositor_values[1] = failure == 4 ? -2 : 8333333;
         compositor_values[2] = failure == 5 ? INT64_MAX : 10000000;
         timing[0] = 7; timing[1] = 8; timing[2] = 9;
-        assert(!lucent_physical_compositor_timing_raw(timing_handle, timing, 3));
+        assert(!emufusion_physical_compositor_timing_raw(timing_handle, timing, 3));
         assert(timing[0] == 7 && timing[1] == 8 && timing[2] == 9);
     }
     compositor_values[2] = 10000000;
-    assert(!lucent_physical_compositor_timing_raw(0, timing, 3));
-    assert(!lucent_physical_compositor_timing_raw(timing_handle, timing, 2));
-    lucent_physical_present_destroy_raw(timing_handle);
+    assert(!emufusion_physical_compositor_timing_raw(0, timing, 3));
+    assert(!emufusion_physical_compositor_timing_raw(timing_handle, timing, 2));
+    emufusion_physical_present_destroy_raw(timing_handle);
     enum { FIELDS = 12, CAPACITY = 97 * FIELDS };
     jlong rows[CAPACITY];
     /* Physical scanout accounting remains independent of dense qualification.
@@ -291,10 +291,10 @@ int main(void) {
      * compositor drops are explicit, and only strict monotonic scanout times
      * become READY results. */
     egl_extensions = "EGL_KHR_fence_sync";
-    assert(lucent_physical_present_create_raw() == 0);
+    assert(emufusion_physical_present_create_raw() == 0);
     egl_extensions = "EGL_KHR_fence_sync EGL_ANDROID_get_frame_timestamps";
     frame_timestamp_supported = 0;
-    assert(lucent_physical_present_create_raw() == 0);
+    assert(emufusion_physical_present_create_raw() == 0);
     frame_timestamp_supported = 1;
     assert(eglGetCurrentDisplay() == current_display);
     assert(eglGetCurrentSurface(0x3059) == current_surface);
@@ -302,49 +302,49 @@ int main(void) {
     assert(eglGetProcAddress("eglGetNextFrameIdANDROID") != NULL);
     assert(eglGetProcAddress("eglGetFrameTimestampSupportedANDROID") != NULL);
     assert(eglGetProcAddress("eglGetFrameTimestampsANDROID") != NULL);
-    jlong physical = lucent_physical_present_create_raw();
+    jlong physical = emufusion_physical_present_create_raw();
     assert(physical != 0 && timestamps_enabled);
     uint64_t frame_id = 0;
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1 &&
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1 &&
             frame_id == 1);
-    assert(lucent_physical_present_pending_raw(physical) == 0);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 2,
+    assert(emufusion_physical_present_pending_raw(physical) == 0);
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 2,
             8448000) == 1);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 2,
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 2,
             8448000) == -4);
-    assert(lucent_physical_present_pending_raw(physical) == 1);
+    assert(emufusion_physical_present_pending_raw(physical) == 1);
     physical_present_ns = -2;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 0);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 0);
     physical_present_ns = 1000000000;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[0] == 1 && rows[1] == 1000000000 && rows[2] == 2 &&
             rows[3] == 8448000 && rows[4] == 0);
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1 &&
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1 &&
             frame_id == 2);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 1,
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 1,
             8448000) == 1);
     physical_present_ns = -1;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 2);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 2);
     assert(rows[0] == 2 && rows[1] == -1);
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1 &&
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1 &&
             frame_id == 3);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 1,
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 1,
             8448000) == 1);
     physical_timestamp_error = EGL_BAD_ACCESS;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 3);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 3);
     assert(rows[0] == 3 && rows[1] == 0 && rows[2] == 1 &&
             rows[3] == 8448000 && rows[4] == EGL_BAD_ACCESS);
-    assert(lucent_physical_present_pending_raw(physical) == 0);
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1 &&
+    assert(emufusion_physical_present_pending_raw(physical) == 0);
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1 &&
             frame_id == 4);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 1,
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 1,
             8448000) == 1);
     physical_present_ns = 999999999;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == -6);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == -6);
     current_context = (EGLContext)(uintptr_t)0x9999;
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == -2);
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == -2);
     current_context = (EGLContext)(uintptr_t)0x1234;
-    lucent_physical_present_destroy_raw(physical);
+    emufusion_physical_present_destroy_raw(physical);
     assert(!timestamps_enabled);
 
     /* Timestamp publication is not guaranteed to be ordered by frame ID. A
@@ -357,38 +357,38 @@ int main(void) {
     for (int index = 0; index < 128; ++index)
         physical_error_by_id[index] = EGL_SUCCESS;
     physical_timestamp_scripted = 1;
-    physical = lucent_physical_present_create_raw();
+    physical = emufusion_physical_present_create_raw();
     assert(physical != 0 && timestamps_enabled);
     uint64_t scripted_ids[3];
     for (int index = 0; index < 3; ++index) {
-        assert(lucent_physical_present_next_raw(physical,
+        assert(emufusion_physical_present_next_raw(physical,
                 &scripted_ids[index]) == 1);
         assert(scripted_ids[index] < 128);
-        assert(lucent_physical_present_commit_raw(physical,
+        assert(emufusion_physical_present_commit_raw(physical,
                 scripted_ids[index], 1, 8448000) == 1);
     }
     physical_present_by_id[scripted_ids[0]] = -2;
     physical_present_by_id[scripted_ids[1]] = 2000000000;
     physical_present_by_id[scripted_ids[2]] = -2;
-    int scripted_result = lucent_physical_present_poll_raw(physical, rows,
+    int scripted_result = emufusion_physical_present_poll_raw(physical, rows,
             CAPACITY);
     assert(scripted_result == 0);
-    assert(lucent_physical_present_pending_raw(physical) == 3);
+    assert(emufusion_physical_present_pending_raw(physical) == 3);
     physical_present_by_id[scripted_ids[0]] = 1000000000;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[0] == (jlong)scripted_ids[0] &&
             rows[1] == 1000000000 && rows[4] == 2);
-    assert(lucent_physical_present_pending_raw(physical) == 2);
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_pending_raw(physical) == 2);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[0] == (jlong)scripted_ids[1] &&
             rows[1] == 2000000000 && rows[4] == 1);
-    assert(lucent_physical_present_pending_raw(physical) == 1);
+    assert(emufusion_physical_present_pending_raw(physical) == 1);
     physical_present_by_id[scripted_ids[2]] = 3000000000;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[0] == (jlong)scripted_ids[2] &&
             rows[1] == 3000000000 && rows[4] == 0);
-    assert(lucent_physical_present_pending_raw(physical) == 0);
-    lucent_physical_present_destroy_raw(physical);
+    assert(emufusion_physical_present_pending_raw(physical) == 0);
+    emufusion_physical_present_destroy_raw(physical);
     physical_timestamp_scripted = 0;
     assert(!timestamps_enabled);
 
@@ -399,43 +399,43 @@ int main(void) {
     for (int index = 0; index < 128; ++index)
         physical_error_by_id[index] = EGL_SUCCESS;
     physical_timestamp_scripted = 1;
-    physical = lucent_physical_present_create_raw();
+    physical = emufusion_physical_present_create_raw();
     assert(physical != 0 && timestamps_enabled);
     uint64_t expired_ids[2];
     for (int index = 0; index < 2; ++index) {
-        assert(lucent_physical_present_next_raw(physical,
+        assert(emufusion_physical_present_next_raw(physical,
                 &expired_ids[index]) == 1);
-        assert(lucent_physical_present_commit_raw(physical,
+        assert(emufusion_physical_present_commit_raw(physical,
                 expired_ids[index], 1, 8448000) == 1);
     }
     physical_present_by_id[expired_ids[0]] = -2;
     physical_present_by_id[expired_ids[1]] = 4000000000;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 0);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 0);
     physical_error_by_id[expired_ids[0]] = EGL_BAD_ACCESS;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 3);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 3);
     assert(rows[0] == (jlong)expired_ids[0] && rows[1] == 0 &&
             rows[4] == EGL_BAD_ACCESS);
-    assert(lucent_physical_present_pending_raw(physical) == 1);
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_pending_raw(physical) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[0] == (jlong)expired_ids[1] &&
             rows[1] == 4000000000 && rows[4] == 0);
-    assert(lucent_physical_present_pending_raw(physical) == 0);
-    lucent_physical_present_destroy_raw(physical);
+    assert(emufusion_physical_present_pending_raw(physical) == 0);
+    emufusion_physical_present_destroy_raw(physical);
     physical_timestamp_scripted = 0;
     assert(!timestamps_enabled);
 
-    physical = lucent_physical_present_create_raw();
+    physical = emufusion_physical_present_create_raw();
     assert(physical != 0 && timestamps_enabled);
     for (int index = 0; index < 64; ++index) {
-        assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-        assert(lucent_physical_present_commit_raw(physical, frame_id, 1,
+        assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+        assert(emufusion_physical_present_commit_raw(physical, frame_id, 1,
                 8448000) == 1);
     }
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 1,
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 1,
             8448000) == -5);
-    assert(lucent_physical_present_pending_raw(physical) == 64);
-    lucent_physical_present_destroy_raw(physical);
+    assert(emufusion_physical_present_pending_raw(physical) == 64);
+    emufusion_physical_present_destroy_raw(physical);
     assert(!timestamps_enabled);
 
     /* Optional ready times are exact-frame fields, never poll-time substitutes.
@@ -446,60 +446,60 @@ int main(void) {
     ready_timestamp_values[1] = 4997000000LL;
     ready_timestamp_values[2] = 4997000000LL;
     ready_timestamp_values[3] = 0; /* Supported display-only composition. */
-    physical = lucent_physical_present_create_raw();
+    physical = emufusion_physical_present_create_raw();
     assert(physical != 0);
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
     physical_present_ns = 5000000000LL;
     int optional_queries_before = ready_timestamp_query_count;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[5] == 15 && rows[6] == -1 && rows[9] == -1);
     assert(ready_timestamp_query_count == optional_queries_before);
-    assert(lucent_physical_present_ready_enabled_raw(physical, 1));
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
+    assert(emufusion_physical_present_ready_enabled_raw(physical, 1));
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
     physical_present_ns += 16666666;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[0] == (jlong)frame_id && rows[5] == 15 &&
             rows[6] == 4996000000LL && rows[7] == 4997000000LL &&
             rows[8] == 4997000000LL && rows[9] == 0);
     ready_timestamp_values[0] = -2;
     ready_timestamp_values[3] = -1;
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
     physical_present_ns += 16666666;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[6] == -2 && rows[9] == -1 && rows[1] == physical_present_ns);
     ready_timestamp_error = EGL_BAD_ACCESS;
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
     physical_present_ns += 16666666;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[6] == -1 && rows[9] == -1 && rows[1] == physical_present_ns);
     assert(eglGetError() == EGL_SUCCESS);
-    assert(lucent_physical_present_ready_enabled_raw(physical, 0));
+    assert(emufusion_physical_present_ready_enabled_raw(physical, 0));
     optional_queries_before = ready_timestamp_query_count;
-    assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-    assert(lucent_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
+    assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+    assert(emufusion_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
     physical_present_ns += 16666666;
-    assert(lucent_physical_present_poll_raw(physical, rows, 5) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, 5) == 1);
     assert(ready_timestamp_query_count == optional_queries_before);
-    lucent_physical_present_destroy_raw(physical);
+    emufusion_physical_present_destroy_raw(physical);
     for (unsigned mask = 0; mask < 16; ++mask) {
         ready_timestamp_supported_mask = mask;
         ready_timestamp_values[0] = 4996000000LL;
         ready_timestamp_values[1] = ready_timestamp_values[2] = 4997000000LL;
         ready_timestamp_values[3] = 0;
-        physical = lucent_physical_present_create_raw();
-        assert(physical != 0 && lucent_physical_present_ready_enabled_raw(physical, 1));
-        assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-        assert(lucent_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
-        assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+        physical = emufusion_physical_present_create_raw();
+        assert(physical != 0 && emufusion_physical_present_ready_enabled_raw(physical, 1));
+        assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+        assert(emufusion_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
+        assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
         assert(rows[5] == mask);
         for (int field = 0; field < 4; ++field)
             assert(rows[6 + field] == ((mask & (1U << field)) ?
                     ready_timestamp_values[field] : -1));
-        lucent_physical_present_destroy_raw(physical);
+        emufusion_physical_present_destroy_raw(physical);
     }
 
     /* Publication may arrive out of order. Optional readiness stays attached
@@ -512,21 +512,21 @@ int main(void) {
     physical_present_by_id[2] = 6000000000LL;
     ready_timestamp_values[0] = 5996000000LL;
     ready_timestamp_values[1] = ready_timestamp_values[2] = 5997000000LL;
-    physical = lucent_physical_present_create_raw();
-    assert(physical != 0 && lucent_physical_present_ready_enabled_raw(physical, 1));
+    physical = emufusion_physical_present_create_raw();
+    assert(physical != 0 && emufusion_physical_present_ready_enabled_raw(physical, 1));
     for (int frame = 0; frame < 2; ++frame) {
-        assert(lucent_physical_present_next_raw(physical, &frame_id) == 1);
-        assert(lucent_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
+        assert(emufusion_physical_present_next_raw(physical, &frame_id) == 1);
+        assert(emufusion_physical_present_commit_raw(physical, frame_id, 2, 8333333) == 1);
     }
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 0);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 0);
     physical_present_by_id[1] = 5000000000LL;
     ready_timestamp_values[0] = 4996000000LL;
     ready_timestamp_values[1] = ready_timestamp_values[2] = 4997000000LL;
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[0] == 1 && rows[1] == 5000000000LL && rows[6] == 4996000000LL);
-    assert(lucent_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
+    assert(emufusion_physical_present_poll_raw(physical, rows, CAPACITY) == 1);
     assert(rows[0] == 2 && rows[1] == 6000000000LL && rows[6] == 5996000000LL);
-    lucent_physical_present_destroy_raw(physical);
+    emufusion_physical_present_destroy_raw(physical);
     physical_timestamp_scripted = 0;
     ready_timestamp_supported_mask = 0;
 
@@ -540,26 +540,26 @@ int main(void) {
     extensions = "GL_EXT_disjoint_timer_query";
     jlong timer = Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL);
     assert(timer != 0);
-    assert(lucent_framegen_signature_poll_raw(timer, 0, rows, CAPACITY) == 0);
-    assert(lucent_framegen_signature_begin_raw(timer, 1));
-    assert(!lucent_framegen_signature_begin_raw(timer, 2));
-    assert(lucent_framegen_signature_end_raw(timer));
-    assert(lucent_framegen_signature_poll_raw(timer, 1, rows, CAPACITY) == 8);
+    assert(emufusion_framegen_signature_poll_raw(timer, 0, rows, CAPACITY) == 0);
+    assert(emufusion_framegen_signature_begin_raw(timer, 1));
+    assert(!emufusion_framegen_signature_begin_raw(timer, 2));
+    assert(emufusion_framegen_signature_end_raw(timer));
+    assert(emufusion_framegen_signature_poll_raw(timer, 1, rows, CAPACITY) == 8);
     assert(rows[0] == 0 && rows[1] == 1 && rows[2] == 1 && rows[6] == 0);
-    assert(lucent_framegen_signature_poll_raw(timer, 1, rows, CAPACITY) == 0);
+    assert(emufusion_framegen_signature_poll_raw(timer, 1, rows, CAPACITY) == 0);
     /* Exact equality produces zero samples; a changed signature produces one.
      * The fake uses query parity to model these two occlusion outcomes. */
-    assert(lucent_framegen_signature_begin_raw(timer, 2));
-    assert(lucent_framegen_signature_end_raw(timer));
-    assert(lucent_framegen_signature_poll_raw(timer, 2, rows, CAPACITY) == 8);
+    assert(emufusion_framegen_signature_begin_raw(timer, 2));
+    assert(emufusion_framegen_signature_end_raw(timer));
+    assert(emufusion_framegen_signature_poll_raw(timer, 2, rows, CAPACITY) == 8);
     assert(rows[1] == 2 && rows[2] == 0);
     held_query = 99;
     for (int i = 0; i < 4; ++i) {
-        assert(lucent_framegen_signature_begin_raw(timer, 10 + i));
-        assert(lucent_framegen_signature_end_raw(timer));
+        assert(emufusion_framegen_signature_begin_raw(timer, 10 + i));
+        assert(emufusion_framegen_signature_end_raw(timer));
     }
-    assert(!lucent_framegen_signature_begin_raw(timer, 14));
-    assert(lucent_framegen_signature_poll_raw(timer, 14, rows, CAPACITY) == 0);
+    assert(!emufusion_framegen_signature_begin_raw(timer, 14));
+    assert(emufusion_framegen_signature_poll_raw(timer, 14, rows, CAPACITY) == 0);
     held_query = 0;
     Java_com_thorium_preview_game_DenseGpuTimer_nativeDiscard(NULL, NULL, timer);
     began = 0;
@@ -570,7 +570,7 @@ int main(void) {
             timer, 1, 1));
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, timer));
     assert(began == 1 && ended == 1);
-    assert(lucent_framegen_timer_poll_raw(timer, 1, 0, rows, CAPACITY) == FIELDS);
+    assert(emufusion_framegen_timer_poll_raw(timer, 1, 0, rows, CAPACITY) == FIELDS);
     assert(rows[0] == 0 && rows[3] == 1 && rows[4] == 1);
     /* A post-begin error ends the active query and leaves no orphan, so the
      * same ring slot can be used by the following successful query. */
@@ -587,12 +587,12 @@ int main(void) {
             timer, 2, 1));
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, timer));
     assert(began == 3 && ended == 3);
-    int count = lucent_framegen_timer_poll_raw(timer, 7, 0, rows, CAPACITY);
+    int count = emufusion_framegen_timer_poll_raw(timer, 7, 0, rows, CAPACITY);
     assert(count == FIELDS);
     assert(rows[0] == 0 && rows[3] == 1 && rows[4] == 3);
     assert((uint64_t)rows[8] == elapsed_value); /* proves no 32-bit wrap */
     assert(rows[9] == 4);
-    assert(lucent_framegen_timer_poll_raw(timer, 7, 0, rows, 3) < 0);
+    assert(emufusion_framegen_timer_poll_raw(timer, 7, 0, rows, 3) < 0);
 
     /* Availability may arrive out of submission order. Each result retains
      * its own stage/sequence and the unavailable query remains pending. */
@@ -603,10 +603,10 @@ int main(void) {
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL,
             timer, 2, 4));
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, timer));
-    count = lucent_framegen_timer_poll_raw(timer, 4, 0, rows, CAPACITY);
+    count = emufusion_framegen_timer_poll_raw(timer, 4, 0, rows, CAPACITY);
     assert(count == FIELDS && rows[3] == 2 && rows[4] == 4);
     held_query = 0;
-    count = lucent_framegen_timer_poll_raw(timer, 4, 0, rows, CAPACITY);
+    count = emufusion_framegen_timer_poll_raw(timer, 4, 0, rows, CAPACITY);
     assert(count == FIELDS && rows[3] == 1 && rows[4] == 4);
 
     /* Stale GL errors are drained; errors caused by each EXT accessor become
@@ -616,25 +616,25 @@ int main(void) {
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, timer));
     error_value = 0x0502;
     elapsed_value = 999;
-    count = lucent_framegen_timer_poll_raw(timer, 5, 0, rows, CAPACITY);
+    count = emufusion_framegen_timer_poll_raw(timer, 5, 0, rows, CAPACITY);
     assert(count == FIELDS && rows[0] == 0 && rows[8] == 999);
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL,
             timer, 1, 6));
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, timer));
     availability_error_value = 0x0502;
-    count = lucent_framegen_timer_poll_raw(timer, 6, 0, rows, CAPACITY);
+    count = emufusion_framegen_timer_poll_raw(timer, 6, 0, rows, CAPACITY);
     assert(count == FIELDS && rows[0] == 3 && rows[1] >= 0 && rows[2] != 0);
     availability_error_value = 0;
-    count = lucent_framegen_timer_poll_raw(timer, 6, 0, rows, CAPACITY);
+    count = emufusion_framegen_timer_poll_raw(timer, 6, 0, rows, CAPACITY);
     assert(count == FIELDS && rows[0] == 0);
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL,
             timer, 1, 7));
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, timer));
     result_error_value = 0x0502;
-    count = lucent_framegen_timer_poll_raw(timer, 7, 0, rows, CAPACITY);
+    count = emufusion_framegen_timer_poll_raw(timer, 7, 0, rows, CAPACITY);
     assert(count == FIELDS && rows[0] == 4 && rows[8] == 999);
     result_error_value = 0;
-    count = lucent_framegen_timer_poll_raw(timer, 7, 0, rows, CAPACITY);
+    count = emufusion_framegen_timer_poll_raw(timer, 7, 0, rows, CAPACITY);
     assert(count == FIELDS && rows[0] == 0);
 
     /* Pending slots cannot be overwritten when the ring wraps. */
@@ -645,7 +645,7 @@ int main(void) {
     }
     assert(!Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL,
             timer, 1, 200));
-    assert(lucent_framegen_timer_poll_raw(timer, 200, 200, rows, CAPACITY) ==
+    assert(emufusion_framegen_timer_poll_raw(timer, 200, 200, rows, CAPACITY) ==
             96 * FIELDS);
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL,
             timer, 1, 201));
@@ -665,7 +665,7 @@ int main(void) {
     unsigned char destination[49152] = {0};
     jlong proof_row[15] = {0};
     proof_wait = 0x911B; /* timeout retains oldest without mapping/deleting */
-    assert(lucent_framegen_proof_atlas_poll_raw(replacement, 102, destination,
+    assert(emufusion_framegen_proof_atlas_poll_raw(replacement, 102, destination,
             sizeof(destination), proof_row, 15) == 0);
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativePendingProofAtlases(
             NULL, NULL, replacement) == 1);
@@ -673,7 +673,7 @@ int main(void) {
     /* An unrelated rendering error predating poll belongs to the producer,
      * not this accessor sequence, and must not poison a completed payload. */
     error_value = 0x0502;
-    assert(lucent_framegen_proof_atlas_poll_raw(replacement, 103, destination,
+    assert(emufusion_framegen_proof_atlas_poll_raw(replacement, 103, destination,
             sizeof(destination), proof_row, 15) == 15);
     assert(proof_row[0] == 0 && proof_row[3] == 1 && proof_row[4] == 101 &&
             proof_row[5] == 49152 && proof_row[6] == 2 && proof_row[9] == 0 &&
@@ -686,7 +686,7 @@ int main(void) {
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnqueueProofAtlas(
             NULL, NULL, replacement, 1000, 103) == 0);
     proof_bind_error_value = 0x0502;
-    assert(lucent_framegen_proof_atlas_poll_raw(replacement, 104, destination,
+    assert(emufusion_framegen_proof_atlas_poll_raw(replacement, 104, destination,
             sizeof(destination), proof_row, 15) == 15);
     assert(proof_row[0] == 2 && proof_row[9] == 4 && proof_row[10] == 0x0502);
     proof_bind_error_value = 0;
@@ -694,26 +694,26 @@ int main(void) {
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnqueueProofAtlas(
             NULL, NULL, replacement, 2, 104) == 0);
     proof_map_null = 1;
-    assert(lucent_framegen_proof_atlas_poll_raw(replacement, 105, destination,
+    assert(emufusion_framegen_proof_atlas_poll_raw(replacement, 105, destination,
             sizeof(destination), proof_row, 15) == 15 && proof_row[0] == 6);
     proof_map_null = 0;
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnqueueProofAtlas(
             NULL, NULL, replacement, 3, 106) == 0);
     proof_unmap_ok = 0;
-    assert(lucent_framegen_proof_atlas_poll_raw(replacement, 107, destination,
+    assert(emufusion_framegen_proof_atlas_poll_raw(replacement, 107, destination,
             sizeof(destination), proof_row, 15) == 15 && proof_row[0] == 7);
     proof_unmap_ok = 1;
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnqueueProofAtlas(
             NULL, NULL, replacement, 4, 108) == 0);
     proof_wait = 0x911D;
-    assert(lucent_framegen_proof_atlas_poll_raw(replacement, 109, destination,
+    assert(emufusion_framegen_proof_atlas_poll_raw(replacement, 109, destination,
             sizeof(destination), proof_row, 15) == 15 && proof_row[0] == 5);
     proof_wait = 0x911A;
 
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnqueueProofAtlas(
             NULL, NULL, replacement, 5, 110) == 0);
     current_context = (EGLContext)(uintptr_t)0x9999;
-    assert(lucent_framegen_proof_atlas_poll_raw(replacement, 111, destination,
+    assert(emufusion_framegen_proof_atlas_poll_raw(replacement, 111, destination,
             sizeof(destination), proof_row, 15) == 15 && proof_row[0] == 1);
     /* Wrong-context poll must leave ownership pending; no GL deletion occurs. */
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativePendingProofAtlases(
@@ -729,7 +729,7 @@ int main(void) {
     for (int i = 0; i < 8; ++i) {
         assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnqueueProofAtlas(
                 NULL, NULL, replacement, 20 + i, 120 + i) == 0);
-        assert(lucent_framegen_proof_atlas_poll_raw(replacement, 121 + i,
+        assert(emufusion_framegen_proof_atlas_poll_raw(replacement, 121 + i,
                 destination, sizeof(destination), proof_row, 15) == 15);
         assert(proof_row[0] == 0 && proof_row[2] != 0);
         int slot_index = (int)proof_row[1];
@@ -753,12 +753,12 @@ int main(void) {
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativePendingProofAtlases(
             NULL, NULL, replacement) == 0);
     memset(rows, 0, sizeof(rows));
-    assert(lucent_framegen_timer_poll_raw(replacement, 0, 0, rows, CAPACITY) == 0);
+    assert(emufusion_framegen_timer_poll_raw(replacement, 0, 0, rows, CAPACITY) == 0);
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL,
             replacement, 1, 1));
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL,
             replacement));
-    assert(lucent_framegen_timer_poll_raw(replacement, 1, 0, rows,
+    assert(emufusion_framegen_timer_poll_raw(replacement, 1, 0, rows,
             CAPACITY) == FIELDS);
     assert(rows[0] == 0 && rows[3] == 1 && rows[4] == 1);
     Java_com_thorium_preview_game_DenseGpuTimer_nativeDestroy(NULL, NULL,

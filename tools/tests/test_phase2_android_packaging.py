@@ -26,7 +26,7 @@ BROWSER_ACTIVITY = (ROOT / "android-companion" / "src" / "com" / "thorium" /
 BRANDING_PATCH = (ROOT / "unified-android" / "tools" /
                   "patch_emufusion_branding.py")
 VULKAN_BACKEND = (ROOT / "unified-android" / "native" /
-                  "lucent_android_vulkan_backend.c")
+                  "emufusion_android_vulkan_backend.c")
 
 
 class PhaseTwoAndroidPackagingTest(unittest.TestCase):
@@ -244,11 +244,11 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
     def test_vulkan_sync_fence_stays_signalled_while_core_records(self):
         backend = VULKAN_BACKEND.read_text(encoding="utf-8")
         method = backend.split(
-            "bool lucent_android_vulkan_run_and_present", 1
+            "bool emufusion_android_vulkan_run_and_present", 1
         )[1].split(
-            "bool lucent_android_vulkan_detach", 1
+            "bool emufusion_android_vulkan_detach", 1
         )[0]
-        run_frame = method.index("lucent_retro_run_frame")
+        run_frame = method.index("emufusion_retro_run_frame")
         reset_fence = method.index("vkResetFences")
         queue_submit = method.index("vkQueueSubmit")
         self.assertLess(run_frame, reset_fence)

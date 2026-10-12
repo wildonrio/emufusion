@@ -13,10 +13,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Reader/writer for {@code <engine root>/lucent-core-overrides.txt}, the
+ * Reader/writer for {@code <engine root>/emufusion-core-overrides.txt}, the
  * launch-time core-option override channel consumed by
  * {@code register_core_variable_defaults()} in
- * {@code native/lucent_libretro_host.c}.
+ * {@code native/emufusion_libretro_host.c}.
  *
  * <p>Format: one {@code key=value} per line, UTF-8, {@code \n} line ends.
  * Blank lines and lines starting with {@code #} are ignored. Keys are
@@ -34,7 +34,7 @@ import java.util.Map;
  */
 public final class CoreOptionOverrideFile {
     /** File name inside the engine's system root; mirrored in the native host. */
-    public static final String NAME = "lucent-core-overrides.txt";
+    public static final String NAME = "emufusion-core-overrides.txt";
     public static final int MAX_ENTRIES = 64;
     public static final int MAX_KEY_LENGTH = 255;
     public static final int MAX_VALUE_LENGTH = 1023;

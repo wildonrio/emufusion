@@ -41,7 +41,7 @@ class EdenSurfaceLifecycleTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_real_jni_window_transaction_reference_counts(self):
-        source = (ROOT / "unified-android/native/lucent_native_adapter_jni.c").read_text()
+        source = (ROOT / "unified-android/native/emufusion_native_adapter_jni.c").read_text()
         bodies = "\n".join(function(source, sig) for sig in (
             "static bool bind_window(", "static bool bind_replacement_windows(",
             "static void release_replaced_windows(", "static void finish_window_binding(",
@@ -58,7 +58,7 @@ typedef struct {
     ANativeWindow *primary_window, *lower_window;
     ANativeWindow *failed_previous_primary, *failed_previous_lower;
     bool window_binding_failed;
-} lucent_adapter_jni_session;
+} emufusion_adapter_jni_session;
 static ANativeWindow* ANativeWindow_fromSurface(JNIEnv* env, jobject window) {
     if (!window->valid) return NULL;
     ++window->refs; return window;
@@ -69,7 +69,7 @@ static void ANativeWindow_release(ANativeWindow* window) {
 ''' + bodies + r'''
 int main(void) {
     ANativeWindow a={1,true}, b={1,true}, c={0,true}, d={0,true}, bad={0,false};
-    lucent_adapter_jni_session session={&a,&b};
+    emufusion_adapter_jni_session session={&a,&b};
     ANativeWindow *old_a=NULL,*old_b=NULL;
     char error[128];
     assert(!bind_replacement_windows(NULL,&session,&bad,&d,&old_a,&old_b,error,sizeof(error)));
@@ -87,7 +87,7 @@ int main(void) {
     assert(c.refs==1 && d.refs==0);
     release_replaced_windows(session.primary_window,session.lower_window);
     assert(c.refs==0);
-    session=(lucent_adapter_jni_session){&a,&b}; a.refs=1; b.refs=1;
+    session=(emufusion_adapter_jni_session){&a,&b}; a.refs=1; b.refs=1;
     assert(bind_replacement_windows(NULL,&session,&c,&d,&old_a,&old_b,error,sizeof(error)));
     finish_window_binding(&session,old_a,old_b,false);
     assert(a.refs==1 && b.refs==1 && c.refs==1 && d.refs==1 && session.window_binding_failed);
@@ -264,12 +264,12 @@ int main() {
         self.assertIn("HasPresentationFailure()", function(source, "static bool adapter_run_frame("))
 
     def test_jni_failed_callback_retained_until_adapter_destroy(self):
-        source = (ROOT / "unified-android/native/lucent_native_adapter_jni.c").read_text()
+        source = (ROOT / "unified-android/native/emufusion_native_adapter_jni.c").read_text()
         for entry, result in (("nativeStart(", "started"), ("nativeSurfaceRecreated(", "rebound")):
             body = function(source, "Java_com_thorium_preview_NativeAdapterHost_" + entry)
             self.assertIn("finish_window_binding(session, old_primary, old_lower, " + result + ")", body)
         body = function(source, "Java_com_thorium_preview_NativeAdapterHost_nativeDestroy(")
-        self.assertLess(body.index("lucent_native_adapter_destroy"), body.index("release_windows"))
+        self.assertLess(body.index("emufusion_native_adapter_destroy"), body.index("release_windows"))
 
     def test_session_shutdown_excludes_gpu_lifecycle_requests(self):
         source = (ROOT / "engines/patches/eden-lucent-adapter.cpp").read_text()

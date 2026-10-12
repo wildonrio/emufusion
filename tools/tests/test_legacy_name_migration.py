@@ -39,8 +39,7 @@ class LegacyNameMigrationTest(unittest.TestCase):
     def test_old_name_lives_only_in_legacy_names(self):
         # Java package, classes, tags, preferences, files and QML memory keys
         # are renamed; native libraries and engine ABI names are a later phase.
-        native = re.compile(r'liblucent_|loadLibrary\("lucent_|lucent_native_|lucent_retro_|'
-                            r'lucent_libretro_host|lucent-core-overrides|LUCENT_INCLUDE_PHASE3|'
+        native = re.compile(r'liblucent_core_|liblucent_native_adapter_|lucent_native_|LUCENT_INCLUDE_PHASE3|'
                             r'eden-lucent-adapter|translucent', re.I)
         offenders = []
         for base in (ROOT / 'unified-android/src', ROOT / 'android-companion/src', ROOT / 'theme'):
@@ -74,6 +73,7 @@ public class MigrationProbe {
 ''' + constants(LEGACY) + '''
   }
   static final String ENGINE_MARKER_PREFIX = LegacyNames.ENGINE_MARKER_PREFIX;
+  static final String CORE_OPTION_OVERRIDES = LegacyNames.CORE_OPTION_OVERRIDES;
   static class ImportManager { static final String AUTO_METADATA_PREFIX = "99-emufusion-auto-"; }
 ''' + bodies.replace('org.json.JSONObject', 'Json') + '\n' + marker + r'''
   // Minimal flat JSON object (string/number/boolean values) for the probe.
@@ -115,7 +115,8 @@ public class MigrationProbe {
     write(new File(metafiles, "owner.metadata.pegasus.txt"), "game: Mine\n");
     File engine = new File(root, "engine-system/armsx2");
     write(new File(engine, ".lucent-runtime-assets"), "rev");
-    write(new File(engine, "lucent-core-overrides.txt"), "keep");
+    write(new File(engine, "pcsx2-keep"), "user data");
+    write(new File(engine, "emufusion-core-overrides.txt"), "keep");
 
     migrateThemeMemory(memory);
     rewriteSelectedTheme(new File(config, "settings.txt"), legacyPath);
@@ -135,7 +136,7 @@ public class MigrationProbe {
           !new File(metafiles, "99-lucent-auto-gba.metadata.pegasus.txt").exists() &&
           new File(metafiles, "owner.metadata.pegasus.txt").isFile(), "generated metadata renamed only");
     check(new File(engine, ".emufusion-runtime-assets").isFile() && !new File(engine, ".lucent-runtime-assets").exists() &&
-          new File(engine, "lucent-core-overrides.txt").isFile(), "markers renamed only");
+          new File(engine, "emufusion-core-overrides.txt").isFile(), "markers renamed only");
 
     // The previous QML can write old keys once more before the new theme
     // loads; the next start folds them in without overriding newer values.

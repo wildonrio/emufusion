@@ -55,7 +55,7 @@ public final class NativeAdapterHost implements Closeable {
     }
 
     static {
-        System.loadLibrary("lucent_native_adapter_host");
+        System.loadLibrary("emufusion_native_adapter_host");
     }
 
     private long handle;

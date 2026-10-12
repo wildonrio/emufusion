@@ -611,7 +611,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
         presentation_geometry = wait_until(
             lambda: next((line for line in logs(adb_path, serial).splitlines()
                           if re.search(
-                              r"LucentGlesBackend(?:\(\s*\d+\))?: "
+                              r"EmuFusionGlesBackend(?:\(\s*\d+\))?: "
                               r"presentation geometry.*sourcePadding=0",
                               line,
                           )), False),

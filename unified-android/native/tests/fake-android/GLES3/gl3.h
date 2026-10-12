@@ -1,5 +1,5 @@
-#ifndef LUCENT_FAKE_GLES3_H
-#define LUCENT_FAKE_GLES3_H
+#ifndef EMUFUSION_FAKE_GLES3_H
+#define EMUFUSION_FAKE_GLES3_H
 
 #include <stddef.h>
 

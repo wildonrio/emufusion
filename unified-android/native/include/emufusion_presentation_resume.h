@@ -1,19 +1,19 @@
-#ifndef LUCENT_PRESENTATION_RESUME_H
-#define LUCENT_PRESENTATION_RESUME_H
+#ifndef EMUFUSION_PRESENTATION_RESUME_H
+#define EMUFUSION_PRESENTATION_RESUME_H
 #include <stdbool.h>
 #include <stdint.h>
 
 /* Lifecycle readiness, not a gameplay/FG cadence qualification. Never accept
  * a single frame: Thor can scan one out between two display power-on stalls. */
-typedef struct lucent_presentation_resume {
+typedef struct emufusion_presentation_resume {
     uint64_t last_id;
     int64_t last_present_ns;
     unsigned last_hold;
     unsigned regular_intervals;
-} lucent_presentation_resume;
+} emufusion_presentation_resume;
 
-static inline bool lucent_presentation_resume_observe(
-        lucent_presentation_resume *state, uint64_t id, int64_t present_ns,
+static inline bool emufusion_presentation_resume_observe(
+        emufusion_presentation_resume *state, uint64_t id, int64_t present_ns,
         int64_t observed_ns, int64_t interval_ns) {
     if (id <= state->last_id || present_ns <= 0 || interval_ns < 1000000 ||
             interval_ns > 100000000) return false;

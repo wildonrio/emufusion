@@ -1,10 +1,10 @@
 /*
  * Vulkan extension of the MIT-licensed libretro API. This is the ABI subset
- * used by Lucent's independent Vulkan frontend; it contains no RetroArch
+ * used by EmuFusion's independent Vulkan frontend; it contains no RetroArch
  * frontend implementation.
  */
-#ifndef LUCENT_LIBRETRO_VULKAN_H
-#define LUCENT_LIBRETRO_VULKAN_H
+#ifndef EMUFUSION_LIBRETRO_VULKAN_H
+#define EMUFUSION_LIBRETRO_VULKAN_H
 
 #include "libretro.h"
 #include <vulkan/vulkan.h>

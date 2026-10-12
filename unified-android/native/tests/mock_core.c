@@ -33,9 +33,9 @@ static unsigned port_device_count;
 static unsigned last_port;
 static unsigned last_device;
 
-#if defined(LUCENT_MOCK_DLCLOSE_MARKER)
+#if defined(EMUFUSION_MOCK_DLCLOSE_MARKER)
 __attribute__((destructor)) static void record_mock_dso_finalized(void) {
-    const char *path = getenv("LUCENT_MOCK_DLCLOSE_MARKER_PATH");
+    const char *path = getenv("EMUFUSION_MOCK_DLCLOSE_MARKER_PATH");
     FILE *marker;
     if (!path || !path[0]) return;
     marker = fopen(path, "wb");
@@ -46,34 +46,34 @@ __attribute__((destructor)) static void record_mock_dso_finalized(void) {
 #endif
 
 /* Test-only probes resolved by the host harness through dlopen/dlsym. */
-void lucent_mock_emit_video(unsigned width, unsigned height, size_t pitch) {
+void emufusion_mock_emit_video(unsigned width, unsigned height, size_t pitch) {
     uint32_t pixels[8] = {0};
     if (video) video(pixels, width, height, pitch);
 }
-void lucent_mock_emit_audio(size_t frames) {
+void emufusion_mock_emit_audio(size_t frames) {
     size_t index;
     if (!audio) return;
     for (index = 0; index < frames; index++)
         audio((int16_t)index, (int16_t)-((int16_t)index));
 }
-bool lucent_mock_probe_null_environment(void) {
+bool emufusion_mock_probe_null_environment(void) {
     return environment && environment(RETRO_ENVIRONMENT_GET_CAN_DUPE, NULL);
 }
-bool lucent_mock_overscan_enabled(void) {
+bool emufusion_mock_overscan_enabled(void) {
     bool enabled = true;
     return !environment ||
             !environment(RETRO_ENVIRONMENT_GET_OVERSCAN, &enabled) || enabled;
 }
-bool lucent_mock_callbacks_were_set_before_init(void) { return callback_before_init; }
-void lucent_mock_set_oversized_state(bool value) { oversized_state = value; }
-void lucent_mock_set_changing_state_size(bool value) {
+bool emufusion_mock_callbacks_were_set_before_init(void) { return callback_before_init; }
+void emufusion_mock_set_oversized_state(bool value) { oversized_state = value; }
+void emufusion_mock_set_changing_state_size(bool value) {
     changing_state_size = value;
     state_size_queries = 0;
     last_advertised_state_size = 0;
 }
-void lucent_mock_set_oversized_save_ram(bool value) { oversized_save_ram = value; }
-void lucent_mock_set_sample_rate(double value) { reported_sample_rate = value; }
-bool lucent_mock_change_runtime_sample_rate(double value) {
+void emufusion_mock_set_oversized_save_ram(bool value) { oversized_save_ram = value; }
+void emufusion_mock_set_sample_rate(double value) { reported_sample_rate = value; }
+bool emufusion_mock_change_runtime_sample_rate(double value) {
     struct retro_system_av_info info;
     if (!environment) return false;
     memset(&info, 0, sizeof(info));
@@ -85,17 +85,17 @@ bool lucent_mock_change_runtime_sample_rate(double value) {
     info.timing.sample_rate = value;
     return environment(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &info);
 }
-void lucent_mock_set_prepare_exit_result(bool value) { prepare_exit_result = value; }
-unsigned lucent_mock_prepare_exit_count(void) { return prepare_exit_count; }
-unsigned lucent_mock_unload_count(void) { return unload_count; }
-unsigned lucent_mock_reset_count(void) { return reset_count; }
-unsigned lucent_mock_port_device_count(void) { return port_device_count; }
-unsigned lucent_mock_last_port(void) { return last_port; }
-unsigned lucent_mock_last_device(void) { return last_device; }
-int16_t lucent_mock_pointer_state(unsigned id) {
+void emufusion_mock_set_prepare_exit_result(bool value) { prepare_exit_result = value; }
+unsigned emufusion_mock_prepare_exit_count(void) { return prepare_exit_count; }
+unsigned emufusion_mock_unload_count(void) { return unload_count; }
+unsigned emufusion_mock_reset_count(void) { return reset_count; }
+unsigned emufusion_mock_port_device_count(void) { return port_device_count; }
+unsigned emufusion_mock_last_port(void) { return last_port; }
+unsigned emufusion_mock_last_device(void) { return last_device; }
+int16_t emufusion_mock_pointer_state(unsigned id) {
     return input_state ? input_state(0, RETRO_DEVICE_POINTER, 0, id) : 0;
 }
-const char *lucent_mock_option_value(const char *key) {
+const char *emufusion_mock_option_value(const char *key) {
     struct retro_variable current;
     if (!key || !environment) return NULL;
     current.key = key;
@@ -106,7 +106,7 @@ const char *lucent_mock_option_value(const char *key) {
 
 void retro_init(void) {
     struct retro_variable definitions[] = {
-        { "lucent_software_test", "Software default; preferred|other" },
+        { "emufusion_software_test", "Software default; preferred|other" },
         { "puae_kickstart", "Kickstart ROM; auto|aros" },
         { "dolphin_widescreen", "Wii widescreen; disabled|enabled" },
         { "dolphin_widescreen_hack", "Widescreen hack; disabled|enabled" },
@@ -127,7 +127,7 @@ void retro_init(void) {
         { "citra_resolution_factor", "Internal resolution; 4|1|2|3|5" },
         { NULL, NULL },
     };
-    struct retro_variable current = { "lucent_software_test", NULL };
+    struct retro_variable current = { "emufusion_software_test", NULL };
     struct retro_variable kickstart = { "puae_kickstart", NULL };
     initialized = true;
     if (environment && environment(RETRO_ENVIRONMENT_SET_VARIABLES, definitions) &&
@@ -140,7 +140,7 @@ void retro_deinit(void) { initialized = false; }
 unsigned retro_api_version(void) { return RETRO_API_VERSION; }
 void retro_get_system_info(struct retro_system_info *info) {
     memset(info, 0, sizeof(*info));
-    info->library_name = "Lucent Mock Core";
+    info->library_name = "EmuFusion Mock Core";
     info->library_version = "1";
     info->valid_extensions = "mock";
     info->need_fullpath = false;
@@ -230,7 +230,7 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code) {
     (void)index; (void)enabled; (void)code;
 }
 bool retro_load_game(const struct retro_game_info *game) {
-#if defined(LUCENT_MOCK_REJECT_GAME)
+#if defined(EMUFUSION_MOCK_REJECT_GAME)
     (void)game;
     return false;
 #else

@@ -11,7 +11,7 @@ import java.io.IOException;
 /** Android Vulkan hardware-render libretro bridge owned entirely by EmuFusion. */
 public final class ExperimentalVulkanLibretroHost implements Closeable {
     static {
-        if (Build.VERSION.SDK_INT >= 24) System.loadLibrary("lucent_vulkan_host");
+        if (Build.VERSION.SDK_INT >= 24) System.loadLibrary("emufusion_vulkan_host");
     }
 
     private long handle;

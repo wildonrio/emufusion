@@ -74,9 +74,9 @@ class OverrideFileTest(unittest.TestCase):
 
     def test_java_and_native_agree_on_the_channel(self):
         java = read("unified-android/src/com/thorium/preview/game/CoreOptionOverrideFile.java")
-        host = read("unified-android/native/lucent_libretro_host.c")
-        self.assertIn('NAME = "lucent-core-overrides.txt"', java)
-        self.assertIn('#define CORE_OVERRIDE_FILE_NAME "lucent-core-overrides.txt"', host)
+        host = read("unified-android/native/emufusion_libretro_host.c")
+        self.assertIn('NAME = "emufusion-core-overrides.txt"', java)
+        self.assertIn('#define CORE_OVERRIDE_FILE_NAME "emufusion-core-overrides.txt"', host)
         self.assertIn("MAX_ENTRIES = 64", java)
         self.assertIn("#define MAX_CORE_OVERRIDES 64u", host)
         self.assertIn("MAX_FILE_BYTES = 64 * 1024", java)
@@ -87,7 +87,7 @@ class OverrideFileTest(unittest.TestCase):
         self.assertIn("file.length() > MAX_FILE_BYTES", java)
 
     def test_native_host_applies_overrides_after_defaults_and_frees_them(self):
-        host = read("unified-android/native/lucent_libretro_host.c")
+        host = read("unified-android/native/emufusion_libretro_host.c")
         defaults = host.split("static bool register_core_variable_defaults(")[1]
         override_at = defaults.index("find_core_override(host, variable->key)")
         # Every reviewed default precedes the override lookup in the loop body.
@@ -105,7 +105,7 @@ class OverrideFileTest(unittest.TestCase):
     def test_native_tests_cover_the_round_trip(self):
         test = read("unified-android/native/tests/host_test.c")
         mock = read("unified-android/native/tests/mock_core.c")
-        self.assertIn('"%s/lucent-core-overrides.txt", argv[3]', test)
+        self.assertIn('"%s/emufusion-core-overrides.txt", argv[3]', test)
         self.assertIn('"mupen64plus-aspect"), "16:9 adjusted") == 0', test)
         self.assertIn("an override token the core does not advertise must be ignored", test)
         self.assertIn("removing the override file did not restore the defaults", test)
@@ -153,7 +153,7 @@ class CompanionAndThemeTest(unittest.TestCase):
 
     def test_contract_doc_describes_the_channel(self):
         doc = read("docs/internal-core-aspect-contract.md")
-        self.assertIn("lucent-core-overrides.txt", doc)
+        self.assertIn("emufusion-core-overrides.txt", doc)
         self.assertIn("`hackEnabled`", doc)
         self.assertIn("default **false**", doc)
         self.assertIn("dolphin_cheats_enabled=enabled", doc)

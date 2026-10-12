@@ -16,9 +16,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NATIVE = ROOT / "unified-android" / "native"
-HOST_C = NATIVE / "lucent_libretro_host.c"
-HOST_H = NATIVE / "include" / "lucent_libretro_host.h"
-JNI_C = NATIVE / "lucent_libretro_jni.c"
+HOST_C = NATIVE / "emufusion_libretro_host.c"
+HOST_H = NATIVE / "include" / "emufusion_libretro_host.h"
+JNI_C = NATIVE / "emufusion_libretro_jni.c"
 NATIVE_TESTS = NATIVE / "tests"
 PREVIEW = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview"
 LIBRETRO_HOST = PREVIEW / "LibretroHost.java"
@@ -53,16 +53,16 @@ class NativeResetTest(unittest.TestCase):
         # The symbol was resolved long before anything could call it.
         self.assertIn('RESOLVE(host, reset, "retro_reset");', self.host)
         self.assertIn(
-            "bool lucent_retro_reset(lucent_retro_host *host, char *error,",
+            "bool emufusion_retro_reset(emufusion_retro_host *host, char *error,",
             self.header,
         )
         self.assertIn(
-            "bool lucent_retro_reset(lucent_retro_host *host, char *error,",
+            "bool emufusion_retro_reset(emufusion_retro_host *host, char *error,",
             self.host,
         )
 
     def test_reset_fails_closed_and_holds_the_host_lock(self):
-        body = body_after(self.host, "bool lucent_retro_reset(lucent_retro_host")
+        body = body_after(self.host, "bool emufusion_retro_reset(emufusion_retro_host")
         self.assertIn("lock_host();", body)
         # No host, no loaded game, and no resolved function pointer are all
         # rejected before the core is touched.
@@ -71,7 +71,7 @@ class NativeResetTest(unittest.TestCase):
         # Cores may emit video/audio from inside retro_reset, so the callback
         # owner has to be this host first, exactly as run_frame does.
         self.assertLess(body.index("active_host = host;"), body.index("host->reset();"))
-        self.assertIn("__android_log_print(ANDROID_LOG_INFO, \"LucentNativeHost\"", body)
+        self.assertIn("__android_log_print(ANDROID_LOG_INFO, \"EmuFusionNativeHost\"", body)
 
     def test_the_jni_boundary_binds_reset_on_both_hosts(self):
         self.assertIn(
@@ -83,7 +83,7 @@ class NativeResetTest(unittest.TestCase):
         )
         software = body_after(
             self.jni, "Java_com_thorium_preview_LibretroHost_nativeReset")
-        self.assertIn("lucent_retro_reset(from_handle(handle)", software)
+        self.assertIn("emufusion_retro_reset(from_handle(handle)", software)
         self.assertIn("throw_state(env, error);", software)
         # The GLES session wraps the host in a session struct; the reset has
         # to reach the same underlying host the game was loaded into.
@@ -93,7 +93,7 @@ class NativeResetTest(unittest.TestCase):
         )
         self.assertIn("from_gles_handle(handle)", hardware)
         self.assertIn("session && session->host", hardware)
-        self.assertIn("lucent_retro_reset(session->host", hardware)
+        self.assertIn("emufusion_retro_reset(session->host", hardware)
 
     def test_the_jni_boundary_binds_the_port_device_on_the_hardware_host(self):
         name = ("Java_com_thorium_preview_ExperimentalGlesLibretroHost_"
@@ -101,7 +101,7 @@ class NativeResetTest(unittest.TestCase):
         self.assertIn(name, self.jni)
         body = body_after(self.jni, name)
         self.assertIn("from_gles_handle(handle)", body)
-        self.assertIn("lucent_retro_set_controller_port_device(session->host", body)
+        self.assertIn("emufusion_retro_set_controller_port_device(session->host", body)
         self.assertIn("(unsigned)port, (unsigned)device", body)
         self.assertIn("throw_state(env, error);", body)
 
@@ -120,9 +120,9 @@ class NativeCoverageTest(unittest.TestCase):
 
     def test_the_software_host_test_proves_reset_and_the_port_device(self):
         test = (NATIVE_TESTS / "host_test.c").read_text(encoding="utf-8")
-        self.assertIn("lucent_mock_reset_count", test)
-        self.assertIn("lucent_mock_port_device_count", test)
-        self.assertIn('CHECK(lucent_retro_reset(host, error, sizeof(error)), "reset failed");',
+        self.assertIn("emufusion_mock_reset_count", test)
+        self.assertIn("emufusion_mock_port_device_count", test)
+        self.assertIn('CHECK(emufusion_retro_reset(host, error, sizeof(error)), "reset failed");',
                       test)
         self.assertIn('"retro_reset was not invoked"', test)
         self.assertIn('"reset did not power-cycle core state"', test)
@@ -138,8 +138,8 @@ class NativeCoverageTest(unittest.TestCase):
 
     def test_the_hardware_host_test_covers_the_wii_path(self):
         test = (NATIVE_TESTS / "hw_host_test.c").read_text(encoding="utf-8")
-        self.assertIn("lucent_hw_mock_game_reset_count", test)
-        self.assertIn("lucent_hw_mock_port_device_count", test)
+        self.assertIn("emufusion_hw_mock_game_reset_count", test)
+        self.assertIn("emufusion_hw_mock_port_device_count", test)
         self.assertIn('"hardware host rejected the Wii Nunchuk port device"', test)
         self.assertIn('"hardware port device did not reach the core unchanged"', test)
         self.assertIn('"retro_reset was not invoked on the hardware host"', test)

@@ -6,23 +6,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef LUCENT_MOCK_HW_VULKAN
-#define LUCENT_MOCK_HW_VULKAN 0
+#ifndef EMUFUSION_MOCK_HW_VULKAN
+#define EMUFUSION_MOCK_HW_VULKAN 0
 #endif
-#ifndef LUCENT_MOCK_ANDROID_GLES
-#define LUCENT_MOCK_ANDROID_GLES 0
+#ifndef EMUFUSION_MOCK_ANDROID_GLES
+#define EMUFUSION_MOCK_ANDROID_GLES 0
 #endif
-#ifndef LUCENT_MOCK_MUPEN_GLES
-#define LUCENT_MOCK_MUPEN_GLES 0
+#ifndef EMUFUSION_MOCK_MUPEN_GLES
+#define EMUFUSION_MOCK_MUPEN_GLES 0
 #endif
-#ifndef LUCENT_MOCK_ARMSX2
-#define LUCENT_MOCK_ARMSX2 0
+#ifndef EMUFUSION_MOCK_ARMSX2
+#define EMUFUSION_MOCK_ARMSX2 0
 #endif
 
 /* The deliberately small host-test libretro header does not carry the full
  * optional descriptor definition.  This is its ABI shape and, importantly,
  * begins with integers rather than pointer fields. */
-struct lucent_mock_input_descriptor {
+struct emufusion_mock_input_descriptor {
     unsigned port;
     unsigned device;
     unsigned index;
@@ -38,16 +38,16 @@ static retro_input_poll_t input_poll;
 static retro_input_state_t input_state;
 static unsigned video_width = 4;
 static unsigned video_height = 4;
-void lucent_hw_mock_set_video_size(unsigned width, unsigned height) {
+void emufusion_hw_mock_set_video_size(unsigned width, unsigned height) {
     video_width = width;
     video_height = height;
 }
-void lucent_hw_mock_set_geometry(unsigned width, unsigned height) {
+void emufusion_hw_mock_set_geometry(unsigned width, unsigned height) {
     struct retro_game_geometry geometry = {width, height, width, height,
             height ? (float)width / height : 0.0f};
     environment(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
 }
-void lucent_hw_mock_set_render_capacity(unsigned width, unsigned height,
+void emufusion_hw_mock_set_render_capacity(unsigned width, unsigned height,
                                         unsigned max_width, unsigned max_height) {
     struct retro_system_av_info info = {
         {width, height, max_width, max_height,
@@ -77,43 +77,43 @@ static unsigned supplied_frontend_framebuffer;
 
 static void context_reset(void) {
     reset_count++;
-#if LUCENT_MOCK_HW_VULKAN
+#if EMUFUSION_MOCK_HW_VULKAN
     backend_hooks_ok = render_interface &&
             render_interface->interface_type == RETRO_HW_RENDER_INTERFACE_VULKAN &&
             render_interface->interface_version == 1;
 #else
     backend_hooks_ok = hardware.get_current_framebuffer &&
-#if LUCENT_MOCK_ANDROID_GLES
+#if EMUFUSION_MOCK_ANDROID_GLES
             hardware.get_current_framebuffer() != 0 &&
 #else
             hardware.get_current_framebuffer() == (uintptr_t)0x1234u &&
 #endif
             hardware.get_proc_address &&
-            hardware.get_proc_address("lucent_mock_symbol") != NULL;
+            hardware.get_proc_address("emufusion_mock_symbol") != NULL;
 #endif
 }
 
 static void context_destroy(void) { destroy_count++; }
 
-unsigned lucent_hw_mock_reset_count(void) { return reset_count; }
-unsigned lucent_hw_mock_destroy_count(void) { return destroy_count; }
-unsigned lucent_hw_mock_state_call_count(void) { return state_call_count; }
-unsigned lucent_hw_mock_game_reset_count(void) { return game_reset_count; }
-unsigned lucent_hw_mock_port_device_count(void) { return port_device_count; }
-unsigned lucent_hw_mock_last_port(void) { return last_port; }
-unsigned lucent_hw_mock_last_device(void) { return last_device; }
-bool lucent_hw_mock_preferred_ok(void) { return preferred_ok; }
-bool lucent_hw_mock_interface_ok(void) { return interface_ok; }
-bool lucent_hw_mock_shared_ok(void) { return shared_ok; }
-bool lucent_hw_mock_backend_hooks_ok(void) { return backend_hooks_ok; }
-bool lucent_hw_mock_variable_default_ok(void) { return variable_default_ok; }
+unsigned emufusion_hw_mock_reset_count(void) { return reset_count; }
+unsigned emufusion_hw_mock_destroy_count(void) { return destroy_count; }
+unsigned emufusion_hw_mock_state_call_count(void) { return state_call_count; }
+unsigned emufusion_hw_mock_game_reset_count(void) { return game_reset_count; }
+unsigned emufusion_hw_mock_port_device_count(void) { return port_device_count; }
+unsigned emufusion_hw_mock_last_port(void) { return last_port; }
+unsigned emufusion_hw_mock_last_device(void) { return last_device; }
+bool emufusion_hw_mock_preferred_ok(void) { return preferred_ok; }
+bool emufusion_hw_mock_interface_ok(void) { return interface_ok; }
+bool emufusion_hw_mock_shared_ok(void) { return shared_ok; }
+bool emufusion_hw_mock_backend_hooks_ok(void) { return backend_hooks_ok; }
+bool emufusion_hw_mock_variable_default_ok(void) { return variable_default_ok; }
 bool retro_lucent_mupen_current_run_has_vi_origin_change(void) {
-    return LUCENT_MOCK_MUPEN_GLES && run_count != 0u && run_count % 3u == 0u;
+    return EMUFUSION_MOCK_MUPEN_GLES && run_count != 0u && run_count % 3u == 0u;
 }
-int16_t lucent_hw_mock_pointer_state(unsigned id) {
+int16_t emufusion_hw_mock_pointer_state(unsigned id) {
     return input_state ? input_state(0, RETRO_DEVICE_POINTER, 0, id) : 0;
 }
-unsigned lucent_hw_mock_frontend_framebuffer(void) {
+unsigned emufusion_hw_mock_frontend_framebuffer(void) {
     return supplied_frontend_framebuffer;
 }
 void lucent_set_frontend_framebuffer(unsigned framebuffer) {
@@ -121,7 +121,7 @@ void lucent_set_frontend_framebuffer(unsigned framebuffer) {
 }
 
 static uint32_t *mock_active_rect;
-void lucent_hw_mock_set_active_rect(const uint32_t *rect) {
+void emufusion_hw_mock_set_active_rect(const uint32_t *rect) {
     if (mock_active_rect) memcpy(mock_active_rect, rect, 7u * sizeof(uint32_t));
 }
 bool retro_lucent_get_hw_active_rect(uint32_t *rect, unsigned count) {
@@ -134,9 +134,9 @@ void retro_deinit(void) { free(mock_active_rect); mock_active_rect = NULL; }
 unsigned retro_api_version(void) { return RETRO_API_VERSION; }
 void retro_get_system_info(struct retro_system_info *info) {
     memset(info, 0, sizeof(*info));
-    info->library_name = LUCENT_MOCK_HW_VULKAN
-            ? "Lucent Vulkan Mock Core" : LUCENT_MOCK_MUPEN_GLES
-            ? "Lucent Mupen GLES Mock Core" : "Lucent GLES Mock Core";
+    info->library_name = EMUFUSION_MOCK_HW_VULKAN
+            ? "EmuFusion Vulkan Mock Core" : EMUFUSION_MOCK_MUPEN_GLES
+            ? "EmuFusion Mupen GLES Mock Core" : "EmuFusion GLES Mock Core";
     info->library_version = "1";
     info->valid_extensions = "mock";
     info->need_fullpath = false;
@@ -152,9 +152,9 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
 }
 void retro_set_environment(retro_environment_t callback) {
     environment = callback;
-#if LUCENT_MOCK_ANDROID_GLES || LUCENT_MOCK_MUPEN_GLES
+#if EMUFUSION_MOCK_ANDROID_GLES || EMUFUSION_MOCK_MUPEN_GLES
     if (environment) {
-        const struct lucent_mock_input_descriptor descriptors[] = {
+        const struct emufusion_mock_input_descriptor descriptors[] = {
             { 0, RETRO_DEVICE_JOYPAD, 0, 6,
               "D-Pad Left" },
             { 0 },
@@ -162,7 +162,7 @@ void retro_set_environment(retro_environment_t callback) {
         unsigned performance_level = 12;
         struct retro_log_callback logger = { NULL };
         struct retro_variable definitions[] = {
-            { "lucent_hw_test", "Lucent hardware test; preferred|other" },
+            { "emufusion_hw_test", "EmuFusion hardware test; preferred|other" },
             { "ppsspp_internal_resolution",
               "Rendering Resolution; 480x272|960x544|1920x1088" },
             { "ppsspp_cropto16x9", "Crop to 16x9; disabled|enabled" },
@@ -180,7 +180,7 @@ void retro_set_environment(retro_environment_t callback) {
               "Blending Accuracy; Minimum|Basic|Medium|High|Full|Maximum" },
             { NULL, NULL },
         };
-        struct retro_variable current = { "lucent_hw_test", NULL };
+        struct retro_variable current = { "emufusion_hw_test", NULL };
         struct retro_variable resolution = {
             "ppsspp_internal_resolution", NULL
         };
@@ -204,7 +204,7 @@ void retro_set_environment(retro_environment_t callback) {
         variable_default_ok = environment(RETRO_ENVIRONMENT_GET_LOG_INTERFACE,
                                           &logger) && logger.log != NULL;
         if (variable_default_ok)
-            logger.log(RETRO_LOG_DEBUG, "Lucent mock core initialized: %d\n", 1);
+            logger.log(RETRO_LOG_DEBUG, "EmuFusion mock core initialized: %d\n", 1);
         variable_default_ok = variable_default_ok && environment(
                     RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS,
                     (void *)descriptors) &&
@@ -239,7 +239,7 @@ void retro_set_environment(retro_environment_t callback) {
                 environment(RETRO_ENVIRONMENT_GET_VARIABLE,
                             &armsx2_blending) &&
                 armsx2_blending.value && strcmp(armsx2_blending.value,
-#if LUCENT_MOCK_ARMSX2
+#if EMUFUSION_MOCK_ARMSX2
                                                 "Full"
 #else
                                                 "Minimum"
@@ -301,16 +301,16 @@ bool retro_load_game(const struct retro_game_info *game) {
     enum retro_hw_context_type preferred = RETRO_HW_CONTEXT_NONE;
     if (!game || !game->data || !game->size || !environment) return false;
     memset(&hardware, 0, sizeof(hardware));
-#if LUCENT_MOCK_HW_VULKAN
+#if EMUFUSION_MOCK_HW_VULKAN
     hardware.context_type = RETRO_HW_CONTEXT_VULKAN;
 #else
-#if LUCENT_MOCK_MUPEN_GLES
+#if EMUFUSION_MOCK_MUPEN_GLES
     /* Exact GLideN64 negotiation shape in pinned Mupen64Plus-Next:
      * GLES3, depth, no stencil/debug/shared context, cache_context. */
     hardware.context_type = RETRO_HW_CONTEXT_OPENGLES3;
     hardware.depth = true;
     hardware.cache_context = true;
-#elif LUCENT_MOCK_ANDROID_GLES
+#elif EMUFUSION_MOCK_ANDROID_GLES
     hardware.context_type = RETRO_HW_CONTEXT_OPENGLES_VERSION;
     hardware.version_major = 3;
     hardware.version_minor = 1;
@@ -328,14 +328,14 @@ bool retro_load_game(const struct retro_game_info *game) {
     preferred_ok = environment(RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER, &preferred) &&
             preferred == hardware.context_type;
     shared_ok =
-#if LUCENT_MOCK_ANDROID_GLES || LUCENT_MOCK_MUPEN_GLES
+#if EMUFUSION_MOCK_ANDROID_GLES || EMUFUSION_MOCK_MUPEN_GLES
             true;
 #else
             environment(RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT, NULL);
 #endif
     if (!preferred_ok || !shared_ok ||
             !environment(RETRO_ENVIRONMENT_SET_HW_RENDER, &hardware)) return false;
-#if LUCENT_MOCK_HW_VULKAN
+#if EMUFUSION_MOCK_HW_VULKAN
     interface_ok = environment(RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE,
                                &render_interface) && render_interface &&
             render_interface->interface_type == RETRO_HW_RENDER_INTERFACE_VULKAN &&

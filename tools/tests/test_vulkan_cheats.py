@@ -129,8 +129,8 @@ class VulkanCheatsTest(unittest.TestCase):
             native = folder / "jni.c"
             native.write_text(JNI)
             platform = "darwin" if sys.platform == "darwin" else "linux"
-            lib = folder / ("liblucent_vulkan_host.dylib" if platform == "darwin"
-                            else "liblucent_vulkan_host.so")
+            lib = folder / ("libemufusion_vulkan_host.dylib" if platform == "darwin"
+                            else "libemufusion_vulkan_host.so")
             subprocess.run(["clang", "-dynamiclib" if platform == "darwin" else "-shared",
                             "-fPIC", "-Wall", "-Wextra", "-Werror",
                             "-I" + str(JAVA_HOME / "include"),
@@ -162,10 +162,10 @@ class VulkanCheatsTest(unittest.TestCase):
         self.assertNotIn("Vulkan session exposes no live cheat bridge", vulkan)
         self.assertIn("nativeHost.reset();", vulkan)
         self.assertNotIn("Vulkan session exposes no reset", vulkan)
-        jni = (ROOT / "unified-android/native/lucent_libretro_vulkan_jni.c").read_text()
+        jni = (ROOT / "unified-android/native/emufusion_libretro_vulkan_jni.c").read_text()
         for symbol in ("nativeCheatResetVulkan", "nativeCheatSetVulkan",
-                       "lucent_retro_cheat_reset", "lucent_retro_cheat_set",
-                       "nativeResetVulkan", "lucent_retro_reset"):
+                       "emufusion_retro_cheat_reset", "emufusion_retro_cheat_set",
+                       "nativeResetVulkan", "emufusion_retro_reset"):
             self.assertIn(symbol, jni)
 
 

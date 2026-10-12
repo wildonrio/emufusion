@@ -79,7 +79,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
     }
 
     private static final class JniBindings implements Bindings {
-        static { System.loadLibrary("lucent_libretro_host"); }
+        static { System.loadLibrary("emufusion_libretro_host"); }
         static final JniBindings INSTANCE = new JniBindings();
         @Override public long create(String core, String root, String system, String save,
                                      int presentationPolicy) {
@@ -225,7 +225,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
     public static final int SOURCE_TIMELINE_MUPEN_VI_ORIGIN = 1;
     // Independent bit: crops a frontend-FBO GLideN64 target's sentinel
     // padding regardless of frame-generation mode. See the native
-    // lucent_retro_source_timeline_policy enum for the full rationale.
+    // emufusion_retro_source_timeline_policy enum for the full rationale.
     public static final int SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS = 2;
 
     public ExperimentalGlesLibretroHost(File core, File trustedCoreDirectory,

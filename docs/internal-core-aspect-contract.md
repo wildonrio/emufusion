@@ -89,7 +89,7 @@ the decision; the pure table lives in `WidescreenHackTable`:
 | 3ds, nds, 2D systems | unavailable | none |
 
 Plumbing: before an engine opens, `WidescreenHackPolicy.prepareLaunch()`
-writes or removes `<engine root>/lucent-core-overrides.txt`
+writes or removes `<engine root>/emufusion-core-overrides.txt`
 (`CoreOptionOverrideFile`: `key=value` per line, 64 entries, 64 KiB, atomic
 `.part` rename). `<engine root>` is `engine-system/<engineId>` for every
 in-process engine, the same directory the libretro sessions pass to the native

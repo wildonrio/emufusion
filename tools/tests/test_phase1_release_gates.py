@@ -16,7 +16,7 @@ BOOTSTRAP = (ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" /
 ENGINE_SPEC = (ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" /
                "game" / "LibretroEngineSpec.java").read_text(encoding="utf-8")
 NATIVE_HOST = (ROOT / "unified-android" / "native" /
-               "lucent_libretro_host.c").read_text(encoding="utf-8")
+               "emufusion_libretro_host.c").read_text(encoding="utf-8")
 REGISTRY = json.loads((ROOT / "engines" / "registry.json").read_text(encoding="utf-8"))
 OPT_IN = json.loads((ROOT / "engines" / "qualification-opt-in.json").read_text(encoding="utf-8"))
 
@@ -331,7 +331,7 @@ Window #1 Window{def u0 com.thorium.preview/com.thorium.preview.PreviewActivity}
     def test_artifact_modes_are_isolated(self):
         with tempfile.TemporaryDirectory() as directory:
             libraries = Path(directory)
-            (libraries / "liblucent_libretro_host.so").write_bytes(b"host")
+            (libraries / "libemufusion_libretro_host.so").write_bytes(b"host")
             release = MODULE.generate(ROOT / "engines" / "registry.json", libraries)
             self.assertEqual([], release["artifacts"])
 

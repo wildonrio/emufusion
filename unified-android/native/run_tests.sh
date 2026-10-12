@@ -87,19 +87,19 @@ mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
     -o "$TEST_DIR/mupen_gles_core.so"
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
-    "$NATIVE_DIR/lucent_libretro_host.c" "$NATIVE_DIR/tests/host_test.c" \
+    "$NATIVE_DIR/emufusion_libretro_host.c" "$NATIVE_DIR/tests/host_test.c" \
     -ldl $LDFLAGS -o "$TEST_DIR/host_test"
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
-    "$NATIVE_DIR/lucent_libretro_host.c" \
+    "$NATIVE_DIR/emufusion_libretro_host.c" \
     "$NATIVE_DIR/tests/dolphin_quarantine_test.c" \
     -ldl $LDFLAGS -o "$TEST_DIR/dolphin_quarantine_test"
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
-    "$NATIVE_DIR/lucent_libretro_host.c" "$NATIVE_DIR/tests/hw_host_test.c" \
+    "$NATIVE_DIR/emufusion_libretro_host.c" "$NATIVE_DIR/tests/hw_host_test.c" \
     -ldl $LDFLAGS -o "$TEST_DIR/hw_host_test"
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS -D__ANDROID__ \
     -I"$NATIVE_DIR/tests/fake-android" \
-    "$NATIVE_DIR/lucent_libretro_host.c" \
-    "$NATIVE_DIR/lucent_android_gles_backend.c" \
+    "$NATIVE_DIR/emufusion_libretro_host.c" \
+    "$NATIVE_DIR/emufusion_android_gles_backend.c" \
     "$NATIVE_DIR/tests/fake_android_egl.c" \
     "$NATIVE_DIR/tests/android_gles_backend_test.c" \
     -ldl -lm $LDFLAGS -o "$TEST_DIR/android_gles_backend_test"
@@ -111,7 +111,7 @@ mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
 "$CC" -std=c11 -O1 -Wall -Wextra -Werror -fsanitize=address,undefined \
     -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/$JNI_PLATFORM" \
     -I"$NATIVE_DIR/tests/fake-android" \
-    "$NATIVE_DIR/lucent_framegen_timer_jni.c" \
+    "$NATIVE_DIR/emufusion_framegen_timer_jni.c" \
     "$NATIVE_DIR/tests/framegen_timer_test.c" \
     -fsanitize=address,undefined -o "$TEST_DIR/framegen_timer_test"
 # Phase 3 native-adapter host: the mock adapter is built as a .so the host
@@ -132,7 +132,7 @@ mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
     "$NATIVE_DIR/tests/mock_native_adapter.c" $LDFLAGS \
     -o "$TEST_DIR/mock_native_adapter_setter_failure.so"
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
-    "$NATIVE_DIR/lucent_native_adapter_host.c" \
+    "$NATIVE_DIR/emufusion_native_adapter_host.c" \
     "$NATIVE_DIR/tests/native_adapter_host_test.c" \
     -ldl $LDFLAGS -o "$TEST_DIR/native_adapter_host_test"
 mkdir -p "$TEST_DIR/system" "$TEST_DIR/save"
@@ -226,17 +226,17 @@ cp "$SANITIZED/mock_core.so" "$SANITIZED/liblucent_core_puae.so"
     "$NATIVE_DIR/tests/hw_mock_core.c" $LDFLAGS \
     -o "$SANITIZED/mupen_gles_core.so"
 "$CC" -std=c11 -O1 -g -pthread -Wall -Wextra -Werror $CFLAGS \
-    $SANITIZER_FLAGS "$NATIVE_DIR/lucent_libretro_host.c" \
+    $SANITIZER_FLAGS "$NATIVE_DIR/emufusion_libretro_host.c" \
     "$NATIVE_DIR/tests/host_test.c" -ldl $LDFLAGS \
     -o "$SANITIZED/host_test"
 "$CC" -std=c11 -O1 -g -pthread -Wall -Wextra -Werror $CFLAGS \
-    $SANITIZER_FLAGS "$NATIVE_DIR/lucent_libretro_host.c" \
+    $SANITIZER_FLAGS "$NATIVE_DIR/emufusion_libretro_host.c" \
     "$NATIVE_DIR/tests/hw_host_test.c" -ldl $LDFLAGS \
     -o "$SANITIZED/hw_host_test"
 "$CC" -std=c11 -O1 -g -pthread -Wall -Wextra -Werror $CFLAGS \
     $SANITIZER_FLAGS -D__ANDROID__ -I"$NATIVE_DIR/tests/fake-android" \
-    "$NATIVE_DIR/lucent_libretro_host.c" \
-    "$NATIVE_DIR/lucent_android_gles_backend.c" \
+    "$NATIVE_DIR/emufusion_libretro_host.c" \
+    "$NATIVE_DIR/emufusion_android_gles_backend.c" \
     "$NATIVE_DIR/tests/fake_android_egl.c" \
     "$NATIVE_DIR/tests/android_gles_backend_test.c" \
     -ldl -lm $LDFLAGS -o "$SANITIZED/android_gles_backend_test"
@@ -256,7 +256,7 @@ cp "$SANITIZED/mock_core.so" "$SANITIZED/liblucent_core_puae.so"
     "$NATIVE_DIR/tests/mock_native_adapter.c" $LDFLAGS \
     -o "$SANITIZED/mock_native_adapter_setter_failure.so"
 "$CC" -std=c11 -O1 -g -pthread -Wall -Wextra -Werror $CFLAGS \
-    $SANITIZER_FLAGS "$NATIVE_DIR/lucent_native_adapter_host.c" \
+    $SANITIZER_FLAGS "$NATIVE_DIR/emufusion_native_adapter_host.c" \
     "$NATIVE_DIR/tests/native_adapter_host_test.c" -ldl $LDFLAGS \
     -o "$SANITIZED/native_adapter_host_test"
 # Apple's host ASan runtime does not support LeakSanitizer; address and

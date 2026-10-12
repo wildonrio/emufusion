@@ -12,7 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 NATIVE = ROOT / 'unified-android/native'
-SOURCE = NATIVE / 'lucent_android_vulkan_backend.c'
+SOURCE = NATIVE / 'emufusion_android_vulkan_backend.c'
 
 
 def function(source, signature):
@@ -27,7 +27,7 @@ def function(source, signature):
 
 
 def harness(source):
-    structs = source[source.index('#define LUCENT_VK_MAX_IMAGES'):
+    structs = source[source.index('#define EMUFUSION_VK_MAX_IMAGES'):
                      source.index('static void set_error(')]
     helpers = '\n'.join(function(source, signature) for signature in (
         'static void set_error(', 'static bool claim_render_thread(',
@@ -38,7 +38,7 @@ def harness(source):
         '/* PRODUCTION_TYPES */', structs).replace(
         '/* PRODUCTION_HELPERS */', helpers).replace(
         '/* PRODUCTION_RUN */', function(source,
-            'bool lucent_android_vulkan_run_and_present('))
+            'bool emufusion_android_vulkan_run_and_present('))
 
 
 def execute(source, directory):

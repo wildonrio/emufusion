@@ -13,10 +13,10 @@ static unsigned swap_count, acquire_count, release_count;
 static int completion_support, completion_enabled;
 static int hold_completions;
 static int64_t completion_times[256];
-void lucent_fake_egl_completion_support(int enabled) { completion_support = enabled; }
-int lucent_fake_egl_completion_enabled(void) { return completion_enabled; }
-void lucent_fake_egl_hold_completions(int hold) { hold_completions = hold; }
-void lucent_fake_egl_complete_last_frames(unsigned count, int64_t interval_ns) {
+void emufusion_fake_egl_completion_support(int enabled) { completion_support = enabled; }
+int emufusion_fake_egl_completion_enabled(void) { return completion_enabled; }
+void emufusion_fake_egl_hold_completions(int hold) { hold_completions = hold; }
+void emufusion_fake_egl_complete_last_frames(unsigned count, int64_t interval_ns) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     int64_t latest = (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
@@ -84,9 +84,9 @@ static GLint sentinel_left = 100, sentinel_bottom = 50;
 static GLint sentinel_right = 1340, sentinel_top = 1030;
 static unsigned bounds_readbacks;
 static GLsizei texture_width, texture_height;
-int lucent_fake_gles_texture_width(void) { return texture_width; }
-int lucent_fake_gles_texture_height(void) { return texture_height; }
-unsigned lucent_fake_gles_bounds_readbacks(void) { return bounds_readbacks; }
+int emufusion_fake_gles_texture_width(void) { return texture_width; }
+int emufusion_fake_gles_texture_height(void) { return texture_height; }
+unsigned emufusion_fake_gles_bounds_readbacks(void) { return bounds_readbacks; }
 static int32_t fake_window_width = 1920;
 static int32_t fake_window_height = 1080;
 static void fake_symbol(void) {}
@@ -157,7 +157,7 @@ __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *name) {
         return (__eglMustCastToProperFunctionPointerType)fake_completion_supported;
     if (name && strcmp(name, "eglGetCompositorTimingANDROID") == 0)
         return (__eglMustCastToProperFunctionPointerType)fake_compositor_timing;
-    if (name && strcmp(name, "lucent_mock_symbol") == 0) return fake_symbol;
+    if (name && strcmp(name, "emufusion_mock_symbol") == 0) return fake_symbol;
     if (name && strcmp(name, "eglPresentationTimeANDROID") == 0)
         return (__eglMustCastToProperFunctionPointerType)fake_presentation_time;
     return NULL;
@@ -176,7 +176,7 @@ EGLBoolean eglSwapBuffers(EGLDisplay d, EGLSurface s) {
 EGLBoolean eglTerminate(EGLDisplay d) { return d == &display_token; }
 EGLint eglGetError(void) { EGLint result = last_error; last_error = EGL_SUCCESS; return result; }
 const GLubyte *glGetString(unsigned name) {
-    static const GLubyte version[] = "OpenGL ES 3.2 Lucent Fake";
+    static const GLubyte version[] = "OpenGL ES 3.2 EmuFusion Fake";
     return name == GL_VERSION ? version : NULL;
 }
 void glGenTextures(GLsizei count, GLuint *textures) {
@@ -344,70 +344,70 @@ int32_t ANativeWindow_getHeight(ANativeWindow *window) {
     (void)window;
     return fake_window_height;
 }
-void lucent_fake_window_set_size(int32_t width, int32_t height) {
+void emufusion_fake_window_set_size(int32_t width, int32_t height) {
     fake_window_width = width;
     fake_window_height = height;
 }
-void lucent_fake_egl_lose_next_swap(void) { lose_next_swap = 1; }
-unsigned lucent_fake_egl_swap_count(void) { return swap_count; }
-unsigned lucent_fake_egl_presentation_time_count(void) {
+void emufusion_fake_egl_lose_next_swap(void) { lose_next_swap = 1; }
+unsigned emufusion_fake_egl_swap_count(void) { return swap_count; }
+unsigned emufusion_fake_egl_presentation_time_count(void) {
     return presentation_time_count;
 }
-int64_t lucent_fake_egl_presentation_time_last(void) {
+int64_t emufusion_fake_egl_presentation_time_last(void) {
     return presentation_time_last;
 }
-int64_t lucent_fake_egl_presentation_time_delta(void) {
+int64_t emufusion_fake_egl_presentation_time_delta(void) {
     return presentation_time_last - presentation_time_previous;
 }
-unsigned lucent_fake_gles_blit_count(void) { return blit_count; }
-unsigned lucent_fake_gles_opaque_alpha_clear_count(void) {
+unsigned emufusion_fake_gles_blit_count(void) { return blit_count; }
+unsigned emufusion_fake_gles_opaque_alpha_clear_count(void) {
     return opaque_alpha_clear_count;
 }
-int lucent_fake_gles_last_blit_source_x1(void) { return last_blit_source_x1; }
-int lucent_fake_gles_last_blit_source_y1(void) { return last_blit_source_y1; }
-int lucent_fake_gles_last_blit_source_x0(void) { return last_blit_source_x0; }
-int lucent_fake_gles_last_blit_source_y0(void) { return last_blit_source_y0; }
-int lucent_fake_gles_previous_blit_source_x0(void) {
+int emufusion_fake_gles_last_blit_source_x1(void) { return last_blit_source_x1; }
+int emufusion_fake_gles_last_blit_source_y1(void) { return last_blit_source_y1; }
+int emufusion_fake_gles_last_blit_source_x0(void) { return last_blit_source_x0; }
+int emufusion_fake_gles_last_blit_source_y0(void) { return last_blit_source_y0; }
+int emufusion_fake_gles_previous_blit_source_x0(void) {
     return previous_blit_source_x0;
 }
-int lucent_fake_gles_previous_blit_source_y0(void) {
+int emufusion_fake_gles_previous_blit_source_y0(void) {
     return previous_blit_source_y0;
 }
-int lucent_fake_gles_previous_blit_source_x1(void) {
+int emufusion_fake_gles_previous_blit_source_x1(void) {
     return previous_blit_source_x1;
 }
-int lucent_fake_gles_previous_blit_source_y1(void) {
+int emufusion_fake_gles_previous_blit_source_y1(void) {
     return previous_blit_source_y1;
 }
-int lucent_fake_gles_last_blit_destination_x0(void) {
+int emufusion_fake_gles_last_blit_destination_x0(void) {
     return last_blit_destination_x0;
 }
-int lucent_fake_gles_last_blit_destination_y0(void) {
+int emufusion_fake_gles_last_blit_destination_y0(void) {
     return last_blit_destination_y0;
 }
-int lucent_fake_gles_last_blit_destination_x1(void) {
+int emufusion_fake_gles_last_blit_destination_x1(void) {
     return last_blit_destination_x1;
 }
-int lucent_fake_gles_last_blit_destination_y1(void) {
+int emufusion_fake_gles_last_blit_destination_y1(void) {
     return last_blit_destination_y1;
 }
-void lucent_fake_gles_set_scissor_enabled(int enabled) {
+void emufusion_fake_gles_set_scissor_enabled(int enabled) {
     scissor_enabled = enabled ? GL_TRUE : GL_FALSE;
 }
-int lucent_fake_gles_scissor_enabled(void) { return scissor_enabled == GL_TRUE; }
-unsigned lucent_fake_gles_bound_framebuffer(void) { return bound_framebuffer; }
-void lucent_fake_gles_set_viewport(GLint x, GLint y, GLsizei width,
+int emufusion_fake_gles_scissor_enabled(void) { return scissor_enabled == GL_TRUE; }
+unsigned emufusion_fake_gles_bound_framebuffer(void) { return bound_framebuffer; }
+void emufusion_fake_gles_set_viewport(GLint x, GLint y, GLsizei width,
                                    GLsizei height) {
     glViewport(x, y, width, height);
 }
-void lucent_fake_gles_set_sentinel_bounds(int enabled) {
+void emufusion_fake_gles_set_sentinel_bounds(int enabled) {
     sentinel_bounds_enabled = enabled;
     sentinel_left = 100; sentinel_bottom = 50;
     sentinel_right = 1340; sentinel_top = 1030;
 }
-void lucent_fake_gles_set_written_rect(int left, int bottom, int right, int top) {
+void emufusion_fake_gles_set_written_rect(int left, int bottom, int right, int top) {
     sentinel_left = left; sentinel_bottom = bottom;
     sentinel_right = right; sentinel_top = top;
 }
-unsigned lucent_fake_window_acquire_count(void) { return acquire_count; }
-unsigned lucent_fake_window_release_count(void) { return release_count; }
+unsigned emufusion_fake_window_acquire_count(void) { return acquire_count; }
+unsigned emufusion_fake_window_release_count(void) { return release_count; }

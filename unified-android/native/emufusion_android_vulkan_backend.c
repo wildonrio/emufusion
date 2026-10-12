@@ -1,11 +1,11 @@
 #define VK_USE_PLATFORM_ANDROID_KHR 1
 
-#include "include/lucent_android_vulkan_backend.h"
-#include "include/lucent_libretro_vulkan.h"
-#include "include/lucent_surface_fit.h"
+#include "include/emufusion_android_vulkan_backend.h"
+#include "include/emufusion_libretro_vulkan.h"
+#include "include/emufusion_surface_fit.h"
 
 #if !defined(__ANDROID__)
-#error "lucent_android_vulkan_backend.c is Android-only"
+#error "emufusion_android_vulkan_backend.c is Android-only"
 #endif
 
 #include <android/native_window.h>
@@ -18,36 +18,36 @@
 #include <time.h>
 #include <android/log.h>
 
-#define LUCENT_VK_MAX_IMAGES 8u
-#define LUCENT_VK_MAX_WAIT_SEMAPHORES 8u
-#define LUCENT_VK_MAX_CORE_COMMANDS 8u
+#define EMUFUSION_VK_MAX_IMAGES 8u
+#define EMUFUSION_VK_MAX_WAIT_SEMAPHORES 8u
+#define EMUFUSION_VK_MAX_CORE_COMMANDS 8u
 
-typedef struct lucent_vulkan_secondary_target {
+typedef struct emufusion_vulkan_secondary_target {
     ANativeWindow *window;
     VkSurfaceKHR surface;
     VkSwapchainKHR swapchain;
     VkFormat swapchain_format;
     VkExtent2D extent;
     uint32_t image_count;
-    VkImage images[LUCENT_VK_MAX_IMAGES];
+    VkImage images[EMUFUSION_VK_MAX_IMAGES];
     VkCommandPool command_pool;
-    VkCommandBuffer command_buffers[LUCENT_VK_MAX_IMAGES];
-    VkFence fences[LUCENT_VK_MAX_IMAGES];
-    VkSemaphore image_available[LUCENT_VK_MAX_IMAGES];
-    VkFence acquire_pending[LUCENT_VK_MAX_IMAGES]; /* borrowed submit fences */
-    VkSemaphore render_finished[LUCENT_VK_MAX_IMAGES];
-    bool image_initialized[LUCENT_VK_MAX_IMAGES];
+    VkCommandBuffer command_buffers[EMUFUSION_VK_MAX_IMAGES];
+    VkFence fences[EMUFUSION_VK_MAX_IMAGES];
+    VkSemaphore image_available[EMUFUSION_VK_MAX_IMAGES];
+    VkFence acquire_pending[EMUFUSION_VK_MAX_IMAGES]; /* borrowed submit fences */
+    VkSemaphore render_finished[EMUFUSION_VK_MAX_IMAGES];
+    bool image_initialized[EMUFUSION_VK_MAX_IMAGES];
     uint32_t current_index;
     uint32_t frame_slot;
-} lucent_vulkan_secondary_target;
+} emufusion_vulkan_secondary_target;
 
-struct lucent_android_vulkan_backend {
+struct emufusion_android_vulkan_backend {
     pthread_t render_thread;
     bool render_thread_set;
     pthread_mutex_t queue_mutex;
     bool queue_mutex_ready;
     ANativeWindow *window;
-    lucent_retro_host *host;
+    emufusion_retro_host *host;
     VkInstance instance;
     VkSurfaceKHR surface;
     struct retro_vulkan_context context;
@@ -57,23 +57,23 @@ struct lucent_android_vulkan_backend {
     VkFormat swapchain_format;
     VkExtent2D extent;
     uint32_t image_count;
-    VkImage images[LUCENT_VK_MAX_IMAGES];
+    VkImage images[EMUFUSION_VK_MAX_IMAGES];
     VkCommandPool command_pool;
-    VkCommandBuffer command_buffers[LUCENT_VK_MAX_IMAGES];
-    VkFence fences[LUCENT_VK_MAX_IMAGES];
-    VkSemaphore image_available[LUCENT_VK_MAX_IMAGES];
-    VkFence acquire_pending[LUCENT_VK_MAX_IMAGES]; /* borrowed submit fences */
-    VkSemaphore render_finished[LUCENT_VK_MAX_IMAGES];
-    bool image_initialized[LUCENT_VK_MAX_IMAGES];
+    VkCommandBuffer command_buffers[EMUFUSION_VK_MAX_IMAGES];
+    VkFence fences[EMUFUSION_VK_MAX_IMAGES];
+    VkSemaphore image_available[EMUFUSION_VK_MAX_IMAGES];
+    VkFence acquire_pending[EMUFUSION_VK_MAX_IMAGES]; /* borrowed submit fences */
+    VkSemaphore render_finished[EMUFUSION_VK_MAX_IMAGES];
+    bool image_initialized[EMUFUSION_VK_MAX_IMAGES];
     uint32_t current_index;
     uint32_t frame_slot;
     bool current_acquired;
     struct retro_vulkan_image core_image;
     bool has_core_image;
-    VkSemaphore core_wait_semaphores[LUCENT_VK_MAX_WAIT_SEMAPHORES];
+    VkSemaphore core_wait_semaphores[EMUFUSION_VK_MAX_WAIT_SEMAPHORES];
     uint32_t core_wait_count;
     uint32_t core_src_queue_family;
-    VkCommandBuffer core_commands[LUCENT_VK_MAX_CORE_COMMANDS];
+    VkCommandBuffer core_commands[EMUFUSION_VK_MAX_CORE_COMMANDS];
     uint32_t core_command_count;
     VkSemaphore core_signal_semaphore;
     uint64_t presented_sequence;
@@ -96,7 +96,7 @@ struct lucent_android_vulkan_backend {
     bool timestamp_timeline_ready;
     float presentation_aspect;
     bool secondary_clockwise_quarter_turn;
-    lucent_vulkan_secondary_target secondary;
+    emufusion_vulkan_secondary_target secondary;
 };
 
 static void set_error(char *buffer, size_t size, const char *format, ...) {
@@ -107,7 +107,7 @@ static void set_error(char *buffer, size_t size, const char *format, ...) {
     va_end(arguments);
 }
 
-static bool claim_render_thread(lucent_android_vulkan_backend *backend,
+static bool claim_render_thread(emufusion_android_vulkan_backend *backend,
                                 char *error, size_t error_size) {
     if (!backend) {
         set_error(error, error_size, "Vulkan backend is required");
@@ -127,15 +127,15 @@ static bool claim_render_thread(lucent_android_vulkan_backend *backend,
 }
 
 static void queue_lock(void *handle) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)handle;
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)handle;
     if (backend && backend->queue_mutex_ready)
         pthread_mutex_lock(&backend->queue_mutex);
 }
 
 static void queue_unlock(void *handle) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)handle;
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)handle;
     if (backend && backend->queue_mutex_ready)
         pthread_mutex_unlock(&backend->queue_mutex);
 }
@@ -143,8 +143,8 @@ static void queue_unlock(void *handle) {
 static void set_image(void *handle, const struct retro_vulkan_image *image,
                       uint32_t num_semaphores, const VkSemaphore *semaphores,
                       uint32_t src_queue_family) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)handle;
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)handle;
     uint32_t count;
     if (!backend) return;
     backend->has_core_image = image && image->create_info.image != VK_NULL_HANDLE;
@@ -154,8 +154,8 @@ static void set_image(void *handle, const struct retro_vulkan_image *image,
         return;
     }
     backend->core_image = *image;
-    count = num_semaphores > LUCENT_VK_MAX_WAIT_SEMAPHORES ?
-            LUCENT_VK_MAX_WAIT_SEMAPHORES : num_semaphores;
+    count = num_semaphores > EMUFUSION_VK_MAX_WAIT_SEMAPHORES ?
+            EMUFUSION_VK_MAX_WAIT_SEMAPHORES : num_semaphores;
     if (count && semaphores)
         memcpy(backend->core_wait_semaphores, semaphores,
                count * sizeof(VkSemaphore));
@@ -164,14 +164,14 @@ static void set_image(void *handle, const struct retro_vulkan_image *image,
 }
 
 static uint32_t get_sync_index(void *handle) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)handle;
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)handle;
     return backend ? backend->current_index : 0;
 }
 
 static uint32_t get_sync_index_mask(void *handle) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)handle;
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)handle;
     if (!backend || !backend->image_count) return 0;
     return backend->image_count >= 32 ? UINT32_MAX :
             ((1u << backend->image_count) - 1u);
@@ -179,12 +179,12 @@ static uint32_t get_sync_index_mask(void *handle) {
 
 static void set_command_buffers(void *handle, uint32_t num_cmd,
                                 const VkCommandBuffer *commands) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)handle;
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)handle;
     uint32_t count;
     if (!backend) return;
-    count = num_cmd > LUCENT_VK_MAX_CORE_COMMANDS ?
-            LUCENT_VK_MAX_CORE_COMMANDS : num_cmd;
+    count = num_cmd > EMUFUSION_VK_MAX_CORE_COMMANDS ?
+            EMUFUSION_VK_MAX_CORE_COMMANDS : num_cmd;
     if (count && commands)
         memcpy(backend->core_commands, commands,
                count * sizeof(VkCommandBuffer));
@@ -192,8 +192,8 @@ static void set_command_buffers(void *handle, uint32_t num_cmd,
 }
 
 static void wait_sync_index(void *handle) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)handle;
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)handle;
     if (!backend || !backend->context.device ||
             backend->current_index >= backend->image_count) return;
     vkWaitForFences(backend->context.device, 1,
@@ -202,8 +202,8 @@ static void wait_sync_index(void *handle) {
 }
 
 static void set_signal_semaphore(void *handle, VkSemaphore semaphore) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)handle;
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)handle;
     if (backend) backend->core_signal_semaphore = semaphore;
 }
 
@@ -247,15 +247,15 @@ static bool choose_gpu(VkInstance instance, VkSurfaceKHR surface,
 }
 
 static bool create_instance_and_surface(
-        lucent_android_vulkan_backend *backend,
+        emufusion_android_vulkan_backend *backend,
         char *error, size_t error_size) {
     const char *extensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
         VK_KHR_ANDROID_SURFACE_EXTENSION_NAME
     };
     VkApplicationInfo fallback = {
-        VK_STRUCTURE_TYPE_APPLICATION_INFO, NULL, "Lucent", 1,
-        "Lucent", 1, VK_API_VERSION_1_1
+        VK_STRUCTURE_TYPE_APPLICATION_INFO, NULL, "EmuFusion", 1,
+        "EmuFusion", 1, VK_API_VERSION_1_1
     };
     VkApplicationInfo application = fallback;
     VkInstanceCreateInfo create_info = {
@@ -293,7 +293,7 @@ static bool create_instance_and_surface(
     return true;
 }
 
-static bool create_surface_only(lucent_android_vulkan_backend *backend,
+static bool create_surface_only(emufusion_android_vulkan_backend *backend,
                                 char *error, size_t error_size) {
     VkAndroidSurfaceCreateInfoKHR surface_info = {
         VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR,
@@ -330,7 +330,7 @@ static bool gpu_supports_extension(VkPhysicalDevice gpu, const char *name) {
     return found;
 }
 
-static bool negotiate_device(lucent_android_vulkan_backend *backend,
+static bool negotiate_device(emufusion_android_vulkan_backend *backend,
                              char *error, size_t error_size) {
     const char *required_extensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -361,7 +361,7 @@ static bool negotiate_device(lucent_android_vulkan_backend *backend,
             backend->context.device == VK_NULL_HANDLE)) {
         /* A core that refuses the timing extension still gets its device;
          * the frame generator then sees real-time stamps as before. */
-        __android_log_print(ANDROID_LOG_WARN, "LucentVulkanBackend",
+        __android_log_print(ANDROID_LOG_WARN, "EmuFusionVulkanBackend",
                 "core rejected %s; retrying device negotiation without it",
                 VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
         memset(&backend->context, 0, sizeof(backend->context));
@@ -424,7 +424,7 @@ static bool choose_surface_format(VkPhysicalDevice gpu, VkSurfaceKHR surface,
     return true;
 }
 
-static bool create_swapchain(lucent_android_vulkan_backend *backend,
+static bool create_swapchain(emufusion_android_vulkan_backend *backend,
                              char *error, size_t error_size) {
     VkSurfaceCapabilitiesKHR capabilities;
     VkSurfaceFormatKHR format;
@@ -462,7 +462,7 @@ static bool create_swapchain(lucent_android_vulkan_backend *backend,
     desired = capabilities.minImageCount;
     if (capabilities.maxImageCount && desired > capabilities.maxImageCount)
         desired = capabilities.maxImageCount;
-    if (desired > LUCENT_VK_MAX_IMAGES) desired = LUCENT_VK_MAX_IMAGES;
+    if (desired > EMUFUSION_VK_MAX_IMAGES) desired = EMUFUSION_VK_MAX_IMAGES;
     memset(&info, 0, sizeof(info));
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     info.surface = backend->surface;
@@ -505,15 +505,15 @@ static bool create_swapchain(lucent_android_vulkan_backend *backend,
         set_error(error, error_size, "cannot create Android Vulkan swapchain");
         return false;
     }
-    backend->image_count = LUCENT_VK_MAX_IMAGES;
+    backend->image_count = EMUFUSION_VK_MAX_IMAGES;
     if (vkGetSwapchainImagesKHR(backend->context.device, backend->swapchain,
                                 &backend->image_count, backend->images) !=
             VK_SUCCESS || !backend->image_count ||
-            backend->image_count > LUCENT_VK_MAX_IMAGES) {
+            backend->image_count > EMUFUSION_VK_MAX_IMAGES) {
         set_error(error, error_size, "cannot enumerate Vulkan swapchain images");
         return false;
     }
-    __android_log_print(ANDROID_LOG_INFO, "LucentVulkanBackend",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionVulkanBackend",
             "QA primary FIFO minImages=%u maxImages=%u requested=%u actual=%u",
             capabilities.minImageCount, capabilities.maxImageCount, desired,
             backend->image_count);
@@ -564,7 +564,7 @@ static bool create_swapchain(lucent_android_vulkan_backend *backend,
     return true;
 }
 
-static void destroy_swapchain(lucent_android_vulkan_backend *backend) {
+static void destroy_swapchain(emufusion_android_vulkan_backend *backend) {
     uint32_t index;
     if (!backend || !backend->context.device) return;
     for (index = 0; index < backend->image_count; index++) {
@@ -595,9 +595,9 @@ static void destroy_swapchain(lucent_android_vulkan_backend *backend) {
 }
 
 static bool create_secondary_swapchain(
-        lucent_android_vulkan_backend *backend,
+        emufusion_android_vulkan_backend *backend,
         char *error, size_t error_size) {
-    lucent_vulkan_secondary_target *target = &backend->secondary;
+    emufusion_vulkan_secondary_target *target = &backend->secondary;
     VkSurfaceCapabilitiesKHR capabilities;
     VkSurfaceFormatKHR format;
     VkSwapchainCreateInfoKHR info;
@@ -630,7 +630,7 @@ static bool create_secondary_swapchain(
     desired = capabilities.minImageCount + 1;
     if (capabilities.maxImageCount && desired > capabilities.maxImageCount)
         desired = capabilities.maxImageCount;
-    if (desired > LUCENT_VK_MAX_IMAGES) desired = LUCENT_VK_MAX_IMAGES;
+    if (desired > EMUFUSION_VK_MAX_IMAGES) desired = EMUFUSION_VK_MAX_IMAGES;
     memset(&info, 0, sizeof(info));
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     info.surface = target->surface;
@@ -673,7 +673,7 @@ static bool create_secondary_swapchain(
         set_error(error, error_size, "cannot create secondary Vulkan swapchain");
         return false;
     }
-    __android_log_print(ANDROID_LOG_INFO, "LucentVulkanBackend",
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionVulkanBackend",
             "secondary swapchain window=%dx%d extent=%ux%u logical=%ux%u "
             "currentTransform=0x%x preTransform=0x%x",
             ANativeWindow_getWidth(target->window),
@@ -684,10 +684,10 @@ static bool create_secondary_swapchain(
             backend->secondary_clockwise_quarter_turn ?
                     target->extent.width : target->extent.height,
             (unsigned)capabilities.currentTransform, (unsigned)info.preTransform);
-    target->image_count = LUCENT_VK_MAX_IMAGES;
+    target->image_count = EMUFUSION_VK_MAX_IMAGES;
     if (vkGetSwapchainImagesKHR(backend->context.device, target->swapchain,
                                 &target->image_count, target->images) != VK_SUCCESS ||
-            !target->image_count || target->image_count > LUCENT_VK_MAX_IMAGES) {
+            !target->image_count || target->image_count > EMUFUSION_VK_MAX_IMAGES) {
         set_error(error, error_size, "cannot enumerate secondary swapchain images");
         return false;
     }
@@ -738,8 +738,8 @@ static bool create_secondary_swapchain(
     return true;
 }
 
-static void destroy_secondary_swapchain(lucent_android_vulkan_backend *backend) {
-    lucent_vulkan_secondary_target *target;
+static void destroy_secondary_swapchain(emufusion_android_vulkan_backend *backend) {
+    emufusion_vulkan_secondary_target *target;
     uint32_t index;
     if (!backend || !backend->context.device) return;
     target = &backend->secondary;
@@ -791,35 +791,35 @@ static void image_barrier(VkCommandBuffer command, VkImage image,
                          0, 0, NULL, 0, NULL, 1, &barrier);
 }
 
-enum lucent_screen_crop {
-    LUCENT_SCREEN_FULL = 0,
-    LUCENT_SCREEN_TOP = 1,
-    LUCENT_SCREEN_BOTTOM = 2
+enum emufusion_screen_crop {
+    EMUFUSION_SCREEN_FULL = 0,
+    EMUFUSION_SCREEN_TOP = 1,
+    EMUFUSION_SCREEN_BOTTOM = 2
 };
 
-typedef struct lucent_source_region {
+typedef struct emufusion_source_region {
     unsigned x;
     unsigned y;
     unsigned width;
     unsigned height;
-} lucent_source_region;
+} emufusion_source_region;
 
 /* Resolve the actual core layout rather than treating every dual-screen image
  * as two vertical halves. A clockwise secondary is the reviewed Azahar path:
- * lucent_libretro_host forces SideScreen, whose source is 400x240 + 320x240
+ * emufusion_libretro_host forces SideScreen, whose source is 400x240 + 320x240
  * horizontally (720x240 at 1x). Other dual-screen cores retain their audited
  * top-bottom composite. */
 static bool resolve_source_region(
-        const lucent_android_vulkan_backend *backend,
+        const emufusion_android_vulkan_backend *backend,
         unsigned source_width, unsigned source_height,
-        enum lucent_screen_crop crop, lucent_source_region *region,
+        enum emufusion_screen_crop crop, emufusion_source_region *region,
         char *error, size_t error_size) {
     if (!backend || !region || !source_width || !source_height) {
         set_error(error, error_size, "invalid Vulkan source geometry");
         return false;
     }
     memset(region, 0, sizeof(*region));
-    if (crop == LUCENT_SCREEN_FULL) {
+    if (crop == EMUFUSION_SCREEN_FULL) {
         region->width = source_width;
         region->height = source_height;
         return true;
@@ -839,8 +839,8 @@ static bool resolve_source_region(
             set_error(error, error_size, "invalid Azahar SideScreen split");
             return false;
         }
-        region->x = crop == LUCENT_SCREEN_BOTTOM ? top_width : 0u;
-        region->width = crop == LUCENT_SCREEN_BOTTOM ?
+        region->x = crop == EMUFUSION_SCREEN_BOTTOM ? top_width : 0u;
+        region->width = crop == EMUFUSION_SCREEN_BOTTOM ?
                 source_width - top_width : top_width;
         region->height = source_height;
         return true;
@@ -851,7 +851,7 @@ static bool resolve_source_region(
      * The exchanged form put the DS top screen on the Thor lower panel in
      * harness run nds-b57 (2026-09-01).  UNVERIFIED on a device: melonds-ds
      * is pinned to the software renderer, so this Vulkan path is unused. */
-    region->y = crop == LUCENT_SCREEN_BOTTOM ? source_height / 2u : 0u;
+    region->y = crop == EMUFUSION_SCREEN_BOTTOM ? source_height / 2u : 0u;
     region->width = source_width;
     region->height = source_height / 2u;
     if (!region->height) {
@@ -862,10 +862,10 @@ static bool resolve_source_region(
 }
 
 static bool record_present_commands_for_target(
-        lucent_android_vulkan_backend *backend, VkCommandBuffer command,
+        emufusion_android_vulkan_backend *backend, VkCommandBuffer command,
         VkImage destination_image, bool destination_initialized,
         VkExtent2D destination_extent, unsigned source_width,
-        unsigned source_height, enum lucent_screen_crop crop,
+        unsigned source_height, enum emufusion_screen_crop crop,
         bool scaled_portrait_surface,
         char *error, size_t error_size) {
     VkCommandBufferBeginInfo begin = {
@@ -890,7 +890,7 @@ static bool record_present_commands_for_target(
     /* Swapchain images are recycled, and an aspect-preserving blit only covers
      * the letterboxed destination rectangle.  Without an unconditional clear
      * the pillarbox/letterbox rows keep whatever the recycled buffer held: the
-     * never-written initial content (transparent, so the Lucent library behind
+     * never-written initial content (transparent, so the EmuFusion library behind
      * the gameplay window shows through) or a stale band left by an earlier,
      * wider core output size.  Clear the complete image to opaque black on
      * every frame so presentation owns every pixel it publishes. */
@@ -916,7 +916,7 @@ static bool record_present_commands_for_target(
         VkImageBlit blit;
         uint32_t destination_width;
         uint32_t destination_height;
-        lucent_source_region source_region;
+        emufusion_source_region source_region;
         unsigned source_x;
         unsigned source_y;
         unsigned cropped_width;
@@ -934,7 +934,7 @@ static bool record_present_commands_for_target(
                           VK_ACCESS_TRANSFER_READ_BIT,
                           VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED);
         }
-        lucent_retro_av_info av;
+        emufusion_retro_av_info av;
         float aspect = 0.0f;
         if (!resolve_source_region(backend, source_width, source_height, crop,
                                    &source_region, error, error_size)) return false;
@@ -951,13 +951,13 @@ static bool record_present_commands_for_target(
          * full-frame present may use it. This mirrors what the GLES backend
          * already does in create_framebuffer(). */
         memset(&av, 0, sizeof(av));
-        if (crop == LUCENT_SCREEN_FULL &&
+        if (crop == EMUFUSION_SCREEN_FULL &&
                 isfinite(backend->presentation_aspect) &&
                 backend->presentation_aspect > 0.1f &&
                 backend->presentation_aspect < 10.0f)
             aspect = backend->presentation_aspect;
-        if (aspect <= 0.0f && crop == LUCENT_SCREEN_FULL && backend->host &&
-                lucent_retro_get_av_info(backend->host, &av) &&
+        if (aspect <= 0.0f && crop == EMUFUSION_SCREEN_FULL && backend->host &&
+                emufusion_retro_get_av_info(backend->host, &av) &&
                 isfinite(av.aspect_ratio) &&
                 av.aspect_ratio > 0.1f && av.aspect_ratio < 10.0f)
             aspect = av.aspect_ratio;
@@ -967,8 +967,8 @@ static bool record_present_commands_for_target(
          * DS/3DS touch screen is different: cropping its left/right edges hides
          * UI and touch targets, so the complete crop must be contained inside
          * that physical panel with black bars where necessary. */
-        if (crop != LUCENT_SCREEN_FULL && scaled_portrait_surface) {
-            lucent_surface_rect fitted;
+        if (crop != EMUFUSION_SCREEN_FULL && scaled_portrait_surface) {
+            emufusion_surface_rect fitted;
             /* The reviewed lower SurfaceView has a portrait producer but a
              * landscape logical View. SurfaceControl already supplies the
              * working orientation; the composed image is independently
@@ -976,7 +976,7 @@ static bool record_present_commands_for_target(
              * first, then map the rectangle back, without rotating the blit.
              * Thor: 1080x1240 producer -> 1240x1080 View; the 4:3 image needs
              * 1080x1068 producer pixels to compose as 1240x930, not 1240x705. */
-            if (!lucent_surface_fit(destination_extent.width,
+            if (!emufusion_surface_fit(destination_extent.width,
                     destination_extent.height, destination_extent.height,
                     destination_extent.width, aspect, &fitted)) {
                 set_error(error, error_size,
@@ -985,7 +985,7 @@ static bool record_present_commands_for_target(
             }
             destination_width = fitted.width;
             destination_height = fitted.height;
-        } else if (crop != LUCENT_SCREEN_FULL) {
+        } else if (crop != EMUFUSION_SCREEN_FULL) {
             destination_width = destination_extent.width;
             destination_height =
                     (uint32_t)((float)destination_width / aspect + 0.5f);
@@ -1054,10 +1054,10 @@ static bool record_present_commands_for_target(
     return true;
 }
 
-static bool record_present_commands(lucent_android_vulkan_backend *backend,
+static bool record_present_commands(emufusion_android_vulkan_backend *backend,
                                     unsigned source_width,
                                     unsigned source_height,
-                                    enum lucent_screen_crop crop,
+                                    enum emufusion_screen_crop crop,
                                     char *error, size_t error_size) {
     return record_present_commands_for_target(backend,
             backend->command_buffers[backend->current_index],
@@ -1066,10 +1066,10 @@ static bool record_present_commands(lucent_android_vulkan_backend *backend,
             source_width, source_height, crop, false, error, error_size);
 }
 
-lucent_android_vulkan_backend *lucent_android_vulkan_create(
+emufusion_android_vulkan_backend *emufusion_android_vulkan_create(
         char *error, size_t error_size) {
-    lucent_android_vulkan_backend *backend =
-            (lucent_android_vulkan_backend *)calloc(1, sizeof(*backend));
+    emufusion_android_vulkan_backend *backend =
+            (emufusion_android_vulkan_backend *)calloc(1, sizeof(*backend));
     if (!backend) {
         set_error(error, error_size, "out of memory creating Vulkan backend");
         return NULL;
@@ -1095,8 +1095,8 @@ lucent_android_vulkan_backend *lucent_android_vulkan_create(
     return backend;
 }
 
-bool lucent_android_vulkan_set_fg_timestamp(
-        lucent_android_vulkan_backend *backend, bool secondary, bool enabled,
+bool emufusion_android_vulkan_set_fg_timestamp(
+        emufusion_android_vulkan_backend *backend, bool secondary, bool enabled,
         char *error, size_t error_size) {
     if (!backend) {
         set_error(error, error_size, "Vulkan backend is required");
@@ -1109,8 +1109,8 @@ bool lucent_android_vulkan_set_fg_timestamp(
     return true;
 }
 
-bool lucent_android_vulkan_set_presentation_aspect(
-        lucent_android_vulkan_backend *backend, float aspect,
+bool emufusion_android_vulkan_set_presentation_aspect(
+        emufusion_android_vulkan_backend *backend, float aspect,
         char *error, size_t error_size) {
     if (!backend) {
         set_error(error, error_size, "Vulkan backend is required");
@@ -1130,8 +1130,8 @@ bool lucent_android_vulkan_set_presentation_aspect(
     return true;
 }
 
-bool lucent_android_vulkan_set_secondary_rotation(
-        lucent_android_vulkan_backend *backend, unsigned clockwise_degrees,
+bool emufusion_android_vulkan_set_secondary_rotation(
+        emufusion_android_vulkan_backend *backend, unsigned clockwise_degrees,
         char *error, size_t error_size) {
     if (!backend) {
         set_error(error, error_size, "Vulkan backend is required");
@@ -1151,9 +1151,9 @@ bool lucent_android_vulkan_set_secondary_rotation(
     return true;
 }
 
-bool lucent_android_vulkan_get_host_options(
-        lucent_android_vulkan_backend *backend,
-        lucent_retro_hw_options *options,
+bool emufusion_android_vulkan_get_host_options(
+        emufusion_android_vulkan_backend *backend,
+        emufusion_retro_hw_options *options,
         char *error, size_t error_size) {
     if (!backend || !options) {
         set_error(error, error_size, "Vulkan backend and options are required");
@@ -1161,40 +1161,40 @@ bool lucent_android_vulkan_get_host_options(
     }
     memset(options, 0, sizeof(*options));
     options->struct_size = sizeof(*options);
-    options->api_version = LUCENT_RETRO_HW_OPTIONS_VERSION;
-    options->context_capabilities = LUCENT_RETRO_HW_VULKAN;
-    options->feature_capabilities = LUCENT_RETRO_HW_CACHE_CONTEXT;
-    options->preferred_context = LUCENT_RETRO_HW_VULKAN;
+    options->api_version = EMUFUSION_RETRO_HW_OPTIONS_VERSION;
+    options->context_capabilities = EMUFUSION_RETRO_HW_VULKAN;
+    options->feature_capabilities = EMUFUSION_RETRO_HW_CACHE_CONTEXT;
+    options->preferred_context = EMUFUSION_RETRO_HW_VULKAN;
     options->userdata = backend;
     options->render_interface = &backend->interface;
     return true;
 }
 
-bool lucent_android_vulkan_attach(
-        lucent_android_vulkan_backend *backend, lucent_retro_host *host,
+bool emufusion_android_vulkan_attach(
+        emufusion_android_vulkan_backend *backend, emufusion_retro_host *host,
         ANativeWindow *window, char *error, size_t error_size) {
-    lucent_retro_hw_info info;
+    emufusion_retro_hw_info info;
     if (!backend || !host || !window ||
             !claim_render_thread(backend, error, error_size)) return false;
     if (backend->window) {
         set_error(error, error_size, "Vulkan surface is already attached");
         return false;
     }
-    if (!lucent_retro_get_hw_info(host, &info) || !info.negotiated ||
+    if (!emufusion_retro_get_hw_info(host, &info) || !info.negotiated ||
             info.context_type != RETRO_HW_CONTEXT_VULKAN) {
         set_error(error, error_size, "loaded core did not negotiate Vulkan");
         return false;
     }
     backend->negotiation =
             (const struct retro_hw_render_context_negotiation_interface_vulkan *)
-            lucent_retro_hw_context_negotiation_interface(host);
+            emufusion_retro_hw_context_negotiation_interface(host);
     backend->host = host;
     backend->window = window;
     ANativeWindow_acquire(window);
     if (backend->context.device) {
         if (!create_surface_only(backend, error, error_size) ||
                 !create_swapchain(backend, error, error_size)) {
-            lucent_android_vulkan_detach(backend, NULL, 0);
+            emufusion_android_vulkan_detach(backend, NULL, 0);
             return false;
         }
         return true;
@@ -1202,17 +1202,17 @@ bool lucent_android_vulkan_attach(
     if (!create_instance_and_surface(backend, error, error_size) ||
             !negotiate_device(backend, error, error_size) ||
             !create_swapchain(backend, error, error_size) ||
-            !lucent_retro_hw_context_reset(host, error, error_size)) {
-        lucent_android_vulkan_detach(backend, NULL, 0);
+            !emufusion_retro_hw_context_reset(host, error, error_size)) {
+        emufusion_android_vulkan_detach(backend, NULL, 0);
         return false;
     }
     return true;
 }
 
-bool lucent_android_vulkan_attach_secondary(
-        lucent_android_vulkan_backend *backend, ANativeWindow *window,
+bool emufusion_android_vulkan_attach_secondary(
+        emufusion_android_vulkan_backend *backend, ANativeWindow *window,
         char *error, size_t error_size) {
-    lucent_vulkan_secondary_target *target;
+    emufusion_vulkan_secondary_target *target;
     VkAndroidSurfaceCreateInfoKHR surface_info;
     VkBool32 present = VK_FALSE;
     if (!backend || !window || !claim_render_thread(backend, error, error_size))
@@ -1260,7 +1260,7 @@ failure:
     return false;
 }
 
-/* Ideal-lattice source stamp, mirroring lucent_android_gles_backend.c:
+/* Ideal-lattice source stamp, mirroring emufusion_android_gles_backend.c:
  * sequence x 1/stamp_hz on the clock the core is paced at (declared x
  * synchronized/paced multiplier).  A clock change re-bases the timeline
  * continuously from the last stamp.  Every present takes one lattice slot:
@@ -1268,18 +1268,18 @@ failure:
  * duplicate on its own slot (the generator classifies it by pixels/ordinal)
  * rather than a stamp collision. */
 static bool stamp_core_frame_timestamp(
-        lucent_android_vulkan_backend *backend, uint64_t frame_sequence,
+        emufusion_android_vulkan_backend *backend, uint64_t frame_sequence,
         int64_t *stamp_out) {
     double stamp_hz;
     long double offset_ns;
     int64_t timestamp;
     uint64_t sequence;
-    lucent_retro_av_info av;
+    emufusion_retro_av_info av;
     memset(&av, 0, sizeof(av));
     if (!backend || !backend->host || !stamp_out) return false;
-    stamp_hz = lucent_retro_synchronized_video_hz(backend->host);
+    stamp_hz = emufusion_retro_synchronized_video_hz(backend->host);
     if (!isfinite(stamp_hz) || stamp_hz <= 1.0 || stamp_hz >= 1000.0) {
-        if (!lucent_retro_get_av_info(backend->host, &av) ||
+        if (!emufusion_retro_get_av_info(backend->host, &av) ||
                 !isfinite(av.frames_per_second) ||
                 av.frames_per_second <= 1.0 || av.frames_per_second >= 1000.0)
             return false;
@@ -1333,16 +1333,16 @@ static bool wait_acquire_slot(VkDevice device, VkFence *pending,
     return true;
 }
 
-bool lucent_android_vulkan_run_and_present(
-        lucent_android_vulkan_backend *backend, bool *presented,
+bool emufusion_android_vulkan_run_and_present(
+        emufusion_android_vulkan_backend *backend, bool *presented,
         char *error, size_t error_size) {
     VkResult result;
     VkPresentTimesInfoGOOGLE present_times;
     VkPresentTimeGOOGLE present_time[2];
-    VkPipelineStageFlags wait_stages[1 + LUCENT_VK_MAX_WAIT_SEMAPHORES];
-    VkSemaphore wait_semaphores[1 + LUCENT_VK_MAX_WAIT_SEMAPHORES];
+    VkPipelineStageFlags wait_stages[1 + EMUFUSION_VK_MAX_WAIT_SEMAPHORES];
+    VkSemaphore wait_semaphores[1 + EMUFUSION_VK_MAX_WAIT_SEMAPHORES];
     VkSemaphore signal_semaphores[2];
-    VkCommandBuffer submits[1 + LUCENT_VK_MAX_CORE_COMMANDS];
+    VkCommandBuffer submits[1 + EMUFUSION_VK_MAX_CORE_COMMANDS];
     VkSubmitInfo submit;
     VkSubmitInfo secondary_submit;
     VkPresentInfoKHR present;
@@ -1354,7 +1354,7 @@ bool lucent_android_vulkan_run_and_present(
     };
     VkSemaphore secondary_waits[2];
     VkCommandBuffer secondary_command;
-    lucent_retro_hw_info hw_info;
+    emufusion_retro_hw_info hw_info;
     uint32_t wait_count;
     uint32_t signal_count = 1;
     uint32_t submit_count = 0;
@@ -1389,7 +1389,7 @@ bool lucent_android_vulkan_run_and_present(
         return false;
     }
     if (has_secondary) {
-        lucent_vulkan_secondary_target *target = &backend->secondary;
+        emufusion_vulkan_secondary_target *target = &backend->secondary;
         if (!wait_acquire_slot(backend->context.device,
                 &target->acquire_pending[target->frame_slot], error, error_size))
             return false;
@@ -1421,21 +1421,21 @@ bool lucent_android_vulkan_run_and_present(
      * after the core has returned and immediately before the queue submit that
      * will signal the fence again.
      */
-    if (!lucent_retro_run_frame(backend->host, error, error_size) ||
-            !lucent_retro_get_hw_info(backend->host, &hw_info) ||
+    if (!emufusion_retro_run_frame(backend->host, error, error_size) ||
+            !emufusion_retro_get_hw_info(backend->host, &hw_info) ||
             !record_present_commands(backend, hw_info.frame_width,
                                      hw_info.frame_height,
-                                     has_secondary ? LUCENT_SCREEN_TOP :
-                                                     LUCENT_SCREEN_FULL,
+                                     has_secondary ? EMUFUSION_SCREEN_TOP :
+                                                     EMUFUSION_SCREEN_FULL,
                                      error, error_size)) return false;
     if (has_secondary) {
-        lucent_vulkan_secondary_target *target = &backend->secondary;
+        emufusion_vulkan_secondary_target *target = &backend->secondary;
         if (!record_present_commands_for_target(
                 backend, target->command_buffers[target->current_index],
                 target->images[target->current_index],
                 target->image_initialized[target->current_index], target->extent,
                 hw_info.frame_width, hw_info.frame_height,
-                LUCENT_SCREEN_BOTTOM,
+                EMUFUSION_SCREEN_BOTTOM,
                 backend->secondary_clockwise_quarter_turn,
                 error, error_size)) return false;
     }
@@ -1473,7 +1473,7 @@ bool lucent_android_vulkan_run_and_present(
     submit.pSignalSemaphores = signal_semaphores;
     memset(&secondary_submit, 0, sizeof(secondary_submit));
     if (has_secondary) {
-        lucent_vulkan_secondary_target *target = &backend->secondary;
+        emufusion_vulkan_secondary_target *target = &backend->secondary;
         secondary_waits[0] = target->image_available[target->frame_slot];
         secondary_waits[1] = backend->render_finished[backend->current_index];
         secondary_command = target->command_buffers[target->current_index];
@@ -1493,7 +1493,7 @@ bool lucent_android_vulkan_run_and_present(
     present_swapchains[0] = backend->swapchain;
     present_indices[0] = backend->current_index;
     if (has_secondary) {
-        lucent_vulkan_secondary_target *target = &backend->secondary;
+        emufusion_vulkan_secondary_target *target = &backend->secondary;
         present.pWaitSemaphores = &target->render_finished[target->current_index];
         present_swapchains[1] = target->swapchain;
         present_indices[1] = target->current_index;
@@ -1528,7 +1528,7 @@ bool lucent_android_vulkan_run_and_present(
         }
         if (!backend->display_timing_logged) {
             backend->display_timing_logged = true;
-            __android_log_print(ANDROID_LOG_INFO, "LucentVulkanBackend",
+            __android_log_print(ANDROID_LOG_INFO, "EmuFusionVulkanBackend",
                     "immutable source timestamps via %s stampHz=%.6f "
                     "firstStampNs=%lld",
                     VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME,
@@ -1536,12 +1536,12 @@ bool lucent_android_vulkan_run_and_present(
         }
     } else if ((tag_primary || tag_secondary) && !backend->display_timing_logged) {
         backend->display_timing_logged = true;
-        __android_log_print(ANDROID_LOG_WARN, "LucentVulkanBackend",
+        __android_log_print(ANDROID_LOG_WARN, "EmuFusionVulkanBackend",
                 "immutable source timestamps unavailable: %s not enabled",
                 VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
     } else if (!backend->display_timing_logged) {
         backend->display_timing_logged = true;
-        __android_log_print(ANDROID_LOG_INFO, "LucentVulkanBackend",
+        __android_log_print(ANDROID_LOG_INFO, "EmuFusionVulkanBackend",
                 "Direct presentation: FG source timestamp processing bypassed");
     }
     queue_lock(backend);
@@ -1554,7 +1554,7 @@ bool lucent_android_vulkan_run_and_present(
         backend->acquire_pending[backend->frame_slot] =
                 backend->fences[backend->current_index];
     if (result == VK_SUCCESS && has_secondary) {
-        lucent_vulkan_secondary_target *target = &backend->secondary;
+        emufusion_vulkan_secondary_target *target = &backend->secondary;
         result = vkResetFences(backend->context.device, 1,
                                &target->fences[target->current_index]);
         if (result == VK_SUCCESS)
@@ -1589,10 +1589,10 @@ bool lucent_android_vulkan_run_and_present(
     return true;
 }
 
-bool lucent_android_vulkan_detach_secondary(
-        lucent_android_vulkan_backend *backend,
+bool emufusion_android_vulkan_detach_secondary(
+        emufusion_android_vulkan_backend *backend,
         char *error, size_t error_size) {
-    lucent_vulkan_secondary_target *target;
+    emufusion_vulkan_secondary_target *target;
     if (!backend || !claim_render_thread(backend, error, error_size)) return false;
     target = &backend->secondary;
     if (!target->window) return true;
@@ -1606,13 +1606,13 @@ bool lucent_android_vulkan_detach_secondary(
     return true;
 }
 
-bool lucent_android_vulkan_detach(
-        lucent_android_vulkan_backend *backend,
+bool emufusion_android_vulkan_detach(
+        emufusion_android_vulkan_backend *backend,
         char *error, size_t error_size) {
     if (!backend || !claim_render_thread(backend, error, error_size)) return false;
     if (!backend->window) return true;
     if (backend->context.device) vkDeviceWaitIdle(backend->context.device);
-    if (!lucent_android_vulkan_detach_secondary(backend, error, error_size))
+    if (!emufusion_android_vulkan_detach_secondary(backend, error, error_size))
         return false;
     destroy_swapchain(backend);
     if (backend->surface)
@@ -1624,9 +1624,9 @@ bool lucent_android_vulkan_detach(
     return true;
 }
 
-bool lucent_android_vulkan_get_info(
-        const lucent_android_vulkan_backend *backend,
-        lucent_android_vulkan_info *info) {
+bool emufusion_android_vulkan_get_info(
+        const emufusion_android_vulkan_backend *backend,
+        emufusion_android_vulkan_info *info) {
     if (!backend || !info) return false;
     memset(info, 0, sizeof(*info));
     info->surface_attached = backend->window != NULL;
@@ -1637,13 +1637,13 @@ bool lucent_android_vulkan_get_info(
     return true;
 }
 
-void lucent_android_vulkan_destroy(lucent_android_vulkan_backend *backend) {
-    lucent_retro_hw_info info;
+void emufusion_android_vulkan_destroy(emufusion_android_vulkan_backend *backend) {
+    emufusion_retro_hw_info info;
     if (!backend) return;
-    if (backend->window) lucent_android_vulkan_detach(backend, NULL, 0);
-    if (backend->host && lucent_retro_get_hw_info(backend->host, &info) &&
+    if (backend->window) emufusion_android_vulkan_detach(backend, NULL, 0);
+    if (backend->host && emufusion_retro_get_hw_info(backend->host, &info) &&
             info.context_ready)
-        lucent_retro_hw_context_destroy(backend->host, NULL, 0);
+        emufusion_retro_hw_context_destroy(backend->host, NULL, 0);
     if (backend->context.device) vkDeviceWaitIdle(backend->context.device);
     if (backend->negotiation && backend->negotiation->destroy_device)
         backend->negotiation->destroy_device();

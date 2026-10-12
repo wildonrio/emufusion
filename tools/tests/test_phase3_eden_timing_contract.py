@@ -147,7 +147,7 @@ class NativeTimingCapabilityTest(unittest.TestCase):
         if cls.compiler is None:
             raise AssertionError("C compiler required for actual dlsym contract test")
         source = r'''
-#include "lucent_native_adapter_host.h"
+#include "emufusion_native_adapter_host.h"
 #include <assert.h>
 #include <math.h>
 #include <stdlib.h>
@@ -158,18 +158,18 @@ static size_t audio(void *ctx, const int16_t *frames, size_t count) {
 int main(int argc, char **argv) {
     assert(argc == 6);
     char error[512] = {0}; uint32_t window = 0;
-    lucent_native_adapter_host *host = lucent_native_adapter_open(argv[1], argv[2], error, sizeof(error));
+    emufusion_native_adapter_host *host = emufusion_native_adapter_open(argv[1], argv[2], error, sizeof(error));
     assert(host);
-    assert(lucent_native_adapter_timing_capabilities(host) == 0);
+    assert(emufusion_native_adapter_timing_capabilities(host) == 0);
     assert(lucent_native_adapter_producer_timeline_hz(host) == 0);
-    assert(lucent_native_adapter_create(host, error, sizeof(error)));
+    assert(emufusion_native_adapter_create(host, error, sizeof(error)));
     lucent_native_load_request request = {argv[2], argv[2], argv[3]};
-    assert(lucent_native_adapter_load(host, &request, error, sizeof(error)));
-    assert(!lucent_native_adapter_set_fg_presentation(host, false));
-    assert(!lucent_native_adapter_set_fg_presentation(host, true));
+    assert(emufusion_native_adapter_load(host, &request, error, sizeof(error)));
+    assert(!emufusion_native_adapter_set_fg_presentation(host, false));
+    assert(!emufusion_native_adapter_set_fg_presentation(host, true));
     lucent_native_io io = {LUCENT_NATIVE_RENDER_VULKAN_WINDOW, &window, NULL, audio, NULL};
-    assert(lucent_native_adapter_start(host, &io, error, sizeof(error)));
-    assert(lucent_native_adapter_timing_capabilities(host) == strtoul(argv[4], NULL, 10));
+    assert(emufusion_native_adapter_start(host, &io, error, sizeof(error)));
+    assert(emufusion_native_adapter_timing_capabilities(host) == strtoul(argv[4], NULL, 10));
     assert(lucent_native_adapter_producer_timeline_hz(host) == strtod(argv[5], NULL));
     assert(!lucent_native_adapter_set_paced_video_hz(host, 40.0));
     assert(!lucent_native_adapter_set_paced_video_hz(host, NAN));
@@ -179,9 +179,9 @@ int main(int argc, char **argv) {
     assert(lucent_native_adapter_set_paced_video_hz(host, 59.55));
     assert(lucent_native_adapter_set_paced_video_hz(host, 59.94));
     assert(lucent_native_adapter_set_paced_video_hz(host, 0));
-    assert(lucent_native_adapter_stop(host, error, sizeof(error)));
+    assert(emufusion_native_adapter_stop(host, error, sizeof(error)));
     assert(lucent_native_adapter_producer_timeline_hz(host) == 0);
-    lucent_native_adapter_destroy(host);
+    emufusion_native_adapter_destroy(host);
 }
 '''
         main = cls.directory / "host.c"
@@ -189,7 +189,7 @@ int main(int argc, char **argv) {
         cls.executable = cls.directory / "host"
         (cls.directory / "game.mock").write_bytes(b"\x07")
         checked([cls.compiler, "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
-                 "-I", NATIVE / "include", NATIVE / "lucent_native_adapter_host.c",
+                 "-I", NATIVE / "include", NATIVE / "emufusion_native_adapter_host.c",
                  main, "-ldl", "-o", cls.executable])
 
     @classmethod
@@ -238,7 +238,7 @@ int main(int argc, char **argv) {
             libraries.append(library)
         executable = self.directory / "lifecycle"
         checked([self.compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
-                 NATIVE / "lucent_native_adapter_host.c",
+                 NATIVE / "emufusion_native_adapter_host.c",
                  NATIVE / "tests/native_adapter_host_test.c", "-ldl", "-o", executable])
         checked([executable, *libraries, self.directory, self.directory,
                  self.directory / "game.mock"])

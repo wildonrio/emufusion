@@ -1270,7 +1270,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         session = self.read(
             "unified-android/src/com/thorium/preview/game/PpssppGlesEngineSession.java"
         )
-        native = self.read("unified-android/native/lucent_libretro_host.c")
+        native = self.read("unified-android/native/emufusion_libretro_host.c")
         patch = self.read("engines/patches/mupen64plus-next-android-arm64.patch")
 
         self.assertIn("SOURCE_TIMELINE_DEFAULT = 0", host)
@@ -1366,7 +1366,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_n64_frontend_fbo_uses_title_dynamic_written_bounds(self):
         backend = self.read(
-            "unified-android/native/lucent_android_gles_backend.c"
+            "unified-android/native/emufusion_android_gles_backend.c"
         )
         probe = backend.split(
             "static int probe_frontend_content_bounds(", 1
@@ -1399,7 +1399,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         present = backend.split(
             "static bool present_current_frame(", 1
         )[1].split(
-            "bool lucent_android_gles_present_if_ready(", 1
+            "bool emufusion_android_gles_present_if_ready(", 1
         )[0]
         self.assertIn("content_bounds_probe_count < 600u", present)
         self.assertIn("content_bounds_stable_count < 4u", present)
@@ -1917,14 +1917,14 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_async_proof_poll_isolates_stale_gl_errors_and_logs_exact_row(self):
         native = self.read(
-            "unified-android/native/lucent_framegen_timer_jni.c"
+            "unified-android/native/emufusion_framegen_timer_jni.c"
         )
         generator = self.read(
             "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
         )
-        poll = native[native.index("int lucent_framegen_proof_atlas_poll_raw"):
+        poll = native[native.index("int emufusion_framegen_proof_atlas_poll_raw"):
                       native.index("JNIEXPORT jlongArray JNICALL",
-                                   native.index("int lucent_framegen_proof_atlas_poll_raw"))]
+                                   native.index("int emufusion_framegen_proof_atlas_poll_raw"))]
         self.assertLess(poll.index("drain_gl_errors()"),
                         poll.index("proof_client_wait_sync"))
         for stage in ("PROOF_ATLAS_POLL_STAGE_DRAIN",
@@ -2121,7 +2121,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
     def test_hardware_surface_uses_core_sequence_timestamp_not_swap_jitter(self):
         backend = self.read(
-            "unified-android/native/lucent_android_gles_backend.c"
+            "unified-android/native/emufusion_android_gles_backend.c"
         )
         fake_egl = self.read(
             "unified-android/native/tests/fake_android_egl.c"
@@ -2131,11 +2131,11 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         )
         stamp = backend[
             backend.index("static bool stamp_core_frame_timestamp"):
-            backend.index("lucent_android_gles_create", backend.index(
+            backend.index("emufusion_android_gles_create", backend.index(
                 "static bool stamp_core_frame_timestamp"))
         ]
         self.assertIn('resolve_egl_symbol("eglPresentationTimeANDROID")', stamp)
-        self.assertIn("lucent_retro_get_av_info", stamp)
+        self.assertIn("emufusion_retro_get_av_info", stamp)
         self.assertIn("frame_sequence -", stamp)
         self.assertIn("1000000000.0L", stamp)
         self.assertIn("backend->timestamp_source_hz", stamp)
@@ -2144,14 +2144,14 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         # present_if_ready wrapper that calls it.
         present = backend[
             backend.index("static bool present_current_frame("):
-            backend.index("bool lucent_android_gles_present_if_ready")
+            backend.index("bool emufusion_android_gles_present_if_ready")
         ]
         self.assertLess(
             present.index("stamp_core_frame_timestamp(backend, info.frame_sequence)"),
             present.index("eglSwapBuffers"),
         )
         self.assertIn("fake_presentation_time", fake_egl)
-        self.assertIn("lucent_fake_egl_presentation_time_delta", native_test)
+        self.assertIn("emufusion_fake_egl_presentation_time_delta", native_test)
         self.assertIn("== 16666667", native_test)
 
     def test_dense_proof_reservoir_survives_late_clean_baseline(self):
@@ -4321,7 +4321,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             "unified-android/src/com/thorium/preview/game/PhysicalPresentationTracker.java"
         )
         native = self.read(
-            "unified-android/native/lucent_framegen_timer_jni.c"
+            "unified-android/native/emufusion_framegen_timer_jni.c"
         )
         self.assertIn("EGL_DISPLAY_PRESENT_TIME_ANDROID", native)
         self.assertIn("eglGetNextFrameIdANDROID", native)

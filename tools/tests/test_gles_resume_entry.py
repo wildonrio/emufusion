@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get('EMUFUSION_GLES_RESUME_JNI_SOURCE', str(
-    ROOT / 'unified-android/native/lucent_libretro_jni.c')))
+    ROOT / 'unified-android/native/emufusion_libretro_jni.c')))
 
 
 class GlesResumeEntryTests(unittest.TestCase):
@@ -54,20 +54,20 @@ typedef void *jclass;
 struct env_callbacks;
 typedef const struct env_callbacks *JNIEnv;
 struct env_callbacks { int (*ExceptionCheck)(JNIEnv *); };
-typedef struct { void *host; void *backend; } lucent_gles_jni_session;
-lucent_gles_jni_session session={(void *)1,(void *)2};
+typedef struct { void *host; void *backend; } emufusion_gles_jni_session;
+emufusion_gles_jni_session session={(void *)1,(void *)2};
 int guest_runs, real_presents, errors;
 bool gate_ready, gate_success=true, swapped=true;
-lucent_gles_jni_session *from_gles_handle(jlong handle) { return handle ? &session : NULL; }
+emufusion_gles_jni_session *from_gles_handle(jlong handle) { return handle ? &session : NULL; }
 int exception_check(JNIEnv *env) { (void)env; return 0; }
 void throw_state(JNIEnv *env, char *error) { (void)env; (void)error; errors++; }
-bool lucent_android_gles_prepare_resume(void *b, bool *ready, char *e, size_t n) {
+bool emufusion_android_gles_prepare_resume(void *b, bool *ready, char *e, size_t n) {
  (void)b; (void)e; (void)n; *ready=gate_ready; return gate_success;
 }
-bool lucent_retro_run_frame(void *h,char *e,size_t n) {
+bool emufusion_retro_run_frame(void *h,char *e,size_t n) {
  (void)h; (void)e; (void)n; guest_runs++; return true;
 }
-bool lucent_android_gles_present_if_ready(void *b,bool *p,char *e,size_t n) {
+bool emufusion_android_gles_present_if_ready(void *b,bool *p,char *e,size_t n) {
  (void)b; (void)e; (void)n; real_presents++; *p=swapped; return true;
 }
 BODY

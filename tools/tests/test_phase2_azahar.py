@@ -66,18 +66,18 @@ class PhaseTwoAzaharTest(unittest.TestCase):
 
     def test_thor_dual_surface_is_owned_by_lucent_and_split_in_vulkan(self):
         backend = (ROOT / "unified-android" / "native" /
-                   "lucent_android_vulkan_backend.c").read_text(encoding="utf-8")
+                   "emufusion_android_vulkan_backend.c").read_text(encoding="utf-8")
         jni = (ROOT / "unified-android" / "native" /
-               "lucent_libretro_vulkan_jni.c").read_text(encoding="utf-8")
+               "emufusion_libretro_vulkan_jni.c").read_text(encoding="utf-8")
         session = (ROOT / "unified-android" / "src" / "com" / "thorium" /
                    "preview" / "game" / "PpssppGlesEngineSession.java").read_text(
                            encoding="utf-8")
         router = (ROOT / "android-companion" / "src" / "com" / "thorium" /
                   "preview" / "SecondaryGameplaySurfaceRouter.java").read_text(
                           encoding="utf-8")
-        self.assertIn("LUCENT_SCREEN_TOP", backend)
-        self.assertIn("LUCENT_SCREEN_BOTTOM", backend)
-        self.assertIn("lucent_android_vulkan_attach_secondary", backend)
+        self.assertIn("EMUFUSION_SCREEN_TOP", backend)
+        self.assertIn("EMUFUSION_SCREEN_BOTTOM", backend)
+        self.assertIn("emufusion_android_vulkan_attach_secondary", backend)
         self.assertIn("present.swapchainCount = present_count", backend)
         self.assertIn("nativeAttachSecondarySurfaceVulkan", jni)
         self.assertIn("nativeSetSecondaryPresentationRotationVulkan", jni)
@@ -85,7 +85,7 @@ class PhaseTwoAzaharTest(unittest.TestCase):
         self.assertIn("loop.setSecondaryPresentationRotation(90);", session)
         self.assertIn("DualScreenLayout.lowerScreenPointerY", session)
         host = (ROOT / "unified-android" / "native" /
-                "lucent_libretro_host.c").read_text(encoding="utf-8")
+                "emufusion_libretro_host.c").read_text(encoding="utf-8")
         azahar = host.split('strstr(host->core_path, "lucent_core_azahar")', 1)[1]
         azahar = azahar.split("} else if", 1)[0]
         self.assertIn('options, "side_by_side", &value_size', azahar)

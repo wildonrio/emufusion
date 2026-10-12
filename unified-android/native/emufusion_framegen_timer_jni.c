@@ -311,12 +311,12 @@ static int drain_gl_errors(void) {
     return 1;
 }
 
-int lucent_framegen_timer_poll_raw(jlong handle, jlong current_pair_sequence,
+int emufusion_framegen_timer_poll_raw(jlong handle, jlong current_pair_sequence,
         jlong current_warp_sequence, jlong *rows, int capacity);
-int lucent_framegen_signature_poll_raw(jlong handle, int64_t current_sequence,
+int emufusion_framegen_signature_poll_raw(jlong handle, int64_t current_sequence,
         jlong *row, int capacity);
-int lucent_framegen_signature_begin_raw(jlong handle, int64_t sequence);
-int lucent_framegen_signature_end_raw(jlong handle);
+int emufusion_framegen_signature_begin_raw(jlong handle, int64_t sequence);
+int emufusion_framegen_signature_end_raw(jlong handle);
 
 static int write_result(jlong *rows, int capacity, int count, int status,
         int slot_index, const timer_slot *slot, jlong current_pair,
@@ -448,10 +448,10 @@ JNIEXPORT jboolean JNICALL
 Java_com_thorium_preview_game_DenseGpuTimer_nativeBeginSignature(JNIEnv *env,
         jclass type, jlong handle, jlong sequence) {
     (void)env; (void)type;
-    return lucent_framegen_signature_begin_raw(handle, sequence) ? JNI_TRUE : JNI_FALSE;
+    return emufusion_framegen_signature_begin_raw(handle, sequence) ? JNI_TRUE : JNI_FALSE;
 }
 
-int lucent_framegen_signature_begin_raw(jlong handle, int64_t sequence) {
+int emufusion_framegen_signature_begin_raw(jlong handle, int64_t sequence) {
     framegen_timer *timer = from(handle);
     if (!timer || !timer->signature_supported || sequence <= 0 ||
             timer->active_signature_slot >= 0 ||
@@ -474,10 +474,10 @@ JNIEXPORT jboolean JNICALL
 Java_com_thorium_preview_game_DenseGpuTimer_nativeEndSignature(JNIEnv *env,
         jclass type, jlong handle) {
     (void)env; (void)type;
-    return lucent_framegen_signature_end_raw(handle) ? JNI_TRUE : JNI_FALSE;
+    return emufusion_framegen_signature_end_raw(handle) ? JNI_TRUE : JNI_FALSE;
 }
 
-int lucent_framegen_signature_end_raw(jlong handle) {
+int emufusion_framegen_signature_end_raw(jlong handle) {
     framegen_timer *timer = from(handle);
     if (!timer || timer->active_signature_slot < 0 ||
             eglGetCurrentContext() != timer->context) return 0;
@@ -500,7 +500,7 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativePollSignature(JNIEnv *env,
         jclass type, jlong handle, jlong current_sequence) {
     (void)type;
     jlong row[SIGNATURE_RESULT_FIELDS] = {0};
-    int count = lucent_framegen_signature_poll_raw(handle, current_sequence,
+    int count = emufusion_framegen_signature_poll_raw(handle, current_sequence,
             row, SIGNATURE_RESULT_FIELDS);
     if (count < 0) count = SIGNATURE_RESULT_FIELDS;
     jlongArray result = (*env)->NewLongArray(env, count);
@@ -508,7 +508,7 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativePollSignature(JNIEnv *env,
     return result;
 }
 
-int lucent_framegen_signature_poll_raw(jlong handle, int64_t current_sequence,
+int emufusion_framegen_signature_poll_raw(jlong handle, int64_t current_sequence,
         jlong *row, int capacity) {
     framegen_timer *timer = from(handle);
     if (!row || capacity < SIGNATURE_RESULT_FIELDS) return -1;
@@ -730,7 +730,7 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativeEnqueueProofAtlas(JNIEnv *env,
     return PROOF_ATLAS_STATUS_OK;
 }
 
-int lucent_framegen_proof_atlas_poll_raw(jlong handle,
+int emufusion_framegen_proof_atlas_poll_raw(jlong handle,
         jlong current_present_ordinal, void *destination,
         int destination_capacity, jlong *row, int row_capacity) {
     framegen_timer *timer = from(handle);
@@ -851,7 +851,7 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativePollProofAtlas(JNIEnv *env,
     void *target = destination ? (*env)->GetDirectBufferAddress(env, destination) : NULL;
     jlong capacity = destination ?
             (*env)->GetDirectBufferCapacity(env, destination) : -1;
-    int count = lucent_framegen_proof_atlas_poll_raw(handle,
+    int count = emufusion_framegen_proof_atlas_poll_raw(handle,
             current_present_ordinal, target,
             capacity > INT32_MAX ? INT32_MAX : (int)capacity,
             row, PROOF_ATLAS_RESULT_FIELDS);
@@ -920,7 +920,7 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativePoll(JNIEnv *env, jclass type,
     (void)type;
     jlong rows[(RING_SIZE + 1) * RESULT_FIELDS];
     int count = 0;
-    count = lucent_framegen_timer_poll_raw(handle, current_pair_sequence,
+    count = emufusion_framegen_timer_poll_raw(handle, current_pair_sequence,
             current_warp_sequence, rows, (RING_SIZE + 1) * RESULT_FIELDS);
     if (count < 0) count = 0;
     jlongArray result = (*env)->NewLongArray(env, count);
@@ -928,7 +928,7 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativePoll(JNIEnv *env, jclass type,
     return result;
 }
 
-int lucent_framegen_timer_poll_raw(jlong handle, jlong current_pair_sequence,
+int emufusion_framegen_timer_poll_raw(jlong handle, jlong current_pair_sequence,
         jlong current_warp_sequence, jlong *rows, int capacity) {
     framegen_timer *timer = from(handle);
     int count = 0;
@@ -1064,7 +1064,7 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativeDestroy(JNIEnv *env, jclass ty
  * renderer that identifies when one of its buffers actually began physical
  * scanout.  This tracker is deliberately separate from the qualification-only
  * GPU timer: direct presentation needs truthful delivered-FPS evidence too. */
-jlong lucent_physical_present_create_raw(void) {
+jlong emufusion_physical_present_create_raw(void) {
     EGLDisplay display = eglGetCurrentDisplay();
     EGLSurface surface = eglGetCurrentSurface(EGL_DRAW);
     EGLContext context = eglGetCurrentContext();
@@ -1152,14 +1152,14 @@ static void physical_collect_optional_ready(physical_present_tracker *tracker,
         slot->ready_timestamps[indices[i]] = values[i];
 }
 
-int lucent_physical_present_ready_enabled_raw(jlong handle, int enabled) {
+int emufusion_physical_present_ready_enabled_raw(jlong handle, int enabled) {
     physical_present_tracker *tracker = physical_from(handle);
     if (!physical_context_matches(tracker)) return 0;
     tracker->collect_ready_timestamps = enabled != 0;
     return 1;
 }
 
-int lucent_physical_present_next_raw(jlong handle, uint64_t *frame_id) {
+int emufusion_physical_present_next_raw(jlong handle, uint64_t *frame_id) {
     physical_present_tracker *tracker = physical_from(handle);
     if (!tracker || !frame_id) return PHYSICAL_PRESENT_STATUS_ARGUMENT;
     if (!physical_context_matches(tracker)) return PHYSICAL_PRESENT_STATUS_CONTEXT;
@@ -1172,7 +1172,7 @@ int lucent_physical_present_next_raw(jlong handle, uint64_t *frame_id) {
     return 1;
 }
 
-int lucent_physical_present_commit_raw(jlong handle, uint64_t frame_id,
+int emufusion_physical_present_commit_raw(jlong handle, uint64_t frame_id,
         int scans_per_output, int64_t panel_period_ns) {
     physical_present_tracker *tracker = physical_from(handle);
     if (!tracker || scans_per_output < 0 || panel_period_ns <= 0)
@@ -1192,7 +1192,7 @@ int lucent_physical_present_commit_raw(jlong handle, uint64_t frame_id,
     return 1;
 }
 
-int lucent_physical_present_poll_raw(jlong handle, jlong *row, int capacity) {
+int emufusion_physical_present_poll_raw(jlong handle, jlong *row, int capacity) {
     physical_present_tracker *tracker = physical_from(handle);
     if (!tracker || !row || capacity < 5)
         return PHYSICAL_PRESENT_STATUS_ARGUMENT;
@@ -1268,12 +1268,12 @@ int lucent_physical_present_poll_raw(jlong handle, jlong *row, int capacity) {
     return PHYSICAL_PRESENT_POLL_READY;
 }
 
-int lucent_physical_present_pending_raw(jlong handle) {
+int emufusion_physical_present_pending_raw(jlong handle) {
     physical_present_tracker *tracker = physical_from(handle);
     return tracker ? tracker->count : 0;
 }
 
-void lucent_physical_present_destroy_raw(jlong handle) {
+void emufusion_physical_present_destroy_raw(jlong handle) {
     physical_present_tracker *tracker = physical_from(handle);
     if (!tracker) return;
     if (physical_context_matches(tracker)) {
@@ -1287,7 +1287,7 @@ void lucent_physical_present_destroy_raw(jlong handle) {
 
 /* Optional prospective timing. Failure never tears down actual-present tracking.
  * Output is published atomically only when every requested value is valid. */
-int lucent_physical_compositor_timing_raw(jlong handle, jlong *output, int capacity) {
+int emufusion_physical_compositor_timing_raw(jlong handle, jlong *output, int capacity) {
     physical_present_tracker *tracker = (physical_present_tracker *)(intptr_t)handle;
     if (!output || capacity < 3 || !physical_context_matches(tracker)) return 0;
     typedef EGLBoolean (*query_fn)(EGLDisplay, EGLSurface, EGLint,
@@ -1319,7 +1319,7 @@ Java_com_thorium_preview_game_PhysicalPresentationTracker_nativeCompositorTiming
     (void)type;
     if (!env || !output || (*env)->GetArrayLength(env, output) < 3) return JNI_FALSE;
     jlong values[3];
-    if (!lucent_physical_compositor_timing_raw(handle, values, 3)) return JNI_FALSE;
+    if (!emufusion_physical_compositor_timing_raw(handle, values, 3)) return JNI_FALSE;
     (*env)->SetLongArrayRegion(env, output, 0, 3, values);
     return JNI_TRUE;
 }
@@ -1328,7 +1328,7 @@ JNIEXPORT jlong JNICALL
 Java_com_thorium_preview_game_PhysicalPresentationTracker_nativeCreate(
         JNIEnv *env, jclass type) {
     (void)env; (void)type;
-    return lucent_physical_present_create_raw();
+    return emufusion_physical_present_create_raw();
 }
 
 JNIEXPORT jint JNICALL
@@ -1338,7 +1338,7 @@ Java_com_thorium_preview_game_PhysicalPresentationTracker_nativeNext(
     if (!env || !output || (*env)->GetArrayLength(env, output) < 1)
         return PHYSICAL_PRESENT_STATUS_ARGUMENT;
     uint64_t frame_id = 0;
-    int status = lucent_physical_present_next_raw(handle, &frame_id);
+    int status = emufusion_physical_present_next_raw(handle, &frame_id);
     if (status > 0) {
         jlong value = (jlong)frame_id;
         (*env)->SetLongArrayRegion(env, output, 0, 1, &value);
@@ -1351,7 +1351,7 @@ Java_com_thorium_preview_game_PhysicalPresentationTracker_nativeCommit(
         JNIEnv *env, jclass type, jlong handle, jlong frame_id,
         jint scans_per_output, jlong panel_period_ns) {
     (void)env; (void)type;
-    return lucent_physical_present_commit_raw(handle, (uint64_t)frame_id,
+    return emufusion_physical_present_commit_raw(handle, (uint64_t)frame_id,
             scans_per_output, panel_period_ns);
 }
 
@@ -1362,7 +1362,7 @@ Java_com_thorium_preview_game_PhysicalPresentationTracker_nativePoll(
     if (!env || !output || (*env)->GetArrayLength(env, output) < PHYSICAL_PRESENT_RESULT_FIELDS)
         return PHYSICAL_PRESENT_STATUS_ARGUMENT;
     jlong row[PHYSICAL_PRESENT_RESULT_FIELDS] = {0};
-    int status = lucent_physical_present_poll_raw(handle, row, PHYSICAL_PRESENT_RESULT_FIELDS);
+    int status = emufusion_physical_present_poll_raw(handle, row, PHYSICAL_PRESENT_RESULT_FIELDS);
     if (status > 0)
         (*env)->SetLongArrayRegion(env, output, 0, PHYSICAL_PRESENT_RESULT_FIELDS, row);
     return status;
@@ -1372,14 +1372,14 @@ JNIEXPORT jint JNICALL
 Java_com_thorium_preview_game_PhysicalPresentationTracker_nativePending(
         JNIEnv *env, jclass type, jlong handle) {
     (void)env; (void)type;
-    return lucent_physical_present_pending_raw(handle);
+    return emufusion_physical_present_pending_raw(handle);
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_thorium_preview_game_PhysicalPresentationTracker_nativeSetReadyTimingEnabled(
         JNIEnv *env, jclass type, jlong handle, jboolean enabled) {
     (void)env; (void)type;
-    return lucent_physical_present_ready_enabled_raw(handle, enabled != JNI_FALSE) ?
+    return emufusion_physical_present_ready_enabled_raw(handle, enabled != JNI_FALSE) ?
             JNI_TRUE : JNI_FALSE;
 }
 
@@ -1387,5 +1387,5 @@ JNIEXPORT void JNICALL
 Java_com_thorium_preview_game_PhysicalPresentationTracker_nativeDestroy(
         JNIEnv *env, jclass type, jlong handle) {
     (void)env; (void)type;
-    lucent_physical_present_destroy_raw(handle);
+    emufusion_physical_present_destroy_raw(handle);
 }

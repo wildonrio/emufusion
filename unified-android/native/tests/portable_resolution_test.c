@@ -1,10 +1,10 @@
 /* Execute the production host policy, not a reimplementation of it. */
-#include "../lucent_libretro_host.c"
+#include "../emufusion_libretro_host.c"
 #include <assert.h>
 
 static void check(const char *key, const char *choices,
                   const char *override, const char *expected) {
-    lucent_retro_host host = {0};
+    emufusion_retro_host host = {0};
     host.core_path = "liblucent_core_test.so";
     struct retro_variable definitions[] = {{key, choices}, {NULL, NULL}};
     if (override) {

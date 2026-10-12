@@ -1,14 +1,14 @@
 /*
- * Minimal ABI-complete declarations used by Lucent's independent libretro
+ * Minimal ABI-complete declarations used by EmuFusion's independent libretro
  * frontend. The libretro API is MIT licensed. Canonical upstream header:
  * https://github.com/libretro/RetroArch/blob/master/libretro-common/include/libretro.h
  *
- * Lucent implements the environment commands needed by its software cores and
+ * EmuFusion implements the environment commands needed by its software cores and
  * its fail-closed Phase 2 hardware-negotiation boundary. Keeping these ABI
  * declarations local does not import RetroArch or any RetroArch frontend code.
  */
-#ifndef LUCENT_LIBRETRO_H
-#define LUCENT_LIBRETRO_H
+#ifndef EMUFUSION_LIBRETRO_H
+#define EMUFUSION_LIBRETRO_H
 
 #include <stdbool.h>
 #include <limits.h>
