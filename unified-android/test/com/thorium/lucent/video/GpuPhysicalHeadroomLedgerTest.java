@@ -13,6 +13,7 @@ public final class GpuPhysicalHeadroomLedgerTest {
         epochsAndCapacityFailClosed();
         qualifiedRecoveryUsesFreshPairedEvidence();
         rejectedBindingPreservesDiagnosticOwner();
+        subScanPhaseErrorIsTheRightSlot();
         wholeScanOffsetInSequenceIsNotAMiss();
         pairWithoutGeneratedImageDoesNotBlockItsSlot();
         System.out.println("GpuPhysicalHeadroomLedgerTest passed");
@@ -123,6 +124,25 @@ public final class GpuPhysicalHeadroomLedgerTest {
         physical(partlyKnown, 1, 1, DEADLINE + 1L, -1L);
         check(partlyKnown.takeCompleted().outcome == GpuPhysicalHeadroomLedger.Outcome.MARGINAL_HEADROOM,
                 "missing compositor data cannot turn a late-rendered on-slot frame into headroom");
+    }
+
+    private static void subScanPhaseErrorIsTheRightSlot() {
+        // Thor 2026-10-11: every frame reached the panel 0.17 ms before (3DS)
+        // or 2.78 ms after (GameCube) its requested time, in its own scan.
+        long[] phaseErrors = {-167_748L, 170_556L, -2_000_000L, 2_779_109L, 4_000_000L};
+        for (long error : phaseErrors) {
+            GpuPhysicalHeadroomLedger value = create(2);
+            check(bind(value, 1, 0, 0), "bind row");
+            value.recordPhysical(1, 1, 1, TARGET + error, 2, PERIOD, 0, -1, -1, -1, -1);
+            GpuPhysicalHeadroomLedger.Result result = value.takeCompleted();
+            check(result.outcome != GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS,
+                    "phase error " + error + " is not a slot miss: " + result.reason);
+        }
+        GpuPhysicalHeadroomLedger late = create(2);
+        check(bind(late, 1, 0, 0), "bind late row");
+        late.recordPhysical(1, 1, 1, TARGET + PERIOD - 100_000L, 2, PERIOD, 0, -1, -1, -1, -1);
+        check(late.takeCompleted().outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS,
+                "a frame a scan late stays a miss");
     }
 
     private static void wholeScanOffsetInSequenceIsNotAMiss() {

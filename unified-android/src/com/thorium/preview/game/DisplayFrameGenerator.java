@@ -391,6 +391,120 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             " gl_FragColor=clamp(4.0*vec4(abs(g-a),abs(g-b),abs(g-0.5*(a+b)),abs(a-b)),0.0,1.0);\n" +
             "}\n";
 
+    // Phase-centred motion (2026-10-11, after the REA study of Lossless
+    // Scaling's frame generation, which re-estimates motion for every output
+    // phase rather than warping endpoint fields). For each analysis cell and
+    // the phase t being generated, choose the motion v of the content that
+    // sits at x at time t by symmetric matching: A sampled at x - t*v against
+    // B sampled at x + (1-t)*v. Candidates come from both validated endpoint
+    // fields (fixed-point projected to time t), their neighbours, the global
+    // camera seeds and zero, then a sub-pixel refinement. Output: the encoded
+    // vector and a match confidence. Original implementation; no Lossless
+    // Scaling code or weights.
+    private static final String DENSE_PHASE_SHADER =
+            "precision highp float;\n" +
+            "uniform sampler2D uPrevious;\n" +
+            "uniform sampler2D uCurrent;\n" +
+            "uniform sampler2D uForwardMotion;\n" +
+            "uniform sampler2D uBackwardMotion;\n" +
+            "uniform sampler2D uSeedForward,uSeedBackward;\n" +
+            "uniform float uSeedEnabled;\n" +
+            "uniform vec2 uFlowRange,uCell,uSourcePixel,uSeedSourceSize;\n" +
+            "uniform float uPhase;\n" +
+            "uniform float uPhaseSearch;\n" +
+            "varying vec2 vTexCoord;\n" +
+            "float seedUnp(vec2 p){float r=floor(p.x*255.0+.5)*256.0+floor(p.y*255.0+.5);return r>=32768.0?r-65536.0:r;}\n" +
+            "vec2 seedDec(vec4 f){return vec2(seedUnp(f.rg),seedUnp(f.ba))/256.0;}\n" +
+            "vec2 dec(vec4 f){vec2 dc=(f.rg*255.0-128.0)/127.0;return sign(dc)*dc*dc*uFlowRange;}\n" +
+            "vec2 cl(vec2 p){return clamp(p,vec2(0.0),vec2(1.0));}\n" +
+            "float cost(vec2 v){\n" +
+            " vec2 pa=vTexCoord-uPhase*v;vec2 pb=vTexCoord+(1.0-uPhase)*v;\n" +
+            " vec2 h=0.5*uCell;\n" +
+            " vec3 e=abs(texture2D(uPrevious,cl(pa)).rgb-texture2D(uCurrent,cl(pb)).rgb);\n" +
+            " e+=abs(texture2D(uPrevious,cl(pa+h)).rgb-texture2D(uCurrent,cl(pb+h)).rgb);\n" +
+            " e+=abs(texture2D(uPrevious,cl(pa-h)).rgb-texture2D(uCurrent,cl(pb-h)).rgb);\n" +
+            " e+=abs(texture2D(uPrevious,cl(pa+vec2(h.x,-h.y))).rgb-texture2D(uCurrent,cl(pb+vec2(h.x,-h.y))).rgb);\n" +
+            " e+=abs(texture2D(uPrevious,cl(pa+vec2(-h.x,h.y))).rgb-texture2D(uCurrent,cl(pb+vec2(-h.x,h.y))).rgb);\n" +
+            // Tie-break toward smaller motion where texture cannot decide.
+            " return e.r+e.g+e.b+0.0004*length(v/uSourcePixel);\n" +
+            "}\n" +
+            "void main(){\n" +
+            " vec2 f0=dec(texture2D(uForwardMotion,vTexCoord));\n" +
+            " vec2 b0=-dec(texture2D(uBackwardMotion,vTexCoord));\n" +
+            " vec2 vf=f0;vf=dec(texture2D(uForwardMotion,cl(vTexCoord-uPhase*vf)));\n" +
+            " vf=dec(texture2D(uForwardMotion,cl(vTexCoord-uPhase*vf)));\n" +
+            " vec2 vb=b0;vb=-dec(texture2D(uBackwardMotion,cl(vTexCoord+(1.0-uPhase)*vb)));\n" +
+            " vb=-dec(texture2D(uBackwardMotion,cl(vTexCoord+(1.0-uPhase)*vb)));\n" +
+            " float best=cost(vf);vec2 bv=vf;float c;\n" +
+            " c=cost(vb);if(c<best){best=c;bv=vb;}\n" +
+            " c=cost(f0);if(c<best){best=c;bv=f0;}\n" +
+            " c=cost(b0);if(c<best){best=c;bv=b0;}\n" +
+            " c=cost(vec2(0.0));if(c<best){best=c;bv=vec2(0.0);}\n" +
+            " vec2 m=0.5*(vf+vb);c=cost(m);if(c<best){best=c;bv=m;}\n" +
+            " if(uSeedEnabled>0.5){\n" +
+            "  vec2 sf=seedDec(texture2D(uSeedForward,vec2(0.5)))/uSeedSourceSize;\n" +
+            "  vec2 sb=-seedDec(texture2D(uSeedBackward,vec2(0.5)))/uSeedSourceSize;\n" +
+            "  c=cost(sf);if(c<best){best=c;bv=sf;}\n" +
+            "  c=cost(sb);if(c<best){best=c;bv=sb;}\n" +
+            " }\n" +
+            " vec2 n;\n" +
+            " n=dec(texture2D(uForwardMotion,cl(vTexCoord+vec2(uCell.x,0.0))));c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            " n=dec(texture2D(uForwardMotion,cl(vTexCoord-vec2(uCell.x,0.0))));c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            " n=dec(texture2D(uForwardMotion,cl(vTexCoord+vec2(0.0,uCell.y))));c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            " n=dec(texture2D(uForwardMotion,cl(vTexCoord-vec2(0.0,uCell.y))));c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            " vec2 st=0.75*uSourcePixel;vec2 base=bv;\n" +
+            " n=base+vec2(st.x,0.0);c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            " n=base-vec2(st.x,0.0);c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            " n=base+vec2(0.0,st.y);c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            " n=base-vec2(0.0,st.y);c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            // Level 3: coarse-to-fine search around the winner (4, 2, 1
+            // output pixels, eight directions), so the field can leave the
+            // endpoint fields' candidates where both are wrong (occlusion
+            // edges, fast or zooming motion). Cheap at analysis resolution.
+            " if(uPhaseSearch>0.5){\n" +
+            "  float sp=4.0;\n" +
+            "  for(int k=0;k<3;k++){\n" +
+            "   vec2 sb2=bv;\n" +
+            "   for(int i=0;i<9;i++){\n" +
+            "    if(i==4)continue;\n" +
+            "    vec2 d=vec2(mod(float(i),3.0)-1.0,floor(float(i)/3.0)-1.0);\n" +
+            "    n=sb2+d*sp*uSourcePixel;c=cost(n);if(c<best){best=c;bv=n;}\n" +
+            "   }\n" +
+            "   sp*=0.5;\n" +
+            "  }\n" +
+            " }\n" +
+            // 15 channel differences: ~0.02 average per channel is a good match.
+            " float conf=exp(-best/0.45);\n" +
+            " vec2 q=clamp(bv/max(uFlowRange,vec2(1e-6)),-1.0,1.0);vec2 dc=sign(q)*sqrt(abs(q));\n" +
+            " gl_FragColor=vec4((dc*127.0+128.0)/255.0,conf,1.0);\n" +
+            "}\n";
+
+    // Hold-out scoring (QA): G0..G2 = the pair generated at the withheld
+    // frame's time by each synthesis level (paired: same pair, same field),
+    // R = the withheld real frame, A/C = the pair it was generated from.
+    // RGB: max-channel |G - R| x2 per level. Alpha: 0 where the scene did not
+    // change, else 128 + 127 x (2 x cross-fade error), so the score only
+    // covers moving content and carries the cross-fade baseline.
+    private static final String HOLDOUT_SHADER =
+            "precision mediump float;\n" +
+            "uniform sampler2D uGenerated0,uGenerated1,uGenerated2;\n" +
+            "uniform sampler2D uPrevious;\n" +
+            "uniform sampler2D uCurrent;\n" +
+            "uniform sampler2D uReference;\n" +
+            "varying vec2 vTexCoord;\n" +
+            "float d(vec3 x,vec3 y){vec3 e=abs(x-y);return max(max(e.r,e.g),e.b);}\n" +
+            "void main(){\n" +
+            " vec3 a=texture2D(uPrevious,vTexCoord).rgb;\n" +
+            " vec3 c=texture2D(uCurrent,vTexCoord).rgb;\n" +
+            " vec3 r=texture2D(uReference,vTexCoord).rgb;\n" +
+            " vec3 g=vec3(d(texture2D(uGenerated0,vTexCoord).rgb,r),d(texture2D(uGenerated1,vTexCoord).rgb,r),\n" +
+            "  d(texture2D(uGenerated2,vTexCoord).rgb,r));\n" +
+            // Only pixels where the scene changed (> 2/255 from either endpoint) count.
+            " float changing=step(2.0/255.0,max(d(a,r),d(c,r)));\n" +
+            " float cf=clamp(2.0*d(0.5*(a+c),r),0.0,1.0);\n" +
+            " gl_FragColor=vec4(clamp(2.0*g,0.0,1.0),changing*(128.0+floor(cf*127.0+0.5))/255.0);\n" +
+            "}\n";
+
     private static final String COPY_SHADER =
             "#extension GL_OES_EGL_image_external : require\n" +
             "precision mediump float;\n" +
@@ -1181,9 +1295,29 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "vec2 seedDec(vec4 f){return vec2(seedUnp(f.rg),seedUnp(f.ba))/256.0;}\n" +
             "uniform float uPhase;\n" +
             "uniform float uDenseEncoding;\n" +
+            "uniform sampler2D uPhaseFlow;uniform float uPhaseFieldEnabled;uniform vec2 uPhaseSize;\n" +
             "varying vec2 vTexCoord;\n" +
             "vec2 decodeFlow(vec4 field){vec2 legacy=field.rg*2.0-1.0;vec2 dc=(field.rg*255.0-128.0)/127.0;vec2 dense=sign(dc)*dc*dc;return mix(legacy,dense,uDenseEncoding)*uFlowRange;}\n" +
+            "float maxDiff(vec3 x,vec3 y){vec3 e=abs(x-y);return max(max(e.r,e.g),e.b);}\n" +
             "void main(){\n" +
+            // Phase-synthesis programs (levels 1+): where the phase field's
+            // two samples agree, the pixel is the phase blend of them and the
+            // endpoint-field path below is skipped. A pixel that did not
+            // change between the endpoints takes this path only if the blend
+            // reproduces it (a static HUD over a moving camera keeps the full
+            // path's exact-endpoint hold), and a detected cut never does.
+            "#ifdef PHASE_SYNTHESIS\n" +
+            " if(uPhaseFieldEnabled*uDenseEncoding>0.5){\n" +
+            "  float qCut=uDenseCutEnabled*step(0.25,texture2D(uDenseCutTex,vec2(0.5)).r);\n" +
+            "  vec4 qf=texture2D(uPhaseFlow,vTexCoord);vec2 qv=decodeFlow(qf);\n" +
+            "  vec3 qa=texture2D(uPrevious,clamp(vTexCoord-uPhase*qv,vec2(0.0),vec2(1.0))).rgb;\n" +
+            "  vec3 qb=texture2D(uCurrent,clamp(vTexCoord+(1.0-uPhase)*qv,vec2(0.0),vec2(1.0))).rgb;\n" +
+            "  vec3 qp=mix(qa,qb,uPhase);\n" +
+            "  vec3 qra=texture2D(uPrevious,vTexCoord).rgb;vec3 qrb=texture2D(uCurrent,vTexCoord).rgb;\n" +
+            "  float qKeep=max(step(20.0/255.0,maxDiff(qra,qrb)),1.0-step(6.0/255.0,maxDiff(qp,mix(qra,qrb,step(0.5,uPhase)))));\n" +
+            "  if(qCut<0.5&&qf.b>0.4&&maxDiff(qa,qb)<0.03&&qKeep>0.5){gl_FragColor=vec4(qp,1.0);return;}\n" +
+            " }\n" +
+            "#endif\n" +
             // Backward maps current -> previous; forward maps previous ->
             // current. A single backward field cannot identify disocclusion
             // and caused the former shader to blend unrelated objects into a
@@ -1348,6 +1482,61 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             " vec3 densePrediction=mix(ownedPrediction,mutuallyVisiblePrediction,bothSupported);\n" +
             " vec3 selectedPrediction=mix(alignedPrediction,densePrediction,uDenseEncoding);\n" +
             " float predictionAdmission=mix(1.0,anySupported,uDenseEncoding);\n" +
+            // Four-candidate weighted synthesis (the structure of Lossless
+            // Scaling's final stage, rebuilt by hand): A and B each sampled
+            // under two motion hypotheses -- the phase-centred field and the
+            // refined endpoint fields. Each candidate's weight is its field's
+            // confidence times how well it agrees with its partner from the
+            // other frame, times the usual (1-t)/t time weight. Visible-in-
+            // both regions blend aligned samples; at an occlusion the side
+            // whose motion is reliable takes over smoothly, never by a hard
+            // switch at t=0.5. Original weights; nothing learned or copied.
+            "#ifdef PHASE_SYNTHESIS\n" +
+            " if(uPhaseFieldEnabled*uDenseEncoding>0.5){\n" +
+            "  vec4 pf=texture2D(uPhaseFlow,vTexCoord);\n" +
+            "  vec2 pv=decodeFlow(pf);\n" +
+            "  vec3 a1=texture2D(uPrevious,clamp(vTexCoord-uPhase*pv,vec2(0.0),vec2(1.0))).rgb;\n" +
+            "  vec3 b1=texture2D(uCurrent,clamp(vTexCoord+(1.0-uPhase)*pv,vec2(0.0),vec2(1.0))).rgb;\n" +
+            "  float c1=clamp(pf.b,0.0,1.0);\n" +
+            "  float g1=maxDiff(a1,b1),g2=maxDiff(a.rgb,b.rgb);\n" +
+            "  float k1=exp(-g1*g1*150.0),k2=exp(-g2*g2*150.0);\n" +
+            "  float s1=(0.02+c1)*(0.02+k1)*(0.02+k1);\n" +
+            "  float wA1=(1.0-uPhase)*s1,wB1=uPhase*s1;\n" +
+            // Per-pixel candidate selection (level 2): the phase field is
+            // one vector per analysis cell, so bilinear upsampling blends
+            // vectors across motion boundaries. Evaluate the four nearest
+            // cell vectors at this pixel instead, each weighted by its
+            // bilinear share, its match confidence and how well its A and B
+            // samples agree here, so each pixel takes the motion that fits it.
+            "#ifdef PHASE_NEIGHBORS\n" +
+            "  {\n" +
+            "   vec2 cp=vTexCoord*uPhaseSize-0.5;vec2 cb=floor(cp);vec2 cf=cp-cb;\n" +
+            // The bilinear vector competes too: on smooth (perspective)
+            // motion it is the right one and the cell vectors are not.
+            "   float w0=(0.02+c1)*(0.02+k1)*(0.02+k1);\n" +
+            "   vec3 sa=w0*a1,sb=w0*b1;float sw=w0,sc=c1;\n" +
+            "   for(int i=0;i<4;i++){\n" +
+            "    vec2 o=vec2(mod(float(i),2.0),floor(float(i)*0.5));\n" +
+            "    vec4 nf=texture2D(uPhaseFlow,clamp((cb+o+0.5)/uPhaseSize,vec2(0.0),vec2(1.0)));\n" +
+            "    vec2 nv=decodeFlow(nf);\n" +
+            "    vec3 na=texture2D(uPrevious,clamp(vTexCoord-uPhase*nv,vec2(0.0),vec2(1.0))).rgb;\n" +
+            "    vec3 nb=texture2D(uCurrent,clamp(vTexCoord+(1.0-uPhase)*nv,vec2(0.0),vec2(1.0))).rgb;\n" +
+            "    float ng=maxDiff(na,nb);float nk=exp(-ng*ng*150.0);\n" +
+            "    vec2 bw=mix(1.0-cf,cf,o);float nc=clamp(nf.b,0.0,1.0);\n" +
+            "    float w=bw.x*bw.y*(0.02+nc)*(0.02+nk)*(0.02+nk);\n" +
+            "    sa+=w*na;sb+=w*nb;sw+=w;sc+=bw.x*bw.y*nc;\n" +
+            "   }\n" +
+            "   a1=sa/sw;b1=sb/sw;c1=0.5*sc;s1=0.5*sw;\n" +
+            "   wA1=(1.0-uPhase)*s1;wB1=uPhase*s1;\n" +
+            "  }\n" +
+            "#endif\n" +
+            "  float wA2=(1.0-uPhase)*(0.02+previousReliability*previousGate)*(0.02+k2)*(0.02+k2);\n" +
+            "  float wB2=uPhase*(0.02+currentReliability*currentGate)*(0.02+k2)*(0.02+k2);\n" +
+            "  float ws=wA1+wB1+wA2+wB2;\n" +
+            "  selectedPrediction=(wA1*a1+wB1*b1+wA2*a.rgb+wB2*b.rgb)/ws;\n" +
+            "  predictionAdmission=max(predictionAdmission,step(0.3,c1));\n" +
+            " }\n" +
+            "#endif\n" +
             // Screen-space HUD, radar chrome, and status text do not move
             // between endpoints. Warping them with the camera/body flow is
             // the smear watched on Hunters (2026-08-16). Hold the exact
@@ -1796,6 +1985,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int externalGeneratedTextureCopyProgram;
     private int signatureCompareProgram;
     private int interpolateProgram;
+    // Phase synthesis variants (compile-time, so level 0 pays nothing).
+    private int interpolateSynthProgram, interpolateNeighborsProgram;
     private int predictionProofProgram;
     private int flowProofProgram;
     private int coarseMotionProgram;
@@ -1836,6 +2027,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final int[] denseFinalTextures = new int[2];
     private final int[] denseValidatedTextures = new int[2];
     private final int[] denseFillTextures = new int[2];
+    // Per-phase motion at time t (DENSE_PHASE_SHADER), analysis resolution.
+    private int densePhaseTexture, densePhaseFramebuffer, densePhaseProgram;
+    // The phase field is twice the analysis resolution: its candidates come
+    // from the analysis fields, but each finer cell picks its own winner,
+    // which follows motion boundaries and perspective more closely.
+    private int densePhaseWidth, densePhaseHeight;
+    private boolean synthesisEnabled;
+    private int synthesisLevel;
     private int denseFillProgram;
     private final int[] denseLevelWidths = new int[DENSE_LEVELS];
     private final int[] denseLevelHeights = new int[DENSE_LEVELS];
@@ -1907,6 +2106,31 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private long verifyLastRealSequence;
     private long verifyPresented, verifyVerified, verifyDuplicate, verifyBlendLike,
             verifyStatic, verifySkipped;
+
+    // Hold-out QA (TimelineSchedulerSwitch.holdout): see HOLDOUT_SHADER.
+    private static final int HOLDOUT_REFERENCES = 8;
+    private static final int HOLDOUT_RING = 4;
+    private static final int HOLDOUT_LEVELS = 3;
+    // Synthesis levels scored side by side on every hold-out pair.
+    private static final int[] HOLDOUT_LEVEL_IDS = {0, 1, 2};
+    private boolean holdoutMode;
+    private boolean holdoutWithholdNext;
+    private final int[] holdoutReferenceTextures = new int[HOLDOUT_REFERENCES];
+    private final long[] holdoutReferenceRightSequence = new long[HOLDOUT_REFERENCES];
+    private final long[] holdoutReferenceTimestampNs = new long[HOLDOUT_REFERENCES];
+    private int holdoutWidth, holdoutHeight, holdoutProgram;
+    private final int[] holdoutGeneratedTextures = new int[HOLDOUT_LEVELS];
+    private final int[] holdoutGeneratedFramebuffers = new int[HOLDOUT_LEVELS];
+    private int holdoutResultTexture, holdoutResultFramebuffer;
+    private final int[] holdoutPbos = new int[HOLDOUT_RING];
+    private final long[] holdoutFences = new long[HOLDOUT_RING];
+    private int holdoutHead, holdoutPending;
+    private boolean holdoutResourcesReady, holdoutUnavailable;
+    private long holdoutWindowSamples, holdoutWindowChanging, holdoutWindowPixels;
+    private final double[] holdoutWindowGenerated = new double[HOLDOUT_LEVELS];
+    private final double[] holdoutTotalGenerated = new double[HOLDOUT_LEVELS];
+    private double holdoutWindowCrossfade, holdoutTotalCrossfade;
+    private long holdoutTotalSamples, holdoutTotalChanging;
     private long denseWarpMaxCompletedSequence;
     private final long[] denseWarpCompletedSequence = new long[128];
     private long denseTimedPairs;
@@ -2312,8 +2536,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // panel) can still generate; the exact lattice refused it.
             frameRate.setPlanRelativeTolerance(TimelineFrameScheduler.PLAN_RELATIVE_TOLERANCE);
             frameRate.setMaxGenerationFactor(TimelineSchedulerSwitch.maxMultiplier());
+            holdoutMode = TimelineSchedulerSwitch.holdout();
             Log.i(TAG, "Timeline scheduler active generator=" + generatorId +
-                    " maxMultiplier=" + TimelineSchedulerSwitch.maxMultiplier());
+                    " maxMultiplier=" + TimelineSchedulerSwitch.maxMultiplier() +
+                    (holdoutMode ? " holdoutQa=1" : ""));
         }
         thread = new HandlerThread("emufusion-frame-generator");
         thread.start();
@@ -4019,6 +4245,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 VERTEX_SHADER, REGIONAL_CANDIDATE_WINNER_SHADER);
         globalMotionProgram = createProgram(VERTEX_SHADER, GLOBAL_MOTION_REDUCTION_SHADER);
         interpolateProgram = createProgram(VERTEX_SHADER, MOTION_INTERPOLATE_SHADER);
+        interpolateSynthProgram = createProgram(VERTEX_SHADER,
+                "#define PHASE_SYNTHESIS\n" + MOTION_INTERPOLATE_SHADER);
+        interpolateNeighborsProgram = createProgram(VERTEX_SHADER,
+                "#define PHASE_SYNTHESIS\n#define PHASE_NEIGHBORS\n" + MOTION_INTERPOLATE_SHADER);
+        densePhaseProgram = createProgram(VERTEX_SHADER, DENSE_PHASE_SHADER);
+        synthesisLevel = TimelineSchedulerSwitch.synthesisLevel();
+        synthesisEnabled = synthesisLevel > 0;
         predictionProofProgram = createProgram(
                 VERTEX_SHADER, MOTION_PREDICTION_PROOF_SHADER);
         flowProofProgram = createProgram(VERTEX_SHADER, FLOW_PROOF_SHADER);
@@ -4809,6 +5042,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             resetEndpointTimelineForSchedulerEpoch();
             resetHealthWindowAfterStreamChange();
         }
+        if (holdoutMode && externalTransport == null && withholdForHoldout(sourceTexture, timestampNs))
+            return;
         if (!admitExternalEndpointCandidate()) return;
         // The overflow reset above deliberately clears the old timeline. This
         // exact candidate is the first endpoint of the new one, so publish its
@@ -5312,6 +5547,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             } else if (dense) {
                 try {
                     estimateDenseMotion();
+                    if (holdoutMode && motionEstimateReady) evaluateHoldoutPair();
                 } catch (RuntimeException denseFailure) {
                     rejectDense("buffered-pair-estimator-failure", denseFailure);
                     motionEstimateReady = false;
@@ -5586,6 +5822,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             GLES20.glGenTextures(2, denseGlobalCutTextures, 0);
             GLES20.glGenTextures(2, denseValidatedTextures, 0);
             GLES20.glGenTextures(2, denseFillTextures, 0);
+            int[] phase = new int[1];
+            GLES20.glGenTextures(1, phase, 0);
+            densePhaseTexture = phase[0];
+            GLES20.glGenFramebuffers(1, phase, 0);
+            densePhaseFramebuffer = phase[0];
             allocateDenseResources();
             validateDenseByteContract();
             validateDenseQ8ShaderContract();
@@ -5666,6 +5907,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     denseAnalysisWidth, denseAnalysisHeight, false);
             allocateDenseTexture(denseFillTextures[direction],
                     denseAnalysisWidth, denseAnalysisHeight, false);
+            if (direction == 0 && densePhaseTexture != 0) {
+                densePhaseWidth = 2 * denseAnalysisWidth;
+                densePhaseHeight = 2 * denseAnalysisHeight;
+                allocateDenseTexture(densePhaseTexture, densePhaseWidth, densePhaseHeight, false);
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, densePhaseFramebuffer);
+                GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                        GLES20.GL_TEXTURE_2D, densePhaseTexture, 0);
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            }
             allocateDenseTexture(denseGlobalCoarseCostTextures[direction],
                     9, 9, true);
             allocateDenseTexture(denseGlobalFineCostTextures[direction],
@@ -10238,6 +10488,281 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glClearColor(0f, 0f, 0f, 1f);
     }
 
+    /**
+     * Hold-out QA: alternate unique frames are kept out of presentation and
+     * remembered as the reference for the pair that spans them. Returns true
+     * when this frame was withheld.
+     */
+    private boolean withholdForHoldout(int sourceTexture, long timestampNs) {
+        boolean withhold = holdoutWithholdNext;
+        holdoutWithholdNext = !holdoutWithholdNext;
+        if (!withhold) return false;
+        if (!ensureHoldoutResources()) return false;
+        long rightSequence = endpointSequence + 1L;  // the next accepted endpoint
+        int slot = (int) (rightSequence % HOLDOUT_REFERENCES);
+        copyTexture(sourceTexture, holdoutReferenceTextures[slot]);
+        holdoutReferenceRightSequence[slot] = rightSequence;
+        holdoutReferenceTimestampNs[slot] = timestampNs;
+        return true;
+    }
+
+    private boolean ensureHoldoutResources() {
+        if (holdoutResourcesReady) return true;
+        if (holdoutUnavailable || historyWidth <= 0 || historyHeight <= 0) return false;
+        try {
+            GLES20.glGenTextures(HOLDOUT_REFERENCES, holdoutReferenceTextures, 0);
+            for (int texture : holdoutReferenceTextures)
+                allocateTexture(texture, historyWidth, historyHeight);
+            holdoutWidth = Math.min(320, historyWidth);
+            holdoutHeight = Math.max(1, Math.round((float) holdoutWidth * historyHeight / historyWidth));
+            GLES20.glGenTextures(HOLDOUT_LEVELS, holdoutGeneratedTextures, 0);
+            GLES20.glGenFramebuffers(HOLDOUT_LEVELS, holdoutGeneratedFramebuffers, 0);
+            int[] result = new int[1];
+            GLES20.glGenTextures(1, result, 0);
+            holdoutResultTexture = result[0];
+            GLES20.glGenFramebuffers(1, result, 0);
+            holdoutResultFramebuffer = result[0];
+            allocateTexture(holdoutResultTexture, holdoutWidth, holdoutHeight);
+            int[] pairs = new int[2 * HOLDOUT_LEVELS + 2];
+            for (int level = 0; level < HOLDOUT_LEVELS; ++level) {
+                allocateTexture(holdoutGeneratedTextures[level], holdoutWidth, holdoutHeight);
+                pairs[2 * level] = holdoutGeneratedFramebuffers[level];
+                pairs[2 * level + 1] = holdoutGeneratedTextures[level];
+            }
+            pairs[2 * HOLDOUT_LEVELS] = holdoutResultFramebuffer;
+            pairs[2 * HOLDOUT_LEVELS + 1] = holdoutResultTexture;
+            for (int i = 0; i < pairs.length; i += 2) {
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, pairs[i]);
+                GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER,
+                        GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_TEXTURE_2D, pairs[i + 1], 0);
+                if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                        GLES20.GL_FRAMEBUFFER_COMPLETE)
+                    throw new IllegalStateException("hold-out framebuffer incomplete");
+            }
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES30.glGenBuffers(HOLDOUT_RING, holdoutPbos, 0);
+            for (int pbo : holdoutPbos) {
+                GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, pbo);
+                GLES30.glBufferData(GLES30.GL_PIXEL_PACK_BUFFER,
+                        holdoutWidth * holdoutHeight * 4, null, GLES30.GL_STREAM_READ);
+            }
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+            holdoutProgram = createProgram(VERTEX_SHADER, HOLDOUT_SHADER);
+            checkGl("hold-out resources");
+            holdoutResourcesReady = true;
+            Log.i(TAG, "Hold-out QA active generator=" + generatorId +
+                    " score=" + holdoutWidth + "x" + holdoutHeight);
+            return true;
+        } catch (RuntimeException failure) {
+            holdoutUnavailable = true;
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            Log.w(TAG, "Hold-out QA unavailable generator=" + generatorId, failure);
+            return false;
+        }
+    }
+
+    /** Renders the pair at its withheld frame's time and queues the comparison. */
+    private void evaluateHoldoutPair() {
+        if (!holdoutResourcesReady) return;
+        int slot = (int) (activeRightSequence % HOLDOUT_REFERENCES);
+        long referenceNs = holdoutReferenceTimestampNs[slot];
+        if (holdoutReferenceRightSequence[slot] != activeRightSequence ||
+                referenceNs <= activeLeftTimestampNs || referenceNs >= activeRightTimestampNs)
+            return;
+        pollHoldout();
+        if (holdoutPending == HOLDOUT_RING) return;
+        float phase = (float) ((double) (referenceNs - activeLeftTimestampNs) /
+                (double) (activeRightTimestampNs - activeLeftTimestampNs));
+        int savedLevel = synthesisLevel;
+        boolean savedEnabled = synthesisEnabled;
+        try {
+            // Every level renders the same pair from the same fields, so the
+            // comparison is paired and independent of scene variation.
+            for (int level = 0; level < HOLDOUT_LEVELS; ++level) {
+                synthesisLevel = HOLDOUT_LEVEL_IDS[level];
+                synthesisEnabled = synthesisLevel > 0;
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, holdoutGeneratedFramebuffers[level]);
+                GLES20.glViewport(0, 0, holdoutWidth, holdoutHeight);
+                drawMotionFrame(phase);
+            }
+            synthesisLevel = savedLevel;
+            synthesisEnabled = savedEnabled;
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, holdoutResultFramebuffer);
+            GLES20.glViewport(0, 0, holdoutWidth, holdoutHeight);
+            GLES20.glUseProgram(holdoutProgram);
+            bindQuad(holdoutProgram);
+            for (int level = 0; level < HOLDOUT_LEVELS; ++level)
+                bindTexture(holdoutProgram, "uGenerated" + level, holdoutGeneratedTextures[level], level);
+            bindTexture(holdoutProgram, "uPrevious", historyTextures[previousIndex], 3);
+            bindTexture(holdoutProgram, "uCurrent", historyTextures[currentIndex], 4);
+            bindTexture(holdoutProgram, "uReference", holdoutReferenceTextures[slot], 5);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+            int ring = holdoutHead;
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, holdoutPbos[ring]);
+            GLES30.glReadPixels(0, 0, holdoutWidth, holdoutHeight,
+                    GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, 0);
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+            holdoutFences[ring] = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            holdoutHead = (holdoutHead + 1) % HOLDOUT_RING;
+            ++holdoutPending;
+            holdoutReferenceRightSequence[slot] = 0L;  // scored once
+            maybeDumpHoldout(slot, phase);
+        } finally {
+            synthesisLevel = savedLevel;
+            synthesisEnabled = savedEnabled;
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        }
+    }
+
+    // QA image evidence for the hold-out score: with the marker present, up to
+    // eight triplets (generated, withheld real frame, both endpoints, the
+    // endpoint and phase fields) go to files/holdout for offline inspection.
+    // Synchronous readback; never combine with pacing measurements.
+    private static final java.io.File HOLDOUT_DUMP_MARKER =
+            new java.io.File("/data/local/tmp/emufusion-holdout-dump");
+    private int holdoutDumpCount;
+    private long holdoutDumpLastNs;
+
+    private void maybeDumpHoldout(int slot, float phase) {
+        long now = System.nanoTime();
+        if (holdoutDumpCount >= 8 || now - holdoutDumpLastNs < 700_000_000L ||
+                !HOLDOUT_DUMP_MARKER.exists()) return;
+        holdoutDumpLastNs = now;
+        ++holdoutDumpCount;
+        java.io.File directory = new java.io.File(DENSE_FLOW_DUMP_DIR.getParentFile(), "holdout");
+        try {
+            directory.mkdirs();
+            java.io.File file = new java.io.File(directory,
+                    "holdout-" + generatorId + "-" + holdoutDumpCount + ".bin");
+            try (java.io.DataOutputStream out = new java.io.DataOutputStream(
+                    new java.io.BufferedOutputStream(new java.io.FileOutputStream(file), 1 << 16))) {
+                out.writeInt(0x484f4431); // 'HOD1'
+                out.writeFloat(phase);
+                out.writeFloat(activeFlowLimitPixels());
+                out.writeInt(synthesisLevel);
+                boolean dense = densePyramidEnabled && denseAnalysisWidth > 0;
+                out.writeInt(HOLDOUT_LEVELS + (dense ? 6 : 3));
+                for (int level = 0; level < HOLDOUT_LEVELS; ++level)
+                    dumpDensePlane(out, "generated" + HOLDOUT_LEVEL_IDS[level], holdoutGeneratedTextures[level],
+                            holdoutWidth, holdoutHeight);
+                dumpDensePlane(out, "reference", holdoutReferenceTextures[slot],
+                        historyWidth, historyHeight);
+                dumpDensePlane(out, "previous", historyTextures[previousIndex], historyWidth, historyHeight);
+                dumpDensePlane(out, "current", historyTextures[currentIndex], historyWidth, historyHeight);
+                if (dense) {
+                    dumpDensePlane(out, "forward", activeForwardFlow(),
+                            denseAnalysisWidth, denseAnalysisHeight);
+                    dumpDensePlane(out, "backward", activeBackwardFlow(),
+                            denseAnalysisWidth, denseAnalysisHeight);
+                    dumpDensePlane(out, "phase", densePhaseTexture,
+                            densePhaseWidth, densePhaseHeight);
+                }
+            }
+            Log.i(TAG, "Hold-out dump generator=" + generatorId + " file=" + file.getName() +
+                    " phase=" + phase + " synthesis=" + synthesisLevel);
+        } catch (java.io.IOException | RuntimeException failure) {
+            Log.w(TAG, "Hold-out dump failed generator=" + generatorId, failure);
+        }
+    }
+
+    private void pollHoldout() {
+        while (holdoutPending > 0) {
+            int ring = (holdoutHead - holdoutPending + HOLDOUT_RING) % HOLDOUT_RING;
+            long fence = holdoutFences[ring];
+            int status = fence == 0L ? GLES30.GL_WAIT_FAILED :
+                    GLES30.glClientWaitSync(fence, 0, 0L);
+            if (status == GLES30.GL_TIMEOUT_EXPIRED) return;
+            if (fence != 0L) GLES30.glDeleteSync(fence);
+            holdoutFences[ring] = 0L;
+            --holdoutPending;
+            if (status == GLES30.GL_WAIT_FAILED) continue;
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, holdoutPbos[ring]);
+            java.nio.Buffer mapped = GLES30.glMapBufferRange(GLES30.GL_PIXEL_PACK_BUFFER, 0,
+                    holdoutWidth * holdoutHeight * 4, GLES30.GL_MAP_READ_BIT);
+            if (mapped instanceof java.nio.ByteBuffer)
+                accumulateHoldout((java.nio.ByteBuffer) mapped);
+            if (mapped != null) GLES30.glUnmapBuffer(GLES30.GL_PIXEL_PACK_BUFFER);
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+        }
+    }
+
+    private void accumulateHoldout(java.nio.ByteBuffer cells) {
+        int count = holdoutWidth * holdoutHeight;
+        long changing = 0L;
+        double crossfade = 0.0;
+        double[] generated = new double[HOLDOUT_LEVELS];
+        for (int i = 0; i < count; ++i) {
+            int base = i * 4;
+            int flag = cells.get(base + 3) & 0xff;
+            if (flag < 128) continue;
+            ++changing;
+            for (int level = 0; level < HOLDOUT_LEVELS; ++level)
+                generated[level] += cells.get(base + level) & 0xff;
+            crossfade += (flag - 128) * (255.0 / 127.0);
+        }
+        if (changing == 0L) return;
+        // Values are 2 x error x 255: halve back to 0-255 per-channel error.
+        ++holdoutWindowSamples;
+        holdoutWindowChanging += changing;
+        holdoutWindowPixels += count;
+        for (int level = 0; level < HOLDOUT_LEVELS; ++level)
+            holdoutWindowGenerated[level] += generated[level] / 2.0;
+        holdoutWindowCrossfade += crossfade / 2.0;
+    }
+
+    private void publishHoldout() {
+        pollHoldout();
+        if (holdoutWindowSamples == 0L) return;
+        holdoutTotalSamples += holdoutWindowSamples;
+        holdoutTotalChanging += holdoutWindowChanging;
+        holdoutTotalCrossfade += holdoutWindowCrossfade;
+        double n = Math.max(1L, holdoutWindowChanging), total = Math.max(1L, holdoutTotalChanging);
+        StringBuilder line = new StringBuilder("Hold-out quality generator=").append(generatorId)
+                .append(" samples=").append(holdoutWindowSamples)
+                .append(String.format(java.util.Locale.US, " changing=%.1f%%",
+                        100.0 * holdoutWindowChanging / Math.max(1L, holdoutWindowPixels)));
+        for (int level = 0; level < HOLDOUT_LEVELS; ++level) {
+            holdoutTotalGenerated[level] += holdoutWindowGenerated[level];
+            line.append(String.format(java.util.Locale.US, " mae%d=%.2f", HOLDOUT_LEVEL_IDS[level],
+                    holdoutWindowGenerated[level] / n));
+        }
+        line.append(String.format(java.util.Locale.US, " crossfadeMae=%.2f totalSamples=%d",
+                holdoutWindowCrossfade / n, holdoutTotalSamples));
+        for (int level = 0; level < HOLDOUT_LEVELS; ++level)
+            line.append(String.format(java.util.Locale.US, " totalMae%d=%.2f", HOLDOUT_LEVEL_IDS[level],
+                    holdoutTotalGenerated[level] / total));
+        line.append(String.format(java.util.Locale.US, " totalCrossfadeMae=%.2f",
+                holdoutTotalCrossfade / total));
+        for (int level = 0; level < HOLDOUT_LEVELS; ++level)
+            line.append(String.format(java.util.Locale.US, " totalVsCrossfade%d=%.3f", HOLDOUT_LEVEL_IDS[level],
+                    holdoutTotalGenerated[level] / Math.max(1e-9, holdoutTotalCrossfade)));
+        Log.i(TAG, line.toString());
+        holdoutWindowSamples = 0L;
+        holdoutWindowChanging = 0L;
+        holdoutWindowPixels = 0L;
+        java.util.Arrays.fill(holdoutWindowGenerated, 0.0);
+        holdoutWindowCrossfade = 0.0;
+    }
+
+    private void releaseHoldoutResources() {
+        if (!holdoutResourcesReady) return;
+        holdoutResourcesReady = false;
+        for (int i = 0; i < HOLDOUT_RING; ++i) {
+            if (holdoutFences[i] != 0L) GLES30.glDeleteSync(holdoutFences[i]);
+            holdoutFences[i] = 0L;
+        }
+        holdoutPending = 0;
+        GLES30.glDeleteBuffers(HOLDOUT_RING, holdoutPbos, 0);
+        GLES20.glDeleteFramebuffers(HOLDOUT_LEVELS, holdoutGeneratedFramebuffers, 0);
+        GLES20.glDeleteTextures(HOLDOUT_LEVELS, holdoutGeneratedTextures, 0);
+        GLES20.glDeleteFramebuffers(1, new int[] {holdoutResultFramebuffer}, 0);
+        GLES20.glDeleteTextures(1, new int[] {holdoutResultTexture}, 0);
+        GLES20.glDeleteTextures(HOLDOUT_REFERENCES, holdoutReferenceTextures, 0);
+        if (holdoutProgram != 0) GLES20.glDeleteProgram(holdoutProgram);
+        holdoutProgram = 0;
+    }
+
     private void countRealFrameShown(float selectedPhase) {
         long sequence = activeRightSequence > 0L && selectedPhase >= 1f ?
                 activeRightSequence : activeLeftSequence;
@@ -10381,7 +10906,59 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " available=" + (verifyUnavailable ? 0 : 1));
     }
 
+    /**
+     * Renders the phase-centred motion field for {@code phase} into the
+     * analysis-resolution phase texture, restoring the caller's framebuffer
+     * and viewport. Returns false when the field is unavailable.
+     */
+    private boolean renderPhaseField(float phase) {
+        if (!synthesisEnabled || !densePyramidEnabled || densePhaseProgram == 0 ||
+                densePhaseFramebuffer == 0 || densePhaseWidth <= 0) return false;
+        if (maxFragmentTextureUnits == 0) {
+            int[] units = new int[1];
+            GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_IMAGE_UNITS, units, 0);
+            maxFragmentTextureUnits = Math.max(1, units[0]);
+        }
+        if (maxFragmentTextureUnits < 10) return false;
+        int[] state = new int[5];
+        GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, state, 0);
+        GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, state, 1);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, densePhaseFramebuffer);
+        GLES20.glViewport(0, 0, densePhaseWidth, densePhaseHeight);
+        GLES20.glUseProgram(densePhaseProgram);
+        bindQuad(densePhaseProgram);
+        bindTexture(densePhaseProgram, "uPrevious", historyTextures[previousIndex], 0);
+        bindTexture(densePhaseProgram, "uCurrent", historyTextures[currentIndex], 1);
+        bindTexture(densePhaseProgram, "uForwardMotion", activeForwardFlow(), 2);
+        bindTexture(densePhaseProgram, "uBackwardMotion", activeBackwardFlow(), 3);
+        boolean seedsReady = denseV28ReducedAnalysisRequested && denseGlobalSeedTextures[0] != 0;
+        bindTexture(densePhaseProgram, "uSeedForward",
+                seedsReady ? denseGlobalSeedTextures[1] : historyTextures[currentIndex], 4);
+        bindTexture(densePhaseProgram, "uSeedBackward",
+                seedsReady ? denseGlobalSeedTextures[0] : historyTextures[currentIndex], 5);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uSeedEnabled"),
+                seedsReady ? 1f : 0f);
+        float flowLimit = activeFlowLimitPixels();
+        uniform2(densePhaseProgram, "uFlowRange",
+                flowLimit / Math.max(1f, historyWidth), flowLimit / Math.max(1f, historyHeight));
+        uniform2(densePhaseProgram, "uCell", 1f / denseAnalysisWidth, 1f / denseAnalysisHeight);
+        uniform2(densePhaseProgram, "uSourcePixel",
+                1f / Math.max(1f, historyWidth), 1f / Math.max(1f, historyHeight));
+        uniform2(densePhaseProgram, "uSeedSourceSize",
+                Math.max(1f, historyWidth), Math.max(1f, historyHeight));
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhase"), phase);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearch"),
+                synthesisLevel >= 3 ? 1f : 0f);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, state[0]);
+        GLES20.glViewport(state[1], state[2], state[3], state[4]);
+        return true;
+    }
+
     private void drawMotionFrame(float phase) {
+        boolean phaseField = renderPhaseField(phase);
+        final int interpolateProgram = !phaseField ? this.interpolateProgram :
+                synthesisLevel >= 2 ? interpolateNeighborsProgram : interpolateSynthProgram;
         GLES20.glUseProgram(interpolateProgram);
         bindQuad(interpolateProgram);
         bindTexture(interpolateProgram, "uPrevious", historyTextures[previousIndex], 0);
@@ -10425,6 +11002,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 cutReady ? 8 : 7);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
                 "uDenseCutEnabled"), cutReady ? 1f : 0f);
+        bindTexture(interpolateProgram, "uPhaseFlow",
+                phaseField ? densePhaseTexture : historyTextures[previousIndex], phaseField ? 9 : 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
+                "uPhaseFieldEnabled"), phaseField ? 1f : 0f);
+        uniform2(interpolateProgram, "uPhaseSize",
+                Math.max(1f, densePhaseWidth), Math.max(1f, densePhaseHeight));
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
@@ -11592,7 +12175,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         double targetOutput = frameRate.targetOutputHz();
         long now = System.nanoTime();
         reportSourceAdmissionDiagnostic(now);
-        if (externalTransport == null) publishVerifiedFrameRates(now);
+        if (externalTransport == null) {
+            boolean secondElapsed = verifyWindowStartNs != 0L && now - verifyWindowStartNs >= 1_000_000_000L;
+            publishVerifiedFrameRates(now);
+            if (holdoutMode && secondElapsed) publishHoldout();
+        }
         // Diagnostic windows follow elapsed time, not a fluctuating target.
         // Resetting this clock on every millihertz change hid 44 seconds of
         // live health rows in the Switch 7c739 test. Physical qualification
@@ -13193,6 +13780,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             softwareUploadBitmap = null;
         }
         releaseVerifyResources();
+        releaseHoldoutResources();
         if (frameBuffer != 0) GLES20.glDeleteFramebuffers(1, new int[]{frameBuffer}, 0);
         if (historyTextures[0] != 0 || historyTextures[1] != 0)
             GLES20.glDeleteTextures(2, historyTextures, 0);
@@ -13243,6 +13831,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             GLES20.glDeleteProgram(regionalCandidateWinnerProgram);
         if (globalMotionProgram != 0) GLES20.glDeleteProgram(globalMotionProgram);
         if (interpolateProgram != 0) GLES20.glDeleteProgram(interpolateProgram);
+        if (interpolateSynthProgram != 0) GLES20.glDeleteProgram(interpolateSynthProgram);
+        if (interpolateNeighborsProgram != 0) GLES20.glDeleteProgram(interpolateNeighborsProgram);
+        interpolateSynthProgram = interpolateNeighborsProgram = 0;
         if (predictionProofProgram != 0) GLES20.glDeleteProgram(predictionProofProgram);
         if (flowProofProgram != 0) GLES20.glDeleteProgram(flowProofProgram);
         for (int direction = 0; direction < 2; ++direction) {
@@ -13256,6 +13847,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         if (denseValidatedTextures[0] != 0)
             GLES20.glDeleteTextures(2, denseValidatedTextures, 0);
+        if (densePhaseTexture != 0) GLES20.glDeleteTextures(1, new int[] {densePhaseTexture}, 0);
+        if (densePhaseFramebuffer != 0)
+            GLES20.glDeleteFramebuffers(1, new int[] {densePhaseFramebuffer}, 0);
+        densePhaseTexture = densePhaseFramebuffer = 0;
             GLES20.glDeleteTextures(2, denseFillTextures, 0);
         if (denseGlobalCoarseCostTextures[0] != 0)
             GLES20.glDeleteTextures(2, denseGlobalCoarseCostTextures, 0);

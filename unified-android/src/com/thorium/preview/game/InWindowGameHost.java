@@ -2575,8 +2575,11 @@ public final class InWindowGameHost
 
     @Override public void retireSurfaceRenderer(FrameGenerationRenderer renderer,
             GameSurface.RetirementCompletion completion) {
+        // A game switch holds the stopped previous session only in
+        // switchingSession; it still owns the retiring generator's input.
         final EngineSession producer = session != null ? session :
-                retiringSession != null ? retiringSession : checkpointRetainedProducer;
+                retiringSession != null ? retiringSession :
+                switchingSession != null ? switchingSession : checkpointRetainedProducer;
         checkpointRetainedProducer = null;
         surfaceAvailable = false;
         updateGameplayScreenOn();

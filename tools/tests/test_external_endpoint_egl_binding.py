@@ -199,6 +199,7 @@ public class EglBindingFixture {
     void drawTexture2d(int source){check(EGL14.current==eglEndpointSurface,"render outside endpoint surface");trace.add("draw:"+source);}
     void closeNativeSourceImageObserver(){}
     void releaseVerifyResources(){}
+    void releaseHoldoutResources(){}
     SCALAR_FIELDS
     PRODUCTION_METHODS
     static EglBindingFixture initialized(boolean appOwned){

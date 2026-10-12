@@ -98,6 +98,9 @@ final class PpssppGlesEngineSession implements EngineSession,
     private volatile Surface secondarySurface;
     private volatile boolean secondaryDisplayRequested;
     private volatile boolean prepared;
+    // prepare() threw before publishing a render loop (for example a refused
+    // disc image): nothing ever drew into the gameplay Surface.
+    private volatile boolean prepareFailed;
     private volatile boolean resumeRequested;
     private final ThreeDsPhoneStylus phoneStylus = new ThreeDsPhoneStylus();
     private volatile double declaredVideoHz;
@@ -519,6 +522,7 @@ final class PpssppGlesEngineSession implements EngineSession,
                             entry.id + " accepted=" + secondaryDisplayRequested);
                 }
             } catch (Throwable failure) {
+                prepareFailed = true;
                 releaseSecondaryDisplay();
                 Log.e(TAG, "Unable to prepare engine=" + entry.id +
                         " system=" + request.systemId, failure);
@@ -806,6 +810,13 @@ final class PpssppGlesEngineSession implements EngineSession,
      * releasing the generator's input is safe; detach if it is still open.
      */
     @Override public boolean quiesceForSurfaceRetirement() {
+        if (prepareFailed && renderLoop == null) {
+            // Refused before any render loop existed: no producer can touch
+            // the generator input, so its retirement is safe. Refusing here
+            // leaked the frame generator for the life of the process.
+            surface = null;
+            return true;
+        }
         if (!stopping.get() && !released.get()) return quiesceForPresentationRecovery();
         ExperimentalGlesRenderLoop active = renderLoop;
         if (active != null) {

@@ -34,6 +34,7 @@ public class HealthWindowTest {
     long intervalPresents,intervalElapsed;
     void reportSourceAdmissionDiagnostic(long now){admissions++;}
     Object externalTransport; void publishVerifiedFrameRates(long now){}
+    long verifyWindowStartNs; boolean holdoutMode; void publishHoldout(){}
     void publishReportedFrameRate(double a,double b,double c,boolean qualified){
         assert !qualified && b==0;publications++;
     }

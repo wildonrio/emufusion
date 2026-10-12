@@ -18,6 +18,18 @@ public final class TimelineSchedulerSwitch {
     static final String GLOBAL = "emufusion_framegen_timeline";
     private static volatile boolean enabled;
     private static volatile int maxMultiplier = FrameGenerationSettings.MAX_MULTIPLIER;
+    // QA only (emufusion_framegen_holdout=1): every other real frame is
+    // withheld from generation and used to score the generated frame at its
+    // time -- the quality measurement for generator changes.
+    static final String HOLDOUT_GLOBAL = "emufusion_framegen_holdout";
+    private static volatile boolean holdout;
+    // QA only: emufusion_framegen_synth selects the synthesis for hold-out
+    // comparisons: 0 the earlier two-sample combination, 1 the phase-field
+    // candidates (default), 2 those with per-pixel selection among
+    // neighbouring cell vectors, 3 also a coarse-to-fine phase-field search.
+    static final String SYNTH_GLOBAL = "emufusion_framegen_synth";
+    static final int DEFAULT_SYNTHESIS_LEVEL = 1;
+    private static volatile int synthesisLevel = DEFAULT_SYNTHESIS_LEVEL;
 
     private TimelineSchedulerSwitch() {}
 
@@ -34,6 +46,22 @@ public final class TimelineSchedulerSwitch {
         maxMultiplier = mode == null ? FrameGenerationSettings.MAX_MULTIPLIER :
                 mode.maxMultiplier();
         enabled = value;
+        boolean qa = false;
+        try {
+            qa = context != null && Settings.Global.getInt(
+                    context.getContentResolver(), HOLDOUT_GLOBAL, 0) == 1;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings never enable QA.
+        }
+        holdout = qa;
+        int level = DEFAULT_SYNTHESIS_LEVEL;
+        try {
+            if (context != null) level = Settings.Global.getInt(
+                    context.getContentResolver(), SYNTH_GLOBAL, DEFAULT_SYNTHESIS_LEVEL);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default synthesis.
+        }
+        synthesisLevel = Math.max(0, Math.min(3, level));
     }
 
     static boolean enabled() { return enabled; }
@@ -42,6 +70,10 @@ public final class TimelineSchedulerSwitch {
         return mode == FrameGenerationSettings.Mode.AUTO ||
                 mode == FrameGenerationSettings.Mode.AUTO_TRIPLE;
     }
+
+    static boolean holdout() { return holdout; }
+
+    static int synthesisLevel() { return synthesisLevel; }
 
     /** Generation ceiling for a timeline generator built after the last refresh. */
     static int maxMultiplier() { return maxMultiplier; }

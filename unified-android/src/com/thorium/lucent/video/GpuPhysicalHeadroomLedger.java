@@ -197,8 +197,15 @@ public final class GpuPhysicalHeadroomLedger {
         Outcome outcome;
         String reason;
         long appMargin = 0L, compositorMargin = 0L;
-        long slotToleranceNs = Math.max(1L, Math.min(row.panelPeriodNs / 4L,
-                Math.max(150_000L, row.panelPeriodNs / 50L)));
+        // Present timestamps are scan-quantized: the frame's slot is the scan
+        // nearest its requested time, so anything within half a scan is in
+        // its slot and another slot is a whole scan away. Smaller offsets are
+        // phase error between our requested lattice and the panel's real
+        // scan-out (the Thor showed a steady 0.17 ms on 3DS and 2.78 ms on
+        // GameCube). A 1/50-scan tolerance called every such frame a
+        // wrong-slot miss and disabled generation seconds after it started
+        // while every generated frame was verified and evenly paced.
+        long slotToleranceNs = Math.max(1L, row.panelPeriodNs / 2L);
         if (row.status == DROPPED) {
             outcome = Outcome.DEADLINE_MISS;
             reason = "compositor-dropped";

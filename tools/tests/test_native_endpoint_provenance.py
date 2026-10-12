@@ -93,6 +93,7 @@ public class ProvenanceTest {
     NativeSourceImageObserver nativeSourceImageObserver=nativeSourceImageObserverInitial;
     NativeSourceImageLedger nativeEndpointProvenance=new NativeSourceImageLedger(9);
     final Rate frameRate=new Rate();ExternalFrameGenerationTransport externalTransport;
+    boolean holdoutMode;boolean withholdForHoldout(int texture,long timestampNs){return false;}
     final int[] endpointFifoTextures={10,11,12,13,14,15},historyTextures={20,21};
     final long[] endpointFifoSequence=new long[6],endpointFifoTimestampNs=new long[6],
         endpointFifoUniqueSequence=new long[6],endpointFifoCandidateLoss=new long[6];
