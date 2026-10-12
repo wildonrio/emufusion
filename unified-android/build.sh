@@ -11,30 +11,30 @@ ANDROID_JAR="$SDK_DIR/platforms/$ANDROID_PLATFORM/android.jar"
 JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
-BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.42
-VERSION_CODE=116
+BUILD_LOCK="$BUILD_DIR/.emufusion-build-lock"
+VERSION_NAME=3.2.43
+VERSION_CODE=117
 
-case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
+case "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
-    *) printf 'LUCENT_REQUIRE_PORTABLE_BUNDLE must be 0 or 1\n' >&2; exit 1 ;;
+    *) printf 'EMUFUSION_REQUIRE_PORTABLE_BUNDLE must be 0 or 1\n' >&2; exit 1 ;;
 esac
 
 # Explicit diagnostic opt-in; a typo must not silently disable heap evidence.
-case "${LUCENT_GWP_ASAN:-0}" in
+case "${EMUFUSION_GWP_ASAN:-0}" in
     0|1) ;;
-    *) printf 'LUCENT_GWP_ASAN must be 0 or 1\n' >&2; exit 1 ;;
+    *) printf 'EMUFUSION_GWP_ASAN must be 0 or 1\n' >&2; exit 1 ;;
 esac
-case "${LUCENT_MALLOC_DEBUG:-0}" in
+case "${EMUFUSION_MALLOC_DEBUG:-0}" in
     0|1) ;;
-    *) printf 'LUCENT_MALLOC_DEBUG must be 0 or 1\n' >&2; exit 1 ;;
+    *) printf 'EMUFUSION_MALLOC_DEBUG must be 0 or 1\n' >&2; exit 1 ;;
 esac
-if [ "${LUCENT_GWP_ASAN:-0}" = 1 ] && [ "${LUCENT_MALLOC_DEBUG:-0}" = 1 ]; then
+if [ "${EMUFUSION_GWP_ASAN:-0}" = 1 ] && [ "${EMUFUSION_MALLOC_DEBUG:-0}" = 1 ]; then
     printf 'Select one heap diagnostic per build, not GWP-ASan and malloc_debug together.\n' >&2
     exit 1
 fi
-if [ -n "${LUCENT_MALLOC_FREE_TRACE_LIBRARY:-}" ] && [ "${LUCENT_MALLOC_DEBUG:-0}" != 1 ]; then
-    printf 'LUCENT_MALLOC_FREE_TRACE_LIBRARY requires LUCENT_MALLOC_DEBUG=1\n' >&2
+if [ -n "${EMUFUSION_MALLOC_FREE_TRACE_LIBRARY:-}" ] && [ "${EMUFUSION_MALLOC_DEBUG:-0}" != 1 ]; then
+    printf 'EMUFUSION_MALLOC_FREE_TRACE_LIBRARY requires EMUFUSION_MALLOC_DEBUG=1\n' >&2
     exit 1
 fi
 
@@ -47,50 +47,59 @@ for stray_flag in INCLUDE_EXPERIMENTAL_CORES AUTOSELECT_EXPERIMENTAL_CORES \
         INCLUDE_RIFE_FRAMEGEN \
         KEYSTORE STORE_PASS KEY_PASS KEY_ALIAS; do
     if eval "[ \"\${$stray_flag+set}\" = set ]"; then
-        printf 'Refusing to build: %s is set but this build only reads LUCENT_%s\n' \
+        printf 'Refusing to build: %s is set but this build only reads EMUFUSION_%s\n' \
             "$stray_flag" "$stray_flag" >&2
         exit 1
     fi
 done
-# A misspelled LUCENT_ flag (LUCENT_INCLUDE_EXPERIMENTAL_CORE, ...) would be
-# just as silently ignored as an unprefixed one. Reject every core-selection
-# style LUCENT_ name this build does not actually read.
-for lucent_flag in $(env | LC_ALL=C sed -n 's/^\(LUCENT_[A-Za-z0-9_]*\)=.*/\1/p'); do
-    case "$lucent_flag" in
-        LUCENT_INCLUDE_EXPERIMENTAL_CORES) ;;
-        LUCENT_AUTOSELECT_EXPERIMENTAL_CORES) ;;
-        LUCENT_REUSE_QUALIFICATION_CORES) ;;
-        LUCENT_INCLUDE_PHASE2_PPSSPP) ;;
-        LUCENT_REUSE_PHASE2_PPSSPP) ;;
-        LUCENT_INCLUDE_PHASE3_EDEN) ;;
-        LUCENT_INCLUDE_PHASE3_CEMU) ;;
-        LUCENT_INCLUDE_PHASE3_APS3E) ;;
-        LUCENT_INCLUDE_RIFE_FRAMEGEN) ;;
-        LUCENT_INCLUDE_*|LUCENT_REUSE_*|LUCENT_AUTOSELECT_*)
-            printf 'Refusing to build: unknown build flag %s (known flags: LUCENT_INCLUDE_EXPERIMENTAL_CORES LUCENT_AUTOSELECT_EXPERIMENTAL_CORES LUCENT_REUSE_QUALIFICATION_CORES LUCENT_INCLUDE_PHASE2_PPSSPP LUCENT_REUSE_PHASE2_PPSSPP LUCENT_INCLUDE_PHASE3_EDEN LUCENT_INCLUDE_PHASE3_CEMU LUCENT_INCLUDE_PHASE3_APS3E LUCENT_INCLUDE_RIFE_FRAMEGEN)\n' \
-                "$lucent_flag" >&2
+# Every flag was renamed from the product's former prefix to EMUFUSION_
+# (2026-10-12). A recipe still exporting an old-prefix flag would otherwise
+# build silently with defaults, the zero-core failure described above.
+legacy_flags=$(env | LC_ALL=C sed -n 's/^\(LUC''ENT_[A-Za-z0-9_]*\)=.*/\1/p')
+if [ -n "$legacy_flags" ]; then
+    printf 'Refusing to build: %s use the former prefix; build flags are EMUFUSION_*\n' \
+        "$(printf '%s ' $legacy_flags)" >&2
+    exit 1
+fi
+# A misspelled EMUFUSION_ flag (EMUFUSION_INCLUDE_EXPERIMENTAL_CORE, ...) would
+# be just as silently ignored as an unprefixed one. Reject every core-selection
+# style EMUFUSION_ name this build does not actually read.
+for emufusion_flag in $(env | LC_ALL=C sed -n 's/^\(EMUFUSION_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    case "$emufusion_flag" in
+        EMUFUSION_INCLUDE_EXPERIMENTAL_CORES) ;;
+        EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES) ;;
+        EMUFUSION_REUSE_QUALIFICATION_CORES) ;;
+        EMUFUSION_INCLUDE_PHASE2_PPSSPP) ;;
+        EMUFUSION_REUSE_PHASE2_PPSSPP) ;;
+        EMUFUSION_INCLUDE_PHASE3_EDEN) ;;
+        EMUFUSION_INCLUDE_PHASE3_CEMU) ;;
+        EMUFUSION_INCLUDE_PHASE3_APS3E) ;;
+        EMUFUSION_INCLUDE_RIFE_FRAMEGEN) ;;
+        EMUFUSION_INCLUDE_*|EMUFUSION_REUSE_*|EMUFUSION_AUTOSELECT_*)
+            printf 'Refusing to build: unknown build flag %s (known flags: EMUFUSION_INCLUDE_EXPERIMENTAL_CORES EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES EMUFUSION_REUSE_QUALIFICATION_CORES EMUFUSION_INCLUDE_PHASE2_PPSSPP EMUFUSION_REUSE_PHASE2_PPSSPP EMUFUSION_INCLUDE_PHASE3_EDEN EMUFUSION_INCLUDE_PHASE3_CEMU EMUFUSION_INCLUDE_PHASE3_APS3E EMUFUSION_INCLUDE_RIFE_FRAMEGEN)\n' \
+                "$emufusion_flag" >&2
             exit 1
             ;;
         *) ;;
     esac
 done
 
-INCLUDE_EXPERIMENTAL_CORES=${LUCENT_INCLUDE_EXPERIMENTAL_CORES:-0}
-AUTOSELECT_EXPERIMENTAL_CORES=${LUCENT_AUTOSELECT_EXPERIMENTAL_CORES:-0}
-REUSE_QUALIFICATION_CORES=${LUCENT_REUSE_QUALIFICATION_CORES:-0}
+INCLUDE_EXPERIMENTAL_CORES=${EMUFUSION_INCLUDE_EXPERIMENTAL_CORES:-0}
+AUTOSELECT_EXPERIMENTAL_CORES=${EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES:-0}
+REUSE_QUALIFICATION_CORES=${EMUFUSION_REUSE_QUALIFICATION_CORES:-0}
 # The Phase 2 bundle contains the in-process Dolphin runtime used by the normal
 # GameCube/Wii route. It is included by default so a normal build can never
 # degrade those systems to a standalone emulator. Set the flag to 0 only for a
 # deliberately stripped diagnostic package; routing then fails closed unless
 # the user explicitly selected External.
-INCLUDE_PHASE2_PPSSPP=${LUCENT_INCLUDE_PHASE2_PPSSPP:-1}
-REUSE_PHASE2_PPSSPP=${LUCENT_REUSE_PHASE2_PPSSPP:-0}
+INCLUDE_PHASE2_PPSSPP=${EMUFUSION_INCLUDE_PHASE2_PPSSPP:-1}
+REUSE_PHASE2_PPSSPP=${EMUFUSION_REUSE_PHASE2_PPSSPP:-0}
 # Optional debug-only candidate pair; never changes the normal core staging.
-ARMSX2_CORE_DIR=${LUCENT_ARMSX2_QUALIFICATION_DIR:-$ROOT_DIR/engines/build/arm64-v8a}
+ARMSX2_CORE_DIR=${EMUFUSION_ARMSX2_QUALIFICATION_DIR:-$ROOT_DIR/engines/build/arm64-v8a}
 # Phase 3 packages an already-built in-process native adapter; this build never
-# compiles one. There is no LUCENT_REUSE_ flag because there is nothing to
+# compiles one. There is no EMUFUSION_REUSE_ flag because there is nothing to
 # rebuild: the staged artifact is the only input and its hash is the gate.
-INCLUDE_PHASE3_EDEN=${LUCENT_INCLUDE_PHASE3_EDEN:-0}
+INCLUDE_PHASE3_EDEN=${EMUFUSION_INCLUDE_PHASE3_EDEN:-0}
 PHASE3_EDEN_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/liblucent_native_adapter_eden.so"
 # Eden does not open libvulkan itself on arm64: it takes the driver library the
 # frontend loaded, and that load goes through adrenotools, which ALWAYS builds a
@@ -104,23 +113,23 @@ PHASE3_EDEN_MAIN_HOOK="$ROOT_DIR/engines/build/arm64-v8a/libmain_hook.so"
 # Cemu (Wii U) needs no hook pair: it reaches adrenotools only for a custom
 # driver and plain-dlopens libvulkan otherwise. It also needs no keys, no
 # firmware, and no Java shim classes, so this is just the adapter.
-INCLUDE_PHASE3_CEMU=${LUCENT_INCLUDE_PHASE3_CEMU:-0}
+INCLUDE_PHASE3_CEMU=${EMUFUSION_INCLUDE_PHASE3_CEMU:-0}
 PHASE3_CEMU_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/liblucent_native_adapter_cemu.so"
 # PS3 is a built-in EmuFusion system, not an external-app fallback. The pinned,
 # hash-verified adapter is therefore part of normal builds; an explicit 0 is
 # retained only for narrow packaging diagnostics.
-INCLUDE_PHASE3_APS3E=${LUCENT_INCLUDE_PHASE3_APS3E:-1}
-INCLUDE_RIFE_FRAMEGEN=${LUCENT_INCLUDE_RIFE_FRAMEGEN:-0}
+INCLUDE_PHASE3_APS3E=${EMUFUSION_INCLUDE_PHASE3_APS3E:-1}
+INCLUDE_RIFE_FRAMEGEN=${EMUFUSION_INCLUDE_RIFE_FRAMEGEN:-0}
 RIFE_EXPERIMENT_DIR="$ROOT_DIR/experiments/rife-ncnn-vulkan-android"
 RIFE_BENCHMARK_DIR="$RIFE_EXPERIMENT_DIR/android-benchmark"
 RIFE_APP_APK="$RIFE_BENCHMARK_DIR/app/build/outputs/apk/release/app-release-unsigned.apk"
 RIFE_TEST_APK="$RIFE_BENCHMARK_DIR/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 RIFE_PREPARED_MANIFEST="$RIFE_BENCHMARK_DIR/build/upstream-prepared-v23-flow-only/prepared-manifest.json"
-RIFE_SPATIAL_DISPATCH=${LUCENT_RIFE_SPATIAL_DISPATCH:-0}
+RIFE_SPATIAL_DISPATCH=${EMUFUSION_RIFE_SPATIAL_DISPATCH:-0}
 case "$RIFE_SPATIAL_DISPATCH" in
     0) ;;
     1) RIFE_PREPARED_MANIFEST="$RIFE_BENCHMARK_DIR/build/upstream-prepared-v23-flow-only-spatial/prepared-manifest.json" ;;
-    *) printf 'LUCENT_RIFE_SPATIAL_DISPATCH must be 0 or 1\n' >&2; exit 1 ;;
+    *) printf 'EMUFUSION_RIFE_SPATIAL_DISPATCH must be 0 or 1\n' >&2; exit 1 ;;
 esac
 RIFE_CACHE_DIR="$RIFE_BENCHMARK_DIR/build/upstream-cache"
 RIFE_HOST_RECORD="$PROJECT_DIR/build/rife-framegen-host-artifacts.json"
@@ -148,14 +157,14 @@ BASE_NAME=pegasus-fe_alpha16-105-g6b322063_android64.apk
 BASE_URL="https://raw.githubusercontent.com/mmatyas/pegasus-deploy-staging/b902bf8d3c866c355e7c57e4a23b36b84bb99ed9/$BASE_NAME"
 BASE_SHA256=e595be198bfd21c1855eaf563d5af0deae9c9601e6efb195ed299f2065287c67
 BASE_APK=${PEGASUS_BASE_APK:-$BUILD_DIR/$BASE_NAME}
-SOURCE_FRONTEND_DIR=${LUCENT_SOURCE_FRONTEND_DIR:-}
-SOURCE_FRONTEND_LOCK=${LUCENT_SOURCE_FRONTEND_LOCK:-}
+SOURCE_FRONTEND_DIR=${EMUFUSION_SOURCE_FRONTEND_DIR:-}
+SOURCE_FRONTEND_LOCK=${EMUFUSION_SOURCE_FRONTEND_LOCK:-}
 if [ -n "$SOURCE_FRONTEND_DIR" ] || [ -n "$SOURCE_FRONTEND_LOCK" ]; then
     if [ -z "$SOURCE_FRONTEND_DIR" ] || [ -z "$SOURCE_FRONTEND_LOCK" ]; then
-        printf 'Source frontend qualification requires both LUCENT_SOURCE_FRONTEND_DIR and LUCENT_SOURCE_FRONTEND_LOCK\n' >&2
+        printf 'Source frontend qualification requires both EMUFUSION_SOURCE_FRONTEND_DIR and EMUFUSION_SOURCE_FRONTEND_LOCK\n' >&2
         exit 1
     fi
-    if [ "${LUCENT_SIGNING_PROFILE:-debug}" = release ]; then
+    if [ "${EMUFUSION_SIGNING_PROFILE:-debug}" = release ]; then
         printf 'Source frontend migration is not release-qualified yet\n' >&2
         exit 1
     fi
@@ -177,7 +186,7 @@ printf '%s\n' "$$" > "$BUILD_LOCK/pid"
 cleanup_build_lock() {
     # These are always regenerated; a failed/signalled build must not retain
     # two extra full APKs. Keep signed outputs, decoded inputs and diagnostics.
-    rm -f "$BUILD_DIR/lucent-unified-unsigned.apk" "$BUILD_DIR/lucent-unified-aligned.apk"
+    rm -f "$BUILD_DIR/emufusion-unified-unsigned.apk" "$BUILD_DIR/emufusion-unified-aligned.apk"
     rm -f "$BUILD_LOCK/pid"
     rmdir "$BUILD_LOCK" 2>/dev/null || true
 }
@@ -194,7 +203,7 @@ python3 "$PROJECT_DIR/tools/prune_build_apks.py" --apply --retired-diagnostics \
 
 if [ "$AUTOSELECT_EXPERIMENTAL_CORES" = 1 ] &&
         [ "$INCLUDE_EXPERIMENTAL_CORES" != 1 ]; then
-    printf 'Experimental auto-selection requires LUCENT_INCLUDE_EXPERIMENTAL_CORES=1\n' >&2
+    printf 'Experimental auto-selection requires EMUFUSION_INCLUDE_EXPERIMENTAL_CORES=1\n' >&2
     exit 1
 fi
 
@@ -203,13 +212,13 @@ case "$INCLUDE_PHASE2_PPSSPP:$REUSE_PHASE2_PPSSPP" in
     *) printf 'Phase 2 PPSSPP flags must be 0 or 1\n' >&2; exit 1 ;;
 esac
 if [ "$REUSE_PHASE2_PPSSPP" = 1 ] && [ "$INCLUDE_PHASE2_PPSSPP" != 1 ]; then
-    printf 'Reusing Phase 2 PPSSPP requires LUCENT_INCLUDE_PHASE2_PPSSPP=1\n' >&2
+    printf 'Reusing Phase 2 PPSSPP requires EMUFUSION_INCLUDE_PHASE2_PPSSPP=1\n' >&2
     exit 1
 fi
 
 # BEGIN PS2 qualification input preflight
-if [ -n "${LUCENT_ARMSX2_QUALIFICATION_DIR:-}" ]; then
-    if [ "${LUCENT_SIGNING_PROFILE:-debug}" != debug ] ||
+if [ -n "${EMUFUSION_ARMSX2_QUALIFICATION_DIR:-}" ]; then
+    if [ "${EMUFUSION_SIGNING_PROFILE:-debug}" != debug ] ||
             [ "$INCLUDE_PHASE2_PPSSPP:$REUSE_PHASE2_PPSSPP" != 1:1 ]; then
         printf 'PS2 candidate inputs require debug signing and Phase 2 reuse\n' >&2
         exit 1
@@ -232,13 +241,13 @@ fi
 
 case "$INCLUDE_PHASE3_EDEN" in
     0|1) ;;
-    *) printf 'LUCENT_INCLUDE_PHASE3_EDEN must be 0 or 1\n' >&2; exit 1 ;;
+    *) printf 'EMUFUSION_INCLUDE_PHASE3_EDEN must be 0 or 1\n' >&2; exit 1 ;;
 esac
 if [ "$INCLUDE_PHASE3_EDEN" = 1 ] && [ ! -f "$PHASE3_EDEN_ADAPTER" ]; then
     # Fail closed before any APK work: an opted-in Phase 3 build that silently
     # produced an APK without the adapter would look qualified and route Switch
     # externally with no signal at all.
-    printf 'LUCENT_INCLUDE_PHASE3_EDEN=1 requires the staged adapter: %s\n' \
+    printf 'EMUFUSION_INCLUDE_PHASE3_EDEN=1 requires the staged adapter: %s\n' \
         "$PHASE3_EDEN_ADAPTER" >&2
     exit 1
 fi
@@ -248,7 +257,7 @@ if [ "$INCLUDE_PHASE3_EDEN" = 1 ]; then
     # create a GPU. Better to refuse the build than to ship that.
     for phase3_hook in "$PHASE3_EDEN_HOOK_IMPL" "$PHASE3_EDEN_MAIN_HOOK"; do
         if [ ! -f "$phase3_hook" ]; then
-            printf 'LUCENT_INCLUDE_PHASE3_EDEN=1 requires the adrenotools hook library: %s\n' \
+            printf 'EMUFUSION_INCLUDE_PHASE3_EDEN=1 requires the adrenotools hook library: %s\n' \
                 "$phase3_hook" >&2
             exit 1
         fi
@@ -256,12 +265,12 @@ if [ "$INCLUDE_PHASE3_EDEN" = 1 ]; then
 fi
 case "$INCLUDE_PHASE3_CEMU" in
     0|1) ;;
-    *) printf 'LUCENT_INCLUDE_PHASE3_CEMU must be 0 or 1\n' >&2; exit 1 ;;
+    *) printf 'EMUFUSION_INCLUDE_PHASE3_CEMU must be 0 or 1\n' >&2; exit 1 ;;
 esac
 if [ "$INCLUDE_PHASE3_CEMU" = 1 ] && [ ! -f "$PHASE3_CEMU_ADAPTER" ]; then
     # Same fail-closed rule as Eden: an opted-in build with no adapter would
     # look qualified and silently route Wii U externally.
-    printf 'LUCENT_INCLUDE_PHASE3_CEMU=1 requires the staged adapter: %s\n' \
+    printf 'EMUFUSION_INCLUDE_PHASE3_CEMU=1 requires the staged adapter: %s\n' \
         "$PHASE3_CEMU_ADAPTER" >&2
     exit 1
 fi
@@ -273,23 +282,23 @@ if [ "$INCLUDE_PHASE3_CEMU" = 1 ]; then
 fi
 case "$INCLUDE_PHASE3_APS3E" in
     0|1) ;;
-    *) printf 'LUCENT_INCLUDE_PHASE3_APS3E must be 0 or 1\n' >&2; exit 1 ;;
+    *) printf 'EMUFUSION_INCLUDE_PHASE3_APS3E must be 0 or 1\n' >&2; exit 1 ;;
 esac
 if [ "$INCLUDE_PHASE3_APS3E" = 1 ] && [ ! -f "$PHASE3_APS3E_ADAPTER" ]; then
-    printf 'LUCENT_INCLUDE_PHASE3_APS3E=1 requires the staged adapter: %s\n' \
+    printf 'EMUFUSION_INCLUDE_PHASE3_APS3E=1 requires the staged adapter: %s\n' \
         "$PHASE3_APS3E_ADAPTER" >&2
     exit 1
 fi
 case "$INCLUDE_RIFE_FRAMEGEN" in
     0|1) ;;
-    *) printf 'LUCENT_INCLUDE_RIFE_FRAMEGEN must be 0 or 1\n' >&2; exit 1 ;;
+    *) printf 'EMUFUSION_INCLUDE_RIFE_FRAMEGEN must be 0 or 1\n' >&2; exit 1 ;;
 esac
 if [ "$INCLUDE_RIFE_FRAMEGEN" = 1 ]; then
     # This is an explicitly named qualification payload, never a product-route
     # switch. Gradle re-verifies every locked upstream tree before building.
     for rife_tool in "$RIFE_GRADLE" "$RIFE_LLVM_READELF"; do
         if [ ! -x "$rife_tool" ]; then
-            printf 'LUCENT_INCLUDE_RIFE_FRAMEGEN=1 requires executable: %s\n' \
+            printf 'EMUFUSION_INCLUDE_RIFE_FRAMEGEN=1 requires executable: %s\n' \
                 "$rife_tool" >&2
             exit 1
         fi
@@ -484,11 +493,11 @@ perl -0pi -e 's/package="org\.pegasus_frontend\.android"/package="com.thorium.pr
     "$DECODED/AndroidManifest.xml"
 perl -0pi -e 's#android:icon="[^"]+"#android:icon="\@drawable/emufusion_icon"#' \
     "$DECODED/AndroidManifest.xml"
-# DIAGNOSTIC ONLY, enabled by LUCENT_DEBUGGABLE=1. Makes the app debuggable so
+# DIAGNOSTIC ONLY, enabled by EMUFUSION_DEBUGGABLE=1. Makes the app debuggable so
 # an authorized debugger can inspect it. App-packaged wrap.sh below is a separate
 # rootless allocator diagnostic; do not depend on global wrap.<pkg> properties.
 # NEVER set this for a build that will be released.
-if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ]; then
+if [ "${EMUFUSION_DEBUGGABLE:-0}" = 1 ]; then
     # apktool may already emit debuggable=false. Replace that attribute rather
     # than adding a duplicate that Android's resource linker rejects.
     perl -0pi -e 's#(<application\b[^>]*?)\s+android:debuggable="[^"]*"#$1#;
@@ -496,7 +505,7 @@ if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ]; then
         "$DECODED/AndroidManifest.xml"
     printf 'WARNING: built DEBUGGABLE for diagnosis. Do not release this APK.\n' >&2
 fi
-if [ "${LUCENT_GWP_ASAN:-0}" = 1 ]; then
+if [ "${EMUFUSION_GWP_ASAN:-0}" = 1 ]; then
     python3 "$PROJECT_DIR/tools/enable_gwp_asan.py" "$DECODED/AndroidManifest.xml"
     printf 'WARNING: GWP-ASan diagnostic APK; sampled heap checks, not a pacing qualification build.\n' >&2
 fi
@@ -576,8 +585,8 @@ perl -0pi -e 's#<application#<application android:largeHeap="true"#' \
     "$DECODED/AndroidManifest.xml"
 # Run after the diagnostic/qualification manifest edits above.
 # The diagnostic transformer replaces existing attributes without duplicates.
-if [ "${LUCENT_MALLOC_DEBUG:-0}" = 1 ]; then
-    python3 "$PROJECT_DIR/tools/enable_malloc_debug.py" "$DECODED" --free-trace-library "${LUCENT_MALLOC_FREE_TRACE_LIBRARY:-}"
+if [ "${EMUFUSION_MALLOC_DEBUG:-0}" = 1 ]; then
+    python3 "$PROJECT_DIR/tools/enable_malloc_debug.py" "$DECODED" --free-trace-library "${EMUFUSION_MALLOC_FREE_TRACE_LIBRARY:-}"
     printf 'WARNING: malloc_debug diagnostic APK; allocation guards alter performance. Do not release or qualify pacing with this build.\n' >&2
 fi
 
@@ -765,7 +774,7 @@ if [ "$INCLUDE_PHASE2_PPSSPP" = 1 ]; then
         "$DECODED/lib/arm64-v8a/liblucent_core_armsx2_16k.so"
     cp "$ROOT_DIR/engines/phase2-registry.json" \
         "$DECODED/assets/phase2-engine-registry.json"
-    if [ -n "${LUCENT_ARMSX2_QUALIFICATION_DIR:-}" ]; then
+    if [ -n "${EMUFUSION_ARMSX2_QUALIFICATION_DIR:-}" ]; then
         python3 "$PROJECT_DIR/tools/stage_ps2_candidate_registry.py" \
             --root "$ROOT_DIR" --core-dir "$ARMSX2_CORE_DIR" --decoded "$DECODED"
     fi
@@ -966,7 +975,7 @@ CLASS_INPUTS=$(find "$BUILD_DIR/classes" -name '*.class' -print)
     --output "$BUILD_DIR/dex" $CLASS_INPUTS "$COMMONS_COMPRESS_JAR" "$XZ_JAR" \
     "$NV_WEBSOCKET_CLIENT_JAR" "$WEBRTC_CLASSES_JAR"
 
-UNSIGNED="$BUILD_DIR/lucent-unified-unsigned.apk"
+UNSIGNED="$BUILD_DIR/emufusion-unified-unsigned.apk"
 # Later bootstrap/lifecycle patches must not reintroduce Qt's runtime theme
 # override after the no-action-bar manifest/resource repair.
 python3 "$PROJECT_DIR/tools/patch_frontend_window_theme.py" "$DECODED" --check
@@ -974,49 +983,49 @@ python3 "$PROJECT_DIR/tools/patch_frontend_window_theme.py" "$DECODED" --check
 cp "$BUILD_DIR/dex/classes.dex" "$BUILD_DIR/work/classes2.dex"
 (cd "$BUILD_DIR/work" && "$BUILD_TOOLS/aapt" add "$UNSIGNED" classes2.dex >/dev/null)
 
-ALIGNED="$BUILD_DIR/lucent-unified-aligned.apk"
+ALIGNED="$BUILD_DIR/emufusion-unified-aligned.apk"
 # EITHER Phase 3 adapter makes this a qualification artifact, so the name is
 # driven by "any phase 3 engine" rather than by Eden alone. A Cemu-only build
-# was previously named lucent-$VERSION_NAME.apk -- indistinguishable from a
+# was previously named <product>-$VERSION_NAME.apk -- indistinguishable from a
 # release -- while carrying a debug-signed, unshipped native adapter.
 INCLUDE_PHASE3_ANY=0
 if [ "$INCLUDE_PHASE3_EDEN" = 1 ] || [ "$INCLUDE_PHASE3_CEMU" = 1 ] || [ "$INCLUDE_PHASE3_APS3E" = 1 ]; then
     INCLUDE_PHASE3_ANY=1
 fi
 if [ "$INCLUDE_RIFE_FRAMEGEN" = 1 ]; then
-    OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-rife-framegen-qualification.apk"
+    OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-rife-framegen-qualification.apk"
 elif [ "$INCLUDE_PHASE2_PPSSPP" = 1 ] && [ "$INCLUDE_PHASE3_ANY" = 1 ]; then
-    OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-phase2-phase3-qualification.apk"
+    OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-phase2-phase3-qualification.apk"
 elif [ "$INCLUDE_PHASE2_PPSSPP" = 1 ]; then
-    OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-phase2-qualification.apk"
+    OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-phase2-qualification.apk"
 elif [ "$INCLUDE_PHASE3_ANY" = 1 ]; then
-    OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-phase3-qualification.apk"
+    OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-phase3-qualification.apk"
 else
-    OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME.apk"
+    OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME.apk"
 fi
 "$BUILD_TOOLS/zipalign" -f 4 "$UNSIGNED" "$ALIGNED"
 # Falling back to the debug keystore must be a stated choice, never the
-# silent result of a misspelled LUCENT_KEYSTORE. A release cannot be
+# silent result of a misspelled EMUFUSION_KEYSTORE. A release cannot be
 # produced by accident with the public debug identity.
-SIGNING_PROFILE=${LUCENT_SIGNING_PROFILE:-debug}
+SIGNING_PROFILE=${EMUFUSION_SIGNING_PROFILE:-debug}
 case "$SIGNING_PROFILE" in
     debug)
-        KEYSTORE=${LUCENT_KEYSTORE:-$ROOT_DIR/android-companion/debug.keystore}
-        STORE_PASS=${LUCENT_STORE_PASS:-android}
-        KEY_ALIAS=${LUCENT_KEY_ALIAS:-androiddebugkey}
+        KEYSTORE=${EMUFUSION_KEYSTORE:-$ROOT_DIR/android-companion/debug.keystore}
+        STORE_PASS=${EMUFUSION_STORE_PASS:-android}
+        KEY_ALIAS=${EMUFUSION_KEY_ALIAS:-androiddebugkey}
         ;;
     release)
-        KEYSTORE=${LUCENT_KEYSTORE:?LUCENT_SIGNING_PROFILE=release requires LUCENT_KEYSTORE}
-        STORE_PASS=${LUCENT_STORE_PASS:?LUCENT_SIGNING_PROFILE=release requires LUCENT_STORE_PASS}
-        KEY_ALIAS=${LUCENT_KEY_ALIAS:?LUCENT_SIGNING_PROFILE=release requires LUCENT_KEY_ALIAS}
+        KEYSTORE=${EMUFUSION_KEYSTORE:?EMUFUSION_SIGNING_PROFILE=release requires EMUFUSION_KEYSTORE}
+        STORE_PASS=${EMUFUSION_STORE_PASS:?EMUFUSION_SIGNING_PROFILE=release requires EMUFUSION_STORE_PASS}
+        KEY_ALIAS=${EMUFUSION_KEY_ALIAS:?EMUFUSION_SIGNING_PROFILE=release requires EMUFUSION_KEY_ALIAS}
         ;;
     *)
-        printf 'LUCENT_SIGNING_PROFILE must be debug or release, not %s\n' \
+        printf 'EMUFUSION_SIGNING_PROFILE must be debug or release, not %s\n' \
             "$SIGNING_PROFILE" >&2
         exit 1
         ;;
 esac
-KEY_PASS=${LUCENT_KEY_PASS:-$STORE_PASS}
+KEY_PASS=${EMUFUSION_KEY_PASS:-$STORE_PASS}
 printf 'Signing profile: %s keystore=%s alias=%s\n' \
     "$SIGNING_PROFILE" "$KEYSTORE" "$KEY_ALIAS" >&2
 "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-pass "pass:$STORE_PASS" \
@@ -1034,7 +1043,7 @@ python3 "$PROJECT_DIR/tools/verify_one_app_apk.py" \
 # Qt/frontend base libraries plus the cores whose recipes do not yet pin
 # max-page-size). Every library NOT named here must be 16 KiB aligned, so a
 # new or regressed 4 KiB library fails the build immediately.
-# THIS LIST MUST SHRINK TO ZERO BEFORE RELEASE; LUCENT_REQUIRE_16K_ALIGNMENT=1
+# THIS LIST MUST SHRINK TO ZERO BEFORE RELEASE; EMUFUSION_REQUIRE_16K_ALIGNMENT=1
 # (the release path) ignores it and gates on every library.
 ALLOWED_4K_LIBS="
 libQt5AndroidExtras_arm64-v8a.so
@@ -1106,7 +1115,7 @@ libqml_QtQuick_Window.2_windowplugin_arm64-v8a.so
 libqml_Qt_labs_qmlmodels_labsmodelsplugin_arm64-v8a.so
 libssl.so
 "
-if [ "${LUCENT_REQUIRE_16K_ALIGNMENT:-0}" = 1 ]; then
+if [ "${EMUFUSION_REQUIRE_16K_ALIGNMENT:-0}" = 1 ]; then
     python3 "$PROJECT_DIR/tools/verify_elf_alignment.py" "$OUTPUT"
 else
     set --
@@ -1124,7 +1133,7 @@ fi
 if [ "$INCLUDE_PHASE3_ANY" = 1 ]; then
     python3 "$PROJECT_DIR/tools/verify_phase3_apk.py" "$OUTPUT"
 fi
-if [ "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" = 1 ]; then
+if [ "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" = 1 ]; then
     python3 "$PROJECT_DIR/tools/verify_portable_bundle.py" "$OUTPUT"
 fi
 # A mutable convenience filename is useful for local installs, but QA evidence
@@ -1133,14 +1142,14 @@ fi
 OUTPUT_SHA=$(shasum -a 256 "$OUTPUT" | awk '{print $1}')
 case "$OUTPUT" in
     *-rife-framegen-qualification.apk)
-        IMMUTABLE_OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-rife-framegen-qualification-$OUTPUT_SHA.apk" ;;
+        IMMUTABLE_OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-rife-framegen-qualification-$OUTPUT_SHA.apk" ;;
     *-phase2-phase3-qualification.apk)
-        IMMUTABLE_OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-phase2-phase3-qualification-$OUTPUT_SHA.apk" ;;
+        IMMUTABLE_OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-phase2-phase3-qualification-$OUTPUT_SHA.apk" ;;
     *-phase2-qualification.apk)
-        IMMUTABLE_OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-phase2-qualification-$OUTPUT_SHA.apk" ;;
+        IMMUTABLE_OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-phase2-qualification-$OUTPUT_SHA.apk" ;;
     *-phase3-qualification.apk)
-        IMMUTABLE_OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-phase3-qualification-$OUTPUT_SHA.apk" ;;
-    *)  IMMUTABLE_OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-$OUTPUT_SHA.apk" ;;
+        IMMUTABLE_OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-phase3-qualification-$OUTPUT_SHA.apk" ;;
+    *)  IMMUTABLE_OUTPUT="$BUILD_DIR/emufusion-$VERSION_NAME-$OUTPUT_SHA.apk" ;;
 esac
 if [ -f "$IMMUTABLE_OUTPUT" ]; then
     IMMUTABLE_SHA=$(shasum -a 256 "$IMMUTABLE_OUTPUT" | awk '{print $1}')
@@ -1177,8 +1186,8 @@ if [ "$SIGNING_PROFILE" = debug ]; then
     printf '############################################################\n' >&2
     printf '# DEBUG-SIGNED (qualification only): %s\n' "$IMMUTABLE_OUTPUT" >&2
     printf '# This APK carries the public debug identity and MUST NOT\n' >&2
-    printf '# be released. Set LUCENT_SIGNING_PROFILE=release with\n' >&2
-    printf '# LUCENT_KEYSTORE/LUCENT_STORE_PASS/LUCENT_KEY_ALIAS to sign\n' >&2
+    printf '# be released. Set EMUFUSION_SIGNING_PROFILE=release with\n' >&2
+    printf '# EMUFUSION_KEYSTORE/EMUFUSION_STORE_PASS/EMUFUSION_KEY_ALIAS to sign\n' >&2
     printf '# a releasable artifact.\n' >&2
     printf '############################################################\n' >&2
 fi

@@ -24,7 +24,7 @@ def main():
     args = parser.parse_args()
     if BUILD.resolve() != BUILD or APK.is_symlink():
         raise RuntimeError('Unexpected build or APK path')
-    lock = BUILD / '.lucent-build-lock'
+    lock = BUILD / '.emufusion-build-lock'
     lock.mkdir()  # Do not race the assembler or steal a live lock.
     try:
         if sha256(APK) != DIGEST:

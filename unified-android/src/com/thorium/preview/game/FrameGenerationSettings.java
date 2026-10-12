@@ -36,6 +36,22 @@ public final class FrameGenerationSettings {
      * like Off, so choosing AUTO never makes a game less smooth. Explicit
      * experimental modes are left as chosen.
      */
+    /**
+     * As {@link #forEngine(Mode, String)}, except that the QA-only global
+     * {@code emufusion_framegen_native_engines=1} lets Switch, Wii U and PS3
+     * through, to work on their generated path. Delete it after testing.
+     */
+    public static Mode forEngine(Context context, Mode selected, String engineId) {
+        boolean qa = false;
+        try {
+            qa = context != null && android.provider.Settings.Global.getInt(
+                    context.getContentResolver(), "emufusion_framegen_native_engines", 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings: the production exclusion applies.
+        }
+        return qa ? (selected == null ? Mode.OFF : selected) : forEngine(selected, engineId);
+    }
+
     public static Mode forEngine(Mode selected, String engineId) {
         if ((selected == Mode.AUTO || selected == Mode.AUTO_TRIPLE) &&
                 ("eden".equals(engineId) || "cemu".equals(engineId) ||

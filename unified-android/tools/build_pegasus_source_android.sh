@@ -4,7 +4,7 @@
 # separate gates; this script never modifies the installed/production APK.
 set -eu
 PROJECT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-QT_WORK=${LUCENT_QT_BUILD_ROOT:-$PROJECT/build/qt-5.15.10-16k}
+QT_WORK=${EMUFUSION_QT_BUILD_ROOT:-$PROJECT/build/qt-5.15.10-16k}
 REVISION=6b322063a036db60cba5810fda82a3ce38f1e62f
 SOURCE=$QT_WORK/source/pegasus-frontend-$REVISION
 BUILD=$QT_WORK/build-pegasus

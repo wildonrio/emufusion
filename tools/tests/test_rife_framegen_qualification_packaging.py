@@ -34,7 +34,7 @@ class RifeQualificationPackagingTest(unittest.TestCase):
 
     def test_spatial_qualification_build_selects_matching_manifest(self):
         source=(ROOT / "unified-android/build.sh").read_text()
-        self.assertIn('RIFE_SPATIAL_DISPATCH=${LUCENT_RIFE_SPATIAL_DISPATCH:-0}',source)
+        self.assertIn('RIFE_SPATIAL_DISPATCH=${EMUFUSION_RIFE_SPATIAL_DISPATCH:-0}',source)
         # The prepared upstream tree is now the v23 flow-only revision; the
         # spatial build must verify the same tree Gradle compiles from.
         self.assertIn('upstream-prepared-v23-flow-only-spatial/prepared-manifest.json',source)
@@ -273,8 +273,8 @@ class RifeQualificationPackagingTest(unittest.TestCase):
 
     def test_build_flag_is_default_off_verified_and_named_qualification(self):
         build = (ROOT / "unified-android/build.sh").read_text(encoding="utf-8")
-        self.assertIn("INCLUDE_RIFE_FRAMEGEN=${LUCENT_INCLUDE_RIFE_FRAMEGEN:-0}", build)
-        self.assertIn("LUCENT_INCLUDE_RIFE_FRAMEGEN must be 0 or 1", build)
+        self.assertIn("INCLUDE_RIFE_FRAMEGEN=${EMUFUSION_INCLUDE_RIFE_FRAMEGEN:-0}", build)
+        self.assertIn("EMUFUSION_INCLUDE_RIFE_FRAMEGEN must be 0 or 1", build)
         self.assertIn(":app:assembleRelease :app:assembleDebugAndroidTest", build)
         self.assertIn('RIFE_APP_APK="$RIFE_BENCHMARK_DIR/app/build/outputs/apk/release/app-release-unsigned.apk"', build)
         self.assertIn("RIFE_GRADLE=${RIFE_GRADLE:-/opt/homebrew/bin/gradle}", build)
@@ -288,7 +288,7 @@ class RifeQualificationPackagingTest(unittest.TestCase):
         self.assertIn('--llvm-readelf "$RIFE_LLVM_READELF"', build)
         self.assertIn("verify_host_artifacts.py", build)
         self.assertIn("stage_rife_framegen_qualification.py", build)
-        self.assertIn("lucent-$VERSION_NAME-rife-framegen-qualification.apk", build)
+        self.assertIn("emufusion-$VERSION_NAME-rife-framegen-qualification.apk", build)
         self.assertIn("librife_benchmark.so) notice_heading=", build)
         self.assertLess(
             build.index("stage_rife_framegen_qualification.py"),

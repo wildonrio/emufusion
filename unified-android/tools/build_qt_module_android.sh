@@ -2,7 +2,7 @@
 # Isolated matching Qt modules; does not replace any normal APK payload.
 set -eu
 PROJECT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-QT_WORK=${LUCENT_QT_BUILD_ROOT:-$PROJECT/build/qt-5.15.10-16k}
+QT_WORK=${EMUFUSION_QT_BUILD_ROOT:-$PROJECT/build/qt-5.15.10-16k}
 MODULE=${1:?Specify a pinned Qt module}
 case "$MODULE" in
     qtdeclarative|qtandroidextras|qtgamepad|qtgraphicaleffects|qtmultimedia|qtsvg|qtimageformats|qtquicktimeline|qttools) ;;

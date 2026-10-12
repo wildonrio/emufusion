@@ -22,10 +22,10 @@ SPEC = importlib.util.spec_from_file_location('portable_bundle', TOOLS / 'verify
 V = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(V)
 WRAPPER = ROOT / 'unified-android/build-portable.sh'
-FLAGS = ('LUCENT_INCLUDE_EXPERIMENTAL_CORES', 'LUCENT_AUTOSELECT_EXPERIMENTAL_CORES',
-         'LUCENT_INCLUDE_PHASE2_PPSSPP', 'LUCENT_INCLUDE_PHASE3_EDEN',
-         'LUCENT_INCLUDE_PHASE3_CEMU', 'LUCENT_INCLUDE_PHASE3_APS3E',
-         'LUCENT_REQUIRE_PORTABLE_BUNDLE')
+FLAGS = ('EMUFUSION_INCLUDE_EXPERIMENTAL_CORES', 'EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES',
+         'EMUFUSION_INCLUDE_PHASE2_PPSSPP', 'EMUFUSION_INCLUDE_PHASE3_EDEN',
+         'EMUFUSION_INCLUDE_PHASE3_CEMU', 'EMUFUSION_INCLUDE_PHASE3_APS3E',
+         'EMUFUSION_REQUIRE_PORTABLE_BUNDLE')
 
 def payload():
     """Minimal catalog fixture for completeness only; not real ELF/runtime evidence."""
@@ -119,9 +119,9 @@ class PortableWrapperTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='portable-wrapper-') as temp:
             folder = Path(temp)
             (folder / 'build-portable.sh').write_bytes(WRAPPER.read_bytes())
-            recorded = (*FLAGS, 'LUCENT_REUSE_QUALIFICATION_CORES', 'LUCENT_REUSE_PHASE2_PPSSPP',
-                        'LUCENT_REQUIRE_16K_ALIGNMENT', 'LUCENT_SIGNING_PROFILE',
-                        'LUCENT_SOURCE_FRONTEND_DIR', 'LUCENT_SOURCE_FRONTEND_LOCK')
+            recorded = (*FLAGS, 'EMUFUSION_REUSE_QUALIFICATION_CORES', 'EMUFUSION_REUSE_PHASE2_PPSSPP',
+                        'EMUFUSION_REQUIRE_16K_ALIGNMENT', 'EMUFUSION_SIGNING_PROFILE',
+                        'EMUFUSION_SOURCE_FRONTEND_DIR', 'EMUFUSION_SOURCE_FRONTEND_LOCK')
             fake = folder / 'build.sh'
             fake.write_text('#!/bin/sh\n' + '\n'.join(
                 'printf "' + flag + '=%s\\n" "${' + flag + '-unset}"' for flag in recorded)
@@ -137,23 +137,23 @@ class PortableWrapperTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         for name in FLAGS:
             self.assertIn(name + '=1\n', result.stdout)
-        self.assertIn('LUCENT_REUSE_PHASE2_PPSSPP=1\n', result.stdout)
-        self.assertIn('LUCENT_SIGNING_PROFILE=unset\n', result.stdout)
-        self.assertRegex(result.stdout, r'LUCENT_SOURCE_FRONTEND_DIR=.*/build/source-frontend\n')
-        self.assertRegex(result.stdout, r'LUCENT_SOURCE_FRONTEND_LOCK=.*/source-frontend-artifact-lock.json\n')
+        self.assertIn('EMUFUSION_REUSE_PHASE2_PPSSPP=1\n', result.stdout)
+        self.assertIn('EMUFUSION_SIGNING_PROFILE=unset\n', result.stdout)
+        self.assertRegex(result.stdout, r'EMUFUSION_SOURCE_FRONTEND_DIR=.*/build/source-frontend\n')
+        self.assertRegex(result.stdout, r'EMUFUSION_SOURCE_FRONTEND_LOCK=.*/source-frontend-artifact-lock.json\n')
 
     def test_explicit_source_kit_is_preserved(self):
-        result = self.run_wrapper({'LUCENT_SOURCE_FRONTEND_DIR': '/explicit kit',
-                                   'LUCENT_SOURCE_FRONTEND_LOCK': '/explicit lock'})
+        result = self.run_wrapper({'EMUFUSION_SOURCE_FRONTEND_DIR': '/explicit kit',
+                                   'EMUFUSION_SOURCE_FRONTEND_LOCK': '/explicit lock'})
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('LUCENT_SOURCE_FRONTEND_DIR=/explicit kit\n', result.stdout)
-        self.assertIn('LUCENT_SOURCE_FRONTEND_LOCK=/explicit lock\n', result.stdout)
+        self.assertIn('EMUFUSION_SOURCE_FRONTEND_DIR=/explicit kit\n', result.stdout)
+        self.assertIn('EMUFUSION_SOURCE_FRONTEND_LOCK=/explicit lock\n', result.stdout)
 
     def test_partial_source_kit_is_not_silently_completed(self):
         # The underlying build's paired-input preflight rejects these values.
-        for flag in ('LUCENT_SOURCE_FRONTEND_DIR', 'LUCENT_SOURCE_FRONTEND_LOCK'):
+        for flag in ('EMUFUSION_SOURCE_FRONTEND_DIR', 'EMUFUSION_SOURCE_FRONTEND_LOCK'):
             result = self.run_wrapper({flag: '/explicit'})
-            other = 'LUCENT_SOURCE_FRONTEND_LOCK' if flag.endswith('DIR') else 'LUCENT_SOURCE_FRONTEND_DIR'
+            other = 'EMUFUSION_SOURCE_FRONTEND_LOCK' if flag.endswith('DIR') else 'EMUFUSION_SOURCE_FRONTEND_DIR'
             self.assertIn(flag + '=/explicit\n', result.stdout)
             self.assertIn(other + '=unset\n', result.stdout)
 
@@ -167,21 +167,21 @@ class PortableWrapperTest(unittest.TestCase):
                     self.assertIn(flag, result.stderr)
 
     def test_explicit_rebuild_and_failure_propagation(self):
-        result = self.run_wrapper({'LUCENT_REUSE_PHASE2_PPSSPP': '0', 'PORTABLE_TEST_EXIT': '17'})
+        result = self.run_wrapper({'EMUFUSION_REUSE_PHASE2_PPSSPP': '0', 'PORTABLE_TEST_EXIT': '17'})
         self.assertEqual(result.returncode, 17)
-        self.assertIn('LUCENT_REUSE_PHASE2_PPSSPP=0\n', result.stdout)
+        self.assertIn('EMUFUSION_REUSE_PHASE2_PPSSPP=0\n', result.stdout)
 
     def test_release_alignment_cannot_be_disabled(self):
-        good = self.run_wrapper({'LUCENT_SIGNING_PROFILE': 'release'})
+        good = self.run_wrapper({'EMUFUSION_SIGNING_PROFILE': 'release'})
         self.assertEqual(good.returncode, 0)
-        self.assertIn('LUCENT_REQUIRE_16K_ALIGNMENT=1\n', good.stdout)
-        bad = self.run_wrapper({'LUCENT_SIGNING_PROFILE': 'release', 'LUCENT_REQUIRE_16K_ALIGNMENT': '0'})
+        self.assertIn('EMUFUSION_REQUIRE_16K_ALIGNMENT=1\n', good.stdout)
+        bad = self.run_wrapper({'EMUFUSION_SIGNING_PROFILE': 'release', 'EMUFUSION_REQUIRE_16K_ALIGNMENT': '0'})
         self.assertNotEqual(bad.returncode, 0)
         self.assertEqual(bad.stdout, '')
 
     def test_build_invokes_completeness_before_immutable_publication(self):
         code = (ROOT / 'unified-android/build.sh').read_text()
-        start = code.index('if [ "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" = 1 ]; then')
+        start = code.index('if [ "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" = 1 ]; then')
         end = code.index('\nfi', start)
         self.assertIn('verify_portable_bundle.py', code[start:end])
         self.assertLess(start, code.index('OUTPUT_SHA='))
@@ -190,7 +190,7 @@ class PortableWrapperTest(unittest.TestCase):
 class RepackedManifestTest(unittest.TestCase):
     def test_actual_debug_override_replaces_existing_attribute_once(self):
         build = (ROOT / 'unified-android/build.sh').read_text()
-        start = build.index('if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ]')
+        start = build.index('if [ "${EMUFUSION_DEBUGGABLE:-0}" = 1 ]')
         block = build[start:build.index('\nfi', start)]
         self.assertEqual(build.count('android:debuggable="true"'), 1,
                          'one debuggable attribute writer')

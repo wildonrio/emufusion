@@ -3,7 +3,7 @@
 # Qualification only: never copies libraries into an APK or normal staging.
 set -eu
 PROJECT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-QT_WORK=${LUCENT_QT_BUILD_ROOT:-$PROJECT/build/qt-5.15.10-16k}
+QT_WORK=${EMUFUSION_QT_BUILD_ROOT:-$PROJECT/build/qt-5.15.10-16k}
 SDK=${ANDROID_SDK_ROOT:-/Users/tyleryoung/Library/Android/sdk}
 NDK=$SDK/ndk/27.0.12077973
 LLVM=$NDK/toolchains/llvm/prebuilt/darwin-x86_64

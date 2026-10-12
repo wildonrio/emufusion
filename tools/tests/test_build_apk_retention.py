@@ -24,7 +24,7 @@ class RetentionTest(unittest.TestCase):
 
     def apk(self, number, age=10, flavor="-lsfg-framegen-qualification", version="3.2.16"):
         digest = f"{number:064x}"
-        path = self.root / f"lucent-{version}{flavor}-{digest}.apk"
+        path = self.root / f"emufusion-{version}{flavor}-{digest}.apk"
         path.write_bytes(b"fixture")
         os.utime(path, (self.now - age * 86400,) * 2)
         return path
@@ -56,7 +56,7 @@ class RetentionTest(unittest.TestCase):
 
     def test_mutable_unknown_files_and_subdirectories_untouched(self):
         self.apk(2)
-        for name in ("lucent-3.2.16.apk", "rom.nsp", "state.bin", "libcore.so", "data.json"):
+        for name in ("emufusion-3.2.16.apk", "rom.nsp", "state.bin", "libcore.so", "data.json"):
             (self.root / name).write_bytes(b"keep")
         (self.root / "work").mkdir()
         (self.root / "work/a.apk").write_bytes(b"keep")
@@ -101,6 +101,15 @@ class RetentionTest(unittest.TestCase):
         candidates = RETENTION.retired_diagnostics([self.root], self.now, set())
         self.assertEqual([p for p, _, _ in candidates], [old])
         self.assertEqual(RETENTION.retired_diagnostics([self.root], self.now, {str(old)}), [])
+
+    def test_release_builds_are_never_retired_as_diagnostics(self):
+        # Build outputs share the product prefix with custom trial names; a
+        # pinned release in build/ must never age out through that path.
+        release = self.apk(7, age=60, flavor="-phase2-phase3-qualification", version="3.2.43")
+        unhashed = self.root / "emufusion-3.2.43-phase2-phase3-qualification.apk"
+        unhashed.write_bytes(b"latest")
+        os.utime(unhashed, (self.now - 60 * 86400,) * 2)
+        self.assertEqual(RETENTION.retired_diagnostics([self.root], self.now, set()), [])
 
     def test_diagnostic_symlink_root_rejected(self):
         alias = self.root / "alias"
@@ -154,7 +163,7 @@ class RetentionTest(unittest.TestCase):
 
     def test_orphan_hash_pin_and_symlink_guards(self):
         digest = "a" * 64
-        path = self.orphan(f"lucent-3.2.16-test-{digest}.apk.idsig")
+        path = self.orphan(f"emufusion-3.2.16-test-{digest}.apk.idsig")
         self.assertEqual(self.orphans(pins={digest}), [])
         target = self.root / "retained"
         path.rename(target)
@@ -177,7 +186,7 @@ class RetentionExecutionTest(unittest.TestCase):
 
     def apk(self, contents, timestamp):
         digest = RETENTION.hashlib.sha256(contents).hexdigest()
-        path = self.build / f"lucent-3.2.16-test-{digest}.apk"
+        path = self.build / f"emufusion-3.2.16-test-{digest}.apk"
         path.write_bytes(contents)
         os.utime(path, (timestamp, timestamp))
         return path
@@ -195,7 +204,7 @@ class RetentionExecutionTest(unittest.TestCase):
     def test_dry_run_never_deletes(self):
         self.run_cleanup()
         self.assertTrue(self.old.exists())
-        self.assertFalse((self.build / ".lucent-build-lock").exists())
+        self.assertFalse((self.build / ".emufusion-build-lock").exists())
 
     def test_apply_deletes_old_and_records_hash(self):
         self.run_cleanup("--apply")
@@ -213,7 +222,7 @@ class RetentionExecutionTest(unittest.TestCase):
         self.assertTrue(self.old.exists())
 
     def test_existing_lock_never_stolen(self):
-        lock = self.build / ".lucent-build-lock"
+        lock = self.build / ".emufusion-build-lock"
         lock.mkdir()
         with self.assertRaises(FileExistsError):
             self.run_cleanup("--apply")
@@ -234,7 +243,7 @@ class RetentionExecutionTest(unittest.TestCase):
         self.assertTrue(self.old.exists())
 
     def test_owning_build_lock_supported(self):
-        lock = self.build / ".lucent-build-lock"
+        lock = self.build / ".emufusion-build-lock"
         lock.mkdir()
         (lock / "pid").write_text(str(os.getppid()))
         self.run_cleanup("--apply", "--build-lock-owner", str(os.getppid()))
@@ -242,7 +251,7 @@ class RetentionExecutionTest(unittest.TestCase):
         self.assertTrue(lock.exists())
 
     def test_wrong_lock_owner_refused(self):
-        lock = self.build / ".lucent-build-lock"
+        lock = self.build / ".emufusion-build-lock"
         lock.mkdir()
         (lock / "pid").write_text("0")
         with self.assertRaises(RuntimeError):
@@ -287,7 +296,7 @@ class RetentionExecutionTest(unittest.TestCase):
         self.assertEqual(script.count('prune_build_apks.py" --apply --retired-diagnostics'), 2)
 
     def test_orphan_signature_deleted_with_receipt_only_on_apply(self):
-        sidecar = self.build / "lucent-3.0.0.apk.idsig"
+        sidecar = self.build / "emufusion-3.0.0.apk.idsig"
         sidecar.write_bytes(b"signature without APK")
         os.utime(sidecar, (1, 1))
         self.run_cleanup("--retired-diagnostics")

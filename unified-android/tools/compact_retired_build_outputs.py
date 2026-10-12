@@ -176,7 +176,7 @@ def main():
     args = parser.parse_args()
     if BUILD.resolve() != BUILD:
         raise RuntimeError('Unexpected build directory')
-    lock = BUILD / '.lucent-build-lock'
+    lock = BUILD / '.emufusion-build-lock'
     lock.mkdir()
     try:
         opened = open_paths()

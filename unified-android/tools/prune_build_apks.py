@@ -22,10 +22,10 @@ import sys
 import time
 
 PROJECT = Path(__file__).resolve().parents[1]
-NAME = re.compile(r"lucent-(\d+\.\d+\.\d+)(.*)-([a-f0-9]{64})\.apk\Z")
+NAME = re.compile(r"emufusion-(\d+\.\d+\.\d+)(.*)-([a-f0-9]{64})\.apk\Z")
 DIAGNOSTIC_NAME = re.compile(
     r"(?:emufusion-[\w.-]+|installed-base|unsigned|aligned|nes-title-01-nes-candidate)\.apk\Z")
-LEGACY_BUILD_NAME = re.compile(r"lucent-[\w.-]+\.apk\Z")
+UNHASHED_BUILD_NAME = re.compile(r"emufusion-\d+\.\d+\.\d+[\w.-]*\.apk\Z")
 
 
 def sha256(path):
@@ -79,7 +79,10 @@ def retired_diagnostics(roots, now, opened):
         # os.walk does not follow symlink directories; also reject symlink files.
         for parent, _, files in os.walk(root, followlinks=False):
             for name in files:
-                if not DIAGNOSTIC_NAME.fullmatch(name):
+                # Hash-named build outputs share the product prefix; the
+                # retention policy (keep newest, pins) owns them, never age.
+                if not DIAGNOSTIC_NAME.fullmatch(name) or NAME.fullmatch(name) or \
+                        UNHASHED_BUILD_NAME.fullmatch(name):
                     continue
                 path = Path(parent) / name
                 meta = path.lstat()
@@ -150,7 +153,7 @@ def orphan_signatures(roots, now, opened, pins):
                 path = Path(parent) / name
                 apk = path.with_suffix("")
                 match = NAME.fullmatch(apk.name)
-                if not (match or LEGACY_BUILD_NAME.fullmatch(apk.name)
+                if not (match or UNHASHED_BUILD_NAME.fullmatch(apk.name)
                         or DIAGNOSTIC_NAME.fullmatch(apk.name)):
                     continue
                 meta = path.lstat()
@@ -179,7 +182,7 @@ def main():
     for key, value in release.items():
         if key.lower().endswith("sha256") and isinstance(value, str):
             policy["pinned_sha256"][value] = "Current release manifest"
-    lock = build / ".lucent-build-lock"
+    lock = build / ".emufusion-build-lock"
     owned = False
     if args.build_lock_owner is not None:
         if (args.build_lock_owner != os.getppid() or lock.is_symlink()

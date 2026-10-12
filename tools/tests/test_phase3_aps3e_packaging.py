@@ -243,7 +243,7 @@ class Aps3eRuntimeGateTest(unittest.TestCase):
         self.assertFalse(enabled["userSuppliedRuntimeInputs"]["bundledInApk"])
 
     def test_build_in_ps3_default_uses_the_general_verifier(self):
-        self.assertIn("INCLUDE_PHASE3_APS3E=${LUCENT_INCLUDE_PHASE3_APS3E:-1}", BUILD)
+        self.assertIn("INCLUDE_PHASE3_APS3E=${EMUFUSION_INCLUDE_PHASE3_APS3E:-1}", BUILD)
         self.assertIn('if [ "$INCLUDE_PHASE3_APS3E" = 1 ]; then', BUILD)
         self.assertIn('"$DECODED/assets/phase3-aps3e-source-lock.json"', BUILD)
         self.assertIn('"$DECODED/assets/phase3-aps3e-lucent-adapter.cpp"', BUILD)

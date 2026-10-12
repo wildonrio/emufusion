@@ -37,7 +37,7 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
 
     def test_default_build_packages_internal_dolphin(self):
         self.assertIn(
-            "INCLUDE_PHASE2_PPSSPP=${LUCENT_INCLUDE_PHASE2_PPSSPP:-1}",
+            "INCLUDE_PHASE2_PPSSPP=${EMUFUSION_INCLUDE_PHASE2_PPSSPP:-1}",
             self.build,
         )
         self.assertIn('if [ "$INCLUDE_PHASE2_PPSSPP" = 1 ]; then', self.build)

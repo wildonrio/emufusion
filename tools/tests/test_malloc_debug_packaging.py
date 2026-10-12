@@ -131,15 +131,15 @@ class MallocDebugPackagingTest(unittest.TestCase):
 
     def test_actual_build_branch_is_opt_in(self):
         build = (ROOT / 'unified-android/build.sh').read_text()
-        start = build.index('if [ "${LUCENT_MALLOC_DEBUG:-0}" = 1 ]; then')
+        start = build.index('if [ "${EMUFUSION_MALLOC_DEBUG:-0}" = 1 ]; then')
         branch = build[start:build.index('\nfi', start)+3]
         for flag in (None, '0', '1'):
             with self.subTest(flag=flag), tempfile.TemporaryDirectory() as folder:
                 path = self.stage(folder)
                 environment = dict(os.environ, PROJECT_DIR=str(ROOT / 'unified-android'), DECODED=folder)
-                environment.pop('LUCENT_MALLOC_DEBUG', None)
+                environment.pop('EMUFUSION_MALLOC_DEBUG', None)
                 if flag is not None:
-                    environment['LUCENT_MALLOC_DEBUG'] = flag
+                    environment['EMUFUSION_MALLOC_DEBUG'] = flag
                 result = subprocess.run(['sh', '-eu', '-c', branch], env=environment, capture_output=True, text=True)
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertEqual(flag == '1', (path / 'lib/arm64-v8a/wrap.sh').exists())
@@ -148,22 +148,22 @@ class MallocDebugPackagingTest(unittest.TestCase):
 
     def test_invalid_or_combined_flags_fail_before_build_work(self):
         build = (ROOT / 'unified-android/build.sh').read_text()
-        start = build.index('case "${LUCENT_GWP_ASAN:-0}" in')
+        start = build.index('case "${EMUFUSION_GWP_ASAN:-0}" in')
         end = build.index('\n# An earlier build', start)
         self.assertLess(end, build.index('mkdir -p "$BUILD_DIR"'))
-        for flags in ({'LUCENT_MALLOC_DEBUG': 'yes'}, {'LUCENT_MALLOC_DEBUG': '2'},
-                      {'LUCENT_MALLOC_DEBUG': '1', 'LUCENT_GWP_ASAN': '1'},
-                      {'LUCENT_MALLOC_FREE_TRACE_LIBRARY': '/some/library.so'}):
+        for flags in ({'EMUFUSION_MALLOC_DEBUG': 'yes'}, {'EMUFUSION_MALLOC_DEBUG': '2'},
+                      {'EMUFUSION_MALLOC_DEBUG': '1', 'EMUFUSION_GWP_ASAN': '1'},
+                      {'EMUFUSION_MALLOC_FREE_TRACE_LIBRARY': '/some/library.so'}):
             result = subprocess.run(['sh', '-eu', '-c', build[start:end]], env=flags, capture_output=True, text=True)
             self.assertNotEqual(0, result.returncode)
 
     def test_actual_debuggable_manifest_branch_composes_without_duplicate_debuggable(self):
         build = (ROOT / 'unified-android/build.sh').read_text()
-        # The single LUCENT_DEBUGGABLE manifest branch must precede malloc_debug.
-        start = build.index('if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ]; then')
+        # The single EMUFUSION_DEBUGGABLE manifest branch must precede malloc_debug.
+        start = build.index('if [ "${EMUFUSION_DEBUGGABLE:-0}" = 1 ]; then')
         end = build.index('\nfi', start) + 3
         self.assertIn('android:debuggable="true"', build[start:end])
-        diagnostic_start = build.index('if [ "${LUCENT_MALLOC_DEBUG:-0}" = 1 ]; then')
+        diagnostic_start = build.index('if [ "${EMUFUSION_MALLOC_DEBUG:-0}" = 1 ]; then')
         diagnostic_end = build.index('\nfi', diagnostic_start) + 3
         self.assertLess(end, diagnostic_start)
         branch = build[start:end] + '\n' + build[diagnostic_start:diagnostic_end]
@@ -175,7 +175,7 @@ class MallocDebugPackagingTest(unittest.TestCase):
                 path = self.stage(folder)
                 (path / 'AndroidManifest.xml').write_text(base)
                 environment = dict(os.environ, PROJECT_DIR=str(ROOT / 'unified-android'), DECODED=folder,
-                                   LUCENT_DEBUGGABLE='1', LUCENT_MALLOC_DEBUG='1')
+                                   EMUFUSION_DEBUGGABLE='1', EMUFUSION_MALLOC_DEBUG='1')
                 result = subprocess.run(['sh', '-eu', '-c', branch], env=environment, capture_output=True, text=True)
                 self.assertEqual(0, result.returncode, result.stderr)
                 text = (path / 'AndroidManifest.xml').read_text()

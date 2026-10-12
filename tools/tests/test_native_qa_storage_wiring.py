@@ -25,7 +25,7 @@ class NativeQaStorageWiringTest(unittest.TestCase):
         self.assertIn('if (qualificationOnly)', section)
         self.assertIn('qualification_session")).isEmpty()', section)
         # The chosen backend still comes from the user's mode, not the QA flag.
-        self.assertIn('FrameGenerationSettings.forEngine(FrameGenerationSettings.mode(activity), engine);', host)
+        self.assertIn('FrameGenerationSettings.forEngine(activity, FrameGenerationSettings.mode(activity), engine);', host)
 
     def test_same_namespace_reaches_preopen_guest_root_and_snapshot_root(self):
         session = (GAME / "NativeAdapterEngineSession.java").read_text()

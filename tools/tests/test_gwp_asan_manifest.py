@@ -40,7 +40,7 @@ class GwpAsanManifestTest(unittest.TestCase):
 
     def test_real_build_branch_is_opt_in(self):
         build = (ROOT / 'unified-android/build.sh').read_text()
-        start = build.index('if [ "${LUCENT_GWP_ASAN:-0}" = 1 ]; then')
+        start = build.index('if [ "${EMUFUSION_GWP_ASAN:-0}" = 1 ]; then')
         branch = build[start:build.index('\nfi', start)+3]
         with tempfile.TemporaryDirectory() as folder:
             manifest = Path(folder)/'AndroidManifest.xml'
@@ -52,7 +52,7 @@ class GwpAsanManifestTest(unittest.TestCase):
                     'DECODED': folder,
                 }
                 if value is not None:
-                    environment['LUCENT_GWP_ASAN'] = value
+                    environment['EMUFUSION_GWP_ASAN'] = value
                 result = subprocess.run(['sh', '-eu', '-c', branch], env=environment,
                                         capture_output=True, text=True)
                 self.assertEqual(0, result.returncode, result.stderr)
@@ -60,12 +60,12 @@ class GwpAsanManifestTest(unittest.TestCase):
 
     def test_invalid_flag_fails_before_build_lock_or_work(self):
         build = (ROOT / 'unified-android/build.sh').read_text()
-        start = build.index('case "${LUCENT_GWP_ASAN:-0}" in')
+        start = build.index('case "${EMUFUSION_GWP_ASAN:-0}" in')
         end = build.index('\nesac', start) + len('\nesac')
         self.assertLess(end, build.index('mkdir -p "$BUILD_DIR"'))
         for value in ('yes', '2', '-1'):
             result = subprocess.run(['sh', '-eu', '-c', build[start:end]],
-                                    env={'LUCENT_GWP_ASAN': value}, capture_output=True, text=True)
+                                    env={'EMUFUSION_GWP_ASAN': value}, capture_output=True, text=True)
             self.assertNotEqual(0, result.returncode)
             self.assertIn('must be 0 or 1', result.stderr)
 

@@ -114,10 +114,10 @@ class PackagingCleanupTest(unittest.TestCase):
                                       ('kill -TERM $$', 143)]:
             with self.subTest(termination=termination), tempfile.TemporaryDirectory() as folder:
                 build = Path(folder)
-                lock = build / '.lucent-build-lock'
+                lock = build / '.emufusion-build-lock'
                 lock.mkdir()
                 (lock / 'pid').write_text('fixture')
-                disposable = ['lucent-unified-unsigned.apk', 'lucent-unified-aligned.apk']
+                disposable = ['emufusion-unified-unsigned.apk', 'emufusion-unified-aligned.apk']
                 retained = ['signed.apk', 'rollback.apk', 'libcore.so', 'save.bin', 'build.log']
                 for name in disposable + retained:
                     (build / name).write_bytes(b'fixture')

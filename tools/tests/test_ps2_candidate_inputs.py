@@ -46,7 +46,7 @@ class Ps2CandidateInputsTest(unittest.TestCase):
             '# END PS2 qualification input preflight')[0]
         self.env = {k: v for k, v in os.environ.items() if not k.startswith('LUCENT_')}
         self.env.update(ROOT_DIR=str(self.root), ARMSX2_CORE_DIR=str(self.cores),
-                        LUCENT_ARMSX2_QUALIFICATION_DIR=str(self.cores),
+                        EMUFUSION_ARMSX2_QUALIFICATION_DIR=str(self.cores),
                         INCLUDE_PHASE2_PPSSPP='1', REUSE_PHASE2_PPSSPP='1')
 
     def run_preflight(self, **changes):
@@ -58,8 +58,8 @@ class Ps2CandidateInputsTest(unittest.TestCase):
         self.assertEqual(self.run_preflight().returncode, 0)
 
     def test_rejects_release_unknown_signing_and_nonreuse(self):
-        for change in [dict(LUCENT_SIGNING_PROFILE='release'),
-                       dict(LUCENT_SIGNING_PROFILE='typo'),
+        for change in [dict(EMUFUSION_SIGNING_PROFILE='release'),
+                       dict(EMUFUSION_SIGNING_PROFILE='typo'),
                        dict(REUSE_PHASE2_PPSSPP='0'), dict(INCLUDE_PHASE2_PPSSPP='0')]:
             with self.subTest(change=change):
                 result = self.run_preflight(**change)
@@ -90,7 +90,7 @@ class Ps2CandidateInputsTest(unittest.TestCase):
 
     def test_default_reuse_still_checks_identity(self):
         (self.cores / 'armsx2_libretro.so').write_bytes(b'stale default staging')
-        self.assertNotEqual(self.run_preflight(LUCENT_ARMSX2_QUALIFICATION_DIR='').returncode, 0)
+        self.assertNotEqual(self.run_preflight(EMUFUSION_ARMSX2_QUALIFICATION_DIR='').returncode, 0)
 
     def test_preflight_precedes_dependencies_and_packing_uses_selected_directory(self):
         build = (ROOT / 'unified-android/build.sh').read_text()

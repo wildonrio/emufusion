@@ -83,7 +83,7 @@ class ElfAlignmentVerifierTest(unittest.TestCase):
         self.assertIn("MUST SHRINK TO ZERO BEFORE RELEASE", build)
         # The release path stays strict: no allowlist at all. (Its report is
         # no longer discarded to /dev/null; the gate itself is unchanged.)
-        strict_gate = 'if [ "${LUCENT_REQUIRE_16K_ALIGNMENT:-0}" = 1 ]; then\n'
+        strict_gate = 'if [ "${EMUFUSION_REQUIRE_16K_ALIGNMENT:-0}" = 1 ]; then\n'
         self.assertIn(
             strict_gate +
             '    python3 "$PROJECT_DIR/tools/verify_elf_alignment.py" "$OUTPUT"',

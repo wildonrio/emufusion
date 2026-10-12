@@ -31,8 +31,8 @@ SPEC.loader.exec_module(MODULE)
 
 class PhaseOneReleaseGateTest(unittest.TestCase):
     def test_release_defaults_exclude_qualification_cores(self):
-        self.assertIn("INCLUDE_EXPERIMENTAL_CORES=${LUCENT_INCLUDE_EXPERIMENTAL_CORES:-0}", BUILD)
-        self.assertIn("AUTOSELECT_EXPERIMENTAL_CORES=${LUCENT_AUTOSELECT_EXPERIMENTAL_CORES:-0}", BUILD)
+        self.assertIn("INCLUDE_EXPERIMENTAL_CORES=${EMUFUSION_INCLUDE_EXPERIMENTAL_CORES:-0}", BUILD)
+        self.assertIn("AUTOSELECT_EXPERIMENTAL_CORES=${EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES:-0}", BUILD)
         qualified = {
             "mesen", "mesen-s", "sameboy", "mgba", "gearsystem",
             "swanstation", "melonds-ds", "fuse", "mame", "dosbox-pure",
@@ -345,7 +345,7 @@ Window #1 Window{def u0 com.thorium.preview/com.thorium.preview.PreviewActivity}
         # gate to 0. The guard must run BEFORE the first LUCENT_ assignment.
         guard = BUILD.index("for stray_flag in INCLUDE_EXPERIMENTAL_CORES")
         first_default = BUILD.index(
-            "INCLUDE_EXPERIMENTAL_CORES=${LUCENT_INCLUDE_EXPERIMENTAL_CORES:-0}"
+            "INCLUDE_EXPERIMENTAL_CORES=${EMUFUSION_INCLUDE_EXPERIMENTAL_CORES:-0}"
         )
         self.assertLess(guard, first_default)
         for name in (
@@ -359,44 +359,44 @@ Window #1 Window{def u0 com.thorium.preview/com.thorium.preview.PreviewActivity}
                 r"for stray_flag in [^\n]*(?:\\\n[^\n]*)*\b" + name + r"\b",
             )
         self.assertIn(
-            'this build only reads LUCENT_%s', BUILD,
+            'this build only reads EMUFUSION_%s', BUILD,
         )
 
-    def test_misspelled_lucent_flags_are_rejected(self):
+    def test_misspelled_emufusion_flags_are_rejected(self):
         unknown_guard = BUILD.index(
-            "LUCENT_INCLUDE_*|LUCENT_REUSE_*|LUCENT_AUTOSELECT_*)"
+            "EMUFUSION_INCLUDE_*|EMUFUSION_REUSE_*|EMUFUSION_AUTOSELECT_*)"
         )
         first_default = BUILD.index(
-            "INCLUDE_EXPERIMENTAL_CORES=${LUCENT_INCLUDE_EXPERIMENTAL_CORES:-0}"
+            "INCLUDE_EXPERIMENTAL_CORES=${EMUFUSION_INCLUDE_EXPERIMENTAL_CORES:-0}"
         )
         self.assertLess(unknown_guard, first_default)
         self.assertIn("unknown build flag", BUILD)
         for known in (
-            "LUCENT_INCLUDE_EXPERIMENTAL_CORES)",
-            "LUCENT_AUTOSELECT_EXPERIMENTAL_CORES)",
-            "LUCENT_REUSE_QUALIFICATION_CORES)",
-            "LUCENT_INCLUDE_PHASE2_PPSSPP)",
-            "LUCENT_REUSE_PHASE2_PPSSPP)",
+            "EMUFUSION_INCLUDE_EXPERIMENTAL_CORES)",
+            "EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES)",
+            "EMUFUSION_REUSE_QUALIFICATION_CORES)",
+            "EMUFUSION_INCLUDE_PHASE2_PPSSPP)",
+            "EMUFUSION_REUSE_PHASE2_PPSSPP)",
         ):
             self.assertIn(known, BUILD)
 
     def test_signing_profile_is_explicit_and_debug_builds_are_loud(self):
-        self.assertIn('SIGNING_PROFILE=${LUCENT_SIGNING_PROFILE:-debug}', BUILD)
+        self.assertIn('SIGNING_PROFILE=${EMUFUSION_SIGNING_PROFILE:-debug}', BUILD)
         self.assertIn(
-            'KEYSTORE=${LUCENT_KEYSTORE:?LUCENT_SIGNING_PROFILE=release '
-            'requires LUCENT_KEYSTORE}', BUILD,
+            'KEYSTORE=${EMUFUSION_KEYSTORE:?EMUFUSION_SIGNING_PROFILE=release '
+            'requires EMUFUSION_KEYSTORE}', BUILD,
         )
         self.assertIn(
-            'STORE_PASS=${LUCENT_STORE_PASS:?LUCENT_SIGNING_PROFILE=release '
-            'requires LUCENT_STORE_PASS}', BUILD,
+            'STORE_PASS=${EMUFUSION_STORE_PASS:?EMUFUSION_SIGNING_PROFILE=release '
+            'requires EMUFUSION_STORE_PASS}', BUILD,
         )
         self.assertIn(
-            'KEY_ALIAS=${LUCENT_KEY_ALIAS:?LUCENT_SIGNING_PROFILE=release '
-            'requires LUCENT_KEY_ALIAS}', BUILD,
+            'KEY_ALIAS=${EMUFUSION_KEY_ALIAS:?EMUFUSION_SIGNING_PROFILE=release '
+            'requires EMUFUSION_KEY_ALIAS}', BUILD,
         )
         self.assertIn("DEBUG-SIGNED (qualification only)", BUILD)
         self.assertIn(
-            'LUCENT_SIGNING_PROFILE must be debug or release', BUILD,
+            'EMUFUSION_SIGNING_PROFILE must be debug or release', BUILD,
         )
 
     def test_alignment_verifier_gates_every_apk_after_one_app_check(self):

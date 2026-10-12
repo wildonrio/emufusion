@@ -789,7 +789,7 @@ public final class InWindowGameHost
             return null;
         }
         FrameGenerationSettings.Mode launchMode =
-                FrameGenerationSettings.forEngine(FrameGenerationSettings.mode(activity), engine);
+                FrameGenerationSettings.forEngine(activity, FrameGenerationSettings.mode(activity), engine);
         GameLaunchRequest request = new GameLaunchRequest(engine, system, gameId,
                 title, uri, SessionReturnState.from(source), qualificationSession,
                 launchMode);

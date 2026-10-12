@@ -27,7 +27,7 @@ def main():
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
     build = ROOT / 'unified-android/build'
-    lock = build / '.lucent-build-lock'
+    lock = build / '.emufusion-build-lock'
     lock.mkdir()  # Never steal the assembler's lock.
     try:
         opened = open_paths()

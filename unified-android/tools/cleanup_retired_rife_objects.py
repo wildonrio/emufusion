@@ -143,7 +143,7 @@ def main():
                         help='Losslessly compact retired static archives instead of removing objects')
     args = parser.parse_args()
     build = ROOT / 'unified-android/build'
-    lock = build / '.lucent-build-lock'
+    lock = build / '.emufusion-build-lock'
     lock.mkdir()
     try:
         tracked = {str(ROOT / name) for name in subprocess.check_output(

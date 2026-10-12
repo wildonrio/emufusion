@@ -175,11 +175,11 @@ class SourceFrontendGateTest(unittest.TestCase):
     def test_build_requires_paired_source_inputs_and_no_release(self):
         build=(ROOT/'unified-android/build.sh').read_text()
         block=build[build.index('SOURCE_FRONTEND_DIR='):build.index('\nexport JAVA_HOME')]
-        base={k:v for k,v in os.environ.items() if not k.startswith('LUCENT_SOURCE_FRONTEND') and k!='LUCENT_SIGNING_PROFILE'}
-        for variables, expected in [({},0),({'LUCENT_SOURCE_FRONTEND_DIR':'kit'},1),
-            ({'LUCENT_SOURCE_FRONTEND_LOCK':'lock'},1),
-            ({'LUCENT_SOURCE_FRONTEND_DIR':'kit','LUCENT_SOURCE_FRONTEND_LOCK':'lock'},0),
-            ({'LUCENT_SOURCE_FRONTEND_DIR':'kit','LUCENT_SOURCE_FRONTEND_LOCK':'lock','LUCENT_SIGNING_PROFILE':'release'},1)]:
+        base={k:v for k,v in os.environ.items() if not k.startswith('LUCENT_SOURCE_FRONTEND') and k!='EMUFUSION_SIGNING_PROFILE'}
+        for variables, expected in [({},0),({'EMUFUSION_SOURCE_FRONTEND_DIR':'kit'},1),
+            ({'EMUFUSION_SOURCE_FRONTEND_LOCK':'lock'},1),
+            ({'EMUFUSION_SOURCE_FRONTEND_DIR':'kit','EMUFUSION_SOURCE_FRONTEND_LOCK':'lock'},0),
+            ({'EMUFUSION_SOURCE_FRONTEND_DIR':'kit','EMUFUSION_SOURCE_FRONTEND_LOCK':'lock','EMUFUSION_SIGNING_PROFILE':'release'},1)]:
             with self.subTest(variables=variables):
                 result=subprocess.run(['sh','-eu','-c',block],env=dict(base,**variables),capture_output=True)
                 self.assertEqual(result.returncode,expected,result.stderr)

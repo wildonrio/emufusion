@@ -45,7 +45,7 @@ class GameLaunchRouterTest(unittest.TestCase):
         self.assertNotIn('NativeAdapterPrerequisites.isReady', ROUTER)
         self.assertIn('if (isInternalOnly(canonical)) return INTERNAL;', ROUTE_STORE)
         self.assertIn('if (isInternalOnly(canonical)) {', ROUTE_STORE)
-        self.assertIn('LUCENT_INCLUDE_PHASE3_APS3E:-1', BUILD)
+        self.assertIn('EMUFUSION_INCLUDE_PHASE3_APS3E:-1', BUILD)
 
     def test_dolphin_is_internal_by_default_and_external_only_when_explicit(self):
         self.assertNotIn(
@@ -57,7 +57,7 @@ class GameLaunchRouterTest(unittest.TestCase):
         self.assertIn('return INTERNAL;', resolve)
         self.assertNotIn('hasInternalEngine', resolve)
         self.assertIn('if (EXTERNAL.equals(stored)) return EXTERNAL;', ROUTE_STORE)
-        self.assertIn('LUCENT_INCLUDE_PHASE2_PPSSPP:-1', BUILD)
+        self.assertIn('EMUFUSION_INCLUDE_PHASE2_PPSSPP:-1', BUILD)
         self.assertIn('put("gamecube", contentUri("dolphin"',
                       (ROOT / "android-companion" / "src" / "com" / "thorium" /
                        "preview" / "EmulatorCatalog.java").read_text(encoding="utf-8"))

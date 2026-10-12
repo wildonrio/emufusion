@@ -2,7 +2,7 @@
 # Preserve the pinned frontend's APNG feature in a source-only rebuild.
 set -eu
 PROJECT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-QT_WORK=${LUCENT_QT_BUILD_ROOT:-$PROJECT/build/qt-5.15.10-16k}
+QT_WORK=${EMUFUSION_QT_BUILD_ROOT:-$PROJECT/build/qt-5.15.10-16k}
 SDK=${ANDROID_SDK_ROOT:-/Users/tyleryoung/Library/Android/sdk}
 SOURCE=$QT_WORK/source/libpng-1.6.37
 BUILD=$QT_WORK/build-apng

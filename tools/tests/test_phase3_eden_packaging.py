@@ -478,18 +478,18 @@ class Phase3BuildFlagTest(unittest.TestCase):
         self.assertIn("INCLUDE_PHASE3_EDEN", stray)
         # ...and the LUCENT_ allowlist must accept the real flag so the guard
         # does not reject a legitimate Phase 3 build.
-        self.assertIn("LUCENT_INCLUDE_PHASE3_EDEN) ;;", BUILD)
+        self.assertIn("EMUFUSION_INCLUDE_PHASE3_EDEN) ;;", BUILD)
         # The message that lists the known flags must name EVERY flag the build
-        # actually reads. It omitted LUCENT_INCLUDE_PHASE3_CEMU, so an operator
+        # actually reads. It omitted EMUFUSION_INCLUDE_PHASE3_CEMU, so an operator
         # reading it built Wii U out of the APK without noticing.
         self.assertIn(
-            "LUCENT_INCLUDE_PHASE3_EDEN LUCENT_INCLUDE_PHASE3_CEMU "
-            "LUCENT_INCLUDE_PHASE3_APS3E LUCENT_INCLUDE_RIFE_FRAMEGEN)",
+            "EMUFUSION_INCLUDE_PHASE3_EDEN EMUFUSION_INCLUDE_PHASE3_CEMU "
+            "EMUFUSION_INCLUDE_PHASE3_APS3E EMUFUSION_INCLUDE_RIFE_FRAMEGEN)",
                       BUILD)
 
     def test_the_flag_defaults_to_off(self):
-        self.assertIn("INCLUDE_PHASE3_EDEN=${LUCENT_INCLUDE_PHASE3_EDEN:-0}", BUILD)
-        self.assertIn("LUCENT_INCLUDE_PHASE3_EDEN must be 0 or 1", BUILD)
+        self.assertIn("INCLUDE_PHASE3_EDEN=${EMUFUSION_INCLUDE_PHASE3_EDEN:-0}", BUILD)
+        self.assertIn("EMUFUSION_INCLUDE_PHASE3_EDEN must be 0 or 1", BUILD)
 
     def test_a_missing_staged_adapter_refuses_the_build(self):
         self.assertIn(
@@ -531,8 +531,8 @@ class Phase3BuildFlagTest(unittest.TestCase):
         self.assertLess(guard_at, verifier_at)
 
     def test_a_phase3_apk_is_named_distinctly_from_a_release(self):
-        self.assertIn("lucent-$VERSION_NAME-phase3-qualification.apk", BUILD)
-        self.assertIn("lucent-$VERSION_NAME-phase2-phase3-qualification.apk", BUILD)
+        self.assertIn("emufusion-$VERSION_NAME-phase3-qualification.apk", BUILD)
+        self.assertIn("emufusion-$VERSION_NAME-phase2-phase3-qualification.apk", BUILD)
         self.assertIn("phase3-qualification-$OUTPUT_SHA.apk", BUILD)
         # EITHER adapter makes the artifact a qualification build. Naming this
         # off Eden alone gave a Cemu-only build the plain release filename

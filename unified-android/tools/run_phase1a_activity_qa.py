@@ -203,7 +203,7 @@ def select_target(adb_path: Path, requested: str | None,
                   allow_physical_thor: bool) -> tuple[str, bool]:
     rows = run([str(adb_path), "devices"]).stdout.splitlines()[1:]
     online = [row.split()[0] for row in rows if row.strip().endswith("\tdevice")]
-    serial = requested or os.environ.get("LUCENT_QA_SERIAL")
+    serial = requested or os.environ.get("EMUFUSION_QA_SERIAL")
     if serial is None:
         candidates = [item for item in online if item.startswith("emulator-")]
         if len(candidates) != 1:
@@ -1003,8 +1003,8 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
 
 def build_apk() -> Path:
     environment = os.environ.copy()
-    environment["LUCENT_INCLUDE_EXPERIMENTAL_CORES"] = "1"
-    environment["LUCENT_AUTOSELECT_EXPERIMENTAL_CORES"] = "0"
+    environment["EMUFUSION_INCLUDE_EXPERIMENTAL_CORES"] = "1"
+    environment["EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES"] = "0"
     completed = run([str(PROJECT / "build.sh")], env=environment)
     path = Path(completed.stdout.strip().splitlines()[-1])
     if not path.is_file():

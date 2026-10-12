@@ -250,7 +250,7 @@ def main():
     build = ROOT / 'unified-android/build'
     if build.resolve() != build:
         raise RuntimeError('Unexpected build root')
-    lock = build / '.lucent-build-lock'
+    lock = build / '.emufusion-build-lock'
     lock.mkdir()
     try:
         opened = open_paths()
