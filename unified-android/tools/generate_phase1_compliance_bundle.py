@@ -52,7 +52,7 @@ def generate(registry_path: Path, opt_in_path: Path, library_dir: Path) -> tuple
     packages: list[dict] = []
     artifacts: list[dict] = []
     notices = [
-        "Lucent Phase 1 qualification core notices",
+        "EmuFusion Phase 1 qualification core notices",
         "",
         "These components are qualification-only and remain subject to the",
         "release gates recorded in engines/registry.json. Inclusion here is",
@@ -154,11 +154,11 @@ def generate(registry_path: Path, opt_in_path: Path, library_dir: Path) -> tuple
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": "Lucent-Phase1-qualification-cores",
+        "name": "EmuFusion-Phase1-qualification-cores",
         "documentNamespace": f"https://github.com/wildonrio/emufusion/spdx/{namespace_seed}",
         "creationInfo": {
             "created": "2026-08-06T00:00:00Z",
-            "creators": ["Tool: Lucent-generate_phase1_compliance_bundle"],
+            "creators": ["Tool: EmuFusion-generate_phase1_compliance_bundle"],
         },
         "documentDescribes": [row["SPDXID"] for row in packages],
         "packages": packages,

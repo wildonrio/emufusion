@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>A no-op end to end (never connects, every call below returns
  * harmlessly) when {@link MultiplayerConfig#isConfigured} is false --
- * this backend is self-hosted per deployment, not a Lucent-operated
+ * this backend is self-hosted per deployment, not a EmuFusion-operated
  * service, so an unconfigured device is the default, expected state, not
  * an error.
  *
@@ -97,7 +97,7 @@ public final class MultiplayerManager implements NetplaySignalingClient.Listener
                 return;
             }
             connect();
-        }, "lucent-multiplayer-register").start();
+        }, "emufusion-multiplayer-register").start();
     }
 
     private void connect() {

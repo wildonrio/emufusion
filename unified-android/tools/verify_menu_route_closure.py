@@ -166,7 +166,7 @@ def launcher_audit(value: str) -> list[dict[str, object]]:
         if internal_action:
             # Internal in-window route: keep the full strict contract.
             if MAIN_ACTIVITY not in command:
-                reasons.append("does not target Lucent MainActivity")
+                reasons.append("does not target EmuFusion MainActivity")
             if not am_start:
                 reasons.append("does not use Pegasus-compatible am-start syntax")
             if cross_user:
@@ -184,7 +184,7 @@ def launcher_audit(value: str) -> list[dict[str, object]]:
         elif MAIN_ACTIVITY in command:
             # Targets the singleTask MainActivity but not via the internal
             # action — the historical stale same-activity route.
-            reasons.append("does not use Lucent's internal launch action")
+            reasons.append("does not use EmuFusion's internal launch action")
         else:
             reasons.append("is neither the internal in-window route nor a "
                            "recognized external route")
@@ -576,7 +576,7 @@ def verify(apk: Path, routes: set[Route], dexdump: Path) -> tuple[list[str], dic
             errors.extend(f"{route.system}/{route.engine}: {error}"
                           for error in row_errors)
     if not routes:
-        errors.append("installed metadata exposes no Lucent in-window routes")
+        errors.append("installed metadata exposes no EmuFusion in-window routes")
     report["pass"] = not errors
     report["errors"] = errors
     return errors, report

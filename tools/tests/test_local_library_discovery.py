@@ -215,7 +215,7 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 public final class DiscoveryProbe {
-  static File PEGASUS, PEGASUS_CONFIG, LUCENT_CONFIG;
+  static File PEGASUS, PEGASUS_CONFIG, APP_CONFIG;
   static String canonical(String s) { try { return new File(s).getCanonicalPath(); }
     catch(Exception e) { throw new RuntimeException(e); } }
   static String normalize(String s) { return s.toLowerCase(Locale.US); }
@@ -229,8 +229,8 @@ public final class DiscoveryProbe {
     File root = new File(args[0]);
     PEGASUS = new File(root,"shared/pegasus-frontend");
     PEGASUS_CONFIG = new File(root,"foreign-package");
-    LUCENT_CONFIG = new File(root,"our-package");
-    File own = new File(LUCENT_CONFIG,"metafiles/nes.metadata.pegasus.txt");
+    APP_CONFIG = new File(root,"our-package");
+    File own = new File(APP_CONFIG,"metafiles/nes.metadata.pegasus.txt");
     File foreign = new File(PEGASUS_CONFIG,"metafiles/nes.metadata.pegasus.txt");
     File rom = new File(root,"ROMs/nes/Fixture.nes");
     write(rom,"payload");

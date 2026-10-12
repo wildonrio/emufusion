@@ -229,7 +229,7 @@ class LibretroHostUiInputTest(unittest.TestCase):
     def test_exit_quiesce_waits_bounded_for_the_frame_boundary(self):
         session = SESSION.read_text()
         quiesce = method(session, '@Override public void quiesceForExit()')
-        self.assertIn('pause(PauseReason.LUCENT_MENU);', quiesce)
+        self.assertIn('pause(PauseReason.EMUFUSION_MENU);', quiesce)
         self.assertIn('active.awaitFrameBoundary(250L)', quiesce)
         self.assertLess(quiesce.index('awaitFrameBoundary'), quiesce.index('presentationLock.tryLock'))
 

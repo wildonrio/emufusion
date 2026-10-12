@@ -23,7 +23,7 @@ public final class EmuFusionApplication
         extends org.qtproject.qt5.android.bindings.QtApplication {
     // The inherited Qt/JNI class name is retained for binary compatibility;
     // it is EmuFusion's sole foreground MainActivity in this package.
-    private static final String LUCENT_ACTIVITY =
+    private static final String FRONTEND_ACTIVITY =
             "org.pegasus_frontend.android.MainActivity";
     private static volatile WeakReference<Activity> liveMainActivity =
             new WeakReference<>(null);
@@ -43,6 +43,18 @@ public final class EmuFusionApplication
     private int firstSetupFocusAttempts;
     private WeakReference<Activity> resumedFrontend = new WeakReference<>(null);
 
+    private void migrateLegacyNames() {
+        LegacyNames.movePreferences(this, LegacyNames.BROWSER_PREFERENCES,
+                BrowserActivity.PREFERENCES);
+        LegacyNames.movePreferences(this, LegacyNames.LEGAL_PREFERENCES,
+                LegalNoticeOverlay.PREFERENCES);
+        LegacyNames.moveBoolean(getSharedPreferences(MenuSoundPlayer.PREFS, MODE_PRIVATE),
+                LegacyNames.SOUND_EFFECTS_KEY, MenuSoundPlayer.PREF_ENABLED,
+                MenuSoundPlayer.DEFAULT_ENABLED);
+        LegacyNames.moveEngineMarkers(getDir("engine-system", MODE_PRIVATE));
+        ThemeInstaller.migrateLegacyTheme(this);
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -54,6 +66,10 @@ public final class EmuFusionApplication
             Log.i(TAG, "Frontend restart bridge process initialized without app services");
             return;
         }
+        // Settings, engine markers and theme state saved under the
+        // pre-rename names move before anything reads them (one-time
+        // renames; see LegacyNames).
+        migrateLegacyNames();
         // Capture this before PreviewService can install the theme. Otherwise
         // its worker may create the version marker while Qt has already read
         // the old/missing configuration, causing us to skip the needed restart.
@@ -86,7 +102,7 @@ public final class EmuFusionApplication
                 // package installer. The downloaded APK stays app-private;
                 // there is never a file-manager step.
                 UpdateManager.resumePendingInstall(activity);
-                if (LUCENT_ACTIVITY.equals(activity.getClass().getName())) {
+                if (FRONTEND_ACTIVITY.equals(activity.getClass().getName())) {
                     resumedFrontend = new WeakReference<>(activity);
                     firstSetupFocusAttempts = 0;
                     // Also retries after Android's storage permission screen;
@@ -174,7 +190,7 @@ public final class EmuFusionApplication
     }
 
     private static void rememberMainActivity(Activity activity) {
-        if (activity != null && LUCENT_ACTIVITY.equals(activity.getClass().getName()))
+        if (activity != null && FRONTEND_ACTIVITY.equals(activity.getClass().getName()))
             liveMainActivity = new WeakReference<>(activity);
     }
 
@@ -243,7 +259,7 @@ public final class EmuFusionApplication
     }
 
     private void completeFirstSetupIfNeeded(Activity activity) {
-        if (!LUCENT_ACTIVITY.equals(activity.getClass().getName()) ||
+        if (!FRONTEND_ACTIVITY.equals(activity.getClass().getName()) ||
                 !ThemeInstaller.hasStorageAccess(this) ||
                 (!firstSetupRequired && ThemeInstaller.isFrontendConfigured()) ||
                 !completingFirstSetup.compareAndSet(false, true)) return;
@@ -270,7 +286,7 @@ public final class EmuFusionApplication
                 firstSetupFocusAttempts = 0;
                 scheduleFirstSetupRestart();
             });
-        }, "lucent-first-setup");
+        }, "emufusion-first-setup");
         worker.setDaemon(true);
         worker.start();
     }
@@ -294,7 +310,7 @@ public final class EmuFusionApplication
     }
 
     private void installFirstSetupFocusListener(Activity activity) {
-        if (!LUCENT_ACTIVITY.equals(activity.getClass().getName())) return;
+        if (!FRONTEND_ACTIVITY.equals(activity.getClass().getName())) return;
         // A dialog (including our legal notice) may keep focus for longer than
         // the bounded first-setup retry window. Dismissing it does not cause
         // Activity.onResume, so resume-only recovery leaves the old Qt library

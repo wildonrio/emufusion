@@ -186,8 +186,11 @@ public final class AdaptiveFrameRateController {
     // lowest supported 20-FPS tier there is no honest fixed cadence to fill:
     // extrapolating an old vector for the missing 50+ ms turns ordinary
     // emulator slowdown into large smears and wobble. Keep presenting the
-    // newest real image until the producer recovers instead.
-    private static final double MIN_GENERATION_SOURCE_HZ = 20.0;
+    // newest real image until the producer recovers instead. The floor sits
+    // just under 20: display-synchronized cores pace a 20-FPS game to a panel
+    // divisor (119.94 Hz / 6 = 19.99 on the Thor), and an exact 20.0 floor
+    // kept Ocarina of Time from generating except when noise read 20.000.
+    private static final double MIN_GENERATION_SOURCE_HZ = 19.5;
 
     // Display.getRefreshRate() describes the selected Android mode, but the
     // temporal contract is owned by the physical Choreographer clock.  Latch

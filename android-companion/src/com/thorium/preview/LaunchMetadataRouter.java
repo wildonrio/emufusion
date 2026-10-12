@@ -71,7 +71,7 @@ final class LaunchMetadataRouter {
     }
 
     private static void writeAtomic(File target, String text) throws Exception {
-        File temporary = new File(target.getParentFile(), "." + target.getName() + ".lucent-route.tmp");
+        File temporary = new File(target.getParentFile(), "." + target.getName() + ".emufusion-route.tmp");
         try (OutputStreamWriter writer = new OutputStreamWriter(
                 new FileOutputStream(temporary, false), StandardCharsets.UTF_8)) {
             writer.write(text);

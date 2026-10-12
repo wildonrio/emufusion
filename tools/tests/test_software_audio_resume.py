@@ -43,7 +43,7 @@ public class SoftwareAudioResumeTest {
     static final class LibretroHost { int resumes; void resume(){resumes++;} void pause(){} }
     static final class DirectDisplayVsync { void suspend(){} }
     static final class PcmSignalTelemetry { void accept(short[] samples){} }
-    enum PauseReason { ANDROID_BACKGROUND, LUCENT_MENU }
+    enum PauseReason { ANDROID_BACKGROUND, EMUFUSION_MENU }
     static final class AudioTrack {
         static final int WRITE_NON_BLOCKING=1, PLAYSTATE_PLAYING=3;
         int state=2, plays, writes, queuedSamples, capacity=12800;
@@ -122,7 +122,7 @@ public class SoftwareAudioResumeTest {
             check(s.audioTrack.writes==0 && s.focusDropped==1066,"suppressed focus was not silent");
             s.audioFocus.suppressed=false;s.presentAudio(new short[12802]);s.presentAudio(null);
             check(s.audioTrack.plays==1,"focus recovery failed to restart full buffer");
-            s.pause(PauseReason.LUCENT_MENU);s.resumeAfterAudioFocusGain();s.presentAudio(new short[1066]);
+            s.pause(PauseReason.EMUFUSION_MENU);s.resumeAfterAudioFocusGain();s.presentAudio(new short[1066]);
             check(s.audioTrack.plays==1 && s.audioTrack.state==2,"late PCM/focus played over paused menu");
             check(s.touchReleases==1,"pause must retain the DS touch-release lifecycle hook");
             break;

@@ -35,7 +35,7 @@ class FirstInstallStartupTest(unittest.TestCase):
 import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 public class StartupFocusProbe {
-  static final String LUCENT_ACTIVITY="StartupFocusProbe$Activity", TAG="test";
+  static final String FRONTEND_ACTIVITY="StartupFocusProbe$Activity", TAG="test";
   static class Observer {
     interface Listener { void changed(boolean focus); }
     Listener listener;
@@ -155,7 +155,7 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 public final class ThemeSetupProbe {
-  static File PEGASUS, PEGASUS_CONFIG, LUCENT_CONFIG, THEME, VERSION;
+  static File PEGASUS, PEGASUS_CONFIG, APP_CONFIG, THEME, VERSION;
   static void check(boolean ok, String why) { if (!ok) throw new AssertionError(why); }
   public static void main(String[] args) throws Exception {
     File root = new File(args[0]);
@@ -165,16 +165,16 @@ public final class ThemeSetupProbe {
     File blocked = new File(root, "foreign-package");
     Files.write(blocked.toPath(), new byte[]{1});
     PEGASUS_CONFIG = new File(blocked, "files/pegasus-frontend");
-    LUCENT_CONFIG = new File(root, "our-package/files/pegasus-frontend");
-    THEME = new File(PEGASUS, "themes/lucent");
-    VERSION = new File(THEME, ".lucent-version");
+    APP_CONFIG = new File(root, "our-package/files/pegasus-frontend");
+    THEME = new File(PEGASUS, "themes/emufusion");
+    VERSION = new File(THEME, ".emufusion-version");
     THEME.mkdirs();
     Files.write(VERSION.toPath(), "3.2.16".getBytes());
     Files.write(new File(THEME,"theme.qml").toPath(), "import QtQuick 2.0".getBytes());
     Files.write(new File(THEME,"theme.cfg").toPath(), "name: EmuFusion".getBytes());
     check(!isFrontendConfigured(), "version marker incorrectly means setup complete");
     updatePegasusSettings(false); // Repair the partial install, not a first install.
-    File settings = new File(LUCENT_CONFIG, "settings.txt");
+    File settings = new File(APP_CONFIG, "settings.txt");
     String value = readText(settings);
     check(value.contains("general.theme: " + THEME.getAbsolutePath() + "/"), "missing default theme");
     check(value.contains("providers.androidapps.enabled: false"), "provider not configured");

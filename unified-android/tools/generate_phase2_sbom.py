@@ -42,10 +42,10 @@ def generate(registry: dict, lock: dict, artifacts: dict) -> dict:
         "dependencies": locks,
     })).hexdigest()
 
-    app_id = "SPDXRef-Lucent-Phase2-Qualification"
+    app_id = "SPDXRef-EmuFusion-Phase2-Qualification"
     packages = [{
         "SPDXID": app_id,
-        "name": "Lucent Phase 2 qualification payload",
+        "name": "EmuFusion Phase 2 qualification payload",
         "versionInfo": identity[:12],
         "downloadLocation": "NOASSERTION",
         "filesAnalyzed": False,
@@ -211,14 +211,14 @@ def generate(registry: dict, lock: dict, artifacts: dict) -> dict:
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": "Lucent Phase 2 qualification SBOM",
+        "name": "EmuFusion Phase 2 qualification SBOM",
         "documentNamespace": (
             "https://github.com/wildonrio/emufusion/"
             f"spdx/phase2/{identity}"
         ),
         "creationInfo": {
             "created": created,
-            "creators": ["Tool: Lucent-generate-phase2-sbom"],
+            "creators": ["Tool: EmuFusion-generate-phase2-sbom"],
             "licenseListVersion": "3.27",
         },
         "documentDescribes": [app_id],

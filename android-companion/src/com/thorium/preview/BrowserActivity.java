@@ -53,7 +53,7 @@ public final class BrowserActivity extends Activity {
     /** Returned by {@link #open} when Android refused the window entirely. */
     static final int LAUNCH_FAILED = Integer.MIN_VALUE;
     private static final String HOME = "https://www.google.com/";
-    private static final String PREFS = "lucent_browser";
+    static final String PREFERENCES = "emufusion_browser";
     private static final String LAST_URL = "last_url";
     private static final String TAG = "EmuFusionBrowser";
     private static final int BAR_COLOR = Color.rgb(11, 14, 20);
@@ -117,7 +117,7 @@ public final class BrowserActivity extends Activity {
                     " (SDK=" + Build.VERSION.SDK_INT + ")");
             return displayId;
         } catch (PendingIntent.CanceledException | RuntimeException failure) {
-            Log.e(TAG, "Unable to open the Lucent browser on display " + displayId, failure);
+            Log.e(TAG, "Unable to open the EmuFusion browser on display " + displayId, failure);
             return LAUNCH_FAILED;
         }
     }
@@ -283,12 +283,12 @@ public final class BrowserActivity extends Activity {
     private String initialUrl(Intent intent) {
         String requested = intent == null ? null : intent.getStringExtra(EXTRA_URL);
         if (requested != null && !requested.trim().isEmpty()) return requested.trim();
-        return getSharedPreferences(PREFS, MODE_PRIVATE).getString(LAST_URL, HOME);
+        return getSharedPreferences(PREFERENCES, MODE_PRIVATE).getString(LAST_URL, HOME);
     }
 
     private void rememberUrl(String url) {
         if (url == null || url.trim().isEmpty() || "about:blank".equals(url)) return;
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(LAST_URL, url).apply();
+        getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().putString(LAST_URL, url).apply();
     }
 
     private TextView button(String text, View.OnClickListener action) {

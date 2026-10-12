@@ -151,7 +151,7 @@ def main_activity_identity(adb_path: Path, serial: str) -> dict[str, str]:
     ))
     if len(matches) != 1:
         raise RuntimeError(
-            f"expected one live Lucent MainActivity record, observed {sorted(matches)}"
+            f"expected one live EmuFusion MainActivity record, observed {sorted(matches)}"
         )
     token, task = next(iter(matches))
     return {"activityToken": token, "taskId": task,
@@ -166,7 +166,7 @@ def start_library(adb_path: Path, serial: str) -> dict[str, str]:
         "--activity-single-top", "--activity-clear-top",
     ], check=False)
     wait_until(lambda: frontend_resumed(adb_path, serial),
-               "Lucent library MainActivity", 30.0)
+               "EmuFusion library MainActivity", 30.0)
     return main_activity_identity(adb_path, serial)
 
 
@@ -207,13 +207,13 @@ def launch(adb_path: Path, serial: str, case: Case,
     ], check=False)
     if completed.returncode != 0 or "Error:" in completed.stdout:
         raise RuntimeError("qualification launch failed: " + completed.stdout)
-    wait_until(lambda: game_resumed(adb_path, serial), "Lucent MainActivity", 20.0)
+    wait_until(lambda: game_resumed(adb_path, serial), "EmuFusion MainActivity", 20.0)
     accepted = f"In-window route accepted engine={case.engine} system={case.system}"
     wait_until(lambda: accepted in logs(adb_path, serial),
                "in-window engine route", 20.0)
     return wait_until(
         lambda: strict_gameplay_identity(adb_path, serial),
-        "one Lucent Activity/task/window/process after lower-preview closure",
+        "one EmuFusion Activity/task/window/process after lower-preview closure",
         20.0,
     )
 
@@ -538,15 +538,15 @@ def strict_frame_match(reference: Path, candidate: Path) -> dict[str, float | bo
 
 def exit_to_lucent(adb_path: Path, serial: str, case: Case,
                    event_node: str) -> None:
-    marker = f"Exit to Lucent invoked engine={case.engine} system={case.system}"
+    marker = f"Exit to EmuFusion invoked engine={case.engine} system={case.system}"
     # Exercise the Thor's user-facing Stop/Select contract itself: a short
     # press remains PSP Select, while a physical hold over one second saves and
     # returns to EmuFusion without relying on pause-menu state.
     phase1_qa_module().send_linux_key(
         adb_path, serial, event_node, 314, hold_seconds=1.15
     )
-    wait_until(lambda: marker in logs(adb_path, serial), "Exit to Lucent marker", 15.0)
-    returned = (f"Returned to Lucent immediately in same window engine={case.engine} "
+    wait_until(lambda: marker in logs(adb_path, serial), "Exit to EmuFusion marker", 15.0)
+    returned = (f"Returned to EmuFusion immediately in same window engine={case.engine} "
                 f"system={case.system}")
     wait_until(lambda: returned in logs(adb_path, serial),
                "same-window return marker", 60.0)
@@ -558,7 +558,7 @@ def exit_to_lucent(adb_path: Path, serial: str, case: Case,
             "same-window UI return did not complete in under 500ms: " +
             repr(latency_matches[-1:] if latency_matches else [])
         )
-    wait_until(lambda: frontend_resumed(adb_path, serial), "Lucent frontend", 60.0)
+    wait_until(lambda: frontend_resumed(adb_path, serial), "EmuFusion frontend", 60.0)
     # Library interactivity is deliberately decoupled from save latency. This
     # completion marker is emitted only after the engine-specific checkpoint
     # path succeeds and the retired native session is queued for teardown.
@@ -596,7 +596,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
     )
     if ({key: gameplay_identity[key] for key in library_identity} != library_identity):
         raise RuntimeError(
-            f"gameplay replaced Lucent's Activity/task: "
+            f"gameplay replaced EmuFusion's Activity/task: "
             f"{library_identity} -> {gameplay_identity}"
         )
     # A static GameCube prompt can legitimately stop duplicate XFB callbacks
@@ -713,7 +713,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
     returned_identity = main_activity_identity(adb_path, serial)
     if returned_identity != library_identity:
         raise RuntimeError(
-            f"return replaced Lucent's Activity/task: "
+            f"return replaced EmuFusion's Activity/task: "
             f"{library_identity} -> {returned_identity}"
         )
 
@@ -761,7 +761,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
     final_log = logs(adb_path, serial)
     crashes = app_crash_markers(final_log)
     if crashes:
-        raise RuntimeError("Lucent crash markers: " + ", ".join(crashes))
+        raise RuntimeError("EmuFusion crash markers: " + ", ".join(crashes))
     if "Audio FIFO overflow" in final_log:
         raise RuntimeError("core audio FIFO overflowed")
     return {

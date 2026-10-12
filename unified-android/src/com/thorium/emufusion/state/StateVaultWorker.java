@@ -16,7 +16,7 @@ public final class StateVaultWorker implements Closeable {
         if (vault == null) throw new IllegalArgumentException("vault is required");
         this.vault = vault;
         this.executor = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "lucent-state-vault");
+            Thread thread = new Thread(runnable, "emufusion-state-vault");
             thread.setDaemon(true);
             return thread;
         });

@@ -67,7 +67,9 @@ import java.util.zip.ZipFile;
  */
 final class ImportManager {
     private static final String TAG = "ThorImporter";
-    private static final String USER_AGENT = "Lucent-Importer/1.0";
+    private static final String USER_AGENT = "EmuFusion-Importer/1.0";
+    /** Prefix of the library metadata files this importer generates. */
+    static final String AUTO_METADATA_PREFIX = "99-emufusion-auto-";
     private static final long MAX_ARCHIVE_ENTRY_BYTES = 128L * 1024L * 1024L * 1024L;
     private static final long ARCHIVE_INSPECTION_BYTES = 8L * 1024L * 1024L;
     private static final SevenZFileOptions SEVEN_Z_OPTIONS = SevenZFileOptions.builder()
@@ -80,7 +82,7 @@ final class ImportManager {
             "pegasus-frontend");
     private static final File PEGASUS_CONFIG = new File(Environment.getExternalStorageDirectory(),
             "Android/data/org.pegasus_frontend.android/files/pegasus-frontend");
-    private static final File LUCENT_CONFIG = new File(Environment.getExternalStorageDirectory(),
+    private static final File APP_CONFIG = new File(Environment.getExternalStorageDirectory(),
             "Android/data/com.thorium.preview/files/pegasus-frontend");
     private static final File REGISTRY = new File(PEGASUS, "thorium-imports.json");
     private static final String BACKGROUND_SOURCE_WALLPAPER = "audited-wallpaper";
@@ -91,12 +93,14 @@ final class ImportManager {
     private static final Map<String, Boolean> WALLPAPER_QUALITY_CACHE =
             new ConcurrentHashMap<>();
     private static volatile boolean wallpaperQualityCacheLoaded;
+    // Combined files earlier versions wrote into the standalone Pegasus app's
+    // config and the shared Pegasus folder; only ever retired, never read.
     private static final File AUTO_METADATA = new File(new File(PEGASUS_CONFIG, "metafiles"),
-            "99-lucent-auto-import.metadata.pegasus.txt");
-    private static final File LUCENT_AUTO_METADATA = new File(new File(LUCENT_CONFIG, "metafiles"),
-            "99-lucent-auto-import.metadata.pegasus.txt");
+            LegacyNames.AUTO_METADATA_PREFIX + "import.metadata.pegasus.txt");
+    private static final File APP_AUTO_METADATA = new File(new File(APP_CONFIG, "metafiles"),
+            AUTO_METADATA_PREFIX + "import.metadata.pegasus.txt");
     private static final File LEGACY_AUTO_METADATA = new File(PEGASUS,
-            "99-lucent-auto-import.metadata.pegasus.txt");
+            LegacyNames.AUTO_METADATA_PREFIX + "import.metadata.pegasus.txt");
     private static final File THORIUM_LEGACY_AUTO_METADATA = new File(PEGASUS,
             "99-thorium-auto-import.metadata.pegasus.txt");
     private static final File THORIUM_LEGACY_CONFIG_METADATA = new File(
@@ -307,7 +311,7 @@ final class ImportManager {
         for (File metadata : metadataFiles()) {
             // Another app's metadata cannot make our empty frontend ready.
             if (!metadata.getParentFile().equals(PEGASUS) &&
-                    !metadata.getParentFile().equals(new File(LUCENT_CONFIG, "metafiles"))) continue;
+                    !metadata.getParentFile().equals(new File(APP_CONFIG, "metafiles"))) continue;
             try {
                 for (String stanza : splitStanzas(readText(metadata))) {
                     String path = field(stanza, "file");
@@ -453,7 +457,7 @@ final class ImportManager {
             if (GameSystems.byFolder(folder) != null) systems.add(folder);
         }
         // The import registry was added after owner-authored and earlier
-        // Lucent metadata already existed.  Treating only registry rows as the
+        // EmuFusion metadata already existed.  Treating only registry rows as the
         // settings inventory hides real, indexed games from the route picker
         // forever (PS3 directory dumps are a common example because their
         // launch target is EBOOT.BIN rather than an extension that discovery
@@ -582,7 +586,7 @@ final class ImportManager {
         // Stage the file on the same volume first, so a metadata write failure
         // can still restore it atomically. The staged copy is permanently
         // deleted only after Pegasus's registry and metadata commit succeeds.
-        File trash = new File(new File(volume, ".LucentTrash"),
+        File trash = new File(new File(volume, ".EmuFusionTrash"),
                 row.optString("system", "unknown"));
         if (!trash.mkdirs() && !trash.isDirectory()) return false;
         File target = uniqueTrashTarget(trash, rom.getName());
@@ -612,7 +616,7 @@ final class ImportManager {
     private static File storageVolumeRoot(File file) {
         String path = file.getAbsolutePath();
         // /storage/emulated is a framework mount, not the writable user
-        // volume. Trying to create /storage/emulated/.LucentTrash made every
+        // volume. Trying to create /storage/emulated/.EmuFusionTrash made every
         // delete of an internally stored game fail. The actual shared-storage
         // root is /storage/emulated/0 (Environment's external directory).
         String internal = Environment.getExternalStorageDirectory().getAbsolutePath();
@@ -647,7 +651,7 @@ final class ImportManager {
         THORIUM_LEGACY_CONFIG_METADATA.delete();
         File metadataParent = AUTO_METADATA.getParentFile();
         if (metadataParent != null) metadataParent.mkdirs();
-        File emuFusionMetadataParent = LUCENT_AUTO_METADATA.getParentFile();
+        File emuFusionMetadataParent = APP_AUTO_METADATA.getParentFile();
         if (emuFusionMetadataParent != null) emuFusionMetadataParent.mkdirs();
         GAMES.mkdirs();
         File mediaRoot = mediaRoot();
@@ -1297,9 +1301,9 @@ final class ImportManager {
         // leave the frontend and the index disagreeing about what exists.
         List<File> roots = Arrays.asList(PEGASUS,
                 new File(PEGASUS_CONFIG, "metafiles"),
-                new File(LUCENT_CONFIG, "metafiles"),
+                new File(APP_CONFIG, "metafiles"),
                 new File(PEGASUS_CONFIG, "metadata"),
-                new File(LUCENT_CONFIG, "metadata"));
+                new File(APP_CONFIG, "metadata"));
         for (File root : roots) {
             File[] metadata = root.listFiles((dir, name) ->
                     name.endsWith(".metadata.pegasus.txt") ||
@@ -1943,7 +1947,7 @@ final class ImportManager {
         if (bundledGameIndex != null) return bundledGameIndex;
         Map<String, BundledGameRecord> index = new HashMap<>();
         int resourceId = context.getResources().getIdentifier(
-                "lucent_game_metadata", "raw", context.getPackageName());
+                "emufusion_game_metadata", "raw", context.getPackageName());
         if (resourceId == 0) {
             bundledGameIndex = index;
             return index;
@@ -1964,7 +1968,7 @@ final class ImportManager {
                 index.put(fieldAt(fields, 0) + "\t" + fieldAt(fields, 1), record);
             }
         } catch (Exception error) {
-            Log.e(TAG, "Unable to load bundled Lucent game metadata", error);
+            Log.e(TAG, "Unable to load bundled EmuFusion game metadata", error);
         }
         bundledGameIndex = index;
         return index;
@@ -2459,7 +2463,8 @@ final class ImportManager {
     private int repairMissingMedia(File cacheRoot, File mediaRoot, List<String> statusTitles,
                                    int added, boolean needsReload) {
         File[] files = PEGASUS.listFiles((dir, name) -> name.endsWith(".metadata.pegasus.txt") &&
-                !name.startsWith("99-lucent-auto-") &&
+                !name.startsWith(AUTO_METADATA_PREFIX) &&
+                !name.startsWith(LegacyNames.AUTO_METADATA_PREFIX) &&
                 !name.startsWith("99-thorium-auto-"));
         if (files == null) return 0;
         int repaired = 0;
@@ -3182,7 +3187,7 @@ final class ImportManager {
         File rom = new File(romPath);
         // Already gone is the outcome the owner asked for.
         if (!rom.isFile()) return true;
-        File trash = new File(storageVolumeRoot(rom), ".LucentTrash");
+        File trash = new File(storageVolumeRoot(rom), ".EmuFusionTrash");
         if (!trash.mkdirs() && !trash.isDirectory()) return rom.delete();
         File staged = uniqueTrashTarget(trash, rom.getName());
         if (!rom.renameTo(staged)) return rom.delete();
@@ -3595,7 +3600,7 @@ final class ImportManager {
             games.sort(Comparator.comparing(value -> value.optString("title"),
                     String.CASE_INSENSITIVE_ORDER));
             StringBuilder out = new StringBuilder(
-                    "# Generated atomically by Lucent Library Importer.\n");
+                    "# Generated atomically by EmuFusion Library Importer.\n");
             // The owner's library intentionally groups the lone PC Engine CD
             // title with Windows instead of exposing a one-game platform card.
             String displayCollection = "pcenginecd".equals(system.folder) ?
@@ -3622,7 +3627,7 @@ final class ImportManager {
                 else
                     out.append("rating: 0%\n");
                 out.append("file: ").append(metadataSafe(row.optString("file"))).append('\n');
-                out.append("x-lucent-id: ")
+                out.append("x-emufusion-id: ")
                         .append(metadataSafe(row.optString("sourceIdentity"))).append('\n');
                 out.append("x-added-at: ").append(row.optLong("addedAt", 0L)).append('\n');
                 appendMetadataList(out, "developer", row.optJSONArray("developers"));
@@ -3697,7 +3702,7 @@ final class ImportManager {
                     out.append("x-metacritic-url: https://www.metacritic.com/game/")
                             .append(row.optString("metacriticSlug")).append("/\n");
                 if (row.optInt("cheats", 0) > 0)
-                    out.append("x-lucent-cheats: ").append(row.optInt("cheats", 0)).append('\n');
+                    out.append("x-emufusion-cheats: ").append(row.optInt("cheats", 0)).append('\n');
                 if (!row.optString("boxArt").isEmpty())
                     out.append("assets.boxFront: ").append(metadataSafe(row.optString("boxArt"))).append('\n');
                 if (!row.optString("background").isEmpty())
@@ -3712,7 +3717,7 @@ final class ImportManager {
                     out.append("x-background-transform: ")
                             .append(metadataSafe(row.optString("backgroundTransform"))).append('\n');
                 // Precomputed "by wallpaper" accent. The theme reads it as
-                // game.extra["lucent-accent"] and never derives a color itself.
+                // game.extra["emufusion-accent"] and never derives a color itself.
                 String accent = WallpaperAccent.sanitize(
                         row.optString(WallpaperAccent.REGISTRY_FIELD));
                 if (!accent.isEmpty())
@@ -3721,18 +3726,18 @@ final class ImportManager {
                 if (!row.optString("video").isEmpty())
                     out.append("assets.video: ").append(metadataSafe(row.optString("video"))).append('\n');
             }
-            String generatedName = "99-lucent-auto-" + system.folder +
+            String generatedName = AUTO_METADATA_PREFIX + system.folder +
                     ".metadata.pegasus.txt";
             activeGeneratedFiles.add(generatedName);
             metadataChanged |= writeGeneratedMetadataIfChanged(
-                    new File(LUCENT_AUTO_METADATA.getParentFile(), generatedName),
+                    new File(APP_AUTO_METADATA.getParentFile(), generatedName),
                     out.toString());
             writeCompatibilityMirror(new File(AUTO_METADATA.getParentFile(), generatedName),
                     out.toString());
         }
         cleanupGeneratedMetadata(AUTO_METADATA.getParentFile(), activeGeneratedFiles);
         metadataChanged |= cleanupGeneratedMetadata(
-                LUCENT_AUTO_METADATA.getParentFile(), activeGeneratedFiles);
+                APP_AUTO_METADATA.getParentFile(), activeGeneratedFiles);
         // Both Android package variants have their own canonical `metafiles`
         // directory. Early builds also mirrored the same generated files into
         // the shared Pegasus root, so each ROM was parsed twice and the second
@@ -3742,8 +3747,8 @@ final class ImportManager {
         // placed several collection headers in this combined file, causing
         // every imported game to appear in every system. Leave a harmless
         // marker at the old path while the per-system files above own games.
-        String retired = "# Retired combined Lucent metadata; per-system files are authoritative.\n";
-        metadataChanged |= writeGeneratedMetadataIfChanged(LUCENT_AUTO_METADATA, retired);
+        String retired = "# Retired combined EmuFusion metadata; per-system files are authoritative.\n";
+        metadataChanged |= writeGeneratedMetadataIfChanged(APP_AUTO_METADATA, retired);
         writeCompatibilityMirror(AUTO_METADATA, retired);
         metadataChanged |= writeGeneratedMetadataIfChanged(LEGACY_AUTO_METADATA, retired);
         return metadataChanged;
@@ -3812,12 +3817,12 @@ final class ImportManager {
         // A verified ROM may predate the registry while still having a valid
         // per-system EmuFusion metafile. Never delete that game merely because a
         // newer scan rebuilds generated files from the registry. Reconcile
-        // only Lucent-owned auto metafiles; hand-authored/core collections are
+        // only EmuFusion-owned auto metafiles; hand-authored/core collections are
         // intentionally not duplicated into the importer registry.
         for (File metadata : metadataFiles()) {
             String name = metadata.getName();
-            if (!name.startsWith("99-lucent-auto-") ||
-                    name.equals("99-lucent-auto-import.metadata.pegasus.txt")) continue;
+            if (!name.startsWith(AUTO_METADATA_PREFIX) ||
+                    name.equals(APP_AUTO_METADATA.getName())) continue;
             try {
                 for (String stanza : splitStanzas(readText(metadata))) {
                     String path = field(stanza, "file");
@@ -3828,9 +3833,10 @@ final class ImportManager {
                     GameSystems.SystemDef system = systemFromRomPath(path);
                     if (system == null) continue;
                     JSONObject row = new JSONObject();
-                    row.put("sourceIdentity", field(stanza, "x-lucent-id").isEmpty() ?
-                            canonicalPath + ":" + new File(path).length() :
-                            field(stanza, "x-lucent-id"));
+                    String identity = field(stanza, "x-emufusion-id");
+                    if (identity.isEmpty()) identity = field(stanza, LegacyNames.METADATA_ID_FIELD);
+                    row.put("sourceIdentity", identity.isEmpty() ?
+                            canonicalPath + ":" + new File(path).length() : identity);
                     row.put("system", system.folder);
                     row.put("title", cleanTitle(title));
                     row.put("file", path);
@@ -3961,9 +3967,9 @@ final class ImportManager {
 
     private static boolean cleanupGeneratedMetadata(File directory, Set<String> keep) {
         File[] files = directory.listFiles((dir, name) ->
-                name.startsWith("99-lucent-auto-") &&
+                name.startsWith(AUTO_METADATA_PREFIX) &&
                         name.endsWith(".metadata.pegasus.txt") &&
-                        !name.equals(AUTO_METADATA.getName()));
+                        !name.equals(APP_AUTO_METADATA.getName()));
         if (files == null) return false;
         boolean changed = false;
         for (File file : files)

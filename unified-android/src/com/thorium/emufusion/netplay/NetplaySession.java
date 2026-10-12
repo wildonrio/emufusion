@@ -108,7 +108,7 @@ public final class NetplaySession {
     private final Map<String, ScheduledFuture<?>> pendingGraceChecks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService graceTimers =
             Executors.newSingleThreadScheduledExecutor(runnable -> {
-                Thread thread = new Thread(runnable, "lucent-netplay-reconnect-grace");
+                Thread thread = new Thread(runnable, "emufusion-netplay-reconnect-grace");
                 thread.setDaemon(true);
                 return thread;
             });

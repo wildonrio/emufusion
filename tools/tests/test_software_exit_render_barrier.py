@@ -21,7 +21,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import java.util.concurrent.locks.*;
 public class SoftwareExitBarrier {
-    enum PauseReason {LUCENT_MENU}
+    enum PauseReason {EMUFUSION_MENU}
     final ReentrantLock presentationLock=new ReentrantLock();
     final AtomicBoolean released=new AtomicBoolean();
     volatile boolean running=true;
@@ -77,7 +77,7 @@ public class SoftwareExitBarrier {
         long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(1);
         while(!s.presentationLock.hasQueuedThread(render) && System.nanoTime()<until)Thread.yield();
         check(s.presentationLock.hasQueuedThread(render),"fixture renderer not queued");
-        s.pause(PauseReason.LUCENT_MENU);s.presentationLock.unlock();join(render);
+        s.pause(PauseReason.EMUFUSION_MENU);s.presentationLock.unlock();join(render);
         check(s.draws.get()==0,"queued draw tested running outside presentation lock");
     }
     static void timeout()throws Exception{

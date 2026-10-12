@@ -11,7 +11,7 @@ import android.view.TextureView;
 import com.thorium.emufusion.video.PresentationGeometry;
 import com.thorium.emufusion.video.FrameGenerationBackendPolicy;
 
-/** Engine-neutral, Lucent-owned video surface. */
+/** Engine-neutral, EmuFusion-owned video surface. */
 public final class GameSurface extends TextureView
         implements TextureView.SurfaceTextureListener {
     private static final String TAG = "EmuFusionGameSurface";

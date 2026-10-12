@@ -27,7 +27,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 public class MetadataProbe {
   static String TAG="test";
-  static File PEGASUS,REGISTRY,AUTO_METADATA,LUCENT_AUTO_METADATA,LEGACY_AUTO_METADATA;
+  static File PEGASUS,REGISTRY,AUTO_METADATA,APP_AUTO_METADATA,LEGACY_AUTO_METADATA;
+  static final String AUTO_METADATA_PREFIX="99-emufusion-auto-";
   static class Log { static void i(String tag,String message) {} }
   static class JSONObject {
     Map<String,Object> values=new HashMap<>();
@@ -50,7 +51,7 @@ public class MetadataProbe {
     static SystemDef byFolder(String s) { return new SystemDef(s); }
   }
   static class WallpaperAccent {
-    static String REGISTRY_FIELD="accent",METADATA_FIELD="x-lucent-accent";
+    static String REGISTRY_FIELD="accent",METADATA_FIELD="x-emufusion-accent";
     static String sanitize(String v) { return v; }
   }
   static boolean hydrateRegistryFromExistingMetadata(JSONArray rows) { return false; }
@@ -78,14 +79,14 @@ public class MetadataProbe {
     File root=new File(args[0]); PEGASUS=new File(root,"shared");
     REGISTRY=new File(PEGASUS,"registry.json");
     AUTO_METADATA=new File(root,"foreign/metafiles/99-lucent-auto-import.metadata.pegasus.txt");
-    LUCENT_AUTO_METADATA=new File(root,"own/metafiles/99-lucent-auto-import.metadata.pegasus.txt");
+    APP_AUTO_METADATA=new File(root,"own/metafiles/99-emufusion-auto-import.metadata.pegasus.txt");
     LEGACY_AUTO_METADATA=new File(PEGASUS,"99-lucent-auto-import.metadata.pegasus.txt");
     File gba=new File(root,"ROMs/gba/First.gba"), snes=new File(root,"ROMs/snes/Second.sfc");
     write(gba,"gba-payload"); write(snes,"snes-payload");
     JSONArray rows=new JSONArray(); JSONObject first=row(gba,"gba");
     rows.add(first); rows.add(row(snes,"snes"));
-    File generated=new File(LUCENT_AUTO_METADATA.getParentFile(),"99-lucent-auto-gba.metadata.pegasus.txt");
-    File ownerFile=new File(LUCENT_AUTO_METADATA.getParentFile(),"owner.metadata.pegasus.txt");
+    File generated=new File(APP_AUTO_METADATA.getParentFile(),"99-emufusion-auto-gba.metadata.pegasus.txt");
+    File ownerFile=new File(APP_AUTO_METADATA.getParentFile(),"owner.metadata.pegasus.txt");
     write(ownerFile,"game: Owner record\nfile: /owner-only\n");
     MetadataProbe probe=new MetadataProbe();
     check(probe.writeMetadata(rows),"initial publication not reported");

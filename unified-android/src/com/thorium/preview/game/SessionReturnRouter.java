@@ -9,13 +9,13 @@ import android.content.SharedPreferences;
 /** Persists a recovery target while preserving the live Pegasus task whenever possible. */
 public final class SessionReturnRouter {
     public static final String ACTION_RETURNED = "com.thorium.preview.GAME_SESSION_RETURNED";
-    private static final String PREFS = "lucent-game-session";
+    public static final String PREFERENCES = "emufusion-game-session";
     private static final String PEGASUS_ACTIVITY = "org.pegasus_frontend.android.MainActivity";
 
     private SessionReturnRouter() {}
 
     public static void remember(Context context, SessionReturnState state) {
-        SharedPreferences.Editor edit = context.getSharedPreferences(PREFS, 0).edit();
+        SharedPreferences.Editor edit = context.getSharedPreferences(PREFERENCES, 0).edit();
         edit.putString("view", state.view)
                 .putString("system", state.systemId)
                 .putString("section", state.section)
@@ -28,7 +28,7 @@ public final class SessionReturnRouter {
     }
 
     public static SessionReturnState peek(Context context) {
-        SharedPreferences preferences = context.getSharedPreferences(PREFS, 0);
+        SharedPreferences preferences = context.getSharedPreferences(PREFERENCES, 0);
         return new SessionReturnState(
                 preferences.getString("view", ""),
                 preferences.getString("system", ""),

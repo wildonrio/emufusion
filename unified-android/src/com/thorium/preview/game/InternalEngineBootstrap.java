@@ -34,7 +34,7 @@ public final class InternalEngineBootstrap {
                 Phase2QualificationCatalog.bootstrapComplete();
                 NativeAdapterCatalog.bootstrapComplete();
             }
-        }, "lucent-engine-verify");
+        }, "emufusion-engine-verify");
         verifier.setDaemon(true);
         InternalEngineCatalog.expectBootstrapOn(verifier);
         Phase2QualificationCatalog.expectBootstrapOn(verifier);

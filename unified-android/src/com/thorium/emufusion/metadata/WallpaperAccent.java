@@ -38,7 +38,7 @@ package com.thorium.emufusion.metadata;
  */
 public final class WallpaperAccent {
     /** Pegasus metafile field written by the importer and read by the theme. */
-    public static final String METADATA_FIELD = "x-lucent-accent";
+    public static final String METADATA_FIELD = "x-emufusion-accent";
     /** Importer registry key holding the resolved accent. */
     public static final String REGISTRY_FIELD = "accent";
     /**

@@ -34,7 +34,7 @@ public final class MenuSoundPlayer {
     public enum Cue { MOVE, CONFIRM, BACK, ERROR }
 
     public static final String PREFS = "preview";
-    public static final String PREF_ENABLED = "lucent_sfx_enabled";
+    public static final String PREF_ENABLED = "emufusion_sfx_enabled";
     /** Sound Effects ships on; the setting exists to turn it off. */
     public static final boolean DEFAULT_ENABLED = true;
 
@@ -69,7 +69,7 @@ public final class MenuSoundPlayer {
 
     /** Resource basename in res/raw, which build.sh copies from this module. */
     static String assetName(Cue cue) {
-        return "lucent_sfx_" + cue.name().toLowerCase(java.util.Locale.US);
+        return "emufusion_sfx_" + cue.name().toLowerCase(java.util.Locale.US);
     }
 
     /** Maps a control-plane name onto a cue, or null when it is not one. */

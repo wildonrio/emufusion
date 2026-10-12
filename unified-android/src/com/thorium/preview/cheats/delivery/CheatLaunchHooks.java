@@ -131,7 +131,7 @@ public final class CheatLaunchHooks {
             } finally {
                 bootReady.countDown();
             }
-        }, "lucent-cheat-prepare");
+        }, "emufusion-cheat-prepare");
         worker.setDaemon(true);
         worker.start();
         return session;

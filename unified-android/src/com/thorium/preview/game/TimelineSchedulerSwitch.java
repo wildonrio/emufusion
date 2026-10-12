@@ -25,10 +25,12 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean holdout;
     // QA only: emufusion_framegen_synth selects the synthesis for hold-out
     // comparisons: 0 the earlier two-sample combination, 1 the phase-field
-    // candidates (default), 2 those with per-pixel selection among
-    // neighbouring cell vectors, 3 also a coarse-to-fine phase-field search.
+    // candidates, 2 those with per-pixel selection among neighbouring cell
+    // vectors, 3 also a coarse-to-fine phase-field search, 4 level 1 with a
+    // vector-median phase field (default: 1-2% better than 1 on every hold-out
+    // game, Thor 2026-10-12, for a negligible low-resolution pass).
     static final String SYNTH_GLOBAL = "emufusion_framegen_synth";
-    static final int DEFAULT_SYNTHESIS_LEVEL = 1;
+    static final int DEFAULT_SYNTHESIS_LEVEL = 4;
     private static volatile int synthesisLevel = DEFAULT_SYNTHESIS_LEVEL;
 
     private TimelineSchedulerSwitch() {}
@@ -61,7 +63,7 @@ public final class TimelineSchedulerSwitch {
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default synthesis.
         }
-        synthesisLevel = Math.max(0, Math.min(3, level));
+        synthesisLevel = Math.max(0, Math.min(4, level));
     }
 
     static boolean enabled() { return enabled; }

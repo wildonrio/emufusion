@@ -41,7 +41,7 @@ public class SoftwareSurfaceRetirement {
         int closes; boolean alive=true;
         void close(){if(alive){closes++;alive=false;}}
     }
-    enum PauseReason {LUCENT_MENU}
+    enum PauseReason {EMUFUSION_MENU}
     final Entry entry=new Entry();final Request request=new Request();
     final ReentrantLock presentationLock=new ReentrantLock();
     final AtomicBoolean released=new AtomicBoolean();

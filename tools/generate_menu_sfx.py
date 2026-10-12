@@ -120,7 +120,7 @@ def main() -> int:
             raise SystemExit(f"{name} is {duration:.3f}s, over the UI budget")
         if peak > MAX_PEAK:
             raise SystemExit(f"{name} peaks at {peak}, louder than the budget")
-        path = arguments.output / f"lucent_sfx_{name}.wav"
+        path = arguments.output / f"emufusion_sfx_{name}.wav"
         write_wav(path, samples)
         print(f"{path.name}  {duration * 1000:.0f} ms  peak {peak:.2f}")
     return 0

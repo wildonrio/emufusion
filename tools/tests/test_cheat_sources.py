@@ -145,7 +145,7 @@ class CheatSourceTests(unittest.TestCase):
         self.assertIn("catch (Throwable failed)", bounded)
         self.assertTrue(bounded.rstrip().endswith("return 0;\n        }"),
                         "bounded cheat fetch must swallow failures as zero cheats")
-        self.assertIn('out.append("x-lucent-cheats: ")', source)
+        self.assertIn('out.append("x-emufusion-cheats: ")', source)
         self.assertIn('value.put("cheats", cheats);', source)
         self.assertIn('game.cheats = value.optInt("cheats", 0);', source)
 

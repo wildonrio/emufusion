@@ -87,7 +87,7 @@ public final class LibretroEngineSession implements EngineSession,
     private final Context appContext;
     private final LibretroEngineSpec entry;
     private final ExecutorService lifecycle = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "lucent-engine-lifecycle");
+        Thread thread = new Thread(runnable, "emufusion-engine-lifecycle");
         thread.setDaemon(true);
         return thread;
     });
@@ -811,7 +811,7 @@ public final class LibretroEngineSession implements EngineSession,
         AudioTrack audio = audioTrack;
         if (audio != null) try { audio.pause(); }
         catch (Throwable failure) { recordAudioWriteError("pause", failure); }
-        // Kept across a Lucent-menu pause: this is still the foreground game.
+        // Kept across a EmuFusion-menu pause: this is still the foreground game.
         // Given back when Android backgrounds it, which is the point another
         // app expects to be able to take it.
         if (reason == PauseReason.ANDROID_BACKGROUND) audioFocus.abandon();
@@ -832,7 +832,7 @@ public final class LibretroEngineSession implements EngineSession,
 
     private void resumeAfterAudioFocusGain() {
         // Only if the session was actually running. Focus can come back while
-        // the game sits paused in the Lucent menu, and restarting the track
+        // the game sits paused in the EmuFusion menu, and restarting the track
         // there would play over a menu the player is still reading.
         if (running) prepareAudioResume();
     }
@@ -862,7 +862,7 @@ public final class LibretroEngineSession implements EngineSession,
         // is detached. Pausing closes the render gate; this bounded barrier
         // drains a draw that had already passed it. On failure, the host keeps
         // the Surface attached through checkpoint/release instead of racing it.
-        pause(PauseReason.LUCENT_MENU);
+        pause(PauseReason.EMUFUSION_MENU);
         try {
             LibretroHost active = host;
             if (active != null && !active.awaitFrameBoundary(250L))
@@ -880,7 +880,7 @@ public final class LibretroEngineSession implements EngineSession,
 
     @Override public boolean quiesceForPresentationRecovery() {
         if (!prepared || stopping.get() || released.get()) return false;
-        pause(PauseReason.LUCENT_MENU);
+        pause(PauseReason.EMUFUSION_MENU);
         try {
             if (!presentationLock.tryLock(250L, java.util.concurrent.TimeUnit.MILLISECONDS))
                 return false;
@@ -1510,7 +1510,7 @@ public final class LibretroEngineSession implements EngineSession,
                 }
                 if (displayDueNs == 0) sleepUntilNextFrame(pacingDelay);
             }
-        }, "lucent-libretro-frames");
+        }, "emufusion-libretro-frames");
         thread.setDaemon(true);
         frameThread = thread;
         thread.start();
@@ -1585,7 +1585,7 @@ public final class LibretroEngineSession implements EngineSession,
                     // core and audio clocks continue and the next frame retries.
                 }
             }
-        }, "lucent-libretro-render");
+        }, "emufusion-libretro-render");
         thread.setDaemon(true);
         renderThread = thread;
         thread.start();

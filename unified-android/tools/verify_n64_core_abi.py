@@ -275,7 +275,7 @@ def verify_apk(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Verify the exact packaged Lucent N64 core is C++-ABI self-contained."
+        description="Verify the exact packaged EmuFusion N64 core is C++-ABI self-contained."
     )
     parser.add_argument("apk", type=Path)
     parser.add_argument("--expected-apk-sha256", required=True)
@@ -295,7 +295,7 @@ def main() -> None:
         for error in result.errors:
             print(f"ERROR: {error}", file=sys.stderr)
         raise SystemExit(1)
-    print("Lucent N64 packaged C++ ABI: PASS")
+    print("EmuFusion N64 packaged C++ ABI: PASS")
 
 
 if __name__ == "__main__":

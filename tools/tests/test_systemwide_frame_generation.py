@@ -1500,7 +1500,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn('return frameGenerationAllowTriple ? "auto-triple" : "auto"', theme)
         self.assertNotIn('"built-in-alpha"', theme)
         self.assertNotIn('"lsfg"', theme)
-        self.assertIn('lucentFrameGenerationThreeModeV3', theme)
+        self.assertIn('emufusionFrameGenerationThreeModeV3', theme)
         self.assertIn('property bool frameGenerationModeConfirmed: false', theme)
         self.assertIn('if (frameGenerationModePending || !frameGenerationModeConfirmed)', theme)
         self.assertIn('if (pendingGame) root.launchConfirmed(pendingGame)', theme)
@@ -1656,7 +1656,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         generator = self.read(
             "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
         )
-        self.assertIn("MIN_GENERATION_SOURCE_HZ = 20.0", controller)
+        self.assertIn("MIN_GENERATION_SOURCE_HZ = 19.5", controller)
         self.assertIn("public boolean hasSustainableGenerationRate()", controller)
         # The starvation guard gained an availability pre-condition; the
         # sustainable-rate check itself must remain in the disjunction.
@@ -4465,7 +4465,7 @@ class ProofMarkTest(unittest.TestCase):
     def test_synthetic_frames_carry_marker_gated_proof_tag(self):
         source = (ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" /
                   "game" / "DisplayFrameGenerator.java").read_text()
-        self.assertIn('new java.io.File("/data/local/tmp/lucent-proofmark")', source)
+        self.assertIn('new java.io.File("/data/local/tmp/emufusion-proofmark")', source)
         self.assertIn("if (renderedSynthetic) drawProofMark();", source)
         self.assertIn("GLES20.glScissor(0, Math.max(0, outputHeight - PROOF_MARK_PX)", source)
         self.assertIn("GLES20.glClearColor(1f, 0f, 1f, 1f);", source)

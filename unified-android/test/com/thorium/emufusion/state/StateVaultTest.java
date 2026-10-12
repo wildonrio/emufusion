@@ -51,9 +51,9 @@ public final class StateVaultTest {
                         64 * 1024 * 1024 + 1),
                 "state above 64 MiB avoids duplicating prior state in heap");
         TestSupport.truth(!QuickResumePolicy.mayCompleteStop(true, false),
-                "Exit to Lucent refuses to complete after an actual commit failure");
+                "Exit to EmuFusion refuses to complete after an actual commit failure");
         TestSupport.truth(QuickResumePolicy.mayCompleteStop(true, true),
-                "Exit to Lucent completes after a verified commit");
+                "Exit to EmuFusion completes after a verified commit");
         TestSupport.truth(QuickResumePolicy.mayCompleteStop(false, false),
                 "non-user teardown remains best effort");
     }

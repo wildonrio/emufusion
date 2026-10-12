@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.39
-VERSION_CODE=113
+VERSION_NAME=3.2.40
+VERSION_CODE=114
 
 case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -170,7 +170,7 @@ export PATH
 # delete or replace each other's decoded resources and dex output.
 mkdir -p "$BUILD_DIR"
 if ! mkdir "$BUILD_LOCK" 2>/dev/null; then
-    printf 'Another Lucent Android build is using %s\n' "$BUILD_DIR" >&2
+    printf 'Another EmuFusion Android build is using %s\n' "$BUILD_DIR" >&2
     exit 1
 fi
 printf '%s\n' "$$" > "$BUILD_LOCK/pid"
@@ -476,13 +476,13 @@ fi
 # Keep Pegasus's JNI class names, but make EmuFusion the Android package and the
 # only launcher. The package intentionally matches the existing companion so
 # this unified build installs in place without deleting its settings.
-APP_ICON_SOURCE="$PROJECT_DIR/res/drawable/lucent_icon.png"
+APP_ICON_SOURCE="$PROJECT_DIR/res/drawable/emufusion_icon.png"
 perl -0pi -e 's/package="org\.pegasus_frontend\.android"/package="com.thorium.preview"/g;
     s/android:name="org\.qtproject\.qt5\.android\.bindings\.QtApplication"/android:name="com.thorium.preview.EmuFusionApplication"/g;
     s/android:label="Pegasus"/android:label="EmuFusion"/g;
     s/org\.pegasus_frontend\.android\.files/com.thorium.preview.files/g' \
     "$DECODED/AndroidManifest.xml"
-perl -0pi -e 's#android:icon="[^"]+"#android:icon="\@drawable/lucent_icon"#' \
+perl -0pi -e 's#android:icon="[^"]+"#android:icon="\@drawable/emufusion_icon"#' \
     "$DECODED/AndroidManifest.xml"
 # DIAGNOSTIC ONLY, enabled by LUCENT_DEBUGGABLE=1. Makes the app debuggable so
 # an authorized debugger can inspect it. App-packaged wrap.sh below is a separate
@@ -587,7 +587,7 @@ if ! grep -q 'android.permission.WAKE_LOCK' "$DECODED/AndroidManifest.xml"; then
 fi
 cp "$ROOT_DIR/android-companion/res/raw/"* "$DECODED/res/raw/"
 cp "$ROOT_DIR/android-companion/res/xml/"* "$DECODED/res/xml/"
-cp "$APP_ICON_SOURCE" "$DECODED/res/drawable/lucent_icon.png"
+cp "$APP_ICON_SOURCE" "$DECODED/res/drawable/emufusion_icon.png"
 cp "$THEME_ARCHIVE" "$THEME_FINGERPRINT" \
     "$ROOT_DIR/android-companion/assets/emufusion-version.txt" \
     "$DECODED/assets/"
@@ -1145,7 +1145,7 @@ esac
 if [ -f "$IMMUTABLE_OUTPUT" ]; then
     IMMUTABLE_SHA=$(shasum -a 256 "$IMMUTABLE_OUTPUT" | awk '{print $1}')
     if [ "$IMMUTABLE_SHA" != "$OUTPUT_SHA" ]; then
-        printf 'Immutable Lucent artifact collision: %s\n' "$IMMUTABLE_OUTPUT" >&2
+        printf 'Immutable EmuFusion artifact collision: %s\n' "$IMMUTABLE_OUTPUT" >&2
         exit 1
     fi
 else
@@ -1162,7 +1162,7 @@ else
     IMMUTABLE_SHA=$(shasum -a 256 "$IMMUTABLE_TEMP" | awk '{print $1}')
     if [ "$IMMUTABLE_SHA" != "$OUTPUT_SHA" ]; then
         rm -f "$IMMUTABLE_TEMP"
-        printf 'Immutable Lucent artifact copy verification failed\n' >&2
+        printf 'Immutable EmuFusion artifact copy verification failed\n' >&2
         exit 1
     fi
     # link is atomic and refuses an existing destination; never replace an

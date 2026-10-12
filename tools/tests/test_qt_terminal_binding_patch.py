@@ -155,7 +155,7 @@ class QtTerminalBindingPatchTest(unittest.TestCase):
         original = instructions(method(DELEGATE, "onDestroy()V"))
         result = PATCH.patch_delegate(DELEGATE)
         helper = instructions(method(result,
-            "lucentCompleteTerminalShutdown(Landroid/app/Activity;)V"))
+            "emufusionCompleteTerminalShutdown(Landroid/app/Activity;)V"))
         first = "invoke-static {}, Lorg/qtproject/qt5/android/QtNative;->terminateQt()V"
         hook = f"invoke-static {{p1, v1}}, {HOST}->finishQtTerminalProcess(Landroid/app/Activity;Ljava/lang/Thread;)Z"
         pos = helper.index(hook)
@@ -174,7 +174,7 @@ class QtTerminalBindingPatchTest(unittest.TestCase):
 
     def test_owner_and_one_shot_guards_precede_all_terminal_work(self):
         helper = method(PATCH.patch_delegate(DELEGATE),
-                        "lucentCompleteTerminalShutdown(Landroid/app/Activity;)V")
+                        "emufusionCompleteTerminalShutdown(Landroid/app/Activity;)V")
         ordered = ["if-ne v1, p1, :cond_0", "if-nez v1, :cond_0",
                    "if-eqz v0, :cond_0", "->lucent_terminal_started:Z",
                    "->terminateQt()V"]
@@ -192,7 +192,7 @@ class QtTerminalBindingPatchTest(unittest.TestCase):
         self.assertIn(f"invoke-direct {{v2, p0, v1}}, {PATCH.CALLBACK}-><init>", wrapper)
         self.assertIn(f"{HOST}->requestQtTerminalShutdown(Landroid/app/Activity;Ljava/lang/Runnable;)Z", wrapper)
         self.assertLess(wrapper.index("if-nez v0, :lucent_destroy_return"),
-                        wrapper.index("->lucentCompleteTerminalShutdown"))
+                        wrapper.index("->emufusionCompleteTerminalShutdown"))
         self.assertNotIn("->terminateQt", wrapper)
         self.assertEqual(["return-void"], instructions(wrapper.rsplit("    :lucent_destroy_return\n", 1)[1]))
 
@@ -203,7 +203,7 @@ class QtTerminalBindingPatchTest(unittest.TestCase):
         self.assertIn(f"iput-object p1, p0, {PATCH.CALLBACK}->delegate:{QT}", source)
         self.assertIn(f"iput-object p2, p0, {PATCH.CALLBACK}->owner:Landroid/app/Activity;", source)
         run = method(source, "run()V")
-        self.assertIn(f"invoke-virtual {{v0, v1}}, {QT}->lucentCompleteTerminalShutdown(Landroid/app/Activity;)V", run)
+        self.assertIn(f"invoke-virtual {{v0, v1}}, {QT}->emufusionCompleteTerminalShutdown(Landroid/app/Activity;)V", run)
         self.assertNotIn("invokeDelegate", source)
         self.assertNotIn("sget-object", source)
 
@@ -266,7 +266,7 @@ class QtTerminalBindingPatchTest(unittest.TestCase):
             self.assertNotEqual(0, result.returncode)
             self.assertEqual(DELEGATE, delegate.read_text())
             self.assertEqual(invalid, binding.read_text())
-            self.assertFalse((qt / "LucentTerminalShutdown.smali").exists())
+            self.assertFalse((qt / "EmuFusionTerminalShutdown.smali").exists())
 
     def test_actual_backing_thread_accessor_is_pinned(self):
         PATCH.validate_qt_thread(THREAD)

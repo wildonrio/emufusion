@@ -559,6 +559,6 @@ public final class LibretroJoypadLayoutTest {
         TestSupport.equal(4, LibretroJoypadLayout.idFor("3do", CanonicalControl.LEFT_Y_NEGATIVE),
                 "the fallback still lets the left stick drive the D-pad");
         TestSupport.equal(-1, LibretroJoypadLayout.idFor("3do", CanonicalControl.GUIDE),
-                "the fallback leaves Guide to Lucent");
+                "the fallback leaves Guide to EmuFusion");
     }
 }

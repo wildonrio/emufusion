@@ -153,7 +153,7 @@ public final class CheatSessionRegistry {
                 if (shared == null) {
                     shared = Executors.newSingleThreadExecutor(new ThreadFactory() {
                         @Override public Thread newThread(Runnable task) {
-                            Thread thread = new Thread(task, "lucent-cheat-delivery");
+                            Thread thread = new Thread(task, "emufusion-cheat-delivery");
                             thread.setDaemon(true);
                             return thread;
                         }

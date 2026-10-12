@@ -1,6 +1,6 @@
 {
   "description": "Looping 'fusion' boot animation made from the EmuFusion app icon. The icon is separated by colour (six rainbow arms of the swirl, the dark D-pad body, the light button body); the layers circle as twisted rings of liquid light, contract and unwind, and lock into the exact icon in a flash with a chromatic shockwave. The icon then floats in god rays with orbiting comets and the wordmark, and finally spins into a point of light that seeds the next loop.",
-  "source": "unified-android/res/drawable/lucent_icon.png",
+  "source": "unified-android/res/drawable/emufusion_icon.png",
   "renderScript": "render.py (deterministic; Homebrew python3 + numpy + Pillow + OpenCV, ffmpeg/libx264). render_all.sh renders lossless segments in parallel and encodes ../../loading.mp4.",
   "wordmarkFont": "Roboto Light (Apache 2.0) from the Android SDK platform fonts",
   "output": "../../loading.mp4",

@@ -36,7 +36,7 @@ cv2.setNumThreads(2)
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-ICON_PATH = ROOT / 'unified-android/res/drawable/lucent_icon.png'
+ICON_PATH = ROOT / 'unified-android/res/drawable/emufusion_icon.png'
 FONT_PATH = Path('/Users/tyleryoung/Library/Android/sdk/platforms/android-21/data/fonts/Roboto-Light.ttf')
 
 W, H, FPS = 1920, 1080, 60

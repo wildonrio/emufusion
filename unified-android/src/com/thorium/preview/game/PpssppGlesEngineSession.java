@@ -76,7 +76,7 @@ final class PpssppGlesEngineSession implements EngineSession,
     private final Context appContext;
     private final LibretroEngineSpec entry;
     private final ExecutorService lifecycle = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "lucent-phase2-lifecycle");
+        Thread thread = new Thread(runnable, "emufusion-phase2-lifecycle");
         thread.setDaemon(true);
         return thread;
     });
@@ -737,7 +737,7 @@ final class PpssppGlesEngineSession implements EngineSession,
         if (prepared && active != null) active.pause();
         AudioTrack audio = audioTrack;
         if (audio != null) try { audio.pause(); } catch (IllegalStateException ignored) {}
-        // Kept across a Lucent-menu pause: this is still the foreground game.
+        // Kept across a EmuFusion-menu pause: this is still the foreground game.
         // Given back when Android backgrounds it, which is the point another
         // app expects to be able to take it.
         if (reason == PauseReason.ANDROID_BACKGROUND) audioFocus.abandon();

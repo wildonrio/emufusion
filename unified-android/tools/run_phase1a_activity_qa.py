@@ -78,23 +78,23 @@ class BlockedCase:
 
 
 CASES = (
-    Case("nes", "Lucent NES QA", "mesen", "lucent-callback-test.nes"),
-    Case("snes", "Lucent SNES QA", "mesen-s", "lucent-callback-test.sfc"),
+    Case("nes", "EmuFusion NES QA", "mesen", "lucent-callback-test.nes"),
+    Case("snes", "EmuFusion SNES QA", "mesen-s", "lucent-callback-test.sfc"),
     Case("gb", "SameBoy DMG Acid2", "sameboy", "dmg-acid2.gb"),
     Case("gbc", "SameBoy CGB Acid2", "sameboy", "cgb-acid2.gbc"),
     Case("gba", "mGBA 2D Wrap", "mgba", "mgba-2d-wrap-test.gba"),
-    Case("sg1000", "Lucent SG-1000 QA", "gearsystem", "lucent-callback-test.sg"),
-    Case("mastersystem", "Lucent Master System QA", "gearsystem", "lucent-callback-test.sms"),
-    Case("gamegear", "Lucent Game Gear QA", "gearsystem", "lucent-callback-test.gg"),
-    Case("psx", "Lucent PlayStation QA", "swanstation", "lucent-callback-test.psexe"),
+    Case("sg1000", "EmuFusion SG-1000 QA", "gearsystem", "lucent-callback-test.sg"),
+    Case("mastersystem", "EmuFusion Master System QA", "gearsystem", "lucent-callback-test.sms"),
+    Case("gamegear", "EmuFusion Game Gear QA", "gearsystem", "lucent-callback-test.gg"),
+    Case("psx", "EmuFusion PlayStation QA", "swanstation", "lucent-callback-test.psexe"),
     Case("nds", "melonDS Homebrew QA", "melonds-ds", "melonds-homebrew-periph-slot2.nds"),
-    Case("zxspectrum", "Lucent ZX Spectrum QA", "fuse", "lucent-visible-test.sna"),
+    Case("zxspectrum", "EmuFusion ZX Spectrum QA", "fuse", "lucent-visible-test.sna"),
     Case("arcade", "MAME Romless Pong", "mame", "pong.cmd"),
     Case("neogeo", "MAME Open Neo Geo QA", "mame", "ngdevkit-open.cmd"),
-    Case("dos", "Lucent DOS QA", "dosbox-pure", "lucent-dos-callback-test.zip"),
+    Case("dos", "EmuFusion DOS QA", "dosbox-pure", "lucent-dos-callback-test.zip"),
     Case("windows", "EmuFusion Internal PC QA", "dosbox-pure",
          "emufusion-internal-pc-callback-test.zip"),
-    Case("pcengine", "Lucent PC Engine QA", "beetle-pce-fast", "lucent-pce-qa.pce"),
+    Case("pcengine", "EmuFusion PC Engine QA", "beetle-pce-fast", "lucent-pce-qa.pce"),
     Case("ngp", "Stargunner Neo Geo Pocket Color", "beetle-neopop", "stargunner.ngc"),
     Case("wonderswancolor", "Bug Witch WonderSwan Color", "beetle-cygne", "bug-witch.wsc"),
 )
@@ -449,7 +449,7 @@ def main_activity_identity(adb_path: Path, serial: str) -> dict[str, str]:
     ))
     if len(matches) != 1:
         raise RuntimeError(
-            f"expected one live Lucent MainActivity record, observed {sorted(matches)}"
+            f"expected one live EmuFusion MainActivity record, observed {sorted(matches)}"
         )
     token, task_inside, task_after = next(iter(matches))
     task = task_inside or task_after
@@ -463,9 +463,9 @@ def ensure_library(adb_path: Path, serial: str) -> dict[str, str]:
         "-c", "android.intent.category.LAUNCHER", "-f", "0x10008000",
         check=False)
     if completed.returncode != 0 or "Error:" in completed.stdout:
-        raise RuntimeError("Lucent library launch failed: " + completed.stdout)
+        raise RuntimeError("EmuFusion library launch failed: " + completed.stdout)
     wait_until(lambda: frontend_is_resumed(adb_path, serial),
-               "Lucent library MainActivity", timeout=30.0)
+               "EmuFusion library MainActivity", timeout=30.0)
     return main_activity_identity(adb_path, serial)
 
 
@@ -765,13 +765,13 @@ def launch(adb_path: Path, serial: str, case: Case) -> dict[str, object]:
     )
     if completed.returncode != 0 or "Error:" in completed.stdout:
         raise RuntimeError("in-window qualification launch failed: " + completed.stdout)
-    wait_until(lambda: game_is_resumed(adb_path, serial), "Lucent MainActivity")
+    wait_until(lambda: game_is_resumed(adb_path, serial), "EmuFusion MainActivity")
     accepted = f"In-window route accepted engine={case.engine} system={case.system}"
     wait_until(lambda: accepted in logs(adb_path, serial),
                "in-window engine route", timeout=20.0)
     identity = wait_until(
         lambda: strict_gameplay_identity(adb_path, serial),
-        "one Lucent Activity/task/window/process after lower-preview closure",
+        "one EmuFusion Activity/task/window/process after lower-preview closure",
         timeout=20.0,
     )
     wait_until(lambda: find_text(adb_path, serial, "Unable to start game") is None,
@@ -795,7 +795,7 @@ def wait_for_new_log(adb_path: Path, serial: str, marker: str, baseline: int,
 def pause_resume_exit(adb_path: Path, serial: str, case: Case) -> None:
     shown = f"Pause menu shown engine={case.engine} system={case.system}"
     hidden = f"Pause menu hidden engine={case.engine} system={case.system}"
-    exited = f"Exit to Lucent invoked engine={case.engine} system={case.system}"
+    exited = f"Exit to EmuFusion invoked engine={case.engine} system={case.system}"
     baseline = logs(adb_path, serial)
     adb(adb_path, serial, "shell", "input", "keyevent", "4")
     wait_for_new_log(adb_path, serial, shown, baseline.count(shown), "pause menu log")
@@ -809,24 +809,24 @@ def pause_resume_exit(adb_path: Path, serial: str, case: Case) -> None:
     current = logs(adb_path, serial)
     adb(adb_path, serial, "shell", "input", "keyevent", "4")
     wait_for_new_log(adb_path, serial, shown, current.count(shown), "second pause menu log")
-    find_text(adb_path, serial, "Exit to Lucent")
+    find_text(adb_path, serial, "Exit to EmuFusion")
     # Restore is disabled until checkpoint history exists, so deterministic
     # pause navigation skips it: Resume -> Controls -> Exit.
     for _ in range(2):
         adb(adb_path, serial, "shell", "input", "keyevent", "20")
     adb(adb_path, serial, "shell", "input", "keyevent", "66")
     wait_for_new_log(adb_path, serial, exited, current.count(exited), "exit invocation log")
-    returned = (f"Returned to Lucent immediately in same window engine={case.engine} "
+    returned = (f"Returned to EmuFusion immediately in same window engine={case.engine} "
                 f"system={case.system}")
     wait_until(lambda: returned in logs(adb_path, serial),
                "same-window return", timeout=40.0)
     wait_until(lambda: frontend_is_resumed(adb_path, serial),
-               "stable Lucent frontend return", timeout=40.0)
+               "stable EmuFusion frontend return", timeout=40.0)
 
 
 def stop_hold_exit(adb_path: Path, serial: str, case: Case,
                    event_nodes: list[str]) -> dict[str, object]:
-    returned = (f"Returned to Lucent immediately in same window engine={case.engine} "
+    returned = (f"Returned to EmuFusion immediately in same window engine={case.engine} "
                 f"system={case.system}")
     baseline = logs(adb_path, serial).count(returned)
     # BTN_SELECT is the normal Thor mapping. KEY_STOPCD and KEY_STOP cover AYN
@@ -852,7 +852,7 @@ def stop_hold_exit(adb_path: Path, serial: str, case: Case,
                     f"held-Stop UI return took {latency_ms}ms; expected <500ms"
                 )
             wait_until(lambda: frontend_is_resumed(adb_path, serial),
-                       "stable Lucent frontend return", timeout=40.0)
+                       "stable EmuFusion frontend return", timeout=40.0)
             return {"eventNode": event_node, "linuxKeyCode": key_code,
                     "acceptedToLibraryMs": latency_ms}
     raise RuntimeError("Thor one-second Stop/Select hold was not consumed")
@@ -877,7 +877,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
     recents_evidence.write_text(recents_dump(adb_path, serial), encoding="utf-8")
     if ({key: gameplay_identity[key] for key in library_identity} != library_identity):
         raise RuntimeError(
-            f"gameplay replaced Lucent's Activity/task: "
+            f"gameplay replaced EmuFusion's Activity/task: "
             f"{library_identity} -> {gameplay_identity}"
         )
     frame_log = wait_until(
@@ -901,7 +901,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
         )
     route_log = logs(adb_path, serial)
     if f"In-window route accepted engine={case.engine} system={case.system}" not in route_log:
-        raise RuntimeError("Lucent in-window route was not observed")
+        raise RuntimeError("EmuFusion in-window route was not observed")
     assert_no_crash(route_log)
 
     runtime: dict[str, object] | None = None
@@ -927,7 +927,7 @@ def verify_case(adb_path: Path, serial: str, case: Case, output: Path,
     returned_identity = main_activity_identity(adb_path, serial)
     if returned_identity != library_identity:
         raise RuntimeError(
-            f"return replaced Lucent's Activity/task: "
+            f"return replaced EmuFusion's Activity/task: "
             f"{library_identity} -> {returned_identity}"
         )
     committed_marker = f"Quick Resume committed engine={case.engine} system={case.system}"
@@ -1043,7 +1043,7 @@ def main() -> int:
     if emulator_only:
         adb(adb_path, serial, "shell", "pm", "clear", PACKAGE)
     # Pegasus's recovery activity may otherwise put Android's notification
-    # permission dialog above the second launch after the first Exit to Lucent.
+    # permission dialog above the second launch after the first Exit to EmuFusion.
     # Pregranting this declared runtime permission keeps QA focused on EmuFusion's
     # own activity lifecycle rather than system onboarding chrome.
     for permission in (

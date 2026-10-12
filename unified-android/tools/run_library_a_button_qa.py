@@ -196,7 +196,7 @@ def metadata_evidence(adb_path: Path, serial: str) -> dict[str, list[str]]:
                 f"--es engine_id {expected[system]}",
             )
             if not all(value in command_text for value in required):
-                raise RuntimeError(f"{path} does not use Lucent's in-window route")
+                raise RuntimeError(f"{path} does not use EmuFusion's in-window route")
             evidence[system].append(path)
     missing = [system for system, paths_for_system in evidence.items()
                if not paths_for_system]

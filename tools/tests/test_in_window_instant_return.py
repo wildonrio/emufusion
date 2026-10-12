@@ -81,7 +81,7 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "575dc45f1c6b7f1d8a8da5277454109620dabac9e0476050ab4d9fa3ef071af4",
+            "8c716d85876070e0e40f45652b4bf374ecca58f3ee3d7ad66a67471c0bbd622d",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):
@@ -290,7 +290,7 @@ class InWindowInstantReturnTest(unittest.TestCase):
         self.assertNotIn("KEYCODE_BUTTON_A", fatal)
         self.assertNotIn("KEYCODE_DPAD_CENTER", fatal)
         self.assertIn('exitToLibrary("fatal-back-key")', handler)
-        self.assertIn('new Throwable("Lucent exit origin")', self.source)
+        self.assertIn('new Throwable("EmuFusion exit origin")', self.source)
         self.assertIn('Log.e(TAG, "Engine session error engine="', self.source)
 
     def test_stale_menu_metadata_cannot_route_to_an_unpackaged_core(self):

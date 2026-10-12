@@ -95,7 +95,7 @@ public final class NetplayInputRelay implements NetplaySession.DataListener {
         this.onDesyncDetected = onDesyncDetected;
         if (localStateSupplier != null) {
             desyncTimer = Executors.newSingleThreadScheduledExecutor(runnable -> {
-                Thread thread = new Thread(runnable, "lucent-netplay-desync-check");
+                Thread thread = new Thread(runnable, "emufusion-netplay-desync-check");
                 thread.setDaemon(true);
                 return thread;
             });

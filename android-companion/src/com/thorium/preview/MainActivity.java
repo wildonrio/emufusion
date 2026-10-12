@@ -246,7 +246,7 @@ public final class MainActivity extends Activity {
         serviceStatus.setText("✓  EmuFusion service active");
         serviceStatus.setTextColor(Color.rgb(113, 230, 176));
         File theme = new File(Environment.getExternalStorageDirectory(),
-                "pegasus-frontend/themes/lucent/theme.qml");
+                "pegasus-frontend/themes/emufusion/theme.qml");
         String version = ThemeInstaller.installedVersion();
         boolean installed = theme.isFile();
         themeStatus.setText(installed
@@ -283,7 +283,7 @@ public final class MainActivity extends Activity {
         Thread thread = new Thread(() -> {
             String response = http(path);
             runOnUiThread(() -> activityStatus.setText(message(response, immediate)));
-        }, "lucent-dashboard-action");
+        }, "emufusion-dashboard-action");
         thread.setDaemon(true);
         thread.start();
     }
@@ -294,7 +294,7 @@ public final class MainActivity extends Activity {
         Thread request = new Thread(() -> {
             http("/update/check");
             monitorUpdateStatus(true);
-        }, "lucent-dashboard-update-request");
+        }, "emufusion-dashboard-update-request");
         request.setDaemon(true);
         request.start();
     }
@@ -327,7 +327,7 @@ public final class MainActivity extends Activity {
                     activityStatus.setText("Update check timed out; network and library remain safe.");
                 });
             }
-        }, "lucent-dashboard-update-monitor");
+        }, "emufusion-dashboard-update-monitor");
         monitor.setDaemon(true);
         monitor.start();
     }
@@ -347,7 +347,7 @@ public final class MainActivity extends Activity {
                 updateUpdateButtons(state, installReady);
                 if (!"idle".equals(state)) activityStatus.setText(message);
             });
-        }, "lucent-dashboard-status");
+        }, "emufusion-dashboard-status");
         thread.setDaemon(true);
         thread.start();
     }

@@ -276,7 +276,7 @@ public final class PreviewService extends Service {
         // Alpha multiplayer: a no-op end to end unless the owner has
         // configured a self-hosted backend (MultiplayerConfig.isConfigured),
         // since this backend is self-hosted per deployment, not a
-        // Lucent-operated service -- see MultiplayerManager's own doc
+        // EmuFusion-operated service -- see MultiplayerManager's own doc
         // comment. globalInit() must run before any NetplaySession is ever
         // constructed; doing it here, once, at the same place every other
         // process-wide manager starts, is the simplest way to guarantee that.
@@ -298,7 +298,7 @@ public final class PreviewService extends Service {
                 // screensaver, or browser-break state.
                 launchRouteReloadPending.set(true);
             }
-        }, "lucent-launch-metadata");
+        }, "emufusion-launch-metadata");
         launchMigration.setDaemon(true);
         launchMigration.start();
         if (ThemeInstaller.hasStorageAccess(this)) {
@@ -327,7 +327,7 @@ public final class PreviewService extends Service {
             // The Switch runtime's per-GPU Vulkan driver (Turnip on most
             // Adreno phones) is fetched up front, before anyone launches a game.
             com.thorium.preview.game.GpuDriverProvisioner.provisionAsync(this);
-        }, "lucent-update-first");
+        }, "emufusion-update-first");
         updateFirst.setDaemon(true);
         updateFirst.start();
     }
@@ -529,7 +529,7 @@ public final class PreviewService extends Service {
                 String value = headerLine.substring(colon + 1).trim();
                 if ("origin".equals(name)) origin = value;
                 else if ("referer".equals(name)) referer = value;
-                else if ("x-lucent-auth".equals(name)) headerToken = value;
+                else if ("x-emufusion-auth".equals(name)) headerToken = value;
             }
             if (MUTATING_ENDPOINTS.contains(path)) {
                 // A browser cannot strip Origin/Referer from a cross-origin
@@ -1133,7 +1133,7 @@ public final class PreviewService extends Service {
                 }
                 respond(writer, "200 OK", result.toString());
             } else {
-                respond(writer, "200 OK", "{\"service\":\"lucent\",\"ok\":true}");
+                respond(writer, "200 OK", "{\"service\":\"emufusion\",\"ok\":true}");
             }
         } catch (Exception ignored) {
         }
@@ -1156,7 +1156,7 @@ public final class PreviewService extends Service {
             result.put("rewriting", true);
         } catch (Exception ignored) {}
         Thread rewrite = new Thread(() -> importManager.rewriteLaunchRoutes(),
-                "lucent-route-rewrite");
+                "emufusion-route-rewrite");
         rewrite.setDaemon(true);
         rewrite.start();
     }
@@ -1313,7 +1313,7 @@ public final class PreviewService extends Service {
         } catch (RuntimeException error) {
             InWindowGameHost.cancelImportFrontendRestart();
             launchRouteReloadPending.set(true);
-            Log.e("EmuFusionImport", "Unable to refresh Lucent after import", error);
+            Log.e("EmuFusionImport", "Unable to refresh EmuFusion after import", error);
         }
     }
 

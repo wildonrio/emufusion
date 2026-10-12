@@ -60,7 +60,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * It reuses the render-owner discipline proven by {@link PpssppGlesEngineSession}:
  * one dedicated thread owns every adapter call, the surface is quiesced before
  * detach, input maps to the {@code lucent_native_control} ordinals, and audio is
- * pulled into a Lucent-owned {@link AudioTrack}. Capabilities are reported
+ * pulled into a EmuFusion-owned {@link AudioTrack}. Capabilities are reported
  * honestly. Eden and Cemu report no Quick Resume; aPS3e reports it only because
  * its RPCS3-derived core serializes and validates a real savestate. Held-Stop
  * therefore either commits that exact adapter state or preserves the prior
@@ -164,7 +164,7 @@ final class NativeAdapterEngineSession implements EngineSession,
     private final Context appContext;
     private final NativeAdapterCatalog.Entry entry;
     private final ExecutorService lifecycle = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "lucent-phase3-lifecycle");
+        Thread thread = new Thread(runnable, "emufusion-phase3-lifecycle");
         thread.setDaemon(true);
         return thread;
     });
@@ -184,7 +184,7 @@ final class NativeAdapterEngineSession implements EngineSession,
     /**
      * Adapter calls that arrive on another thread and have to be handed to the
      * render owner. The ABI is explicit that "all calls for one engine instance
-     * are serialized by Lucent on a single render-owner thread", and both
+     * are serialized by EmuFusion on a single render-owner thread", and both
      * engines rely on it: Eden's {@code SurfaceChanged} reads {@code m_window}
      * with no lock while {@code ShutdownEmulation} resets it, and Cemu's
      * {@code InitializeSurface} replaces the live swapchains outright while its
@@ -400,7 +400,7 @@ final class NativeAdapterEngineSession implements EngineSession,
     }
 
     private void startRenderThread() {
-        Thread thread = new Thread(this::renderLoop, "lucent-phase3-render");
+        Thread thread = new Thread(this::renderLoop, "emufusion-phase3-render");
         thread.setDaemon(true);
         renderThread = thread;
         thread.start();
@@ -420,7 +420,7 @@ final class NativeAdapterEngineSession implements EngineSession,
      * gameplay layer. That curtain exists because a SurfaceView punches a
      * transparent hole through this window: until the engine has published a
      * frame, its layer has no buffer, and what shows through the hole is the
-     * still-attached Qt library. Nothing else in Lucent needs this, so it stays
+     * still-attached Qt library. Nothing else in EmuFusion needs this, so it stays
      * off {@link EngineSession.Listener}.
      */
     // Optional adapter clock hooks. A known declared clock is required for
@@ -898,9 +898,9 @@ final class NativeAdapterEngineSession implements EngineSession,
                                            boolean pressed) {
         NativeAdapterHost active = host;
         if (active == null || !started) return;
-        setLocalControl(active, 19, normalizedX);       // LUCENT_PAD_TOUCH_X
-        setLocalControl(active, 20, normalizedY);       // LUCENT_PAD_TOUCH_Y
-        setLocalControl(active, 21, pressed ? 1f : 0f); // LUCENT_PAD_TOUCH_PRESSED
+        setLocalControl(active, 19, normalizedX);       // pad touch x
+        setLocalControl(active, 20, normalizedY);       // pad touch y
+        setLocalControl(active, 21, pressed ? 1f : 0f); // pad touch pressed
     }
 
     @Override public boolean canSwitchPrimaryScreen() {
@@ -969,7 +969,7 @@ final class NativeAdapterEngineSession implements EngineSession,
         if (started && active != null) runOnRenderThread(active::pause);
         AudioTrack audio = audioTrack;
         if (audio != null) try { audio.pause(); } catch (IllegalStateException ignored) {}
-        // Kept across a Lucent-menu pause: this is still the foreground game.
+        // Kept across a EmuFusion-menu pause: this is still the foreground game.
         // Given back when Android backgrounds it, which is the point another
         // app expects to be able to take it.
         if (reason == PauseReason.ANDROID_BACKGROUND) audioFocus.abandon();
@@ -985,7 +985,7 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     private void resumeAfterAudioFocusGain() {
         // Only if the session was actually running. Focus can come back while
-        // the game sits paused in the Lucent menu, and restarting the track
+        // the game sits paused in the EmuFusion menu, and restarting the track
         // there would play over a menu the player is still reading.
         AudioTrack audio = audioTrack;
         if (audio != null && audioStartedOnce && resumeRequested)

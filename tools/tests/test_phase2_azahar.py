@@ -118,7 +118,7 @@ class PhaseTwoAzaharTest(unittest.TestCase):
         self.assertIn("Settings::SmallScreenPosition::MiddleRight", side_layout)
         # Native 3DS dimensions make that contract 400+320 by 240. Keeping
         # the source proof here prevents a core update from silently moving
-        # the lower viewport while Lucent continues cropping the old columns.
+        # the lower viewport while EmuFusion continues cropping the old columns.
         core_header = (source_root / "src" / "core" / "3ds.h").read_text(
                 encoding="utf-8")
         self.assertIn("kScreenTopWidth = 400", core_header)

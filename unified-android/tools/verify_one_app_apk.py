@@ -69,7 +69,7 @@ FORBIDDEN_DEX_CLASS_PACKAGES = (
 # JNI_OnLoad call Android would otherwise make. Eden's JNI_OnLoad caches these
 # classes by exact name and leaves a pending ClassNotFoundException if any is
 # absent, which aborts the process before a game can boot. The names are fixed
-# by FindClass and cannot be relocated into a Lucent package.
+# by FindClass and cannot be relocated into a EmuFusion package.
 #
 # What ships under them is EmuFusion's own code -- see unified-android/stubs -- not
 # Eden's frontend: plain data holders, three real filesystem helpers, and
@@ -104,7 +104,7 @@ FORBIDDEN_DEX_CLASSES = (
 
 # The user-facing product name. Internal identifiers (the Application class,
 # native library prefixes, the JNI Activity, metadata suffixes and storage
-# migration keys) still read Lucent on purpose: renaming those is a separate,
+# migration keys) still read EmuFusion on purpose: renaming those is a separate,
 # far larger change that touches the native ABI symbol compiled into both
 # adapters, and it must not be conflated with the visible branding.
 APP_LABEL = "EmuFusion"
@@ -160,7 +160,7 @@ def verify_manifest(xmltree: str, expected_label: str = APP_LABEL) -> list[str]:
             "android.permission.KILL_BACKGROUND_PROCESSES"):
         if authority in xmltree:
             errors.append(
-                f"one-app Lucent must not request legacy authority {authority}"
+                f"one-app EmuFusion must not request legacy authority {authority}"
             )
     if "android.permission.RECORD_AUDIO" not in xmltree:
         errors.append("voice feedback requires explicit RECORD_AUDIO permission")
@@ -172,7 +172,7 @@ def verify_manifest(xmltree: str, expected_label: str = APP_LABEL) -> list[str]:
     if len(manifests) != 1:
         return [f"expected one manifest, found {len(manifests)}"]
     if _raw_attribute(manifests[0], "package") != PACKAGE:
-        errors.append("APK package is not Lucent's com.thorium.preview identity")
+        errors.append("APK package is not EmuFusion's com.thorium.preview identity")
     if len(applications) != 1:
         errors.append(f"expected one application, found {len(applications)}")
     else:
@@ -200,19 +200,19 @@ def verify_manifest(xmltree: str, expected_label: str = APP_LABEL) -> list[str]:
     unexpected = set(by_name) - ALLOWED_ACTIVITIES
     if unexpected:
         errors.append(
-            "manifest declares Activities outside the Lucent boundary: "
+            "manifest declares Activities outside the EmuFusion boundary: "
             + repr(sorted(unexpected))
         )
     if MAIN_ACTIVITY not in by_name:
-        errors.append("manifest is missing the Lucent MainActivity")
+        errors.append("manifest is missing the EmuFusion MainActivity")
 
     main = by_name.get(MAIN_ACTIVITY, "")
     if 'android:launchMode' not in main or \
             not re.search(r'android:launchMode[^\n]*\(type 0x10\)0x2', main):
-        errors.append("Lucent MainActivity is not singleTask")
+        errors.append("EmuFusion MainActivity is not singleTask")
     if '"android.intent.action.MAIN"' not in main or \
             '"android.intent.category.LAUNCHER"' not in main:
-        errors.append("Lucent MainActivity is not the sole launcher")
+        errors.append("EmuFusion MainActivity is not the sole launcher")
     launcher_count = sum(
         '"android.intent.category.LAUNCHER"' in block for block in by_name.values())
     if launcher_count != 1:
@@ -228,7 +228,7 @@ def verify_manifest(xmltree: str, expected_label: str = APP_LABEL) -> list[str]:
 
     browser = by_name.get("com.thorium.preview.BrowserActivity", "")
     if not re.search(r'android:exported[^\n]*\(type 0x12\)0x0', browser):
-        errors.append("Lucent BrowserActivity must be non-exported")
+        errors.append("EmuFusion BrowserActivity must be non-exported")
 
     voice = by_name.get(VOICE_FEEDBACK_ACTIVITY, "")
     if not voice:
@@ -388,12 +388,12 @@ def verify_branding(apk: Path) -> list[str]:
             # replacement in at least one encoding below proves the patch ran.
         if not any(after.encode(encoding) in data
                    for encoding in ("utf-8", "utf-16le", "utf-16be")):
-            errors.append(f"frontend lacks Lucent replacement {after!r}")
+            errors.append(f"frontend lacks EmuFusion replacement {after!r}")
     for malformed in (
-            "Lucent  ", "Lucent have permission", "Lucent yet?",
-            "games. on your device", "Lucent, can use"):
+            "EmuFusion  ", "EmuFusion have permission", "EmuFusion yet?",
+            "games. on your device", "EmuFusion, can use"):
         if malformed.encode() in data:
-            errors.append(f"frontend contains malformed Lucent text {malformed!r}")
+            errors.append(f"frontend contains malformed EmuFusion text {malformed!r}")
     return errors
 
 
@@ -568,7 +568,7 @@ def main() -> None:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
         raise SystemExit(1)
-    print("Lucent one-app APK boundary: PASS")
+    print("EmuFusion one-app APK boundary: PASS")
 
 
 if __name__ == "__main__":

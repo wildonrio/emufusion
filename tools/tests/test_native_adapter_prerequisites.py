@@ -65,7 +65,7 @@ class PrerequisiteLifecycleContractTest(unittest.TestCase):
     def test_startup_route_migration_reloads_only_from_a_safe_heartbeat(self):
         startup = PREVIEW_SERVICE[
             PREVIEW_SERVICE.index("Thread launchMigration = new Thread"):
-            PREVIEW_SERVICE.index('}, "lucent-launch-metadata")')
+            PREVIEW_SERVICE.index('}, "emufusion-launch-metadata")')
         ]
         self.assertIn("LaunchMetadataRouter.normalize(this)", startup)
         self.assertIn("launchRouteReloadPending.set(true)", startup)

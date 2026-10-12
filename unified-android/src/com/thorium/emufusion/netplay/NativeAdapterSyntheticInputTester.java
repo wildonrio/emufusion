@@ -16,18 +16,18 @@ import java.io.File;
  * separate marker file so it can be triggered independently of the
  * libretro-family tester.
  *
- * <p>Taps LUCENT_PAD_START (ordinal 12) on controller_index 1 once (many
+ * <p>Taps PAD_START (ordinal 12) on controller_index 1 once (many
  * local-co-op titles require a second player to press Start/+ to join
- * before their character exists), then toggles LUCENT_PAD_DPAD_RIGHT
+ * before their character exists), then toggles PAD_DPAD_RIGHT
  * (ordinal 11) on controller_index 1 twice a second -- a movement control
  * rather than Start, so a real two-controller title shows player 2
  * visibly moving on screen for the ongoing proof.
  */
 public final class NativeAdapterSyntheticInputTester {
     private static final String TAG = "EmuFusionNativeAdapterSynthTest";
-    private static final String MARKER_FILE = "lucent-native-adapter-synthetic-test";
-    private static final int LUCENT_PAD_START = 12;
-    private static final int LUCENT_PAD_DPAD_RIGHT = 11;
+    private static final String MARKER_FILE = "emufusion-native-adapter-synthetic-test";
+    private static final int PAD_START = 12;
+    private static final int PAD_DPAD_RIGHT = 11;
     private static final int REMOTE_CONTROLLER_INDEX = 1;
     private static final long JOIN_TAP_MS = 150L;
     private static final long JOIN_SETTLE_MS = 1_500L;
@@ -45,19 +45,19 @@ public final class NativeAdapterSyntheticInputTester {
         Log.w(TAG, "SYNTHETIC NATIVE-ADAPTER INPUT TEST ACTIVE -- controller_index 1 will tap " +
                 "Start once to join, then toggle Right every " + TOGGLE_INTERVAL_MS +
                 "ms. This must never run outside manual verification.");
-        HandlerThread thread = new HandlerThread("lucent-native-adapter-synth-test");
+        HandlerThread thread = new HandlerThread("emufusion-native-adapter-synth-test");
         thread.start();
         Handler handler = new Handler(thread.getLooper());
 
-        sink.applyRemoteControl(REMOTE_CONTROLLER_INDEX, LUCENT_PAD_START, 1f);
+        sink.applyRemoteControl(REMOTE_CONTROLLER_INDEX, PAD_START, 1f);
         handler.postDelayed(() ->
-                sink.applyRemoteControl(REMOTE_CONTROLLER_INDEX, LUCENT_PAD_START, 0f), JOIN_TAP_MS);
+                sink.applyRemoteControl(REMOTE_CONTROLLER_INDEX, PAD_START, 0f), JOIN_TAP_MS);
 
         Runnable[] toggle = new Runnable[1];
         boolean[] pressed = {false};
         toggle[0] = () -> {
             pressed[0] = !pressed[0];
-            sink.applyRemoteControl(REMOTE_CONTROLLER_INDEX, LUCENT_PAD_DPAD_RIGHT, pressed[0] ? 1f : 0f);
+            sink.applyRemoteControl(REMOTE_CONTROLLER_INDEX, PAD_DPAD_RIGHT, pressed[0] ? 1f : 0f);
             handler.postDelayed(toggle[0], TOGGLE_INTERVAL_MS);
         };
         handler.postDelayed(toggle[0], JOIN_SETTLE_MS);

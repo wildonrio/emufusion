@@ -40,9 +40,9 @@ class VersionLabelTest(unittest.TestCase):
         self.assertIn('value.put("appVersion", installedAppVersion);', update)
         theme = read(ROOT / 'theme/theme.qml')
         self.assertIn('if (payload.appVersion) root.installedAppVersion = String(payload.appVersion)', theme)
-        self.assertIn('installedAppVersion : lucentVersion', theme)
+        self.assertIn('installedAppVersion : emufusionVersion', theme)
         self.assertEqual(3, theme.count('root.displayVersion'))
-        self.assertNotIn('" + root.lucentVersion', theme)
+        self.assertNotIn('" + root.emufusionVersion', theme)
 
 
 class Aps3eStringsTest(unittest.TestCase):

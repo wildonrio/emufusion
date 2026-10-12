@@ -377,16 +377,16 @@ class PhaseTwoAndroidPackagingTest(unittest.TestCase):
         self.assertIn("patch_emufusion_branding.py", self.build)
         self.assertIn('"Exit Pegasus"', branding)
         self.assertIn('"Pegasus couldn\'t find any games on your device.', branding)
-        self.assertIn('"Lucent Frontend - version"', branding)
-        self.assertIn("Lucent has permission for", branding)
-        self.assertNotIn('replace("Pegasus", "Lucent ")', branding)
+        self.assertIn('"EmuFusion Library version"', branding)
+        self.assertIn("EmuFusion can currently access", branding)
+        self.assertNotIn('replace("Pegasus", "EmuFusion ")', branding)
         self.assertNotIn('"Pegasus.Model"', branding)
         self.assertNotIn('"PegasusProvider"', branding)
 
     def test_build_emits_content_addressed_immutable_qa_artifact(self):
         self.assertIn("OUTPUT_SHA=$(shasum -a 256", self.build)
         self.assertIn("phase2-qualification-$OUTPUT_SHA.apk", self.build)
-        self.assertIn("Immutable Lucent artifact collision", self.build)
+        self.assertIn("Immutable EmuFusion artifact collision", self.build)
         self.assertIn("printf '%s\\n' \"$IMMUTABLE_OUTPUT\"", self.build)
 
 

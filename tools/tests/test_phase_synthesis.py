@@ -44,6 +44,7 @@ class PhaseSynthesisTest(unittest.TestCase):
     def test_phase_and_interpolate_shaders_compile_as_gles2(self):
         variants = {
             "phase": shader("DENSE_PHASE_SHADER"),
+            "median": shader("PHASE_MEDIAN_SHADER"),
             "holdout": shader("HOLDOUT_SHADER"),
             "interpolate": shader("MOTION_INTERPOLATE_SHADER"),
             "synth": "#define PHASE_SYNTHESIS\n" + shader("MOTION_INTERPOLATE_SHADER"),
@@ -79,9 +80,9 @@ class PhaseSynthesisTest(unittest.TestCase):
         self.assertLess(draw.index("boolean phaseField = renderPhaseField(phase);"),
                         draw.index("GLES20.glUseProgram(interpolateProgram);"))
         self.assertIn("final int interpolateProgram = !phaseField ? this.interpolateProgram :\n"
-                      "                synthesisLevel >= 2 ? interpolateNeighborsProgram : "
-                      "interpolateSynthProgram;", draw)
-        self.assertIn('"uPhaseFlow",\n                phaseField ? densePhaseTexture : '
+                      "                synthesisLevel == 2 || synthesisLevel == 3 ? "
+                      "interpolateNeighborsProgram :\n                interpolateSynthProgram;", draw)
+        self.assertIn('"uPhaseFlow",\n                phaseField ? densePhaseBoundTexture : '
                       "historyTextures[previousIndex], phaseField ? 9 : 0);", draw)
         self.assertIn('"uPhaseFieldEnabled"), phaseField ? 1f : 0f);', draw)
 
@@ -99,8 +100,8 @@ class PhaseSynthesisTest(unittest.TestCase):
 
     def test_synthesis_defaults_on_with_a_qa_only_override(self):
         self.assertIn('SYNTH_GLOBAL = "emufusion_framegen_synth"', SWITCH)
-        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 1;", SWITCH)
-        self.assertIn("synthesisLevel = Math.max(0, Math.min(3, level));", SWITCH)
+        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 4;", SWITCH)
+        self.assertIn("synthesisLevel = Math.max(0, Math.min(4, level));", SWITCH)
         self.assertIn("synthesisEnabled = synthesisLevel > 0;", GENERATOR)
         self.assertIn('"#define PHASE_SYNTHESIS\\n#define PHASE_NEIGHBORS\\n" + MOTION_INTERPOLATE_SHADER', GENERATOR)
 

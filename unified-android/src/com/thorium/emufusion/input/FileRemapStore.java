@@ -66,7 +66,7 @@ public final class FileRemapStore implements RemapStore {
         FileOutputStream raw = new FileOutputStream(temporary);
         try {
             BufferedOutputStream buffered = new BufferedOutputStream(raw);
-            values.store(buffered, "Lucent controller remaps");
+            values.store(buffered, "EmuFusion controller remaps");
             buffered.flush();
             raw.getFD().sync();
         } finally { raw.close(); }

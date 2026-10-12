@@ -39,12 +39,12 @@ class MenuSoundEffectsTest(unittest.TestCase):
     def test_every_cue_is_packaged_as_a_raw_asset(self):
         self.assertTrue(GENERATOR.is_file(), "the sfx generator is missing")
         for cue in CUES:
-            path = RAW / f"lucent_sfx_{cue}.wav"
+            path = RAW / f"emufusion_sfx_{cue}.wav"
             self.assertTrue(path.is_file(), f"{path.name} was never generated")
 
     def test_every_cue_is_short_and_quiet(self):
         for cue in CUES:
-            path = RAW / f"lucent_sfx_{cue}.wav"
+            path = RAW / f"emufusion_sfx_{cue}.wav"
             channels, width, rate, samples = read_samples(path)
             self.assertEqual(channels, 1, f"{path.name} is not mono")
             self.assertEqual(width, 2, f"{path.name} is not 16-bit PCM")
@@ -65,7 +65,7 @@ class MenuSoundEffectsTest(unittest.TestCase):
         # A blip that starts or ends away from zero pops, which is exactly the
         # harshness the design is meant to avoid.
         for cue in CUES:
-            path = RAW / f"lucent_sfx_{cue}.wav"
+            path = RAW / f"emufusion_sfx_{cue}.wav"
             _, _, _, samples = read_samples(path)
             self.assertLess(abs(samples[0]) / 32_767.0, 0.01,
                             f"{path.name} starts with a click")
@@ -78,7 +78,7 @@ class MenuSoundEffectsTest(unittest.TestCase):
         # user cannot tell an accepted action from a rejected one.
         lengths = {}
         for cue in CUES:
-            _, _, rate, samples = read_samples(RAW / f"lucent_sfx_{cue}.wav")
+            _, _, rate, samples = read_samples(RAW / f"emufusion_sfx_{cue}.wav")
             lengths[cue] = len(samples) / rate
         self.assertLess(lengths["move"], lengths["confirm"])
         self.assertLess(lengths["move"], lengths["back"])
@@ -106,7 +106,7 @@ class MenuSoundEffectsTest(unittest.TestCase):
         self.assertIn('values.getOrDefault("enabled", "1")', settings)
         theme = THEME.read_text(encoding="utf-8")
         self.assertIn("property bool soundEffectsEnabled: true", theme)
-        self.assertIn('api.memory.has("lucentSoundEffects") ?', theme)
+        self.assertIn('api.memory.has("emufusionSoundEffects") ?', theme)
 
     def test_the_cues_never_play_over_a_running_game(self):
         source = HOST.read_text(encoding="utf-8")

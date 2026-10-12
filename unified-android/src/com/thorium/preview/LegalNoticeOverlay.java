@@ -45,7 +45,7 @@ import com.thorium.emufusion.legal.LegalNotice;
 public final class LegalNoticeOverlay {
 
     private static final String TAG = "EmuFusionLegal";
-    private static final String PREFS = "lucent-legal";
+    static final String PREFERENCES = "emufusion-legal";
     private static final String KEY_ACKNOWLEDGED = "acknowledgedWithSuppression";
 
     /**
@@ -123,7 +123,7 @@ public final class LegalNoticeOverlay {
 
     private static SharedPreferences prefs(Context context) {
         return context.getApplicationContext()
-                .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
     }
 
     private static synchronized void show() {

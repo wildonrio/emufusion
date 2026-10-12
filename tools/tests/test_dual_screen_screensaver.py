@@ -13,10 +13,10 @@ class DualScreenScreensaverTest(unittest.TestCase):
     def test_timeout_is_exactly_two_minutes_and_default_is_on(self):
         self.assertIn("property bool screensaverEnabled: true", THEME)
         self.assertIn("screensaverStillTimeoutMs: 300000", THEME)
-        self.assertIn('api.memory.has("lucentScreensaverEnabled")', THEME)
-        self.assertIn('Boolean(api.memory.get("lucentScreensaverEnabled")) : true', THEME)
+        self.assertIn('api.memory.has("emufusionScreensaverEnabled")', THEME)
+        self.assertIn('Boolean(api.memory.get("emufusionScreensaverEnabled")) : true', THEME)
         completed = THEME.split("Component.onCompleted: {", 1)[1]
-        self.assertIn('screensaverEnabled = api.memory.has("lucentScreensaverEnabled")',
+        self.assertIn('screensaverEnabled = api.memory.has("emufusionScreensaverEnabled")',
                       completed)
         sound_setter = THEME.split("function setPreviewSoundEnabled", 1)[1].split(
             "function setScreensaverEnabled", 1)[0]
@@ -25,7 +25,7 @@ class DualScreenScreensaverTest(unittest.TestCase):
     def test_settings_exposes_a_persistent_on_off_switch(self):
         self.assertIn('"VIDEO SCREENSAVER"', THEME)
         self.assertIn('if (index === 20) return screensaverEnabled ? "ON" : "OFF"', THEME)
-        self.assertIn('api.memory.set("lucentScreensaverEnabled", screensaverEnabled)', THEME)
+        self.assertIn('api.memory.set("emufusionScreensaverEnabled", screensaverEnabled)', THEME)
         self.assertIn("setScreensaverEnabled(!screensaverEnabled)", THEME)
 
     def test_lower_display_reports_real_surface_frame_progress(self):
@@ -84,7 +84,7 @@ class DualScreenScreensaverTest(unittest.TestCase):
             "function nextScreensaverGame", 1)[0]
         self.assertIn("api.allGames.count", picker)
         self.assertIn("Math.random() * (remaining + 1)", picker)
-        self.assertIn('api.memory.has("lucentScreensaverLastVideo")', picker)
+        self.assertIn('api.memory.has("emufusionScreensaverLastVideo")', picker)
         self.assertIn("videoSource(games[0]) === last", picker)
         self.assertNotIn("payload.videoAdvancing", THEME)
         self.assertNotIn("source = String(payload.video)", THEME)

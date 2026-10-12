@@ -141,7 +141,7 @@ public final class Phase2QualificationCatalog {
             if (!systemAssetRoot.isEmpty()) {
                 File runtimeAssets = systemAssetDestination.isEmpty() ? system :
                         new File(system, systemAssetDestination);
-                File marker = new File(system, ".lucent-runtime-assets");
+                File marker = new File(system, ".emufusion-runtime-assets");
                 String installed = marker.isFile() ? readFile(marker).trim() : "";
                 String expectedMarker = sourceCommit + ":" + systemAssetRevision;
                 if (!expectedMarker.equals(installed) || !runtimeAssetsComplete(system)) {

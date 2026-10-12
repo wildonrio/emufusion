@@ -449,7 +449,7 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
             Thread thread = new Thread(() -> {
                 renderThread = Thread.currentThread();
                 runnable.run();
-            }, "lucent-experimental-gles");
+            }, "emufusion-experimental-gles");
             thread.setDaemon(true);
             return thread;
         });

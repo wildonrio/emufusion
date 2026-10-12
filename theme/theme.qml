@@ -9,12 +9,12 @@ FocusScope {
     width: 1920
     height: 1080
 
-    readonly property string lucentVersion: "3.2.19"
+    readonly property string emufusionVersion: "3.2.19"
     // The installed app's versionName from the updater status; labels fall back
     // to the bundled constant until the first status arrives.
     property string installedAppVersion: ""
     readonly property string displayVersion: installedAppVersion !== "" ?
-            installedAppVersion : lucentVersion
+            installedAppVersion : emufusionVersion
 
     // ---- Vertical envelope ------------------------------------------------
     // Android used to reserve the bottom 55 px of the panel for its navigation
@@ -696,7 +696,7 @@ FocusScope {
 
     function defaultFamilyAccent(family) {
         // Spread unrelated platform families around the color wheel while
-        // retaining Lucent's established colors for the four families on the
+        // retaining EmuFusion's established colors for the four families on the
         // reference Thor library.
         var defaults = {
             "nintendo": "#ff9f43", "sega": "#4fd17f",
@@ -767,11 +767,11 @@ FocusScope {
         return ["family", "system", "wallpaper"]
     }
 
-    // Precomputed by the Lucent importer as x-lucent-accent. Reading a stored
+    // Precomputed by the EmuFusion importer as x-emufusion-accent. Reading a stored
     // string keeps game selection free of any color analysis.
     function storedWallpaperAccent(game) {
         if (!game || !game.extra) return ""
-        var stored = game.extra["lucent-accent"]
+        var stored = game.extra["emufusion-accent"]
         if (stored === undefined || stored === null) return ""
         var text = String(stored).trim().toLowerCase()
         return /^#[0-9a-f]{6}$/.test(text) ? text : ""
@@ -796,7 +796,7 @@ FocusScope {
 
     function setAccentGrouping(value) {
         accentGrouping = normalizedAccentGrouping(value)
-        api.memory.set("lucentAccentGrouping", accentGrouping)
+        api.memory.set("emufusionAccentGrouping", accentGrouping)
         accentEditorTargetIndex = 0
         applyAccentPalette()
     }
@@ -877,12 +877,12 @@ FocusScope {
             var systemCopy = JSON.parse(JSON.stringify(customSystemAccents))
             systemCopy[key] = hex
             customSystemAccents = systemCopy
-            api.memory.set("lucentCustomSystemAccents", JSON.stringify(systemCopy))
+            api.memory.set("emufusionCustomSystemAccents", JSON.stringify(systemCopy))
         } else {
             var familyCopy = JSON.parse(JSON.stringify(customFamilyAccents))
             familyCopy[key] = hex
             customFamilyAccents = familyCopy
-            api.memory.set("lucentCustomFamilyAccents", JSON.stringify(familyCopy))
+            api.memory.set("emufusionCustomFamilyAccents", JSON.stringify(familyCopy))
         }
         applyAccentPalette()
     }
@@ -915,12 +915,12 @@ FocusScope {
             var systemCopy = JSON.parse(JSON.stringify(customSystemAccents))
             delete systemCopy[key]
             customSystemAccents = systemCopy
-            api.memory.set("lucentCustomSystemAccents", JSON.stringify(systemCopy))
+            api.memory.set("emufusionCustomSystemAccents", JSON.stringify(systemCopy))
         } else {
             var familyCopy = JSON.parse(JSON.stringify(customFamilyAccents))
             delete familyCopy[key]
             customFamilyAccents = familyCopy
-            api.memory.set("lucentCustomFamilyAccents", JSON.stringify(familyCopy))
+            api.memory.set("emufusionCustomFamilyAccents", JSON.stringify(familyCopy))
         }
         applyAccentPalette()
         loadAccentEditorTarget()
@@ -1059,7 +1059,7 @@ FocusScope {
         var end = Math.min(api.allGames.count, libraryIndexBuildPosition + 180)
         for (var gameIndex = libraryIndexBuildPosition; gameIndex < end; ++gameIndex) {
             var game = api.allGames.get(gameIndex)
-            if (!isLucentLibraryGame(game) || !gameVisibleAfterMutation(game)) continue
+            if (!isEmuFusionLibraryGame(game) || !gameVisibleAfterMutation(game)) continue
             for (var collectionIndex = 0;
                  collectionIndex < game.collections.count; ++collectionIndex) {
                 var collectionName = String(game.collections.get(collectionIndex).name || "")
@@ -1143,7 +1143,7 @@ FocusScope {
         var candidates = []
         for (var index = 0; index < api.allGames.count; ++index) {
             var game = api.allGames.get(index)
-            if (!isLucentLibraryGame(game) || !gameVisibleAfterMutation(game) ||
+            if (!isEmuFusionLibraryGame(game) || !gameVisibleAfterMutation(game) ||
                     !gameVisibleInHomeCategory(game, 3))
                 continue
             var values = game.extra ? game.extra["added-at"] : null
@@ -1380,9 +1380,9 @@ FocusScope {
         return 0.64
     }
 
-    function isLucentLibraryGame(game) {
+    function isEmuFusionLibraryGame(game) {
         // Pegasus exposes installed Android applications through api.allGames.
-        // Lucent is a ROM library: the built-in Android provider is never a
+        // EmuFusion is a ROM library: the built-in Android provider is never a
         // game source. Keep real ROM collections visible even before a custom
         // rail card/logo has been added for a newly detected platform.
         if (!game || !game.collections || game.collections.count <= 0)
@@ -1402,7 +1402,7 @@ FocusScope {
         var sourceCount = api.allGames.count
         var count = 0
         for (var index = 0; index < sourceCount; ++index) {
-            if (isLucentLibraryGame(api.allGames.get(index))) ++count
+            if (isEmuFusionLibraryGame(api.allGames.get(index))) ++count
         }
         return count
     }
@@ -1688,10 +1688,10 @@ FocusScope {
 
     function gameIdentifier(game) {
         if (!game || !game.extra) return ""
-        return String(game.extra["lucent-id"] || game.extra.lucentId || "")
+        return String(game.extra["emufusion-id"] || game.extra.emufusionId || "")
     }
 
-    // Older, hand-authored Pegasus metafiles predate Lucent's x-lucent-id.
+    // Older, hand-authored Pegasus metafiles predate EmuFusion's x-emufusion-id.
     // They are still first-class library games, so behavioral preferences
     // need a durable local key. Destructive companion APIs continue to use
     // only the importer-issued identity above.
@@ -2062,7 +2062,7 @@ FocusScope {
         bucket[identity] = true
         allBuckets[categoryKey] = bucket
         removedHomeCategoryGameIds = allBuckets
-        api.memory.set("lucentRemovedHomeCategoryGameIds", JSON.stringify(allBuckets))
+        api.memory.set("emufusionRemovedHomeCategoryGameIds", JSON.stringify(allBuckets))
         libraryMutationRevision += 1
         homeListCache = ({})
         if (gameActionCategory === 3)
@@ -2373,8 +2373,8 @@ FocusScope {
             }
             root.frameGenerationMode = confirmed
             root.frameGenerationModeConfirmed = true
-            api.memory.set("lucentFrameGenerationModeV3", confirmed)
-            api.memory.set("lucentFrameGenerationThreeModeV3", true)
+            api.memory.set("emufusionFrameGenerationModeV3", confirmed)
+            api.memory.set("emufusionFrameGenerationThreeModeV3", true)
             var pendingGame = root.frameGenerationPendingLaunch
             root.frameGenerationPendingLaunch = null
             if (pendingGame) root.launchConfirmed(pendingGame)
@@ -2407,7 +2407,7 @@ FocusScope {
                         status.frameGenerationMode)
                 root.frameGenerationMode = confirmed
                 root.frameGenerationModeConfirmed = true
-                api.memory.set("lucentFrameGenerationModeV3", confirmed)
+                api.memory.set("emufusionFrameGenerationModeV3", confirmed)
                 var pendingGame = root.frameGenerationPendingLaunch
                 root.frameGenerationPendingLaunch = null
                 if (pendingGame) root.launchConfirmed(pendingGame)
@@ -2422,7 +2422,7 @@ FocusScope {
 
     function setScreensaverEnabled(enabled) {
         screensaverEnabled = Boolean(enabled)
-        api.memory.set("lucentScreensaverEnabled", screensaverEnabled)
+        api.memory.set("emufusionScreensaverEnabled", screensaverEnabled)
         if (!screensaverEnabled && screensaverActive)
             stopScreensaver()
         screensaverTopStillSince = Date.now()
@@ -2453,8 +2453,8 @@ FocusScope {
             games[remaining] = games[chosen]
             games[chosen] = swap
         }
-        var last = api.memory.has("lucentScreensaverLastVideo") ?
-                String(api.memory.get("lucentScreensaverLastVideo")) : ""
+        var last = api.memory.has("emufusionScreensaverLastVideo") ?
+                String(api.memory.get("emufusionScreensaverLastVideo")) : ""
         if (games.length > 1 && videoSource(games[0]) === last) {
             var replacement = 1 + Math.floor(Math.random() * (games.length - 1))
             var first = games[0]
@@ -2529,7 +2529,7 @@ FocusScope {
         screensaverGame = screensaverPendingGame
         screensaverPendingGame = null
         screensaverPendingSlot = -1
-        api.memory.set("lucentScreensaverLastVideo", videoSource(screensaverGame))
+        api.memory.set("emufusionScreensaverLastVideo", videoSource(screensaverGame))
     }
 
     function advanceScreensaverVideo() {
@@ -2613,7 +2613,7 @@ FocusScope {
 
     function setSoundEffectsEnabled(enabled) {
         soundEffectsEnabled = Boolean(enabled)
-        api.memory.set("lucentSoundEffects", soundEffectsEnabled)
+        api.memory.set("emufusionSoundEffects", soundEffectsEnabled)
         requestPreviewEndpoint("settings/sfx?enabled=" +
                 (soundEffectsEnabled ? "1" : "0"))
     }
@@ -2621,7 +2621,7 @@ FocusScope {
     function setSingleScreenMediaSwapped(swapped) {
         if (dualScreenDevice) return
         singleScreenMediaSwapped = Boolean(swapped)
-        api.memory.set("lucentSingleScreenMediaSwapped", singleScreenMediaSwapped)
+        api.memory.set("emufusionSingleScreenMediaSwapped", singleScreenMediaSwapped)
     }
 
     function validatedCoverRowOrder(value) {
@@ -2660,7 +2660,7 @@ FocusScope {
 
     function setCoverViewRowCount(value) {
         coverViewRowCount = Math.max(1, Math.min(3, Math.round(Number(value))))
-        api.memory.set("lucentCoverViewRowCount", coverViewRowCount)
+        api.memory.set("emufusionCoverViewRowCount", coverViewRowCount)
     }
 
     function coverZonePosition(zone) {
@@ -2720,7 +2720,7 @@ FocusScope {
         updated[target] = held
         coverRowOrder = updated
         coverOrderEditorIndex = target
-        api.memory.set("lucentCoverRowOrder", JSON.stringify(coverRowOrder))
+        api.memory.set("emufusionCoverRowOrder", JSON.stringify(coverRowOrder))
     }
 
     function previewPlacementLabel() {
@@ -2879,7 +2879,7 @@ FocusScope {
 
     function setSystemLedEnabled(enabled) {
         systemLedEnabled = Boolean(enabled)
-        api.memory.set("lucentSystemLedEnabled", systemLedEnabled)
+        api.memory.set("emufusionSystemLedEnabled", systemLedEnabled)
         if (systemLedEnabled)
             systemLedCommit.restart()
         else
@@ -2889,7 +2889,7 @@ FocusScope {
     function setSystemLedBrightness(value) {
         var clamped = Math.max(1, Math.min(100, Number(value)))
         systemLedBrightness = Math.round(clamped)
-        api.memory.set("lucentSystemLedBrightness", systemLedBrightness)
+        api.memory.set("emufusionSystemLedBrightness", systemLedBrightness)
         if (systemLedEnabled)
             systemLedCommit.restart()
     }
@@ -2928,7 +2928,7 @@ FocusScope {
         if (current < 0) current = 0
         var step = direction < 0 ? -1 : 1
         startViewPreference = options[(current + step + options.length) % options.length]
-        api.memory.set("lucentStartView", startViewPreference)
+        api.memory.set("emufusionStartView", startViewPreference)
     }
 
     function configuredStartSystemIndex() {
@@ -3000,13 +3000,13 @@ FocusScope {
 
     function setRightStickViewSwitching(enabled) {
         rightStickViewSwitchingEnabled = Boolean(enabled)
-        api.memory.set("lucentRightStickViewSwitching",
+        api.memory.set("emufusionRightStickViewSwitching",
                        rightStickViewSwitchingEnabled)
     }
 
     function setViewTransitions(enabled) {
         viewTransitionsEnabled = Boolean(enabled)
-        api.memory.set("lucentViewTransitions", viewTransitionsEnabled)
+        api.memory.set("emufusionViewTransitions", viewTransitionsEnabled)
     }
 
     function showCoverView() {
@@ -4117,7 +4117,7 @@ FocusScope {
         request.send()
     }
 
-    function openLucentBrowser() {
+    function openEmuFusionBrowser() {
         endSearch()
         requestPreviewEndpoint("browser/open")
     }
@@ -4644,68 +4644,68 @@ FocusScope {
         api.memory.set("thoriumSystemMotion", false)
         previewPlacementMode = api.memory.has("thoriumPreviewPlacement") ?
                 api.memory.get("thoriumPreviewPlacement") : "auto"
-        singleScreenMediaSwapped = api.memory.has("lucentSingleScreenMediaSwapped") ?
-                Boolean(api.memory.get("lucentSingleScreenMediaSwapped")) : false
-        coverViewRowCount = api.memory.has("lucentCoverViewRowCount") ?
-                Math.max(1, Math.min(3, Number(api.memory.get("lucentCoverViewRowCount")))) : 1
-        coverRowOrder = validatedCoverRowOrder(api.memory.has("lucentCoverRowOrder") ?
-                String(api.memory.get("lucentCoverRowOrder")) : "[0,1,2,3,4,5,6,7]")
+        singleScreenMediaSwapped = api.memory.has("emufusionSingleScreenMediaSwapped") ?
+                Boolean(api.memory.get("emufusionSingleScreenMediaSwapped")) : false
+        coverViewRowCount = api.memory.has("emufusionCoverViewRowCount") ?
+                Math.max(1, Math.min(3, Number(api.memory.get("emufusionCoverViewRowCount")))) : 1
+        coverRowOrder = validatedCoverRowOrder(api.memory.has("emufusionCoverRowOrder") ?
+                String(api.memory.get("emufusionCoverRowOrder")) : "[0,1,2,3,4,5,6,7]")
         // The refractive shader remains available as an explicit visual
         // preference, but the calm, undistorted surface is the default.
         liquidGlassEnabled = api.memory.has("thoriumLiquidGlassEnabled") ?
                 Boolean(api.memory.get("thoriumLiquidGlassEnabled")) : false
         rightStickViewSwitchingEnabled =
-                api.memory.has("lucentRightStickViewSwitching") ?
-                Boolean(api.memory.get("lucentRightStickViewSwitching")) : true
-        viewTransitionsEnabled = api.memory.has("lucentViewTransitions") ?
-                Boolean(api.memory.get("lucentViewTransitions")) : false
-        accentGrouping = api.memory.has("lucentAccentGrouping") ?
-                normalizedAccentGrouping(String(api.memory.get("lucentAccentGrouping"))) :
+                api.memory.has("emufusionRightStickViewSwitching") ?
+                Boolean(api.memory.get("emufusionRightStickViewSwitching")) : true
+        viewTransitionsEnabled = api.memory.has("emufusionViewTransitions") ?
+                Boolean(api.memory.get("emufusionViewTransitions")) : false
+        accentGrouping = api.memory.has("emufusionAccentGrouping") ?
+                normalizedAccentGrouping(String(api.memory.get("emufusionAccentGrouping"))) :
                 "system"
         try {
-            customFamilyAccents = api.memory.has("lucentCustomFamilyAccents") ?
-                    JSON.parse(String(api.memory.get("lucentCustomFamilyAccents"))) : ({})
+            customFamilyAccents = api.memory.has("emufusionCustomFamilyAccents") ?
+                    JSON.parse(String(api.memory.get("emufusionCustomFamilyAccents"))) : ({})
         } catch (familyError) { customFamilyAccents = ({}) }
         try {
-            customSystemAccents = api.memory.has("lucentCustomSystemAccents") ?
-                    JSON.parse(String(api.memory.get("lucentCustomSystemAccents"))) : ({})
+            customSystemAccents = api.memory.has("emufusionCustomSystemAccents") ?
+                    JSON.parse(String(api.memory.get("emufusionCustomSystemAccents"))) : ({})
         } catch (systemError) { customSystemAccents = ({}) }
         try {
-            removedHomeCategoryGameIds = api.memory.has("lucentRemovedHomeCategoryGameIds") ?
-                    JSON.parse(String(api.memory.get("lucentRemovedHomeCategoryGameIds"))) :
+            removedHomeCategoryGameIds = api.memory.has("emufusionRemovedHomeCategoryGameIds") ?
+                    JSON.parse(String(api.memory.get("emufusionRemovedHomeCategoryGameIds"))) :
                     ({ "1": {}, "2": {}, "3": {} })
         } catch (removedListError) {
             removedHomeCategoryGameIds = ({ "1": {}, "2": {}, "3": {} })
         }
         rebuildRecentlyAddedModel()
         applyAccentPalette()
-        systemLedEnabled = api.memory.has("lucentSystemLedEnabled") ?
-                Boolean(api.memory.get("lucentSystemLedEnabled")) : true
-        systemLedBrightness = api.memory.has("lucentSystemLedBrightness") ?
+        systemLedEnabled = api.memory.has("emufusionSystemLedEnabled") ?
+                Boolean(api.memory.get("emufusionSystemLedEnabled")) : true
+        systemLedBrightness = api.memory.has("emufusionSystemLedBrightness") ?
                 Math.max(1, Math.min(100,
-                    Number(api.memory.get("lucentSystemLedBrightness")))) : 2
+                    Number(api.memory.get("emufusionSystemLedBrightness")))) : 2
         // Split the old combined SYSTEM/manual row into independent enabled
         // and brightness preferences. Migrate every existing install once to
         // the requested safe default: enabled, system-matched, one percent.
-        if (!api.memory.has("lucentSplitLedControlsV1")) {
+        if (!api.memory.has("emufusionSplitLedControlsV1")) {
             systemLedEnabled = true
             systemLedBrightness = 2
-            api.memory.set("lucentSystemLedEnabled", true)
-            api.memory.set("lucentSystemLedBrightness", 2)
-            api.memory.set("lucentSplitLedControlsV1", true)
+            api.memory.set("emufusionSystemLedEnabled", true)
+            api.memory.set("emufusionSystemLedBrightness", 2)
+            api.memory.set("emufusionSplitLedControlsV1", true)
         }
         // Existing 3.0.40/3.0.41 installs were intentionally migrated to 1%.
         // Move that exact old default to the newly requested 2% once without
         // overwriting a brightness the user had already customized.
-        if (!api.memory.has("lucentLedDefaultTwoPercentV1")) {
+        if (!api.memory.has("emufusionLedDefaultTwoPercentV1")) {
             if (systemLedBrightness === 1) {
                 systemLedBrightness = 2
-                api.memory.set("lucentSystemLedBrightness", 2)
+                api.memory.set("emufusionSystemLedBrightness", 2)
             }
-            api.memory.set("lucentLedDefaultTwoPercentV1", true)
+            api.memory.set("emufusionLedDefaultTwoPercentV1", true)
         }
-        startViewPreference = api.memory.has("lucentStartView") ?
-                String(api.memory.get("lucentStartView")) : "cover"
+        startViewPreference = api.memory.has("emufusionStartView") ?
+                String(api.memory.get("emufusionStartView")) : "cover"
         // Reset the former default-ON behavior once on upgrade. The marker is
         // separate from the preference so a user who subsequently enables
         // preview sound keeps that choice across every later launch/update.
@@ -4733,26 +4733,26 @@ FocusScope {
         // This selector supersedes both old automatic/Boolean settings. Force
         // one safe OFF migration so an existing install cannot retain a hidden
         // qualification backend after updating.
-        if (!api.memory.has("lucentFrameGenerationThreeModeV3")) {
+        if (!api.memory.has("emufusionFrameGenerationThreeModeV3")) {
             frameGenerationMode = "off"
             frameGenerationModeConfirmed = false
             setFrameGenerationMode("off")
         } else {
-            frameGenerationMode = api.memory.has("lucentFrameGenerationModeV3") ?
+            frameGenerationMode = api.memory.has("emufusionFrameGenerationModeV3") ?
                     normalizedFrameGenerationMode(
-                            api.memory.get("lucentFrameGenerationModeV3")) : "off"
+                            api.memory.get("emufusionFrameGenerationModeV3")) : "off"
             frameGenerationAllowTriple = api.memory.has("emufusionFrameGenerationAllowTriple") ?
                     Boolean(api.memory.get("emufusionFrameGenerationAllowTriple")) :
                     frameGenerationMode === "auto-triple"
             refreshFrameGenerationStatus()
         }
         // Burn-in protection is on unless the owner explicitly turned it off.
-        screensaverEnabled = api.memory.has("lucentScreensaverEnabled") ?
-                Boolean(api.memory.get("lucentScreensaverEnabled")) : true
+        screensaverEnabled = api.memory.has("emufusionScreensaverEnabled") ?
+                Boolean(api.memory.get("emufusionScreensaverEnabled")) : true
         screensaverTopStillSince = Date.now()
         // Menu sound effects are on by default; only an explicit OFF persists.
-        soundEffectsEnabled = api.memory.has("lucentSoundEffects") ?
-                Boolean(api.memory.get("lucentSoundEffects")) : true
+        soundEffectsEnabled = api.memory.has("emufusionSoundEffects") ?
+                Boolean(api.memory.get("emufusionSoundEffects")) : true
         requestPreviewEndpoint("settings/sfx?enabled=" +
                 (soundEffectsEnabled ? "1" : "0"))
         systemLedCommit.restart()
@@ -5700,7 +5700,7 @@ FocusScope {
         filters: [
             RangeFilter { roleName: "playCount"; minimumValue: 1 },
             ExpressionFilter {
-                expression: root.isLucentLibraryGame(api.allGames.get(index)) &&
+                expression: root.isEmuFusionLibraryGame(api.allGames.get(index)) &&
                             root.gameVisibleAfterMutation(api.allGames.get(index)) &&
                             root.gameVisibleInHomeCategory(api.allGames.get(index), 1)
             }
@@ -5717,14 +5717,14 @@ FocusScope {
         filters: [
             RangeFilter { roleName: "playCount"; minimumValue: 1 },
             ExpressionFilter {
-                expression: root.isLucentLibraryGame(api.allGames.get(index)) &&
+                expression: root.isEmuFusionLibraryGame(api.allGames.get(index)) &&
                             root.gameVisibleAfterMutation(api.allGames.get(index)) &&
                             root.gameVisibleInHomeCategory(api.allGames.get(index), 2)
             }
         ]
     }
 
-    // Pegasus has no built-in "date added" role. Lucent writes an immutable
+    // Pegasus has no built-in "date added" role. EmuFusion writes an immutable
     // x-added-at timestamp when a ROM first enters its registry, then builds a
     // compact source-index rail here. Existing registry rows are backfilled
     // from the ROM mtime during the companion update.
@@ -5740,7 +5740,7 @@ FocusScope {
         sourceModel: api.allGames
         filters: [
             ExpressionFilter {
-                expression: root.isLucentLibraryGame(api.allGames.get(index)) &&
+                expression: root.isEmuFusionLibraryGame(api.allGames.get(index)) &&
                             root.gameVisibleAfterMutation(api.allGames.get(index))
             }
         ]
@@ -5820,7 +5820,7 @@ FocusScope {
                 caseSensitivity: Qt.CaseInsensitive
             },
             ExpressionFilter {
-                expression: root.isLucentLibraryGame(api.allGames.get(index))
+                expression: root.isEmuFusionLibraryGame(api.allGames.get(index))
             },
             ExpressionFilter {
                 expression: root.gameVisibleAfterMutation(api.allGames.get(index))
@@ -6790,7 +6790,7 @@ FocusScope {
             }
 
             Item {
-                id: lucentSettingsButton
+                id: emufusionSettingsButton
                 anchors.right: searchControl.left
                 // Keep the two icons visually and physically distinct. The old
                 // expanded gear hit target nearly touched the search target.
@@ -6822,8 +6822,8 @@ FocusScope {
             }
 
             Item {
-                id: lucentBrowserButton
-                anchors.right: lucentSettingsButton.left
+                id: emufusionBrowserButton
+                anchors.right: emufusionSettingsButton.left
                 anchors.rightMargin: 24
                 anchors.verticalCenter: parent.verticalCenter
                 width: 42
@@ -6842,20 +6842,20 @@ FocusScope {
 
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: root.openLucentBrowser()
+                    onClicked: root.openEmuFusionBrowser()
                 }
             }
 
             Item {
-                id: lucentRescanButton
-                anchors.right: lucentBrowserButton.left
+                id: emufusionRescanButton
+                anchors.right: emufusionBrowserButton.left
                 anchors.rightMargin: 24
                 anchors.verticalCenter: parent.verticalCenter
                 width: 42
                 height: 42
 
                 Image {
-                    id: lucentRescanIcon
+                    id: emufusionRescanIcon
                     anchors.centerIn: parent
                     width: 31
                     height: 31
@@ -6889,7 +6889,7 @@ FocusScope {
 
             Item {
                 id: voiceFeedbackButton
-                anchors.right: lucentRescanButton.left
+                anchors.right: emufusionRescanButton.left
                 anchors.rightMargin: 24
                 anchors.verticalCenter: parent.verticalCenter
                 width: 42

@@ -73,11 +73,11 @@ MAIN_ACTIVITY = "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 # Re-pinned for the WIDESCREEN HACK Settings slot (23) and the AUTO frame-
 # generation mode; the theme.qml byte identity otherwise stays the reviewed
 # product source.
-FROZEN_THEME_QML = "575dc45f1c6b7f1d8a8da5277454109620dabac9e0476050ab4d9fa3ef071af4"
+FROZEN_THEME_QML = "8c716d85876070e0e40f45652b4bf374ecca58f3ee3d7ad66a67471c0bbd622d"
 FROZEN_THEME_CFG = "b10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9"
 ROUTE = re.compile(r"In-window route accepted engine=([^ ]+) system=([^\s]+)")
 RETURN = re.compile(
-    r"Returned to Lucent immediately in same window engine=([^ ]+) "
+    r"Returned to EmuFusion immediately in same window engine=([^ ]+) "
     r"system=([^ ]+) latencyMs=(\d+)"
 )
 ACTIVITY_START = re.compile(
@@ -360,7 +360,7 @@ def classify_new_activity_starts(
 
     Only dual-screen systems may open exactly one EmuFusion PreviewActivity with the
     SECONDARY_GAMEPLAY action on a non-primary display. Any other new Activity,
-    any Activity on display 0, any MainActivity relaunch, and any non-Lucent
+    any Activity on display 0, any MainActivity relaunch, and any non-EmuFusion
     package is a violation for every system."""
     baseline = len(ACTIVITY_START_INTENT.findall(baseline_log))
     matches = list(ACTIVITY_START_INTENT.finditer(routed_log))
@@ -485,7 +485,7 @@ def exact_install(adb: Path, serial: str, apk: Path, expected_sha: str,
             stdout=handle, stderr=subprocess.PIPE,
         )
     if completed.returncode != 0:
-        raise RuntimeError("cannot read installed Lucent base.apk")
+        raise RuntimeError("cannot read installed EmuFusion base.apk")
     installed_sha = sha256_file(installed)
     if installed_sha != actual:
         raise RuntimeError(
@@ -512,7 +512,7 @@ def assert_installed_hash(adb: Path, serial: str, expected_sha: str) -> dict[str
     base = next((line.split(":", 1)[1] for line in package_path.splitlines()
                  if line.startswith("package:") and line.endswith("base.apk")), "")
     if not base:
-        raise RuntimeError("installed Lucent base.apk path was not found by hash guard")
+        raise RuntimeError("installed EmuFusion base.apk path was not found by hash guard")
     completed = qa.adb(adb, serial, "shell", "sha256sum", base)
     actual = completed.stdout.strip().split()[0].lower()
     expected = expected_sha.lower()
@@ -3257,7 +3257,7 @@ def classify_nes_return_frames(
         expected_title: Optional[str]) -> tuple[list[dict[str, object]], set[Path]]:
     """Require guest* followed by the exact selected NES library menu+.
 
-    The selected calibration title legitimately contains ``Lucent``, so the
+    The selected calibration title legitimately contains ``EmuFusion``, so the
     generic prohibited-text scan cannot identify it. Acceptance instead binds
     that text to the known library reference, exact selected title, and menu
     structure. Once the library appears, gameplay may never reappear.
@@ -3569,7 +3569,7 @@ def wait_visible_menu(adb: Path, serial: str, output: Path,
         attempt += 1
         time.sleep(0.45)
     raise RuntimeError(
-        "Lucent did not expose an interactive menu after startup; "
+        "EmuFusion did not expose an interactive menu after startup; "
         f"last OCR={latest_text}"
     )
 
@@ -4880,7 +4880,7 @@ def move_to_title(adb: Path, serial: str, controller: PhysicalController,
                   display_names: dict[str, str], keys: list[str]) -> int:
     """Move through a proven per-system Alpha list using its exact 8-row page.
 
-    Single-row traversal took r16 more than seven minutes and crossed Lucent's
+    Single-row traversal took r16 more than seven minutes and crossed EmuFusion's
     idle/screensaver boundary.  The frozen theme maps physical Left/Right to an
     exact eight-row page in List layout, so use that bounded path. Row zero
     proves the total against the immutable live-key list; later checkpoints
@@ -7022,14 +7022,14 @@ def same_identity(expected: dict[str, object], observed: dict[str, object]) -> b
 def identity(adb: Path, serial: str) -> dict[str, object]:
     result = qa.strict_gameplay_identity(adb, serial)
     if not result:
-        raise RuntimeError("Lucent is not the sole foreground app/task/window/process")
+        raise RuntimeError("EmuFusion is not the sole foreground app/task/window/process")
     return result
 
 
 def go_to_cover_system(controller: PhysicalController, visible_order: list[str],
                        folder: str) -> None:
     if folder not in visible_order:
-        raise RuntimeError(f"{folder} is not a visible Lucent system")
+        raise RuntimeError(f"{folder} is not a visible EmuFusion system")
     # Force Cover, then use the mapped right-stick shortcut to enter All Systems
     # and physical B to return to Cover with All Systems selected. This is a
     # deterministic origin even though the cover rail intentionally wraps.
@@ -7096,7 +7096,7 @@ def dual_screen_evidence(adb: Path, serial: str, case: SystemCase,
         # and nontrivial lower pixels are mandatory.
         state = qa.strict_gameplay_identity(adb, serial)
         if not state or state.get("previewActivityDisplay") != 4:
-            raise RuntimeError(f"{case.folder} has no Lucent secondary gameplay window")
+            raise RuntimeError(f"{case.folder} has no EmuFusion secondary gameplay window")
         if top_lower_delta < 3_000:
             raise RuntimeError(
                 f"{case.folder} duplicated the same gameplay on both Thor displays"
@@ -7813,7 +7813,7 @@ def stop_and_return(adb: Path, serial: str, controller: PhysicalController,
         )
     returned_identity = identity(adb, serial)
     if not same_identity(before_identity, returned_identity):
-        raise RuntimeError("Stop return replaced Lucent's Activity/task/PID")
+        raise RuntimeError("Stop return replaced EmuFusion's Activity/task/PID")
 
     # A confirmed physical menu move after the first restored frame proves an
     # input-blocking splash is not merely hidden behind a similar screenshot.
@@ -8544,10 +8544,10 @@ def run_game_from_system_menu(adb: Path, serial: str,
         # and opens exactly one of EmuFusion's OWN PreviewActivity windows on the
         # physical lower panel (act=SECONDARY_GAMEPLAY, resumed on a non-primary
         # display). Any other new Activity, any activity on display 0, and any
-        # non-Lucent package already landed in foreign_starts above.
+        # non-EmuFusion package already landed in foreign_starts above.
         if secondary_starts not in {0, 1}:
             raise RuntimeError(
-                "dual-screen launch did not open exactly one Lucent secondary "
+                "dual-screen launch did not open exactly one EmuFusion secondary "
                 f"gameplay window on the physical lower display (saw {secondary_starts})"
             )
         secondary_ready = SECONDARY_GAMEPLAY_RESUME.search(routed_log) is not None
@@ -13266,7 +13266,7 @@ def external_route_systems(route_text: str) -> set[str]:
 
     The exemption is derived only from ``verify_menu_route_closure.launcher_audit``
     classifying the line as ``external-route``; the strict internal contract for
-    every internal in-window launch line is untouched, and a non-Lucent / stale
+    every internal in-window launch line is untouched, and a non-EmuFusion / stale
     launcher never audits as ``external-route`` so it is never exempted here.
     """
     externals: set[str] = set()
@@ -13426,7 +13426,7 @@ def _runtime_main() -> int:
             pass
         time.sleep(0.5)
     if index is None:
-        raise RuntimeError("Lucent library index did not become available")
+        raise RuntimeError("EmuFusion library index did not become available")
 
     # Recheck after installation/startup in case the candidate regenerated any
     # launch metadata. A newly exposed route cannot bypass exact core closure.
@@ -13460,7 +13460,7 @@ def _runtime_main() -> int:
     if post_invalid:
         post_report["invalidMetadataLaunchers"] = post_invalid
         post_errors.extend(
-            "startup metadata has a non-Lucent launcher: " + row["commandSha256"]
+            "startup metadata has a non-EmuFusion launcher: " + row["commandSha256"]
             for row in post_invalid
         )
     # Per-system EXTERNAL routing is legitimate: a system that resolves external
@@ -13469,7 +13469,7 @@ def _runtime_main() -> int:
     # strict internal closure below still holds for every INTERNAL in-window
     # route — installed_routes only ever carries engine_id lines, which verify()
     # already binds to an exact packaged engine, and invalidMetadataLaunchers
-    # still fails any non-Lucent launcher.
+    # still fails any non-EmuFusion launcher.
     external_systems = external_route_systems(installed_route_text)
     post_report["externalRoutedSystems"] = sorted(external_systems)
     internal_installed_routes = {

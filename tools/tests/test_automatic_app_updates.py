@@ -36,7 +36,7 @@ class AutomaticAppUpdateTest(unittest.TestCase):
         self.assertIn("for (String apiUrl : RELEASE_API_URLS)", UPDATE)
         self.assertIn('asset.optString("digest", "")', UPDATE)
         self.assertIn('digest.matches("(?i)^sha256:[0-9a-f]{64}$")', UPDATE)
-        self.assertIn('"lucent-" + version + ".apk"', UPDATE)
+        self.assertIn('"emufusion-" + version + ".apk"', UPDATE)
         self.assertIn("RELEASE_DOWNLOAD_PREFIX", UPDATE)
         self.assertLess(UPDATE.index("AppRelease candidate = appRelease(release)"),
                         UPDATE.index("manifest.optInt(\"companionVersionCode\""))
@@ -52,26 +52,26 @@ class AutomaticAppUpdateTest(unittest.TestCase):
         self.assertIn("- RECHECK_INTERVAL_MS + RETRY_AFTER_FAILURE_MS", retry)
         self.assertIn("RETRY_AFTER_FAILURE_MS = 10L * 60L * 1000L", UPDATE)
 
-    def test_renamed_repository_keeps_the_legacy_channel_trusted(self):
-        # pegasus-lucent was renamed to emufusion; installs from before the
-        # rename and GitHub's redirects both still use the old name.
-        for name in ("emufusion", "pegasus-lucent"):
-            self.assertIn("https://api.github.com/repos/wildonrio/%s/releases/latest" % name, UPDATE)
-            self.assertIn("https://github.com/wildonrio/%s/releases/download/" % name, UPDATE)
-            self.assertIn("https://raw.githubusercontent.com/wildonrio/%s/main/release-manifest.json" % name,
-                          UPDATE)
+    def test_update_channel_uses_the_renamed_repository(self):
+        # Installs from before the rename keep their own trust list (both
+        # names); this version and the manifest use only the current name.
+        self.assertIn("https://api.github.com/repos/wildonrio/emufusion/releases/latest", UPDATE)
+        self.assertIn("https://github.com/wildonrio/emufusion/releases/download/", UPDATE)
+        self.assertIn("https://raw.githubusercontent.com/wildonrio/emufusion/main/release-manifest.json",
+                      UPDATE)
+        self.assertNotIn("pegasus-lucent", UPDATE)
         self.assertIn("for (String url : MANIFEST_URLS)", UPDATE)
         self.assertNotIn("fetch(MANIFEST_URL,", UPDATE)
 
     def test_release_manifest_points_at_published_app_only(self):
-        # Installs up to versionCode 91 trust only the pre-rename download
-        # prefix; GitHub redirects it to the renamed repository. The theme
-        # ships inside the APK -- the v3.2.0 theme zip the manifest pinned was
-        # never uploaded -- so no theme download is advertised.
+        # Every supported install (3.2.18+) trusts the renamed repository's
+        # download prefix. The theme ships inside the APK -- the v3.2.0 theme
+        # zip the manifest pinned was never uploaded -- so no theme download
+        # is advertised.
         release = json.loads((ROOT / "release-manifest.json").read_text(encoding="utf-8"))
         version = release["companionVersionName"]
         self.assertEqual(
-            "https://github.com/wildonrio/pegasus-lucent/releases/download/v%s/emufusion-%s.apk"
+            "https://github.com/wildonrio/emufusion/releases/download/v%s/emufusion-%s.apk"
             % (version, version), release["companionApkUrl"])
         self.assertRegex(release["companionSha256"], r"^[0-9a-f]{64}$")
         for key in ("themeVersion", "themeZipUrl", "themeSha256"):

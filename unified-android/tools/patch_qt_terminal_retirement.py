@@ -13,14 +13,14 @@ import re
 
 QT = "Lorg/qtproject/qt5/android/QtActivityDelegate;"
 HOST = "Lcom/thorium/preview/game/InWindowGameHost;"
-CALLBACK = "Lorg/qtproject/qt5/android/LucentTerminalShutdown;"
+CALLBACK = "Lorg/qtproject/qt5/android/EmuFusionTerminalShutdown;"
 QT_THREAD = "Lorg/qtproject/qt5/android/QtThread;"
 MARKER = "lucent_terminal_retirement"
 METHOD = re.compile(r"^\.method ([^\n]+)\n(.*?)^\.end method", re.M | re.S)
 
 
 def patch_delegate(source):
-    if MARKER in source or "lucentCompleteTerminalShutdown" in source:
+    if MARKER in source or "emufusionCompleteTerminalShutdown" in source:
         raise ValueError("Qt terminal retirement already applied")
     matches = [m for m in METHOD.finditer(source) if m.group(1) == "public onDestroy()V"]
     if len(matches) != 1:
@@ -62,7 +62,7 @@ return-void"""
     invoke-static {{v1, v2}}, {HOST}->requestQtTerminalShutdown(Landroid/app/Activity;Ljava/lang/Runnable;)Z
     move-result v0
     if-nez v0, :lucent_destroy_return
-    invoke-virtual {{p0, v1}}, {QT}->lucentCompleteTerminalShutdown(Landroid/app/Activity;)V
+    invoke-virtual {{p0, v1}}, {QT}->emufusionCompleteTerminalShutdown(Landroid/app/Activity;)V
     :lucent_destroy_return
     return-void
 .end method
@@ -89,7 +89,7 @@ return-void"""
     move-result v1
     if-nez v1, :cond_0
 {exit_anchor}""", 1)
-    helper = ".method public lucentCompleteTerminalShutdown(Landroid/app/Activity;)V\n" + helper + ".end method\n"
+    helper = ".method public emufusionCompleteTerminalShutdown(Landroid/app/Activity;)V\n" + helper + ".end method\n"
     fields = ".field private m_quitApp:Z"
     if source.count(fields) != 1:
         raise ValueError("Qt quit flag declaration changed")
@@ -179,7 +179,7 @@ def callback_source():
     .locals 2
     iget-object v0, p0, {CALLBACK}->delegate:{QT}
     iget-object v1, p0, {CALLBACK}->owner:Landroid/app/Activity;
-    invoke-virtual {{v0, v1}}, {QT}->lucentCompleteTerminalShutdown(Landroid/app/Activity;)V
+    invoke-virtual {{v0, v1}}, {QT}->emufusionCompleteTerminalShutdown(Landroid/app/Activity;)V
     return-void
 .end method
 """
@@ -203,7 +203,7 @@ def main():
     qt = args.smali_root / "org/qtproject/qt5/android"
     delegate = qt / "QtActivityDelegate.smali"
     binding = qt / "bindings/QtActivity.smali"
-    callback = qt / "LucentTerminalShutdown.smali"
+    callback = qt / "EmuFusionTerminalShutdown.smali"
     if callback.exists():
         raise SystemExit("refusing to overwrite existing Qt terminal callback")
     # Validate every input before writing generated build files.

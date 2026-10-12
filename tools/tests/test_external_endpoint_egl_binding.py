@@ -35,7 +35,11 @@ class ExternalEndpointEglBindingTest(unittest.TestCase):
             signatures.append("private EGLSurface workingEglSurface()")
         actual = "\n".join(method(source, signature) for signature in signatures)
         release = method(source, "private void releaseGl()")
-        scalar_names = sorted(set(re.findall(r"if \((\w+) != 0\)", release)))
+        scalar_names = set(re.findall(r"if \((\w+) != 0\)", release))
+        # Fields only ever reset in releaseGl (chained "a = b = 0;" resets).
+        for chain in re.findall(r"((?:\w+ = )+)0;", release):
+            scalar_names.update(name.strip() for name in chain.split("=") if name.strip())
+        scalar_names = sorted(scalar_names)
         scalars = "\n".join("int " + name + ";" for name in scalar_names)
         fixture = r'''
 import java.util.*;

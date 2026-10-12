@@ -64,12 +64,12 @@ final class NativeAdapterSystemDirectory {
     private static final String FIRMWARE_DIRECTORY = "nand/system/Contents/registered";
     private static final String REQUIRED_KEY = "prod.keys";
     private static final String OPTIONAL_KEY = "title.keys";
-    private static final String FIRMWARE_MARKER = ".lucent-firmware-source";
+    private static final String FIRMWARE_MARKER = ".emufusion-firmware-source";
     /* Layout Cemu derives from its user-data path (KeyCache_Prepare). */
     private static final String WIIU_KEY = "keys.txt";
     /* Official Sony system software supplied by the device owner. */
     private static final String PS3_UPDATE = "PS3UPDAT.PUP";
-    private static final String SOURCE_MARKER_PREFIX = ".lucent-source-";
+    private static final String SOURCE_MARKER_PREFIX = ".emufusion-source-";
     private static final int MAX_SCAN_DEPTH = 8;
 
     /**
@@ -185,7 +185,7 @@ final class NativeAdapterSystemDirectory {
      *
      * <p>The pinned aPS3e tree implements {@code rp3_get_config_dir()} as a
      * direct {@code std::string(getenv("APS3E_DATA_DIR"))}. RPCS3 can call that
-     * function while {@code dlopen()} is still running, before Lucent can call
+     * function while {@code dlopen()} is still running, before EmuFusion can call
      * the adapter's {@code load} entry point. A missing variable therefore
      * dereferences null inside the dynamic loader instead of returning a Java
      * error. Create the exact private root that {@link #resolve} will return and

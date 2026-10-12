@@ -6,7 +6,7 @@ package com.thorium.emufusion.emulators;
  * <p>aPS3e's RPCS3 {@code Emu.Kill}/join path aborts the whole process
  * (Scudo invalid chunk on thread {@code Emulation Join}, Thor ps3-13).
  * Library return already completed; destroying the host after that
- * replaces Lucent with the Android launcher.
+ * replaces EmuFusion with the Android launcher.
  *
  * <p>Eden (Switch) runs its guest natively (NCE), and Eden's teardown is not
  * safe in this long-lived process: on the Thor it crashed in an NVDEC thread

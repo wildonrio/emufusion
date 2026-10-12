@@ -316,10 +316,10 @@ public class InWindowGameHost {
         Activity a=new Activity(new Intent("MAIN")); onCreate(a,null);
         Intent original=game("QA").putExtra("qualification_only",true)
             .putExtra("qualification_session","qa-01234567890123456789012345678901")
-            .putExtra("lucent.return.view","cover").putExtra("lucent.return.system","gamecube")
-            .putExtra("lucent.return.section","favorites").putExtra("lucent.return.sort","title")
-            .putExtra("lucent.return.game","QA").putExtra("lucent.return.system_index",3)
-            .putExtra("lucent.return.game_index",17).putExtra("lucent.return.token","navigation-token");
+            .putExtra("emufusion.return.view","cover").putExtra("emufusion.return.system","gamecube")
+            .putExtra("emufusion.return.section","favorites").putExtra("emufusion.return.sort","title")
+            .putExtra("emufusion.return.game","QA").putExtra("emufusion.return.system_index",3)
+            .putExtra("emufusion.return.game_index",17).putExtra("emufusion.return.token","navigation-token");
         handleIntent(a,original); Bundle out=new Bundle(); onSaveInstanceState(a,out);
         Intent copy=out.getBundle(RECREATION_STATE).getParcelable("request");
         check(copy.extras.equals(original.extras),"path/qualification/return-state roundtrip differs");

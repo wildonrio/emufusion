@@ -108,7 +108,7 @@ public final class CheatGameIdentityTest {
     }
 
     private static void isoImages() throws IOException {
-        File dir = Files.createTempDirectory("lucent-identity").toFile();
+        File dir = Files.createTempDirectory("emufusion-identity").toFile();
         Map<String, byte[]> files = new LinkedHashMap<>();
         files.put("SYSTEM.CNF", "BOOT2 = cdrom0:\\SLUS_209.46;1\n".getBytes(StandardCharsets.US_ASCII));
         byte[] elf = new byte[4096];

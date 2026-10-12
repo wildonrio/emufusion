@@ -2902,7 +2902,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             "08-11 06:18:19.020 29739 29739 E Adreno: DequeueBuffer failed",
             "08-11 06:18:19.021 29739 29739 E Qt: Renderer stopped",
             "08-11 06:18:19.022 29739 29739 E Qt: Android EGL swap failed (0x300d)",
-            "08-11 06:18:19.023 29739 29739 E Lucent: Engine session error",
+            "08-11 06:18:19.023 29739 29739 E EmuFusion: Engine session error",
         ))
         proof = MODULE.classify_reload_surface_teardown(log, 29739)
         self.assertGreaterEqual(len(proof["failures"]), 5)
@@ -7563,7 +7563,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             "/storage/emulated/0/Android/data/com.thorium.preview/files/"
             "pegasus-frontend/metafiles"
         )
-        metadata_path = canonical + "/99-lucent-auto-nes.metadata.pegasus.txt"
+        metadata_path = canonical + "/99-emufusion-auto-nes.metadata.pegasus.txt"
         rom_path = "/storage/emulated/0/Games/nes/Lucent Callback Test.nes"
         metadata = "\n".join((
             "collection: Nintendo Entertainment System",
@@ -7597,7 +7597,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             "/storage/emulated/0/Android/data/com.thorium.preview/files/"
             "pegasus-frontend/metadata"
         )
-        fixture_metadata = canonical + "/99-lucent-auto-nes.metadata.pegasus.txt"
+        fixture_metadata = canonical + "/99-emufusion-auto-nes.metadata.pegasus.txt"
         owner_metadata = owner + "/12-nes.metadata.pegasus.txt"
         fixture_rom = "/storage/emulated/0/Games/nes/Lucent Callback Test.nes"
         real_roms = {
@@ -7689,7 +7689,7 @@ mCurrentFocus=Window{123 u0 com.thorium.preview/org.pegasus_frontend.android.Mai
             "/storage/emulated/0/Android/data/com.thorium.preview/files/"
             "pegasus-frontend/metafiles"
         )
-        metadata_path = canonical + "/99-lucent-auto-nes.metadata.pegasus.txt"
+        metadata_path = canonical + "/99-emufusion-auto-nes.metadata.pegasus.txt"
         metadata = "shortname: nes\ngame: Lucent Callback Test\n"
         roots = []
 

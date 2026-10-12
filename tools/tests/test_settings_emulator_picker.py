@@ -581,7 +581,7 @@ class SettingsScreenTest(unittest.TestCase):
 
     def test_an_apk_update_refreshes_changed_bundled_theme_bytes_once(self):
         self.assertIn('ASSET_BUNDLED_FINGERPRINT', THEME_INSTALLER)
-        self.assertIn('new File(PEGASUS,\n            ".lucent-bundled-theme.sha256")',
+        self.assertIn('new File(PEGASUS,\n            ".emufusion-bundled-theme.sha256")',
                       THEME_INSTALLER)
         self.assertIn("boolean bundledChanged", THEME_INSTALLER)
         self.assertIn("private static synchronized boolean installBundledBlocking(",

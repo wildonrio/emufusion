@@ -4,10 +4,10 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 /**
- * Where this device's copy of Lucent looks for the self-hosted multiplayer
- * backend (see backend/README.md). Unlike every other Lucent setting, this
+ * Where this device's copy of EmuFusion looks for the self-hosted multiplayer
+ * backend (see backend/README.md). Unlike every other EmuFusion setting, this
  * one has no sensible built-in default: the backend is self-hosted per
- * user/group, not a Lucent-operated service, so there is no URL to ship in
+ * user/group, not a EmuFusion-operated service, so there is no URL to ship in
  * the app. Multiplayer features stay off (see {@link #isConfigured}) until
  * whoever deployed a backend enters its address once.
  */

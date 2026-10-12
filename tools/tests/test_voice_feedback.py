@@ -26,7 +26,7 @@ BUILD = (ROOT / "unified-android/build.sh").read_text(encoding="utf-8")
 class VoiceFeedbackIntegrationTest(unittest.TestCase):
     def test_toolbar_places_raised_hand_immediately_left_of_update_control(self):
         self.assertIn("id: voiceFeedbackButton", THEME)
-        self.assertIn("anchors.right: lucentRescanButton.left", THEME)
+        self.assertIn("anchors.right: emufusionRescanButton.left", THEME)
         self.assertIn('source: Qt.resolvedUrl("assets/raised-hand-white.svg")', THEME)
         icon = (ROOT / "theme" / "assets" / "raised-hand-white.svg").read_text(
             encoding="utf-8"

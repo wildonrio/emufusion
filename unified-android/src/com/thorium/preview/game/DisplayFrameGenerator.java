@@ -479,6 +479,33 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             " gl_FragColor=vec4((dc*127.0+128.0)/255.0,conf,1.0);\n" +
             "}\n";
 
+    // Level 4: vector median of the phase field (3x3, confidence-weighted).
+    // Per-cell winners are noisy where matching is ambiguous (large motion,
+    // rotation, low texture), and warping with an outlier tears the image
+    // into fragments. The median keeps motion edges but drops isolated
+    // outliers. Vectors are compared in normalized (range) units.
+    private static final String PHASE_MEDIAN_SHADER =
+            "precision highp float;\n" +
+            "uniform sampler2D uPhaseRaw;\n" +
+            "uniform vec2 uCell;\n" +
+            "varying vec2 vTexCoord;\n" +
+            "void main(){\n" +
+            " vec2 v[9];float c[9];\n" +
+            " for(int i=0;i<9;i++){\n" +
+            "  vec2 o=vec2(mod(float(i),3.0)-1.0,floor(float(i)/3.0)-1.0);\n" +
+            "  vec4 f=texture2D(uPhaseRaw,clamp(vTexCoord+o*uCell,vec2(0.0),vec2(1.0)));\n" +
+            "  vec2 d=(f.rg*255.0-128.0)/127.0;v[i]=sign(d)*d*d;c[i]=f.b;\n" +
+            " }\n" +
+            " float best=1e9;vec2 bv=v[4];float bc=c[4];\n" +
+            " for(int i=0;i<9;i++){\n" +
+            "  float sum=0.0;\n" +
+            "  for(int j=0;j<9;j++)sum+=(0.05+c[j])*length(v[i]-v[j]);\n" +
+            "  if(sum<best){best=sum;bv=v[i];bc=c[i];}\n" +
+            " }\n" +
+            " vec2 q=sign(bv)*sqrt(abs(bv));\n" +
+            " gl_FragColor=vec4((q*127.0+128.0)/255.0,bc,1.0);\n" +
+            "}\n";
+
     // Hold-out scoring (QA): G0..G2 = the pair generated at the withheld
     // frame's time by each synthesis level (paired: same pair, same field),
     // R = the withheld real frame, A/C = the pair it was generated from.
@@ -2033,6 +2060,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // from the analysis fields, but each finer cell picks its own winner,
     // which follows motion boundaries and perspective more closely.
     private int densePhaseWidth, densePhaseHeight;
+    private int densePhaseMedianTexture, densePhaseMedianFramebuffer, densePhaseMedianProgram;
+    // The phase texture drawMotionFrame samples: the raw field, or its median.
+    private int densePhaseBoundTexture;
     private boolean synthesisEnabled;
     private int synthesisLevel;
     private int denseFillProgram;
@@ -2112,7 +2142,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private static final int HOLDOUT_RING = 4;
     private static final int HOLDOUT_LEVELS = 3;
     // Synthesis levels scored side by side on every hold-out pair.
-    private static final int[] HOLDOUT_LEVEL_IDS = {0, 1, 2};
+    private static final int[] HOLDOUT_LEVEL_IDS = {0, 1, 4};
     private boolean holdoutMode;
     private boolean holdoutWithholdNext;
     private final int[] holdoutReferenceTextures = new int[HOLDOUT_REFERENCES];
@@ -4250,6 +4280,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         interpolateNeighborsProgram = createProgram(VERTEX_SHADER,
                 "#define PHASE_SYNTHESIS\n#define PHASE_NEIGHBORS\n" + MOTION_INTERPOLATE_SHADER);
         densePhaseProgram = createProgram(VERTEX_SHADER, DENSE_PHASE_SHADER);
+        densePhaseMedianProgram = createProgram(VERTEX_SHADER, PHASE_MEDIAN_SHADER);
         synthesisLevel = TimelineSchedulerSwitch.synthesisLevel();
         synthesisEnabled = synthesisLevel > 0;
         predictionProofProgram = createProgram(
@@ -5834,6 +5865,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             densePhaseTexture = phase[0];
             GLES20.glGenFramebuffers(1, phase, 0);
             densePhaseFramebuffer = phase[0];
+            GLES20.glGenTextures(1, phase, 0);
+            densePhaseMedianTexture = phase[0];
+            GLES20.glGenFramebuffers(1, phase, 0);
+            densePhaseMedianFramebuffer = phase[0];
             allocateDenseResources();
             validateDenseByteContract();
             validateDenseQ8ShaderContract();
@@ -5921,6 +5956,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, densePhaseFramebuffer);
                 GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
                         GLES20.GL_TEXTURE_2D, densePhaseTexture, 0);
+                if (densePhaseMedianTexture != 0) {
+                    allocateDenseTexture(densePhaseMedianTexture, densePhaseWidth, densePhaseHeight, false);
+                    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, densePhaseMedianFramebuffer);
+                    GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                            GLES20.GL_TEXTURE_2D, densePhaseMedianTexture, 0);
+                }
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
             }
             allocateDenseTexture(denseGlobalCoarseCostTextures[direction],
@@ -7215,12 +7256,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // half-resolution endpoint pyramids are written to the app's files dir
     // for offline inspection.  Bounded to a few dumps per session.
     private static final java.io.File DENSE_FLOW_DUMP_MARKER =
-            new java.io.File("/data/local/tmp/lucent-flowdump");
+            new java.io.File("/data/local/tmp/emufusion-flowdump");
     // Optional diagnostic override; still requires the primary marker and
     // retains the eight-dump limit and 700ms attempt interval. This controls
     // evidence collection only, never runtime generation admission.
     private static final java.io.File DENSE_FLOW_DUMP_LOW_MOTION_MARKER =
-            new java.io.File("/data/local/tmp/lucent-flowdump-low-motion");
+            new java.io.File("/data/local/tmp/emufusion-flowdump-low-motion");
     private static final java.io.File DENSE_FLOW_DUMP_DIR =
             new java.io.File(android.os.Environment.getExternalStorageDirectory(),
                     "Android/data/com.thorium.preview/files/flowdump");
@@ -7281,7 +7322,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long now = System.nanoTime();
         if (!DENSE_FLOW_DUMP_MARKER.exists()) return;
         boolean contiguousCapture = new java.io.File(
-                "/data/local/tmp/lucent-flowdump-contiguous").exists();
+                "/data/local/tmp/emufusion-flowdump-contiguous").exists();
         if (!contiguousCapture && now - denseFlowDumpLastNs < 700_000_000L) return;
         // This opt-in diagnostic intentionally stalls for readback. Its output
         // is image evidence only; never use it to qualify presentation timing.
@@ -10475,7 +10516,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // top-left corner and real frames carry nothing, so a panel capture can
     // label real/generated frames without trusting any log.  Off by default.
     private static final java.io.File PROOF_MARK_MARKER =
-            new java.io.File("/data/local/tmp/lucent-proofmark");
+            new java.io.File("/data/local/tmp/emufusion-proofmark");
     private static final int PROOF_MARK_PX = 32;
     private boolean proofMarkEnabled;
     private int proofMarkPollCountdown;
@@ -10662,7 +10703,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                             denseAnalysisWidth, denseAnalysisHeight);
                     dumpDensePlane(out, "backward", activeBackwardFlow(),
                             denseAnalysisWidth, denseAnalysisHeight);
-                    dumpDensePlane(out, "phase", densePhaseTexture,
+                    dumpDensePlane(out, "phase", densePhaseBoundTexture != 0 ? densePhaseBoundTexture : densePhaseTexture,
                             densePhaseWidth, densePhaseHeight);
                 }
             }
@@ -10955,8 +10996,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 Math.max(1f, historyWidth), Math.max(1f, historyHeight));
         GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhase"), phase);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearch"),
-                synthesisLevel >= 3 ? 1f : 0f);
+                synthesisLevel == 3 ? 1f : 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        densePhaseBoundTexture = densePhaseTexture;
+        if (synthesisLevel == 4 && densePhaseMedianProgram != 0 && densePhaseMedianFramebuffer != 0) {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, densePhaseMedianFramebuffer);
+            GLES20.glUseProgram(densePhaseMedianProgram);
+            bindQuad(densePhaseMedianProgram);
+            bindTexture(densePhaseMedianProgram, "uPhaseRaw", densePhaseTexture, 0);
+            uniform2(densePhaseMedianProgram, "uCell", 1f / densePhaseWidth, 1f / densePhaseHeight);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+            densePhaseBoundTexture = densePhaseMedianTexture;
+        }
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, state[0]);
         GLES20.glViewport(state[1], state[2], state[3], state[4]);
         return true;
@@ -10965,7 +11016,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private void drawMotionFrame(float phase) {
         boolean phaseField = renderPhaseField(phase);
         final int interpolateProgram = !phaseField ? this.interpolateProgram :
-                synthesisLevel >= 2 ? interpolateNeighborsProgram : interpolateSynthProgram;
+                synthesisLevel == 2 || synthesisLevel == 3 ? interpolateNeighborsProgram :
+                interpolateSynthProgram;
         GLES20.glUseProgram(interpolateProgram);
         bindQuad(interpolateProgram);
         bindTexture(interpolateProgram, "uPrevious", historyTextures[previousIndex], 0);
@@ -11010,7 +11062,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
                 "uDenseCutEnabled"), cutReady ? 1f : 0f);
         bindTexture(interpolateProgram, "uPhaseFlow",
-                phaseField ? densePhaseTexture : historyTextures[previousIndex], phaseField ? 9 : 0);
+                phaseField ? densePhaseBoundTexture : historyTextures[previousIndex], phaseField ? 9 : 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
                 "uPhaseFieldEnabled"), phaseField ? 1f : 0f);
         uniform2(interpolateProgram, "uPhaseSize",
@@ -13857,7 +13909,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (densePhaseTexture != 0) GLES20.glDeleteTextures(1, new int[] {densePhaseTexture}, 0);
         if (densePhaseFramebuffer != 0)
             GLES20.glDeleteFramebuffers(1, new int[] {densePhaseFramebuffer}, 0);
+        if (densePhaseMedianTexture != 0)
+            GLES20.glDeleteTextures(1, new int[] {densePhaseMedianTexture}, 0);
+        if (densePhaseMedianFramebuffer != 0)
+            GLES20.glDeleteFramebuffers(1, new int[] {densePhaseMedianFramebuffer}, 0);
         densePhaseTexture = densePhaseFramebuffer = 0;
+        densePhaseMedianTexture = densePhaseMedianFramebuffer = densePhaseBoundTexture = 0;
             GLES20.glDeleteTextures(2, denseFillTextures, 0);
         if (denseGlobalCoarseCostTextures[0] != 0)
             GLES20.glDeleteTextures(2, denseGlobalCoarseCostTextures, 0);

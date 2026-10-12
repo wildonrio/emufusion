@@ -76,7 +76,7 @@ class AdapterOwnsOneSessionThread(unittest.TestCase):
             self.assertIn(
                 call, thread,
                 call + " must run on the engine thread, as upstream's "
-                "RunEmulation() does, not on whichever thread Lucent calls from")
+                "RunEmulation() does, not on whichever thread EmuFusion calls from")
         self.assertLess(
             thread.index("InitializeEmulation"), thread.index("RunEmulation"),
             "the title has to be loaded before the loop runs")
@@ -101,7 +101,7 @@ class AdapterOwnsOneSessionThread(unittest.TestCase):
         stop = _body(self.source, "static void adapter_stop(")
         self.assertIn(
             "UnPauseEmulation", stop,
-            "Lucent pauses twice on the way out; ShutdownMainProcess has to "
+            "EmuFusion pauses twice on the way out; ShutdownMainProcess has to "
             "terminate those guest threads and wait for each one")
         self.assertLess(
             stop.index("UnPauseEmulation"), stop.index("HaltEmulation"),

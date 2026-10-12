@@ -27,7 +27,7 @@ MAIN_ACTIVITY = (
     "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 )
 HOST_RETURN = re.compile(
-    r"Returned to Lucent immediately in same window .*?latencyMs=(\d+)"
+    r"Returned to EmuFusion immediately in same window .*?latencyMs=(\d+)"
 )
 VISIBLE_RESET = re.compile(
     r"PREPARING|SAVING\s+AND\s+RETURNING|POWERED\s+BY\s+PEGASUS|"
@@ -71,13 +71,13 @@ def audit(log_text: str, frame_ocr: dict[str, str],
     errors: list[str] = list(evidence_errors)
     if activity_launches:
         errors.append(
-            "normal menu launch used ActivityTaskManager START for Lucent "
+            "normal menu launch used ActivityTaskManager START for EmuFusion "
             "MainActivity; launch must reach the live Activity by the "
             "same-package receiver without an Activity lifecycle transition"
         )
     if activity_launches and lifecycle_resumes:
         errors.append(
-            "menu launch resumed/restarted the Lucent Activity after an "
+            "menu launch resumed/restarted the EmuFusion Activity after an "
             "Activity START, allowing Qt to recreate its surface"
         )
     if visible:
@@ -233,7 +233,7 @@ def verify_directory(evidence: Path, tesseract: Path) -> Audit:
         # the missing lifecycle trace: otherwise an Activity START is
         # impossible to rule out.
         log_text = "\n".join(
-            "I/EmuFusionInWindow: Returned to Lucent immediately in same window "
+            "I/EmuFusionInWindow: Returned to EmuFusion immediately in same window "
             f"latencyMs={latency}" for latency in stored_latencies
         )
     frames = sorted(path for path in evidence.glob("*-return-*.png")

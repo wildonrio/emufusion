@@ -50,7 +50,7 @@ public final class SnapshotMetadata {
         values.setProperty("stateSha256", stateSha256);
         values.setProperty("stateCrc32", Long.toString(stateCrc32));
         values.setProperty("hasScreenshot", Boolean.toString(hasScreenshot));
-        values.store(output, "Lucent state manifest v" + FORMAT_VERSION);
+        values.store(output, "EmuFusion state manifest v" + FORMAT_VERSION);
     }
 
     static SnapshotMetadata read(InputStream input) throws IOException {

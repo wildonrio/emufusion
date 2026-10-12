@@ -5,15 +5,15 @@ import android.net.Uri;
 
 /** Immutable, engine-neutral description of one in-process game launch. */
 public final class GameLaunchRequest {
-    public static final String EXTRA_ENGINE_ID = "lucent.engine_id";
-    public static final String EXTRA_SYSTEM_ID = "lucent.system_id";
-    public static final String EXTRA_GAME_ID = "lucent.game_id";
-    public static final String EXTRA_GAME_TITLE = "lucent.game_title";
-    public static final String EXTRA_CONTENT_URI = "lucent.content_uri";
+    public static final String EXTRA_ENGINE_ID = "emufusion.engine_id";
+    public static final String EXTRA_SYSTEM_ID = "emufusion.system_id";
+    public static final String EXTRA_GAME_ID = "emufusion.game_id";
+    public static final String EXTRA_GAME_TITLE = "emufusion.game_title";
+    public static final String EXTRA_CONTENT_URI = "emufusion.content_uri";
     public static final String EXTRA_QUALIFICATION_SESSION =
-            "lucent.qualification_session";
+            "emufusion.qualification_session";
     public static final String EXTRA_FRAME_GENERATION_MODE =
-            "lucent.frame_generation_mode";
+            "emufusion.frame_generation_mode";
 
     public final String engineId;
     public final String systemId;

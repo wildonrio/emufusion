@@ -17,10 +17,10 @@ from pathlib import Path
 
 
 EXIT = re.compile(
-    r"Exit to Lucent invoked engine=mupen64plus-next system=n64"
+    r"Exit to EmuFusion invoked engine=mupen64plus-next system=n64"
 )
 RETURN = re.compile(
-    r"Returned to Lucent immediately in same window "
+    r"Returned to EmuFusion immediately in same window "
     r"engine=mupen64plus-next system=n64 latencyMs=(\d+)"
 )
 COMMIT = re.compile(

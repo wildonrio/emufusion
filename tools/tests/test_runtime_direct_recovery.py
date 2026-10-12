@@ -263,7 +263,7 @@ class RuntimeDirectRecoveryTest(unittest.TestCase):
             '    private void presentVideoWithSurfaceLock('])
         self.run_java(r'''
     static class LibretroHost {static class VideoFrame{}}
-    enum PauseReason {LUCENT_MENU}
+    enum PauseReason {EMUFUSION_MENU}
     static class Session {
         boolean prepared=true,running=true,primaryRecoverySurfaceCanvas;int canvasCloses;
         AtomicBoolean stopping=new AtomicBoolean(),released=new AtomicBoolean();

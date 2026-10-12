@@ -347,7 +347,7 @@ public final class EmuFusionGameActivity extends Activity
     private void showPauseMenu() {
         if (pauseOverlay == null || menuVisible || exitStarted.get()) return;
         menuVisible = true;
-        if (prepared && session != null) session.pause(EngineSession.PauseReason.LUCENT_MENU);
+        if (prepared && session != null) session.pause(EngineSession.PauseReason.EMUFUSION_MENU);
         pauseOverlay.setVisibility(View.VISIBLE);
         pauseOverlay.getChildAt(0).requestFocus();
         // Focus the first actual button rather than the panel container.
@@ -413,7 +413,7 @@ public final class EmuFusionGameActivity extends Activity
 
     private void exitToEmuFusion() {
         if (!exitStarted.compareAndSet(false, true)) return;
-        Log.i(TAG, "Exit to Lucent invoked engine=" + request.engineId +
+        Log.i(TAG, "Exit to EmuFusion invoked engine=" + request.engineId +
                 " system=" + request.systemId);
         menuVisible = false;
         if (pauseOverlay != null) pauseOverlay.setVisibility(View.VISIBLE);

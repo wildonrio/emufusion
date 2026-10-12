@@ -79,7 +79,7 @@ class OneAppApkVerifierTest(unittest.TestCase):
 '''
         errors = MODULE.verify_manifest(value)
         self.assertTrue(any(
-            "Activities outside the Lucent boundary" in error for error in errors))
+            "Activities outside the EmuFusion boundary" in error for error in errors))
 
     def test_rejects_external_emulator_launcher(self):
         value = MANIFEST.replace(
@@ -88,7 +88,7 @@ class OneAppApkVerifierTest(unittest.TestCase):
         )
         errors = MODULE.verify_manifest(value)
         self.assertTrue(any(
-            "Activities outside the Lucent boundary" in error for error in errors))
+            "Activities outside the EmuFusion boundary" in error for error in errors))
 
     def test_frontend_restart_bridge_is_exact_and_fail_closed(self):
         self.assertFalse(any("frontend restart bridge" in error
@@ -142,7 +142,7 @@ class OneAppApkVerifierTest(unittest.TestCase):
 '''
         errors = MODULE.verify_manifest(value)
         self.assertFalse(any(
-            "outside the Lucent boundary" in error or "trampoline" in error
+            "outside the EmuFusion boundary" in error or "trampoline" in error
             for error in errors))
 
     def test_lsfg_self_test_activity_is_exact_and_conditional(self):

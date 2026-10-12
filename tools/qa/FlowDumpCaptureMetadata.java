@@ -10,7 +10,7 @@ public final class FlowDumpCaptureMetadata {
         catch(ReflectiveOperationException e){throw new IllegalStateException("Capture identity unavailable",e);}
     }
     public static boolean burst(Object owner) {
-        if(!new File("/data/local/tmp/lucent-flowdump-contiguous").exists())return false;
+        if(!new File("/data/local/tmp/emufusion-flowdump-contiguous").exists())return false;
         long left=value(owner,"activeLeftSequence"),right=value(owner,"activeRightSequence");
         return left>0 && right==left+1 && value(owner,"activeRightTimestampNs")>value(owner,"activeLeftTimestampNs");
     }

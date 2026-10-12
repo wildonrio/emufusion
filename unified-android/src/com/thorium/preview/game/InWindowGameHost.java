@@ -99,7 +99,7 @@ public final class InWindowGameHost
             java.util.regex.Pattern.compile("qa-[0-9a-f]{32}");
 
     private static InWindowGameHost active;
-    private static final String RECREATION_STATE = "lucent.inWindow.recreation.v1";
+    private static final String RECREATION_STATE = "emufusion.inWindow.recreation.v1";
     private static final WeakHashMap<Activity, RecreationState> RECREATIONS =
             new WeakHashMap<>();
     private static int destroyedSessionsRetiring;
@@ -506,7 +506,7 @@ public final class InWindowGameHost
         // 1920x1080 top display.
         View contentView = activity.getWindow().getDecorView();
         if (!(contentView instanceof ViewGroup)) {
-            Log.e(TAG, "Lucent content root is not a ViewGroup");
+            Log.e(TAG, "EmuFusion content root is not a ViewGroup");
             return true;
         }
         InWindowGameHost previous = active;
@@ -1993,7 +1993,7 @@ public final class InWindowGameHost
         menuVisible = true;
         updateGameplayScreenOn();
         if (prepared && session != null)
-            session.pause(EngineSession.PauseReason.LUCENT_MENU);
+            session.pause(EngineSession.PauseReason.EMUFUSION_MENU);
         if (primaryScreenButton != null) {
             boolean available = session != null && session.canSwitchPrimaryScreen();
             primaryScreenButton.setVisibility(available ? View.VISIBLE : View.GONE);
@@ -2201,9 +2201,9 @@ public final class InWindowGameHost
         // cheat list for a game that no longer exists.
         hideCheatsPanel();
         final long returnStartedUptimeMs = android.os.SystemClock.uptimeMillis();
-        Log.i(TAG, "Exit to Lucent invoked engine=" + request.engineId +
+        Log.i(TAG, "Exit to EmuFusion invoked engine=" + request.engineId +
                 " system=" + request.systemId + " reason=" + clean(reason),
-                new Throwable("Lucent exit origin"));
+                new Throwable("EmuFusion exit origin"));
         EngineSession ending = session;
         boolean renderQuiesced = ending == null;
         if (ending != null) {
@@ -2302,7 +2302,7 @@ public final class InWindowGameHost
         tellCompanion(PreviewService.ACTION_LIBRARY);
         long latencyMs = Math.max(0L,
                 android.os.SystemClock.uptimeMillis() - returnStartedUptimeMs);
-        Log.i(TAG, "Returned to Lucent immediately in same window engine=" +
+        Log.i(TAG, "Returned to EmuFusion immediately in same window engine=" +
                 request.engineId + " system=" + request.systemId +
                 " latencyMs=" + latencyMs);
     }
@@ -2785,7 +2785,7 @@ public final class InWindowGameHost
             }
             // Manual netplay port-routing verification only: fires only when
             // a marker file has been placed by hand (adb shell touch
-            // /sdcard/lucent-netplay-synthetic-test), which nothing in the
+            // /sdcard/emufusion-netplay-synthetic-test), which nothing in the
             // normal UI or launch flow ever does. See
             // NetplaySyntheticInputTester's class doc for the full rationale.
             if (com.thorium.emufusion.netplay.NetplaySyntheticInputTester.isRequested(activity)) {

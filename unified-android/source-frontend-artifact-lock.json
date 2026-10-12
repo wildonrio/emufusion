@@ -51,7 +51,7 @@
     "lib/arm64-v8a/libc++_shared.so": "46b51d661454b9cfaf42c1dc90893b5ad601b7a7ffc2e09d44bb3cc9d20e7ae2",
     "lib/arm64-v8a/libcrypto.so": "c5148d1d6be3df14e33d3fe96aa6464ec3cafbaafc67c5b859700b24dafdce5e",
     "lib/arm64-v8a/libssl.so": "63777d74db2f4211a41499b1145b7a4cc798e2a13f719209144860df48ed3720",
-    "lib/arm64-v8a/libpegasus-fe_arm64-v8a.so": "c37245d3d2bb5e6738763a1a4256333f2e21e4d34f75df485de444fed6d5f969"
+    "lib/arm64-v8a/libpegasus-fe_arm64-v8a.so": "cd17524aca9f2405cdcc2fbc9848ad0ecdb30ddfd6a7957a4601f430a41a80b8"
   },
   "sourceLockSha256": "dabf6f1044d5da8f632f1e9e97eb8eaeed95e491929ca1e7ae82a8ef9fee5cbd",
   "patches": {
@@ -66,5 +66,6 @@
     "qtdeclarative-android-emulator-bgra.patch": "918629a9246b2876c9b0e6952d242a2f578a1b048cce0d21c46759d59ff52205",
     "qtbase-android-emulator-texture-upload.patch": "31fc49b3201ad509cd28147613ee3ae77fc3c852985f3ba425f10e0ba7a934a7"
   },
-  "runtimeQualified": false
+  "runtimeQualified": false,
+  "postBuildBranding": "2026-10-12: libpegasus-fe was rebranded in place from the earlier Lucent phrases to the equal-length EmuFusion phrases in tools/patch_emufusion_branding.py (all encodings; no other bytes changed). Previous sha256 c37245d3d2bb5e6738763a1a4256333f2e21e4d34f75df485de444fed6d5f969."
 }

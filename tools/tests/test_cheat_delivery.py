@@ -114,7 +114,7 @@ class BootstrapWrapTests(unittest.TestCase):
         self.assertIn("catch (Throwable failure)", prepare)
         # The factory runs on the UI thread: the catalogue work must not.
         self.assertIn('new Thread(', prepare)
-        self.assertIn('"lucent-cheat-prepare"', prepare)
+        self.assertIn('"emufusion-cheat-prepare"', prepare)
         # 2026-09-06 review fix: the 3-arg overload always left
         # perGameWidescreenCodeSelected false, so Dolphin's generic
         # projection hack and a per-game 16:9 code the widescreen-by-cheat

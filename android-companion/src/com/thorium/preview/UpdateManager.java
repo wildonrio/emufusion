@@ -35,24 +35,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** GitHub-backed theme and APK updater with a small JSON status surface. */
 final class UpdateManager {
     private static final String TAG = "EmuFusionUpdater";
-    // The repository was renamed from pegasus-lucent to emufusion. Both names
-    // stay trusted: GitHub redirects the old name, and before the rename only
-    // the old name resolves. Never drop the legacy entries while installs that
-    // predate the rename may still be updating through this one.
+    // Installs from before the repository rename keep their own trust list
+    // (old and new names); release-manifest.json uses the current name.
     private static final String[] MANIFEST_URLS = new String[]{
-            "https://raw.githubusercontent.com/wildonrio/emufusion/main/release-manifest.json",
-            "https://raw.githubusercontent.com/wildonrio/pegasus-lucent/main/release-manifest.json"
+            "https://raw.githubusercontent.com/wildonrio/emufusion/main/release-manifest.json"
     };
     // The publishing repository owns the immutable release assets. Reading its
     // latest-release record means uploading a new GitHub release is sufficient;
     // the app does not wait for somebody to hand-edit release-manifest.json.
     private static final String[] RELEASE_API_URLS = new String[]{
-            "https://api.github.com/repos/wildonrio/emufusion/releases/latest",
-            "https://api.github.com/repos/wildonrio/pegasus-lucent/releases/latest"
+            "https://api.github.com/repos/wildonrio/emufusion/releases/latest"
     };
     private static final String[] RELEASE_DOWNLOAD_PREFIXES = new String[]{
-            "https://github.com/wildonrio/emufusion/releases/download/",
-            "https://github.com/wildonrio/pegasus-lucent/releases/download/"
+            "https://github.com/wildonrio/emufusion/releases/download/"
     };
     private static final String UPDATE_PREFERENCES = "updates-ui";
     private static final String PENDING_INSTALL = "automaticInstallPending";
@@ -168,7 +163,7 @@ final class UpdateManager {
                 running.set(false);
                 firstCheck.countDown();
             }
-        }, "lucent-update-check");
+        }, "emufusion-update-check");
         worker.setDaemon(true);
         worker.start();
     }
@@ -419,9 +414,8 @@ final class UpdateManager {
                 tag.substring(1) : tag;
         if (version.isEmpty()) return null;
         String[] acceptedNames = new String[]{
-                "lucent-unified-" + version + ".apk",
-                "lucent-" + version + ".apk",
-                "emufusion-" + version + ".apk"
+                "emufusion-" + version + ".apk",
+                "emufusion-unified-" + version + ".apk"
         };
         JSONArray assets = release.optJSONArray("assets");
         if (assets == null) return null;
@@ -588,7 +582,7 @@ final class UpdateManager {
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(30000);
         connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("User-Agent", "Lucent-Updater/1.0");
+        connection.setRequestProperty("User-Agent", "EmuFusion-Updater/1.0");
         try (InputStream input = new BufferedInputStream(connection.getInputStream());
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[32 * 1024];
@@ -618,7 +612,7 @@ final class UpdateManager {
         connection.setConnectTimeout(20000);
         connection.setReadTimeout(60000);
         connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("User-Agent", "Lucent-Updater/1.0");
+        connection.setRequestProperty("User-Agent", "EmuFusion-Updater/1.0");
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream input = new BufferedInputStream(connection.getInputStream());
              BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(partial))) {

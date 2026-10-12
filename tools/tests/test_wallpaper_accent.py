@@ -44,7 +44,7 @@ IMPORTER = _read(COMPANION / "ImportManager.java")
 THEME = _read(ROOT / "theme" / "theme.qml")
 TEST_SH = _read(UNIFIED / "test.sh")
 
-METADATA_FIELD = "x-lucent-accent"
+METADATA_FIELD = "x-emufusion-accent"
 REGISTRY_FIELD = "accent"
 REGISTRY_SOURCE_FIELD = "accentSource"
 
@@ -219,7 +219,7 @@ class ThemeWallpaperGroupingTest(unittest.TestCase):
         # Persisted values go through the same normalizer, so an unknown or
         # hand-edited setting can never leave the theme in a fourth mode.
         self.assertIn(
-            'normalizedAccentGrouping(String(api.memory.get("lucentAccentGrouping")))',
+            'normalizedAccentGrouping(String(api.memory.get("emufusionAccentGrouping")))',
             THEME)
         self.assertIn("accentGrouping = normalizedAccentGrouping(value)", THEME)
 
@@ -234,7 +234,7 @@ class ThemeWallpaperGroupingTest(unittest.TestCase):
     def test_the_theme_only_reads_a_precomputed_value(self):
         reader = THEME.split("function storedWallpaperAccent(game) {", 1)[1]
         reader = reader.split("\n    }", 1)[0]
-        self.assertIn('game.extra["lucent-accent"]', reader)
+        self.assertIn('game.extra["emufusion-accent"]', reader)
         # No image, canvas, or pixel work anywhere in the resolution path.
         for forbidden in ("ShaderEffect", "grabToImage", "Canvas", "getContext"):
             self.assertNotIn(forbidden, reader)
@@ -427,9 +427,9 @@ class AccentDerivationExecutingTest(unittest.TestCase):
                   "x-background-source: exact-wallpaper\n"
                   f"{METADATA_FIELD}: {accent}\n")
         self.assertEqual(accent, metadata_field(stanza, METADATA_FIELD))
-        self.assertEqual("", metadata_field(stanza, "x-lucent-id"))
+        self.assertEqual("", metadata_field(stanza, "x-emufusion-id"))
 
-        # Pegasus drops the x- prefix, so the theme reads it as "lucent-accent"
+        # Pegasus drops the x- prefix, so the theme reads it as "emufusion-accent"
         # and validates it with the pattern theme.qml actually contains.
         reader = THEME.split("function storedWallpaperAccent(game) {", 1)[1]
         reader = reader.split("\n    }", 1)[0]

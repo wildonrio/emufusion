@@ -35,18 +35,18 @@ final class ThemeInstaller {
             "pegasus-frontend");
     private static final File PEGASUS_CONFIG = new File(Environment.getExternalStorageDirectory(),
             "Android/data/org.pegasus_frontend.android/files/pegasus-frontend");
-    private static final File LUCENT_CONFIG = new File(Environment.getExternalStorageDirectory(),
+    private static final File APP_CONFIG = new File(Environment.getExternalStorageDirectory(),
             "Android/data/com.thorium.preview/files/pegasus-frontend");
-    private static final File THEME = new File(PEGASUS, "themes/lucent");
-    private static final File VERSION = new File(THEME, ".lucent-version");
+    private static final File THEME = new File(PEGASUS, "themes/emufusion");
+    private static final File VERSION = new File(THEME, ".emufusion-version");
     // Deliberately outside THEME: installing a newer downloaded theme replaces
     // that directory, but must not erase the record of which APK-bundled theme
     // was already considered. A later APK with different bundled bytes then
     // installs once; repeated starts of the same APK leave the theme alone.
     private static final File BUNDLED_FINGERPRINT = new File(PEGASUS,
-            ".lucent-bundled-theme.sha256");
-    private static final File CONFIG_MIGRATION = new File(LUCENT_CONFIG,
-            ".lucent-config-migrated");
+            ".emufusion-bundled-theme.sha256");
+    private static final File CONFIG_MIGRATION = new File(APP_CONFIG,
+            ".emufusion-config-migrated");
 
     private ThemeInstaller() {}
 
@@ -104,7 +104,7 @@ final class ThemeInstaller {
                     installedCompletion.run();
                 if (completion != null) completion.run();
             }
-        }, "lucent-theme-install");
+        }, "emufusion-theme-install");
         worker.setDaemon(true);
         worker.start();
     }
@@ -122,6 +122,7 @@ final class ThemeInstaller {
         // Android/data directory, even when that app is not installed.
         if (context.getExternalFilesDir(null) == null)
             throw new java.io.IOException("EmuFusion external storage is unavailable");
+        migrateLegacyTheme(context);
         boolean configurationMissing = !isFrontendConfigured();
         migratePegasusConfig();
         String bundled = readAssetText(context, ASSET_VERSION).trim();
@@ -147,13 +148,144 @@ final class ThemeInstaller {
     }
 
     /**
+     * Moves the theme and the frontend state that is keyed by its folder name
+     * from the pre-rename names (see {@link LegacyNames}) once: the installed
+     * theme folder and its version marker (renamed in place, so an update is
+     * not mistaken for a first install that would override the owner's chosen
+     * theme), the bundled-theme fingerprint, the config-migration marker,
+     * Pegasus's theme memory file with its keys, the selected-theme path in
+     * both settings files, and the generated library metadata file names.
+     * ROMs, media and other themes are never touched. Every step is a rename
+     * or a small rewrite and is skipped once its new name exists.
+     */
+    static synchronized void migrateLegacyTheme(Context context) {
+        if (!hasStorageAccess(context)) return;
+        try {
+            File themes = new File(PEGASUS, "themes");
+            File legacyTheme = new File(themes, LegacyNames.THEME_DIRECTORY);
+            if (legacyTheme.isDirectory() && !THEME.exists() && legacyTheme.renameTo(THEME))
+                Log.i(TAG, "Theme folder moved to " + THEME.getName());
+            renameIfAbsent(new File(THEME, LegacyNames.THEME_VERSION_MARKER), VERSION);
+            renameIfAbsent(new File(PEGASUS, LegacyNames.BUNDLED_THEME_FINGERPRINT),
+                    BUNDLED_FINGERPRINT);
+            renameIfAbsent(new File(APP_CONFIG, LegacyNames.CONFIG_MIGRATION_MARKER),
+                    CONFIG_MIGRATION);
+            migrateThemeMemory(new File(APP_CONFIG, "theme_settings"));
+            String legacyPath = legacyTheme.getAbsolutePath() + "/";
+            rewriteSelectedTheme(new File(APP_CONFIG, "settings.txt"), legacyPath);
+            rewriteSelectedTheme(new File(PEGASUS, "settings.txt"), legacyPath);
+            renameGeneratedMetadata(new File(APP_CONFIG, "metafiles"));
+            // The old folder only remains when it could not be renamed. Once
+            // the new theme is complete it is a stale duplicate in Pegasus's
+            // theme list (app-installed files, re-installable from the APK).
+            if (legacyTheme.isDirectory() && new File(THEME, "theme.qml").isFile() &&
+                    VERSION.isFile())
+                deleteTree(legacyTheme);
+        } catch (Exception failure) {
+            Log.w(TAG, "Legacy theme migration deferred", failure);
+        }
+    }
+
+    private static void renameIfAbsent(File legacy, File current) {
+        if (legacy.isFile() && !current.exists() && !legacy.renameTo(current))
+            Log.w(TAG, "Unable to rename " + legacy.getName());
+    }
+
+    /**
+     * Pegasus keys theme memory by folder name: carry the file and rename its
+     * keys. The first start after the update can still run the previous QML
+     * for a moment (the folder is renamed before the new theme finishes
+     * installing), which writes its old key names again; those are folded in
+     * on the next start, a value saved under the new name winning.
+     */
+    private static void migrateThemeMemory(File directory) throws Exception {
+        File legacy = new File(directory, LegacyNames.THEME_MEMORY_FILE);
+        File current = new File(directory, THEME.getName() + ".json");
+        org.json.JSONObject source;
+        if (current.isFile()) source = new org.json.JSONObject(readText(current));
+        else if (legacy.isFile()) source = new org.json.JSONObject(readText(legacy));
+        else return;
+        String prefix = LegacyNames.THEME_MEMORY_KEY_PREFIX;
+        org.json.JSONObject migrated = new org.json.JSONObject();
+        java.util.List<String> legacyKeys = new ArrayList<>();
+        java.util.Iterator<String> keys = source.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (key.startsWith(prefix) && key.length() > prefix.length() &&
+                    Character.isUpperCase(key.charAt(prefix.length()))) legacyKeys.add(key);
+            else migrated.put(key, source.get(key));
+        }
+        if (current.isFile() && legacyKeys.isEmpty() && !legacy.isFile()) return;
+        for (String key : legacyKeys) {
+            String renamed = "emufusion" + key.substring(prefix.length());
+            if (!migrated.has(renamed)) migrated.put(renamed, source.get(key));
+        }
+        if (current.isFile() && legacy.isFile()) {
+            // Both exist (an interrupted earlier move): keep what the current
+            // file has and add only what the old file alone still holds.
+            org.json.JSONObject old = new org.json.JSONObject(readText(legacy));
+            java.util.Iterator<String> oldKeys = old.keys();
+            while (oldKeys.hasNext()) {
+                String key = oldKeys.next();
+                String renamed = key.startsWith(prefix) && key.length() > prefix.length() &&
+                        Character.isUpperCase(key.charAt(prefix.length())) ?
+                        "emufusion" + key.substring(prefix.length()) : key;
+                if (!migrated.has(renamed)) migrated.put(renamed, old.get(key));
+            }
+        }
+        File temporary = new File(directory, "." + current.getName() + ".tmp");
+        writeText(temporary, migrated.toString());
+        if (current.isFile() && !current.delete())
+            throw new java.io.IOException("Unable to replace theme memory");
+        if (!temporary.renameTo(current))
+            throw new java.io.IOException("Unable to commit migrated theme memory");
+        if (legacy.isFile() && !legacy.delete())
+            Log.w(TAG, "Unable to remove migrated theme memory file");
+        Log.i(TAG, "Theme memory migrated keys=" + migrated.length() +
+                " renamed=" + legacyKeys.size());
+    }
+
+    private static void rewriteSelectedTheme(File settings, String legacyPath) throws Exception {
+        if (!settings.isFile()) return;
+        String text = readText(settings);
+        String legacyLine = "general.theme: " + legacyPath;
+        if (!text.contains(legacyLine)) return;
+        File temporary = new File(settings.getParentFile(), ".settings.emufusion.tmp");
+        writeText(temporary, text.replace(legacyLine,
+                "general.theme: " + THEME.getAbsolutePath() + "/"));
+        if (settings.isFile() && !settings.delete())
+            throw new java.io.IOException("Unable to replace frontend settings");
+        if (!temporary.renameTo(settings))
+            throw new java.io.IOException("Unable to commit frontend settings");
+    }
+
+    /** Library metadata the importer generated (and its backups), never user files. */
+    private static void renameGeneratedMetadata(File directory) {
+        File[] files = directory.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            String name = file.getName();
+            if (!file.isFile() || !name.startsWith(LegacyNames.AUTO_METADATA_PREFIX)) continue;
+            File current = new File(directory, ImportManager.AUTO_METADATA_PREFIX +
+                    name.substring(LegacyNames.AUTO_METADATA_PREFIX.length()));
+            if (current.exists()) {
+                // Generated again under the new name already: the old copy
+                // would list every game twice.
+                if (!file.delete()) Log.w(TAG, "Unable to remove stale metadata " + name);
+            } else if (!file.renameTo(current)) {
+                Log.w(TAG, "Unable to rename metadata " + name);
+            }
+        }
+    }
+
+    /**
      * Carries the existing Pegasus library, play history and theme memory into
      * the unified package once. ROMs and media are referenced in place and are
      * never copied, moved or deleted by this migration.
      */
     private static synchronized void migratePegasusConfig() throws Exception {
         if (CONFIG_MIGRATION.isFile() || !PEGASUS_CONFIG.isDirectory()) return;
-        copyConfigTree(PEGASUS_CONFIG, LUCENT_CONFIG);
+        copyConfigTree(PEGASUS_CONFIG, APP_CONFIG);
         writeText(CONFIG_MIGRATION, "migrated from org.pegasus_frontend.android\n");
     }
 
@@ -167,7 +299,7 @@ final class ThemeInstaller {
         PEGASUS.mkdirs();
         File themes = new File(PEGASUS, "themes");
         themes.mkdirs();
-        File staging = new File(themes, ".lucent-installing");
+        File staging = new File(themes, ".emufusion-installing");
         deleteTree(staging);
         if (!staging.mkdirs() && !staging.isDirectory())
             throw new java.io.IOException("Unable to create the theme staging directory");
@@ -177,7 +309,7 @@ final class ThemeInstaller {
             byte[] buffer = new byte[128 * 1024];
             while ((entry = zip.getNextEntry()) != null) {
                 String relative = entry.getName();
-                if (relative.startsWith("lucent/")) relative = relative.substring(7);
+                if (relative.startsWith("emufusion/")) relative = relative.substring(10);
                 if (relative.isEmpty()) continue;
                 File output = new File(staging, relative);
                 String canonical = output.getCanonicalPath();
@@ -290,7 +422,7 @@ final class ThemeInstaller {
     static boolean isFrontendConfigured() {
         if (installedVersion().isEmpty() || !new File(THEME, "theme.qml").isFile()
                 || !new File(THEME, "theme.cfg").isFile()) return false;
-        for (String line : readText(new File(LUCENT_CONFIG, "settings.txt")).split("\n")) {
+        for (String line : readText(new File(APP_CONFIG, "settings.txt")).split("\n")) {
             if (line.startsWith("general.theme:") &&
                     !line.substring("general.theme:".length()).trim().isEmpty()) return true;
         }
@@ -304,7 +436,7 @@ final class ThemeInstaller {
         // The old Pegasus directory is a read-only migration source, not a
         // required write target. On a clean Android phone its creation fails
         // before either of our own settings files can be written.
-        updateSettings(new File(LUCENT_CONFIG, "settings.txt"), selectEmuFusion);
+        updateSettings(new File(APP_CONFIG, "settings.txt"), selectEmuFusion);
         updateSettings(new File(PEGASUS, "settings.txt"), selectEmuFusion);
     }
 
@@ -334,14 +466,14 @@ final class ThemeInstaller {
                 }
             }
         }
-        // Repair an interrupted first install even if .lucent-version already
+        // Repair an interrupted first install even if .emufusion-version already
         // exists. A deliberately selected nonempty custom theme stays intact.
         if (!themeReplaced)
             lines.add(0, "general.theme: " + THEME.getAbsolutePath() + "/");
         if (!appsReplaced) lines.add("providers.androidapps.enabled: false");
         File parent = settings.getParentFile();
         if (parent != null) parent.mkdirs();
-        File temporary = new File(settings.getParentFile(), ".settings.lucent.tmp");
+        File temporary = new File(settings.getParentFile(), ".settings.emufusion.tmp");
         try (FileWriter writer = new FileWriter(temporary, false)) {
             for (String line : lines) writer.write(line + "\n");
         }

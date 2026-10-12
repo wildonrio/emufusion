@@ -9,7 +9,7 @@ import android.content.Intent;
  * this state is primarily a recovery contract for process/task recreation.
  */
 public final class SessionReturnState {
-    public static final String EXTRA_PREFIX = "lucent.return.";
+    public static final String EXTRA_PREFIX = "emufusion.return.";
     public static final SessionReturnState EMPTY = new SessionReturnState(
             "", "", "", "", "", -1, -1, "");
 

@@ -107,11 +107,11 @@ def main() -> None:
         raise SystemExit(1)
     if warnings:
         print(
-            f"Lucent 16 KiB ELF alignment: PASS with {len(warnings)} "
+            f"EmuFusion 16 KiB ELF alignment: PASS with {len(warnings)} "
             "allowlisted 4 KiB offender(s)"
         )
     else:
-        print("Lucent 16 KiB ELF alignment: PASS")
+        print("EmuFusion 16 KiB ELF alignment: PASS")
 
 
 if __name__ == "__main__":

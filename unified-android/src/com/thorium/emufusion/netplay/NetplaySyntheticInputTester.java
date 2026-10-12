@@ -15,7 +15,7 @@ import java.io.File;
  * run once per libretro-family engine while that port-routing code is
  * new, not as a permanent feature; it can only ever fire when a specific
  * marker file has been placed by hand (e.g. {@code adb shell touch
- * /sdcard/lucent-netplay-synthetic-test}), which nothing in the normal
+ * /sdcard/emufusion-netplay-synthetic-test}), which nothing in the normal
  * UI or launch flow ever does.
  *
  * <p>First taps Start on port 1 once (many co-op titles, e.g. Contra,
@@ -28,7 +28,7 @@ import java.io.File;
  */
 public final class NetplaySyntheticInputTester {
     private static final String TAG = "EmuFusionNetplaySynthTest";
-    private static final String MARKER_FILE = "lucent-netplay-synthetic-test";
+    private static final String MARKER_FILE = "emufusion-netplay-synthetic-test";
     private static final int RETRO_DEVICE_ID_JOYPAD_START = 3;
     private static final int RETRO_DEVICE_ID_JOYPAD_RIGHT = 7;
     private static final long JOIN_TAP_MS = 150L;
@@ -47,7 +47,7 @@ public final class NetplaySyntheticInputTester {
         Log.w(TAG, "SYNTHETIC NETPLAY INPUT TEST ACTIVE -- port 1 will tap Start once to join, " +
                 "then toggle Right every " + TOGGLE_INTERVAL_MS +
                 "ms. This must never run outside manual verification.");
-        HandlerThread thread = new HandlerThread("lucent-netplay-synth-test");
+        HandlerThread thread = new HandlerThread("emufusion-netplay-synth-test");
         thread.start();
         Handler handler = new Handler(thread.getLooper());
 

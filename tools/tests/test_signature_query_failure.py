@@ -21,6 +21,7 @@ public class QueryTest {
         static void glDisable(int x){enabled.remove(x);}
         static void glEnable(int x){enabled.add(x);}
         static void glUseProgram(int x){}
+        static void glFlush(){}
         static void glDrawArrays(int a,int b,int c){draws++;}
     }
     static class DenseGpuTimer {

@@ -41,7 +41,7 @@ public final class CoreOptionOverrideFile {
     public static final int MAX_FILE_BYTES = 64 * 1024;
 
     private static final String HEADER =
-            "# Lucent launch-time core-option overrides. Generated; do not edit.\n";
+            "# EmuFusion launch-time core-option overrides. Generated; do not edit.\n";
 
     private CoreOptionOverrideFile() {}
 

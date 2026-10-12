@@ -146,7 +146,7 @@ class Phase3EdenIdentityTest(unittest.TestCase):
         options = SOURCE_LOCK["cmakeOptions"]
         self.assertEqual(0, options["ENABLE_QT"])
         # The embedded frontend neither signs in nor exposes Eden's online UI.
-        # Keeping web services enabled starts needless sockets in Lucent's
+        # Keeping web services enabled starts needless sockets in EmuFusion's
         # process and increases load/relocation work.
         self.assertEqual(0, options["ENABLE_WEB_SERVICE"])
         self.assertIs(True, options["ANDROID_ARM_NEON"])
@@ -736,7 +736,7 @@ class Phase3SystemDirectoryTest(unittest.TestCase):
                       SYSTEM_DIR)
 
     def test_an_installed_firmware_set_is_not_reinstalled_every_launch(self):
-        self.assertIn('FIRMWARE_MARKER = ".lucent-firmware-source"', SYSTEM_DIR)
+        self.assertIn('FIRMWARE_MARKER = ".emufusion-firmware-source"', SYSTEM_DIR)
         self.assertIn("if (countFirmware(registered) > 0 &&", SYSTEM_DIR)
 
 

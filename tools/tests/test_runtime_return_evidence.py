@@ -23,7 +23,7 @@ class RuntimeReturnEvidenceTest(unittest.TestCase):
 E/ActivityTaskManager: START u0 {act=com.thorium.preview.LAUNCH_INTERNAL_GAME cmp=com.thorium.preview/org.pegasus_frontend.android.MainActivity}
 I/EmuFusionInWindow: In-window route accepted engine=mesen system=nes
 I/ActivityThread: performResumeActivity com.thorium.preview displayId 0
-I/EmuFusionInWindow: Returned to Lucent immediately in same window engine=mesen system=nes latencyMs=1
+I/EmuFusionInWindow: Returned to EmuFusion immediately in same window engine=mesen system=nes latencyMs=1
 """
         result = MODULE.audit(log, {"return-01.png": "Nintendo menu"})
         self.assertFalse(result.passed)
@@ -34,7 +34,7 @@ I/EmuFusionInWindow: Returned to Lucent immediately in same window engine=mesen 
 
     def test_visible_splash_overrules_fast_host_marker(self):
         log = (
-            "I/EmuFusionInWindow: Returned to Lucent immediately in same window "
+            "I/EmuFusionInWindow: Returned to EmuFusion immediately in same window "
             "engine=mesen system=nes latencyMs=1\n"
         )
         result = MODULE.audit(log, {
@@ -51,7 +51,7 @@ I/EmuFusionInWindow: Returned to Lucent immediately in same window engine=mesen 
         log = """
 I/EmuFusionLaunchReceiver: received launch
 I/EmuFusionInWindow: In-window route accepted engine=mesen system=nes
-I/EmuFusionInWindow: Returned to Lucent immediately in same window engine=mesen system=nes latencyMs=7
+I/EmuFusionInWindow: Returned to EmuFusion immediately in same window engine=mesen system=nes latencyMs=7
 """
         result = MODULE.audit(log, {
             "return-01.png": "Nintendo Entertainment System 10-Yard Fight",
@@ -69,13 +69,13 @@ I/EmuFusionInWindow: Returned to Lucent immediately in same window engine=mesen 
 
     def test_host_or_visible_latency_over_five_hundred_ms_fails(self):
         host = MODULE.audit(
-            "Returned to Lucent immediately in same window latencyMs=501",
+            "Returned to EmuFusion immediately in same window latencyMs=501",
             {"return.png": "SYSTEM VIEW"},
             visible_return_upper_bounds_ms=(20,),
         )
         self.assertTrue(any("in-process" in error for error in host.errors))
         visible = MODULE.audit(
-            "Returned to Lucent immediately in same window latencyMs=5",
+            "Returned to EmuFusion immediately in same window latencyMs=5",
             {"return.png": "SYSTEM VIEW"},
             visible_return_upper_bounds_ms=(501,),
         )
@@ -125,7 +125,7 @@ I/EmuFusionInWindow: Returned to Lucent immediately in same window engine=mesen 
         self.assertEqual(latencies, (3,))
         self.assertEqual(reports, ())
         result = MODULE.audit(
-            "I/EmuFusionInWindow: Returned to Lucent immediately in same window "
+            "I/EmuFusionInWindow: Returned to EmuFusion immediately in same window "
             "latencyMs=3",
             ocr,
         )

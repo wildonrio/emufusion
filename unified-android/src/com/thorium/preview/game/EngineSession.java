@@ -14,7 +14,7 @@ import java.util.Set;
 
 /** Runtime boundary shared by future libretro and native engine adapters. */
 public interface EngineSession {
-    enum PauseReason { LUCENT_MENU, ANDROID_BACKGROUND }
+    enum PauseReason { EMUFUSION_MENU, ANDROID_BACKGROUND }
     enum StopReason { EXIT_TO_EMUFUSION, ACTIVITY_DESTROYED }
 
     interface Listener {
@@ -93,10 +93,10 @@ public interface EngineSession {
         return quiesceForPresentationRecovery();
     }
 
-    /** Returns true when the engine displayed its Lucent-owned remapping UI. */
+    /** Returns true when the engine displayed its EmuFusion-owned remapping UI. */
     boolean openControls();
 
-    /** Returns true when the engine displayed a Lucent-owned checkpoint timeline. */
+    /** Returns true when the engine displayed a EmuFusion-owned checkpoint timeline. */
     boolean openRestoreHistory();
 
     /**

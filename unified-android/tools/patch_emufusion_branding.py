@@ -17,23 +17,24 @@ VISIBLE_REPLACEMENTS = {
     # the source string's exact byte/code-unit length.  Each replacement is a
     # complete, naturally worded phrase of that exact length; padding after the
     # shorter EmuFusion name caused visible double spaces and broken grammar.
-    "Exit Pegasus": "Close Lucent",
-    "Pegasus Frontend, version": "Lucent Frontend - version",
-    "Pegasus couldn't find any games on your device. If you have not set up "
-    "Pegasus yet,":
-        "Lucent could not find your games on your device. If you have not set "
-        "up Lucent yet,",
+    "Exit Pegasus":
+        "Quit the app",
+    "Pegasus Frontend, version":
+        "EmuFusion Library version",
+    "Pegasus couldn't find any games on your device. If you have not set up Pegasus yet,":
+        "EmuFusion couldn't find games on this device. If you have not set up EmuFusion yet,",
     "When looking for games, Pegasus can use":
-        "While looking for games, Lucent can use",
+        "When searching games, EmuFusion can use",
     "Pegasus tried to load the selected theme":
-        "Lucent tried to load your selected theme",
+        "EmuFusion tried to load the chosen theme",
     "Pegasus will look for collection files":
-        "Lucent can search for collection files",
+        "EmuFusion will search collection files",
     "in both Pegasus and the launched app. Pegasus have permission for":
-        "in Lucent and also in the launched app. Lucent has permission for",
-    "name: Pegasus Grid": "name: Lucent Theme",
+        "in EmuFusion and the launched app. EmuFusion can currently access",
+    "name: Pegasus Grid":
+        "name: EmuFusion UI",
     "summary: The default grid theme of Pegasus":
-        "summary: The default grid theme of Lucent.",
+        "summary: The EmuFusion default grid theme.",
 
     # The frontend also embeds the original QML source.  Those strings are
     # split at source-level concatenation boundaries, so the complete runtime
@@ -41,13 +42,13 @@ VISIBLE_REPLACEMENTS = {
     # fragment byte-for-byte the same length while making the concatenated
     # result read naturally.
     "Pegasus couldn't find any games on your device. If you have not":
-        "Lucent could not find any games on your device. If you have not",
+        "EmuFusion cannot find any games on your device. If you have not",
     " set up Pegasus yet, you can find the documentation here: <i>%1</i>.":
-        " configured Lucent yet, use the setup documentation here: <i>%1</i>.",
+        " set up EmuFusion yet, read the setup documentation here: <i>%1</i>.",
     "Some Android apps may not launch games unless you manually allow access ":
-        "Lucent keeps all emulation inside this app. To read game files stored ou",
+        "EmuFusion keeps all emulation inside this app. To read game files stored",
     "to the game's directory, in both Pegasus and the launched app. Pegasus ":
-        "tside its private folder, Lucent needs access to each game's directory.",
+        " outside its own folder, EmuFusion needs access to each game's folders.",
     "have permission for the following locations:":
         " It currently has access to these locations:",
 }
