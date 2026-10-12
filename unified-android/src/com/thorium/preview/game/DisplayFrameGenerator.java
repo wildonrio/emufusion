@@ -4336,6 +4336,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private void allocateHistoryTextures(int width, int height) {
         if (nativeSourceImageObserver != null)
             nativeSourceImageObserver.resetImages();
+        forgetReusableDensePyramid();
         historyWidth = width;
         historyHeight = height;
         float flowLimit = flowLimitPixels(width, height);
@@ -5047,11 +5048,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             return;
         }
         if (lastPresentationEndpointTimestampNs > 0L &&
-                !(timelineActive ?
-                        timeline.pairSpanAllowed(lastPresentationEndpointTimestampNs, timestampNs) :
-                        AdaptiveFrameRateController.endpointSpanContinuous(
-                                lastPresentationEndpointTimestampNs, timestampNs,
-                                frameRate.presentationSourceHz()))) {
+                !presentationEndpointContinuous(lastPresentationEndpointTimestampNs, timestampNs)) {
             // A loading screen, static hold, save-state transition, or lost
             // carrier interval ends the old presentation timeline before the
             // resumed endpoint can be submitted.  Detecting this only while
@@ -5164,6 +5161,25 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     " candidateUnavailableTotal=" + endpointCandidateUnavailable);
         }
         return false;
+    }
+
+    /**
+     * Whether the next presentation endpoint continues the current timeline.
+     * While nothing is generated (Direct passthrough), exactly one dropped
+     * frame does not cut it: no pair is interpolated across the gap, and a
+     * game near 60 FPS that drops a frame every quarter second (Wii U SM3DW at
+     * 55-60) was reset 75 times in 19 s, so the timeline never saw a steady
+     * source to generate for (2026-10-12). Generated presentation keeps the
+     * strict span: never morph across a missing interval.
+     */
+    private boolean presentationEndpointContinuous(long previousNs, long timestampNs) {
+        if (timelineActive) return timeline.pairSpanAllowed(previousNs, timestampNs);
+        double sourceHz = frameRate.presentationSourceHz();
+        if (AdaptiveFrameRateController.endpointSpanContinuous(previousNs, timestampNs, sourceHz))
+            return true;
+        return !frameRate.generatesIntermediateFrames() &&
+                AdaptiveFrameRateController.endpointSpanBridgesOneHeldFrame(
+                        previousNs, timestampNs, sourceHz);
     }
 
     /**
@@ -5299,7 +5315,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             throw new IllegalStateException("endpoint FIFO sequence missing");
         if (timestampNs <= 0L)
             throw new IllegalStateException("endpoint FIFO timestamp missing");
-        copyTexture(endpointFifoTextures[slot], historyTextures[historyIndex]);
+        writeHistory(endpointFifoTextures[slot], historyIndex);
         copyNativeEndpointProvenance(slot, NATIVE_HISTORY_BASE + historyIndex);
         releaseNativeEndpointProvenance(slot);
         endpointFifoSequence[slot] = 0L;
@@ -5747,8 +5763,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private void promoteLatestTexture() {
         if (promotedFrameCount == 0) {
-            copyTexture(latestTexture, historyTextures[0]);
-            copyTexture(latestTexture, historyTextures[1]);
+            writeHistory(latestTexture, 0);
+            writeHistory(latestTexture, 1);
             previousIndex = 0;
             currentIndex = 1;
             clearMotionField(flowTextures[0], coarseFlowWidth, coarseFlowHeight);
@@ -5778,18 +5794,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 boolean endpointCopied = false;
                 try {
                     beginDenseStage(DenseGpuTimer.ENDPOINT_COPY);
-                    copyTexture(latestTexture, historyTextures[currentIndex]);
+                    writeHistory(latestTexture, currentIndex);
                     endDenseStage();
                     endpointCopied = true;
                     estimateDenseMotion();
                 } catch (RuntimeException failure) {
                     rejectDense("timer-or-estimator-failure", failure);
                     if (!endpointCopied)
-                        copyTexture(latestTexture, historyTextures[currentIndex]);
+                        writeHistory(latestTexture, currentIndex);
                     estimateMotion();
                 }
             } else {
-                copyTexture(latestTexture, historyTextures[currentIndex]);
+                writeHistory(latestTexture, currentIndex);
                 estimateMotion();
             }
         }
@@ -5920,6 +5936,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void allocateDenseResources() {
+        forgetReusableDensePyramid();
         int maxWidth = denseV28ReducedAnalysisRequested ?
                 DENSE_V28_ANALYSIS_MAX_WIDTH : denseV27ReducedAnalysisRequested ?
                 DENSE_V27_ANALYSIS_MAX_WIDTH : DENSE_V26_ANALYSIS_MAX_WIDTH;
@@ -6203,8 +6220,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // both directions are invalid.
             densePairMeanDifference = 0f;
             beginDenseStage(DenseGpuTimer.PYRAMID);
-            buildDensePyramid(historyTextures[previousIndex], 0);
-            buildDensePyramid(historyTextures[currentIndex], 1);
+            buildDensePairPyramids();
             if (denseV28ReducedAnalysisRequested) {
                 buildDenseGlobalSeed(0, historyTextures[previousIndex],
                         historyTextures[currentIndex]);
@@ -6662,6 +6678,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private String denseStageTelemetry() {
         StringBuilder value = new StringBuilder();
+        value.append(" densePyramidBuilds=").append(densePyramidBuilds)
+                .append(" densePyramidReuses=").append(densePyramidReuses);
         String[] names = {"", "Copy", "Pyramid", "Forward", "Reverse",
                 "Validation", "Warp"};
         for (int stage = 1; stage <= DenseGpuTimer.VISIBLE_WARP; ++stage) {
@@ -6906,6 +6924,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * path. A later enable must create a new native timer and sequence epoch. */
     private void teardownDenseEpoch(String reason) {
         motionEstimateReady = false;
+        forgetReusableDensePyramid();
         if (physicalPresentationTracker != null)
             physicalPresentationTracker.setReadyTimingEnabled(false);
         resetDenseGpuEvidenceEpoch();
@@ -6999,6 +7018,45 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 difference += Math.abs((proofPrevious[offset + channel] & 0xff) -
                         (proofCurrent[offset + channel] & 0xff));
         return difference / (255f * channels);
+    }
+
+    // Per-real-frame analysis is reused across pairs (as LSFG builds its
+    // feature pyramid once per real frame): when this pair's left image is
+    // the previous pair's right one -- the same history texture, unwritten
+    // since -- its pyramid is already built and only the new right image is
+    // analysed. About 0.35 ms of the ~0.7 ms pyramid stage per pair at 1080p.
+    private int densePyramidRightHistoryIndex = -1;
+    private long densePyramidRightHistoryWrite;
+    private final long[] historyWrites = new long[2];
+    private long densePyramidReuses, densePyramidBuilds;
+
+    private void writeHistory(int sourceTexture, int historyIndex) {
+        copyTexture(sourceTexture, historyTextures[historyIndex]);
+        ++historyWrites[historyIndex];
+    }
+
+    private void forgetReusableDensePyramid() {
+        densePyramidRightHistoryIndex = -1;
+    }
+
+    private void buildDensePairPyramids() {
+        if (densePyramidRightHistoryIndex == previousIndex &&
+                historyWrites[previousIndex] == densePyramidRightHistoryWrite) {
+            int[] pyramid = densePyramidTextures[0];
+            densePyramidTextures[0] = densePyramidTextures[1];
+            densePyramidTextures[1] = pyramid;
+            int[] box = denseBoxTextures[0];
+            denseBoxTextures[0] = denseBoxTextures[1];
+            denseBoxTextures[1] = box;
+            ++densePyramidReuses;
+        } else {
+            buildDensePyramid(historyTextures[previousIndex], 0);
+            ++densePyramidBuilds;
+        }
+        buildDensePyramid(historyTextures[currentIndex], 1);
+        ++densePyramidBuilds;
+        densePyramidRightHistoryIndex = currentIndex;
+        densePyramidRightHistoryWrite = historyWrites[currentIndex];
     }
 
     private void buildDensePyramid(int source, int endpoint) {

@@ -91,6 +91,45 @@ public class VariableProbe {
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertIn("VARIABLE_OK", run.stdout)
 
+    def test_direct_passthrough_bridges_one_dropped_frame(self):
+        body = method("private boolean presentationEndpointContinuous(")
+        harness = r'''
+import com.thorium.emufusion.video.AdaptiveFrameRateController;
+public class ContinuityProbe {
+  boolean timelineActive;
+  static class Timeline { boolean pairSpanAllowed(long a, long b) { return b - a < 100_000_000L; } }
+  final Timeline timeline = new Timeline();
+  static class Rate { boolean generating; double presentationSourceHz() { return 60.0; }
+    boolean generatesIntermediateFrames() { return generating; } }
+  final Rate frameRate = new Rate();
+''' + body + r'''
+  static void check(boolean ok, String why) { if (!ok) throw new AssertionError(why); }
+  public static void main(String[] a) {
+    ContinuityProbe p = new ContinuityProbe();
+    long t = 1_000_000_000L, period = 16_666_667L;
+    check(p.presentationEndpointContinuous(t, t + period), "one period continues");
+    check(p.presentationEndpointContinuous(t, t + 2 * period), "Direct bridges one dropped frame");
+    check(!p.presentationEndpointContinuous(t, t + 3 * period), "two dropped frames still cut");
+    p.frameRate.generating = true;
+    check(!p.presentationEndpointContinuous(t, t + 2 * period), "generated output never spans a gap");
+    p.timelineActive = true;
+    check(p.presentationEndpointContinuous(t, t + 5 * period), "the timeline applies its own limit");
+    System.out.println("CONTINUITY_OK");
+  }
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="continuity-") as tmp:
+            path = Path(tmp, "ContinuityProbe.java")
+            path.write_text(harness)
+            built = subprocess.run([str(JAVA / "javac"), "-sourcepath",
+                                    str(ROOT / "unified-android/src"), "-d", tmp, str(path)],
+                                   capture_output=True, text=True, timeout=120)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(JAVA / "java"), "-cp", tmp, "ContinuityProbe"],
+                                 capture_output=True, text=True, timeout=60)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn("CONTINUITY_OK", run.stdout)
+
     def test_timeline_uses_owned_lattice_when_the_controller_is_direct(self):
         planned = method("private boolean builtinGenerationPlanned()")
         self.assertLess(planned.index("frameRate.generatesIntermediateFrames()"),

@@ -35,6 +35,8 @@ class NativeEndpointProvenanceTest(unittest.TestCase):
             "private void invalidateBufferedPairForReprime(boolean resetController)",
             "private void commitBufferedEndpointAdvance(int presentation, int advance)",
             "private void recordEndpointAdmissionLag(long timestampNs)",
+            "private boolean presentationEndpointContinuous(long previousNs, long timestampNs)",
+            "private void writeHistory(int sourceTexture, int historyIndex)",
         )
         fixture = r'''
 import com.thorium.emufusion.video.*;
@@ -60,11 +62,13 @@ public class ProvenanceTest {
         static final int PRESENT_REAL=1;
         static boolean continuous=true,duplicate=true;
         static boolean endpointSpanContinuous(long a,long b,double hz){return continuous;}
+        static boolean endpointSpanBridgesOneHeldFrame(long a,long b,double hz){return false;}
         static boolean duplicateOccupiesNextSourceSlot(long a,long b,double hz,int c,int d){return duplicate;}
     }
     static class Rate {boolean sustainable=true;int resets;
         boolean hasSustainableGenerationRate(){return sustainable;}
         double presentationSourceHz(){return 60;}
+        boolean generatesIntermediateFrames(){return false;}
         boolean lockedTierActive(){return false;}
         boolean admitLockedTierEndpoint(long timestamp){return true;}
         double directLatticeSourceHz(){return 0;}
@@ -101,6 +105,7 @@ public class ProvenanceTest {
     final Rate frameRate=new Rate();ExternalFrameGenerationTransport externalTransport;
     boolean holdoutMode;boolean withholdForHoldout(int texture,long timestampNs){return false;}
     final int[] endpointFifoTextures={10,11,12,13,14,15},historyTextures={20,21};
+    final long[] historyWrites=new long[2];
     final long[] endpointFifoSequence=new long[6],endpointFifoTimestampNs=new long[6],
         endpointFifoUniqueSequence=new long[6],endpointFifoCandidateLoss=new long[6];
     final int[] endpointFifoSubmission=new int[6];final long[] textureContent=new long[32];
