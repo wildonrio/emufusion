@@ -71,8 +71,8 @@ class LegacyNameMigrationTest(unittest.TestCase):
 
     def test_libretro_core_recipes_and_patches_use_the_new_name(self):
         # Rename phase C2b rebuilt every libretro core from renamed recipes and
-        # patches; only the in-process adapters (Eden, Cemu, aPS3e) remain.
-        adapters = ('aps3e-', 'cemu-', 'eden-')
+        # patches, C2c the Cemu adapter; only Eden and aPS3e remain.
+        adapters = ('aps3e-', 'eden-')
         offenders = []
         recipes = [ROOT / 'engines/build_core.sh', ROOT / 'engines/build_scummvm_core.sh']
         recipes += [p for p in (ROOT / 'engines/patches').iterdir() if not p.name.startswith(adapters)]

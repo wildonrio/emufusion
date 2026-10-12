@@ -54,6 +54,15 @@ public final class TimelineFrameScheduler {
     public static final long REAL_SNAP_DIVISOR = 4L;
     /** Frames queued beyond the steady depth before latency is trimmed. */
     public static final int TRIM_EXCESS_QUEUED = 2;
+    /**
+     * Callbacks the excess must persist for before trimming starts (~0.25 s
+     * at 120 Hz). A producer that delivers in bursts (Cemu: two images
+     * back to back, then a gap) queues extra images only momentarily; trimming
+     * on each burst left the timeline at the newest image, so the next gap
+     * made its successor late (Thor, Super Mario 3D World: 154 trims, 119
+     * late-successor holds, 59 re-anchors in 20 s).
+     */
+    public static final int TRIM_PERSISTENCE_CALLBACKS = 30;
     // Each trimmed output advances the timeline this fraction of an output
     // period early: 1/16 = 6% faster, invisible, ~0.5 s per 33 ms excess.
     private static final long TRIM_DIVISOR = 16L;
@@ -100,6 +109,7 @@ public final class TimelineFrameScheduler {
 
     private long reanchors;
     private long passedReals;
+    private int excessCallbacks;
     private long timingSamples;
     private double timingErrorSquares;
     private long timingErrorMaxNs;
@@ -144,6 +154,7 @@ public final class TimelineFrameScheduler {
         consecutiveLatePairs = 0;
         passBlockedThisPair = false;
         consecutivePassBlockedPairs = 0;
+        excessCallbacks = 0;
         pairsSinceGenerated = Integer.MAX_VALUE / 2;
         shownSequence = 0L;
         shownTargetNs = Long.MIN_VALUE;
@@ -217,7 +228,8 @@ public final class TimelineFrameScheduler {
         // callback jitter); rounding would show multi-scan outputs a scan early.
         long slot = Math.floorDiv(displayNs - anchorDisplayNs + outputPeriodNs / 4L, outputPeriodNs);
         if (slot <= lastSlot) return NONE;  // this output slot is already shown
-        if (hasRight && excessQueued >= TRIM_EXCESS_QUEUED) {
+        excessCallbacks = hasRight && excessQueued >= TRIM_EXCESS_QUEUED ? excessCallbacks + 1 : 0;
+        if (excessCallbacks >= TRIM_PERSISTENCE_CALLBACKS) {
             anchorSourceNs += Math.max(1L, outputPeriodNs / TRIM_DIVISOR);
             ++trims;
         }

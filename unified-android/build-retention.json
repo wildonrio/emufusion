@@ -3,7 +3,7 @@
   "minimum_age_days": 1,
   "pinned_sha256": {
     "738c2f9fde3b7d585c21070c3948199545aa899c15c35d2450335957ac6256a9": "Current release 3.2.45 (119). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
-    "81ab95cea38c07cefbf300d9601a017a3880ca460c02234c1953a07fbbd27b4b": "Candidate 3.2.46 (120): timeline pass-right, pending Thor validation."
+    "01616daf5bf7e3713c41a5af49ca4bdb62f3579bc291838ebc4b713a05f94eba": "Candidate 3.2.47 (121): Cemu adapter renamed, timeline pass-right and burst-robust trims; pending Thor validation."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {

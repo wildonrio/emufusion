@@ -34,7 +34,7 @@ ROUTER = _read(ROOT / "android-companion" / "src" / "com" / "thorium" /
 ROUTE_STORE = _read(ROOT / "android-companion" / "src" / "com" / "thorium" /
                     "preview" / "EngineRouteStore.java")
 ABI_HEADER = _read(ROOT / "unified-android" / "native" / "include" /
-                   "lucent_native_adapter.h")
+                   "emufusion_native_adapter.h")
 HOST_C = _read(ROOT / "unified-android" / "native" / "emufusion_native_adapter_host.c")
 JNI_C = _read(ROOT / "unified-android" / "native" / "emufusion_native_adapter_jni.c")
 MOCK_C = _read(ROOT / "unified-android" / "native" / "tests" /
@@ -42,7 +42,7 @@ MOCK_C = _read(ROOT / "unified-android" / "native" / "tests" /
 HOST_TEST_C = _read(ROOT / "unified-android" / "native" / "tests" /
                     "native_adapter_host_test.c")
 RUN_TESTS = _read(ROOT / "unified-android" / "native" / "run_tests.sh")
-CEMU_ADAPTER = _read(ROOT / "engines" / "patches" / "cemu-lucent-adapter.cpp")
+CEMU_ADAPTER = _read(ROOT / "engines" / "patches" / "cemu-emufusion-adapter.cpp")
 CEMU_TREE = Path(SOURCE_LOCK["core"]["stagedTree"])
 CEMU_SWKBD_H = _read(CEMU_TREE / "src" / "Cafe" / "OS" / "libs" /
                      "swkbd" / "swkbd.h")
@@ -107,7 +107,7 @@ class Phase3RegistryCemuTest(unittest.TestCase):
         self.assertEqual(64, len(local_archive["sha256"]))
         self.assertTrue(local_archive["path"])
         self.assertGreater(local_archive["sizeBytes"], 0)
-        self.assertEqual("lucent_native_adapter_entry",
+        self.assertEqual("emufusion_native_adapter_entry",
                          SOURCE_LOCK["adapterAbi"]["entrySymbol"])
         self.assertEqual("libemufusion_native_adapter_cemu.so",
                          SOURCE_LOCK["adapterAbi"]["expectedLibraryName"])
@@ -130,9 +130,9 @@ class Phase3RegistryCemuTest(unittest.TestCase):
         self.assertEqual(artifact["sha256"], hashlib.sha256(payload).hexdigest())
 
     def test_cemu_exports_its_engine_owned_guest_fps(self):
-        self.assertIn("lucent_native_adapter_average_game_fps",
+        self.assertIn("emufusion_native_adapter_average_game_fps",
                       CEMU_ANDROID_WINDOW)
-        self.assertIn("g_lucent_average_game_fps.store", CEMU_ANDROID_WINDOW)
+        self.assertIn("g_emufusion_average_game_fps.store", CEMU_ANDROID_WINDOW)
         self.assertIn("emufusion_native_adapter_average_game_fps", HOST_C)
         self.assertIn("emufusion_eden_average_game_fps", HOST_C)
 
@@ -140,15 +140,15 @@ class Phase3RegistryCemuTest(unittest.TestCase):
         # Frame-generation protocol 2026-09-01: the host paces a hardware
         # core at the tier below its sustained delivery.  Cemu's pace is its
         # emulated vsync frequency, which the present stamps must follow.
-        adapter = _read(ROOT / "engines" / "patches" / "cemu-lucent-adapter.cpp")
-        self.assertIn("lucent_native_adapter_set_paced_video_hz", adapter)
-        self.assertIn("lucent_native_adapter_declared_video_hz", adapter)
+        adapter = _read(ROOT / "engines" / "patches" / "cemu-emufusion-adapter.cpp")
+        self.assertIn("emufusion_native_adapter_set_paced_video_hz", adapter)
+        self.assertIn("emufusion_native_adapter_declared_video_hz", adapter)
         self.assertIn("LatteTiming_setCustomVsyncFrequency", adapter)
         self.assertIn("emufusion_native_adapter_set_paced_video_hz", HOST_C)
         self.assertIn("emufusion_native_adapter_declared_video_hz", HOST_C)
         renderer = _read(CEMU_TREE / "src" / "Cafe" / "HW" / "Latte" /
                          "Renderer" / "Vulkan" / "VulkanRenderer.cpp")
-        self.assertIn("LatteTiming_getCustomVsyncFrequency(lucentVsyncHz)", renderer)
+        self.assertIn("LatteTiming_getCustomVsyncFrequency(emufusionVsyncHz)", renderer)
 
 
 class NativeAdapterCatalogGateTest(unittest.TestCase):
@@ -295,7 +295,7 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
                         stop.index("CafeSystem::ShutdownTitle();"))
 
     def test_cemu_reclaims_only_title_owned_system_area_after_shutdown(self):
-        # Cemu's stock Android app exits after one title. Lucent retains the
+        # Cemu's stock Android app exits after one title. EmuFusion retains the
         # library, so the 32 MiB process-lifetime bump allocator must not leak
         # a new 8 MiB coreinit heap on every launch. The device regression was
         # a SIGTRAP at 0x1dd5000 + 8 MiB in InitSysHeap on a later launch.
@@ -387,11 +387,11 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
 
     def test_abi_version_is_pinned(self):
         # v2 adds max_controllers and controller_index; v1 is not compatible.
-        self.assertIn("#define LUCENT_NATIVE_ADAPTER_ABI_VERSION 2u", ABI_HEADER)
+        self.assertIn("#define EMUFUSION_NATIVE_ADAPTER_ABI_VERSION 2u", ABI_HEADER)
         self.assertIn("uint32_t max_controllers;", ABI_HEADER)
         self.assertIn("uint32_t controller_index", ABI_HEADER)
-        self.assertIn('#define LUCENT_NATIVE_ADAPTER_ENTRY_SYMBOL '
-                      '"lucent_native_adapter_entry"', ABI_HEADER)
+        self.assertIn('#define EMUFUSION_NATIVE_ADAPTER_ENTRY_SYMBOL '
+                      '"emufusion_native_adapter_entry"', ABI_HEADER)
 
     def test_host_fails_closed_on_every_load_gate(self):
         for guard in ("cannot load adapter",
@@ -442,7 +442,7 @@ class NativeAdapterAbiAndTestsTest(unittest.TestCase):
 
     def test_phase3_gameplay_gets_its_own_layer_not_a_textureview(self):
         # A TextureView publishes into the Qt window's own surface, and the
-        # non-opaque one Lucent uses made every published game frame dirty the
+        # non-opaque one EmuFusion uses made every published game frame dirty the
         # whole window -- so HWUI recomposited, and Qt Quick re-rendered,
         # underneath live gameplay for the entire session. That is where the
         # Adreno null dereference in QSGBatchRenderer::renderBatches() came

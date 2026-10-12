@@ -701,7 +701,7 @@ class Phase3SystemDirectoryTest(unittest.TestCase):
 
     def test_the_cemu_adapter_declares_and_reads_the_wiiu_key(self):
         cemu = (ROOT / "engines" / "patches" /
-                "cemu-lucent-adapter.cpp").read_text(encoding="utf-8")
+                "cemu-emufusion-adapter.cpp").read_text(encoding="utf-8")
         # Declaring 0 was the bug: the resolver uses the count as its gate, so
         # Cemu was handed an empty root and rejected every encrypted disc.
         self.assertIn("out->required_firmware = 1;", cemu)

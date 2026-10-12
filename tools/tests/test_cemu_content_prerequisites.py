@@ -186,7 +186,7 @@ int main(){
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
     def test_reload_only_on_quiescent_relaunch_before_title_parse(self):
-        source = (ROOT / 'engines/patches/cemu-lucent-adapter.cpp').read_text()
+        source = (ROOT / 'engines/patches/cemu-emufusion-adapter.cpp').read_text()
         self.assertTrue('if (relaunch) KeyCache_Reload();' in source, 'Missing between-title key refresh')
         self.assertLess(source.index('while (CafeTitleList::IsScanning())'), source.index('if (relaunch) KeyCache_Reload();'))
         self.assertLess(source.index('if (relaunch) KeyCache_Reload();'), source.index('TitleInfo launchTitle{launchPath};'))

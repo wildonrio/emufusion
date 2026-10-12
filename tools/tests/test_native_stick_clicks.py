@@ -105,13 +105,13 @@ int main(){
 ''')
 
     def test_wiiu_vpad_and_pro_click_map_and_release_membership(self):
-        source = (PATCHES / 'cemu-lucent-adapter.cpp').read_text()
+        source = (PATCHES / 'cemu-emufusion-adapter.cpp').read_text()
         enums = 'kButtonId_' + ',kButtonId_'.join([
             'A','B','X','Y','L','R','ZL','ZR','Plus','Minus','Up','Down','Left','Right',
             'StickL','StickR','Home'])
         self.cpp('''
 #include <cstdint>
-#include "lucent_native_adapter.h"
+#include "emufusion_native_adapter.h"
 using uint64=uint64_t;
 ''' + 'struct VPADController {enum {' + enums + '};};\n'
             + 'struct ProController {enum {' + enums + '};};\n'
@@ -119,17 +119,17 @@ using uint64=uint64_t;
             + member(source, 'bool pro_button_for(') + '''
 int main(){
  uint64 result;
- if(!vpad_button_for(static_cast<lucent_native_control>(23),result)||result!=VPADController::kButtonId_StickL) return 51;
- if(!vpad_button_for(static_cast<lucent_native_control>(24),result)||result!=VPADController::kButtonId_StickR) return 52;
- if(!pro_button_for(static_cast<lucent_native_control>(23),result)||result!=ProController::kButtonId_StickL) return 53;
- if(!pro_button_for(static_cast<lucent_native_control>(24),result)||result!=ProController::kButtonId_StickR) return 54;
- if(pro_button_for(LUCENT_PAD_HOME,result)||vpad_button_for(LUCENT_PAD_SCREEN_VIEW,result)) return 55;
+ if(!vpad_button_for(static_cast<emufusion_native_control>(23),result)||result!=VPADController::kButtonId_StickL) return 51;
+ if(!vpad_button_for(static_cast<emufusion_native_control>(24),result)||result!=VPADController::kButtonId_StickR) return 52;
+ if(!pro_button_for(static_cast<emufusion_native_control>(23),result)||result!=ProController::kButtonId_StickL) return 53;
+ if(!pro_button_for(static_cast<emufusion_native_control>(24),result)||result!=ProController::kButtonId_StickR) return 54;
+ if(pro_button_for(EMUFUSION_PAD_HOME,result)||vpad_button_for(EMUFUSION_PAD_SCREEN_VIEW,result)) return 55;
 }
 ''')
         release = member(source, 'void release_all_controls()')
         digital = re.search(r'kSharedDigital\[\]\s*=\s*\{([^}]+)\}', release).group(1)
-        self.assertIn('LUCENT_PAD_L3', digital)
-        self.assertIn('LUCENT_PAD_R3', digital)
+        self.assertIn('EMUFUSION_PAD_L3', digital)
+        self.assertIn('EMUFUSION_PAD_R3', digital)
 
 
 if __name__ == '__main__':

@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Lucent Phase 3 native adapter for the Cemu Wii U engine.
+// EmuFusion Phase 3 native adapter for the Cemu Wii U engine.
 //
 // This translation unit is compiled INTO Cemu's own libCemuAndroid.so and is
-// the only symbol Lucent calls: lucent_native_adapter_entry(). It drives
-// CafeSystem/VulkanRenderer directly, so the engine runs inside Lucent's
-// process, in Lucent's windows, with no Cemu Activity and no emulator UI.
+// the only symbol EmuFusion calls: emufusion_native_adapter_entry(). It drives
+// CafeSystem/VulkanRenderer directly, so the engine runs inside EmuFusion's
+// process, in EmuFusion's windows, with no Cemu Activity and no emulator UI.
 //
 // LICENCE NOTE: Cemu is Mozilla Public License 2.0 and carries no Exhibit B
 // "Incompatible With Secondary Licenses" notice, so MPL-2.0 section 3.3 permits
-// the combined Larger Work to be distributed under a Secondary License. Lucent
+// the combined Larger Work to be distributed under a Secondary License. EmuFusion
 // distributes under GPL-3.0-only, which is a Secondary License in MPL 2.0's own
 // terms (1.12 names the GPL v2.0 "or any later versions"). Cemu's own files stay
-// MPL-2.0 file-by-file; only this Lucent-authored file is GPL-3.0-or-later.
+// MPL-2.0 file-by-file; only this EmuFusion-authored file is GPL-3.0-or-later.
 //
 // Cemu owns its emulation loop: LaunchForegroundTitle() detaches its own title
 // thread and returns immediately, so unlike Eden this adapter does not need to
-// spawn one. run_frame() reports liveness so Lucent can fail a dead session
+// spawn one. run_frame() reports liveness so EmuFusion can fail a dead session
 // rather than leaving a frozen picture on screen.
 //
 // Keys are never bundled. The user's own keys.txt is copied into the validated
-// system directory by Lucent before load() runs, and load() hands it to Cemu's
+// system directory by EmuFusion before load() runs, and load() hands it to Cemu's
 // own KeyCache. When it holds no key that fits the disc, load() still fails
 // closed and reports Cemu's missing-disc-key / missing-ticket status.
 
@@ -39,9 +39,9 @@
 #include <dlfcn.h>
 #include <signal.h>
 
-#include "lucent_native_adapter.h"
+#include "emufusion_native_adapter.h"
 
-extern "C" const lucent_native_adapter* lucent_native_adapter_entry(void);
+extern "C" const emufusion_native_adapter* emufusion_native_adapter_entry(void);
 
 #include "Cafe/CafeSystem.h"
 #include "Cafe/Filesystem/FST/KeyCache.h"
@@ -83,40 +83,40 @@ namespace
 
 	// Cemu's AX mixer hands the audio device one group of 4 AX frames at a
 	// time; this is the same block geometry NativeEmulation::CreateAudioDevice
-	// uses, and it is what Lucent's sink will see per FeedBlock call.
+	// uses, and it is what EmuFusion's sink will see per FeedBlock call.
 	constexpr int kAxFramesPerGroup = 4;
 	constexpr uint32 kSampleRate = 48000;
 	// Wii U TV output clock as the host sees it: the exact 60.000 Hz lattice
-	// the VulkanRenderer stamps claim (see lucent_native_adapter_set_paced_video_hz).
-	constexpr sint32 kLucentDeclaredVideoHz = 60;
-	std::atomic<double> g_lucent_paced_video_hz{0.0};
+	// the VulkanRenderer stamps claim (see emufusion_native_adapter_set_paced_video_hz).
+	constexpr sint32 kEmuFusionDeclaredVideoHz = 60;
+	std::atomic<double> g_emufusion_paced_video_hz{0.0};
 	constexpr uint32 kBitsPerSample = 16;
 
-	// Lucent's audio sink takes interleaved stereo s16. The Wii U can mix 5.1
-	// for the TV, but Lucent owns a stereo AudioTrack, so the device is created
+	// EmuFusion's audio sink takes interleaved stereo s16. The Wii U can mix 5.1
+	// for the TV, but EmuFusion owns a stereo AudioTrack, so the device is created
 	// as stereo rather than downmixing after the fact.
 	constexpr uint32 kChannels = 2;
 
 	/**
-	 * Bridges Cemu's audio device interface onto Lucent's audio sink.
+	 * Bridges Cemu's audio device interface onto EmuFusion's audio sink.
 	 *
-	 * Cemu would normally open its own cubeb stream, which would give Lucent no
-	 * ownership of the AudioTrack and no way to follow system volume. Lucent
-	 * hands the adapter a sink in lucent_native_io instead, so this subclass
+	 * Cemu would normally open its own cubeb stream, which would give EmuFusion no
+	 * ownership of the AudioTrack and no way to follow system volume. EmuFusion
+	 * hands the adapter a sink in emufusion_native_io instead, so this subclass
 	 * forwards each mixed block straight to it and never touches cubeb.
 	 */
-	class LucentAudioAPI final : public IAudioAPI
+	class EmuFusionAudioAPI final : public IAudioAPI
 	{
 	  public:
-		LucentAudioAPI(lucent_native_audio_sink sink, void* sinkCtx, uint32 samplesPerBlock)
+		EmuFusionAudioAPI(emufusion_native_audio_sink sink, void* sinkCtx, uint32 samplesPerBlock)
 			: IAudioAPI(kSampleRate, kChannels, samplesPerBlock, kBitsPerSample),
 			  m_sink(sink), m_sinkCtx(sinkCtx)
 		{
 		}
 
-		// Cemu's AudioAPI enum has no Lucent member and is only consulted by the
-		// desktop settings UI, which Lucent never opens. Reporting Cubeb keeps
-		// the enum valid without claiming a device Lucent did not create.
+		// Cemu's AudioAPI enum has no EmuFusion member and is only consulted by the
+		// desktop settings UI, which EmuFusion never opens. Reporting Cubeb keeps
+		// the enum valid without claiming a device EmuFusion did not create.
 		AudioAPI GetType() const override { return Cubeb; }
 
 		/**
@@ -131,8 +131,8 @@ namespace
 		 * AX never used the nominal tick and the whole audio clock ran
 		 * 3.0/2.9 = 3.45% fast, permanently, for as long as a title played.
 		 *
-		 * Lucent's sink has no queue to be behind on: FeedBlock hands the block
-		 * straight to Lucent, which owns the AudioTrack and does its own
+		 * EmuFusion's sink has no queue to be behind on: FeedBlock hands the block
+		 * straight to EmuFusion, which owns the AudioTrack and does its own
 		 * buffering, and the adapter holds nothing. With no backlog to report,
 		 * the honest answer is false -- keep AX on the cadence the hardware
 		 * actually had, and let the AudioTrack absorb jitter as it is designed
@@ -162,12 +162,12 @@ namespace
 			return true;
 		}
 
-		// Lucent owns the AudioTrack and already follows system volume, so the
+		// EmuFusion owns the AudioTrack and already follows system volume, so the
 		// engine-side attenuation stays at unity instead of applying a second one.
 		void SetVolume(sint32 volume) override { (void)volume; m_volume = 100; }
 
 	  private:
-		lucent_native_audio_sink m_sink;
+		emufusion_native_audio_sink m_sink;
 		void* m_sinkCtx;
 	};
 
@@ -178,16 +178,16 @@ namespace
 	 * adapter uses index 0 (VPAD, the real Wii U GamePad) plus indices 1..7
 	 * (Pro Controller, InputManager's m_wpad array) -- 8 total.
 	 */
-	constexpr size_t kLucentMaxControllers = InputManager::kMaxController;
+	constexpr size_t kEmuFusionMaxControllers = InputManager::kMaxController;
 
 	/**
 	 * Cached per controller_index so set_control can reach a guest pad without
 	 * re-resolving it through InputManager on every call. Index 0 (VPAD) is
-	 * created eagerly in start(); indices 1..kLucentMaxControllers-1 (Pro
+	 * created eagerly in start(); indices 1..kEmuFusionMaxControllers-1 (Pro
 	 * Controller) are created lazily the first time that index is actually
 	 * driven, since most sessions never use a second player.
 	 */
-	std::array<EmulatedControllerPtr, kLucentMaxControllers> g_controllers{};
+	std::array<EmulatedControllerPtr, kEmuFusionMaxControllers> g_controllers{};
 
 	/**
 	 * Resolves controller_index to its EmulatedController, creating a Pro
@@ -198,7 +198,7 @@ namespace
 	 */
 	EmulatedControllerPtr controller_for_index(uint32_t controllerIndex)
 	{
-		if (controllerIndex >= kLucentMaxControllers)
+		if (controllerIndex >= kEmuFusionMaxControllers)
 			return {};
 		if (g_controllers[controllerIndex])
 			return g_controllers[controllerIndex];
@@ -216,11 +216,11 @@ namespace
 	// Cemu is a one-title-per-process emulator upstream. Its Android frontend
 	// calls initializeEmulation() once from CemuApplication and then
 	// exitProcess(0) when the user quits a game (EmulationActivity.kt::onQuit),
-	// so nothing upstream ever re-enters that path. Lucent keeps the library
+	// so nothing upstream ever re-enters that path. EmuFusion keeps the library
 	// mapped and launches again in the same process, which means every
 	// process-wide step has to run EXACTLY ONCE. These are file-scope on
 	// purpose: they describe the process, not a session, and they must survive
-	// the lucent_native_engine being destroyed and re-created between titles.
+	// the emufusion_native_engine being destroyed and re-created between titles.
 	std::atomic<bool> g_process_initialised{false};
 	std::atomic<bool> g_title_prepared{false};
 	// Content path of the still-prepared title, so a same-title relaunch
@@ -242,11 +242,11 @@ namespace
 		sizeof(kCemuHijackedSignals) / sizeof(kCemuHijackedSignals[0]);
 
 	/**
-	 * Keeps Cemu's desktop crash handler from taking over Lucent's process.
+	 * Keeps Cemu's desktop crash handler from taking over EmuFusion's process.
 	 *
 	 * CemuCommonInit() calls ExceptionHandler_Init(), which sigaction()s the ten
 	 * signals above to handlers that end in _Exit(1) (fatal signals) or _Exit(0)
-	 * (SIGINT/SIGTERM). On the desktop that is a courtesy. Inside Lucent it is a
+	 * (SIGINT/SIGTERM). On the desktop that is a courtesy. Inside EmuFusion it is a
 	 * PROCESS-WIDE takeover, installed the first time a Wii U title loads and
 	 * never removed, with three consequences:
 	 *
@@ -267,7 +267,7 @@ namespace
 	 *     other threads are still running.
 	 *
 	 * Nothing in Cemu RECOVERS from these signals; the handler is reporting
-	 * only, and its report lands in a log.txt inside Lucent's private engine
+	 * only, and its report lands in a log.txt inside EmuFusion's private engine
 	 * directory that neither the user nor Android's crash pipeline ever sees. So
 	 * the dispositions in force before CemuCommonInit() are snapshotted and put
 	 * back immediately afterwards. Cemu keeps everything that actually runs a
@@ -307,7 +307,7 @@ namespace
 	std::string adapter_library_directory()
 	{
 		Dl_info info{};
-		if (dladdr(reinterpret_cast<const void*>(&lucent_native_adapter_entry), &info) == 0 ||
+		if (dladdr(reinterpret_cast<const void*>(&emufusion_native_adapter_entry), &info) == 0 ||
 			info.dli_fname == nullptr)
 			return std::string();
 		const std::string path(info.dli_fname);
@@ -316,38 +316,38 @@ namespace
 	}
 
 	/**
-	 * Lucent's canonical controls are already console-semantic, so LUCENT_PAD_A
+	 * EmuFusion's canonical controls are already console-semantic, so EMUFUSION_PAD_A
 	 * means the Wii U GamePad's A. These go to EmulatedController's override
 	 * maps (setButtonValue/setAxisValue), which are Cemu's equivalent of Eden's
 	 * VirtualGamepad: get_axis_value() and is_mapping_down() consult the
 	 * override before any physical controller, so no GUID, no InputAPI::Device
 	 * registration and no user input profile is needed. The alternative path,
 	 * CreateDefaultDeviceController() plus set_mapping(), needs a written
-	 * profile that Lucent never produces.
+	 * profile that EmuFusion never produces.
 	 */
-	bool vpad_button_for(lucent_native_control control, uint64& out)
+	bool vpad_button_for(emufusion_native_control control, uint64& out)
 	{
 		switch (control)
 		{
-		case LUCENT_PAD_A:          out = VPADController::kButtonId_A;     return true;
-		case LUCENT_PAD_B:          out = VPADController::kButtonId_B;     return true;
-		case LUCENT_PAD_X:          out = VPADController::kButtonId_X;     return true;
-		case LUCENT_PAD_Y:          out = VPADController::kButtonId_Y;     return true;
-		case LUCENT_PAD_L:          out = VPADController::kButtonId_L;     return true;
-		case LUCENT_PAD_R:          out = VPADController::kButtonId_R;     return true;
-		case LUCENT_PAD_ZL:         out = VPADController::kButtonId_ZL;    return true;
-		case LUCENT_PAD_ZR:         out = VPADController::kButtonId_ZR;    return true;
-		case LUCENT_PAD_L3:         out = VPADController::kButtonId_StickL; return true;
-		case LUCENT_PAD_R3:         out = VPADController::kButtonId_StickR; return true;
-		case LUCENT_PAD_DPAD_UP:    out = VPADController::kButtonId_Up;    return true;
-		case LUCENT_PAD_DPAD_DOWN:  out = VPADController::kButtonId_Down;  return true;
-		case LUCENT_PAD_DPAD_LEFT:  out = VPADController::kButtonId_Left;  return true;
-		case LUCENT_PAD_DPAD_RIGHT: out = VPADController::kButtonId_Right; return true;
-		// The Wii U labels these Plus and Minus; Lucent's canonical names are
+		case EMUFUSION_PAD_A:          out = VPADController::kButtonId_A;     return true;
+		case EMUFUSION_PAD_B:          out = VPADController::kButtonId_B;     return true;
+		case EMUFUSION_PAD_X:          out = VPADController::kButtonId_X;     return true;
+		case EMUFUSION_PAD_Y:          out = VPADController::kButtonId_Y;     return true;
+		case EMUFUSION_PAD_L:          out = VPADController::kButtonId_L;     return true;
+		case EMUFUSION_PAD_R:          out = VPADController::kButtonId_R;     return true;
+		case EMUFUSION_PAD_ZL:         out = VPADController::kButtonId_ZL;    return true;
+		case EMUFUSION_PAD_ZR:         out = VPADController::kButtonId_ZR;    return true;
+		case EMUFUSION_PAD_L3:         out = VPADController::kButtonId_StickL; return true;
+		case EMUFUSION_PAD_R3:         out = VPADController::kButtonId_StickR; return true;
+		case EMUFUSION_PAD_DPAD_UP:    out = VPADController::kButtonId_Up;    return true;
+		case EMUFUSION_PAD_DPAD_DOWN:  out = VPADController::kButtonId_Down;  return true;
+		case EMUFUSION_PAD_DPAD_LEFT:  out = VPADController::kButtonId_Left;  return true;
+		case EMUFUSION_PAD_DPAD_RIGHT: out = VPADController::kButtonId_Right; return true;
+		// The Wii U labels these Plus and Minus; EmuFusion's canonical names are
 		// the generic Start/Select the rest of the library uses.
-		case LUCENT_PAD_START:      out = VPADController::kButtonId_Plus;  return true;
-		case LUCENT_PAD_SELECT:     out = VPADController::kButtonId_Minus; return true;
-		case LUCENT_PAD_HOME:       out = VPADController::kButtonId_Home;  return true;
+		case EMUFUSION_PAD_START:      out = VPADController::kButtonId_Plus;  return true;
+		case EMUFUSION_PAD_SELECT:     out = VPADController::kButtonId_Minus; return true;
+		case EMUFUSION_PAD_HOME:       out = VPADController::kButtonId_Home;  return true;
 		default:                                                           return false;
 		}
 	}
@@ -358,31 +358,31 @@ namespace
 	 * VPADController's (A/B/X/Y/L/R/ZL/ZR/Plus/Minus/d-pad/two sticks), so this
 	 * mirrors that table onto ProController::ButtonId.
 	 *
-	 * LUCENT_PAD_HOME is deliberately absent: the Home button is a GamePad-only
+	 * EMUFUSION_PAD_HOME is deliberately absent: the Home button is a GamePad-only
 	 * gesture on real Wii U hardware, and adapter_set_control() always routes
 	 * it to controller_index 0's VPAD before this table would ever be
 	 * consulted (see the touch/Home redirect there).
 	 */
-	bool pro_button_for(lucent_native_control control, uint64& out)
+	bool pro_button_for(emufusion_native_control control, uint64& out)
 	{
 		switch (control)
 		{
-		case LUCENT_PAD_A:          out = ProController::kButtonId_A;     return true;
-		case LUCENT_PAD_B:          out = ProController::kButtonId_B;     return true;
-		case LUCENT_PAD_X:          out = ProController::kButtonId_X;     return true;
-		case LUCENT_PAD_Y:          out = ProController::kButtonId_Y;     return true;
-		case LUCENT_PAD_L:          out = ProController::kButtonId_L;     return true;
-		case LUCENT_PAD_R:          out = ProController::kButtonId_R;     return true;
-		case LUCENT_PAD_ZL:         out = ProController::kButtonId_ZL;    return true;
-		case LUCENT_PAD_ZR:         out = ProController::kButtonId_ZR;    return true;
-		case LUCENT_PAD_L3:         out = ProController::kButtonId_StickL; return true;
-		case LUCENT_PAD_R3:         out = ProController::kButtonId_StickR; return true;
-		case LUCENT_PAD_DPAD_UP:    out = ProController::kButtonId_Up;    return true;
-		case LUCENT_PAD_DPAD_DOWN:  out = ProController::kButtonId_Down;  return true;
-		case LUCENT_PAD_DPAD_LEFT:  out = ProController::kButtonId_Left;  return true;
-		case LUCENT_PAD_DPAD_RIGHT: out = ProController::kButtonId_Right; return true;
-		case LUCENT_PAD_START:      out = ProController::kButtonId_Plus;  return true;
-		case LUCENT_PAD_SELECT:     out = ProController::kButtonId_Minus; return true;
+		case EMUFUSION_PAD_A:          out = ProController::kButtonId_A;     return true;
+		case EMUFUSION_PAD_B:          out = ProController::kButtonId_B;     return true;
+		case EMUFUSION_PAD_X:          out = ProController::kButtonId_X;     return true;
+		case EMUFUSION_PAD_Y:          out = ProController::kButtonId_Y;     return true;
+		case EMUFUSION_PAD_L:          out = ProController::kButtonId_L;     return true;
+		case EMUFUSION_PAD_R:          out = ProController::kButtonId_R;     return true;
+		case EMUFUSION_PAD_ZL:         out = ProController::kButtonId_ZL;    return true;
+		case EMUFUSION_PAD_ZR:         out = ProController::kButtonId_ZR;    return true;
+		case EMUFUSION_PAD_L3:         out = ProController::kButtonId_StickL; return true;
+		case EMUFUSION_PAD_R3:         out = ProController::kButtonId_StickR; return true;
+		case EMUFUSION_PAD_DPAD_UP:    out = ProController::kButtonId_Up;    return true;
+		case EMUFUSION_PAD_DPAD_DOWN:  out = ProController::kButtonId_Down;  return true;
+		case EMUFUSION_PAD_DPAD_LEFT:  out = ProController::kButtonId_Left;  return true;
+		case EMUFUSION_PAD_DPAD_RIGHT: out = ProController::kButtonId_Right; return true;
+		case EMUFUSION_PAD_START:      out = ProController::kButtonId_Plus;  return true;
+		case EMUFUSION_PAD_SELECT:     out = ProController::kButtonId_Minus; return true;
 		default:                                                          return false;
 		}
 	}
@@ -418,7 +418,7 @@ namespace
 	 * Clears every control override before the pads are handed back.
 	 *
 	 * EmulatedController lives in InputManager and outlives a title, so a
-	 * button Lucent never sent an up event for would still read as held when
+	 * button EmuFusion never sent an up event for would still read as held when
 	 * the next title boots. VPAD/Pro resolve a stick from four unsigned
 	 * magnitudes, so all four have to be zeroed, not just the two last written.
 	 *
@@ -433,27 +433,27 @@ namespace
 	 */
 	void release_all_controls()
 	{
-		static constexpr lucent_native_control kVpadOnlyDigital[] = {
-			LUCENT_PAD_HOME,
+		static constexpr emufusion_native_control kVpadOnlyDigital[] = {
+			EMUFUSION_PAD_HOME,
 		};
-		static constexpr lucent_native_control kSharedDigital[] = {
-			LUCENT_PAD_A, LUCENT_PAD_B, LUCENT_PAD_X, LUCENT_PAD_Y,
-			LUCENT_PAD_L, LUCENT_PAD_R, LUCENT_PAD_ZL, LUCENT_PAD_ZR,
-			LUCENT_PAD_DPAD_UP, LUCENT_PAD_DPAD_DOWN,
-			LUCENT_PAD_DPAD_LEFT, LUCENT_PAD_DPAD_RIGHT,
-			LUCENT_PAD_START, LUCENT_PAD_SELECT,
-			LUCENT_PAD_L3, LUCENT_PAD_R3,
+		static constexpr emufusion_native_control kSharedDigital[] = {
+			EMUFUSION_PAD_A, EMUFUSION_PAD_B, EMUFUSION_PAD_X, EMUFUSION_PAD_Y,
+			EMUFUSION_PAD_L, EMUFUSION_PAD_R, EMUFUSION_PAD_ZL, EMUFUSION_PAD_ZR,
+			EMUFUSION_PAD_DPAD_UP, EMUFUSION_PAD_DPAD_DOWN,
+			EMUFUSION_PAD_DPAD_LEFT, EMUFUSION_PAD_DPAD_RIGHT,
+			EMUFUSION_PAD_START, EMUFUSION_PAD_SELECT,
+			EMUFUSION_PAD_L3, EMUFUSION_PAD_R3,
 		};
 
 		if (g_controllers[0])
 		{
-			for (lucent_native_control control : kSharedDigital)
+			for (emufusion_native_control control : kSharedDigital)
 			{
 				uint64 button = 0;
 				if (vpad_button_for(control, button))
 					g_controllers[0]->setButtonValue(button, false);
 			}
-			for (lucent_native_control control : kVpadOnlyDigital)
+			for (emufusion_native_control control : kVpadOnlyDigital)
 			{
 				uint64 button = 0;
 				if (vpad_button_for(control, button))
@@ -472,11 +472,11 @@ namespace
 			touchInfo.left_down = touchInfo.left_down_toggle = false;
 		}
 
-		for (uint32_t index = 1; index < kLucentMaxControllers; index++)
+		for (uint32_t index = 1; index < kEmuFusionMaxControllers; index++)
 		{
 			if (!g_controllers[index])
 				continue;
-			for (lucent_native_control control : kSharedDigital)
+			for (emufusion_native_control control : kSharedDigital)
 			{
 				uint64 button = 0;
 				if (pro_button_for(control, button))
@@ -519,7 +519,7 @@ namespace
 	 * Writing the real extent back fixes both: it is the size of the surface
 	 * Cemu presents into, so the letterbox, the scissor and the recreation
 	 * check finally agree. Cemu's own frontend never needs this because its
-	 * SurfaceHolder callback reports the post-inset size; Lucent reads
+	 * SurfaceHolder callback reports the post-inset size; EmuFusion reads
 	 * ANativeWindow directly, which can still be the pre-layout size.
 	 */
 	void sync_window_size_to_swapchain(bool mainCanvas)
@@ -548,7 +548,7 @@ namespace
 		}
 	}
 
-	constexpr const char* kLogTag = "LucentCemuAdapter";
+	constexpr const char* kLogTag = "EmuFusionCemuAdapter";
 
 	/** Reports an escaping exception once, with the entry point that raised it. */
 	void report_escaping_exception(const char* entryPoint, const char* detail)
@@ -561,18 +561,18 @@ namespace
 	/**
 	 * Stops any C++ exception from crossing the adapter ABI.
 	 *
-	 * lucent_native_adapter is a table of C function pointers, and Lucent calls
-	 * them from C (unified-android/native/lucent_native_adapter_host.c) and from
+	 * emufusion_native_adapter is a table of C function pointers, and EmuFusion calls
+	 * them from C (unified-android/native/emufusion_native_adapter_host.c) and from
 	 * JNI. There is no C++ frame between the engine and the JVM that could catch
 	 * anything, so an exception leaving one of these entry points does not
 	 * surface as an error -- it unwinds into frames that cannot handle it and
-	 * ends in std::terminate, taking the whole Lucent process with it.
+	 * ends in std::terminate, taking the whole EmuFusion process with it.
 	 *
 	 * Cemu throws for real, not hypothetically: SwapchainInfoVk's constructor
 	 * throws std::runtime_error when vkCreateAndroidSurfaceKHR fails, and the
 	 * filesystem and title-parsing paths reachable from load() throw too. The
 	 * ABI already has a failure value for every one of these calls, so the
-	 * correct behaviour is to report the failure through it and let Lucent
+	 * correct behaviour is to report the failure through it and let EmuFusion
 	 * decide, which for a lost surface means the session ends with a message
 	 * instead of the app disappearing.
 	 */
@@ -613,23 +613,23 @@ namespace
 	}
 } // namespace
 
-struct lucent_native_engine
+struct emufusion_native_engine
 {
 	std::atomic<bool> loaded{false};
 	std::atomic<bool> started{false};
 	ANativeWindow* tv_window{nullptr};
 	ANativeWindow* pad_window{nullptr};
-	lucent_native_audio_sink audio_sink{nullptr};
+	emufusion_native_audio_sink audio_sink{nullptr};
 	void* audio_sink_ctx{nullptr};
 	std::string content_path;
-	// Lucent delivers touch as normalised 0..1 within the GamePad view; the
+	// EmuFusion delivers touch as normalised 0..1 within the GamePad view; the
 	// last position is retained because press and move arrive as separate axes.
 	float touch_x{0.0f};
 	float touch_y{0.0f};
 	bool gamepad_on_primary{false};
 };
 
-static void set_primary_screen(lucent_native_engine* engine, bool gamepad)
+static void set_primary_screen(emufusion_native_engine* engine, bool gamepad)
 {
 	// Use Cemu Android's existing held-TAB view selection. Account for a
 	// game's startWithPadView preference without changing that saved profile.
@@ -646,21 +646,21 @@ static void set_primary_screen(lucent_native_engine* engine, bool gamepad)
 	input.m_pad_mouse.left_down = input.m_pad_mouse.left_down_toggle = false;
 }
 
-static void adapter_describe(lucent_native_capabilities* out)
+static void adapter_describe(emufusion_native_capabilities* out)
 {
 	if (out == nullptr)
 		return;
 	std::memset(out, 0, sizeof(*out));
-	out->abi_version = LUCENT_NATIVE_ADAPTER_ABI_VERSION;
+	out->abi_version = EMUFUSION_NATIVE_ADAPTER_ABI_VERSION;
 	out->engine_id = kEngineId;
 	out->engine_version = kEngineVersion;
-	// Cemu has no savestate or full-machine snapshot API at all, so Lucent must
+	// Cemu has no savestate or full-machine snapshot API at all, so EmuFusion must
 	// not advertise Quick Resume for Wii U. Held-Stop flushes the game's own
 	// saves and exits instead of promising a snapshot that cannot be restored.
 	out->has_quick_resume = false;
 	out->has_persistent_save = true;
 	// The Wii U is genuinely two-screen and the Thor has a second display, so
-	// the GamePad view is rendered to Lucent's lower window rather than being
+	// the GamePad view is rendered to EmuFusion's lower window rather than being
 	// composited into the TV view or dropped.
 	out->dual_screen = true;
 	// ONE user-supplied blob: keys.txt, the disc-key list Cemu's KeyCache reads
@@ -670,7 +670,7 @@ static void adapter_describe(lucent_native_capabilities* out)
 	// decrypted (RPX/ELF, extracted content, WUA) needs no key either. But real
 	// Wii U libraries are overwhelmingly encrypted .wud/.wux disc images, and
 	// those cannot be opened at all without a matching key. Reporting 0 here was
-	// what stopped Lucent installing the key directory: the resolver treats the
+	// what stopped EmuFusion installing the key directory: the resolver treats the
 	// count as its gate and installed nothing, so Cemu was handed an empty root
 	// and failed with "no disc key was supplied" even though the user had one.
 	// Declaring 1 asks EmuFusion to install disc keys. The Java resolver uses
@@ -682,16 +682,16 @@ static void adapter_describe(lucent_native_capabilities* out)
 	// is the engine's true multi-controller capacity, not an alpha-imposed
 	// cap -- a lower player limit for the current multiplayer alpha belongs in
 	// the Java/UI layer, not in this honest capability report.
-	out->max_controllers = static_cast<uint32_t>(kLucentMaxControllers);
+	out->max_controllers = static_cast<uint32_t>(kEmuFusionMaxControllers);
 }
 
-static lucent_native_engine* adapter_create(void)
+static emufusion_native_engine* adapter_create(void)
 {
-	return new (std::nothrow) lucent_native_engine();
+	return new (std::nothrow) emufusion_native_engine();
 }
 
-static bool adapter_load(lucent_native_engine* engine,
-                         const lucent_native_load_request* request,
+static bool adapter_load(emufusion_native_engine* engine,
+                         const emufusion_native_load_request* request,
                          char* error, size_t error_size)
 {
 	const auto fail = [&](const char* message) {
@@ -711,7 +711,7 @@ static bool adapter_load(lucent_native_engine* engine,
 	const fs::path systemRoot{request->system_directory};
 
 	// True for every load after the first one in this process, whether or not
-	// Lucent re-used the same lucent_native_engine. Used only to give Lucent a
+	// EmuFusion re-used the same emufusion_native_engine. Used only to give EmuFusion a
 	// distinguishable, honest message: a title that booted once and then
 	// refuses is a session problem, not a bad dump.
 	const bool relaunch = g_process_initialised.load();
@@ -741,7 +741,7 @@ static bool adapter_load(lucent_native_engine* engine,
 			        "adopting still-prepared Wii U title for relaunch");
 			return true;
 		}
-		return fail("a previous Wii U title is still resident; close and reopen Lucent to play again");
+		return fail("a previous Wii U title is still resident; close and reopen EmuFusion to play again");
 	}
 
 	// ---- ONE-SHOT, PROCESS-WIDE INITIALISATION -----------------------------
@@ -758,9 +758,9 @@ static bool adapter_load(lucent_native_engine* engine,
 	//                             already populated list (upstream asserts
 	//                             sTLList.empty() in debug builds).
 	//   CafeTitleList::Refresh()  starts a scan worker that DELETES every
-	//                             TitleInfo it cannot rediscover. Lucent
+	//                             TitleInfo it cannot rediscover. EmuFusion
 	//                             configures no Cemu game paths -- the library
-	//                             lives in Lucent's own index and the title
+	//                             lives in EmuFusion's own index and the title
 	//                             sits outside the emulated MLC -- so the
 	//                             worker frees the exact entry the prepare step
 	//                             below is about to look up, and races
@@ -769,7 +769,7 @@ static bool adapter_load(lucent_native_engine* engine,
 	//   PPCTimer_init()           detaches another three-second measuring
 	//                             thread that rewrites _rdtscFrequency under a
 	//                             title that is already running.
-	//   InputManager::load()      rebuilds the controllers Lucent is driving.
+	//   InputManager::load()      rebuilds the controllers EmuFusion is driving.
 	//   GraphicPack2::LoadAll()   re-reads every pack from disk.
 	//
 	// Cemu's own in-process relaunch path, coreinit::OSLauncherThread, does
@@ -777,16 +777,16 @@ static bool adapter_load(lucent_native_engine* engine,
 	// re-runs NONE of this. The adapter now matches that shape.
 	if (!g_process_initialised.load())
 	{
-		// Point Cemu at Lucent's validated per-engine roots before anything
+		// Point Cemu at EmuFusion's validated per-engine roots before anything
 		// reads config, keys, NAND or save data. Cemu is normally told these by
 		// its own Application object; there is no Activity here to do it. The
 		// argument order matches NativeActiveSettings::initializeActiveSettings,
 		// which also passes an empty executable path on Android.
 		//
-		// Every root is the Lucent system directory on purpose. Cemu keeps Wii U
+		// Every root is the EmuFusion system directory on purpose. Cemu keeps Wii U
 		// game saves INSIDE its emulated NAND (mlc01/usr/save), not in a flat
 		// per-title folder, so the ABI's separate save_directory has no place to
-		// map onto without breaking the NAND layout. Lucent's save handling must
+		// map onto without breaking the NAND layout. EmuFusion's save handling must
 		// treat the mlc tree under the system directory as the save location.
 		std::set<fs::path> failedWriteAccess;
 		ActiveSettings::SetPaths(false, {}, systemRoot, systemRoot,
@@ -801,9 +801,9 @@ static bool adapter_load(lucent_native_engine* engine,
 		// FilesystemAndroid callbacks are deliberately NOT installed. Cemu's
 		// AndroidFilesystemCallbacks constructor FindClass-es
 		// info/cemu/cemu/nativeinterface/NativeFiles, which does not exist in
-		// Lucent's dex and would abort ART. The callbacks are only consulted for
+		// EmuFusion's dex and would abort ART. The callbacks are only consulted for
 		// content:// URIs (FilesystemAndroid::IsContentUri) and every accessor is
-		// null-safe, so leaving them unset is correct as long as Lucent passes
+		// null-safe, so leaving them unset is correct as long as EmuFusion passes
 		// real filesystem paths -- which it does.
 
 		// This is initializeEmulation()'s body, in Cemu's own order. Only the
@@ -829,7 +829,7 @@ static bool adapter_load(lucent_native_engine* engine,
 		hostSignals.restore();
 
 		// Cemu's default vsync=0 selects VK_PRESENT_MODE_IMMEDIATE_KHR. On a
-		// desktop monitor that only tears; on Lucent's SurfaceTexture-backed
+		// desktop monitor that only tears; on EmuFusion's SurfaceTexture-backed
 		// window the consumer is EmuFusion's frame generator, and Android's
 		// BufferQueue DROPS the queued image whenever a new present arrives
 		// before the consumer latched the previous one. Emulation stalls make
@@ -842,21 +842,21 @@ static bool adapter_load(lucent_native_engine* engine,
 		// never throttled by it.
 		GetConfig().vsync = static_cast<int>(SwapchainInfoVk::VSync::FIFO);
 
-		// Load the user's disc keys out of the system directory Lucent
+		// Load the user's disc keys out of the system directory EmuFusion
 		// validated. This is Cemu's own key path, not a reimplementation:
 		// KeyCache_Prepare() reads ActiveSettings::GetUserDataPath("keys.txt"),
 		// which the SetPaths call above resolved to <system_directory>/keys.txt,
 		// and parses it exactly as the desktop build does -- one
 		// 32-hex-character AES-128 key per line, '#' and ';' comments,
-		// whitespace and '-'/'_' separators stripped. Lucent's
+		// whitespace and '-'/'_' separators stripped. EmuFusion's
 		// NativeAdapterSystemDirectory has already copied the user's keys.txt
 		// there, which is why describe() reports required_firmware = 1.
 		//
 		// FSTVolume::OpenFromDiscImage calls this itself, so the explicit call
 		// is about ORDER and INTENT rather than reachability: it guarantees the
-		// cache is populated from Lucent's root before any title parse can latch
+		// cache is populated from EmuFusion's root before any title parse can latch
 		// KeyCache's one-shot sKeyCachePrepared flag, and it keeps the key
-		// dependency visible at the point Lucent's system directory is consumed.
+		// dependency visible at the point EmuFusion's system directory is consumed.
 		// It must run after CemuCommonInit() because AES128_init() lives there
 		// and the keys are useless until the cipher is up.
 		KeyCache_Prepare();
@@ -868,7 +868,7 @@ static bool adapter_load(lucent_native_engine* engine,
 		// runs WITHOUT holding sTLMutex and frees every TitleInfo it did not
 		// rediscover, so letting it overlap AddTitleFromPath below is a
 		// use-after-free on the entry the prepare step needs. There is nothing
-		// for it to find -- Lucent registers no Cemu game paths -- so this
+		// for it to find -- EmuFusion registers no Cemu game paths -- so this
 		// costs milliseconds once per process.
 		while (CafeTitleList::IsScanning())
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -877,7 +877,7 @@ static bool adapter_load(lucent_native_engine* engine,
 		// prefix now contains every process-owned SysAllocator, while allocations
 		// made by coreinit_start (including the 8 MiB system heap) belong to one
 		// title.  The stock Android frontend exits its process after that title,
-		// so upstream never has to distinguish the two.  Lucent does: capture the
+		// so upstream never has to distinguish the two.  EmuFusion does: capture the
 		// permanent boundary before the first PrepareForegroundTitle, then stop()
 		// can reclaim the title suffix for every same-process launch.
 		coreinit_markProcessSysAreaEnd();
@@ -887,7 +887,7 @@ static bool adapter_load(lucent_native_engine* engine,
 		// ActiveSettings' roots are latched into the emulated NAND layout, the
 		// key cache and the shader cache paths; moving them under a live
 		// process is not something Cemu supports.
-		return fail("Cemu's Wii U system directory cannot change without restarting Lucent");
+		return fail("Cemu's Wii U system directory cannot change without restarting EmuFusion");
 	}
 
 	// A fresh device can first run decrypted content with no disc keys, then
@@ -911,7 +911,7 @@ static bool adapter_load(lucent_native_engine* engine,
 			return fail("the base game files for this Wii U title were not found");
 		if (CafeSystem::PrepareForegroundTitle(baseTitleId) != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
 			return fail(relaunch
-			                ? "Cemu could not prepare this Wii U title a second time; close and reopen Lucent"
+			                ? "Cemu could not prepare this Wii U title a second time; close and reopen EmuFusion"
 			                : "Cemu could not prepare this Wii U title");
 	}
 	else
@@ -921,7 +921,7 @@ static bool adapter_load(lucent_native_engine* engine,
 		{
 			if (CafeSystem::PrepareForegroundTitleFromStandaloneRPX(launchPath) != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
 				return fail(relaunch
-				                ? "Cemu could not prepare this standalone RPX/ELF a second time; close and reopen Lucent"
+				                ? "Cemu could not prepare this standalone RPX/ELF a second time; close and reopen EmuFusion"
 				                : "Cemu could not prepare this standalone RPX/ELF");
 		}
 		else if (launchTitle.GetInvalidReason() == TitleInfo::InvalidReason::NO_DISC_KEY)
@@ -938,7 +938,7 @@ static bool adapter_load(lucent_native_engine* engine,
 	return true;
 }
 
-static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* io,
+static bool adapter_start(emufusion_native_engine* engine, const emufusion_native_io* io,
                           char* error, size_t error_size)
 {
 	const auto fail = [&](const char* message) {
@@ -951,7 +951,7 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
 	if (!engine->loaded.load())
 		return fail("adapter start called before a title was loaded");
 	if (io->primary_window == nullptr)
-		return fail("Lucent supplied no render window");
+		return fail("EmuFusion supplied no render window");
 	if (engine->started.load())
 		return true;
 
@@ -997,7 +997,7 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
 		windowInfo.pad_open = false;
 	}
 
-	// initializeSystems equivalent. Lucent injects input through the emulated
+	// initializeSystems equivalent. EmuFusion injects input through the emulated
 	// controller's override maps, so no InputAPI::Device controller is created
 	// and no profile is required; the pad only has to exist.
 	windowInfo.set_keystatesup();
@@ -1012,9 +1012,9 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
 	{
 		std::unique_lock audioLock(g_audioMutex);
 		// TV audio carries the full mix. A second device for the GamePad would
-		// push a duplicate of the same programme into Lucent's single sink, so
+		// push a duplicate of the same programme into EmuFusion's single sink, so
 		// g_padAudio is deliberately left unset.
-		g_tvAudio = std::make_unique<LucentAudioAPI>(
+		g_tvAudio = std::make_unique<EmuFusionAudioAPI>(
 			engine->audio_sink, engine->audio_sink_ctx,
 			snd_core::AX_SAMPLES_PER_3MS_48KHZ * kAxFramesPerGroup);
 		g_tvAudio->Play();
@@ -1022,7 +1022,7 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
 
 	// initializeRenderer equivalent. Cemu's own frontend builds a throwaway
 	// SurfaceTexture here purely so VulkanRenderer has something to probe;
-	// Lucent already owns a real surface, so window_main is pointed at it and
+	// EmuFusion already owns a real surface, so window_main is pointed at it and
 	// the JNI-constructed TestSurface is skipped entirely. That keeps the whole
 	// boot path free of FindClass and therefore free of any dex dependency.
 	if (!InitializeGlobalVulkan())
@@ -1045,35 +1045,35 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
 
 	// LaunchForegroundTitle detaches Cemu's own title thread and returns, so
 	// unlike Eden this adapter owns no emulation thread of its own.
-	// Lucent tier pacing (2026-09-02): the emulated vsync is the guest's
+	// EmuFusion tier pacing (2026-09-02): the emulated vsync is the guest's
 	// frame clock, and the present stamps in VulkanRenderer claim an exact
 	// 60.000 Hz lattice.  Cemu's default period deliberately overshoots to
 	// 59.88 Hz (60 * 1000/1002), which skipped one stamp slot every ~8 s
 	// and read as a held frame at the host.  Every start therefore begins
 	// on the exact clock the stamps describe, unpaced.
-	g_lucent_paced_video_hz.store(0.0);
-	LatteTiming_setCustomVsyncFrequency(kLucentDeclaredVideoHz);
+	g_emufusion_paced_video_hz.store(0.0);
+	LatteTiming_setCustomVsyncFrequency(kEmuFusionDeclaredVideoHz);
 	CafeSystem::LaunchForegroundTitle();
 	engine->started.store(true);
 	return true;
 }
 
-static bool adapter_run_frame(lucent_native_engine* engine)
+static bool adapter_run_frame(emufusion_native_engine* engine)
 {
 	if (engine == nullptr || !engine->started.load())
 		return false;
-	// Cemu presents from its own title thread. Report liveness so Lucent can
+	// Cemu presents from its own title thread. Report liveness so EmuFusion can
 	// fail the session instead of leaving a frozen picture on screen.
 	return CafeSystem::IsTitleRunning();
 }
 
-static void adapter_set_control(lucent_native_engine* engine, uint32_t controller_index,
-                                lucent_native_control control, float value)
+static void adapter_set_control(emufusion_native_engine* engine, uint32_t controller_index,
+                                emufusion_native_control control, float value)
 {
 	if (engine == nullptr || !engine->started.load())
 		return;
 
-	if (control == LUCENT_PAD_SCREEN_VIEW)
+	if (control == EMUFUSION_PAD_SCREEN_VIEW)
 	{
 		// A remote player must never change this device's local display.
 		if (controller_index == 0 && std::isfinite(value))
@@ -1086,20 +1086,20 @@ static void adapter_set_control(lucent_native_engine* engine, uint32_t controlle
 	// regardless of what controller_index they arrive tagged with.
 	switch (control)
 	{
-	case LUCENT_PAD_TOUCH_X:
-	case LUCENT_PAD_TOUCH_Y:
-	case LUCENT_PAD_TOUCH_PRESSED:
-	case LUCENT_PAD_HOME:
+	case EMUFUSION_PAD_TOUCH_X:
+	case EMUFUSION_PAD_TOUCH_Y:
+	case EMUFUSION_PAD_TOUCH_PRESSED:
+	case EMUFUSION_PAD_HOME:
 		controller_index = 0;
 		break;
 	default:
 		break;
 	}
 
-	// describe() advertises exactly kLucentMaxControllers slots; an index at
+	// describe() advertises exactly kEmuFusionMaxControllers slots; an index at
 	// or beyond that is a no-op rather than aliasing onto another slot's
 	// state, per the ABI's fail-closed contract for set_control().
-	if (controller_index >= kLucentMaxControllers)
+	if (controller_index >= kEmuFusionMaxControllers)
 		return;
 	EmulatedControllerPtr controller = controller_for_index(controller_index);
 	if (!controller)
@@ -1111,7 +1111,7 @@ static void adapter_set_control(lucent_native_engine* engine, uint32_t controlle
 	                                : pro_button_for(control, button);
 	if (isButton)
 	{
-		// Lucent sends 1.0/0.0 for digital controls and an analog ramp for
+		// EmuFusion sends 1.0/0.0 for digital controls and an analog ramp for
 		// triggers on pads that have them; anything past halfway counts as a
 		// press so an analog ZL/ZR still actuates.
 		controller->setButtonValue(button, value >= 0.5f);
@@ -1119,7 +1119,7 @@ static void adapter_set_control(lucent_native_engine* engine, uint32_t controlle
 	}
 
 	// Android reports its Y axis positive-down while the Wii U stick is
-	// positive-up, so a positive Lucent value drives the Down magnitude. The
+	// positive-up, so a positive EmuFusion value drives the Down magnitude. The
 	// negation lives here rather than in the Java layer, which must stay
 	// console-neutral for every other system. VPAD and Pro share the same
 	// four-magnitude stick shape, so apply_stick_axis only needs the right
@@ -1128,34 +1128,34 @@ static void adapter_set_control(lucent_native_engine* engine, uint32_t controlle
 	{
 		switch (control)
 		{
-		case LUCENT_PAD_LSTICK_X:
+		case EMUFUSION_PAD_LSTICK_X:
 			apply_stick_axis(controller, VPADController::kButtonId_StickL_Left,
 			                 VPADController::kButtonId_StickL_Right, value);
 			return;
-		case LUCENT_PAD_LSTICK_Y:
+		case EMUFUSION_PAD_LSTICK_Y:
 			apply_stick_axis(controller, VPADController::kButtonId_StickL_Up,
 			                 VPADController::kButtonId_StickL_Down, value);
 			return;
-		case LUCENT_PAD_RSTICK_X:
+		case EMUFUSION_PAD_RSTICK_X:
 			apply_stick_axis(controller, VPADController::kButtonId_StickR_Left,
 			                 VPADController::kButtonId_StickR_Right, value);
 			return;
-		case LUCENT_PAD_RSTICK_Y:
+		case EMUFUSION_PAD_RSTICK_Y:
 			apply_stick_axis(controller, VPADController::kButtonId_StickR_Up,
 			                 VPADController::kButtonId_StickR_Down, value);
 			return;
 
 		// The GamePad touchscreen is a real Wii U input that many titles
 		// require. Cemu reads it from InputManager's pad mouse state in
-		// physical pad-window pixels, so Lucent's normalised 0..1
+		// physical pad-window pixels, so EmuFusion's normalised 0..1
 		// coordinates are scaled here.
-		case LUCENT_PAD_TOUCH_X:
+		case EMUFUSION_PAD_TOUCH_X:
 			engine->touch_x = value;
 			return;
-		case LUCENT_PAD_TOUCH_Y:
+		case EMUFUSION_PAD_TOUCH_Y:
 			engine->touch_y = value;
 			return;
-		case LUCENT_PAD_TOUCH_PRESSED:
+		case EMUFUSION_PAD_TOUCH_PRESSED:
 		{
 			auto& windowInfo = WindowSystem::GetWindowInfo();
 			const bool separatePad = engine->pad_window != nullptr;
@@ -1176,19 +1176,19 @@ static void adapter_set_control(lucent_native_engine* engine, uint32_t controlle
 
 	switch (control)
 	{
-	case LUCENT_PAD_LSTICK_X:
+	case EMUFUSION_PAD_LSTICK_X:
 		apply_stick_axis(controller, ProController::kButtonId_StickL_Left,
 		                 ProController::kButtonId_StickL_Right, value);
 		break;
-	case LUCENT_PAD_LSTICK_Y:
+	case EMUFUSION_PAD_LSTICK_Y:
 		apply_stick_axis(controller, ProController::kButtonId_StickL_Up,
 		                 ProController::kButtonId_StickL_Down, value);
 		break;
-	case LUCENT_PAD_RSTICK_X:
+	case EMUFUSION_PAD_RSTICK_X:
 		apply_stick_axis(controller, ProController::kButtonId_StickR_Left,
 		                 ProController::kButtonId_StickR_Right, value);
 		break;
-	case LUCENT_PAD_RSTICK_Y:
+	case EMUFUSION_PAD_RSTICK_Y:
 		apply_stick_axis(controller, ProController::kButtonId_StickR_Up,
 		                 ProController::kButtonId_StickR_Down, value);
 		break;
@@ -1199,26 +1199,26 @@ static void adapter_set_control(lucent_native_engine* engine, uint32_t controlle
 	}
 }
 
-static void adapter_pause(lucent_native_engine* engine)
+static void adapter_pause(emufusion_native_engine* engine)
 {
 	if (engine == nullptr || !engine->started.load())
 		return;
 	CafeSystem::PauseTitle();
 }
 
-static void adapter_resume(lucent_native_engine* engine)
+static void adapter_resume(emufusion_native_engine* engine)
 {
 	if (engine == nullptr || !engine->started.load())
 		return;
 	CafeSystem::ResumeTitle();
 }
 
-static bool adapter_flush_save(lucent_native_engine* engine)
+static bool adapter_flush_save(emufusion_native_engine* engine)
 {
 	if (engine == nullptr || !engine->loaded.load())
 		return false;
 	// Suspending the guest threads quiesces the emulated filesystem and lets
-	// Cemu's pending save writes settle before Lucent reports a clean exit.
+	// Cemu's pending save writes settle before EmuFusion reports a clean exit.
 	// Cemu exposes no explicit "commit saves now" call; ShutdownTitle in stop()
 	// is what finally closes the save handles.
 	if (CafeSystem::IsTitleRunning())
@@ -1226,13 +1226,13 @@ static bool adapter_flush_save(lucent_native_engine* engine)
 	return true;
 }
 
-static size_t adapter_serialize_size(lucent_native_engine* engine)
+static size_t adapter_serialize_size(emufusion_native_engine* engine)
 {
 	(void)engine;
 	return 0;
 }
 
-static size_t adapter_serialize(lucent_native_engine* engine, void* out, size_t capacity)
+static size_t adapter_serialize(emufusion_native_engine* engine, void* out, size_t capacity)
 {
 	(void)engine;
 	(void)out;
@@ -1240,7 +1240,7 @@ static size_t adapter_serialize(lucent_native_engine* engine, void* out, size_t 
 	return 0;
 }
 
-static bool adapter_unserialize(lucent_native_engine* engine, const void* data, size_t size)
+static bool adapter_unserialize(emufusion_native_engine* engine, const void* data, size_t size)
 {
 	(void)engine;
 	(void)data;
@@ -1248,8 +1248,8 @@ static bool adapter_unserialize(lucent_native_engine* engine, const void* data, 
 	return false;
 }
 
-static bool adapter_surface_recreated(lucent_native_engine* engine,
-                                      const lucent_native_io* io)
+static bool adapter_surface_recreated(emufusion_native_engine* engine,
+                                      const emufusion_native_io* io)
 {
 	if (engine == nullptr || io == nullptr || io->primary_window == nullptr)
 		return false;
@@ -1267,7 +1267,7 @@ static bool adapter_surface_recreated(lucent_native_engine* engine,
 	return true;
 }
 
-static void adapter_stop(lucent_native_engine* engine)
+static void adapter_stop(emufusion_native_engine* engine)
 {
 	if (engine == nullptr)
 		return;
@@ -1277,12 +1277,12 @@ static void adapter_stop(lucent_native_engine* engine)
 		// does NOT reset CafeSystem's sTitlePaused, and flush_save() pauses to
 		// quiesce the emulated filesystem, so a session that exits through the
 		// normal save-and-quit path leaves the flag set. The next title would
-		// then boot with PauseTitle() already latched -- Lucent's pause would
+		// then boot with PauseTitle() already latched -- EmuFusion's pause would
 		// silently do nothing and its resume would call ResumeActiveThreads on
 		// threads that were never suspended. Resuming here also gives
 		// OSSchedulerEnd runnable cores to join instead of suspended ones.
 		CafeSystem::ResumeTitle();
-		// Drop any control Lucent still has held; the EmulatedController
+		// Drop any control EmuFusion still has held; the EmulatedController
 		// outlives the title inside InputManager.
 		release_all_controls();
 
@@ -1321,7 +1321,7 @@ static void adapter_stop(lucent_native_engine* engine)
 		g_tvAudio.reset();
 	}
 	// Release the Vulkan device and both swapchains before returning, as the
-	// ABI requires: Lucent detaches the surfaces immediately afterwards.
+	// ABI requires: EmuFusion detaches the surfaces immediately afterwards.
 	g_renderer.reset();
 
 	auto& windowInfo = WindowSystem::GetWindowInfo();
@@ -1338,7 +1338,7 @@ static void adapter_stop(lucent_native_engine* engine)
 	engine->loaded.store(false);
 }
 
-static void adapter_destroy(lucent_native_engine* engine)
+static void adapter_destroy(emufusion_native_engine* engine)
 {
 	if (engine == nullptr)
 		return;
@@ -1348,7 +1348,7 @@ static void adapter_destroy(lucent_native_engine* engine)
 
 // --- ABI BOUNDARY -----------------------------------------------------------
 //
-// Every entry point Lucent can call is registered through one of these, so no
+// Every entry point EmuFusion can call is registered through one of these, so no
 // exception raised anywhere inside Cemu can reach a C frame. See guard_abi.
 // The bodies above stay exception-free in intent; these make it structural.
 
@@ -1357,7 +1357,7 @@ static void adapter_destroy(lucent_native_engine* engine)
  *
  * adapter_load and adapter_start write their own reason on every failure they
  * return normally, so a buffer that is still empty here means guard_abi caught
- * something instead. Lucent shows this string to the user, and an empty one
+ * something instead. EmuFusion shows this string to the user, and an empty one
  * would surface as a failure with no explanation.
  */
 static void describe_caught_failure(char* error, size_t error_size,
@@ -1367,8 +1367,8 @@ static void describe_caught_failure(char* error, size_t error_size,
 		std::snprintf(error, error_size, "%s", message);
 }
 
-static bool guarded_load(lucent_native_engine* engine,
-                         const lucent_native_load_request* request,
+static bool guarded_load(emufusion_native_engine* engine,
+                         const emufusion_native_load_request* request,
                          char* error, size_t error_size)
 {
 	const bool loaded = guard_abi("load", false, [&] {
@@ -1380,7 +1380,7 @@ static bool guarded_load(lucent_native_engine* engine,
 	return loaded;
 }
 
-static bool guarded_start(lucent_native_engine* engine, const lucent_native_io* io,
+static bool guarded_start(emufusion_native_engine* engine, const emufusion_native_io* io,
                           char* error, size_t error_size)
 {
 	const bool started = guard_abi("start", false, [&] {
@@ -1392,52 +1392,52 @@ static bool guarded_start(lucent_native_engine* engine, const lucent_native_io* 
 	return started;
 }
 
-static bool guarded_run_frame(lucent_native_engine* engine)
+static bool guarded_run_frame(emufusion_native_engine* engine)
 {
 	return guard_abi("run_frame", false, [&] { return adapter_run_frame(engine); });
 }
 
-static void guarded_set_control(lucent_native_engine* engine, uint32_t controller_index,
-                                lucent_native_control control, float value)
+static void guarded_set_control(emufusion_native_engine* engine, uint32_t controller_index,
+                                emufusion_native_control control, float value)
 {
 	guard_abi_void("set_control", [&] { adapter_set_control(engine, controller_index, control, value); });
 }
 
-static void guarded_pause(lucent_native_engine* engine)
+static void guarded_pause(emufusion_native_engine* engine)
 {
 	guard_abi_void("pause", [&] { adapter_pause(engine); });
 }
 
-static void guarded_resume(lucent_native_engine* engine)
+static void guarded_resume(emufusion_native_engine* engine)
 {
 	guard_abi_void("resume", [&] { adapter_resume(engine); });
 }
 
-static bool guarded_flush_save(lucent_native_engine* engine)
+static bool guarded_flush_save(emufusion_native_engine* engine)
 {
 	return guard_abi("flush_save", false, [&] { return adapter_flush_save(engine); });
 }
 
-static bool guarded_surface_recreated(lucent_native_engine* engine,
-                                      const lucent_native_io* io)
+static bool guarded_surface_recreated(emufusion_native_engine* engine,
+                                      const emufusion_native_io* io)
 {
 	return guard_abi("surface_recreated", false, [&] {
 		return adapter_surface_recreated(engine, io);
 	});
 }
 
-static void guarded_stop(lucent_native_engine* engine)
+static void guarded_stop(emufusion_native_engine* engine)
 {
 	guard_abi_void("stop", [&] { adapter_stop(engine); });
 }
 
-static void guarded_destroy(lucent_native_engine* engine)
+static void guarded_destroy(emufusion_native_engine* engine)
 {
 	guard_abi_void("destroy", [&] { adapter_destroy(engine); });
 }
 
-static const lucent_native_adapter kLucentCemuAdapter = {
-	/* abi_version      */ LUCENT_NATIVE_ADAPTER_ABI_VERSION,
+static const emufusion_native_adapter kEmuFusionCemuAdapter = {
+	/* abi_version      */ EMUFUSION_NATIVE_ADAPTER_ABI_VERSION,
 	/* describe         */ adapter_describe,
 	/* create           */ adapter_create,
 	/* load             */ guarded_load,
@@ -1456,12 +1456,12 @@ static const lucent_native_adapter kLucentCemuAdapter = {
 };
 
 extern "C" __attribute__((visibility("default")))
-const lucent_native_adapter* lucent_native_adapter_entry(void)
+const emufusion_native_adapter* emufusion_native_adapter_entry(void)
 {
-	return &kLucentCemuAdapter;
+	return &kEmuFusionCemuAdapter;
 }
 
-// Lucent tier pacing hooks (2026-09-02).  Optional symbols the host resolves
+// EmuFusion tier pacing hooks (2026-09-02).  Optional symbols the host resolves
 // with dlsym: an adapter without them simply cannot be paced.
 //
 // The guest's frame clock is the emulated vsync, which LatteTiming derives
@@ -1472,34 +1472,34 @@ const lucent_native_adapter* lucent_native_adapter_entry(void)
 // one exact lattice.  Audio is unaffected: AX mixes on its own real-time
 // alarm, not on vsync.
 extern "C" __attribute__((visibility("default")))
-double lucent_native_adapter_declared_video_hz(void)
+double emufusion_native_adapter_declared_video_hz(void)
 {
-	return static_cast<double>(kLucentDeclaredVideoHz);
+	return static_cast<double>(kEmuFusionDeclaredVideoHz);
 }
 
 extern "C" __attribute__((visibility("default")))
-bool lucent_native_adapter_set_paced_video_hz(double hz)
+bool emufusion_native_adapter_set_paced_video_hz(double hz)
 {
 	if (!(hz > 0.0))
 	{
-		g_lucent_paced_video_hz.store(0.0);
-		LatteTiming_setCustomVsyncFrequency(kLucentDeclaredVideoHz);
+		g_emufusion_paced_video_hz.store(0.0);
+		LatteTiming_setCustomVsyncFrequency(kEmuFusionDeclaredVideoHz);
 		return true;
 	}
 	// Tiers are exact integers (20, 30, 40, 60); the vsync setter is integral.
 	const double rounded = std::round(hz);
 	if (std::fabs(hz - rounded) > 1.0e-6 || rounded < 20.0 ||
-	    rounded > static_cast<double>(kLucentDeclaredVideoHz))
+	    rounded > static_cast<double>(kEmuFusionDeclaredVideoHz))
 		return false;
-	g_lucent_paced_video_hz.store(rounded);
+	g_emufusion_paced_video_hz.store(rounded);
 	LatteTiming_setCustomVsyncFrequency(static_cast<sint32>(rounded));
 	return true;
 }
 
-// NOTE: no lucent_cemu_average_game_fps counterpart to Eden's measurement hook
+// NOTE: no emufusion_cemu_average_game_fps counterpart to Eden's measurement hook
 // is exported. Cemu computes its frame rate inside LattePerformanceMonitor and
 // pushes it to LatteOverlay_updateStats/UpdateWindowTitles without exposing a
 // public accessor, and LatteOverlay only records it when the on-screen overlay
 // is enabled. Rather than export a number that would silently read zero,
-// qualification must time run_frame() from Lucent's side until a small upstream
+// qualification must time run_frame() from EmuFusion's side until a small upstream
 // patch adds a real accessor.

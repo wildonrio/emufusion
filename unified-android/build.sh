@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.emufusion-build-lock"
-VERSION_NAME=3.2.46
-VERSION_CODE=120
+VERSION_NAME=3.2.47
+VERSION_CODE=121
 
 case "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -114,7 +114,7 @@ PHASE3_EDEN_MAIN_HOOK="$ROOT_DIR/engines/build/arm64-v8a/libmain_hook.so"
 # driver and plain-dlopens libvulkan otherwise. It also needs no keys, no
 # firmware, and no Java shim classes, so this is just the adapter.
 INCLUDE_PHASE3_CEMU=${EMUFUSION_INCLUDE_PHASE3_CEMU:-0}
-PHASE3_CEMU_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/liblucent_native_adapter_cemu.so"
+PHASE3_CEMU_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/libemufusion_native_adapter_cemu.so"
 # PS3 is a built-in EmuFusion system, not an external-app fallback. The pinned,
 # hash-verified adapter is therefore part of normal builds; an explicit 0 is
 # retained only for narrow packaging diagnostics.
@@ -910,8 +910,8 @@ if [ "$INCLUDE_PHASE3_CEMU" = 1 ]; then
         "$DECODED/assets/phase3-qualification-opt-in.json"
     cp "$ROOT_DIR/engines/cemu-source-lock.json" \
         "$DECODED/assets/phase3-cemu-source-lock.json"
-    cp "$ROOT_DIR/engines/patches/cemu-lucent-adapter.cpp" \
-        "$DECODED/assets/phase3-cemu-lucent-adapter.cpp"
+    cp "$ROOT_DIR/engines/patches/cemu-emufusion-adapter.cpp" \
+        "$DECODED/assets/phase3-cemu-emufusion-adapter.cpp"
     python3 "$PROJECT_DIR/tools/generate_engine_artifact_manifest.py" \
         --registry "$ROOT_DIR/engines/phase3-registry.json" \
         --library-dir "$DECODED/lib/arm64-v8a" \

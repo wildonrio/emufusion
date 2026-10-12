@@ -25,6 +25,7 @@ public final class TimelineFrameSchedulerTest {
         passesRealImagesNoOutputLandsNear();
         passingKeepsWholeCadencesExact();
         passingNeedsAQueuedSuccessor();
+        burstsAreNotTrimmed();
         System.out.println("TimelineFrameSchedulerTest passed");
     }
 
@@ -127,6 +128,33 @@ public final class TimelineFrameSchedulerTest {
         rig.produce(2, t0 + source50);
         for (int v = 0; v < 6; ++v) rig.vsync(t0 + 30_000_000L + v * PANEL);
         check(rig.shown.contains("R2"), "right image shown without a successor " + rig.shown);
+    }
+
+    private static void burstsAreNotTrimmed() {
+        // 60 fps delivered two images at a time every 33 ms (a producer that
+        // presents in bursts): the extra queued image is momentary, so the
+        // timeline keeps its latency instead of trimming toward the newest
+        // image and then waiting on a late successor.
+        Rig rig = new Rig(PANEL, SOURCE60);
+        rig.steadyQueued = 0;  // every image beyond the pair counts as excess
+        long t0 = 1_000_000_000L;
+        int produced = 0;
+        for (; produced < 2; ++produced) rig.produce(produced + 1, t0 + produced * SOURCE60);
+        int momentaryExcess = 0;
+        for (int v = 0; v < 240; ++v) {
+            long now = t0 + 40_000_000L + v * PANEL;
+            if (v % 4 == 0) {
+                rig.produce(produced + 1, t0 + produced * SOURCE60);
+                rig.produce(produced + 2, t0 + (produced + 1) * SOURCE60);
+                produced += 2;
+            }
+            if (rig.fifo.size() >= TimelineFrameScheduler.TRIM_EXCESS_QUEUED) ++momentaryExcess;
+            rig.vsync(now);
+        }
+        String diagnostics = rig.scheduler.diagnostics();
+        check(momentaryExcess > 20, "the bursts do queue extra images " + momentaryExcess);
+        check(diagnostics.contains("timelineTrims=0 "), "bursts are not trimmed: " + diagnostics);
+        check(!rig.shown.subList(1, rig.shown.size()).contains("-"), "no repeated output " + rig.shown);
     }
 
     private static void doublesSixtyEvenly() {

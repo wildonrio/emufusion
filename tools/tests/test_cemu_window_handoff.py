@@ -64,7 +64,7 @@ struct Chain {
 };
 struct VulkanRenderer {
  std::mutex m_androidWindowMutex;
- std::atomic_bool m_lucentManagedWindows{false};
+ std::atomic_bool m_emufusionManagedWindows{false};
  std::unique_ptr<Chain> m_mainSwapchainInfo, m_padSwapchainInfo;
  std::vector<bool> calls;
  std::thread::id owner = std::this_thread::get_id();
@@ -122,7 +122,7 @@ int main() {
             subprocess.run([str(binary)], check=True, timeout=5)
 
     def test_adapter_rebind_never_replaces_live_swapchains(self):
-        adapter = (ROOT / "engines/patches/cemu-lucent-adapter.cpp").read_text()
+        adapter = (ROOT / "engines/patches/cemu-emufusion-adapter.cpp").read_text()
         rebind = adapter.split("static bool adapter_surface_recreated(", 1)[1].split("static void adapter_stop(", 1)[0]
         self.assertIn("renderer->PublishAndroidWindows", rebind)
         self.assertNotIn("renderer->InitializeSurface", rebind)

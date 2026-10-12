@@ -10,7 +10,7 @@ from tools.tests.test_phone_analog_controls import STUBS, JAVA
 from tools.tests.test_native_adapter_start_pause import ENV
 
 ROOT = Path(__file__).resolve().parents[2]
-ADAPTER = ROOT / 'engines/patches/cemu-lucent-adapter.cpp'
+ADAPTER = ROOT / 'engines/patches/cemu-emufusion-adapter.cpp'
 
 
 class CemuPhoneScreenTest(unittest.TestCase):
@@ -27,8 +27,8 @@ class CemuPhoneScreenTest(unittest.TestCase):
 
     def test_actual_touch_branch_uses_the_visible_canvas(self):
         source = ADAPTER.read_text()
-        start = source.rindex('case LUCENT_PAD_TOUCH_PRESSED:')
-        branch = member(source[start:], 'case LUCENT_PAD_TOUCH_PRESSED:')
+        start = source.rindex('case EMUFUSION_PAD_TOUCH_PRESSED:')
+        branch = member(source[start:], 'case EMUFUSION_PAD_TOUCH_PRESSED:')
         body = branch[branch.index('{'):]
         harness = r'''
 #include <atomic>
@@ -72,13 +72,13 @@ int main(){
     def test_actual_view_control_profile_dual_screen_and_local_ownership(self):
         source = ADAPTER.read_text()
         helper = member(source, 'static void set_primary_screen(')
-        routing = member(source, 'if (control == LUCENT_PAD_SCREEN_VIEW)')
+        routing = member(source, 'if (control == EMUFUSION_PAD_SCREEN_VIEW)')
         self.compile_cpp(r'''
 #include <atomic>
 #include <cassert>
 #include <cmath>
 #include <mutex>
-#include "lucent_native_adapter.h"
+#include "emufusion_native_adapter.h"
 using uint32=uint32_t;
 namespace ActiveSettings { bool initialPad=false; bool DisplayDRCEnabled(){return initialPad;} }
 namespace WindowSystem {
@@ -89,33 +89,33 @@ namespace WindowSystem {
 struct Mouse { std::mutex m_mutex; bool left_down=false,left_down_toggle=false; };
 struct InputManager { Mouse m_main_mouse,m_pad_mouse;
  static InputManager& instance(){static InputManager value;return value;} };
-struct lucent_native_engine { void* pad_window=nullptr; bool gamepad_on_primary=false; };
+struct emufusion_native_engine { void* pad_window=nullptr; bool gamepad_on_primary=false; };
 ''' + helper + r'''
-void dispatch(lucent_native_engine* engine,uint32_t controller_index,
-              lucent_native_control control,float value){
+void dispatch(emufusion_native_engine* engine,uint32_t controller_index,
+              emufusion_native_control control,float value){
 ''' + routing + r'''
 }
 int main(){
- static_assert(LUCENT_PAD_TOUCH_PRESSED==21 && LUCENT_PAD_SCREEN_VIEW==22);
- lucent_native_engine engine;
+ static_assert(EMUFUSION_PAD_TOUCH_PRESSED==21 && EMUFUSION_PAD_SCREEN_VIEW==22);
+ emufusion_native_engine engine;
  auto& input=InputManager::instance();
  auto& info=WindowSystem::GetWindowInfo();
  for(bool profile:{false,true}) {
   ActiveSettings::initialPad=profile;
   for(bool requested:{false,true,false,true}) {
    input.m_main_mouse.left_down=input.m_pad_mouse.left_down=true;
-   dispatch(&engine,0,LUCENT_PAD_SCREEN_VIEW,requested?1.f:0.f);
+   dispatch(&engine,0,EMUFUSION_PAD_SCREEN_VIEW,requested?1.f:0.f);
    assert(engine.gamepad_on_primary==requested);
    assert((profile^info.tab)==requested);
    assert(!input.m_main_mouse.left_down && !input.m_pad_mouse.left_down);
-   dispatch(&engine,1,LUCENT_PAD_SCREEN_VIEW,requested?0.f:1.f);
+   dispatch(&engine,1,EMUFUSION_PAD_SCREEN_VIEW,requested?0.f:1.f);
    assert(engine.gamepad_on_primary==requested); // remote input cannot swap
-   dispatch(&engine,0,LUCENT_PAD_SCREEN_VIEW,NAN);
+   dispatch(&engine,0,EMUFUSION_PAD_SCREEN_VIEW,NAN);
    assert(engine.gamepad_on_primary==requested);
   }
  }
  engine.pad_window=&engine;
- dispatch(&engine,0,LUCENT_PAD_SCREEN_VIEW,1.f);
+ dispatch(&engine,0,EMUFUSION_PAD_SCREEN_VIEW,1.f);
  assert(!engine.gamepad_on_primary && !info.tab); // physical two-screen route
 }
 ''')

@@ -21,20 +21,20 @@
 #   4. Configure Cemu's CMake for a Vulkan, headless, no-Qt/no-wxWidgets core
 #      target that builds Cemu WITHOUT its own Android Activity/UI, and links a
 #      thin adapter translation unit implementing the vtable in
-#      unified-android/native/include/lucent_native_adapter.h.
-#   5. Export EXACTLY one public symbol, lucent_native_adapter_entry, returning a
-#      static const lucent_native_adapter whose abi_version equals
-#      LUCENT_NATIVE_ADAPTER_ABI_VERSION. Everything else stays hidden
+#      unified-android/native/include/emufusion_native_adapter.h.
+#   5. Export EXACTLY one public symbol, emufusion_native_adapter_entry, returning a
+#      static const emufusion_native_adapter whose abi_version equals
+#      EMUFUSION_NATIVE_ADAPTER_ABI_VERSION. Everything else stays hidden
 #      (-fvisibility=hidden -Wl,--no-undefined -Wl,--exclude-libs,ALL).
 #   6. Apply EmuFusion's 16 KiB page-size link policy
 #      (-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384) and produce
-#      liblucent_native_adapter_cemu.so.
+#      libemufusion_native_adapter_cemu.so.
 #   7. Normalize (strip .note.gnu.build-id), record artifactSha256, and prove
 #      byte-identical independent builds before flipping "reproducible": true and
 #      generating the signed phase3 artifact manifest the APK verifies.
 #
 # Until all of that exists, the Java NativeAdapterCatalog stays fail-closed on
-# the HASH: a build that does not pass LUCENT_INCLUDE_PHASE3_CEMU=1 packages no
+# the HASH: a build that does not pass EMUFUSION_INCLUDE_PHASE3_CEMU=1 packages no
 # adapter .so at all, and only then does Wii U resolve to its external Cemu
 # route. With the flag, the staged adapter is bundled and Wii U runs internally.
 
@@ -52,7 +52,7 @@ fi
 
 # Confirm the pinned identity and ABI contract are present so a future
 # implementation starts from a validated, fail-closed baseline.
-python3 - "$ENGINE" "$LOCK" "$ROOT/unified-android/native/include/lucent_native_adapter.h" <<'PY'
+python3 - "$ENGINE" "$LOCK" "$ROOT/unified-android/native/include/emufusion_native_adapter.h" <<'PY'
 import json, re, sys
 engine, lock_path, header_path = sys.argv[1], sys.argv[2], sys.argv[3]
 lock = json.load(open(lock_path))
@@ -74,11 +74,11 @@ if bool(archive) != bool(archive_hash) or (archive_hash and
         not re.fullmatch(r"[0-9a-f]{64}", str(archive_hash))):
     errors.append("core archive identity is incomplete")
 abi = lock.get("adapterAbi") or {}
-if abi.get("entrySymbol") != "lucent_native_adapter_entry":
-    errors.append("adapter entry symbol must be lucent_native_adapter_entry")
+if abi.get("entrySymbol") != "emufusion_native_adapter_entry":
+    errors.append("adapter entry symbol must be emufusion_native_adapter_entry")
 header = open(header_path).read()
-if "#define LUCENT_NATIVE_ADAPTER_ABI_VERSION" not in header:
-    errors.append("ABI header does not define LUCENT_NATIVE_ADAPTER_ABI_VERSION")
+if "#define EMUFUSION_NATIVE_ADAPTER_ABI_VERSION" not in header:
+    errors.append("ABI header does not define EMUFUSION_NATIVE_ADAPTER_ABI_VERSION")
 if errors:
     print("\n".join("  - " + e for e in errors)); sys.exit(1)
 print(f"{engine} native-adapter source lock and ABI contract validated")

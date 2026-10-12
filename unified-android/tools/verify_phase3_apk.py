@@ -42,13 +42,20 @@ def _by_id(rows: list, key: str = "id") -> dict:
     return result
 
 
-def _asset_names(engine_id: str) -> tuple[str, str, str]:
+def _asset_names(engine_id: str) -> tuple[str, str]:
     stem = engine_id.replace("-", "_")
     return (
         f"lib/arm64-v8a/libemufusion_native_adapter_{stem}.so",
         f"assets/phase3-{engine_id}-source-lock.json",
-        f"assets/phase3-{engine_id}-lucent-adapter.cpp",
     )
+
+
+def _adapter_source_path(source_lock: dict) -> str | None:
+    """The adapter translation unit the lock pins (its packaged copy is
+    assets/phase3-<file name>)."""
+    rows = [entry.get("path") for entry in source_lock.get("patches", [])
+            if entry.get("role") == "adapter-translation-unit"]
+    return rows[0] if len(rows) == 1 and isinstance(rows[0], str) else None
 
 
 def verify(path: Path) -> list[str]:
@@ -93,18 +100,26 @@ def verify(path: Path) -> list[str]:
         for engine_id, identity in sorted(identities.items()):
             row = rows.get(engine_id)
             enable = enabled.get(engine_id)
-            library, lock_asset, source_asset = _asset_names(engine_id)
-            for required in (library, lock_asset, source_asset):
+            library, lock_asset = _asset_names(engine_id)
+            for required in (library, lock_asset):
                 if required not in names:
                     errors.append(f"missing Phase 3 qualification payload: {required}")
             if row is None or enable is None or any(
-                    required not in names for required in
-                    (library, lock_asset, source_asset)):
+                    required not in names for required in (library, lock_asset)):
                 continue
             try:
                 source_lock = _read_json(archive, lock_asset)
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 errors.append(f"invalid {engine_id} source lock: {exc}")
+                continue
+            expected_source_path = _adapter_source_path(source_lock)
+            if expected_source_path is None or \
+                    not expected_source_path.startswith(f"engines/patches/{engine_id}-"):
+                errors.append(f"{engine_id} source lock does not pin one adapter source")
+                continue
+            source_asset = "assets/phase3-" + Path(expected_source_path).name
+            if source_asset not in names:
+                errors.append(f"missing Phase 3 qualification payload: {source_asset}")
                 continue
 
             commit = (row.get("source") or {}).get("commit")
@@ -159,7 +174,6 @@ def verify(path: Path) -> list[str]:
                     if expected_license != actual_license:
                         errors.append("Packaged aPS3e GPL-2.0 license differs from the source lock")
 
-            expected_source_path = f"engines/patches/{engine_id}-lucent-adapter.cpp"
             adapter_patches = [entry for entry in source_lock.get("patches", [])
                                if entry.get("path") == expected_source_path]
             if len(adapter_patches) != 1 or \
