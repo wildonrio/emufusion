@@ -17,9 +17,6 @@ COMPANION = ROOT / 'android-companion/src/com/thorium/preview'
 INSTALLER = (COMPANION / 'ThemeInstaller.java').read_text()
 LEGACY = (COMPANION / 'LegacyNames.java').read_text()
 JSON_JAR = Path.home() / '.m2/repository/org/json/json'
-# The aPS3e adapter is still compiled against the pinned former-name header.
-LEGACY_ABI_HEADERS = [ROOT / 'unified-android/native/include' / name for name in (
-    'lucent_native_adapter.h',)]
 
 
 def method(source, signature):
@@ -54,15 +51,16 @@ class LegacyNameMigrationTest(unittest.TestCase):
         self.assertEqual([], offenders)
         self.assertEqual(1, LEGACY.count('"lucent"'))
 
-    def test_native_host_names_former_engine_hooks_in_one_header(self):
-        # Prebuilt engines still export their hooks under the former names
-        # until each is rebuilt (rename phase C2); only the fallback header
-        # and the two ABI headers those engines were compiled against name it.
+    def test_native_host_never_names_the_former_product(self):
+        # Every packaged engine was rebuilt to export its hooks under the
+        # EmuFusion names (rename phase C2, completed 2026-10-12 with aPS3e),
+        # so the host's former-name fallback and the old ABI header are gone.
         native = ROOT / 'unified-android/native'
-        allowed = {native / 'include/emufusion_legacy_engine_abi.h'} | set(LEGACY_ABI_HEADERS)
+        self.assertFalse((native / 'include/emufusion_legacy_engine_abi.h').exists())
+        self.assertEqual([], sorted(p.name for p in (native / 'include').glob('lucent_*')))
         offenders = []
         for path in native.rglob('*'):
-            if not path.is_file() or path in allowed or path.suffix not in (
+            if not path.is_file() or path.suffix not in (
                     '.c', '.h', '.cpp', '.java', '.sh', '.txt'):
                 continue
             for number, line in enumerate(path.read_text(errors='replace').splitlines(), 1):
@@ -70,28 +68,17 @@ class LegacyNameMigrationTest(unittest.TestCase):
                     offenders.append(f'{path.relative_to(ROOT)}:{number}: {line.strip()}')
         self.assertEqual([], offenders)
 
-    def test_libretro_core_recipes_and_patches_use_the_new_name(self):
+    def test_engine_recipes_and_patches_use_the_new_name(self):
         # Rename phase C2b rebuilt every libretro core from renamed recipes and
-        # patches, C2c the Cemu and Eden adapters; only aPS3e remains.
-        adapters = ('aps3e-',)
+        # patches, C2c the Cemu, Eden and aPS3e adapters.
         offenders = []
         recipes = [ROOT / 'engines/build_core.sh', ROOT / 'engines/build_scummvm_core.sh']
-        recipes += [p for p in (ROOT / 'engines/patches').iterdir() if not p.name.startswith(adapters)]
+        recipes += [p for p in (ROOT / 'engines/patches').iterdir() if p.is_file()]
         for path in recipes:
             for number, line in enumerate(path.read_text(errors='replace').splitlines(), 1):
                 if re.search(r'(?i)(?<!trans)lucent', line):
                     offenders.append(f'{path.relative_to(ROOT)}:{number}: {line.strip()}')
         self.assertEqual([], offenders)
-
-    def test_emufusion_abi_headers_are_the_pinned_headers_renamed(self):
-        # Same ABI, new names: each EmuFusion header must be exactly the
-        # header the prebuilt adapters compiled against, renamed.
-        def renamed(text):
-            spelling = {'lucent': 'emufusion', 'Lucent': 'EmuFusion', 'LUCENT': 'EMUFUSION'}
-            return re.sub(r'(?i)(?<!trans)lucent', lambda m: spelling[m.group(0)], text)
-        for legacy in LEGACY_ABI_HEADERS:
-            current = legacy.with_name(legacy.name.replace('lucent_', 'emufusion_'))
-            self.assertEqual(renamed(legacy.read_text()), current.read_text(), current.name)
 
     def test_theme_memory_settings_metadata_and_markers_move_once(self):
         bodies = '\n'.join(method(INSTALLER, signature) for signature in (

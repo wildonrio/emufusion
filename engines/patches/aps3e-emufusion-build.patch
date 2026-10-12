@@ -6,10 +6,10 @@ index 134de7dd..de92b6e0 100644
      alias(libs.plugins.android.application)
  }
  
-+def lucentAdapterSource = System.getenv('LUCENT_ADAPTER_SOURCE')
-+def lucentAdapterInclude = System.getenv('LUCENT_ADAPTER_INCLUDE')
-+if (!lucentAdapterSource || !lucentAdapterInclude) {
-+    throw new GradleException('Lucent adapter source/include environment is required')
++def emufusionAdapterSource = System.getenv('EMUFUSION_ADAPTER_SOURCE')
++def emufusionAdapterInclude = System.getenv('EMUFUSION_ADAPTER_INCLUDE')
++if (!emufusionAdapterSource || !emufusionAdapterInclude) {
++    throw new GradleException('EmuFusion adapter source/include environment is required')
 +}
 +
  android {
@@ -19,8 +19,8 @@ index 134de7dd..de92b6e0 100644
              cmake {
                  abiFilters 'arm64-v8a'
                  cppFlags ''
-+                arguments "-DLUCENT_ADAPTER_SOURCE=${lucentAdapterSource}",
-+                        "-DLUCENT_ADAPTER_INCLUDE=${lucentAdapterInclude}"
++                arguments "-DEMUFUSION_ADAPTER_SOURCE=${emufusionAdapterSource}",
++                        "-DEMUFUSION_ADAPTER_INCLUDE=${emufusionAdapterInclude}"
              }
          }
  
@@ -39,10 +39,10 @@ index 723c3c04..7503f8b0 100644
  add_library(emu SHARED)
  set_target_properties(emu PROPERTIES OUTPUT_NAME "e")
  
-+if(DEFINED LUCENT_ADAPTER_SOURCE)
-+    target_sources(emu PRIVATE ${LUCENT_ADAPTER_SOURCE})
-+    target_include_directories(emu PRIVATE ${LUCENT_ADAPTER_INCLUDE})
-+    set_target_properties(emu PROPERTIES OUTPUT_NAME "lucent_native_adapter_aps3e")
++if(DEFINED EMUFUSION_ADAPTER_SOURCE)
++    target_sources(emu PRIVATE ${EMUFUSION_ADAPTER_SOURCE})
++    target_include_directories(emu PRIVATE ${EMUFUSION_ADAPTER_INCLUDE})
++    set_target_properties(emu PROPERTIES OUTPUT_NAME "emufusion_native_adapter_aps3e")
 +endif()
 +
  target_link_options(emu PRIVATE -Wl,--exclude-libs,ALL)

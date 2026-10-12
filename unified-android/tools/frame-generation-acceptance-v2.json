@@ -117,7 +117,7 @@
       "sources": [
         {"path": "unified-android/src/com/thorium/preview/game/InWindowGameHost.java", "line": 1861},
         {"path": "unified-android/native/emufusion_native_adapter_host.c", "line": 562},
-        {"path": "engines/patches/aps3e-lucent-adapter.cpp", "line": 365}
+        {"path": "engines/patches/aps3e-emufusion-adapter.cpp", "line": 365}
       ]
     },
     {

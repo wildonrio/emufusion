@@ -131,19 +131,6 @@ mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
     -DMOCK_JAVA_VM_SETTER_FAILURE=1 -shared \
     "$NATIVE_DIR/tests/mock_native_adapter.c" $LDFLAGS \
     -o "$TEST_DIR/mock_native_adapter_setter_failure.so"
-# The same adapters exporting their hooks under the names used before the
-# EmuFusion rename: the host must still find every one of them.
-for legacy in "" _setter _setter_failure; do
-    case "$legacy" in
-        _setter) legacy_flags=-DMOCK_JAVA_VM_SETTER_SUCCESS=1 ;;
-        _setter_failure) legacy_flags=-DMOCK_JAVA_VM_SETTER_FAILURE=1 ;;
-        *) legacy_flags= ;;
-    esac
-    "$CC" -std=c11 -O1 -fPIC -pthread -Wall -Wextra -Werror $CFLAGS \
-        -DMOCK_LEGACY_EXPORTS=1 $legacy_flags -shared \
-        "$NATIVE_DIR/tests/mock_native_adapter.c" $LDFLAGS \
-        -o "$TEST_DIR/mock_native_adapter_legacy$legacy.so"
-done
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
     "$NATIVE_DIR/emufusion_native_adapter_host.c" \
     "$NATIVE_DIR/tests/native_adapter_host_test.c" \
@@ -177,12 +164,6 @@ printf '\007' > "$TEST_DIR/game.mock"
     "$TEST_DIR/mock_native_adapter_setter.so" \
     "$TEST_DIR/mock_native_adapter_setter_failure.so" "$TEST_DIR" \
     "$TEST_DIR/save" "$TEST_DIR/game.mock"
-"$TEST_DIR/native_adapter_host_test" "$TEST_DIR/mock_native_adapter_legacy.so" \
-    "$TEST_DIR/mock_native_adapter_mismatch.so" \
-    "$TEST_DIR/mock_native_adapter_legacy_setter.so" \
-    "$TEST_DIR/mock_native_adapter_legacy_setter_failure.so" "$TEST_DIR" \
-    "$TEST_DIR/save" "$TEST_DIR/game.mock"
-printf 'native-adapter hooks under their former names passed\n'
 
 # The adapter loader must reject an otherwise-valid adapter outside its trusted
 # root, exactly as the libretro core loader does below.

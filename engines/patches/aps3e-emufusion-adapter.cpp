@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Lucent's in-process adapter for the pinned aPS3e/RPCS3 Android engine.
+// EmuFusion's in-process adapter for the pinned aPS3e/RPCS3 Android engine.
 // This translation unit is compiled into aPS3e's native library.  It does not
-// load aPS3e's Activity or JNI frontend: Lucent owns the window, controller,
+// load aPS3e's Activity or JNI frontend: EmuFusion owns the window, controller,
 // lifecycle, firmware gate and Quick Resume artifact.
 
-#include "lucent_native_adapter.h"
+#include "emufusion_native_adapter.h"
 
 #include "emulator.h"
 #include "emulator_aps3e.h"
@@ -36,7 +36,7 @@
 
 namespace {
 
-constexpr const char* kTag = "LucentAps3e";
+constexpr const char* kTag = "EmuFusionAps3e";
 constexpr auto kBootTimeout = std::chrono::seconds(120);
 constexpr auto kStopTimeout = std::chrono::seconds(45);
 constexpr std::size_t kMaxStateBytes = 2ull * 1024ull * 1024ull * 1024ull;
@@ -117,7 +117,7 @@ bool write_file_atomic(const std::filesystem::path& destination,
     return !ec;
 }
 
-int virtual_key(lucent_native_control control, float value, bool& pressed,
+int virtual_key(emufusion_native_control control, float value, bool& pressed,
                 std::uint16_t& magnitude) {
     // APS3E_VKC is intentionally mirrored from aps3e_rp3_impl.cpp.  Keeping
     // this mapping explicit makes the physical-slot -> DS3 contract auditable.
@@ -131,49 +131,49 @@ int virtual_key(lucent_native_control control, float value, bool& pressed,
     magnitude = static_cast<std::uint16_t>(std::clamp(std::abs(value), 0.0f, 1.0f) * 255.0f);
     pressed = magnitude > 0;
     switch (control) {
-        // Lucent's canonical A/B/X/Y are physical south/east/west/north.
+        // EmuFusion's canonical A/B/X/Y are physical south/east/west/north.
         // A PS3's corresponding printed controls are Cross/Circle/Square/Triangle.
-        case LUCENT_PAD_A: return kCross;
-        case LUCENT_PAD_B: return kCircle;
-        case LUCENT_PAD_X: return kSquare;
-        case LUCENT_PAD_Y: return kTriangle;
-        case LUCENT_PAD_L: return kL1;
-        case LUCENT_PAD_R: return kR1;
-        case LUCENT_PAD_ZL: return kL2;
-        case LUCENT_PAD_ZR: return kR2;
-        case LUCENT_PAD_L3: return kL3;
-        case LUCENT_PAD_R3: return kR3;
-        case LUCENT_PAD_DPAD_UP: return kUp;
-        case LUCENT_PAD_DPAD_DOWN: return kDown;
-        case LUCENT_PAD_DPAD_LEFT: return kLeft;
-        case LUCENT_PAD_DPAD_RIGHT: return kRight;
-        case LUCENT_PAD_START: return kStart;
-        case LUCENT_PAD_SELECT: return kSelect;
-        case LUCENT_PAD_HOME: return kPs;
-        case LUCENT_PAD_LSTICK_X: return value < 0 ? kLsLeft : kLsRight;
-        case LUCENT_PAD_LSTICK_Y: return value < 0 ? kLsUp : kLsDown;
-        case LUCENT_PAD_RSTICK_X: return value < 0 ? kRsLeft : kRsRight;
-        case LUCENT_PAD_RSTICK_Y: return value < 0 ? kRsUp : kRsDown;
+        case EMUFUSION_PAD_A: return kCross;
+        case EMUFUSION_PAD_B: return kCircle;
+        case EMUFUSION_PAD_X: return kSquare;
+        case EMUFUSION_PAD_Y: return kTriangle;
+        case EMUFUSION_PAD_L: return kL1;
+        case EMUFUSION_PAD_R: return kR1;
+        case EMUFUSION_PAD_ZL: return kL2;
+        case EMUFUSION_PAD_ZR: return kR2;
+        case EMUFUSION_PAD_L3: return kL3;
+        case EMUFUSION_PAD_R3: return kR3;
+        case EMUFUSION_PAD_DPAD_UP: return kUp;
+        case EMUFUSION_PAD_DPAD_DOWN: return kDown;
+        case EMUFUSION_PAD_DPAD_LEFT: return kLeft;
+        case EMUFUSION_PAD_DPAD_RIGHT: return kRight;
+        case EMUFUSION_PAD_START: return kStart;
+        case EMUFUSION_PAD_SELECT: return kSelect;
+        case EMUFUSION_PAD_HOME: return kPs;
+        case EMUFUSION_PAD_LSTICK_X: return value < 0 ? kLsLeft : kLsRight;
+        case EMUFUSION_PAD_LSTICK_Y: return value < 0 ? kLsUp : kLsDown;
+        case EMUFUSION_PAD_RSTICK_X: return value < 0 ? kRsLeft : kRsRight;
+        case EMUFUSION_PAD_RSTICK_Y: return value < 0 ? kRsUp : kRsDown;
         default: return kNone;
     }
 }
 
 } // namespace
 
-// The unified Lucent APK does not package aPS3e's Activity frontend classes.
+// The unified EmuFusion APK does not package aPS3e's Activity frontend classes.
 // Its upstream JNI_OnLoad unconditionally RegisterNatives against those
 // classes, which makes ART abort when the adapter is opened in-process. The
 // native engine only needs the VM identity cached by that hook; accept it over
 // the host's versioned adapter ABI without registering any Java frontend.
 extern JavaVM* g_jvm;
 extern "C" __attribute__((visibility("default")))
-int lucent_native_adapter_set_java_vm(std::uint32_t version, void* java_vm) {
+int emufusion_native_adapter_set_java_vm(std::uint32_t version, void* java_vm) {
     if (version != 1u || !java_vm) return 0;
     g_jvm = static_cast<JavaVM*>(java_vm);
     return 1;
 }
 
-struct lucent_native_engine {
+struct emufusion_native_engine {
     std::mutex mutex;
     std::string system_directory;
     std::string save_directory;
@@ -187,7 +187,7 @@ struct lucent_native_engine {
     bool save_requested = false;
 };
 
-static void release_boot_io(lucent_native_engine* engine) {
+static void release_boot_io(emufusion_native_engine* engine) {
     if (!engine) return;
     if (engine->primary) {
         if (ae::window == engine->primary) ae::window = nullptr;
@@ -200,10 +200,10 @@ static void release_boot_io(lucent_native_engine* engine) {
     }
 }
 
-static void adapter_describe(lucent_native_capabilities* out) {
+static void adapter_describe(emufusion_native_capabilities* out) {
     if (!out) return;
     *out = {};
-    out->abi_version = LUCENT_NATIVE_ADAPTER_ABI_VERSION;
+    out->abi_version = EMUFUSION_NATIVE_ADAPTER_ABI_VERSION;
     out->engine_id = "aps3e";
     out->engine_version = "2.40-b5ae1af";
     out->has_quick_resume = true;
@@ -224,13 +224,13 @@ static void adapter_describe(lucent_native_capabilities* out) {
     out->max_controllers = 1;
 }
 
-static lucent_native_engine* adapter_create() {
-    try { return new lucent_native_engine(); }
+static emufusion_native_engine* adapter_create() {
+    try { return new emufusion_native_engine(); }
     catch (...) { return nullptr; }
 }
 
-static bool adapter_load(lucent_native_engine* engine,
-                         const lucent_native_load_request* request,
+static bool adapter_load(emufusion_native_engine* engine,
+                         const emufusion_native_load_request* request,
                          char* error, std::size_t error_size) {
     if (!engine || !request || !request->system_directory || !request->save_directory ||
         !request->content_path || !*request->content_path) {
@@ -272,7 +272,7 @@ static bool adapter_load(lucent_native_engine* engine,
     if (!readable_file(firmware_version)) {
         // aPS3e's installer calls statfs(dev_flash) after validating the PUP
         // and before extracting it.  The Activity frontend normally creates
-        // this target during initialization, but Lucent installs firmware
+        // this target during initialization, but EmuFusion installs firmware
         // before starting the emulation thread, so create this exact private
         // target here.  A pre-existing directory without the concrete version
         // sentinel may be a partial prior install: never overwrite or delete
@@ -326,9 +326,9 @@ static bool adapter_load(lucent_native_engine* engine,
     return true;
 }
 
-static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* io,
+static bool adapter_start(emufusion_native_engine* engine, const emufusion_native_io* io,
                           char* error, std::size_t error_size) {
-    if (!engine || !io || io->kind != LUCENT_NATIVE_RENDER_VULKAN_WINDOW ||
+    if (!engine || !io || io->kind != EMUFUSION_NATIVE_RENDER_VULKAN_WINDOW ||
         !io->primary_window || !engine->loaded) {
         write_error(error, error_size, "PS3 Vulkan window is unavailable");
         return false;
@@ -373,17 +373,17 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
     return true;
 }
 
-static bool adapter_run_frame(lucent_native_engine* engine) {
+static bool adapter_run_frame(emufusion_native_engine* engine) {
     if (!engine || !engine->started || engine->stopped) return false;
     // RPCS3 owns its emulation/render threads.  The host tick is a health poll,
-    // deliberately paced so Lucent's render owner does not busy-spin.
+    // deliberately paced so EmuFusion's render owner does not busy-spin.
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
     return ae::is_running() || ae::is_paused();
 }
 
-static void adapter_set_control(lucent_native_engine* engine,
+static void adapter_set_control(emufusion_native_engine* engine,
                                 std::uint32_t controller_index,
-                                lucent_native_control control, float value) {
+                                emufusion_native_control control, float value) {
     // describe() reports max_controllers == 1: the shared virtual-pad key
     // space has no room for a second independently-routable player (see the
     // comment in adapter_describe()). Per the ABI contract for such an
@@ -395,10 +395,10 @@ static void adapter_set_control(lucent_native_engine* engine,
     std::uint16_t magnitude = 0;
     const int code = virtual_key(control, value, pressed, magnitude);
     switch (control) {
-        case LUCENT_PAD_LSTICK_X:
-        case LUCENT_PAD_LSTICK_Y:
-        case LUCENT_PAD_RSTICK_X:
-        case LUCENT_PAD_RSTICK_Y: {
+        case EMUFUSION_PAD_LSTICK_X:
+        case EMUFUSION_PAD_LSTICK_Y:
+        case EMUFUSION_PAD_RSTICK_X:
+        case EMUFUSION_PAD_RSTICK_Y: {
             // aPS3e retains the negative and positive virtual keys separately.
             // Release the opposite direction first, including on neutral (which
             // maps to the positive key), or a previous left/up remains held.
@@ -414,15 +414,15 @@ static void adapter_set_control(lucent_native_engine* engine,
     if (code != 0) ae::key_event(static_cast<std::uint32_t>(code), pressed, magnitude);
 }
 
-static void adapter_pause(lucent_native_engine* engine) {
+static void adapter_pause(emufusion_native_engine* engine) {
     if (engine && engine->started && !engine->stopped && ae::is_running()) ae::pause();
 }
 
-static void adapter_resume(lucent_native_engine* engine) {
+static void adapter_resume(emufusion_native_engine* engine) {
     if (engine && engine->started && !engine->stopped && ae::is_paused()) ae::resume();
 }
 
-static bool adapter_flush_save(lucent_native_engine* engine) {
+static bool adapter_flush_save(emufusion_native_engine* engine) {
     // RPCS3's guest save-data manager performs durable file writes itself.  A
     // successful call means the engine is alive and its config root exists;
     // Quick Resume below is the separate exact-position artifact.
@@ -430,7 +430,7 @@ static bool adapter_flush_save(lucent_native_engine* engine) {
            std::filesystem::is_directory(engine->system_directory + "/config");
 }
 
-static std::size_t adapter_serialize_size(lucent_native_engine* engine) {
+static std::size_t adapter_serialize_size(emufusion_native_engine* engine) {
     if (!engine || !engine->started) return 0;
     std::lock_guard lock(engine->mutex);
     if (!engine->save_requested) {
@@ -456,7 +456,7 @@ static std::size_t adapter_serialize_size(lucent_native_engine* engine) {
     return engine->serialized_state.size();
 }
 
-static std::size_t adapter_serialize(lucent_native_engine* engine,
+static std::size_t adapter_serialize(emufusion_native_engine* engine,
                                      void* out, std::size_t capacity) {
     if (!engine) return 0;
     const std::size_t required = adapter_serialize_size(engine);
@@ -466,12 +466,12 @@ static std::size_t adapter_serialize(lucent_native_engine* engine,
     return required;
 }
 
-static bool adapter_unserialize(lucent_native_engine* engine,
+static bool adapter_unserialize(emufusion_native_engine* engine,
                                 const void* data, std::size_t size) {
     if (!engine || !engine->started || !data || size == 0 || size > kMaxStateBytes)
         return false;
     const std::filesystem::path incoming =
-            std::filesystem::path(engine->save_directory) / "lucent-restore.SAVESTAT.zst";
+            std::filesystem::path(engine->save_directory) / "emufusion-restore.SAVESTAT.zst";
     if (!write_file_atomic(incoming, data, size)) return false;
     // RPCS3 validates the state header/version before replacing the running
     // guest.  A rejected or incompatible state therefore fails closed.
@@ -483,8 +483,8 @@ static bool adapter_unserialize(lucent_native_engine* engine,
     return Emu.BootGame(incoming.string(), "", true) == game_boot_result::no_errors;
 }
 
-static bool adapter_surface_recreated(lucent_native_engine* engine,
-                                      const lucent_native_io* io) {
+static bool adapter_surface_recreated(emufusion_native_engine* engine,
+                                      const emufusion_native_io* io) {
     if (!engine || !io || !io->primary_window || !engine->started || engine->stopped)
         return false;
     std::lock_guard lock(engine->mutex);
@@ -501,7 +501,7 @@ static bool adapter_surface_recreated(lucent_native_engine* engine,
     return true;
 }
 
-static void adapter_stop(lucent_native_engine* engine) {
+static void adapter_stop(emufusion_native_engine* engine) {
     if (!engine) return;
     std::lock_guard lock(engine->mutex);
     if (engine->started && !engine->stopped) {
@@ -512,14 +512,14 @@ static void adapter_stop(lucent_native_engine* engine) {
     release_boot_io(engine);
 }
 
-static void adapter_destroy(lucent_native_engine* engine) {
+static void adapter_destroy(emufusion_native_engine* engine) {
     if (!engine) return;
     adapter_stop(engine);
     delete engine;
 }
 
-static const lucent_native_adapter kAdapter = {
-    LUCENT_NATIVE_ADAPTER_ABI_VERSION,
+static const emufusion_native_adapter kAdapter = {
+    EMUFUSION_NATIVE_ADAPTER_ABI_VERSION,
     adapter_describe,
     adapter_create,
     adapter_load,
@@ -538,6 +538,6 @@ static const lucent_native_adapter kAdapter = {
 };
 
 extern "C" __attribute__((visibility("default")))
-const lucent_native_adapter* lucent_native_adapter_entry() {
+const emufusion_native_adapter* emufusion_native_adapter_entry() {
     return &kAdapter;
 }

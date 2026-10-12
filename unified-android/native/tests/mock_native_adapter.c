@@ -25,14 +25,7 @@
 #include "../include/emufusion_native_adapter.h"
 #include "../include/emufusion_native_source_image.h"
 
-/* MOCK_LEGACY_EXPORTS builds the same adapter with the hook names engines
- * exported before the EmuFusion rename, for the host's fallback lookup. */
-#ifdef MOCK_LEGACY_EXPORTS
-#include "../include/emufusion_legacy_engine_abi.h"
-#define MOCK_EXPORT(suffix) EMUFUSION_LEGACY_ENGINE_SYMBOL(suffix)
-#else
 #define MOCK_EXPORT(suffix) emufusion_##suffix
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>

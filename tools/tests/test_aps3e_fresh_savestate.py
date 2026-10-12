@@ -2,13 +2,14 @@
 import hashlib
 import importlib.util
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT/'engines/patches/aps3e-lucent-adapter.cpp'
+SRC = ROOT/'engines/patches/aps3e-emufusion-adapter.cpp'
 GEN = ROOT/'engines/diagnostics/prepare_fresh_savestate.py'
 spec = importlib.util.spec_from_file_location('fresh_capture', GEN)
 generator = importlib.util.module_from_spec(spec)
@@ -22,8 +23,23 @@ STICK_CLICKS = (b'        case LUCENT_PAD_L3: return kL3;\n'
                 b'        case LUCENT_PAD_R3: return kR3;\n')
 
 
+# The adapter was renamed mechanically on 2026-10-12 (rename phase C2c). The
+# pinned chain was reviewed against its former spelling, which this map
+# reproduces exactly: the former file never contained the new name.
+FORMER_SPELLING = {b'emufusion': b'lucent', b'EmuFusion': b'Lucent', b'EMUFUSION': b'LUCENT'}
+
+
+def former_spelling(text):
+    return re.sub(rb'emufusion|EmuFusion|EMUFUSION', lambda m: FORMER_SPELLING[m.group(0)], text)
+
+
+def shipping_adapter():
+    """The shipping adapter in the spelling the pinned chain was reviewed in."""
+    return former_spelling(SRC.read_bytes())
+
+
 def reviewed_adapter(expected_sha=generator.EXPECTED_SHA):
-    current = SRC.read_bytes()
+    current = shipping_adapter()
     if hashlib.sha256(current).hexdigest() == expected_sha:
         return current
     if current.count(STICK_CLICKS) != 1:
@@ -139,7 +155,7 @@ class FreshSavestateTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             # 'old' is the shipping adapter; 'new' is the probe applied to its reviewed input.
-            for label, text in [('old',SRC.read_text()),('new',generator.prepare(reviewed_adapter()))]:
+            for label, text in [('old',shipping_adapter().decode()),('new',generator.prepare(reviewed_adapter()))]:
                 start = text.index('bool write_file_atomic(')
                 body = text[start:text.index('int virtual_key(',start)]
                 suffix = r'''
@@ -168,7 +184,7 @@ int main(int argc, char** argv) {
                 self.assertEqual(result.returncode,10 if label=='old' else 0)
 
     def test_preserves_unrelated_code_and_rejects_drift(self):
-        current = SRC.read_bytes()
+        current = shipping_adapter()
         old = reviewed_adapter()
         new = generator.prepare(old)
         for marker in ('static void adapter_set_control(', 'static bool adapter_unserialize('):
@@ -186,7 +202,7 @@ int main(int argc, char** argv) {
 
     @unittest.skipUnless(shutil.which('c++'), 'compiler absent')
     def test_actual_capture_stale_timeout_wrong_game_and_fresh_commit(self):
-        old = SRC.read_bytes()
+        old = shipping_adapter()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for label, text in [('old', old.decode()), ('new', generator.prepare(reviewed_adapter()))]:
@@ -206,7 +222,7 @@ int main(int argc, char** argv) {
                     with self.subTest(version=label, case=case):
                         result = subprocess.run([str(binary),str(root/(label+str(case))),str(case)])
                         self.assertEqual(result.returncode,0 if label=='new' else 10)
-        self.assertEqual(SRC.read_bytes(), old)
+        self.assertEqual(shipping_adapter(), old)
 
 
 if __name__ == '__main__':

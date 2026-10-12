@@ -64,15 +64,15 @@ public class ClickRoutes {
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_ps3_click_press_release_independent_of_axes_and_face_buttons(self):
-        source = (PATCHES / 'aps3e-lucent-adapter.cpp').read_text()
+        source = (PATCHES / 'aps3e-emufusion-adapter.cpp').read_text()
         self.cpp(PREFIX + input_functions(source) + r'''
 int main(){
- lucent_native_engine engine;
- static_assert(LUCENT_PAD_A==0 && LUCENT_PAD_RSTICK_Y==18 && LUCENT_PAD_SCREEN_VIEW==22);
+ emufusion_native_engine engine;
+ static_assert(EMUFUSION_PAD_A==0 && EMUFUSION_PAD_RSTICK_Y==18 && EMUFUSION_PAD_SCREEN_VIEW==22);
  for(auto pair : {std::pair{23,19},std::pair{24,22}}){
-  auto control=static_cast<lucent_native_control>(pair.first);
-  adapter_set_control(&engine,0,LUCENT_PAD_LSTICK_X,-1.f);
-  adapter_set_control(&engine,0,LUCENT_PAD_A,1.f);
+  auto control=static_cast<emufusion_native_control>(pair.first);
+  adapter_set_control(&engine,0,EMUFUSION_PAD_LSTICK_X,-1.f);
+  adapter_set_control(&engine,0,EMUFUSION_PAD_A,1.f);
   adapter_set_control(&engine,0,control,1.f);
   if(ae::values[pair.second]!=255 || ae::values[9]!=255 || ae::values[6]!=255) return 31;
   adapter_set_control(&engine,0,control,0.f);

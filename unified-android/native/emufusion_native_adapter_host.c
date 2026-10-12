@@ -1,7 +1,6 @@
 #define _XOPEN_SOURCE 700
 
 #include "include/emufusion_native_adapter_host.h"
-#include "include/emufusion_legacy_engine_abi.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -73,7 +72,7 @@ static bool supply_java_vm_to_adapter(void *library,
         }
     }
     dlerror();
-    setter_symbol = emufusion_engine_dlsym(library, EMUFUSION_NATIVE_ADAPTER_JAVA_VM_SYMBOL);
+    setter_symbol = dlsym(library, EMUFUSION_NATIVE_ADAPTER_JAVA_VM_SYMBOL);
     if (setter_symbol) {
         int accepted;
         memcpy(&set_vm, &setter_symbol, sizeof(set_vm));
@@ -207,7 +206,7 @@ emufusion_native_adapter_host *emufusion_native_adapter_open(
         return NULL;
     }
     dlerror();
-    symbol = emufusion_engine_dlsym(library, EMUFUSION_NATIVE_ADAPTER_ENTRY_SYMBOL);
+    symbol = dlsym(library, EMUFUSION_NATIVE_ADAPTER_ENTRY_SYMBOL);
     if (!symbol || dlerror()) {
         set_error(error, error_size, "adapter is missing required symbol %s",
                   EMUFUSION_NATIVE_ADAPTER_ENTRY_SYMBOL);
@@ -258,8 +257,8 @@ emufusion_native_adapter_host *emufusion_native_adapter_open(
     host->capabilities = capabilities;
     /* Resolve optional hot-path queries once during setup, not under a live
      * renderer deadline where dlsym may contend on the dynamic-linker lock. */
-    void *binding_symbol = emufusion_engine_dlsym(library, "emufusion_native_adapter_source_image_binding_v1");
-    void *query_symbol = emufusion_engine_dlsym(library, "emufusion_native_adapter_query_source_image_v1");
+    void *binding_symbol = dlsym(library, "emufusion_native_adapter_source_image_binding_v1");
+    void *query_symbol = dlsym(library, "emufusion_native_adapter_query_source_image_v1");
     if (binding_symbol) memcpy(&host->source_binding, &binding_symbol, sizeof(host->source_binding));
     if (query_symbol) memcpy(&host->source_query, &query_symbol, sizeof(host->source_query));
 #if defined(__ANDROID__)
@@ -593,11 +592,11 @@ double emufusion_native_adapter_average_fps(emufusion_native_adapter_host *host)
         return EMUFUSION_NATIVE_ADAPTER_FPS_UNSUPPORTED;
     }
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, standard_symbol);
+    symbol = dlsym(host->library, standard_symbol);
     if (!symbol && host->capabilities.engine_id &&
             strcmp(host->capabilities.engine_id, "eden") == 0) {
         dlerror();
-        symbol = emufusion_engine_dlsym(host->library, fps_symbol);
+        symbol = dlsym(host->library, fps_symbol);
     }
     if (!symbol) return EMUFUSION_NATIVE_ADAPTER_FPS_UNSUPPORTED;
     memcpy(&reader, &symbol, sizeof(reader));
@@ -610,7 +609,7 @@ bool emufusion_native_adapter_set_fg_presentation(emufusion_native_adapter_host 
     void *symbol;
     if (!host || !host->library || !host->loaded) return false;
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_set_fg_presentation_v1");
+    symbol = dlsym(host->library, "emufusion_native_adapter_set_fg_presentation_v1");
     if (!symbol) return false;
     memcpy(&setter, &symbol, sizeof(setter));
     setter(enabled);
@@ -622,7 +621,7 @@ double emufusion_native_adapter_declared_video_hz(emufusion_native_adapter_host 
     void *symbol;
     if (!host || !host->library || !host->started) return 0.0;
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_declared_video_hz");
+    symbol = dlsym(host->library, "emufusion_native_adapter_declared_video_hz");
     if (!symbol) return 0.0;
     memcpy(&reader, &symbol, sizeof(reader));
     return reader();
@@ -640,7 +639,7 @@ bool emufusion_native_adapter_set_paced_video_hz(emufusion_native_adapter_host *
             fabs(hz / declared - 1.0) > 0.0075 + 1.0e-12) return false;
     }
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_set_paced_video_hz");
+    symbol = dlsym(host->library, "emufusion_native_adapter_set_paced_video_hz");
     if (!symbol) return false;
     memcpy(&setter, &symbol, sizeof(setter));
     return setter(hz);
@@ -651,7 +650,7 @@ uint32_t emufusion_native_adapter_timing_capabilities(emufusion_native_adapter_h
     void *symbol;
     if (!host || !host->library || !host->started) return 0u;
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_timing_capabilities_v1");
+    symbol = dlsym(host->library, "emufusion_native_adapter_timing_capabilities_v1");
     if (!symbol) return 0u;
     memcpy(&reader, &symbol, sizeof(reader));
     return reader() & (EMUFUSION_NATIVE_TIMING_BASE_CLOCK_CORRECTION |
@@ -665,7 +664,7 @@ double emufusion_native_adapter_producer_timeline_hz(emufusion_native_adapter_ho
     if (!(emufusion_native_adapter_timing_capabilities(host) &
             EMUFUSION_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE)) return 0.0;
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, "emufusion_native_adapter_producer_timeline_hz");
+    symbol = dlsym(host->library, "emufusion_native_adapter_producer_timeline_hz");
     if (!symbol) return 0.0;
     memcpy(&reader, &symbol, sizeof(reader));
     double hz = reader();

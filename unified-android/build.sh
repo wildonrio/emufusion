@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.emufusion-build-lock"
-VERSION_NAME=3.2.50
-VERSION_CODE=124
+VERSION_NAME=3.2.51
+VERSION_CODE=125
 
 case "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -135,7 +135,7 @@ RIFE_CACHE_DIR="$RIFE_BENCHMARK_DIR/build/upstream-cache"
 RIFE_HOST_RECORD="$PROJECT_DIR/build/rife-framegen-host-artifacts.json"
 RIFE_GRADLE=${RIFE_GRADLE:-/opt/homebrew/bin/gradle}
 RIFE_LLVM_READELF="$SDK_DIR/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-readelf"
-PHASE3_APS3E_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/liblucent_native_adapter_aps3e.so"
+PHASE3_APS3E_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/libemufusion_native_adapter_aps3e.so"
 DEPS_DIR="$BUILD_DIR/deps"
 COMMONS_COMPRESS_JAR="$DEPS_DIR/commons-compress-1.21.jar"
 XZ_JAR="$DEPS_DIR/xz-1.9.jar"
@@ -927,8 +927,8 @@ if [ "$INCLUDE_PHASE3_APS3E" = 1 ]; then
         "$DECODED/assets/phase3-qualification-opt-in.json"
     cp "$ROOT_DIR/engines/aps3e-source-lock.json" \
         "$DECODED/assets/phase3-aps3e-source-lock.json"
-    cp "$ROOT_DIR/engines/patches/aps3e-lucent-adapter.cpp" \
-        "$DECODED/assets/phase3-aps3e-lucent-adapter.cpp"
+    cp "$ROOT_DIR/engines/patches/aps3e-emufusion-adapter.cpp" \
+        "$DECODED/assets/phase3-aps3e-emufusion-adapter.cpp"
     cp "$ROOT_DIR/engines/compliance/aps3e/GPL-2.0-only.txt" \
         "$DECODED/assets/LICENSE-GPL-2.0-APS3E.txt"
     python3 "$PROJECT_DIR/tools/generate_engine_artifact_manifest.py" \

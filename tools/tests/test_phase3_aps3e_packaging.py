@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 COMMIT = "b5ae1af50d5e2f3b705506e7380a4504e086840b"
 LIBRARY = "libemufusion_native_adapter_aps3e.so"
 # Staged under its build name until aPS3e is rebuilt (rename phase C2).
-STAGED = ROOT / "engines" / "build" / "arm64-v8a" / "liblucent_native_adapter_aps3e.so"
+STAGED = ROOT / "engines" / "build" / "arm64-v8a" / "libemufusion_native_adapter_aps3e.so"
 LOCK_PATH = ROOT / "engines" / "aps3e-source-lock.json"
-ADAPTER_PATH = ROOT / "engines" / "patches" / "aps3e-lucent-adapter.cpp"
+ADAPTER_PATH = ROOT / "engines" / "patches" / "aps3e-emufusion-adapter.cpp"
 TAGGED_POINTER_PATCH = (ROOT / "engines" / "patches" /
                         "aps3e-android-tagged-atomic-ptr.patch")
 REGISTRY = json.loads((ROOT / "engines" / "phase3-registry.json").read_text())
@@ -85,7 +85,7 @@ class Aps3eIdentityTest(unittest.TestCase):
         self.assertEqual(LOCK["artifact"]["sha256"],
                          hashlib.sha256(STAGED.read_bytes()).hexdigest())
         self.assertEqual("0x4000", LOCK["artifact"]["ptLoadAlignment"])
-        self.assertEqual("lucent_native_adapter_entry",
+        self.assertEqual("emufusion_native_adapter_entry",
                          LOCK["artifact"]["requiredExport"])
 
     def test_adapter_exposes_ps3_lifecycle_controls_and_savestate(self):
@@ -94,10 +94,10 @@ class Aps3eIdentityTest(unittest.TestCase):
         self.assertIn("out->required_firmware = 1;", source)
         self.assertIn("Emu.Kill(false, true);", source)
         self.assertIn("Emu.BootGame(incoming.string()", source)
-        self.assertIn("case LUCENT_PAD_A: return kCross;", source)
-        self.assertIn("case LUCENT_PAD_B: return kCircle;", source)
+        self.assertIn("case EMUFUSION_PAD_A: return kCross;", source)
+        self.assertIn("case EMUFUSION_PAD_B: return kCircle;", source)
         self.assertIn("android_get_device_api_level()", source)
-        self.assertIn("lucent_native_adapter_set_java_vm", source)
+        self.assertIn("emufusion_native_adapter_set_java_vm", source)
         self.assertIn("version != 1u || !java_vm", source)
         self.assertIn("g_jvm = static_cast<JavaVM*>(java_vm);", source)
 
@@ -182,7 +182,7 @@ class Aps3eIdentityTest(unittest.TestCase):
     def test_versioned_java_vm_handoff_precedes_activity_jni_fallback(self):
         self.assertIn('"emufusion_native_adapter_set_java_vm"', HOST_HEADER)
         self.assertIn("EMUFUSION_NATIVE_ADAPTER_JAVA_VM_VERSION 1u", HOST_HEADER)
-        setter = HOST.index("setter_symbol = emufusion_engine_dlsym")
+        setter = HOST.index("setter_symbol = dlsym")
         fallback = HOST.index('on_load_symbol = dlsym(library, "JNI_OnLoad")')
         self.assertLess(setter, fallback)
         self.assertIn("if (!accepted)", HOST[setter:fallback])
@@ -247,7 +247,7 @@ class Aps3eRuntimeGateTest(unittest.TestCase):
         self.assertIn("INCLUDE_PHASE3_APS3E=${EMUFUSION_INCLUDE_PHASE3_APS3E:-1}", BUILD)
         self.assertIn('if [ "$INCLUDE_PHASE3_APS3E" = 1 ]; then', BUILD)
         self.assertIn('"$DECODED/assets/phase3-aps3e-source-lock.json"', BUILD)
-        self.assertIn('"$DECODED/assets/phase3-aps3e-lucent-adapter.cpp"', BUILD)
+        self.assertIn('"$DECODED/assets/phase3-aps3e-emufusion-adapter.cpp"', BUILD)
         self.assertIn('"$DECODED/assets/LICENSE-GPL-2.0-APS3E.txt"', BUILD)
         verifier = BUILD.index('python3 "$PROJECT_DIR/tools/verify_phase3_apk.py"')
         guard = BUILD.rindex('if [ "$INCLUDE_PHASE3_ANY" = 1 ]; then', 0, verifier)
@@ -266,7 +266,7 @@ class Aps3eRuntimeGateTest(unittest.TestCase):
             "assets/phase3-engine-artifacts.json": json.dumps({
                 "schemaVersion": 1, "artifacts": [identity]}).encode(),
             "assets/phase3-aps3e-source-lock.json": json.dumps(LOCK).encode(),
-            "assets/phase3-aps3e-lucent-adapter.cpp": ADAPTER_PATH.read_bytes(),
+            "assets/phase3-aps3e-emufusion-adapter.cpp": ADAPTER_PATH.read_bytes(),
             "assets/LICENSE-GPL-2.0-APS3E.txt":
                 (ROOT / "engines" / "compliance" / "aps3e" /
                  "GPL-2.0-only.txt").read_bytes(),

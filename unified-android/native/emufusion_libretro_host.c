@@ -2,7 +2,6 @@
 
 #include "include/emufusion_libretro_host.h"
 #include "include/libretro.h"
-#include "include/emufusion_legacy_engine_abi.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -1335,7 +1334,7 @@ static bool resolve_symbol(void *library, const char *name, void *target,
 static void resolve_optional_symbol(void *library, const char *name, void *target) {
     void *symbol;
     dlerror();
-    symbol = emufusion_engine_dlsym(library, name);
+    symbol = dlsym(library, name);
     if (dlerror()) symbol = NULL;
     memcpy(target, &symbol, sizeof(symbol));
 }
@@ -1571,7 +1570,7 @@ bool emufusion_retro_supply_android_java_vm(emufusion_retro_host *host, void *ja
         RETURN_UNLOCKED(false);
     }
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, play_setter_name);
+    symbol = dlsym(host->library, play_setter_name);
     if (!symbol) {
         /* This hook is optional and deliberately invisible to normal cores. */
 #if defined(__ANDROID__)
@@ -1607,7 +1606,7 @@ bool emufusion_retro_supply_output_size(emufusion_retro_host *host,
         RETURN_UNLOCKED(false);
     }
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, setter_name);
+    symbol = dlsym(host->library, setter_name);
     if (!symbol) RETURN_UNLOCKED(true);
     memcpy(&setter, &symbol, sizeof(setter));
     setter(width, height);
@@ -1631,7 +1630,7 @@ bool emufusion_retro_supply_frontend_framebuffer(emufusion_retro_host *host,
         RETURN_UNLOCKED(false);
     }
     dlerror();
-    symbol = emufusion_engine_dlsym(host->library, setter_name);
+    symbol = dlsym(host->library, setter_name);
     if (!symbol) RETURN_UNLOCKED(true);
     memcpy(&setter, &symbol, sizeof(setter));
     setter(framebuffer);

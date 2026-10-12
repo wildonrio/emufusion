@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / 'engines/patches/aps3e-lucent-adapter.cpp'
+SRC = ROOT / 'engines/patches/aps3e-emufusion-adapter.cpp'
 GEN = ROOT / 'engines/diagnostics/prepare_native_stop_probe.py'
 spec = importlib.util.spec_from_file_location('stop_probe', GEN)
 generator = importlib.util.module_from_spec(spec)

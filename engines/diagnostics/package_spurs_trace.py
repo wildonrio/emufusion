@@ -11,7 +11,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 SDK = Path('/Users/tyleryoung/Library/Android/sdk')
 BASE_SHA = '02d71f0930fcff2ccab27201fe7dbe214f83bd9e5e3416994e8e61438a0c5adc'
-SO = 'lib/arm64-v8a/liblucent_native_adapter_aps3e.so'
+SO = 'lib/arm64-v8a/libemufusion_native_adapter_aps3e.so'
 LOCK = 'assets/phase3-aps3e-source-lock.json'
 INDEX = 'assets/phase3-engine-artifacts.json'
 NOTE = 'assets/local-spurs-trace-diagnostic.json'
@@ -38,7 +38,7 @@ def trace_profile(mfc_progress=False, spurs_workload=False, retirement_only=Fals
                                   if getllar_read_barrier else '')
                                + ('; acquire-loss flip-retirement correction'
                                   if combined_flip_retirement else '')),
-                'sourcePatch': 'engines/patches/aps3e-lucent-adapter.cpp',
+                'sourcePatch': 'engines/patches/aps3e-emufusion-adapter.cpp',
                 'helper': None}
     if retirement_only:
         if mfc_progress or spurs_workload:
@@ -136,7 +136,7 @@ def main():
         if any((args.state_restore_probe, args.render_capture_probe, args.state_capture_probe, args.native_stop_probe)) or not args.wrapper_sync_lifetime or not args.combined_flip_retirement or not args.without_trace or not args.core_error_trace:
             parser.error('restore phase requires retained wrapper/composition and core-error mirror without other probes')
         from prepare_restore_phase_probe import prepare
-        if args.restore_phase_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-lucent-adapter.cpp').read_bytes(), args.restore_attempt).encode():
+        if args.restore_phase_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-emufusion-adapter.cpp').read_bytes(), args.restore_attempt).encode():
             parser.error('restore phase source differs from the pinned generator')
         args.extra_source_patch += [ROOT/'engines/diagnostics/prepare_fresh_savestate.py',
                                    ROOT/'engines/diagnostics/prepare_render_capture_probe.py',
@@ -149,7 +149,7 @@ def main():
         if args.render_capture_probe is not None or args.state_capture_probe is not None or args.native_stop_probe is not None or not args.wrapper_sync_lifetime or not args.combined_flip_retirement or not args.without_trace:
             parser.error('state restore requires wrapper/retained composition without other probes or tracing')
         from prepare_state_restore_probe import prepare
-        if args.state_restore_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-lucent-adapter.cpp').read_bytes()).encode():
+        if args.state_restore_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-emufusion-adapter.cpp').read_bytes()).encode():
             parser.error('state restore source differs from the pinned scoped generator')
         args.extra_source_patch += [ROOT/'engines/diagnostics/prepare_fresh_savestate.py',
                                    ROOT/'engines/diagnostics/prepare_render_capture_probe.py',
@@ -158,7 +158,7 @@ def main():
         if args.state_capture_probe is not None or args.native_stop_probe is not None or not args.wrapper_sync_lifetime or not args.combined_flip_retirement or not args.without_trace:
             parser.error('render capture requires wrapper/retained composition without other probes or tracing')
         from prepare_render_capture_probe import prepare
-        if args.render_capture_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-lucent-adapter.cpp').read_bytes()).encode():
+        if args.render_capture_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-emufusion-adapter.cpp').read_bytes()).encode():
             parser.error('render capture source differs from the pinned scoped generator')
         args.extra_source_patch += [ROOT/'engines/diagnostics/prepare_fresh_savestate.py',
                                    ROOT/'engines/diagnostics/prepare_render_capture_probe.py', args.render_capture_probe]
@@ -166,7 +166,7 @@ def main():
         if args.native_stop_probe is not None or not args.wrapper_sync_lifetime or not args.combined_flip_retirement or not args.without_trace:
             parser.error('state capture requires wrapper/retained composition without tracing or native-stop probe')
         from prepare_state_capture_probe import prepare
-        if args.state_capture_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-lucent-adapter.cpp').read_bytes()).encode():
+        if args.state_capture_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-emufusion-adapter.cpp').read_bytes()).encode():
             parser.error('state capture source differs from the pinned scoped generator')
         args.extra_source_patch += [ROOT/'engines/diagnostics/prepare_fresh_savestate.py',
                                    ROOT/'engines/diagnostics/prepare_state_capture_probe.py', args.state_capture_probe]
@@ -174,7 +174,7 @@ def main():
         if not args.combined_flip_retirement or not args.without_trace:
             parser.error('native stop probe requires retained composition without tracing')
         from prepare_native_stop_probe import prepare
-        if args.native_stop_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-lucent-adapter.cpp').read_bytes()).encode():
+        if args.native_stop_probe.read_bytes() != prepare((ROOT/'engines/patches/aps3e-emufusion-adapter.cpp').read_bytes()).encode():
             parser.error('native stop probe source differs from the pinned scoped generator')
         args.extra_source_patch += [ROOT/'engines/diagnostics/prepare_native_stop_probe.py', args.native_stop_probe]
     if args.zcull_teardown:
@@ -315,7 +315,7 @@ def main():
         replacements = {SO:trace.read_bytes(),
                         LOCK:json.dumps(lock, indent=2).encode(), INDEX:json.dumps(index, indent=2).encode()}
         if adapter_source is not None:
-            replacements['assets/phase3-aps3e-lucent-adapter.cpp'] = adapter_source
+            replacements['assets/phase3-aps3e-emufusion-adapter.cpp'] = adapter_source
         with zipfile.ZipFile(out/'unsigned.apk', 'w') as destination:
             for entry in source.infolist():
                 if not signature(entry.filename):

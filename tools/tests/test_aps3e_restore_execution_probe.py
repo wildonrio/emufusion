@@ -17,7 +17,7 @@ class RestoreExecutionProbeTest(unittest.TestCase):
         result = trace_profile(mfc_progress=True, adapter_input_only=True,
                                getllar_read_barrier=True, combined_flip_retirement=True,
                                restore_diagnostic=True)
-        self.assertEqual(result['sourcePatch'], 'engines/patches/aps3e-lucent-adapter.cpp')
+        self.assertEqual(result['sourcePatch'], 'engines/patches/aps3e-emufusion-adapter.cpp')
 
     def test_only_markers_and_retained_barrier_extend_reviewed_mfc_probe(self):
         source = (ROOT/'engines/build/sources/aps3e-b5ae1af50d5e2f3b705506e7380a4504e086840b/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp').read_bytes()
