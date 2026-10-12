@@ -1,7 +1,7 @@
 {
   "product": "EmuFusion",
-  "companionVersionCode": 127,
-  "companionVersionName": "3.2.53",
-  "companionApkUrl": "https://github.com/wildonrio/emufusion/releases/download/v3.2.53/emufusion-3.2.53.apk",
-  "companionSha256": "3296f6c1e41e48667bd9f04e7087247de84a42f1d4a92523f2d366d12ca94025"
+  "companionVersionCode": 128,
+  "companionVersionName": "3.2.54",
+  "companionApkUrl": "https://github.com/wildonrio/emufusion/releases/download/v3.2.54/emufusion-3.2.54.apk",
+  "companionSha256": "91ccf3a9a561ea52668159f2370bf43b6e64832f4df1a478454d7854e843a2c3"
 }
