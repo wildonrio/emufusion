@@ -7901,6 +7901,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             timelineLastPlannedGenerationNs = nowNs;
             return true;
         }
+        int ownedScans = variableSourceScans();
+        if (ownedScans > 0) {
+            timelineScansPerOutput = ownedScans;
+            timelineLastPlannedGenerationNs = nowNs;
+            return true;
+        }
         if (!timelineActive || !frameRate.generationAvailable() ||
                 timelineScansPerOutput <= 0 || timelineLastPlannedGenerationNs <= 0L)
             return false;
@@ -7914,6 +7920,37 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         return nowNs - timelineLastPlannedGenerationNs < TIMELINE_RELEASE_AFTER_NS;
     }
+
+    /**
+     * Output lattice (scans per output) the timeline owns for a source the
+     * controller does not plan: one whose measured rate is not a uniform
+     * qualified clock (Star Fox dipping 27-30 FPS, NDS, PS1) or not yet
+     * qualified (an N64 20-FPS game waits ~40 s for that). The timeline places
+     * every output at its own source time from real pair timestamps, so a
+     * fixed panel divisor near maxMultiplier x the measured rate is smoother
+     * than presenting the irregular source directly. Hysteresis keeps the
+     * lattice while the rate still fits it, so a wobble near a boundary does
+     * not re-anchor the timeline.
+     */
+    private int variableSourceScans() {
+        if (!timelineMode || !frameRate.generationAvailable()) return 0;
+        double panelHz = frameRate.panelHz();
+        double sourceHz = frameRate.sustainedMeasuredSourceHz();
+        if (!(panelHz > 0.0) || !(sourceHz >= VARIABLE_SOURCE_MIN_HZ) ||
+                sourceHz > panelHz / 2.0) return 0;
+        int multiplier = TimelineSchedulerSwitch.maxMultiplier();
+        int previous = timelineScansPerOutput;
+        if (previous > 0) {
+            double previousOutput = panelHz / previous;
+            if (previousOutput <= multiplier * sourceHz * 1.25 &&
+                    previousOutput >= sourceHz * 1.3) return previous;
+        }
+        int scans = Math.max(1, (int) Math.ceil(panelHz / (multiplier * sourceHz * 1.12) - 1e-9));
+        return panelHz / scans >= sourceHz * 1.3 ? scans : 0;
+    }
+
+    /** Below this a pair spans > 50 ms and the motion between them is not worth guessing. */
+    private static final double VARIABLE_SOURCE_MIN_HZ = 19.5;
 
     /** Measured unique source x whole multiplier lands on the timeline's output rate (1%). */
     private boolean sourceFitsTimelineLattice() {
@@ -7934,7 +7971,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      */
     private int presentationScansPerOutput() {
         int planned = frameRate.panelScansPerOutput();
-        return planned > 0 || !timelineActive ? planned : timelineScansPerOutput;
+        if (!timelineActive) return planned;
+        // A variable source's lattice is the timeline's own; the controller's
+        // Direct plan for it (every 4 scans at 30 FPS) is not what is shown.
+        return planned > 0 && frameRate.generatesIntermediateFrames() ? planned :
+                timelineScansPerOutput;
     }
 
     /**
@@ -7968,7 +8009,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     /** Configures the timeline from the controller's plan and asks it for this callback. */
     private int selectTimelinePresentation(long callbackNs) {
         long panelPeriodNs = frameRate.panelPeriodNs();
-        int planned = frameRate.panelScansPerOutput();
+        // The controller's plan when it generates; otherwise the lattice the
+        // timeline owns for a variable source (its Direct plan would present
+        // a 30-FPS source every 4 scans, not the generated 60).
+        int planned = frameRate.generatesIntermediateFrames() ?
+                frameRate.panelScansPerOutput() : 0;
         if (planned > 0) timelineScansPerOutput = planned;
         int scans = Math.max(1, planned > 0 ? planned : timelineScansPerOutput);
         double sourceHz = frameRate.presentationSourceHz();
