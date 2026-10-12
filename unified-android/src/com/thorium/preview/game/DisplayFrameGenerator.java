@@ -8063,6 +8063,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             timelineLastPlannedGenerationNs = nowNs;
             return true;
         }
+        logTimelineOwnershipDeclined(nowNs);
         if (!timelineActive || !frameRate.generationAvailable() ||
                 timelineScansPerOutput <= 0 || timelineLastPlannedGenerationNs <= 0L)
             return false;
@@ -8132,6 +8133,26 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (fallback == 0) fallback = scans;
         }
         return fallback;
+    }
+
+    // Why the timeline is not generating, every 2 s at most while it is not:
+    // a near-60 source (SM3DW) waited 19 s with no visible reason (2026-10-12).
+    private long timelineDeclinedLogNs;
+
+    private void logTimelineOwnershipDeclined(long nowNs) {
+        if (timelineActive || nowNs - timelineDeclinedLogNs < 2_000_000_000L) return;
+        timelineDeclinedLogNs = nowNs;
+        Log.i(TAG, "Timeline ownership declined generator=" + generatorId +
+                " timelineMode=" + (timelineMode ? 1 : 0) +
+                " generationAvailable=" + (frameRate.generationAvailable() ? 1 : 0) +
+                " dense=" + (densePyramidEnabled ? 1 : 0) +
+                " denseUnavailable=" + (densePyramidUnavailable ? 1 : 0) +
+                " external=" + (externalTransport != null ? 1 : 0) +
+                " sustainedHz=" + String.format(java.util.Locale.US, "%.2f",
+                        frameRate.sustainedMeasuredSourceHz()) +
+                " panelHz=" + String.format(java.util.Locale.US, "%.2f", frameRate.panelHz()) +
+                " physicalHz=" + String.format(java.util.Locale.US, "%.2f", physicalPanelHz()) +
+                " suspended=" + (denseGpuAdaptation.generationDisabled() ? 1 : 0));
     }
 
     /** Below this a pair spans > 50 ms and the motion between them is not worth guessing. */

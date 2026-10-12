@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.emufusion-build-lock"
-VERSION_NAME=3.2.53
-VERSION_CODE=127
+VERSION_NAME=3.2.54
+VERSION_CODE=128
 
 case "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -450,7 +450,10 @@ fi
 THEME_ARCHIVE="$ROOT_DIR/android-companion/assets/emufusion-theme.zip"
 THEME_FINGERPRINT="$ROOT_DIR/android-companion/assets/emufusion-theme.sha256"
 rm -f "$THEME_ARCHIVE.partial.zip"
-(cd "$ROOT_DIR/theme" && /usr/bin/zip -q -r "$THEME_ARCHIVE.partial.zip" .)
+# Sorted entries and fixed timestamps: the fingerprint changes only when theme
+# content does, so the installer stops re-installing an identical theme.
+python3 "$PROJECT_DIR/tools/zip_theme_deterministic.py" "$ROOT_DIR/theme" \
+    "$THEME_ARCHIVE.partial.zip"
 mv "$THEME_ARCHIVE.partial.zip" "$THEME_ARCHIVE"
 shasum -a 256 "$THEME_ARCHIVE" | awk '{print $1}' > "$THEME_FINGERPRINT"
 
