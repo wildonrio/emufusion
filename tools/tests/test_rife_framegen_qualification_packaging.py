@@ -113,6 +113,8 @@ class RifeQualificationPackagingTest(unittest.TestCase):
         self.lock_path = ROOT / "experiments/rife-ncnn-vulkan-android/upstream-lock.json"
         self.lock = json.loads(self.lock_path.read_text(encoding="utf-8"))
 
+    @unittest.skipUnless((ROOT / ".evidence-rife-twine-r146-30to60" / "run-device-test.sh").is_file(),
+                         "closed Twine harness evidence absent")
     def test_twine_physical_harness_detects_system_server_failure_without_screencap(self):
         harness = (ROOT / ".evidence-rife-twine-r146-30to60" /
                    "run-device-test.sh").read_text(encoding="utf-8")
@@ -870,6 +872,8 @@ class RifeQualificationPackagingTest(unittest.TestCase):
             ROOT / "experiments/rife-ncnn-vulkan-android/evidence/"
                    "ahardwarebuffer-surface-2026-08-24/host-artifacts.json",
         ]
+        if not app_apk.is_file():
+            self.skipTest("matching locked local RIFE build/cache is absent")
         record = next((candidate for candidate in records
                        if candidate.is_file() and
                        json.loads(candidate.read_text(encoding="utf-8"))

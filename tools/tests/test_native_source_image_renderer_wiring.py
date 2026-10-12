@@ -242,6 +242,7 @@ public class WiringFixture {
     void setSignatureTextureSampling(int texture){}
     void clearMotionField(int texture,int w,int h){}
     void allocateDenseResources(){}
+    void forgetReusableDensePyramid(){}
     void resetHealthWindowAfterStreamChange(){}
 ''' .replace("OBSERVER", observer_name) + methods + r'''
     void frame(long pts){trace.clear();inputTexture.timestamp=pts;onFrameAvailable(inputTexture);}
