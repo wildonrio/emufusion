@@ -4146,8 +4146,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         int[] contextAttributes = {EGL14.EGL_CONTEXT_CLIENT_VERSION,
                 requestedEglContextMajor, EGL14.EGL_NONE};
         String contextExtensions = EGL14.eglQueryString(eglDisplay, EGL14.EGL_EXTENSIONS);
-        boolean prioritizeExternalPresentation = externalTransport != null &&
-                appOwnedPresentation && contextExtensions != null &&
+        // The generator's work per output is short but deadline-bound; under
+        // a GPU-heavy engine (Wii U Wind Waker HD on the Thor) its pairs
+        // queued behind the engine's long submissions and missed the panel
+        // until generation disabled itself. Ask for high priority for the
+        // built-in generator as well as an app-owned external transport.
+        boolean prioritizeExternalPresentation = (externalTransport == null ||
+                appOwnedPresentation) && contextExtensions != null &&
                 (" " + contextExtensions + " ").contains(" EGL_IMG_context_priority ");
         if (prioritizeExternalPresentation) {
             // Driver hint only. Never require privileges or change device policy.
@@ -4159,7 +4164,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 contextAttributes, 0);
         if (eglContext == EGL14.EGL_NO_CONTEXT && prioritizeExternalPresentation) {
             int priorityError = EGL14.eglGetError();
-            Log.w(TAG, "External presentation priority hint refused error=" + priorityError);
+            Log.w(TAG, "Presentation priority hint refused error=" + priorityError);
             eglContext = EGL14.eglCreateContext(eglDisplay, configs[0], EGL14.EGL_NO_CONTEXT,
                     new int[]{EGL14.EGL_CONTEXT_CLIENT_VERSION,
                             requestedEglContextMajor, EGL14.EGL_NONE}, 0);
@@ -4170,7 +4175,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             boolean queried = EGL14.eglQueryContext(eglDisplay, eglContext,
                     0x3100 /* PRIORITY_LEVEL_IMG */, grantedPriority, 0);
             if (!queried) EGL14.eglGetError();
-            Log.i(TAG, "External presentation GPU priority requested=high queried=" +
+            Log.i(TAG, "Presentation GPU priority requested=high queried=" +
                     queried + " granted=" + (queried ? grantedPriority[0] : 0));
         }
         int[] surfaceAttributes = {EGL14.EGL_NONE};
@@ -11042,6 +11047,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private boolean renderPhaseField(float phase) {
         if (!synthesisEnabled || !densePyramidEnabled || densePhaseProgram == 0 ||
                 densePhaseFramebuffer == 0 || densePhaseWidth <= 0) return false;
+        // At the deepest GPU work reduction (a GPU-heavy engine still missing
+        // panel deadlines) the per-output phase field is the next work to
+        // shed: the endpoint-field warp alone, before generation would stop.
+        if (denseWorkLevel >= 2 && !holdoutMode) return false;
         if (maxFragmentTextureUnits == 0) {
             int[] units = new int[1];
             GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_IMAGE_UNITS, units, 0);

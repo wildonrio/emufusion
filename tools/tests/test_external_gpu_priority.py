@@ -42,7 +42,10 @@ class ExternalGpuPriorityTest(unittest.TestCase):
    reset();EGL14.extensions=ext;new PriorityProbe().run();check(EGL14.calls==1&&EGL14.hints==0&&EGL14.queries==0);
   }
   EGL14.extensions="EGL_IMG_context_priority";
-  reset();PriorityProbe off=new PriorityProbe();off.externalTransport=null;off.run();check(EGL14.hints==0);
+  // The built-in generator (no external transport) asks for high priority too:
+  // under a GPU-heavy engine its short deadline-bound work queued behind the
+  // engine's submissions. A non-app-owned external transport still does not.
+  reset();PriorityProbe builtIn=new PriorityProbe();builtIn.externalTransport=null;builtIn.appOwnedPresentation=false;builtIn.run();check(EGL14.hints==1);
   reset();PriorityProbe other=new PriorityProbe();other.appOwnedPresentation=false;other.run();check(EGL14.hints==0);
  }
 }'''

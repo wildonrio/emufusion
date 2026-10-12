@@ -19,7 +19,7 @@ class RifeQualificationPackagingTest(unittest.TestCase):
     def test_visible_context_priority_is_scoped_and_has_fallback(self):
         source = (ROOT / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java").read_text()
         context = source.split("private void initializeEgl()", 1)[1].split("int[] surfaceAttributes", 1)[0]
-        self.assertIn('externalTransport != null &&\n                appOwnedPresentation', context)
+        self.assertIn('(externalTransport == null ||\n                appOwnedPresentation)', context)
         self.assertIn('contains(" EGL_IMG_context_priority ")', context)
         self.assertIn('eglContext == EGL14.EGL_NO_CONTEXT && prioritizeExternalPresentation', context)
         self.assertIn('EGL14.eglQueryContext(eglDisplay, eglContext,', context)
