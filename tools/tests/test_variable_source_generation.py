@@ -57,6 +57,13 @@ public class VariableProbe {
     check(scans(60.5, 0) == 0, "above half the panel: the controller owns it");
     check(scans(26.0, 2) == 2, "hysteresis keeps 60 for a dip to 26");
     check(scans(23.0, 2) == 3, "a sustained 23 leaves 60");
+    check(scans(50.0, 0) == 1, "50 FPS -> 120 (60 gains too little; there was no generation)");
+    check(scans(47.0, 0) == 2, "47 FPS -> 60 while 60 still adds a quarter");
+    check(scans(49.0, 0) == 1, "49 FPS -> 120");
+    check(scans(47.0, 1) == 1, "hysteresis keeps 120 for a dip to 47");
+    check(scans(45.0, 1) == 2, "a sustained 45 leaves 120");
+    check(scans(49.5, 2) == 2, "hysteresis keeps 60 up to 50");
+    check(scans(52.0, 2) == 1, "a sustained 52 leaves 60 for 120");
     multiplier = 3;
     check(scans(20.0, 0) == 2, "triple: 20 FPS -> 60");
     VariableProbe off = new VariableProbe(); off.frameRate.source = 30; off.frameRate.available = false;

@@ -7956,11 +7956,23 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         int previous = timelineScansPerOutput;
         if (previous > 0) {
             double previousOutput = panelHz / previous;
-            if (previousOutput <= multiplier * sourceHz * 1.25 &&
-                    previousOutput >= sourceHz * 1.3) return previous;
+            if (previousOutput <= multiplier * sourceHz * 1.3 &&
+                    previousOutput >= sourceHz * 1.2) return previous;
         }
-        int scans = Math.max(1, (int) Math.ceil(panelHz / (multiplier * sourceHz * 1.12) - 1e-9));
-        return panelHz / scans >= sourceHz * 1.3 ? scans : 0;
+        // Prefer the highest output within 1.12 x the multiplier; when none
+        // fits (46-53 FPS on 120 Hz: 60 gains too little, 120 is 2.3-2.6x),
+        // the highest within 1.3 x. Without that fallback such a source got
+        // no generation at all, and one wobbling through that range (Wii U
+        // Super Mario 3D World, 43-56 FPS) kept dropping and re-priming it.
+        int fallback = 0;
+        for (int scans = 1; scans <= 12; ++scans) {
+            double output = panelHz / scans;
+            if (output < sourceHz * 1.25) break;
+            if (output > multiplier * sourceHz * 1.3) continue;
+            if (output <= multiplier * sourceHz * 1.12) return scans;
+            if (fallback == 0) fallback = scans;
+        }
+        return fallback;
     }
 
     /** Below this a pair spans > 50 ms and the motion between them is not worth guessing. */
