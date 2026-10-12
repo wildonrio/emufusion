@@ -19,27 +19,27 @@ class NativeSourceImageJavaTest(unittest.TestCase):
             directory = Path(temporary)
             source = directory / "abi.c"
             source.write_text(r'''
-#include "lucent_native_source_image.h"
+#include "emufusion_native_source_image.h"
 #include <stddef.h>
 #include <stdio.h>
-_Static_assert(sizeof(lucent_source_image_v1) == 808, "image layout");
-_Static_assert(sizeof(lucent_source_layer_v1) == 88, "layer layout");
-_Static_assert(sizeof(lucent_source_binding_v1) == 64, "binding layout");
-_Static_assert(offsetof(lucent_source_image_v1, composition) == 40, "composition offset");
-_Static_assert(offsetof(lucent_source_composition_v1, layers) == 64, "layers offset");
+_Static_assert(sizeof(emufusion_source_image_v1) == 808, "image layout");
+_Static_assert(sizeof(emufusion_source_layer_v1) == 88, "layer layout");
+_Static_assert(sizeof(emufusion_source_binding_v1) == 64, "binding layout");
+_Static_assert(offsetof(emufusion_source_image_v1, composition) == 40, "composition offset");
+_Static_assert(offsetof(emufusion_source_composition_v1, layers) == 64, "layers offset");
 int main(void) {
-    lucent_source_image_v1 image = {0};
+    emufusion_source_image_v1 image = {0};
     image.version=1; image.struct_size=sizeof(image); image.state=1;
     image.submission_ordinal=1; image.buffer_timestamp_ns=1100;
     image.vk_present_id=1; image.swapchain_image_index=2;
-    image.composition.header=(lucent_source_composition_header_v1){11,22,33,0,1,1000,1,1};
+    image.composition.header=(emufusion_source_composition_header_v1){11,22,33,0,1,1000,1,1};
     image.composition.retained_layer_count=1;
-    image.composition.layers[0]=(lucent_source_layer_v1){
+    image.composition.layers[0]=(emufusion_source_layer_v1){
         .queue_epoch=44,.queue_frame_number=1,.guest_requested_timestamp_ns=-700,
         .consumer_id=7,.buffer_slot=1,.raw_swap_interval=2,.normalized_swap_interval=2,
         .flags=1,.width=1280,.height=720,.stride=1280,.pixel_format=1,
         .crop_right=1280,.crop_bottom=720};
-    lucent_source_binding_v1 binding={1,sizeof(binding),11,22,33,0,0,0,0};
+    emufusion_source_binding_v1 binding={1,sizeof(binding),11,22,33,0,0,0,0};
     return fwrite(&image, sizeof(image), 1, stdout) != 1 ||
            fwrite(&binding, sizeof(binding), 1, stdout) != 1;
 }

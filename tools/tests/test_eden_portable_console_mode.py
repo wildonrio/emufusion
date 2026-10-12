@@ -7,8 +7,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-ADAPTER = ROOT / "engines/patches/eden-lucent-adapter.cpp"
-VENDORED = ROOT / "engines/build/switch-src/eden/src/android/app/src/main/jni/lucent_adapter.cpp"
+ADAPTER = ROOT / "engines/patches/eden-emufusion-adapter.cpp"
+VENDORED = ROOT / "engines/build/switch-src/eden/src/android/app/src/main/jni/emufusion_adapter.cpp"
 
 
 def mode_assignment(source):

@@ -77,8 +77,8 @@ proof is armed; a source that sustains 50-59 fps demotes to 40 and is paced
 there; the corner badge reports source → target, delivered rate and backend.
 
 - Wii U tier pacing (2026-09-02): the Cemu adapter now exports optional
-  pacing hooks (`lucent_native_adapter_declared_video_hz`,
-  `lucent_native_adapter_set_paced_video_hz`) that the native host resolves
+  pacing hooks (`emufusion_native_adapter_declared_video_hz`,
+  `emufusion_native_adapter_set_paced_video_hz`) that the native host resolves
   by dlsym; the Java adapter session implements `declaredVideoHz` /
   `setPacedVideoHz`, so the load-hold downgrade probe can pace Cemu at 40
   (or 30/20) exactly like a libretro core. The pace is Cemu's own emulated
@@ -127,8 +127,8 @@ there; the corner badge reports source → target, delivered rate and backend.
 
 - Switch tier pacing (2026-09-02, not yet device-verified): Eden now
   exports the same optional pacing hooks as Cemu. Eden's own speed limit
-  is an integer percent and cannot express 40 of 60, so a Lucent-authored
-  header-only atomic (`src/common/lucent_pacing.h`) carries the exact paced
+  is an integer percent and cannot express 40 of 60, so a EmuFusion-authored
+  header-only atomic (`src/common/emufusion_pacing.h`) carries the exact paced
   vsync clock; the VI conductor uses it as the vsync base clock and the
   Vulkan swapchain's display-timing stamps follow the same period.
 
@@ -259,7 +259,7 @@ there; the corner badge reports source → target, delivered rate and backend.
   0.5; the build-88 proof recording showed the big/small/big step triple
   (0.44, 0.14, 0.42). The snap now quantises to the uniform OUTPUT period.
 - Recording-side labelling (2026-09-03, build 90): while
-  /data/local/tmp/lucent-proofmark exists, every presented synthetic frame
+  /data/local/tmp/emufusion-proofmark exists, every presented synthetic frame
   carries a 32-px magenta tag in the window's top-left corner (real frames
   carry nothing), so a panel recording labels real/generated frames from the
   pixels alone. The tag is polled every 120 synthetic presents and is off by
@@ -360,7 +360,7 @@ there; the corner badge reports source → target, delivered rate and backend.
   and changed between the endpoints; the fill keeps temporally consistent
   weak vectors; wide inpainting is dropped (fill passes 6 -> 4) and the
   legacy global block is branched out of the dense warp to pay for it.
-  Kill switch /data/local/tmp/lucent-temporal-off for same-session A/B.
+  Kill switch /data/local/tmp/emufusion-temporal-off for same-session A/B.
   Verdict (same session, level 1-1, two 8-s dash clips per arm): the
   box-around-Mario metric was already at 0.39 / 0.63 with the prior off and
   0.34 / 0.65 with it on (no gain), while the frame-wide tagged intermediate
@@ -585,7 +585,7 @@ Still open:
   holds do not bounce the lattice back into re-acquisition.
 - Vulkan-runtime cores (ARMSX2, Azahar, Dolphin on Wii) presented with
   real-time buffer stamps, so no clock ever qualified (PS2 run ps2-b30, 1.6 %
-  RMS period jitter). `lucent_android_vulkan_backend.c` now enables
+  RMS period jitter). `emufusion_android_vulkan_backend.c` now enables
   `VK_GOOGLE_display_timing` and stamps every present with the same ideal
   lattice as the GLES backend (desiredPresentTime = sequence / synchronized
   Hz), and the host treats both hardware runtimes as stamped producers.

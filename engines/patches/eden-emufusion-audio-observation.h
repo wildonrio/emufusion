@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace Lucent {
+namespace EmuFusion {
 
 // Owned by one audio pump. Stream counters sum across streams; mixed/accepted
 // counters describe the single host sink. Neither means hardware playback.
@@ -44,4 +44,4 @@ struct AudioObservation {
     }
 };
 
-} // namespace Lucent
+} // namespace EmuFusion

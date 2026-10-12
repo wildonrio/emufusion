@@ -23,11 +23,11 @@ class EdenTimingContractTest(unittest.TestCase):
         compiler = shutil.which("c++")
         self.assertIsNotNone(compiler, "a C++ compiler is required, not a skipped clock test")
         source = r'''
-#include "eden-lucent-pacing.h"
+#include "eden-emufusion-pacing.h"
 #include <cassert>
 #include <limits>
 int main() {
-    using namespace Lucent;
+    using namespace EmuFusion;
     assert(!UsesFgPresentation());
     SetFgPresentation(true);
     assert(UsesFgPresentation());
@@ -77,23 +77,23 @@ int main() {
 
     def test_used_vi_path_retains_composition_scale_and_never_averaged_fps(self):
         source = (EDEN / "src/core/hle/service/vi/conductor.cpp").read_text()
-        self.assertEqual(2, source.count("Lucent::CompositionPeriodNs(base_fps, m_swap_interval, speed_scale)"))
+        self.assertEqual(2, source.count("EmuFusion::CompositionPeriodNs(base_fps, m_swap_interval, speed_scale)"))
         self.assertEqual(2, source.count("speed_scale /= m_compose_speed_scale;"))
-        self.assertNotIn("static_cast<f32>(lucent_paced_hz)", source)
+        self.assertNotIn("static_cast<f32>(emufusion_paced_hz)", source)
         self.assertNotIn("average_game_fps", source)
         self.assertIn("kind=callback-not-retired-guest-image", source)
 
     def test_submission_timestamp_is_not_a_manufactured_guest_grid(self):
         source = (EDEN / "src/video_core/renderer_vulkan/vk_swapchain.cpp").read_text()
         self.assertIn("desiredPresentTime = static_cast<u64>(now_ns)", source)
-        self.assertIn("if (device.HasLucentDisplayTiming() && Lucent::UsesFgPresentation())", source)
-        self.assertIn("if (source_image && Lucent::UsesFgPresentation())", source)
-        self.assertNotIn("s_lucent_last_slot", source)
-        self.assertNotIn("kLucentStampPeriodNs", source)
+        self.assertIn("if (device.HasEmuFusionDisplayTiming() && EmuFusion::UsesFgPresentation())", source)
+        self.assertIn("if (source_image && EmuFusion::UsesFgPresentation())", source)
+        self.assertNotIn("s_emufusion_last_slot", source)
+        self.assertNotIn("kEmuFusionStampPeriodNs", source)
         self.assertIn("sourceIdentity=unjoined physicalPresent=unverified", source)
-        adapter = (ROOT / "engines/patches/eden-lucent-adapter.cpp").read_text()
-        export = adapter.split("uint32_t lucent_native_adapter_timing_capabilities_v1(void)")[1].split("}", 1)[0]
-        self.assertNotIn("LUCENT_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE", export)
+        adapter = (ROOT / "engines/patches/eden-emufusion-adapter.cpp").read_text()
+        export = adapter.split("uint32_t emufusion_native_adapter_timing_capabilities_v1(void)")[1].split("}", 1)[0]
+        self.assertNotIn("EMUFUSION_NATIVE_TIMING_AUTHORITATIVE_SOURCE_TIMELINE", export)
 
     def test_tracked_patch_and_canonical_sources_reproduce_current_subset(self):
         # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).

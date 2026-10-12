@@ -124,7 +124,7 @@
       "id": "eden-clock-identity",
       "summary": "Eden's paced VI base still divides by game swap interval; its separately quantized Vulkan present stamps are not retired guest-frame identities.",
       "sources": [
-        {"path": "engines/patches/eden-lucent-adapter.cpp", "line": 863},
+        {"path": "engines/patches/eden-emufusion-adapter.cpp", "line": 863},
         {"path": "engines/eden-source-lock.json", "line": 132},
         {"path": "docs/EDEN-SWITCH-CORE-TIMING-VERIFICATION.md", "line": 1}
       ]
@@ -152,7 +152,7 @@
       "summary": "DisplaySyncPolicy uses Thor's 60/120-Hz modes, and Eden forces Docked. Qualification must discover device limits rather than assuming these settings fit every GPU.",
       "sources": [
         {"path": "unified-android/src/com/thorium/emufusion/timing/DisplaySyncPolicy.java", "line": 18},
-        {"path": "engines/patches/eden-lucent-adapter.cpp", "line": 454}
+        {"path": "engines/patches/eden-emufusion-adapter.cpp", "line": 454}
       ]
     }
   ],

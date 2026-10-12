@@ -36,7 +36,7 @@ HARNESS = r'''
 #include <span>
 #include <string>
 #include "common/ring_buffer.h"
-#include "eden-lucent-audio-observation.h"
+#include "eden-emufusion-audio-observation.h"
 using s16 = int16_t;
 using u64 = uint64_t;
 __STRUCT__
@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
         }
         for (unsigned i = 0; i < 8; ++i) assert(output[i] == int(i + 1));
     }
-    Lucent::AudioObservation window;
+    EmuFusion::AudioObservation window;
     window.Pull(4, 4, 8, 0, 0);
     window.Pull(4, 2, 4, 2, 0);
     window.Delivery(4, 3, true);
@@ -193,7 +193,7 @@ class EdenAudioObservationTest(unittest.TestCase):
         self.assertIn("Assertion", result.stderr)
 
     def test_adapter_records_actual_callback_return_without_claiming_playback(self):
-        adapter = (ROOT / "engines/patches/eden-lucent-adapter.cpp").read_text()
+        adapter = (ROOT / "engines/patches/eden-emufusion-adapter.cpp").read_text()
         self.assertIn("ProcessAudioOutAndRender(pulled, kBlockFrames, &pull)", adapter)
         self.assertIn("const auto accepted = sink(sink_ctx, block.data(), kBlockFrames);", adapter)
         self.assertIn("observation.Delivery(kBlockFrames, accepted, any_stream);", adapter)
@@ -211,8 +211,8 @@ class EdenAudioObservationTest(unittest.TestCase):
 
     def test_repeat_apply_preserves_canonical_header_mtimes(self):
         targets = [EDEN / "src/common" / name for name in (
-            "lucent_pacing.h", "lucent_source_image.h", "lucent_source_image_types.h",
-            "lucent_audio_observation.h")]
+            "emufusion_pacing.h", "emufusion_source_image.h", "emufusion_source_image_types.h",
+            "emufusion_audio_observation.h")]
         before = [path.stat().st_mtime_ns for path in targets]
         result = subprocess.run(["python3", str(ROOT / "engines/tools/apply_eden_timing_patch.py"),
                                  "--apply"], capture_output=True, text=True)

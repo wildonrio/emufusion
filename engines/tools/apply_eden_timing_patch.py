@@ -12,18 +12,18 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-PATCHES = [ROOT / "engines/patches/eden-lucent-clock.patch",
-           ROOT / "engines/patches/eden-lucent-audio-observation.patch",
-           ROOT / "engines/patches/eden-lucent-adreno-descriptors.patch"]
+PATCHES = [ROOT / "engines/patches/eden-emufusion-clock.patch",
+           ROOT / "engines/patches/eden-emufusion-audio-observation.patch",
+           ROOT / "engines/patches/eden-emufusion-adreno-descriptors.patch"]
 COPIES = {
-    ROOT / "engines/patches/eden-lucent-pacing.h": "src/common/lucent_pacing.h",
-    ROOT / "engines/patches/eden-lucent-audio-observation.h":
-        "src/common/lucent_audio_observation.h",
-    ROOT / "engines/patches/eden-lucent-adapter.cpp":
-        "src/android/app/src/main/jni/lucent_adapter.cpp",
-    ROOT / "engines/patches/eden-lucent-source-image.h": "src/common/lucent_source_image.h",
-    ROOT / "unified-android/native/include/lucent_native_source_image.h":
-        "src/common/lucent_source_image_types.h",
+    ROOT / "engines/patches/eden-emufusion-pacing.h": "src/common/emufusion_pacing.h",
+    ROOT / "engines/patches/eden-emufusion-audio-observation.h":
+        "src/common/emufusion_audio_observation.h",
+    ROOT / "engines/patches/eden-emufusion-adapter.cpp":
+        "src/android/app/src/main/jni/emufusion_adapter.cpp",
+    ROOT / "engines/patches/eden-emufusion-source-image.h": "src/common/emufusion_source_image.h",
+    ROOT / "unified-android/native/include/emufusion_native_source_image.h":
+        "src/common/emufusion_source_image_types.h",
 }
 
 

@@ -39,7 +39,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-ADAPTER = ROOT / "engines" / "patches" / "eden-lucent-adapter.cpp"
+ADAPTER = ROOT / "engines" / "patches" / "eden-emufusion-adapter.cpp"
 EDEN_CORE = ROOT / "engines" / "build" / "switch-src" / "eden" / "src" / "core" / "core.cpp"
 
 

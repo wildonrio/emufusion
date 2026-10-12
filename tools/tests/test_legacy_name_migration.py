@@ -17,8 +17,9 @@ COMPANION = ROOT / 'android-companion/src/com/thorium/preview'
 INSTALLER = (COMPANION / 'ThemeInstaller.java').read_text()
 LEGACY = (COMPANION / 'LegacyNames.java').read_text()
 JSON_JAR = Path.home() / '.m2/repository/org/json/json'
+# The aPS3e adapter is still compiled against the pinned former-name header.
 LEGACY_ABI_HEADERS = [ROOT / 'unified-android/native/include' / name for name in (
-    'lucent_native_adapter.h', 'lucent_native_source_image.h')]
+    'lucent_native_adapter.h',)]
 
 
 def method(source, signature):
@@ -71,8 +72,8 @@ class LegacyNameMigrationTest(unittest.TestCase):
 
     def test_libretro_core_recipes_and_patches_use_the_new_name(self):
         # Rename phase C2b rebuilt every libretro core from renamed recipes and
-        # patches, C2c the Cemu adapter; only Eden and aPS3e remain.
-        adapters = ('aps3e-', 'eden-')
+        # patches, C2c the Cemu and Eden adapters; only aPS3e remains.
+        adapters = ('aps3e-',)
         offenders = []
         recipes = [ROOT / 'engines/build_core.sh', ROOT / 'engines/build_scummvm_core.sh']
         recipes += [p for p in (ROOT / 'engines/patches').iterdir() if not p.name.startswith(adapters)]

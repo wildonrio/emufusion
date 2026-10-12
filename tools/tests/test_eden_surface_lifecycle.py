@@ -249,7 +249,7 @@ int main() {
         self.assertLess(body.index("HasPresentationFailure()"), body.index("frame->present_done.Wait()"))
 
     def test_adapter_pause_rebind_stop_join_are_ordered(self):
-        source = (ROOT / "engines/patches/eden-lucent-adapter.cpp").read_text()
+        source = (ROOT / "engines/patches/eden-emufusion-adapter.cpp").read_text()
         pause = function(source, "static void adapter_pause(")
         self.assertLess(pause.index("session.PauseEmulation()"), pause.index("SetPresentationSuspended(true)"))
         resume = function(source, "static void adapter_resume(")
@@ -272,7 +272,7 @@ int main() {
         self.assertLess(body.index("emufusion_native_adapter_destroy"), body.index("release_windows"))
 
     def test_session_shutdown_excludes_gpu_lifecycle_requests(self):
-        source = (ROOT / "engines/patches/eden-lucent-adapter.cpp").read_text()
+        source = (ROOT / "engines/patches/eden-emufusion-adapter.cpp").read_text()
         for signature in ("static void adapter_pause(", "static void adapter_resume(",
                           "static bool adapter_surface_recreated(", "static bool adapter_run_frame("):
             body = function(source, signature)

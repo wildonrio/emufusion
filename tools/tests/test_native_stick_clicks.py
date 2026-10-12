@@ -85,10 +85,10 @@ int main(){
 ''')
 
     def test_switch_native_click_map(self):
-        source = (PATCHES / 'eden-lucent-adapter.cpp').read_text()
+        source = (PATCHES / 'eden-emufusion-adapter.cpp').read_text()
         self.cpp('''
 #include <cstdint>
-#include "lucent_native_adapter.h"
+#include "emufusion_native_adapter.h"
 namespace InputCommon { struct VirtualGamepad { enum class VirtualButton {
  ButtonA,ButtonB,ButtonX,ButtonY,StickL,StickR,TriggerL,TriggerR,TriggerZL,TriggerZR,
  ButtonPlus,ButtonMinus,ButtonLeft,ButtonUp,ButtonRight,ButtonDown,ButtonHome
@@ -97,10 +97,10 @@ namespace InputCommon { struct VirtualGamepad { enum class VirtualButton {
 int main(){
  using VB=InputCommon::VirtualGamepad::VirtualButton;
  VB result{};
- if(!virtual_button_for(static_cast<lucent_native_control>(23),result)||result!=VB::StickL) return 41;
- if(!virtual_button_for(static_cast<lucent_native_control>(24),result)||result!=VB::StickR) return 42;
- if(!virtual_button_for(LUCENT_PAD_A,result)||result!=VB::ButtonA) return 43;
- if(virtual_button_for(LUCENT_PAD_SCREEN_VIEW,result)) return 44;
+ if(!virtual_button_for(static_cast<emufusion_native_control>(23),result)||result!=VB::StickL) return 41;
+ if(!virtual_button_for(static_cast<emufusion_native_control>(24),result)||result!=VB::StickR) return 42;
+ if(!virtual_button_for(EMUFUSION_PAD_A,result)||result!=VB::ButtonA) return 43;
+ if(virtual_button_for(EMUFUSION_PAD_SCREEN_VIEW,result)) return 44;
 }
 ''')
 

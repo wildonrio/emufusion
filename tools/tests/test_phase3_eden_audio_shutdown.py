@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-ADAPTER = ROOT / 'engines/patches/eden-lucent-adapter.cpp'
+ADAPTER = ROOT / 'engines/patches/eden-emufusion-adapter.cpp'
 
 
 class AudioShutdownTest(unittest.TestCase):

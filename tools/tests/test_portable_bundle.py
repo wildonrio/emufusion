@@ -35,7 +35,7 @@ def payload():
         for system, (phase, engine) in V.REQUIRED.items():
             if phase != number:
                 continue
-            library = 'liblucent_' + engine.replace('-', '_') + '.so'
+            library = 'libemufusion_' + engine.replace('-', '_') + '.so'
             enabled.setdefault(engine, dict(id=engine, libraryName=library, libraryRouteSystems=[]))['libraryRouteSystems'].append(system)
             registry.setdefault(engine, dict(id=engine, systems=[]))['systems'].append(system)
             artifacts[engine] = dict(engineId=engine, fileName=library)
@@ -74,7 +74,7 @@ class PortableCompletenessTest(unittest.TestCase):
 
     def test_binary_presence_is_required_not_just_metadata(self):
         entries = payload()
-        del entries['lib/arm64-v8a/liblucent_eden.so']
+        del entries['lib/arm64-v8a/libemufusion_eden.so']
         self.assertIn('switch: packaged eden library is missing', self.check_entries(entries))
 
     def test_phase1_auto_selection_is_required(self):
@@ -127,7 +127,7 @@ class PortableWrapperTest(unittest.TestCase):
                 'printf "' + flag + '=%s\\n" "${' + flag + '-unset}"' for flag in recorded)
                 + '\nexit "${PORTABLE_TEST_EXIT:-0}"\n')
             fake.chmod(0o755)
-            env = {k: v for k, v in os.environ.items() if not k.startswith('LUCENT_')}
+            env = {k: v for k, v in os.environ.items() if not k.startswith('EMUFUSION_')}
             env.update(overrides or {})
             return subprocess.run(['sh', str(folder / 'build-portable.sh')], env=env,
                                   capture_output=True, text=True)
@@ -238,7 +238,7 @@ class RealApkCompletenessTest(unittest.TestCase):
                 for item in old.infolist():
                     if item.filename.startswith('META-INF/') or item.filename in {
                         'lib/arm64-v8a/libemufusion_native_adapter_eden.so',
-                        'assets/phase3-eden-source-lock.json', 'assets/phase3-eden-lucent-adapter.cpp'}:
+                        'assets/phase3-eden-source-lock.json', 'assets/phase3-eden-emufusion-adapter.cpp'}:
                         continue
                     data = old.read(item.filename)
                     if item.filename == V.phase3.ARTIFACTS:

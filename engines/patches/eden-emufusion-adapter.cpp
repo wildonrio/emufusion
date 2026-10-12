@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Lucent Phase 3 native adapter for the Eden Switch engine.
+// EmuFusion Phase 3 native adapter for the Eden Switch engine.
 //
 // This translation unit is compiled INTO Eden's own libyuzu-android.so and is
-// the only symbol Lucent calls: lucent_native_adapter_entry(). It drives
-// EmulationSession directly, so the engine runs inside Lucent's process, in
-// Lucent's window, with no Eden Activity, no second task, and no emulator UI.
+// the only symbol EmuFusion calls: emufusion_native_adapter_entry(). It drives
+// EmulationSession directly, so the engine runs inside EmuFusion's process, in
+// EmuFusion's window, with no Eden Activity, no second task, and no emulator UI.
 //
 // Eden owns its emulation loop (RunEmulation blocks until halted), so the
 // adapter runs it on one engine thread and reports liveness from run_frame().
-// That satisfies the ABI contract -- Lucent still owns the surface, audio sink
+// That satisfies the ABI contract -- EmuFusion still owns the surface, audio sink
 // ownership, pause/resume, save flushing, and teardown ordering.
 //
 // THE WHOLE SESSION LIVES ON THAT ONE ENGINE THREAD. Eden's own Android
@@ -17,9 +17,9 @@
 // single thread (jni/native.cpp's static RunEmulation(): a SCOPE_EXIT calling
 // ShutdownEmulation, then InitializeEmulation, then RunEmulation), and
 // NativeLibrary.stopEmulation() from its UI only sets the halt flag. The
-// adapter used to spread that across three different host threads -- Lucent's
+// adapter used to spread that across three different host threads -- EmuFusion's
 // render owner called InitializeEmulation, a private thread called
-// RunEmulation, and Lucent's lifecycle executor called ShutdownEmulation after
+// RunEmulation, and EmuFusion's lifecycle executor called ShutdownEmulation after
 // joining that thread. Eden's kernel is not thread-agnostic here: every host
 // thread that reaches into it gets a lazily created dummy KThread held in
 // KernelCore's thread_local storage, and that KThread is registered with the
@@ -38,7 +38,7 @@
 // ran the guest, before that thread's kernel identity is destroyed, exactly as
 // upstream does it.
 //
-// Firmware and keys are never bundled: load() fails closed unless Lucent hands
+// Firmware and keys are never bundled: load() fails closed unless EmuFusion hands
 // over a validated system directory that Eden can read them from.
 
 #include <cerrno>
@@ -62,9 +62,9 @@
 #include <android/native_window.h>
 #include <dlfcn.h>
 
-#include "lucent_native_adapter.h"
+#include "emufusion_native_adapter.h"
 
-extern "C" const lucent_native_adapter* lucent_native_adapter_entry(void);
+extern "C" const emufusion_native_adapter* emufusion_native_adapter_entry(void);
 
 #include "audio_core/common/common.h"
 #include "audio_core/sink/sink.h"
@@ -74,9 +74,9 @@ extern "C" const lucent_native_adapter* lucent_native_adapter_entry(void);
 #include "common/settings.h"
 #include "common/settings_enums.h"
 #include "common/thread.h"
-#include "common/lucent_pacing.h"
-#include "common/lucent_audio_observation.h"
-#include "common/lucent_source_image.h"
+#include "common/emufusion_pacing.h"
+#include "common/emufusion_audio_observation.h"
+#include "common/emufusion_source_image.h"
 #include "core/core.h"
 #include "core/core_timing.h"
 #include "core/perf_stats.h"
@@ -91,7 +91,7 @@ extern "C" const lucent_native_adapter* lucent_native_adapter_entry(void);
 // parameter type is part of a function's mangled name, so if the two ever drift
 // apart this fails to link instead of silently mismatching.
 namespace AudioCore::Sink {
-void SetLucentSinkFactory(SinkPtr (*factory)());
+void SetEmuFusionSinkFactory(SinkPtr (*factory)());
 } // namespace AudioCore::Sink
 
 namespace {
@@ -102,14 +102,14 @@ constexpr const char* kEngineVersion = "eden-v0.2.0";
 // Settings::values.players (Settings::values.players.GetValue()) is a
 // std::array<PlayerInput, 10> mirroring HID's NPad slots, but the guest-visible
 // NPad handheld/standard styles only ever address Player1..Player8 -- indices
-// 8 and 9 back Handheld and Debug pads Lucent never routes local input to.
+// 8 and 9 back Handheld and Debug pads EmuFusion never routes local input to.
 // This is also the controller_index ceiling adapter_describe() advertises via
-// lucent_native_capabilities::max_controllers, so the two must stay in sync.
+// emufusion_native_capabilities::max_controllers, so the two must stay in sync.
 constexpr std::size_t kMaxLocalControllers = 8;
 
 } // namespace
 
-struct lucent_native_engine {
+struct emufusion_native_engine {
     std::thread emulation_thread;
     std::atomic<bool> started{false};
     std::atomic<bool> loaded{false};
@@ -119,11 +119,11 @@ struct lucent_native_engine {
     // GPU callbacks never acquire it, avoiding a wait-back cycle.
     std::mutex presentation_api_mutex;
     // InitializeEmulation builds the render window, so it cannot run until
-    // Lucent has handed us a surface. load() therefore only prepares the
+    // EmuFusion has handed us a surface. load() therefore only prepares the
     // system and keeps the content path for start().
     std::string content_path;
 
-    // Boot handshake. start() has to report a real load failure to Lucent, but
+    // Boot handshake. start() has to report a real load failure to EmuFusion, but
     // the load itself now happens on the engine thread, so start() blocks here
     // until that thread has published a status. It blocks for exactly as long
     // as it used to spend inside InitializeEmulation on the calling thread.
@@ -140,7 +140,7 @@ struct lucent_native_engine {
  */
 static std::string adapter_library_directory() {
     Dl_info info{};
-    if (dladdr(reinterpret_cast<const void*>(&lucent_native_adapter_entry), &info) == 0 ||
+    if (dladdr(reinterpret_cast<const void*>(&emufusion_native_adapter_entry), &info) == 0 ||
         info.dli_fname == nullptr) {
         return std::string();
     }
@@ -173,11 +173,11 @@ static std::pair<std::string, std::string> provisioned_gpu_driver() {
 // ---------------------------------------------------------------------------
 // Audio.
 //
-// Lucent owns the output device. The ABI hands us `audio_sink`, which is backed
-// by an AudioTrack that Lucent creates, plays and pauses with the session, and
+// EmuFusion owns the output device. The ABI hands us `audio_sink`, which is backed
+// by an AudioTrack that EmuFusion creates, plays and pauses with the session, and
 // drains on its own render thread. So the engine must not open a device of its
 // own: Eden's Oboe backend talks straight to OpenSL ES, which both leaves
-// Lucent's track starved (the "disabled due to previous underrun" spam) and is
+// EmuFusion's track starved (the "disabled due to previous underrun" spam) and is
 // unsafe here, because OboeSinkStream is destroyed through Sink::CloseStream
 // without anything ever calling oboe::AudioStream::close() -- Oboe's own
 // destructors are no-ops, so a guest that ends an audio session leaves an
@@ -187,10 +187,10 @@ static std::pair<std::string, std::string> provisioned_gpu_driver() {
 // tapping one. Eden's SinkStream base class already does the channel down-mix,
 // the volume, the buffer-release accounting and the played-sample clock the
 // guest reads back; its pull model (ProcessAudioOutAndRender) is what paces
-// audio. We do what OboeSinkStream does, with Lucent's AudioTrack as the device.
+// audio. We do what OboeSinkStream does, with EmuFusion's AudioTrack as the device.
 //
 // One difference matters. Oboe gives every stream its own OpenSL stream and lets
-// AudioFlinger mix them; Lucent's ABI is a single PCM sink, and the guest really
+// AudioFlinger mix them; EmuFusion's ABI is a single PCM sink, and the guest really
 // can have several output streams open at once (the renderer plus any number of
 // audout sessions). So the CLOCK LIVES IN THE SINK, not the stream: one pump
 // thread pulls a block from every playing stream, sums them, and pushes one
@@ -200,38 +200,38 @@ static std::pair<std::string, std::string> provisioned_gpu_driver() {
 
 namespace {
 
-// Lucent's sink, published by start() and cleared by stop(). The pump reads it
+// EmuFusion's sink, published by start() and cleared by stop(). The pump reads it
 // on every block so a session that ends mid-block simply stops pushing, rather
-// than writing into a context Lucent has already released.
-std::atomic<lucent_native_audio_sink> g_audio_sink{nullptr};
+// than writing into a context EmuFusion has already released.
+std::atomic<emufusion_native_audio_sink> g_audio_sink{nullptr};
 std::atomic<void*> g_audio_sink_ctx{nullptr};
 
-// Lucent's track is 48 kHz interleaved stereo s16, which is also Eden's own
+// EmuFusion's track is 48 kHz interleaved stereo s16, which is also Eden's own
 // TargetSampleRate, so nothing here resamples.
-constexpr u32 kLucentChannels = 2;
+constexpr u32 kEmuFusionChannels = 2;
 // One block is Eden's own 5 ms audio quantum, so we consume at the rate the
 // renderer produces and never have to guess at a buffer size.
 constexpr u32 kBlockFrames = AudioCore::TargetSampleCount;
-constexpr u32 kBlockSamples = kBlockFrames * kLucentChannels;
+constexpr u32 kBlockSamples = kBlockFrames * kEmuFusionChannels;
 constexpr std::chrono::nanoseconds kBlockPeriod{1'000'000'000LL * kBlockFrames /
                                                 AudioCore::TargetSampleRate};
-// Past this much lateness the scheduler starved us for longer than Lucent's
+// Past this much lateness the scheduler starved us for longer than EmuFusion's
 // track can absorb, so the backlog is dropped rather than pushed as a burst.
 constexpr std::chrono::milliseconds kResyncAfter{100};
 
-class LucentSinkStream final : public AudioCore::Sink::SinkStream {
+class EmuFusionSinkStream final : public AudioCore::Sink::SinkStream {
 public:
-    LucentSinkStream(Core::System& system_, AudioCore::Sink::StreamType type_,
+    EmuFusionSinkStream(Core::System& system_, AudioCore::Sink::StreamType type_,
                      const std::string& name_, u32 system_channels_)
         : SinkStream(system_, type_) {
         name = name_;
         system_channels = system_channels_;
-        device_channels = kLucentChannels;
+        device_channels = kEmuFusionChannels;
     }
-    ~LucentSinkStream() override = default;
+    ~EmuFusionSinkStream() override = default;
 
     /// Whether the sink should pull a block from this stream. Capture streams
-    /// have no device behind them -- Lucent's ABI carries no microphone, so the
+    /// have no device behind them -- EmuFusion's ABI carries no microphone, so the
     /// base class hands the guest silence instead.
     bool IsPlayingOutput() const {
         return type != AudioCore::Sink::StreamType::In && !IsPaused();
@@ -254,17 +254,17 @@ public:
     }
 };
 
-class LucentSink final : public AudioCore::Sink::Sink {
+class EmuFusionSink final : public AudioCore::Sink::Sink {
 public:
-    LucentSink() {
-        device_channels = kLucentChannels;
+    EmuFusionSink() {
+        device_channels = kEmuFusionChannels;
     }
 
     // The pump dereferences both the streams and the Core::System behind them,
     // and Eden tears sinks down while the guest is still running, so it is
     // joined before anything it touches is released. This is exactly what
     // OboeSinkStream fails to do with its OpenSL ES callback.
-    ~LucentSink() override {
+    ~EmuFusionSink() override {
         stopping.store(true, std::memory_order_release);
         if (pump.joinable()) {
             pump.join();
@@ -279,13 +279,13 @@ public:
         std::scoped_lock lock{streams_mutex};
         system.store(&system_, std::memory_order_release);
         auto& stream = streams.emplace_back(
-            std::make_unique<LucentSinkStream>(system_, type, name, system_channels_));
+            std::make_unique<EmuFusionSinkStream>(system_, type, name, system_channels_));
         // Eden builds two sinks and DeviceSession routes capture to the input
         // one, so only the sink that is handed a playable stream starts a clock.
-        // The input sink must never push into Lucent's single output ring, or
+        // The input sink must never push into EmuFusion's single output ring, or
         // the device would be fed at twice real time.
         if (type != AudioCore::Sink::StreamType::In && !pump.joinable()) {
-            pump = std::thread(&LucentSink::Pump, this);
+            pump = std::thread(&EmuFusionSink::Pump, this);
         }
         return stream.get();
     }
@@ -335,7 +335,7 @@ private:
         }
     }
 
-    /// True while Lucent is actually consuming. Lucent stops draining the ring
+    /// True while EmuFusion is actually consuming. EmuFusion stops draining the ring
     /// when it pauses the session, so pushing during a pause would queue a
     /// backlog that plays back as a delay on resume rather than as silence.
     bool IsConsuming() const {
@@ -344,14 +344,14 @@ private:
     }
 
     void Pump() {
-        Common::SetCurrentThreadName("LucentAudioOut");
+        Common::SetCurrentThreadName("EmuFusionAudioOut");
         constexpr s32 kMin = std::numeric_limits<s16>::min();
         constexpr s32 kMax = std::numeric_limits<s16>::max();
         std::array<s32, kBlockSamples> mix{};
         std::array<s16, kBlockSamples> pulled{};
         std::array<s16, kBlockSamples> block{};
         auto deadline = std::chrono::steady_clock::now();
-        Lucent::AudioObservation observation{};
+        EmuFusion::AudioObservation observation{};
 
         while (!stopping.load(std::memory_order_acquire)) {
             QuiesceShutdownStreams();
@@ -370,7 +370,7 @@ private:
             {
                 std::scoped_lock lock{streams_mutex};
                 for (auto& stream : streams) {
-                    auto* const output = static_cast<LucentSinkStream*>(stream.get());
+                    auto* const output = static_cast<EmuFusionSinkStream*>(stream.get());
                     if (!output->IsPlayingOutput()) {
                         continue;
                     }
@@ -388,7 +388,7 @@ private:
                 block[index] = static_cast<s16>(std::clamp(mix[index], kMin, kMax));
             }
             // With nothing playing this is a block of silence, which is the
-            // right thing to send: it keeps Lucent's track fed at real time
+            // right thing to send: it keeps EmuFusion's track fed at real time
             // instead of letting it underrun between audio sessions.
             const auto accepted = sink(sink_ctx, block.data(), kBlockFrames);
             observation.Delivery(kBlockFrames, accepted, any_stream);
@@ -401,10 +401,10 @@ private:
             if (observation.blocks % 200 == 0) {
                 // Bracket the clock read. Multicore CoreTiming is wall-derived,
                 // not proof of guest work or an image's logical retirement time.
-                const auto host_before = Lucent::SourceMonotonicNs();
+                const auto host_before = EmuFusion::SourceMonotonicNs();
                 const auto core_ns = system.load(std::memory_order_acquire)
                     ->CoreTiming().GetGlobalTimeNs().count();
-                const auto host_after = Lucent::SourceMonotonicNs();
+                const auto host_after = EmuFusion::SourceMonotonicNs();
                 LOG_INFO(Audio_Sink,
                     "EmuFusion audio observation blocks={} streamFrames={} queuedFrames={} "
                     "copiedSamples={} heldFrames={} pausedFrames={} noStreamBlocks={} "
@@ -416,7 +416,7 @@ private:
                     observation.no_stream_blocks, observation.mixed_frames, observation.accepted_frames,
                     observation.rejected_frames, observation.invalid_returns, observation.late_blocks,
                     observation.resyncs, observation.max_lateness_ns, host_before, core_ns, host_after,
-                    Settings::values.use_multi_core.GetValue(), Lucent::BaseVsyncHz());
+                    Settings::values.use_multi_core.GetValue(), EmuFusion::BaseVsyncHz());
             }
             if (deadline > now) {
                 std::this_thread::sleep_until(deadline);
@@ -433,21 +433,21 @@ private:
     std::atomic<bool> stopping{false};
 };
 
-AudioCore::Sink::SinkPtr make_lucent_sink() {
-    return std::make_unique<LucentSink>();
+AudioCore::Sink::SinkPtr make_emufusion_sink() {
+    return std::make_unique<EmuFusionSink>();
 }
 
 } // namespace
 
-static void adapter_describe(lucent_native_capabilities* out) {
+static void adapter_describe(emufusion_native_capabilities* out) {
     if (out == nullptr) {
         return;
     }
     std::memset(out, 0, sizeof(*out));
-    out->abi_version = LUCENT_NATIVE_ADAPTER_ABI_VERSION;
+    out->abi_version = EMUFUSION_NATIVE_ADAPTER_ABI_VERSION;
     out->engine_id = kEngineId;
     out->engine_version = kEngineVersion;
-    // Eden exposes no deterministic, migration-safe full-state API, so Lucent
+    // Eden exposes no deterministic, migration-safe full-state API, so EmuFusion
     // must not advertise Quick Resume for Switch. Held-Stop flushes the game's
     // own saves and exits instead of promising a snapshot it cannot restore.
     out->has_quick_resume = false;
@@ -464,12 +464,12 @@ static void adapter_describe(lucent_native_capabilities* out) {
     out->max_controllers = kMaxLocalControllers;
 }
 
-static lucent_native_engine* adapter_create(void) {
-    return new (std::nothrow) lucent_native_engine();
+static emufusion_native_engine* adapter_create(void) {
+    return new (std::nothrow) emufusion_native_engine();
 }
 
-static bool adapter_load(lucent_native_engine* engine,
-                         const lucent_native_load_request* request,
+static bool adapter_load(emufusion_native_engine* engine,
+                         const emufusion_native_load_request* request,
                          char* error, size_t error_size) {
     const auto fail = [&](const char* message) {
         if (error != nullptr && error_size > 0) {
@@ -531,16 +531,16 @@ static bool adapter_load(lucent_native_engine* engine,
 
     // Each session starts at the upstream VI base clock. Only a bounded
     // near-native fractional correction may be requested, never a load tier.
-    Lucent::SetPacedVsyncHz(0.0);
-    Lucent::SetFgPresentation(false);
-    Lucent::ResetTimingDiagnostics();
-    Lucent::g_source_images.BeginSession();
+    EmuFusion::SetPacedVsyncHz(0.0);
+    EmuFusion::SetFgPresentation(false);
+    EmuFusion::ResetTimingDiagnostics();
+    EmuFusion::g_source_images.BeginSession();
 
     // The embedded adapter has no Eden controller-settings Activity. Eden's
     // compiled Android defaults leave every player disconnected, so HIDCore's
     // ReloadInputDevices() builds the virtual-gamepad devices but immediately
     // disconnects the emulated NPads. Overlay writes then reach the input engine
-    // (and look successful to Lucent) while the guest sees no controller at
+    // (and look successful to EmuFusion) while the guest sees no controller at
     // all. The stock Eden Activity normally performs this connection through
     // NativeInput.connectController(); establish the same Pro Controller
     // contract for every locally routable player -- Player1..Player8,
@@ -553,7 +553,7 @@ static bool adapter_load(lucent_native_engine* engine,
         players[i].controller_type = Settings::ControllerType::ProController;
     }
 
-    // Point Eden at Lucent's validated per-engine root before anything reads
+    // Point Eden at EmuFusion's validated per-engine root before anything reads
     // keys, NAND, or save data.
     Common::FS::SetAppDirectory(std::string(request->system_directory));
 
@@ -612,7 +612,7 @@ static bool adapter_load(lucent_native_engine* engine,
     return true;
 }
 
-static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* io,
+static bool adapter_start(emufusion_native_engine* engine, const emufusion_native_io* io,
                           char* error, size_t error_size) {
     const auto fail = [&](const char* message) {
         if (error != nullptr && error_size > 0) {
@@ -627,25 +627,25 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
         return fail("adapter start called before a title was loaded");
     }
     if (io->primary_window == nullptr) {
-        return fail("Lucent supplied no render window");
+        return fail("EmuFusion supplied no render window");
     }
     if (engine->started.load()) {
         return true;
     }
 
     engine->window = static_cast<ANativeWindow*>(io->primary_window);
-    Lucent::g_source_images.BindSurface();
+    EmuFusion::g_source_images.BindSurface();
     auto& session = EmulationSession::GetInstance();
     session.SetNativeWindow(engine->window);
 
-    // Publish Lucent's sink and claim Eden's audio backend BEFORE the system is
+    // Publish EmuFusion's sink and claim Eden's audio backend BEFORE the system is
     // created: AudioCore builds both of its sinks inside InitializeEmulation
     // below, and after that the choice is fixed for the session. A caller that
     // supplies no sink keeps Eden's own backend rather than losing audio
     // outright -- that is a caller with nowhere to send PCM, not an error here.
     g_audio_sink_ctx.store(io->audio_sink_ctx, std::memory_order_release);
     g_audio_sink.store(io->audio_sink, std::memory_order_release);
-    AudioCore::Sink::SetLucentSinkFactory(io->audio_sink != nullptr ? &make_lucent_sink : nullptr);
+    AudioCore::Sink::SetEmuFusionSinkFactory(io->audio_sink != nullptr ? &make_emufusion_sink : nullptr);
 
     // Now that a surface exists, bring the title up on the engine thread. This
     // mirrors jni/native.cpp's static RunEmulation() exactly: initialize, run,
@@ -655,7 +655,7 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
     // to be the same thread or the kernel is left holding a pointer to a
     // KThread whose thread_local storage has already gone away.
     engine->emulation_thread = std::thread([engine]() {
-        Common::SetCurrentThreadName("LucentEdenSession");
+        Common::SetCurrentThreadName("EmuFusionEdenSession");
         auto& engine_session = EmulationSession::GetInstance();
         const auto boot = engine_session.InitializeEmulation(engine->content_path, 0, true);
         {
@@ -665,18 +665,18 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
         }
         engine->boot_cv.notify_all();
         if (boot == Core::SystemResultStatus::Success) {
-            LOG_INFO(Frontend, "Lucent session running");
+            LOG_INFO(Frontend, "EmuFusion session running");
             engine_session.RunEmulation();
         }
         // Reached on every path, halted or failed, like upstream's SCOPE_EXIT.
         // A failed InitializeEmulation still built a render window that has to
         // be released here.
-        LOG_INFO(Frontend, "Lucent session tearing down on the engine thread");
+        LOG_INFO(Frontend, "EmuFusion session tearing down on the engine thread");
         {
             std::scoped_lock lifecycle{engine->presentation_api_mutex};
             engine_session.ShutdownEmulation();
         }
-        LOG_INFO(Frontend, "Lucent session teardown complete");
+        LOG_INFO(Frontend, "EmuFusion session teardown complete");
     });
 
     Core::SystemResultStatus boot_status{};
@@ -711,55 +711,55 @@ static bool adapter_start(lucent_native_engine* engine, const lucent_native_io* 
     return true;
 }
 
-static bool adapter_run_frame(lucent_native_engine* engine) {
+static bool adapter_run_frame(emufusion_native_engine* engine) {
     if (engine == nullptr || !engine->started.load()) {
         return false;
     }
-    // Eden presents from its own loop. Report liveness so Lucent can fail the
+    // Eden presents from its own loop. Report liveness so EmuFusion can fail the
     // session instead of leaving a frozen picture on screen.
     std::scoped_lock lifecycle{engine->presentation_api_mutex};
     auto& session = EmulationSession::GetInstance();
     return session.IsRunning() && !session.System().Renderer().HasPresentationFailure();
 }
 
-// Lucent's canonical controls are already console-semantic -- SystemControlLayouts
+// EmuFusion's canonical controls are already console-semantic -- SystemControlLayouts
 // has resolved the Thor's physical geometry into the console's own buttons -- so
-// LUCENT_PAD_A means the Switch's A, not whichever key sits bottom-right.
+// EMUFUSION_PAD_A means the Switch's A, not whichever key sits bottom-right.
 //
 // These go to Eden's VirtualGamepad rather than its Android driver. The Android
 // driver wants a GUID, a port, raw Android keycodes and a controller registered
 // from a YuzuInputDevice Java object, and it then resolves those through a user
-// input profile that Lucent never writes. VirtualGamepad is the path Eden's own
+// input profile that EmuFusion never writes. VirtualGamepad is the path Eden's own
 // on-screen overlay uses: player-indexed, already bound to the guest pad, and
 // needing no profile, no registration and no keycodes.
-static bool virtual_button_for(lucent_native_control control,
+static bool virtual_button_for(emufusion_native_control control,
                                InputCommon::VirtualGamepad::VirtualButton& out) {
     using VB = InputCommon::VirtualGamepad::VirtualButton;
     switch (control) {
-    case LUCENT_PAD_A:          out = VB::ButtonA;      return true;
-    case LUCENT_PAD_B:          out = VB::ButtonB;      return true;
-    case LUCENT_PAD_X:          out = VB::ButtonX;      return true;
-    case LUCENT_PAD_Y:          out = VB::ButtonY;      return true;
-    case LUCENT_PAD_L:          out = VB::TriggerL;     return true;
-    case LUCENT_PAD_R:          out = VB::TriggerR;     return true;
-    case LUCENT_PAD_ZL:         out = VB::TriggerZL;    return true;
-    case LUCENT_PAD_ZR:         out = VB::TriggerZR;    return true;
-    case LUCENT_PAD_L3:         out = VB::StickL;       return true;
-    case LUCENT_PAD_R3:         out = VB::StickR;       return true;
-    case LUCENT_PAD_DPAD_UP:    out = VB::ButtonUp;     return true;
-    case LUCENT_PAD_DPAD_DOWN:  out = VB::ButtonDown;   return true;
-    case LUCENT_PAD_DPAD_LEFT:  out = VB::ButtonLeft;   return true;
-    case LUCENT_PAD_DPAD_RIGHT: out = VB::ButtonRight;  return true;
-    // Switch labels these Plus and Minus; Lucent's canonical names are the
+    case EMUFUSION_PAD_A:          out = VB::ButtonA;      return true;
+    case EMUFUSION_PAD_B:          out = VB::ButtonB;      return true;
+    case EMUFUSION_PAD_X:          out = VB::ButtonX;      return true;
+    case EMUFUSION_PAD_Y:          out = VB::ButtonY;      return true;
+    case EMUFUSION_PAD_L:          out = VB::TriggerL;     return true;
+    case EMUFUSION_PAD_R:          out = VB::TriggerR;     return true;
+    case EMUFUSION_PAD_ZL:         out = VB::TriggerZL;    return true;
+    case EMUFUSION_PAD_ZR:         out = VB::TriggerZR;    return true;
+    case EMUFUSION_PAD_L3:         out = VB::StickL;       return true;
+    case EMUFUSION_PAD_R3:         out = VB::StickR;       return true;
+    case EMUFUSION_PAD_DPAD_UP:    out = VB::ButtonUp;     return true;
+    case EMUFUSION_PAD_DPAD_DOWN:  out = VB::ButtonDown;   return true;
+    case EMUFUSION_PAD_DPAD_LEFT:  out = VB::ButtonLeft;   return true;
+    case EMUFUSION_PAD_DPAD_RIGHT: out = VB::ButtonRight;  return true;
+    // Switch labels these Plus and Minus; EmuFusion's canonical names are the
     // generic Start/Select the rest of the library uses.
-    case LUCENT_PAD_START:      out = VB::ButtonPlus;   return true;
-    case LUCENT_PAD_SELECT:     out = VB::ButtonMinus;  return true;
-    case LUCENT_PAD_HOME:       out = VB::ButtonHome;   return true;
+    case EMUFUSION_PAD_START:      out = VB::ButtonPlus;   return true;
+    case EMUFUSION_PAD_SELECT:     out = VB::ButtonMinus;  return true;
+    case EMUFUSION_PAD_HOME:       out = VB::ButtonHome;   return true;
     default:                                            return false;
     }
 }
 
-// SetStickPosition takes both axes at once, but Lucent delivers one axis per
+// SetStickPosition takes both axes at once, but EmuFusion delivers one axis per
 // call, so the last value of the partner axis is retained and resent. Without
 // this a horizontal push would zero the vertical axis on the very next event.
 // This state is now per controller_index (previously two file-scope globals
@@ -772,9 +772,9 @@ struct stick_state {
 static stick_state g_left_stick[kMaxLocalControllers];
 static stick_state g_right_stick[kMaxLocalControllers];
 
-static void adapter_set_control(lucent_native_engine* engine,
+static void adapter_set_control(emufusion_native_engine* engine,
                                 uint32_t controller_index,
-                                lucent_native_control control, float value) {
+                                emufusion_native_control control, float value) {
     if (engine == nullptr || !engine->started.load()) {
         return;
     }
@@ -796,7 +796,7 @@ static void adapter_set_control(lucent_native_engine* engine,
 
     InputCommon::VirtualGamepad::VirtualButton button{};
     if (virtual_button_for(control, button)) {
-        // Lucent sends 1.0/0.0 for digital controls and an analog ramp for
+        // EmuFusion sends 1.0/0.0 for digital controls and an analog ramp for
         // triggers on pads that have them; anything past halfway counts as a
         // press so an analog ZL/ZR still actuates.
         pad->SetButtonState(player_index, button, value >= 0.5f);
@@ -810,19 +810,19 @@ static void adapter_set_control(lucent_native_engine* engine,
     // Android reports its Y axis positive-down while the Switch stick is
     // positive-up, so the vertical axes are negated here rather than in the
     // Java layer, which must stay console-neutral for every other system.
-    case LUCENT_PAD_LSTICK_X:
+    case EMUFUSION_PAD_LSTICK_X:
         left_stick.x = value;
         pad->SetStickPosition(player_index, VS::Left, left_stick.x, -left_stick.y);
         break;
-    case LUCENT_PAD_LSTICK_Y:
+    case EMUFUSION_PAD_LSTICK_Y:
         left_stick.y = value;
         pad->SetStickPosition(player_index, VS::Left, left_stick.x, -left_stick.y);
         break;
-    case LUCENT_PAD_RSTICK_X:
+    case EMUFUSION_PAD_RSTICK_X:
         right_stick.x = value;
         pad->SetStickPosition(player_index, VS::Right, right_stick.x, -right_stick.y);
         break;
-    case LUCENT_PAD_RSTICK_Y:
+    case EMUFUSION_PAD_RSTICK_Y:
         right_stick.y = value;
         pad->SetStickPosition(player_index, VS::Right, right_stick.x, -right_stick.y);
         break;
@@ -832,7 +832,7 @@ static void adapter_set_control(lucent_native_engine* engine,
     }
 }
 
-static void adapter_pause(lucent_native_engine* engine) {
+static void adapter_pause(emufusion_native_engine* engine) {
     if (engine == nullptr || !engine->started.load()) {
         return;
     }
@@ -848,7 +848,7 @@ static void adapter_pause(lucent_native_engine* engine) {
     }
 }
 
-static void adapter_resume(lucent_native_engine* engine) {
+static void adapter_resume(emufusion_native_engine* engine) {
     if (engine == nullptr || !engine->started.load()) {
         return;
     }
@@ -856,25 +856,25 @@ static void adapter_resume(lucent_native_engine* engine) {
     auto& session = EmulationSession::GetInstance();
     if (session.IsPaused()) {
         if (!session.System().GPU().SetPresentationSuspended(false)) {
-            LOG_ERROR(Frontend, "Lucent refusing to resume failed Vulkan presentation");
+            LOG_ERROR(Frontend, "EmuFusion refusing to resume failed Vulkan presentation");
             return;
         }
         session.UnPauseEmulation();
     }
 }
 
-static bool adapter_flush_save(lucent_native_engine* engine) {
+static bool adapter_flush_save(emufusion_native_engine* engine) {
     if (engine == nullptr || !engine->loaded.load()) {
         return false;
     }
     std::scoped_lock lifecycle{engine->presentation_api_mutex};
     // Pausing quiesces the guest and lets Eden's filesystem layer settle its
-    // pending save writes before Lucent reports a clean exit.
+    // pending save writes before EmuFusion reports a clean exit.
     auto& session = EmulationSession::GetInstance();
     if (session.IsRunning() && !session.IsPaused()) {
         session.PauseEmulation();
     }
-    // Lucent calls this only on the way out, and the Switch runtime is never
+    // EmuFusion calls this only on the way out, and the Switch runtime is never
     // torn down in-process any more: the frontend retains this host and
     // replaces the whole process instead (NativeAdapterStopPolicy). Under NCE
     // Eden's own teardown crashed in this long-lived process. So everything
@@ -892,27 +892,27 @@ static bool adapter_flush_save(lucent_native_engine* engine) {
     return true;
 }
 
-static size_t adapter_serialize_size(lucent_native_engine* engine) {
+static size_t adapter_serialize_size(emufusion_native_engine* engine) {
     (void)engine;
     return 0;
 }
 
-static size_t adapter_serialize(lucent_native_engine* engine, void* out, size_t capacity) {
+static size_t adapter_serialize(emufusion_native_engine* engine, void* out, size_t capacity) {
     (void)engine;
     (void)out;
     (void)capacity;
     return 0;
 }
 
-static bool adapter_unserialize(lucent_native_engine* engine, const void* data, size_t size) {
+static bool adapter_unserialize(emufusion_native_engine* engine, const void* data, size_t size) {
     (void)engine;
     (void)data;
     (void)size;
     return false;
 }
 
-static bool adapter_surface_recreated(lucent_native_engine* engine,
-                                      const lucent_native_io* io) {
+static bool adapter_surface_recreated(emufusion_native_engine* engine,
+                                      const emufusion_native_io* io) {
     if (engine == nullptr || io == nullptr || io->primary_window == nullptr) {
         return false;
     }
@@ -922,7 +922,7 @@ static bool adapter_surface_recreated(lucent_native_engine* engine,
     if (running && !session.System().GPU().SetPresentationSuspended(true)) {
         return false;
     }
-    Lucent::g_source_images.BindSurface();
+    EmuFusion::g_source_images.BindSurface();
     engine->window = static_cast<ANativeWindow*>(io->primary_window);
     session.SetNativeWindow(engine->window);
     session.SurfaceChanged();
@@ -932,11 +932,11 @@ static bool adapter_surface_recreated(lucent_native_engine* engine,
     return true;
 }
 
-static void adapter_stop(lucent_native_engine* engine) {
+static void adapter_stop(emufusion_native_engine* engine) {
     if (engine == nullptr) {
         return;
     }
-    Lucent::g_source_images.Close();
+    EmuFusion::g_source_images.Close();
     auto& session = EmulationSession::GetInstance();
     if (engine->started.load()) {
         {
@@ -944,7 +944,7 @@ static void adapter_stop(lucent_native_engine* engine) {
             if (session.IsRunning()) {
                 session.System().GPU().SetPresentationSuspended(true);
             }
-            // Leave the paused state first. Lucent pauses the engine twice on
+            // Leave the paused state first. EmuFusion pauses the engine twice on
             // exit; System::Pause suspends guest threads and parks CoreTiming.
             // ShutdownMainProcess must terminate those same threads, so match
             // Eden's frontend by halting a running guest. Only guest progress
@@ -952,7 +952,7 @@ static void adapter_stop(lucent_native_engine* engine) {
             if (session.IsPaused()) {
                 session.UnPauseEmulation();
             }
-            LOG_INFO(Frontend, "Lucent halting the Switch session");
+            LOG_INFO(Frontend, "EmuFusion halting the Switch session");
             session.HaltEmulation();
         } // Never hold presentation_api_mutex across the session-thread join.
         if (engine->emulation_thread.joinable()) {
@@ -961,7 +961,7 @@ static void adapter_stop(lucent_native_engine* engine) {
             // point at which its run loop returned.
             engine->emulation_thread.join();
         }
-        LOG_INFO(Frontend, "Lucent joined the Switch session thread");
+        LOG_INFO(Frontend, "EmuFusion joined the Switch session thread");
         engine->started.store(false);
         engine->loaded.store(false);
     } else if (engine->loaded.load()) {
@@ -972,16 +972,16 @@ static void adapter_stop(lucent_native_engine* engine) {
         engine->loaded.store(false);
     }
     // ShutdownEmulation destroys AudioCore, which destroys the sink, which joins
-    // the pump thread. Only once that has returned is it safe to drop Lucent's
-    // callback: after this point nothing can push into a context Lucent is
+    // the pump thread. Only once that has returned is it safe to drop EmuFusion's
+    // callback: after this point nothing can push into a context EmuFusion is
     // about to free, and a later session installs its own.
-    AudioCore::Sink::SetLucentSinkFactory(nullptr);
+    AudioCore::Sink::SetEmuFusionSinkFactory(nullptr);
     g_audio_sink.store(nullptr, std::memory_order_release);
     g_audio_sink_ctx.store(nullptr, std::memory_order_release);
     engine->window = nullptr;
 }
 
-static void adapter_destroy(lucent_native_engine* engine) {
+static void adapter_destroy(emufusion_native_engine* engine) {
     if (engine == nullptr) {
         return;
     }
@@ -989,8 +989,8 @@ static void adapter_destroy(lucent_native_engine* engine) {
     delete engine;
 }
 
-static const lucent_native_adapter kLucentEdenAdapter = {
-    /* abi_version      */ LUCENT_NATIVE_ADAPTER_ABI_VERSION,
+static const emufusion_native_adapter kEmuFusionEdenAdapter = {
+    /* abi_version      */ EMUFUSION_NATIVE_ADAPTER_ABI_VERSION,
     /* describe         */ adapter_describe,
     /* create           */ adapter_create,
     /* load             */ adapter_load,
@@ -1009,14 +1009,14 @@ static const lucent_native_adapter kLucentEdenAdapter = {
 };
 
 extern "C" __attribute__((visibility("default")))
-const lucent_native_adapter* lucent_native_adapter_entry(void) {
-    return &kLucentEdenAdapter;
+const emufusion_native_adapter* emufusion_native_adapter_entry(void) {
+    return &kEmuFusionEdenAdapter;
 }
 
-// Lucent reads live speed through this symbol during qualification so a
+// EmuFusion reads live speed through this symbol during qualification so a
 // "runs at 60fps" claim is measured from the engine, not inferred.
 extern "C" __attribute__((visibility("default")))
-double lucent_eden_average_game_fps(void) {
+double emufusion_eden_average_game_fps(void) {
     return EmulationSession::GetInstance().PerfStats().average_game_fps;
 }
 
@@ -1025,41 +1025,41 @@ double lucent_eden_average_game_fps(void) {
 // FPS, VI callbacks nor monotonic submission timestamps establish image-linked
 // guest timing, so this adapter intentionally does NOT advertise that authority.
 extern "C" __attribute__((visibility("default")))
-double lucent_native_adapter_declared_video_hz(void) {
+double emufusion_native_adapter_declared_video_hz(void) {
     return 60.0;
 }
 
 extern "C" __attribute__((visibility("default")))
-void lucent_native_adapter_set_fg_presentation_v1(bool enabled) {
-    Lucent::SetFgPresentation(enabled);
+void emufusion_native_adapter_set_fg_presentation_v1(bool enabled) {
+    EmuFusion::SetFgPresentation(enabled);
 }
 
 extern "C" __attribute__((visibility("default")))
-bool lucent_native_adapter_set_paced_video_hz(double hz) {
-    return Lucent::SetPacedVsyncHz(hz);
+bool emufusion_native_adapter_set_paced_video_hz(double hz) {
+    return EmuFusion::SetPacedVsyncHz(hz);
 }
 
 extern "C" __attribute__((visibility("default")))
-uint32_t lucent_native_adapter_timing_capabilities_v1(void) {
-    return LUCENT_NATIVE_TIMING_BASE_CLOCK_CORRECTION |
-           LUCENT_NATIVE_TIMING_SUBMISSION_TIMESTAMPS;
+uint32_t emufusion_native_adapter_timing_capabilities_v1(void) {
+    return EMUFUSION_NATIVE_TIMING_BASE_CLOCK_CORRECTION |
+           EMUFUSION_NATIVE_TIMING_SUBMISSION_TIMESTAMPS;
 }
 
 // Diagnostic exact-image lookup, not a stable guest-content clock. These
 // optional exports do not enable AUTHORITATIVE_SOURCE_TIMELINE. Callers must
 // own the native host lifetime while copying into their fixed-size output.
 extern "C" __attribute__((visibility("default")))
-uint32_t lucent_native_adapter_source_image_binding_v1(lucent_source_binding_v1* out,
+uint32_t emufusion_native_adapter_source_image_binding_v1(emufusion_source_binding_v1* out,
                                                      uint32_t out_size) {
-    return Lucent::g_source_images.Binding(out, out_size);
+    return EmuFusion::g_source_images.Binding(out, out_size);
 }
 
 extern "C" __attribute__((visibility("default")))
-uint32_t lucent_native_adapter_query_source_image_v1(uint64_t session_epoch,
+uint32_t emufusion_native_adapter_query_source_image_v1(uint64_t session_epoch,
                                                    uint64_t surface_epoch,
                                                    uint64_t buffer_timestamp_ns,
-                                                   lucent_source_image_v1* out,
+                                                   emufusion_source_image_v1* out,
                                                    uint32_t out_size) {
-    return Lucent::g_source_images.Query(session_epoch, surface_epoch, buffer_timestamp_ns,
+    return EmuFusion::g_source_images.Query(session_epoch, surface_epoch, buffer_timestamp_ns,
                                        out, out_size);
 }

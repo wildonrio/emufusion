@@ -6,7 +6,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace Lucent {
+namespace EmuFusion {
 inline constexpr double kDeclaredVsyncHz = 60.0;
 inline constexpr double kMaximumClockCorrection = 0.0075;
 inline std::atomic<double> g_paced_vsync_hz{0.0};
@@ -82,4 +82,4 @@ inline void ResetTimingDiagnostics() {
     g_last_swap_interval.store(1, std::memory_order_relaxed);
     g_last_composition_period_ns.store(0, std::memory_order_relaxed);
 }
-} // namespace Lucent
+} // namespace EmuFusion

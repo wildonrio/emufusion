@@ -307,7 +307,7 @@ def parser() -> argparse.ArgumentParser:
     observe_parser.add_argument("--proof-manifest", type=Path, required=True)
     observe_parser.add_argument("--output", type=Path, required=True)
     observe_parser.add_argument("--adapter", type=Path, default=Path(
-        "engines/build/arm64-v8a/liblucent_native_adapter_eden.so"))
+        "engines/build/arm64-v8a/libemufusion_native_adapter_eden.so"))
     observe_parser.add_argument("--ffmpeg", default="/opt/homebrew/bin/ffmpeg")
     observe_parser.add_argument("--package", default="com.thorium.preview")
     observe_parser.add_argument("--duration-seconds", type=int, default=600)

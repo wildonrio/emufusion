@@ -14,7 +14,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 TREE = ROOT / "engines/build/switch-src/eden"
-ADAPTER = ROOT / "engines/patches/eden-lucent-adapter.cpp"
+ADAPTER = ROOT / "engines/patches/eden-emufusion-adapter.cpp"
 EMITTER = TREE / "src/dynarmic/src/dynarmic/backend/arm64/emit_arm64_memory.cpp"
 
 

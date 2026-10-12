@@ -100,7 +100,7 @@ ARMSX2_CORE_DIR=${EMUFUSION_ARMSX2_QUALIFICATION_DIR:-$ROOT_DIR/engines/build/ar
 # compiles one. There is no EMUFUSION_REUSE_ flag because there is nothing to
 # rebuild: the staged artifact is the only input and its hash is the gate.
 INCLUDE_PHASE3_EDEN=${EMUFUSION_INCLUDE_PHASE3_EDEN:-0}
-PHASE3_EDEN_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/liblucent_native_adapter_eden.so"
+PHASE3_EDEN_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/libemufusion_native_adapter_eden.so"
 # Eden does not open libvulkan itself on arm64: it takes the driver library the
 # frontend loaded, and that load goes through adrenotools, which ALWAYS builds a
 # linker namespace over the hook directory and dlopens these two by name --
@@ -888,8 +888,8 @@ if [ "$INCLUDE_PHASE3_EDEN" = 1 ]; then
         "$DECODED/assets/phase3-qualification-opt-in.json"
     cp "$ROOT_DIR/engines/eden-source-lock.json" \
         "$DECODED/assets/phase3-eden-source-lock.json"
-    cp "$ROOT_DIR/engines/patches/eden-lucent-adapter.cpp" \
-        "$DECODED/assets/phase3-eden-lucent-adapter.cpp"
+    cp "$ROOT_DIR/engines/patches/eden-emufusion-adapter.cpp" \
+        "$DECODED/assets/phase3-eden-emufusion-adapter.cpp"
     python3 "$PROJECT_DIR/tools/generate_engine_artifact_manifest.py" \
         --registry "$ROOT_DIR/engines/phase3-registry.json" \
         --library-dir "$DECODED/lib/arm64-v8a" \

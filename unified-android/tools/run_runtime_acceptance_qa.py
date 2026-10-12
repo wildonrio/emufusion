@@ -5209,7 +5209,7 @@ def has_presented_frame_telemetry(log: str, engine: str, system: str) -> bool:
     if f"Health engine={engine} " in log[route_index:]:
         return True
     # Cemu and aPS3e ship no measured-fps hook (only the Eden adapter exports
-    # lucent_eden_average_game_fps), so "First guest frame" can never log for
+    # emufusion_eden_average_game_fps), so "First guest frame" can never log for
     # them.  Their audio prime counter advances only on samples drained from
     # the adapter — guest-produced DSP output, not host-inserted silence — so
     # a started playback bound to this exact route is engine-owned proof the

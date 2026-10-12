@@ -74,110 +74,110 @@ int main(int argc, char** argv) {
 
     def test_compiled_value_ledger_boundaries_lifetime_exact_keys_and_content_holds(self):
         # Uncommitted, build-Mac-only input (see tools/run_ci_tests.py).
-        for needed in (EDEN / "common/lucent_source_image_types.h",):
+        for needed in (EDEN / "common/emufusion_source_image_types.h",):
             if not needed.exists():
                 self.skipTest("local-only input absent: " + str(needed))
         source = r'''
-#include "eden-lucent-source-image.h"
+#include "eden-emufusion-source-image.h"
 #include <cassert>
 #include <thread>
 #include <atomic>
-using namespace Lucent;
-lucent_source_composition_v1 image(SourceImageLedger& ledger, uint64_t frame = 1) {
-    lucent_source_composition_v1 out{};
+using namespace EmuFusion;
+emufusion_source_composition_v1 image(SourceImageLedger& ledger, uint64_t frame = 1) {
+    emufusion_source_composition_v1 out{};
     auto header = ledger.Composition(0, 1, 50);
-    lucent_source_layer_v1 layer{};
+    emufusion_source_layer_v1 layer{};
     layer.queue_epoch = 500; layer.queue_frame_number = frame;
-    layer.flags = LUCENT_SOURCE_LAYER_ACQUIRED;
+    layer.flags = EMUFUSION_SOURCE_LAYER_ACQUIRED;
     AppendSourceLayer(out, header, layer);
     return out;
 }
 int main() {
-    static_assert(sizeof(lucent_source_image_v1) <= 4096);
-    static_assert(sizeof(lucent_source_binding_v1) == 64);
+    static_assert(sizeof(emufusion_source_image_v1) <= 4096);
+    static_assert(sizeof(emufusion_source_binding_v1) == 64);
     SourceImageLedger ledger;
-    lucent_source_binding_v1 binding{};
-    lucent_source_image_v1 row{};
-    assert(ledger.Binding(&binding, sizeof(binding)) == LUCENT_SOURCE_CLOSED);
+    emufusion_source_binding_v1 binding{};
+    emufusion_source_image_v1 row{};
+    assert(ledger.Binding(&binding, sizeof(binding)) == EMUFUSION_SOURCE_CLOSED);
     ledger.BeginSession(); ledger.BindSurface(); ledger.NewSwapchain();
-    assert(ledger.Binding(&binding, sizeof(binding)) == LUCENT_SOURCE_MATCH_ACCEPTED);
+    assert(ledger.Binding(&binding, sizeof(binding)) == EMUFUSION_SOURCE_MATCH_ACCEPTED);
     auto query = [&](uint64_t timestamp) {
         return ledger.Query(binding.session_epoch, binding.surface_epoch, timestamp, &row, sizeof(row));
     };
     auto first = image(ledger);
     assert(ledger.BeginPresent(first, 90, 1, 0, false) == 0);
     auto token = ledger.BeginPresent(first, 100, 1, 0, true);
-    assert(token > 0 && query(100) == LUCENT_SOURCE_PENDING);
+    assert(token > 0 && query(100) == EMUFUSION_SOURCE_PENDING);
     first.layers[0].queue_frame_number = 999; // Original no longer owns recorded value.
     ledger.FinishPresent(token, 0, true);
-    assert(query(100) == LUCENT_SOURCE_MATCH_ACCEPTED);
+    assert(query(100) == EMUFUSION_SOURCE_MATCH_ACCEPTED);
     assert(row.composition.layers[0].queue_frame_number == 1);
-    assert(query(99) == LUCENT_SOURCE_NOT_FOUND && query(101) == LUCENT_SOURCE_NOT_FOUND);
+    assert(query(99) == EMUFUSION_SOURCE_NOT_FOUND && query(101) == EMUFUSION_SOURCE_NOT_FOUND);
     auto held = image(ledger);
-    held.layers[0].flags = LUCENT_SOURCE_LAYER_HELD;
+    held.layers[0].flags = EMUFUSION_SOURCE_LAYER_HELD;
     auto heldToken = ledger.BeginPresent(held, 110, 2, 1, true);
     ledger.FinishPresent(heldToken, 0, true);
-    assert(query(110) == LUCENT_SOURCE_MATCH_ACCEPTED);
+    assert(query(110) == EMUFUSION_SOURCE_MATCH_ACCEPTED);
     assert(row.composition.layers[0].queue_frame_number == 1);
-    assert(row.composition.layers[0].flags == LUCENT_SOURCE_LAYER_HELD);
+    assert(row.composition.layers[0].flags == EMUFUSION_SOURCE_LAYER_HELD);
     auto duplicate = ledger.BeginPresent(held, 110, 3, 2, true);
     ledger.FinishPresent(duplicate, 0, true);
-    assert(query(110) == LUCENT_SOURCE_AMBIGUOUS);
+    assert(query(110) == EMUFUSION_SOURCE_AMBIGUOUS);
     auto rejected = ledger.BeginPresent(held, 120, 4, 2, true);
     ledger.FinishPresent(rejected, -1, false);
-    assert(query(120) == LUCENT_SOURCE_REJECTED);
+    assert(query(120) == EMUFUSION_SOURCE_REJECTED);
     auto retried = ledger.BeginPresent(held, 130, 5, 3, true);
     ledger.FinishPresent(retried, 0, true);
-    assert(query(130) == LUCENT_SOURCE_MATCH_ACCEPTED);
-    assert(query(120) == LUCENT_SOURCE_REJECTED);
+    assert(query(130) == EMUFUSION_SOURCE_MATCH_ACCEPTED);
+    assert(query(120) == EMUFUSION_SOURCE_REJECTED);
 
-    lucent_source_composition_v1 mixed{};
+    emufusion_source_composition_v1 mixed{};
     auto multiHeader = ledger.Composition(0, 2, 50);
     auto left = held.layers[0]; auto overlay = left;
-    overlay.queue_epoch = 501; overlay.flags = LUCENT_SOURCE_LAYER_OVERLAY | LUCENT_SOURCE_LAYER_ACQUIRED;
+    overlay.queue_epoch = 501; overlay.flags = EMUFUSION_SOURCE_LAYER_OVERLAY | EMUFUSION_SOURCE_LAYER_ACQUIRED;
     AppendSourceLayer(mixed, multiHeader, left);
     AppendSourceLayer(mixed, multiHeader, overlay);
     assert(mixed.retained_layer_count == 2 && mixed.layers[0].queue_epoch != mixed.layers[1].queue_epoch);
     assert(mixed.layers[0].queue_frame_number == mixed.layers[1].queue_frame_number);
-    lucent_source_composition_v1 overfull{};
+    emufusion_source_composition_v1 overfull{};
     auto overHeader = ledger.Composition(0, 9, 50);
     for (int i = 0; i < 9; ++i) AppendSourceLayer(overfull, overHeader, left);
     assert(overfull.retained_layer_count == 8 && overfull.header.layer_count == 9);
-    assert(!(overfull.header.flags & LUCENT_SOURCE_COMPOSITION_COMPLETE));
-    lucent_source_composition_v1 inconsistent{};
+    assert(!(overfull.header.flags & EMUFUSION_SOURCE_COMPOSITION_COMPLETE));
+    emufusion_source_composition_v1 inconsistent{};
     AppendSourceLayer(inconsistent, multiHeader, left);
     ++multiHeader.composition_ordinal;
     AppendSourceLayer(inconsistent, multiHeader, overlay);
-    assert(inconsistent.header.flags & LUCENT_SOURCE_COMPOSITION_INCONSISTENT);
+    assert(inconsistent.header.flags & EMUFUSION_SOURCE_COMPOSITION_INCONSISTENT);
 
     for (uint64_t i = 0; i < 130; ++i) {
         auto next = image(ledger, i + 2);
         auto nextToken = ledger.BeginPresent(next, 1000 + i, static_cast<uint32_t>(i + 10), 0, true);
         ledger.FinishPresent(nextToken, 0, true);
     }
-    assert(query(100) == LUCENT_SOURCE_NOT_FOUND);
+    assert(query(100) == EMUFUSION_SOURCE_NOT_FOUND);
     ledger.NewSwapchain();
-    assert(query(1129) == LUCENT_SOURCE_NOT_FOUND);
+    assert(query(1129) == EMUFUSION_SOURCE_NOT_FOUND);
     assert(ledger.BeginPresent(held, 1200, 150, 0, true) == 0); // Old swapchain composition.
     ledger.BindSurface();
-    assert(query(1129) == LUCENT_SOURCE_STALE_EPOCH);
+    assert(query(1129) == EMUFUSION_SOURCE_STALE_EPOCH);
     assert(image(ledger).header.session_epoch == 0); // Binding awaits its new swapchain.
     ledger.NewSwapchain();
-    assert(ledger.Binding(&binding, sizeof(binding)) == LUCENT_SOURCE_MATCH_ACCEPTED);
+    assert(ledger.Binding(&binding, sizeof(binding)) == EMUFUSION_SOURCE_MATCH_ACCEPTED);
     auto newSurface = image(ledger);
     auto newToken = ledger.BeginPresent(newSurface, 2000, 151, 0, true);
     ledger.FinishPresent(token, -1, false); // Old token cannot mutate a newly allocated row.
-    assert(query(2000) == LUCENT_SOURCE_PENDING);
+    assert(query(2000) == EMUFUSION_SOURCE_PENDING);
     ledger.FinishPresent(newToken, 0, true);
-    assert(query(2000) == LUCENT_SOURCE_MATCH_ACCEPTED);
+    assert(query(2000) == EMUFUSION_SOURCE_MATCH_ACCEPTED);
     ledger.Close();
-    assert(query(2000) == LUCENT_SOURCE_CLOSED);
+    assert(query(2000) == EMUFUSION_SOURCE_CLOSED);
     ledger.BeginSession(); ledger.BindSurface(); ledger.NewSwapchain();
-    assert(query(2000) == LUCENT_SOURCE_STALE_EPOCH);
+    assert(query(2000) == EMUFUSION_SOURCE_STALE_EPOCH);
 
     // Single producer and independent readers exercise the real protected
     // values. A busy try_lock is a missing diagnostic, never a torn record.
-    assert(ledger.Binding(&binding, sizeof(binding)) == LUCENT_SOURCE_MATCH_ACCEPTED);
+    assert(ledger.Binding(&binding, sizeof(binding)) == EMUFUSION_SOURCE_MATCH_ACCEPTED);
     std::atomic<uint64_t> latest{0}; std::atomic<bool> finished{false};
     std::thread producer([&] {
         for (uint64_t i = 1; i <= 5000; ++i) {
@@ -192,7 +192,7 @@ int main() {
         const auto timestamp = latest.load();
         if (!timestamp) continue;
         const auto status = query(timestamp);
-        if (status == LUCENT_SOURCE_MATCH_ACCEPTED || status == LUCENT_SOURCE_PENDING) {
+        if (status == EMUFUSION_SOURCE_MATCH_ACCEPTED || status == EMUFUSION_SOURCE_PENDING) {
             assert(row.buffer_timestamp_ns == timestamp);
             assert(row.composition.layers[0].queue_frame_number == timestamp - 10000);
         }
@@ -215,14 +215,14 @@ int main() {
             run([executable])
 
     def test_canonical_metadata_headers_equal_used_vendor_headers(self):
-        for canonical, actual in (("engines/patches/eden-lucent-source-image.h", "lucent_source_image.h"),
-                                  ("unified-android/native/include/lucent_native_source_image.h", "lucent_source_image_types.h")):
+        for canonical, actual in (("engines/patches/eden-emufusion-source-image.h", "emufusion_source_image.h"),
+                                  ("unified-android/native/include/emufusion_native_source_image.h", "emufusion_source_image_types.h")):
             self.assertEqual((ROOT / canonical).read_bytes(), (EDEN / "common" / actual).read_bytes())
 
     def test_used_value_owned_chain_reaches_exact_present(self):
         composer = (EDEN / "core/hle/service/nvnflinger/hardware_composer.cpp").read_text()
-        for expected in (".queue_frame_number = item.frame_number", ".queue_epoch = layer->lucent_queue_epoch",
-                         "LUCENT_SOURCE_LAYER_HELD", "layer.source_header = source_header"):
+        for expected in (".queue_frame_number = item.frame_number", ".queue_epoch = layer->emufusion_queue_epoch",
+                         "EMUFUSION_SOURCE_LAYER_HELD", "layer.source_header = source_header"):
             self.assertIn(expected, composer)
         converter = (EDEN / "core/hle/service/nvdrv/devices/nvdisp_disp0.cpp").read_text()
         self.assertIn(".source_layer = layer.source_layer", converter)
@@ -240,8 +240,8 @@ int main() {
         self.assertIn("desiredPresentTime = static_cast<u64>(now_ns)", swapchain)
 
     def test_no_authority_is_added_and_queries_hold_a_nonblocking_session_lease(self):
-        adapter = (ROOT / "engines/patches/eden-lucent-adapter.cpp").read_text()
-        export = adapter.split("uint32_t lucent_native_adapter_timing_capabilities_v1(void)")[1].split("}", 1)[0]
+        adapter = (ROOT / "engines/patches/eden-emufusion-adapter.cpp").read_text()
+        export = adapter.split("uint32_t emufusion_native_adapter_timing_capabilities_v1(void)")[1].split("}", 1)[0]
         self.assertNotIn("AUTHORITATIVE", export)
         java = (ROOT / "unified-android/src/com/thorium/preview/NativeAdapterHost.java").read_text()
         self.assertEqual(java.count("sourceQueryLease.readLock().tryLock()"), 2)

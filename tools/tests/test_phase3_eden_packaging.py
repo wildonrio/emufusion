@@ -48,10 +48,10 @@ SUPERSEDED_COMMIT = "5ec94b19714f75489cdfc62d890d2f94d45514ce"
 # October7 adds previously missing stick-click routes; runtime acceptance pending.
 # October 11 passes the frontend-provisioned per-GPU driver (Turnip) to Eden.
 # 3.2.34 runs the guest natively (NCE) and flushes saves for process replacement.
-ADAPTER_SHA256 = "b974cd99ba9583628367e0ecce3bd749d470fc962b8d4790717d0ff90c0ec54c"
+ADAPTER_SHA256 = "bc18590a0cad64cc1059d62bdf1e69d5cabad80f952b132d876adce26f26ba79"
 ADAPTER_LIBRARY = "libemufusion_native_adapter_eden.so"
 STAGED_ADAPTER = ROOT / "engines" / "build" / "arm64-v8a" / ADAPTER_LIBRARY
-ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-lucent-adapter.cpp"
+ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-emufusion-adapter.cpp"
 MEMORY_TRACKER = (ROOT / "engines" / "build" / "switch-src" / "eden" / "src" /
                   "video_core" / "buffer_cache" / "memory_tracker_base.h")
 
@@ -130,7 +130,7 @@ class Phase3EdenIdentityTest(unittest.TestCase):
         self.assertEqual(EDEN_COMMIT, SOURCE_LOCK["core"]["commit"])
         self.assertIs(False, SOURCE_LOCK["reproducible"])
         self.assertNotIn("independentBuilds", SOURCE_LOCK)
-        self.assertEqual("lucent_native_adapter_entry",
+        self.assertEqual("emufusion_native_adapter_entry",
                          SOURCE_LOCK["adapterAbi"]["entrySymbol"])
         self.assertEqual(ADAPTER_LIBRARY,
                          SOURCE_LOCK["adapterAbi"]["expectedLibraryName"])
@@ -162,7 +162,7 @@ class Phase3EdenIdentityTest(unittest.TestCase):
     def test_source_lock_pins_the_adapter_translation_unit_it_compiled_in(self):
         patches = SOURCE_LOCK["patches"]
         adapter = [entry for entry in patches
-                   if entry["path"] == "engines/patches/eden-lucent-adapter.cpp"]
+                   if entry["path"] == "engines/patches/eden-emufusion-adapter.cpp"]
         self.assertEqual(1, len(adapter), "exactly one adapter TU is compiled in")
         self.assertEqual(
             hashlib.sha256(ADAPTER_PATCH.read_bytes()).hexdigest(),
@@ -215,19 +215,19 @@ class Phase3EdenIdentityTest(unittest.TestCase):
         # Measured facts only: the library is Eden's whole native library with
         # the adapter compiled in, so it does NOT export only the entry symbol.
         self.assertIs(False, artifact["exportsOnlyTheAdapterEntry"])
-        self.assertIn("lucent_native_adapter_entry", artifact["requiredExports"])
-        self.assertIn("lucent_eden_average_game_fps", artifact["requiredExports"])
+        self.assertIn("emufusion_native_adapter_entry", artifact["requiredExports"])
+        self.assertIn("emufusion_eden_average_game_fps", artifact["requiredExports"])
         # The rebuilt staged artifact has bounded clock/capability hooks;
         # packaging is distinct from installation and device timing proof.
-        self.assertIn("lucent_native_adapter_set_paced_video_hz", artifact["requiredExports"])
-        self.assertIn("lucent_native_adapter_declared_video_hz", artifact["requiredExports"])
-        self.assertIn("lucent_native_adapter_source_image_binding_v1", artifact["requiredExports"])
-        self.assertIn("lucent_native_adapter_query_source_image_v1", artifact["requiredExports"])
+        self.assertIn("emufusion_native_adapter_set_paced_video_hz", artifact["requiredExports"])
+        self.assertIn("emufusion_native_adapter_declared_video_hz", artifact["requiredExports"])
+        self.assertIn("emufusion_native_adapter_source_image_binding_v1", artifact["requiredExports"])
+        self.assertIn("emufusion_native_adapter_query_source_image_v1", artifact["requiredExports"])
         adapter = _read(ADAPTER_PATCH)
-        self.assertIn("return Lucent::SetPacedVsyncHz(hz);", adapter)
+        self.assertIn("return EmuFusion::SetPacedVsyncHz(hz);", adapter)
         conductor = _read(ROOT / "engines" / "build" / "switch-src" / "eden" / "src" /
                           "core" / "hle" / "service" / "vi" / "conductor.cpp")
-        self.assertIn("Lucent::PacedVsyncHz()", conductor)
+        self.assertIn("EmuFusion::PacedVsyncHz()", conductor)
         self.assertEqual("0x4000", artifact["ptLoadAlignment"])
 
     def test_no_keys_or_firmware_are_ever_claimed_as_bundled(self):
@@ -372,12 +372,12 @@ class Phase3ApkGateTest(unittest.TestCase):
             }).encode(),
             "assets/phase3-eden-source-lock.json":
                 json.dumps(source_lock).encode(),
-            "assets/phase3-eden-lucent-adapter.cpp": patch,
+            "assets/phase3-eden-emufusion-adapter.cpp": patch,
         }
 
     def _verify(self, payload: dict) -> list:
         with tempfile.TemporaryDirectory() as directory:
-            apk = Path(directory) / "lucent.apk"
+            apk = Path(directory) / "emufusion.apk"
             with zipfile.ZipFile(apk, "w") as archive:
                 for name, data in payload.items():
                     archive.writestr(name, data)
@@ -476,7 +476,7 @@ class Phase3BuildFlagTest(unittest.TestCase):
         # Unprefixed stray name is refused outright...
         stray = BUILD[BUILD.index("for stray_flag in"):BUILD.index("# A misspelled")]
         self.assertIn("INCLUDE_PHASE3_EDEN", stray)
-        # ...and the LUCENT_ allowlist must accept the real flag so the guard
+        # ...and the EMUFUSION_ allowlist must accept the real flag so the guard
         # does not reject a legitimate Phase 3 build.
         self.assertIn("EMUFUSION_INCLUDE_PHASE3_EDEN) ;;", BUILD)
         # The message that lists the known flags must name EVERY flag the build
@@ -496,7 +496,7 @@ class Phase3BuildFlagTest(unittest.TestCase):
             'if [ "$INCLUDE_PHASE3_EDEN" = 1 ] && [ ! -f "$PHASE3_EDEN_ADAPTER" ]',
             BUILD)
         self.assertIn(
-            "engines/build/arm64-v8a/liblucent_native_adapter_eden.so", BUILD)
+            "engines/build/arm64-v8a/libemufusion_native_adapter_eden.so", BUILD)
 
     def test_every_phase3_asset_is_staged_only_under_the_flag(self):
         block = BUILD[BUILD.index('if [ "$INCLUDE_PHASE3_EDEN" = 1 ]; then\n    # Phase 3 stages'):]
