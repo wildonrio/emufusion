@@ -382,13 +382,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "uniform sampler2D uGenerated;\n" +
             "uniform sampler2D uPrevious;\n" +
             "uniform sampler2D uCurrent;\n" +
+            "uniform float uPhase;\n" +
             "varying vec2 vTexCoord;\n" +
             "float luma(vec3 c){return dot(c,vec3(0.299,0.587,0.114));}\n" +
             "void main(){\n" +
             " float g=luma(texture2D(uGenerated,vTexCoord).rgb);\n" +
             " float a=luma(texture2D(uPrevious,vTexCoord).rgb);\n" +
             " float b=luma(texture2D(uCurrent,vTexCoord).rgb);\n" +
-            " gl_FragColor=clamp(4.0*vec4(abs(g-a),abs(g-b),abs(g-0.5*(a+b)),abs(a-b)),0.0,1.0);\n" +
+            " gl_FragColor=clamp(4.0*vec4(abs(g-a),abs(g-b),abs(g-mix(a,b,uPhase)),abs(a-b)),0.0,1.0);\n" +
             "}\n";
 
     // Phase-centred motion (2026-10-11, after the REA study of Lossless
@@ -2114,16 +2115,23 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // Honest frame accounting for the corner readout (owner, 2026-10-11: no
     // duplicated or cross-faded frame may ever be counted as generated). Every
     // generated image is re-evaluated at 128x72 and compared with both real
-    // images and their 50/50 blend where the scene moved. Counted only when
-    // it is neither (almost everywhere) a copy of one real image nor a blend.
+    // images and their cross-fade at the same phase where the scene moved.
+    // Counted only when it is neither (almost everywhere) a copy of one real
+    // image nor a blend.
     private static final int VERIFY_WIDTH = 128;
     private static final int VERIFY_HEIGHT = 72;
     private static final int VERIFY_RING = 4;
     // Bytes hold 4 x luma difference x 255. Held pixels re-render exactly
-    // (same shader, same sample points), so "equal" can be tight.
-    private static final int VERIFY_MOVING_MIN = 16;    // |A-B| > 4/255 luma
+    // (same shader, same sample points), so "equal" can be tight. A cell is
+    // evidence only where A and B differ by 6x the equality tolerance: at
+    // 4/255 any correct in-between value lies within tolerance of the blend,
+    // so faint flicker (PPSSPP title screens) and slow low-contrast changes
+    // labelled true frames as blends. Scored on 279 hold-out pairs from nine
+    // systems against the withheld real frame: true frames counted 201 -> 207,
+    // true frames called blends 15 -> 6, no cross-fade counted at any phase.
+    private static final int VERIFY_MOVING_MIN = 32;    // |A-B| >= 8/255 luma
     private static final int VERIFY_EQUAL_MAX = 5;      // |G-X| < 1.25/255 luma
-    private static final int VERIFY_MIN_MOVING_CELLS = 48;
+    private static final int VERIFY_MIN_MOVING_CELLS = 24;
     private int verifyProgram;
     private int verifyGeneratedTexture, verifyGeneratedFramebuffer;
     private int verifyResultTexture, verifyResultFramebuffer;
@@ -11191,6 +11199,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             bindTexture(verifyProgram, "uGenerated", verifyGeneratedTexture, 0);
             bindTexture(verifyProgram, "uPrevious", historyTextures[previousIndex], 1);
             bindTexture(verifyProgram, "uCurrent", historyTextures[currentIndex], 2);
+            // The cross-fade a fallback would show at this phase, not always
+            // 50/50: at 0.375 a fade differs from the midpoint blend and was
+            // counted as generated.
+            GLES20.glUniform1f(GLES20.glGetUniformLocation(verifyProgram, "uPhase"), phase);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
             int slot = verifyHead;
             GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, verifyPbos[slot]);
