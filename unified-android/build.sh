@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.lucent-build-lock"
-VERSION_NAME=3.2.37
-VERSION_CODE=111
+VERSION_NAME=3.2.38
+VERSION_CODE=112
 
 case "${LUCENT_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -44,7 +44,7 @@ fi
 for stray_flag in INCLUDE_EXPERIMENTAL_CORES AUTOSELECT_EXPERIMENTAL_CORES \
         REUSE_QUALIFICATION_CORES INCLUDE_PHASE2_PPSSPP REUSE_PHASE2_PPSSPP \
         INCLUDE_PHASE3_EDEN INCLUDE_PHASE3_CEMU INCLUDE_PHASE3_APS3E \
-        INCLUDE_RIFE_FRAMEGEN INCLUDE_LSFG_FRAMEGEN INTERNAL_LSFG_PLUS \
+        INCLUDE_RIFE_FRAMEGEN \
         KEYSTORE STORE_PASS KEY_PASS KEY_ALIAS; do
     if eval "[ \"\${$stray_flag+set}\" = set ]"; then
         printf 'Refusing to build: %s is set but this build only reads LUCENT_%s\n' \
@@ -66,9 +66,8 @@ for lucent_flag in $(env | LC_ALL=C sed -n 's/^\(LUCENT_[A-Za-z0-9_]*\)=.*/\1/p'
         LUCENT_INCLUDE_PHASE3_CEMU) ;;
         LUCENT_INCLUDE_PHASE3_APS3E) ;;
         LUCENT_INCLUDE_RIFE_FRAMEGEN) ;;
-        LUCENT_INCLUDE_LSFG_FRAMEGEN) ;;
         LUCENT_INCLUDE_*|LUCENT_REUSE_*|LUCENT_AUTOSELECT_*)
-            printf 'Refusing to build: unknown build flag %s (known flags: LUCENT_INCLUDE_EXPERIMENTAL_CORES LUCENT_AUTOSELECT_EXPERIMENTAL_CORES LUCENT_REUSE_QUALIFICATION_CORES LUCENT_INCLUDE_PHASE2_PPSSPP LUCENT_REUSE_PHASE2_PPSSPP LUCENT_INCLUDE_PHASE3_EDEN LUCENT_INCLUDE_PHASE3_CEMU LUCENT_INCLUDE_PHASE3_APS3E LUCENT_INCLUDE_RIFE_FRAMEGEN LUCENT_INCLUDE_LSFG_FRAMEGEN)\n' \
+            printf 'Refusing to build: unknown build flag %s (known flags: LUCENT_INCLUDE_EXPERIMENTAL_CORES LUCENT_AUTOSELECT_EXPERIMENTAL_CORES LUCENT_REUSE_QUALIFICATION_CORES LUCENT_INCLUDE_PHASE2_PPSSPP LUCENT_REUSE_PHASE2_PPSSPP LUCENT_INCLUDE_PHASE3_EDEN LUCENT_INCLUDE_PHASE3_CEMU LUCENT_INCLUDE_PHASE3_APS3E LUCENT_INCLUDE_RIFE_FRAMEGEN)\n' \
                 "$lucent_flag" >&2
             exit 1
             ;;
@@ -112,16 +111,6 @@ PHASE3_CEMU_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/liblucent_native_adapter_
 # retained only for narrow packaging diagnostics.
 INCLUDE_PHASE3_APS3E=${LUCENT_INCLUDE_PHASE3_APS3E:-1}
 INCLUDE_RIFE_FRAMEGEN=${LUCENT_INCLUDE_RIFE_FRAMEGEN:-0}
-INCLUDE_LSFG_FRAMEGEN=${LUCENT_INCLUDE_LSFG_FRAMEGEN:-0}
-INTERNAL_LSFG_PLUS=${LUCENT_INTERNAL_LSFG_PLUS:-0}
-LSFG_EXPERIMENT_DIR="$ROOT_DIR/experiments/lsfg-vulkan-android-inprocess"
-LSFG_WRAPPER_DIR=${LUCENT_LSFG_WRAPPER_DIR:-}
-LSFG_NATIVE_SOURCE="$PROJECT_DIR/lsfg-qualification-native"
-LSFG_NATIVE_BUILD="$BUILD_DIR/lsfg-qualification-native"
-LSFG_NATIVE_LIBRARY="$LSFG_NATIVE_BUILD/liblucent_lsfg_qualification.so"
-LSFG_CMAKE="$SDK_DIR/cmake/3.22.1/bin/cmake"
-LSFG_NINJA="$SDK_DIR/cmake/3.22.1/bin/ninja"
-LSFG_NDK="$SDK_DIR/ndk/27.0.12077973"
 RIFE_EXPERIMENT_DIR="$ROOT_DIR/experiments/rife-ncnn-vulkan-android"
 RIFE_BENCHMARK_DIR="$RIFE_EXPERIMENT_DIR/android-benchmark"
 RIFE_APP_APK="$RIFE_BENCHMARK_DIR/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -295,54 +284,6 @@ case "$INCLUDE_RIFE_FRAMEGEN" in
     0|1) ;;
     *) printf 'LUCENT_INCLUDE_RIFE_FRAMEGEN must be 0 or 1\n' >&2; exit 1 ;;
 esac
-case "$INCLUDE_LSFG_FRAMEGEN" in
-    0|1) ;;
-    *) printf 'LUCENT_INCLUDE_LSFG_FRAMEGEN must be 0 or 1\n' >&2; exit 1 ;;
-esac
-case "$INTERNAL_LSFG_PLUS" in
-    0|1) ;;
-    *) printf 'LUCENT_INTERNAL_LSFG_PLUS must be 0 or 1\n' >&2; exit 1 ;;
-esac
-if [ "$INTERNAL_LSFG_PLUS" = 1 ] && [ "$INCLUDE_LSFG_FRAMEGEN" != 1 ]; then
-    printf 'LUCENT_INTERNAL_LSFG_PLUS=1 requires LUCENT_INCLUDE_LSFG_FRAMEGEN=1\n' >&2
-    exit 1
-fi
-if [ "$INCLUDE_RIFE_FRAMEGEN" = 1 ] && [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then
-    printf 'RIFE and LSFG qualification payloads are mutually exclusive\n' >&2
-    exit 1
-fi
-
-if [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then
-    if [ -z "$LSFG_WRAPPER_DIR" ] || [ ! -d "$LSFG_WRAPPER_DIR" ]; then
-        printf 'LUCENT_INCLUDE_LSFG_FRAMEGEN=1 requires LUCENT_LSFG_WRAPPER_DIR\n' >&2
-        exit 1
-    fi
-    for lsfg_tool in "$LSFG_CMAKE" "$LSFG_NINJA"; do
-        if [ ! -x "$lsfg_tool" ]; then
-            printf 'LSFG qualification requires executable: %s\n' "$lsfg_tool" >&2
-            exit 1
-        fi
-    done
-    python3 "$LSFG_EXPERIMENT_DIR/tools/verify_patched_checkout.py" \
-        --checkout "$LSFG_WRAPPER_DIR" >/dev/null
-    python3 "$LSFG_EXPERIMENT_DIR/tools/verify_nonblocking_patch.py" \
-        --checkout "$LSFG_WRAPPER_DIR" >/dev/null
-    python3 "$LSFG_EXPERIMENT_DIR/tools/verify_owned_wsi_setup_source.py" \
-        --native-dir "$LSFG_NATIVE_SOURCE" >/dev/null
-    "$LSFG_CMAKE" -S "$LSFG_NATIVE_SOURCE" -B "$LSFG_NATIVE_BUILD" -G Ninja \
-        -DCMAKE_MAKE_PROGRAM="$LSFG_NINJA" \
-        -DCMAKE_TOOLCHAIN_FILE="$LSFG_NDK/build/cmake/android.toolchain.cmake" \
-        -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 \
-        -DEMUFUSION_LSFG_PIXEL_PROBE=OFF \
-        -DLSFG_WRAPPER_DIR="$LSFG_WRAPPER_DIR" -DCMAKE_BUILD_TYPE=Release >/dev/null
-    "$LSFG_CMAKE" --build "$LSFG_NATIVE_BUILD" \
-        --target lucent_lsfg_qualification -j 8 >/dev/null
-    if [ ! -f "$LSFG_NATIVE_LIBRARY" ]; then
-        printf 'LSFG qualification native build produced no library\n' >&2
-        exit 1
-    fi
-fi
-
 if [ "$INCLUDE_RIFE_FRAMEGEN" = 1 ]; then
     # This is an explicitly named qualification payload, never a product-route
     # switch. Gradle re-verifies every locked upstream tree before building.
@@ -536,31 +477,18 @@ fi
 # only launcher. The package intentionally matches the existing companion so
 # this unified build installs in place without deleting its settings.
 APP_ICON_SOURCE="$PROJECT_DIR/res/drawable/lucent_icon.png"
-if [ "$INTERNAL_LSFG_PLUS" = 1 ]; then
-    APP_ICON_SOURCE="$PROJECT_DIR/res/drawable/lucent_plus_icon.png"
-    if [ ! -f "$APP_ICON_SOURCE" ]; then
-        printf 'EmuFusion+ icon is absent: %s\n' "$APP_ICON_SOURCE" >&2
-        exit 1
-    fi
-fi
 perl -0pi -e 's/package="org\.pegasus_frontend\.android"/package="com.thorium.preview"/g;
     s/android:name="org\.qtproject\.qt5\.android\.bindings\.QtApplication"/android:name="com.thorium.preview.LucentApplication"/g;
     s/android:label="Pegasus"/android:label="EmuFusion"/g;
     s/org\.pegasus_frontend\.android\.files/com.thorium.preview.files/g' \
     "$DECODED/AndroidManifest.xml"
-if [ "$INTERNAL_LSFG_PLUS" = 1 ]; then
-    perl -0pi -e 's/android:label="EmuFusion"/android:label="EmuFusion+"/g' \
-        "$DECODED/AndroidManifest.xml"
-fi
 perl -0pi -e 's#android:icon="[^"]+"#android:icon="\@drawable/lucent_icon"#' \
     "$DECODED/AndroidManifest.xml"
 # DIAGNOSTIC ONLY, enabled by LUCENT_DEBUGGABLE=1. Makes the app debuggable so
 # an authorized debugger can inspect it. App-packaged wrap.sh below is a separate
 # rootless allocator diagnostic; do not depend on global wrap.<pkg> properties.
 # NEVER set this for a build that will be released.
-if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ] || [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then
-    # The LSFG qualification payload also uses run-as for owner-staged shaders.
-    # Apply both diagnostic switches here, once, before packaging.
+if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ]; then
     # apktool may already emit debuggable=false. Replace that attribute rather
     # than adding a duplicate that Android's resource linker rejects.
     perl -0pi -e 's#(<application\b[^>]*?)\s+android:debuggable="[^"]*"#$1#;
@@ -582,8 +510,7 @@ perl -0pi -e 's#<uses-permission android:name="android\.permission\.QUERY_ALL_PA
 # Android 11 package visibility is required by the external-emulator picker.
 # The source manifest owns that generated allowlist, but this unified APK is
 # assembled from a decoded Pegasus manifest rather than Gradle's normal
-# manifest merger, so copy the exact <queries> block here. LSFG is in-process
-# and requires no companion package or package-visibility declaration.
+# manifest merger, so copy the exact <queries> block here.
 python3 - "$ROOT_DIR/android-companion/AndroidManifest.xml" \
     "$DECODED/AndroidManifest.xml" <<'PY'
 import pathlib
@@ -636,14 +563,6 @@ printf '%s\n' \
 '        <provider android:name="com.thorium.preview.RomFileProvider" android:authorities="com.thorium.preview.roms" android:exported="false" android:grantUriPermissions="true"/>' \
 '        <receiver android:name="com.thorium.preview.BootReceiver" android:enabled="true" android:exported="true"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/><action android:name="android.intent.action.MY_PACKAGE_REPLACED"/></intent-filter></receiver>' \
     > "$MANIFEST_COMPONENTS"
-if [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then
-    # One shell-launched, in-process surface proves the native LSFG transport
-    # before any ROM or gameplay session is allowed to open it. This component
-    # exists only in the explicit qualification APK and has no intent filter.
-    printf '%s\n' \
-'        <activity android:name="com.thorium.preview.game.LsfgQualificationSelfTestActivity" android:excludeFromRecents="true" android:exported="true" android:finishOnTaskLaunch="true" android:noHistory="true" android:screenOrientation="landscape" android:taskAffinity="com.thorium.preview.lsfg.selftest" android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"/>' \
-        >> "$MANIFEST_COMPONENTS"
-fi
 # The component fragment is interpolated into Perl source below.  Resource
 # references contain '@' (for example @xml/external_stop_accessibility), which
 # Perl would otherwise treat as an array variable and silently rewrite to an
@@ -705,13 +624,6 @@ if [ "$INCLUDE_RIFE_FRAMEGEN" = 1 ]; then
         --host-record "$RIFE_HOST_RECORD" \
         --decoded-apk "$DECODED" >/dev/null
 fi
-if [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then
-    # Only the public-wrapper host library is packaged. Lossless.dll and all
-    # derived shaders remain outside the APK and are accepted solely from the
-    # app-private, owner-staged qualification directory at runtime.
-    cp "$LSFG_NATIVE_LIBRARY" \
-        "$DECODED/lib/arm64-v8a/liblucent_lsfg_qualification.so"
-fi
 
 # Licence gate. Qt and OpenSSL were shipped undocumented for several releases
 # because nothing tied the packaged library set to the notices. This binds
@@ -725,7 +637,6 @@ for lib_path in "$DECODED/lib/arm64-v8a/"*.so; do
     [ -f "$lib_path" ] || continue
     lib_name=${lib_path##*/}
     case "$lib_name" in
-        liblucent_lsfg_qualification.so) notice_heading='## LSFG public-wrapper qualification host' ;;
         libemufusion_free_trace.so) notice_heading='## EmuFusion optional local crash tracer' ;;
         liblucent_*|libpegasus-fe_*) continue ;;
         # Not liblucent_-prefixed and not ours: these are libadrenotools' own
@@ -1043,14 +954,6 @@ $PROJECT_DIR/qualification-src/com/thorium/preview/game/RifeQualificationRuntime
 $PROJECT_DIR/qualification-src/com/thorium/preview/game/RifePresentationTransport.java \
 $PROJECT_DIR/qualification-src/com/thorium/preview/game/RifeQualificationTransportFactory.java"
 fi
-if [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then
-    SOURCES="$SOURCES \
-$PROJECT_DIR/qualification-src/com/thorium/preview/game/NativeLsfgBridge.java \
-$PROJECT_DIR/qualification-src/com/thorium/preview/game/LsfgQualificationRuntime.java \
-$PROJECT_DIR/qualification-src/com/thorium/preview/game/LsfgPresentationTransport.java \
-$PROJECT_DIR/qualification-src/com/thorium/preview/game/LsfgQualificationTransportFactory.java \
-$PROJECT_DIR/qualification-src/com/thorium/preview/game/LsfgQualificationSelfTestActivity.java"
-fi
 "$JAVA_HOME/bin/javac" -source 8 -target 8 -encoding UTF-8 \
     -classpath "$ANDROID_JAR:$COMMONS_COMPRESS_JAR:$XZ_JAR:$NV_WEBSOCKET_CLIENT_JAR:$WEBRTC_CLASSES_JAR" \
     -d "$BUILD_DIR/classes" $SOURCES
@@ -1080,11 +983,7 @@ INCLUDE_PHASE3_ANY=0
 if [ "$INCLUDE_PHASE3_EDEN" = 1 ] || [ "$INCLUDE_PHASE3_CEMU" = 1 ] || [ "$INCLUDE_PHASE3_APS3E" = 1 ]; then
     INCLUDE_PHASE3_ANY=1
 fi
-if [ "$INTERNAL_LSFG_PLUS" = 1 ]; then
-    OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-emufusion-plus-lsfg-internal.apk"
-elif [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then
-    OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-lsfg-framegen-qualification.apk"
-elif [ "$INCLUDE_RIFE_FRAMEGEN" = 1 ]; then
+if [ "$INCLUDE_RIFE_FRAMEGEN" = 1 ]; then
     OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-rife-framegen-qualification.apk"
 elif [ "$INCLUDE_PHASE2_PPSSPP" = 1 ] && [ "$INCLUDE_PHASE3_ANY" = 1 ]; then
     OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-phase2-phase3-qualification.apk"
@@ -1125,9 +1024,6 @@ printf 'Signing profile: %s keystore=%s alias=%s\n' \
     --out "$OUTPUT" "$ALIGNED"
 "$BUILD_TOOLS/apksigner" verify --verbose "$OUTPUT" >/dev/null
 set --
-if [ "$INTERNAL_LSFG_PLUS" = 1 ]; then
-    set -- --internal-lsfg-plus
-fi
 if [ -n "$SOURCE_FRONTEND_LOCK" ]; then
     set -- "$@" --source-frontend-lock "$SOURCE_FRONTEND_LOCK"
 fi
@@ -1236,10 +1132,6 @@ fi
 # content-addressed copy as the authoritative artifact.
 OUTPUT_SHA=$(shasum -a 256 "$OUTPUT" | awk '{print $1}')
 case "$OUTPUT" in
-    *-emufusion-plus-lsfg-internal.apk)
-        IMMUTABLE_OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-emufusion-plus-lsfg-internal-$OUTPUT_SHA.apk" ;;
-    *-lsfg-framegen-qualification.apk)
-        IMMUTABLE_OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-lsfg-framegen-qualification-$OUTPUT_SHA.apk" ;;
     *-rife-framegen-qualification.apk)
         IMMUTABLE_OUTPUT="$BUILD_DIR/lucent-$VERSION_NAME-rife-framegen-qualification-$OUTPUT_SHA.apk" ;;
     *-phase2-phase3-qualification.apk)

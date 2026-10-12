@@ -81,7 +81,7 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "469f03703fea8b274403c42ab41a1e090f56747c424d782ac1bf017433dbb6d1",
+            "575dc45f1c6b7f1d8a8da5277454109620dabac9e0476050ab4d9fa3ef071af4",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):
@@ -236,26 +236,6 @@ class InWindowInstantReturnTest(unittest.TestCase):
                          destroyed.split("listener.retireSurfaceRenderer", 1)[0])
         self.assertIn("failure -> mainHandler.post", destroyed)
         self.assertIn("if (!generatorStartupPending) releaseGenerator();", destroyed)
-
-    def test_lsfg_startup_retry_is_bounded_and_falls_open(self):
-        surface = (ROOT / "unified-android" / "src" / "com" / "thorium" /
-                   "preview" / "game" / "GameSurfaceView.java").read_text(
-                           encoding="utf-8")
-        qualification = surface.split(
-            "if (qualification != null)", 1
-        )[1].split(
-            "FrameGenerationBackendPolicy.Selection selection", 1
-        )[0]
-        self.assertIn("for (int attempt = 1; attempt <= 2; ++attempt)", qualification)
-        self.assertIn("retrying with a clean transport", qualification)
-        self.assertIn("unavailable after bounded retry", qualification)
-        # An ordinary rejection may return Direct after complete retirement;
-        # unresolved Surface ownership may neither retry nor hand it to anyone.
-        self.assertIn("using exact direct Surface", qualification)
-        self.assertIn("useDirectAfterUnavailableLsfg(output)", qualification)
-        self.assertIn("retireFailedGenerator(failure)", qualification)
-        self.assertIn("if (SurfaceOwnershipException.isUnsafe(failure)) throw failure;", qualification)
-        self.assertNotIn("selecting the built-in generator", qualification)
 
     def test_real_menu_launch_does_not_restart_the_qt_activity_lifecycle(self):
         command = COMMAND.read_text(encoding="utf-8")

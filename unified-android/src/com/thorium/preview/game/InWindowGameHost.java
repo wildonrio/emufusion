@@ -1029,13 +1029,22 @@ public final class InWindowGameHost
         // 2026-09-01: "the corner should show the normal frame rate and the
         // generated frame rate; that is my indication that it is on").
         FrameGenerationRenderer.StatsListener frameRateListener =
-                (source, target, actual, qualified) ->
-                mainHandler.post(() -> {
-                    observeReportedOutput(actual);
-                    // Delivery/GPU load must never downclock the guest. Near-native
-                    // display synchronization is owned by each engine session.
-                    updateFrameRateBadge(source, target, actual, qualified);
-                });
+                new FrameGenerationRenderer.StatsListener() {
+                    @Override public void onFrameRate(double source, double target,
+                                                      double actual, boolean qualified) {
+                        mainHandler.post(() -> {
+                            observeReportedOutput(actual);
+                            // Delivery/GPU load must never downclock the guest.
+                            // Near-native display synchronization is owned by
+                            // each engine session.
+                            updateFrameRateBadge(source, target, actual, qualified);
+                        });
+                    }
+
+                    @Override public void onDisplayedFrameRate(double real, double displayed) {
+                        mainHandler.post(() -> showVerifiedFrameRates(real, displayed));
+                    }
+                };
         if (gameSurface instanceof GameSurfaceView)
             ((GameSurfaceView) gameSurface).setFrameRateListener(frameRateListener);
         else if (gameSurface instanceof GameSurface)
@@ -1662,17 +1671,32 @@ public final class InWindowGameHost
         if (badge == null || request == null ||
                 request.frameGenerationMode == FrameGenerationSettings.Mode.OFF)
             return;
-        String backend = gameSurface instanceof GameSurfaceView ?
-                ((GameSurfaceView) gameSurface).activeFrameGenerationBackend() :
-                "Built-in";
-        boolean generating = qualified && target > source + 0.5;
-        String text = generating
-                ? String.format(Locale.US, "%.0f → %.0f  ·  %.1f fps  ·  %s",
-                        source, target, actual, backend)
-                : String.format(Locale.US, "%.0f fps  ·  direct  ·  %s",
-                        source, backend);
-        badge.setText(text);
+        // While the generator reports verified counts they own the badge.
+        if (System.nanoTime() / 1_000_000L - verifiedRatesAtMs < 2500L) return;
+        badge.setText(String.format(Locale.US, "%.0f fps", source));
         badge.setVisibility(source > 0.0 ? View.VISIBLE : View.GONE);
+    }
+
+    private long verifiedRatesAtMs;
+
+    /**
+     * The corner shows two numbers, like LSFG: the game's real frame rate and
+     * the rate actually displayed with generated frames -- counting only
+     * generated images that passed the per-frame motion check, never a
+     * duplicate or a cross-fade (owner, 2026-10-11). One number when nothing
+     * is being generated.
+     */
+    private void showVerifiedFrameRates(double real, double displayed) {
+        TextView badge = frameRateBadge;
+        if (badge == null || request == null || ownerRequestedDirect ||
+                presentationRecoveryAttempted ||
+                request.frameGenerationMode == FrameGenerationSettings.Mode.OFF)
+            return;
+        verifiedRatesAtMs = System.nanoTime() / 1_000_000L;
+        badge.setText(displayed >= real + 1.0 ?
+                String.format(Locale.US, "%.0f → %.0f fps", real, displayed) :
+                String.format(Locale.US, "%.0f fps", real));
+        badge.setVisibility(real > 0.0 ? View.VISIBLE : View.GONE);
     }
 
     private void observeReportedOutput(double output) {

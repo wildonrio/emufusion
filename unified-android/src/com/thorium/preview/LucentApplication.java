@@ -62,11 +62,6 @@ public final class LucentApplication
         // runs that on its own background thread and catalog consumers block
         // until it completes, so onCreate stays off the ANR path.
         InternalEngineBootstrap.register(this);
-        // Qualification APKs validate the optional lawful RIFE payload and
-        // cold Vulkan/model initialization away from game launch and renderer
-        // callbacks. Normal APKs do not contain that class and fail closed.
-        if (FrameGenerationSettings.isEnabled(this))
-            FrameGenerationSettings.prewarmOptionalBackends(this);
         // Theme extraction can touch thousands of external-storage files and
         // must never delay Application startup. PreviewService installs or
         // updates it on its worker thread; the first-setup lifecycle callback

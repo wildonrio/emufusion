@@ -132,7 +132,13 @@ public final class GpuPhysicalHeadroomLedger {
                 costUs <= 0L || budgetUs <= 0L) return false;
         int slot = (int) (pairSequence % shaderPairs.length);
         if (shaderPairs[slot] >= pairSequence ||
-                (shaderPairs[slot] != 0L && !shaderConsumed[slot])) return false;
+                (shaderPairs[slot] != 0L && !shaderConsumed[slot] &&
+                        rowPendingForPair(shaderPairs[slot]))) return false;
+        // An unconsumed older entry with no pending row belongs to a pair
+        // that never presented a generated image (the timeline scheduler may
+        // skip a pair's midpoint when its successor is late). Its row was
+        // bound before its timers completed, so none can arrive any more:
+        // retire it instead of refusing every later pair on this slot.
         shaderPairs[slot] = pairSequence;
         shaderCostsUs[slot] = costUs;
         shaderBudgetsUs[slot] = budgetUs;
@@ -272,6 +278,12 @@ public final class GpuPhysicalHeadroomLedger {
         long shownSpacingNs = row.actualNs - previousActualNs;
         return requestedSpacingNs > 0L &&
                 Math.abs(shownSpacingNs - requestedSpacingNs) <= slotToleranceNs;
+    }
+
+    private boolean rowPendingForPair(long pairSequence) {
+        for (int offset = 0; offset < count; ++offset)
+            if (rows[(head + offset) % rows.length].pairSequence == pairSequence) return true;
+        return false;
     }
 
     public int pendingCount() { return count; }

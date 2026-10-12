@@ -157,18 +157,17 @@ class MallocDebugPackagingTest(unittest.TestCase):
             result = subprocess.run(['sh', '-eu', '-c', build[start:end]], env=flags, capture_output=True, text=True)
             self.assertNotEqual(0, result.returncode)
 
-    def test_actual_late_lsfg_manifest_branch_composes_without_duplicate_debuggable(self):
+    def test_actual_debuggable_manifest_branch_composes_without_duplicate_debuggable(self):
         build = (ROOT / 'unified-android/build.sh').read_text()
-        # The LSFG qualification APK's debuggable edit now shares the single
-        # LUCENT_DEBUGGABLE manifest branch; it must still precede malloc_debug.
-        start = build.index('if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ] || [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then')
+        # The single LUCENT_DEBUGGABLE manifest branch must precede malloc_debug.
+        start = build.index('if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ]; then')
         end = build.index('\nfi', start) + 3
         self.assertIn('android:debuggable="true"', build[start:end])
         diagnostic_start = build.index('if [ "${LUCENT_MALLOC_DEBUG:-0}" = 1 ]; then')
         diagnostic_end = build.index('\nfi', diagnostic_start) + 3
         self.assertLess(end, diagnostic_start)
         branch = build[start:end] + '\n' + build[diagnostic_start:diagnostic_end]
-        # Pinned base APK has no debuggable attribute before the LSFG edit;
+        # Pinned base APK has no debuggable attribute before the edit;
         # apktool may instead emit an explicit debuggable="false".
         for base in (MANIFEST.replace(" android:debuggable='false'", ''),
                      MANIFEST.replace("android:debuggable='false'", 'android:debuggable="false"')):
@@ -176,8 +175,7 @@ class MallocDebugPackagingTest(unittest.TestCase):
                 path = self.stage(folder)
                 (path / 'AndroidManifest.xml').write_text(base)
                 environment = dict(os.environ, PROJECT_DIR=str(ROOT / 'unified-android'), DECODED=folder,
-                                   INCLUDE_LSFG_FRAMEGEN='1', LUCENT_MALLOC_DEBUG='1')
-                environment.pop('LUCENT_DEBUGGABLE', None)
+                                   LUCENT_DEBUGGABLE='1', LUCENT_MALLOC_DEBUG='1')
                 result = subprocess.run(['sh', '-eu', '-c', branch], env=environment, capture_output=True, text=True)
                 self.assertEqual(0, result.returncode, result.stderr)
                 text = (path / 'AndroidManifest.xml').read_text()

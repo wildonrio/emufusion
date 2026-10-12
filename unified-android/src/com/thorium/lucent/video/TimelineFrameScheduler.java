@@ -59,6 +59,14 @@ public final class TimelineFrameScheduler {
     private long lastSlot = Long.MIN_VALUE;
     // Typical span of a pair as delivered (EWMA of committed pairs).
     private long expectedSpanNs;
+    private int consecutiveLongSpans;
+    // Midpoints lost because the successor arrived after them but before its
+    // own slot: a source drifting late against its timestamps sits there
+    // pair after pair without ever forcing a re-anchor.
+    private boolean midpointLostThisPair;
+    private int consecutiveLatePairs;
+    private int pairsSinceGenerated = Integer.MAX_VALUE / 2;
+    private long slackSteps;
     // What the panel currently shows, so an unchanged hold needs no swap.
     private long shownSequence;
     private long shownTargetNs = Long.MIN_VALUE;
@@ -110,6 +118,10 @@ public final class TimelineFrameScheduler {
         primed = false;
         lastSlot = Long.MIN_VALUE;
         expectedSpanNs = sourcePeriodNs;
+        consecutiveLongSpans = 0;
+        midpointLostThisPair = false;
+        consecutiveLatePairs = 0;
+        pairsSinceGenerated = Integer.MAX_VALUE / 2;
         shownSequence = 0L;
         shownTargetNs = Long.MIN_VALUE;
         clearPending();
@@ -191,8 +203,14 @@ public final class TimelineFrameScheduler {
             ++successorLateHolds;
             lastHoldReason = "successor-late";
             long dueNs = leftTimestampNs + Math.max(expectedSpanNs, outputPeriodNs) - tolerance;
+            if (target < dueNs) midpointLostThisPair = true;
             if (target >= dueNs) {
-                anchorSourceNs -= target - dueNs + 1L;
+                // Stop one output period short of it, not just short: a
+                // source whose frames drift later than their timestamps (3DS
+                // under load) otherwise arrives exactly on time for its real
+                // slot every pair, never in time for the midpoint, and
+                // generation stops (2026-10-11). Queued frames trim it back.
+                anchorSourceNs -= target - dueNs + 1L + outputPeriodNs;
                 ++reanchors;
             }
             lastSlot = slot;
@@ -259,9 +277,33 @@ public final class TimelineFrameScheduler {
             shownSequence = pendingKind == GENERATED ? 0L : pendingSequence;
             shownTargetNs = pendingTargetNs;
         }
+        if (swapSucceeded && pendingKind == GENERATED) pairsSinceGenerated = 0;
+        if (swapSucceeded && pendingKind == REAL_RIGHT) {
+            consecutiveLatePairs = midpointLostThisPair ? consecutiveLatePairs + 1 : 0;
+            midpointLostThisPair = false;
+            if (pairsSinceGenerated < Integer.MAX_VALUE / 2) ++pairsSinceGenerated;
+            if (consecutiveLatePairs >= 2 && pairsSinceGenerated <= 4 && primed) {
+                // Generation was running and two pairs in a row lost their
+                // midpoint to a late successor: give the timeline one more
+                // output period of slack (trimmed later if frames queue up).
+                anchorSourceNs -= outputPeriodNs;
+                consecutiveLatePairs = 0;
+                ++slackSteps;
+            }
+        }
         if (pendingSpanNs > 0L) {
             long span = Math.min(pendingSpanNs, sourcePeriodNs > 0L ? maxBridgeNs() : pendingSpanNs);
-            expectedSpanNs = expectedSpanNs <= 0L ? span : (3L * expectedSpanNs + span) / 4L;
+            boolean longSpan = expectedSpanNs > 0L &&
+                    span > expectedSpanNs + expectedSpanNs * 3L / 4L;
+            consecutiveLongSpans = longSpan ? consecutiveLongSpans + 1 : 0;
+            if (expectedSpanNs <= 0L) expectedSpanNs = span;
+            // One long span is a hitch, not a new rate: let it barely move the
+            // estimate, so the pairs after a stall are not judged against an
+            // inflated span. Two in a row are a new rate (60 -> 30): follow it.
+            else if (longSpan && consecutiveLongSpans < 2)
+                expectedSpanNs = (15L * expectedSpanNs + span) / 16L;
+            else if (longSpan) expectedSpanNs = (expectedSpanNs + span) / 2L;
+            else expectedSpanNs = (3L * expectedSpanNs + span) / 4L;
         }
         clearPending();
     }
@@ -284,6 +326,7 @@ public final class TimelineFrameScheduler {
     /** One when the pending decision shows the right image and rotates the pair. */
     public int pendingAdvance() { return pendingKind == REAL_RIGHT ? 1 : 0; }
     public boolean primed() { return primed; }
+    public long expectedSpanNs() { return expectedSpanNs; }
     public long outputPeriodNs() { return outputPeriodNs; }
 
     public String diagnostics() {
@@ -293,6 +336,7 @@ public final class TimelineFrameScheduler {
                 " timelineSuccessorLate=" + successorLateHolds +
                 " timelinePauseHolds=" + pauseHolds +
                 " timelineTrims=" + trims +
+                " timelineSlackSteps=" + slackSteps +
                 " timelineExpectedSpanUs=" + expectedSpanNs / 1000L +
                 " timelineLastHold=" + lastHoldReason;
     }

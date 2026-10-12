@@ -119,6 +119,9 @@ FocusScope {
     // Explicit and fail-closed. No legacy Boolean is allowed to silently turn
     // an experimental renderer back on after an update.
     property string frameGenerationMode: "off"
+    // Owner option: frame generation may triple (40->120, 20->60) when on.
+    // Kept separately so turning generation off and on keeps the choice.
+    property bool frameGenerationAllowTriple: false
     // The displayed value is committed Android state, never an optimistic UI
     // guess. A launch requested while a write/status read is in flight waits
     // for the service acknowledgement.
@@ -271,7 +274,7 @@ FocusScope {
     // thing as a slot -- settingSlot() is the one place that difference is
     // resolved, and the tail order is written down here rather than implied by
     // the slot numbers so a new row can be inserted without renumbering.
-    readonly property var settingsTailSlots: [17, 21, 22, 23, 20, 19, 24, 18]
+    readonly property var settingsTailSlots: [17, 21, 25, 22, 23, 20, 19, 24, 18]
     readonly property int settingsTailCount: settingsTailSlots.length
     readonly property int settingsOptionCount:
             baseSettingsOptionCount + settingsTailCount
@@ -2313,16 +2316,29 @@ FocusScope {
 
     function normalizedFrameGenerationMode(value) {
         value = String(value || "").toLowerCase()
-        return value === "auto" || value === "auto-triple" ||
-                value === "built-in-alpha" || value === "lsfg" ? value : "off"
+        return value === "auto" || value === "auto-triple" ? value : "off"
     }
 
     function frameGenerationModeLabel() {
-        if (frameGenerationMode === "auto") return "AUTO"
-        if (frameGenerationMode === "auto-triple") return "AUTO (TRIPLE)"
-        if (frameGenerationMode === "built-in-alpha") return "BUILT-IN (ALPHA)"
-        if (frameGenerationMode === "lsfg") return "LSFG"
-        return "OFF"
+        return frameGenerationMode === "off" ? "OFF" : "ON"
+    }
+
+    // On is one mode on the service side: "auto", or "auto-triple" when the
+    // owner allows tripling.
+    function frameGenerationOnMode() {
+        return frameGenerationAllowTriple ? "auto-triple" : "auto"
+    }
+
+    function toggleFrameGeneration() {
+        if (frameGenerationModePending) return
+        setFrameGenerationMode(frameGenerationMode === "off" ? frameGenerationOnMode() : "off")
+    }
+
+    function toggleFrameGenerationTriple() {
+        if (frameGenerationModePending) return
+        frameGenerationAllowTriple = !frameGenerationAllowTriple
+        api.memory.set("emufusionFrameGenerationAllowTriple", frameGenerationAllowTriple)
+        if (frameGenerationMode !== "off") setFrameGenerationMode(frameGenerationOnMode())
     }
 
     function setFrameGenerationMode(mode) {
@@ -2366,15 +2382,6 @@ FocusScope {
         request.open("GET", "http://127.0.0.1:43821/settings/frame-generation?mode=" +
                      requested, true)
         request.send()
-    }
-
-    function cycleFrameGenerationMode(direction) {
-        if (frameGenerationModePending) return
-        var modes = ["off", "auto", "auto-triple", "built-in-alpha", "lsfg"]
-        var current = modes.indexOf(frameGenerationMode)
-        if (current < 0) current = 0
-        var step = direction < 0 ? -1 : 1
-        setFrameGenerationMode(modes[(current + step + modes.length) % modes.length])
     }
 
     function refreshFrameGenerationStatus() {
@@ -3085,7 +3092,7 @@ FocusScope {
                 "PIP / BOX ART ORDER", "EMULATOR FOR EACH SYSTEM",
                 "LEGAL NOTICE", "GAMES WITH NO BOX ART", "VIDEO SCREENSAVER",
                 "FRAME GENERATION", "WIDESCREEN ENHANCEMENTS",
-                "WIDESCREEN HACK", "PRIVATE DIAGNOSTICS"]
+                "WIDESCREEN HACK", "PRIVATE DIAGNOSTICS", "ALLOW TRIPLE FRAME RATE"]
         return titles[settingSlot(index)]
     }
 
@@ -3115,9 +3122,11 @@ FocusScope {
             "Trademarks, third-party content, and your responsibilities",
             "Choose once per game: keep it, hide it, or delete the ROM",
             "After two still minutes, play one synchronized preview on both screens",
-            "Off: true direct bypass. Auto: 60, or locked 30. Built-in: experimental. LSFG: beta",
+            "On: doubles the frame rate on a fixed refresh rate your screen supports",
             "Use verified built-in emulator 16:9 options; unsupported systems are unchanged",
-            "Off by default: true 16:9 geometry for N64, PS1, PS2, GC, Wii, Dreamcast, PSP"
+            "Off by default: true 16:9 geometry for N64, PS1, PS2, GC, Wii, Dreamcast, PSP",
+            "",
+            "When frame generation is on, also triple 40 and 20 fps games (40 to 120)"
         ]
         return descriptions[settingSlot(index)]
     }
@@ -3133,7 +3142,9 @@ FocusScope {
                 artworkReviewCount + (artworkReviewCount === 1 ? " GAME" : " GAMES") :
                 (artworkReviewLoaded ? "NONE" : "CHECK")
         if (index === 20) return screensaverEnabled ? "ON" : "OFF"
-        if (index === 21) return frameGenerationModeLabel()
+        if (index === 21) return frameGenerationModePending ? "SAVING…" :
+                frameGenerationModeLabel()
+        if (index === 25) return frameGenerationAllowTriple ? "ON" : "OFF"
         if (index === 22) return widescreenEnhancementsPending ? "SAVING…" :
                 (widescreenEnhancementsEnabled ? "ON" : "OFF")
         if (index === 23) return widescreenHackPending ? "SAVING…" :
@@ -3184,7 +3195,11 @@ FocusScope {
             return
         }
         if (slot === 21) {
-            cycleFrameGenerationMode(direction)
+            toggleFrameGeneration()
+            return
+        }
+        if (slot === 25) {
+            toggleFrameGenerationTriple()
             return
         }
         if (slot === 22) {
@@ -4021,7 +4036,12 @@ FocusScope {
         // quiet (owner, 2026-10-11: the panel never went away). If such a pass
         // did obtain new media it still reloads the library, silently.
         if (Boolean(payload.quiet)) {
-            importToastVisible = false
+            // The top-edge line is unobtrusive: show what is being fetched
+            // while the spinner turns (owner, 2026-10-11: "I see the spinning
+            // icon but I can't see what is being updated"), but no completion
+            // message for a quiet pass.
+            importToastVisible = importState !== "idle" && importState !== "complete" &&
+                    importState !== "error"
             if (importState === "complete" && previousState !== "complete" &&
                     importNeedsReload && !importReloadRequested) {
                 importReloadRequested = true
@@ -4721,6 +4741,9 @@ FocusScope {
             frameGenerationMode = api.memory.has("lucentFrameGenerationModeV3") ?
                     normalizedFrameGenerationMode(
                             api.memory.get("lucentFrameGenerationModeV3")) : "off"
+            frameGenerationAllowTriple = api.memory.has("emufusionFrameGenerationAllowTriple") ?
+                    Boolean(api.memory.get("emufusionFrameGenerationAllowTriple")) :
+                    frameGenerationMode === "auto-triple"
             refreshFrameGenerationStatus()
         }
         // Burn-in protection is on unless the owner explicitly turned it off.
@@ -5320,22 +5343,14 @@ FocusScope {
     Item {
         id: importToast
         z: 300
-        // One line of text at the top centre of the screen, on the header
-        // line between the system mark and the status icons (owner,
-        // 2026-10-11: "just one line text at the very top middle of the
-        // screen ... instead of a box. The box is just annoying").
-        // Centred on the screen when it fits, otherwise kept in the free
-        // span between the system mark and the leftmost status icon (narrow
-        // phones and cutout insets left it running over the icons).
-        property real freeLeft: root.cutoutSafeInset + topBar.x + 230 + 24
-        property real freeRight: root.cutoutSafeInset + topBar.x - 24 +
-                Math.min(voiceFeedbackButton.visible ? voiceFeedbackButton.x : topBar.width,
-                         lucentRescanButton.x, lucentBrowserButton.x,
-                         lucentSettingsButton.x, searchControl.x)
-        x: Math.round(Math.max(freeLeft, Math.min(freeRight - width,
-                                                 (parent.width - width) / 2)))
-        y: 34 + Math.round((58 - height) / 2)
-        width: Math.max(0, Math.min(importStatusLine.implicitWidth, freeRight - freeLeft))
+        // One line of text across the very top edge of the screen, above the
+        // header (owner, 2026-10-11: "just have some text at the very top of
+        // the screen going across that says what's being updated"). It used
+        // to sit between the system mark and the status icons, a span that is
+        // zero on narrow phones -- only the spinner showed.
+        x: root.cutoutSafeInset + 24
+        y: 6
+        width: Math.max(0, parent.width - 2 * (root.cutoutSafeInset + 24))
         height: importStatusLine.implicitHeight
         visible: root.importToastVisible && importStatusLine.text !== ""
 
@@ -8286,8 +8301,12 @@ FocusScope {
                     y: swappedSingleScreen ? 102 - listViewPanel.y :
                        (!root.dualScreenDevice ? -76 : 90)
                     width: swappedSingleScreen ? 624 : 600
+                    // Single-screen: run from just below the sort controls to
+                    // the content floor, so the cover (largest size at its own
+                    // aspect, centred both ways) has no empty band beneath it
+                    // (owner, 2026-10-11: it sat high with a gap below).
                     height: swappedSingleScreen ? Math.round(624 * 9 / 16) :
-                            (!root.dualScreenDevice ? 540 : parent.height - 90)
+                            (!root.dualScreenDevice ? parent.height + 76 : parent.height - 90)
                     // Use equal outer padding on every side and center within
                     // the entire list panel. The former 106 px top inset made
                     // every cover appear visibly low on a single-screen Flip.

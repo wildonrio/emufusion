@@ -119,7 +119,7 @@ public class StartupRace {
         RuntimeException createFailure; boolean failClose;
         ArrayList<FrameGenerationRenderer> made=new ArrayList<>();
         SurfaceHolder getHolder(){return holder;}int getWidth(){return width;}int getHeight(){return height;}
-        float rendererRefreshRate(){return 120;}
+        float refreshRate(){return 120;}
         String activeFrameGenerationBackend(){return activeBackend.name();}
         void propagatePanelRefresh(String s){}void bindRuntimeErrorListener(int g){}
         void requestDirectFrameRate(Surface s){}

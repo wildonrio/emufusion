@@ -811,9 +811,10 @@ public final class PreviewService extends Service {
                             FrameGenerationSettings.Mode.parse(requested);
                     String normalized = requested == null ? "" :
                             requested.trim().toLowerCase(Locale.US);
-                    if (!parsed.storedValue().equals(normalized)) {
+                    // "on" is accepted as AUTO; anything else unknown is refused.
+                    if (!parsed.storedValue().equals(normalized) && !"on".equals(normalized)) {
                         respond(writer, "400 Bad Request",
-                                "{\"error\":\"mode must be off, auto, auto-triple, built-in-alpha, or lsfg\"}");
+                                "{\"error\":\"mode must be off, on (auto), or auto-triple\"}");
                         return;
                     }
                     FrameGenerationSettings.setMode(this, parsed);

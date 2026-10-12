@@ -248,26 +248,6 @@ source closure includes legacy SoftFloat 2b custom terms whose compatibility
 with EmuFusion's combined GPLv3 distribution has not been established, so the
 registry and build remain fail-closed.
 
-## LSFG public-wrapper qualification host
-
-An explicitly requested, debug-signed qualification APK may contain an
-Android ARM64 host linked with the public `FrankBarretta/lsfg-vk-android`
-frame-generation wrapper at exact commit
-`3e89e5439a98f55d5acb003d20039426ab24e69c`. The wrapper and its `framegen`
-library are licensed under the MIT License; their exact license SHA-256 and
-submodule commits are recorded in
-`experiments/lsfg-vulkan-android-inprocess/upstream-lock.json`.
-
-The Android live-path change is the checked-in patch
-`patches/0001-android-nonblocking-sync-fd-midpoint.patch`. It adds an exact
-fixed-midpoint, nonblocking Android sync-FD API. The build verifies that the
-external checkout equals the pinned commit plus exactly that patch.
-
-This notice does not cover Lossless Scaling's proprietary runtime assets.
-`Lossless.dll` and derived shader payloads are not distributed in the APK or
-repository. A local owner-staged qualification payload remains app-private and
-does not imply redistribution permission or product eligibility.
-
 ## Optional Phase 2 multi-core qualification payload
 
 An explicitly requested Phase 2 qualification APK may include the pinned

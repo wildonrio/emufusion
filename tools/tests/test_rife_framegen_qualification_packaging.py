@@ -109,16 +109,6 @@ class RifeQualificationPackagingTest(unittest.TestCase):
         self.assertLess(gate, prepare.index("bridge.pollBoundHardwareBufferRifeOutputs()"))
         self.assertLess(gate, prepare.index("secondaryBridge.pollBoundHardwareBufferRifeOutputs()"))
 
-    def test_rife_route_requires_alpha_and_explicit_flag_after_off_guard(self):
-        source = (ROOT / "unified-android/src/com/thorium/preview/game/FrameGenerationSettings.java").read_text()
-        route = source.split("Context context, int displayId, Mode launchMode) {", 1)[1]
-        self.assertLess(route.index("launchMode == Mode.OFF) return null;"),
-                        route.index("Settings.Global.getInt"))
-        self.assertLess(route.index("launchMode == Mode.BUILT_IN_ALPHA"),
-                        route.index('"emufusion_framegen_rife_qualification", 0) != 1'))
-        self.assertIn("ExternalFrameGenerationTransportLoader.rifeQualification(context)", route)
-        self.assertIn("if (launchMode != Mode.LSFG) return null;", route)
-
     def setUp(self):
         self.lock_path = ROOT / "experiments/rife-ncnn-vulkan-android/upstream-lock.json"
         self.lock = json.loads(self.lock_path.read_text(encoding="utf-8"))
@@ -615,9 +605,6 @@ class RifeQualificationPackagingTest(unittest.TestCase):
         self.assertIn("ensure_hardware_buffer_pack_pipeline(context)", preparation)
         self.assertNotIn("submit", preparation)
         self.assertNotIn("wait", preparation)
-        self.assertIn("selfTestPassed=false", (ROOT /
-            "unified-android/src/com/thorium/preview/game/FrameGenerationSettings.java"
-        ).read_text(encoding="utf-8"))
         cmake = (ROOT / "experiments/rife-ncnn-vulkan-android/android-benchmark/"
                  "app/src/main/cpp/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn('set(NCNN_OPENMP OFF CACHE BOOL "" FORCE)', cmake)
@@ -639,13 +626,10 @@ class RifeQualificationPackagingTest(unittest.TestCase):
                      "ExternalFrameGenerationTransport.java").read_text(
                          encoding="utf-8")
 
-        self.assertIn('"emufusion_framegen_rife_qualification", 0) != 1', settings)
-        self.assertIn('BUILT_IN_ALPHA("built-in-alpha")', settings)
-        self.assertIn("launchMode != Mode.LSFG", settings)
-        self.assertIn("displayId != Display.DEFAULT_DISPLAY", settings)
-        self.assertIn("createExternalQualification", surface)
-        self.assertIn("qualification.label", surface)
-        self.assertIn("product backend assessment remains unqualified", surface)
+        # The app no longer routes any external qualification transport
+        # (owner, 2026-10-11: frame generation is On/Off only).
+        self.assertNotIn("BUILT_IN_ALPHA", settings)
+        self.assertNotIn("createExternalQualification", surface)
         self.assertIn("EGL14.eglCreatePbufferSurface", generator)
         self.assertIn("externalTransport.endpointSurface()", generator)
         self.assertIn("publishExternalEndpoint", generator)

@@ -192,9 +192,8 @@ class RepackedManifestTest(unittest.TestCase):
         build = (ROOT / 'unified-android/build.sh').read_text()
         start = build.index('if [ "${LUCENT_DEBUGGABLE:-0}" = 1 ]')
         block = build[start:build.index('\nfi', start)]
-        self.assertIn('|| [ "$INCLUDE_LSFG_FRAMEGEN" = 1 ]; then', block)
         self.assertEqual(build.count('android:debuggable="true"'), 1,
-                         'diagnostic and LSFG flags must share one attribute writer')
+                         'one debuggable attribute writer')
         expression = re.search(r"perl -0pi -e '([^']+)'", block).group(1)
         for existing in ('', ' android:debuggable="false"', '\n android:debuggable="true"'):
             with self.subTest(existing=existing), tempfile.TemporaryDirectory() as temp:

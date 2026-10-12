@@ -346,6 +346,7 @@ class RuntimeDirectRecoveryTest(unittest.TestCase):
     static class GameSurfaceView {String activeFrameGenerationBackend(){return "Direct";}}
     static class Host {
         boolean presentationRecoveryPending,presentationRecoveryAttempted,ownerRequestedDirect;
+        long verifiedRatesAtMs;
         Queue RETIREMENT_RELEASES=new Queue();TextView frameRateBadge=new TextView();
         Request request=new Request();Object gameSurface=new GameSurfaceView();
 ''' + bodies + r'''

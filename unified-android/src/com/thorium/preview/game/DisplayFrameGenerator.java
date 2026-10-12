@@ -33,6 +33,7 @@ import com.thorium.lucent.video.NativeSourceImageProvider;
 import com.thorium.lucent.video.GpuPairTimingLedger;
 import com.thorium.lucent.video.GpuPhysicalHeadroomLedger;
 import com.thorium.lucent.video.SubmissionTimingHistory;
+import com.thorium.lucent.video.GeneratedFrameVerdict;
 import com.thorium.lucent.video.TimelineFrameScheduler;
 import com.thorium.lucent.video.UniformFrameRatePlan;
 import com.thorium.lucent.video.GpuWorkAdaptationPolicy;
@@ -186,7 +187,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // Use the actual number of panel holds per output: on a 120-Hz panel,
         // 30 -> 60 uses two holds; 20 -> 40 uses three. No x3 generation.
         if (frameRate == null) return DENSE_GPU_BUDGET_US;
-        int scans = frameRate.panelScansPerOutput();
+        int scans = presentationScansPerOutput();
         long panelPeriodUs = frameRate.panelPeriodNs() / 1000L;
         if (scans < 2 || panelPeriodUs <= 0L) return DENSE_GPU_BUDGET_US;
         long periodUs = panelPeriodUs * scans;
@@ -371,6 +372,24 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "attribute vec2 aTexCoord;\n" +
             "varying vec2 vTexCoord;\n" +
             "void main(){ gl_Position=vec4(aPosition,0.0,1.0); vTexCoord=aTexCoord; }\n";
+
+    // Generated-frame verification. Inputs: the generated image re-evaluated
+    // at 128x72 (same shader, same phase) and both real endpoints sampled at
+    // the same points. Output per cell: |G-A|, |G-B|, |G-(A+B)/2|, |A-B| in
+    // luma, scaled x4 into 8 bits.
+    private static final String VERIFY_SHADER =
+            "precision mediump float;\n" +
+            "uniform sampler2D uGenerated;\n" +
+            "uniform sampler2D uPrevious;\n" +
+            "uniform sampler2D uCurrent;\n" +
+            "varying vec2 vTexCoord;\n" +
+            "float luma(vec3 c){return dot(c,vec3(0.299,0.587,0.114));}\n" +
+            "void main(){\n" +
+            " float g=luma(texture2D(uGenerated,vTexCoord).rgb);\n" +
+            " float a=luma(texture2D(uPrevious,vTexCoord).rgb);\n" +
+            " float b=luma(texture2D(uCurrent,vTexCoord).rgb);\n" +
+            " gl_FragColor=clamp(4.0*vec4(abs(g-a),abs(g-b),abs(g-0.5*(a+b)),abs(a-b)),0.0,1.0);\n" +
+            "}\n";
 
     private static final String COPY_SHADER =
             "#extension GL_OES_EGL_image_external : require\n" +
@@ -1269,9 +1288,28 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             " previousReliability=max(previousReliability,0.03*forwardFallback);\n" +
             " float previousGate=step(0.02,previousReliability);\n" +
             " float currentGate=step(0.02,currentReliability);\n" +
-            " vec2 previousUv=clamp(vTexCoord-forward*uPhase*previousGate," +
+            // Warp with the motion of the content that lands here at this
+            // phase, not the motion measured at the output pixel: near a
+            // moving edge the (coarse) field at x belongs to the foreground
+            // while the pixel shows background, which dragged background
+            // along the edge (halos, double edges). Two fixed-point steps of
+            // p = x - t*F(p) per direction, accepting only validated vectors
+            // at the source position; mirrored/seed vectors keep the old path.
+            // The HUD and pop-in checks below keep the vectors at x.
+            " vec2 warpForward=forward;vec2 warpBackward=backward;\n" +
+            " if(uDenseEncoding>0.5){\n" +
+            "  float refineForward=previousStrong*(1.0-mirrorForward)*(1.0-forwardFallback);\n" +
+            "  float refineBackward=currentStrong*(1.0-mirrorBackward)*(1.0-backwardFallback);\n" +
+            "  for(int i=0;i<2;i++){\n" +
+            "   vec4 fs=texture2D(uForwardMotion,clamp(vTexCoord-warpForward*uPhase,vec2(0.0),vec2(1.0)));\n" +
+            "   vec4 bs=texture2D(uBackwardMotion,clamp(vTexCoord-warpBackward*(1.0-uPhase),vec2(0.0),vec2(1.0)));\n" +
+            "   warpForward=mix(warpForward,decodeFlow(fs),refineForward*step(39.5/255.0,fs.b));\n" +
+            "   warpBackward=mix(warpBackward,decodeFlow(bs),refineBackward*step(39.5/255.0,bs.b));\n" +
+            "  }\n" +
+            " }\n" +
+            " vec2 previousUv=clamp(vTexCoord-warpForward*uPhase*previousGate," +
                     "vec2(0.0),vec2(1.0));\n" +
-            " vec2 currentUv=clamp(vTexCoord-backward*(1.0-uPhase)*currentGate," +
+            " vec2 currentUv=clamp(vTexCoord-warpBackward*(1.0-uPhase)*currentGate," +
                     "vec2(0.0),vec2(1.0));\n" +
             " vec4 a=texture2D(uPrevious,previousUv);\n" +
             " vec4 b=texture2D(uCurrent,currentUv);\n" +
@@ -1742,6 +1780,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // Output lattice of the last generated plan, kept through a dropout so
     // the timeline does not restart when the plan briefly has no divisor.
     private int timelineScansPerOutput;
+    private long timelineLastPlannedGenerationNs;
     private long lastPromotedEndpointSequence;
     private long bufferedPairCreatedCount;
     private long bufferedSyntheticSelectedCount;
@@ -1842,6 +1881,32 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // timed and bound as the pair's warp, the rest are drawn untimed and
     // reported as cadence-only rows, keeping both ledgers one warp per pair.
     private long denseTimedWarpPromotion;
+
+    // Honest frame accounting for the corner readout (owner, 2026-10-11: no
+    // duplicated or cross-faded frame may ever be counted as generated). Every
+    // generated image is re-evaluated at 128x72 and compared with both real
+    // images and their 50/50 blend where the scene moved. Counted only when
+    // it is neither (almost everywhere) a copy of one real image nor a blend.
+    private static final int VERIFY_WIDTH = 128;
+    private static final int VERIFY_HEIGHT = 72;
+    private static final int VERIFY_RING = 4;
+    // Bytes hold 4 x luma difference x 255. Held pixels re-render exactly
+    // (same shader, same sample points), so "equal" can be tight.
+    private static final int VERIFY_MOVING_MIN = 16;    // |A-B| > 4/255 luma
+    private static final int VERIFY_EQUAL_MAX = 5;      // |G-X| < 1.25/255 luma
+    private static final int VERIFY_MIN_MOVING_CELLS = 48;
+    private int verifyProgram;
+    private int verifyGeneratedTexture, verifyGeneratedFramebuffer;
+    private int verifyResultTexture, verifyResultFramebuffer;
+    private final int[] verifyPbos = new int[VERIFY_RING];
+    private final long[] verifyFences = new long[VERIFY_RING];
+    private int verifyHead, verifyPending;
+    private boolean verifyResourcesReady, verifyUnavailable;
+    private long verifyWindowStartNs;
+    private long verifyWindowReal, verifyWindowVerified;
+    private long verifyLastRealSequence;
+    private long verifyPresented, verifyVerified, verifyDuplicate, verifyBlendLike,
+            verifyStatic, verifySkipped;
     private long denseWarpMaxCompletedSequence;
     private final long[] denseWarpCompletedSequence = new long[128];
     private long denseTimedPairs;
@@ -3463,7 +3528,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         Math.abs(compositorTimeline.signedTargetErrorNs()));
             }
             if (timelineMode) {
-                boolean generating = frameRate.generatesIntermediateFrames();
+                boolean generating = builtinGenerationPlanned();
                 if (generating || !timelineActive) timelineGenerationLostNs = 0L;
                 if (generating && !timelineActive) {
                     switchTimelineOwnership(true);
@@ -3477,7 +3542,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (timelineActive) {
                 int timelinePresentation = selectTimelinePresentation(frameTimeNanos);
                 if (timelinePresentation != AdaptiveFrameRateController.PRESENT_NONE)
-                    presentTimelineSelection(deadline, compositorTimeline, timelinePresentation);
+                    presentTimelineSelection(phaseLockedTimelineDeadline(deadline),
+                            compositorTimeline, timelinePresentation);
                 return;
             }
             int presentation = frameRate.selectBufferedPresentation(
@@ -5058,7 +5124,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 consumeEndpointIntoHistory(previousIndex, true);
                 return;
             }
-            boolean generatedTimeline = frameRate.generatesIntermediateFrames();
+            boolean generatedTimeline = builtinGenerationPlanned();
             if (!generatedTimeline && endpointFifoCount == 1) {
                 // Direct presentation does not need a future interpolation
                 // interval. Show this exact REAL promptly while its successor
@@ -5191,7 +5257,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         activePairReady = false;
         // Endpoint continuity is needed even when no exact doubled cadence
         // exists. Do not time/solve a pair that cannot fund a midpoint.
-        boolean builtinCadenceReady = frameRate.generatesIntermediateFrames();
+        boolean builtinCadenceReady = builtinGenerationPlanned();
         boolean dense = densePyramidEnabled && builtinCadenceReady;
         boolean denseCopyStageOpen = false;
         try {
@@ -7505,6 +7571,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long previousEpoch = schedulerPresentationEpoch();
         timelineActive = active;
         timelineScansPerOutput = 0;
+        if (!active) timelineLastPlannedGenerationNs = 0L;
         timeline.reset();
         frameRate.setExactDoubleEndpointLatticeRequired(!active);
         frameRate.resetPresentation();
@@ -7519,6 +7586,85 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " panelHz=" + String.format(java.util.Locale.ROOT, "%.3f", frameRate.panelHz()) +
                 " physicalHz=" + String.format(java.util.Locale.ROOT, "%.3f", physicalPanelHz()) +
                 " dense=" + densePyramidEnabled + " denseUnavailable=" + densePyramidUnavailable);
+    }
+
+    /**
+     * Whether the built-in path generates this callback. The controller's plan
+     * decides; while the timeline presents, a short gap in that plan (the
+     * controller revoking its measured clock -- N64's 30 Hz clock reading
+     * 30.04 for a moment, 2026-10-11) keeps generating on the last output
+     * lattice, because the timeline places frames from real timestamps and
+     * does not need the exact clock. Generation availability itself (GPU
+     * budget, dense rejection, panel not measured) still stops it at once.
+     */
+    private boolean builtinGenerationPlanned() {
+        long nowNs = System.nanoTime();
+        if (frameRate.generatesIntermediateFrames()) {
+            timelineLastPlannedGenerationNs = nowNs;
+            return true;
+        }
+        if (!timelineActive || !frameRate.generationAvailable() ||
+                timelineScansPerOutput <= 0 || timelineLastPlannedGenerationNs <= 0L)
+            return false;
+        // While the measured source still fits the last output lattice the
+        // gap is the controller re-proving its clock (N64: ~11 s at 30.04 Hz
+        // after a revocation), not a new rate: keep generating. Otherwise
+        // allow a short grace before Direct takes over.
+        if (sourceFitsTimelineLattice()) {
+            timelineLastPlannedGenerationNs = nowNs;
+            return true;
+        }
+        return nowNs - timelineLastPlannedGenerationNs < TIMELINE_RELEASE_AFTER_NS;
+    }
+
+    /** Measured unique source x whole multiplier lands on the timeline's output rate (1%). */
+    private boolean sourceFitsTimelineLattice() {
+        double panelHz = frameRate.panelHz();
+        double sourceHz = frameRate.sustainedMeasuredSourceHz();
+        if (!(panelHz > 0.0) || !(sourceHz >= 10.0) || timelineScansPerOutput <= 0) return false;
+        double outputHz = panelHz / timelineScansPerOutput;
+        long multiplier = Math.round(outputHz / sourceHz);
+        if (multiplier < 2L || multiplier > TimelineSchedulerSwitch.maxMultiplier()) return false;
+        return Math.abs(sourceHz * multiplier - outputHz) <= outputHz * 0.01;
+    }
+
+    /**
+     * Scans each presented output occupies, for physical-evidence binding:
+     * the controller's plan, or the timeline's last lattice while it keeps
+     * generating through a gap in that plan (a zero there made the GPU ledger
+     * refuse the generated swap and end generation for the session).
+     */
+    private int presentationScansPerOutput() {
+        int planned = frameRate.panelScansPerOutput();
+        return planned > 0 || !timelineActive ? planned : timelineScansPerOutput;
+    }
+
+    /**
+     * An output held for several scans must start exactly a whole number of
+     * output periods after the previous one. The planner picks the earliest
+     * reachable scan for each callback, and its choice moves by a scan with
+     * the remaining time, so 30->60 outputs landed 1 or 3 scans apart (N64:
+     * 27% of frames, 2026-10-11). Take the earliest output-lattice scan that
+     * is still reachable, after the previous output; a later scan only adds
+     * completion time, and latency falls back when time allows.
+     */
+    private PhysicalPresentationDeadline phaseLockedTimelineDeadline(
+            PhysicalPresentationDeadline deadline) {
+        int scans = presentationScansPerOutput();
+        long panelPeriodNs = frameRate.panelPeriodNs();
+        long previousNs = builtInLastCommittedTargetNs;
+        if (scans <= 1 || panelPeriodNs <= 0L || previousNs <= 0L ||
+                externalTransport != null || !deadline.valid())
+            return deadline;
+        long outputPeriodNs = panelPeriodNs * scans;
+        long earliestNs = deadline.contentPresentationTimeNs();
+        long outputs = Math.max(1L, Math.floorDiv(
+                earliestNs - panelPeriodNs / 2L - previousNs + outputPeriodNs - 1L,
+                outputPeriodNs));
+        if (outputs > 64L) return deadline;  // a long pause: restart the lattice here
+        long alignedNs = previousNs + outputs * outputPeriodNs;
+        return alignedNs > earliestNs + panelPeriodNs / 2L ?
+                deadline.delayedBy(alignedNs - earliestNs) : deadline;
     }
 
     /** Configures the timeline from the controller's plan and asks it for this callback. */
@@ -7539,7 +7685,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 activeLeftSequence, activeLeftTimestampNs,
                 activeRightSequence, activeRightTimestampNs,
                 activePairReady && motionEstimateReady &&
-                        frameRate.generatesIntermediateFrames(),
+                        builtinGenerationPlanned(),
                 activeRightSequence > 0L ?
                         endpointFifoCount - (requiredEndpointPrimeDepth(true) - 2) : 0);
         if (kind == TimelineFrameScheduler.GENERATED)
@@ -7766,7 +7912,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             ++phaseDiagCount;
             phaseDiagSpanSumNs +=
                     activeRightTimestampNs - activeLeftTimestampNs;
-            boolean sustainable = frameRate.hasSustainableGenerationRate();
+            boolean sustainable = timelineActive ? builtinGenerationPlanned() :
+                    frameRate.hasSustainableGenerationRate();
             if (sustainable) {
                 if (densePyramidEnabled) {
                     try {
@@ -7884,12 +8031,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         long denseSwapReturnedNs = densePyramidEnabled ? System.nanoTime() : 0L;
         boolean densePhysicalFrameCommitted = physicalFramePrepared && physicalTracker.commitPrepared(
-                frameRate.panelScansPerOutput(), frameRate.panelPeriodNs());
+                presentationScansPerOutput(), frameRate.panelPeriodNs());
         if (densePyramidEnabled && densePhysicalFrameCommitted && externalTransport == null)
             denseSubmissionHistory.record(schedulerPresentationEpoch(), densePhysicalFrameId,
                     deadline.contentPresentationTimeNs(), deadline.hardCompletionDeadlineNs(),
                     denseSwapEnteredNs, denseSwapReturnedNs, renderedSynthetic);
         finishFullImageCapture(densePhysicalFrameCommitted);
+        // After the visible swap, so verification never delays the frame.
+        if (externalTransport == null) {
+            if (renderedSynthetic) enqueueGeneratedVerification(proofPhase);
+            else if (realThisTick) countRealFrameShown(selectedPhase);
+        }
         if (sampleCompositorTiming) {
             ++builtinCompositorTimingSamples;
             Log.i(TAG, "Built-in compositor submission generator=" + generatorId +
@@ -7929,7 +8081,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             }
             if (!densePhysicalFrameCommitted ||
                     !requiresDenseGpuHeadroomBinding(renderedTimedWarp,
-                            frameRate.panelScansPerOutput())) {
+                            presentationScansPerOutput())) {
                 ++denseGpuPhysicalUnboundEvents;
                 denseGpuAdaptation.invalidateRecoveryEvidence();
             } else if (!denseGpuHeadroom.bindSwap(denseGpuHeadroom.evidenceEpoch(),
@@ -7937,7 +8089,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     renderedTimedWarp ? densePromotions : 0L,
                     renderedTimedWarp ? denseWarpSequence : 0L,
                     deadline.contentPresentationTimeNs(), deadline.hardCompletionDeadlineNs(),
-                    frameRate.panelScansPerOutput(), frameRate.panelPeriodNs())) {
+                    presentationScansPerOutput(), frameRate.panelPeriodNs())) {
                 // The visible swap already succeeded. Preserve its controller
                 // commit below; reject at the next timer poll before more
                 // synthesis, not halfway through this presentation transaction.
@@ -7950,7 +8102,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         " warp=" + (renderedTimedWarp ? denseWarpSequence : 0L) +
                         " desiredNs=" + deadline.contentPresentationTimeNs() +
                         " deadlineNs=" + deadline.hardCompletionDeadlineNs() +
-                        " scans=" + frameRate.panelScansPerOutput() +
+                        " scans=" + presentationScansPerOutput() +
                         " periodNs=" + frameRate.panelPeriodNs() +
                         " ledger={" + denseGpuHeadroom.bindingState() + "}");
             }
@@ -10086,6 +10238,149 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glClearColor(0f, 0f, 0f, 1f);
     }
 
+    private void countRealFrameShown(float selectedPhase) {
+        long sequence = activeRightSequence > 0L && selectedPhase >= 1f ?
+                activeRightSequence : activeLeftSequence;
+        if (sequence <= 0L || sequence == verifyLastRealSequence) return;
+        verifyLastRealSequence = sequence;
+        ++verifyWindowReal;
+    }
+
+    private boolean ensureVerifyResources() {
+        if (verifyResourcesReady) return true;
+        if (verifyUnavailable) return false;
+        try {
+            int[] textures = new int[2];
+            GLES20.glGenTextures(2, textures, 0);
+            verifyGeneratedTexture = textures[0];
+            verifyResultTexture = textures[1];
+            allocateTexture(verifyGeneratedTexture, VERIFY_WIDTH, VERIFY_HEIGHT);
+            allocateTexture(verifyResultTexture, VERIFY_WIDTH, VERIFY_HEIGHT);
+            int[] framebuffers = new int[2];
+            GLES20.glGenFramebuffers(2, framebuffers, 0);
+            verifyGeneratedFramebuffer = framebuffers[0];
+            verifyResultFramebuffer = framebuffers[1];
+            int[] pairs = {verifyGeneratedFramebuffer, verifyGeneratedTexture,
+                    verifyResultFramebuffer, verifyResultTexture};
+            for (int i = 0; i < pairs.length; i += 2) {
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, pairs[i]);
+                GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER,
+                        GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_TEXTURE_2D, pairs[i + 1], 0);
+                if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                        GLES20.GL_FRAMEBUFFER_COMPLETE)
+                    throw new IllegalStateException("verification framebuffer incomplete");
+            }
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES30.glGenBuffers(VERIFY_RING, verifyPbos, 0);
+            for (int pbo : verifyPbos) {
+                GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, pbo);
+                GLES30.glBufferData(GLES30.GL_PIXEL_PACK_BUFFER,
+                        VERIFY_WIDTH * VERIFY_HEIGHT * 4, null, GLES30.GL_STREAM_READ);
+            }
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+            verifyProgram = createProgram(VERTEX_SHADER, VERIFY_SHADER);
+            checkGl("generated-frame verification resources");
+            verifyResourcesReady = true;
+            return true;
+        } catch (RuntimeException failure) {
+            // Without verification the corner never claims a generated rate.
+            verifyUnavailable = true;
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            Log.w(TAG, "Generated-frame verification unavailable generator=" + generatorId,
+                    failure);
+            return false;
+        }
+    }
+
+    /** Re-evaluates the presented generated image at 128x72 and queues its comparison. */
+    private void enqueueGeneratedVerification(float phase) {
+        ++verifyPresented;
+        if (!ensureVerifyResources()) return;
+        pollGeneratedVerification();
+        if (verifyPending == VERIFY_RING) {
+            ++verifySkipped;  // never counted without its evidence
+            return;
+        }
+        try {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, verifyGeneratedFramebuffer);
+            GLES20.glViewport(0, 0, VERIFY_WIDTH, VERIFY_HEIGHT);
+            drawMotionFrame(phase);
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, verifyResultFramebuffer);
+            GLES20.glViewport(0, 0, VERIFY_WIDTH, VERIFY_HEIGHT);
+            GLES20.glUseProgram(verifyProgram);
+            bindQuad(verifyProgram);
+            bindTexture(verifyProgram, "uGenerated", verifyGeneratedTexture, 0);
+            bindTexture(verifyProgram, "uPrevious", historyTextures[previousIndex], 1);
+            bindTexture(verifyProgram, "uCurrent", historyTextures[currentIndex], 2);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+            int slot = verifyHead;
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, verifyPbos[slot]);
+            GLES30.glReadPixels(0, 0, VERIFY_WIDTH, VERIFY_HEIGHT,
+                    GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, 0);
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+            verifyFences[slot] = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            verifyHead = (verifyHead + 1) % VERIFY_RING;
+            ++verifyPending;
+        } finally {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        }
+    }
+
+    /** Consumes completed comparisons without waiting on the GPU. */
+    private void pollGeneratedVerification() {
+        while (verifyPending > 0) {
+            int slot = (verifyHead - verifyPending + VERIFY_RING) % VERIFY_RING;
+            long fence = verifyFences[slot];
+            int status = fence == 0L ? GLES30.GL_WAIT_FAILED :
+                    GLES30.glClientWaitSync(fence, 0, 0L);
+            if (status == GLES30.GL_TIMEOUT_EXPIRED) return;
+            if (fence != 0L) GLES30.glDeleteSync(fence);
+            verifyFences[slot] = 0L;
+            --verifyPending;
+            if (status == GLES30.GL_WAIT_FAILED) { ++verifySkipped; continue; }
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, verifyPbos[slot]);
+            java.nio.Buffer mapped = GLES30.glMapBufferRange(GLES30.GL_PIXEL_PACK_BUFFER, 0,
+                    VERIFY_WIDTH * VERIFY_HEIGHT * 4, GLES30.GL_MAP_READ_BIT);
+            if (mapped instanceof java.nio.ByteBuffer)
+                classifyGeneratedFrame((java.nio.ByteBuffer) mapped);
+            else ++verifySkipped;
+            if (mapped != null) GLES30.glUnmapBuffer(GLES30.GL_PIXEL_PACK_BUFFER);
+            GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
+        }
+    }
+
+    private void classifyGeneratedFrame(java.nio.ByteBuffer cells) {
+        int verdict = GeneratedFrameVerdict.classify(cells, VERIFY_WIDTH * VERIFY_HEIGHT,
+                VERIFY_MOVING_MIN, VERIFY_EQUAL_MAX, VERIFY_MIN_MOVING_CELLS);
+        if (verdict == GeneratedFrameVerdict.GENERATED) { ++verifyVerified; ++verifyWindowVerified; }
+        else if (verdict == GeneratedFrameVerdict.DUPLICATE) ++verifyDuplicate;
+        else if (verdict == GeneratedFrameVerdict.BLEND) ++verifyBlendLike;
+        else ++verifyStatic;
+    }
+
+    /** Once a second: real images shown and verified generated images, per second. */
+    private void publishVerifiedFrameRates(long now) {
+        pollGeneratedVerification();
+        if (verifyWindowStartNs == 0L) { verifyWindowStartNs = now; return; }
+        long elapsedNs = now - verifyWindowStartNs;
+        if (elapsedNs < 1_000_000_000L) return;
+        double real = verifyWindowReal * 1e9 / elapsedNs;
+        double generated = verifyWindowVerified * 1e9 / elapsedNs;
+        verifyWindowStartNs = now;
+        verifyWindowReal = 0L;
+        verifyWindowVerified = 0L;
+        FrameGenerationRenderer.StatsListener callback = statsListener;
+        if (callback != null) callback.onDisplayedFrameRate(real, real + generated);
+        Log.i(TAG, "Generated frame verification generator=" + generatorId +
+                String.format(java.util.Locale.US, " realFps=%.1f displayedFps=%.1f", real,
+                        real + generated) +
+                " presented=" + verifyPresented + " verified=" + verifyVerified +
+                " duplicate=" + verifyDuplicate + " blendLike=" + verifyBlendLike +
+                " static=" + verifyStatic + " skipped=" + verifySkipped +
+                " available=" + (verifyUnavailable ? 0 : 1));
+    }
+
     private void drawMotionFrame(float phase) {
         GLES20.glUseProgram(interpolateProgram);
         bindQuad(interpolateProgram);
@@ -11297,6 +11592,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         double targetOutput = frameRate.targetOutputHz();
         long now = System.nanoTime();
         reportSourceAdmissionDiagnostic(now);
+        if (externalTransport == null) publishVerifiedFrameRates(now);
         // Diagnostic windows follow elapsed time, not a fluctuating target.
         // Resetting this clock on every millihertz change hid 44 seconds of
         // live health rows in the Switch 7c739 test. Physical qualification
@@ -12825,6 +13121,22 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         Log.i(TAG, "External native software geometry width=" + width + " height=" + height);
     }
 
+    private void releaseVerifyResources() {
+        if (!verifyResourcesReady) return;
+        verifyResourcesReady = false;
+        for (int i = 0; i < VERIFY_RING; ++i) {
+            if (verifyFences[i] != 0L) GLES30.glDeleteSync(verifyFences[i]);
+            verifyFences[i] = 0L;
+        }
+        verifyPending = 0;
+        GLES30.glDeleteBuffers(VERIFY_RING, verifyPbos, 0);
+        GLES20.glDeleteFramebuffers(2,
+                new int[] {verifyGeneratedFramebuffer, verifyResultFramebuffer}, 0);
+        GLES20.glDeleteTextures(2, new int[] {verifyGeneratedTexture, verifyResultTexture}, 0);
+        if (verifyProgram != 0) GLES20.glDeleteProgram(verifyProgram);
+        verifyProgram = 0;
+    }
+
     private void releaseGl() {
         discardFullImageCapture();
         closeNativeSourceImageObserver();
@@ -12880,6 +13192,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             softwareUploadBitmap.recycle();
             softwareUploadBitmap = null;
         }
+        releaseVerifyResources();
         if (frameBuffer != 0) GLES20.glDeleteFramebuffers(1, new int[]{frameBuffer}, 0);
         if (historyTextures[0] != 0 || historyTextures[1] != 0)
             GLES20.glDeleteTextures(2, historyTextures, 0);

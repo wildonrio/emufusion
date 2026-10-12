@@ -3,6 +3,7 @@ package com.thorium.lucent.video;
 public final class PhysicalPresentationDeadlineTest {
     public static void main(String[] ignored) {
         appOwnedGeneratedRetainsPredecessorLead();
+        delayedPlanMovesAllInstantsTogether();
         eglProspectiveQueueDeadlineOwnsAdmission();
         eglPhaseSweepSelectsFirstAdmissibleScan();
         contentAndDriverTimesRemainDistinct();
@@ -634,4 +635,20 @@ public final class PhysicalPresentationDeadlineTest {
     private static void check(boolean value, String message) {
         if (!value) throw new AssertionError(message);
     }
+
+    private static void delayedPlanMovesAllInstantsTogether() {
+        long period = 8_333_333L;
+        PhysicalPresentationDeadline plan = PhysicalPresentationDeadline.nextEgl(
+                1_000_000_000L, period, 2_000_000L, 990_000_000L, 0L, 1_000_000L);
+        if (!plan.valid()) throw new AssertionError("base plan");
+        PhysicalPresentationDeadline later = plan.delayedBy(period);
+        if (later.contentPresentationTimeNs() != plan.contentPresentationTimeNs() + period ||
+                later.driverDesiredPresentTimeNs() != plan.driverDesiredPresentTimeNs() + period ||
+                later.hardCompletionDeadlineNs() != plan.hardCompletionDeadlineNs() + period ||
+                !later.valid())
+            throw new AssertionError("a delayed plan keeps its lead and cutoff spacing");
+        if (plan.delayedBy(0L) != plan || plan.delayedBy(-period) != plan)
+            throw new AssertionError("a plan is never moved earlier");
+    }
+
 }

@@ -209,7 +209,7 @@ public class RuntimeFailureTest {
     static class Surface { boolean isValid(){return true;} }
     static class SurfaceTexture {}
     static class SurfaceHolder { Surface getSurface(){return new Surface();} }
-    static class FrameGenerationSettings { enum Mode {OFF, LSFG} }
+    static class FrameGenerationSettings { enum Mode {OFF, AUTO} }
     static class FrameGenerationRenderer {int resizes; void resize(int a,int b,int c,int d,float e){resizes++;}}
     static class GameSurface {
         interface Listener {
@@ -230,9 +230,9 @@ public class RuntimeFailureTest {
         int starts,creates,binds; float lastReportedPanelHz;
         Surface engineSurface; FrameGenerationRenderer frameGenerator;
         GameSurface.Listener listener;
-        FrameGenerationSettings.Mode launchMode=FrameGenerationSettings.Mode.LSFG;
+        FrameGenerationSettings.Mode launchMode=FrameGenerationSettings.Mode.AUTO;
+        float refreshRate(){return 120f;}
         int getWidth(){return 1920;} int getHeight(){return 1080;}
-        float rendererRefreshRate(){return 120f;}
         void bindRuntimeErrorListener(int generation){binds++;}
         void startGeneratorAsync(Surface s,int w,int h){starts++;}
         void createGenerator(Surface s,int w,int h){creates++;engineSurface=s;}

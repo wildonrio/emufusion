@@ -95,7 +95,6 @@ public final class GameSurfaceView extends SurfaceView
     // A new game view may retry the saved owner choice; preferences are untouched.
     private volatile boolean startupFellBackToDirect;
     private volatile boolean generatorStartupPending;
-    private boolean lsfgUnavailableNotified;
     private int pendingWidth, pendingHeight;
     private FrameGenerationRenderer.StatsListener frameRateListener;
     private float lastReportedPanelHz;
@@ -329,7 +328,7 @@ public final class GameSurfaceView extends SurfaceView
     private void propagatePanelRefresh(String reason) {
         FrameGenerationRenderer generator = frameGenerator;
         if (generator == null) return;
-        float hz = rendererRefreshRate();
+        float hz = refreshRate();
         if (!(hz > 0f) || Math.abs(hz - lastReportedPanelHz) < 0.5f) return;
         Log.i(TAG, "Panel refresh changed reason=" + reason +
                 " previousHz=" + lastReportedPanelHz + " hz=" + hz);
@@ -357,13 +356,13 @@ public final class GameSurfaceView extends SurfaceView
             return;
         }
         if (first) {
-            lastReportedPanelHz = rendererRefreshRate();
+            lastReportedPanelHz = refreshRate();
             createGenerator(holder.getSurface(), width, height);
             // The mode switch may already have completed between the
             // creation read and now; reconcile once immediately.
             propagatePanelRefresh("surface-changed");
         } else if (frameGenerator != null) {
-            float hz = rendererRefreshRate();
+            float hz = refreshRate();
             lastReportedPanelHz = hz;
             frameGenerator.resize(width, height, width, height, hz);
         }
@@ -385,7 +384,7 @@ public final class GameSurfaceView extends SurfaceView
         generatorStartupPending = true;
         pendingWidth = width;
         pendingHeight = height;
-        lastReportedPanelHz = rendererRefreshRate();
+        lastReportedPanelHz = refreshRate();
         final long startedMs = android.os.SystemClock.elapsedRealtime();
         GENERATOR_STARTUP.execute(() -> {
             RuntimeException problem = null;
@@ -563,74 +562,6 @@ public final class GameSurfaceView extends SurfaceView
                     FrameGenerationRendererRegistry.liveCount());
             return;
         }
-        FrameGenerationSettings.QualificationTransport qualification =
-                FrameGenerationSettings.qualificationTransport(
-                        getContext(), displayId(), launchMode);
-        // Explicit LSFG selection authorizes that transport, not a different
-        // experimental generator. Its capability/deadline checks remain
-        // mandatory; failure must hand back the exact engine-owned Surface.
-        if (qualification != null && !qualificationProofEnabled())
-            Log.i(TAG, qualification.label +
-                    " requested without shell proof mode; attaching on the" +
-                    " owner's explicit selection");
-        if (qualification != null) {
-            activeBackend = qualification.backend;
-            RuntimeException lastFailure = null;
-            // SurfaceControl occasionally reports the just-replaced endpoint
-            // during LSFG's startup proof even though the next clean instance
-            // passes immediately. Recreate the whole transport once so no
-            // rejected Vulkan/SurfaceControl state is reused. This remains
-            // strictly bounded: two failures fall open to the direct Surface.
-            for (int attempt = 1; attempt <= 2; ++attempt) {
-                try {
-                    frameGenerator =
-                            FrameGenerationRendererFactory.createExternalQualification(
-                                    qualification.factory, output,
-                                    width, height, width, height,
-                                    rendererRefreshRate(),
-                                    "primary", displayId(),
-                                    // The user has explicitly selected LSFG in the
-                                    // three-way setting. Do not require a hidden
-                                    // shell qualification switch on top of that
-                                    // visible consent; transport capability and
-                                    // deadline failures still fall closed.
-                                    () -> true);
-                    frameGenerator.setAuthoritativeSourceHz(authoritativeSourceHz);
-                    frameGenerator.setProducerTimelineHz(producerTimelineHz);
-                    frameGenerator.setStatsListener(frameRateListener);
-                    if (slotLatticeProducer) frameGenerator.setSlotLatticeProducer(true);
-                    frameGenerator.setFirstSubmittedFrameListener(
-                            firstSubmittedFrameListener);
-                    Surface input = frameGenerator.inputSurface();
-                    if (input == null || !input.isValid())
-                        throw new IllegalStateException("Frame generator input Surface is unavailable");
-                    engineSurface = input;
-                    Log.w(TAG, qualification.label +
-                            " qualification transport active attempt=" + attempt + "; " +
-                            "product backend assessment remains unqualified");
-                    return;
-                } catch (RuntimeException failure) {
-                    retireFailedGenerator(failure);
-                    if (SurfaceOwnershipException.isUnsafe(failure)) throw failure;
-                    lastFailure = failure;
-                    if (attempt == 1) {
-                        Log.w(TAG, qualification.label +
-                                " startup proof failed; retrying with a clean transport",
-                                failure);
-                    }
-                }
-            }
-            Log.e(TAG, qualification.label +
-                    " qualification unavailable after bounded retry; using exact direct Surface",
-                    lastFailure);
-            useDirectAfterUnavailableLsfg(output);
-            return;
-        }
-        if (launchMode == FrameGenerationSettings.Mode.LSFG) {
-            Log.e(TAG, "Selected LSFG transport is unavailable; using exact direct Surface");
-            useDirectAfterUnavailableLsfg(output);
-            return;
-        }
         FrameGenerationBackendPolicy.Selection selection =
                 FrameGenerationSettings.selectBackendForSession(
                         getContext(), launchMode);
@@ -682,22 +613,6 @@ public final class GameSurfaceView extends SurfaceView
         }
     }
 
-    private void useDirectAfterUnavailableLsfg(Surface output) {
-        startupFellBackToDirect = true;
-        frameGenerator = null;
-        activeBackend = FrameGenerationBackendPolicy.Backend.DIRECT;
-        requestDirectFrameRate(output);
-        engineSurface = output;
-        Log.i(TAG, "LSFG fallback surfaceIdentity=true liveRenderers=" +
-                FrameGenerationRendererRegistry.liveCount());
-        if (!lsfgUnavailableNotified) {
-            lsfgUnavailableNotified = true;
-            mainHandler.post(() -> android.widget.Toast.makeText(getContext(),
-                    "LSFG could not start. Using direct playback with frame generation off.",
-                    android.widget.Toast.LENGTH_LONG).show());
-        }
-    }
-
     private void requestDirectFrameRate(Surface surface) {
         if (surface == null || Build.VERSION.SDK_INT < 30) return;
         try {
@@ -724,19 +639,6 @@ public final class GameSurfaceView extends SurfaceView
         return display == null ? 60f : display.getRefreshRate();
     }
 
-    /** LSFG's qualified 20->40 path needs a 120-Hz three-scan lattice. */
-    private float rendererRefreshRate() {
-        Display display = getDisplay();
-        if (launchMode != FrameGenerationSettings.Mode.LSFG || display == null)
-            return refreshRate();
-        float maximum = display.getRefreshRate();
-        for (Display.Mode mode : display.getSupportedModes()) {
-            float candidate = mode.getRefreshRate();
-            if (Float.isFinite(candidate) && candidate <= 120.5f)
-                maximum = Math.max(maximum, candidate);
-        }
-        return maximum;
-    }
 
     private int displayId() {
         Display display = getDisplay();

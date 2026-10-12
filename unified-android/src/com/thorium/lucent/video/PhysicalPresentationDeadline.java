@@ -530,6 +530,21 @@ public final class PhysicalPresentationDeadline {
                 targetNs, cutoffNs, cutoffNs, skipped, 0);
     }
 
+    /**
+     * The same plan moved later by whole scans (all three instants together),
+     * keeping its driver lead; a later target only adds completion time.
+     */
+    public PhysicalPresentationDeadline delayedBy(long delayNs) {
+        if (delayNs <= 0L || !valid()) return this;
+        long content = saturatingAdd(contentPresentationTimeNs, delayNs);
+        long desired = saturatingAdd(driverDesiredPresentTimeNs, delayNs);
+        long hard = saturatingAdd(hardCompletionDeadlineNs, delayNs);
+        if (content == Long.MAX_VALUE || desired == Long.MAX_VALUE || hard == Long.MAX_VALUE)
+            return invalid();
+        return new PhysicalPresentationDeadline(content, desired, hard,
+                skippedPanelScans, presentationPipelineScans);
+    }
+
     public boolean valid() {
         return contentPresentationTimeNs > 0L &&
                 driverDesiredPresentTimeNs > 0L &&

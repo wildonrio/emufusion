@@ -13,11 +13,12 @@ THEME = (ROOT / 'theme/theme.qml').read_text(encoding='utf-8')
 class ImportStatusLineTest(unittest.TestCase):
     def test_single_centred_line(self):
         block = THEME[THEME.index('        id: importToast\n'):][:2200]
-        # Screen-centred when it fits, else kept between the mark and the icons.
-        self.assertIn('(parent.width - width) / 2', block)
-        self.assertIn('property real freeLeft: root.cutoutSafeInset + topBar.x + 230 + 24', block)
-        self.assertIn('voiceFeedbackButton.x', block)
-        self.assertIn('y: 34 + Math.round((58 - height) / 2)', block)
+        # Across the very top edge, full width inside the cutout insets
+        # (owner, 2026-10-11): the old span between the mark and the icons
+        # was zero on narrow phones, so only the spinner showed.
+        self.assertIn('y: 6', block)
+        self.assertIn('width: Math.max(0, parent.width - 2 * (root.cutoutSafeInset + 24))', block)
+        self.assertIn('horizontalAlignment: Text.AlignHCenter', block)
         self.assertIn('text: root.importStatusLineText()', block)
         self.assertIn('maximumLineCount: 1', block)
         self.assertIn('elide: Text.ElideRight', block)

@@ -14,6 +14,7 @@ public final class GpuPhysicalHeadroomLedgerTest {
         qualifiedRecoveryUsesFreshPairedEvidence();
         rejectedBindingPreservesDiagnosticOwner();
         wholeScanOffsetInSequenceIsNotAMiss();
+        pairWithoutGeneratedImageDoesNotBlockItsSlot();
         System.out.println("GpuPhysicalHeadroomLedgerTest passed");
     }
 
@@ -149,6 +150,18 @@ public final class GpuPhysicalHeadroomLedgerTest {
         fresh.recordPhysical(1, 1, 1, TARGET - PERIOD, 2, PERIOD, 0, -1, -1, -1, -1);
         check(fresh.takeCompleted().outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS,
                 "without a shown predecessor an off-slot frame stays a miss");
+    }
+
+    private static void pairWithoutGeneratedImageDoesNotBlockItsSlot() {
+        GpuPhysicalHeadroomLedger value = create(4);
+        // Pair 1 was estimated but never shown as a generated image.
+        check(value.recordShader(1, 1, 500, 1000), "first pair shader");
+        // Pair 5 shares its slot in a 4-entry ring.
+        check(value.recordShader(1, 5, 500, 1000), "an orphaned pair cannot block its slot");
+        // A pair whose generated row is still pending keeps its slot.
+        check(bind(value, 1, 6, 6), "bind pending generated row");
+        check(value.recordShader(1, 6, 500, 1000), "record pending pair");
+        check(!value.recordShader(1, 10, 500, 1000), "a pending row's shader cannot be retired");
     }
 
     private static void epochsAndCapacityFailClosed() {

@@ -198,6 +198,7 @@ public class EglBindingFixture {
     void checkGl(String where){if(EGL14.failAt.equals("render"))throw new IllegalStateException(where);}
     void drawTexture2d(int source){check(EGL14.current==eglEndpointSurface,"render outside endpoint surface");trace.add("draw:"+source);}
     void closeNativeSourceImageObserver(){}
+    void releaseVerifyResources(){}
     SCALAR_FIELDS
     PRODUCTION_METHODS
     static EglBindingFixture initialized(boolean appOwned){

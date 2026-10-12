@@ -20,6 +20,8 @@ public final class TimelineFrameSchedulerTest {
         thirtyInASixtyStreamIsNotLate();
         stallResumesWithoutSkippingAhead();
         queuedLatencyIsTrimmed();
+        oneHitchDoesNotInflateTheExpectedSpan();
+        driftingSourceKeepsGenerating();
         System.out.println("TimelineFrameSchedulerTest passed");
     }
 
@@ -195,6 +197,43 @@ public final class TimelineFrameSchedulerTest {
         }
         check(rig.fifo.size() <= 2, "the backlog drains to the steady depth " + rig.fifo.size());
         check(!rig.shown.subList(1, rig.shown.size()).contains("-"), "no slot is skipped while trimming");
+    }
+
+    private static void oneHitchDoesNotInflateTheExpectedSpan() {
+        Rig rig = new Rig(2 * PANEL, SOURCE30);
+        long t0 = 1_000_000_000L;
+        long[] stamps = new long[24];
+        for (int i = 0; i < stamps.length; ++i) stamps[i] = i * SOURCE30 + (i >= 12 ? 2 * SOURCE30 : 0);
+        for (int i = 0; i < stamps.length; ++i) rig.produce(i + 1, t0 + stamps[i]);
+        long peak = 0;
+        for (int v = 0; v < 70; ++v) {
+            rig.vsync(t0 + 70_000_000L + v * PANEL);
+            peak = Math.max(peak, rig.scheduler.expectedSpanNs());
+        }
+        check(peak < SOURCE30 + SOURCE30 / 4,
+                "a single 100 ms span leaves the estimate near 33 ms: peak " + peak);
+    }
+
+    private static void driftingSourceKeepsGenerating() {
+        // 30 -> 60 on 120 Hz; frames are stamped every 33.3 ms but arrive
+        // 0.5 ms later each time (an emulator running slower than its clock).
+        Rig rig = new Rig(2 * PANEL, SOURCE30);
+        rig.motionReady = true;
+        long t0 = 1_000_000_000L;
+        int produced = 0;
+        rig.produce(++produced, t0);
+        rig.produce(++produced, t0 + SOURCE30);
+        rig.produce(++produced, t0 + 2 * SOURCE30);
+        int generated = 0;
+        for (int v = 0; v < 960; ++v) {
+            long now = t0 + 70_000_000L + v * PANEL;
+            while (t0 + produced * (SOURCE30 + 500_000L) + 2 * SOURCE30 <= now)
+                rig.produce(++produced, t0 + produced * SOURCE30);
+            rig.vsync(now);
+            if (v >= 480 && rig.shown.get(rig.shown.size() - 1).startsWith("g")) ++generated;
+        }
+        // 480 vsyncs = 4 s = ~118 real frames; nearly every pair keeps its midpoint.
+        check(generated >= 100, "generation survives a drifting source: " + generated);
     }
 
     private static void check(boolean condition, String message) {

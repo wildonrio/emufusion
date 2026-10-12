@@ -35,8 +35,8 @@ public final class FrameGenerationRendererFactory {
             throw new IllegalArgumentException("backend selection is required");
         if (selection.backend == FrameGenerationBackendPolicy.Backend.DIRECT)
             throw new IllegalArgumentException("Direct presentation has no renderer");
-        if (selection.backend == FrameGenerationBackendPolicy.Backend.LSFG)
-            throw new IllegalStateException("LSFG selected without an integrated renderer");
+        if (selection.backend != FrameGenerationBackendPolicy.Backend.BUILT_IN)
+            throw new IllegalStateException("no renderer for backend " + selection.backend);
         BooleanSupplier safeProof = safe(qualificationProof);
         BooleanSupplier safeDense = safe(densePyramid);
         BooleanSupplier safeV27 = safe(denseV27);
@@ -52,45 +52,6 @@ public final class FrameGenerationRendererFactory {
                 safeDense::getAsBoolean,
                 safeV27::getAsBoolean,
                 safeV28::getAsBoolean);
-        CREATED.incrementAndGet();
-        return renderer;
-    }
-
-    /**
-     * Creates the shell-only live-output qualification arm.
-     *
-     * <p>The caller may reach this method only after the conditional factory
-     * was found in a qualification APK. It deliberately bypasses product
-     * backend selection without marking the built-in assessment usable.</p>
-     */
-    static FrameGenerationRenderer createRifeQualification(
-            ExternalFrameGenerationTransport.Factory transportFactory,
-            Surface output, int inputWidth, int inputHeight,
-            int outputWidth, int outputHeight, float refreshHz,
-            String displayRole, int displayId,
-            BooleanSupplier qualificationProof) {
-        if (transportFactory == null)
-            throw new IllegalArgumentException("RIFE qualification transport is required");
-        return createExternalQualification(transportFactory, output,
-                inputWidth, inputHeight, outputWidth, outputHeight, refreshHz,
-                displayRole, displayId, qualificationProof);
-    }
-
-    /** Creates one shell-only external transport without changing product policy. */
-    static FrameGenerationRenderer createExternalQualification(
-            ExternalFrameGenerationTransport.Factory transportFactory,
-            Surface output, int inputWidth, int inputHeight,
-            int outputWidth, int outputHeight, float refreshHz,
-            String displayRole, int displayId,
-            BooleanSupplier qualificationProof) {
-        if (transportFactory == null)
-            throw new IllegalArgumentException(
-                    "external qualification transport is required");
-        FrameGenerationRenderer renderer = new DisplayFrameGenerator(output,
-                inputWidth, inputHeight, outputWidth, outputHeight, refreshHz,
-                displayRole, displayId,
-                safe(qualificationProof)::getAsBoolean,
-                () -> false, () -> false, () -> false, transportFactory);
         CREATED.incrementAndGet();
         return renderer;
     }

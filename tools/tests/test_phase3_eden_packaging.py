@@ -484,8 +484,7 @@ class Phase3BuildFlagTest(unittest.TestCase):
         # reading it built Wii U out of the APK without noticing.
         self.assertIn(
             "LUCENT_INCLUDE_PHASE3_EDEN LUCENT_INCLUDE_PHASE3_CEMU "
-            "LUCENT_INCLUDE_PHASE3_APS3E LUCENT_INCLUDE_RIFE_FRAMEGEN "
-            "LUCENT_INCLUDE_LSFG_FRAMEGEN)",
+            "LUCENT_INCLUDE_PHASE3_APS3E LUCENT_INCLUDE_RIFE_FRAMEGEN)",
                       BUILD)
 
     def test_the_flag_defaults_to_off(self):

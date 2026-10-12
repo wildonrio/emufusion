@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import unittest
 
-from tools.tests.test_lsfg_endpoint_lifetime import method
+from tools.tests.test_native_source_image_renderer_wiring import method
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "unified-android/src"
@@ -166,7 +166,7 @@ public class ProviderTest {
         off = method((GAME / "GameSurfaceView.java").read_text(),
                      "private void createGenerator(Surface output, int width, int height)")
         off_branch = off[off.index("if (launchMode == FrameGenerationSettings.Mode.OFF)"):
-                         off.index("FrameGenerationSettings.QualificationTransport")]
+                         off.index("if (startupFellBackToDirect)")]
         self.assertIn("engineSurface = output;", off_branch)
         self.assertNotIn("NativeSourceImageProvider", off_branch)
         self.assertNotIn("FrameGenerationRendererFactory.create(", off_branch)

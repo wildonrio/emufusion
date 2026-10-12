@@ -95,15 +95,6 @@ ship under `assets/framegen/rife-v4.6/licenses/`. The build flag is default-off,
 the resulting filename says `rife-framegen-qualification`, and the embedded
 manifest explicitly forbids product routing.
 
-An APK explicitly built with `LUCENT_INCLUDE_LSFG_FRAMEGEN=1` compiles the
-EmuFusion-owned host in `unified-android/lsfg-qualification-native/` against an
-external checkout of the exact public MIT wrapper and authorized Android patch
-identified by `experiments/lsfg-vulkan-android-inprocess/upstream-lock.json`.
-The build verifies the complete patched checkout before compilation. Neither
-`Lossless.dll` nor derived shaders are corresponding-source inputs for the APK:
-they are not packaged or redistributed and may only be staged privately by the
-owner for a local qualification run.
-
 The separate, explicitly requested Phase 2 qualification APK contains
 qualification-only in-process candidates including AppleWin, PUAE, Beetle
 Saturn, Dolphin, PPSSPP, Play!, ARMSX2, Flycast, Azahar, Virtual Jaguar, and

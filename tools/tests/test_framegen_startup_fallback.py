@@ -27,7 +27,6 @@ class FramegenStartupFallbackTest(unittest.TestCase):
         primary_methods = '\n'.join(method(view, signature) for signature in [
             '    private void createGenerator(',
             '    private void retireFailedGenerator(',
-            '    private void useDirectAfterUnavailableLsfg(',
             '    private void releaseGenerator(',
             'public void surfaceChanged('])
         legacy_methods = '\n'.join(method(legacy, signature) for signature in [
@@ -57,16 +56,9 @@ public class StartupFallbackTest {
         static class Selection {Backend backend=Backend.BUILTIN;}
     }
     static class FrameGenerationSettings {
-        enum Mode {OFF, BUILT_IN_ALPHA, LSFG;
-            boolean usesLockToThirtyTierPolicy(){return false;}}
+        enum Mode {OFF, AUTO;
+            boolean usesLockToThirtyTierPolicy(){return this==AUTO;}}
         static int selections,probes; static boolean available=true,directSelection;
-        static class QualificationTransport {
-            Object factory=new Object(); String label="LSFG";
-            FrameGenerationBackendPolicy.Backend backend=FrameGenerationBackendPolicy.Backend.LSFG;
-        }
-        static QualificationTransport qualificationTransport(Object c,int d,Mode m){
-            probes++;return m==Mode.LSFG && available ? new QualificationTransport():null;
-        }
         static FrameGenerationBackendPolicy.Selection selectBackendForSession(Object c,Mode m){
             selections++; FrameGenerationBackendPolicy.Selection s=new FrameGenerationBackendPolicy.Selection();
             if(directSelection)s.backend=FrameGenerationBackendPolicy.Backend.DIRECT; return s;
@@ -112,7 +104,7 @@ public class StartupFallbackTest {
         static final String TAG="fixture";
         boolean startupFellBackToDirect,runtimePresentationFailed,surfaceLive,generatorStartupPending,runtimeRecoveryPending;
         int quarantinedSurfaceGeneration=-1,surfaceGeneration,pendingWidth,pendingHeight,asyncStarts;
-        boolean lsfgUnavailableNotified,slotLatticeProducer; float lastReportedPanelHz;
+        boolean slotLatticeProducer; float lastReportedPanelHz;
         Surface outputSurface,engineSurface; FrameGenerationRenderer frameGenerator;
         FrameGenerationBackendPolicy.Backend activeBackend=FrameGenerationBackendPolicy.Backend.DIRECT;
         FrameGenerationSettings.Mode launchMode;
@@ -120,7 +112,7 @@ public class StartupFallbackTest {
         Object frameRateListener; Runnable firstSubmittedFrameListener; double authoritativeSourceHz,producerTimelineHz;
         Primary(FrameGenerationSettings.Mode mode){launchMode=mode;}
         Object getContext(){return this;} int displayId(){return 0;}
-        float refreshRate(){return 120f;} float rendererRefreshRate(){return 120f;}
+        float refreshRate(){return 120f;}
         boolean qualificationProofEnabled(){return false;} boolean densePyramidEnabled(){return true;}
         boolean denseV27ReducedAnalysisEnabled(){return false;} boolean denseV28ReducedAnalysisEnabled(){return true;}
         void requestDirectFrameRate(Surface s){} void propagatePanelRefresh(String r){}
@@ -154,7 +146,7 @@ public class StartupFallbackTest {
             p.surfaceChanged(holder,0,1920,1080);
             assert p.engineSurface==holder.s && p.frameGenerator==null;
             int attempts=FrameGenerationRendererFactory.creates, async=p.asyncStarts;
-            assert attempts==(mode==FrameGenerationSettings.Mode.OFF?0:mode==FrameGenerationSettings.Mode.LSFG?2:1);
+            assert attempts==(mode==FrameGenerationSettings.Mode.OFF?0:1);
             for(int wake=0;wake<3;wake++){
                 p.releaseGenerator();p.surfaceGeneration++;holder=new SurfaceHolder();
                 p.surfaceChanged(holder,0,1920,1080);
@@ -168,15 +160,9 @@ public class StartupFallbackTest {
             if(mode==FrameGenerationSettings.Mode.OFF)
                 assert FrameGenerationSettings.probes==0 && FrameGenerationSettings.selections==0;
         }
-        reset();FrameGenerationSettings.available=false;
-        Primary missing=new Primary(FrameGenerationSettings.Mode.LSFG);
-        missing.createGenerator(new Surface(),1920,1080);
-        int probes=FrameGenerationSettings.probes;missing.releaseGenerator();
-        FrameGenerationSettings.available=true;missing.createGenerator(new Surface(),1920,1080);
-        assert FrameGenerationSettings.probes==probes && FrameGenerationRendererFactory.creates==0;
         for(boolean selection:new boolean[]{false,true}){
             reset();FrameGenerationSettings.directSelection=selection;
-            Legacy l=new Legacy(FrameGenerationSettings.Mode.BUILT_IN_ALPHA);
+            Legacy l=new Legacy(FrameGenerationSettings.Mode.AUTO);
             l.ensureSurface(new SurfaceTexture(),1920,1080);
             assert l.renderSurface==l.outputSurface && l.frameGenerator==null;
             int attempts=FrameGenerationRendererFactory.creates,selections=FrameGenerationSettings.selections;
@@ -186,7 +172,7 @@ public class StartupFallbackTest {
             assert l.renderSurface==l.outputSurface;
         }
         for(FrameGenerationSettings.Mode mode:new FrameGenerationSettings.Mode[]{
-                FrameGenerationSettings.Mode.BUILT_IN_ALPHA,FrameGenerationSettings.Mode.LSFG}){
+                FrameGenerationSettings.Mode.AUTO}){
           for(boolean absent:new boolean[]{false,true}){
             reset();FrameGenerationRendererFactory.fail=false;
             FrameGenerationRendererFactory.invalidInput=true;
@@ -199,17 +185,17 @@ public class StartupFallbackTest {
           }
         }
         reset();FrameGenerationRendererFactory.fail=false;
-        Primary success=new Primary(FrameGenerationSettings.Mode.BUILT_IN_ALPHA);
+        Primary success=new Primary(FrameGenerationSettings.Mode.AUTO);
         success.createGenerator(new Surface(),1920,1080);FrameGenerationRenderer renderer=success.frameGenerator;
         assert renderer!=null && !success.startupFellBackToDirect;
         success.releaseGenerator();assert renderer.closes==1;
         success.createGenerator(new Surface(),1920,1080);assert success.frameGenerator!=null;
         reset();FrameGenerationRendererFactory.unsafe=true;
-        Primary unsafe=new Primary(FrameGenerationSettings.Mode.LSFG);
+        Primary unsafe=new Primary(FrameGenerationSettings.Mode.AUTO);
         try{unsafe.createGenerator(new Surface(),1920,1080);throw new AssertionError("unsafe reuse");}
         catch(SurfaceOwnershipException expected){}
         assert !unsafe.startupFellBackToDirect && unsafe.engineSurface==null;
-        Legacy quarantined=new Legacy(FrameGenerationSettings.Mode.BUILT_IN_ALPHA);
+        Legacy quarantined=new Legacy(FrameGenerationSettings.Mode.AUTO);
         SurfaceTexture texture=new SurfaceTexture();quarantined.ensureSurface(texture,1920,1080);
         assert quarantined.renderSurface==null && quarantined.quarantinedTexture==texture;
         assert !quarantined.startupFellBackToDirect && quarantined.listener.errors==1;

@@ -1195,72 +1195,6 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             generator,
         )
 
-    def test_lsfg_timeline_reset_waits_for_a_positive_renderer_epoch(self):
-        transport = self.read(
-            "unified-android/qualification-src/com/thorium/preview/game/"
-            "LsfgPresentationTransport.java"
-        )
-        reset = transport.split(
-            "@Override public void resetEndpointTimeline()", 1
-        )[1].split("@Override public PreparationResult prepare", 1)[0]
-        enqueue = transport.split(
-            "@Override public EnqueueResult enqueue", 1
-        )[1].split("@Override public PollResult poll", 1)[0]
-        self.assertNotIn("NativeLsfgBridge.resetTimeline", reset)
-        self.assertIn("requestPresentationEpoch = 0L;", reset)
-        self.assertIn(
-            "NativeLsfgBridge.resetTimeline(nativeHandle, requestPresentationEpoch);",
-            enqueue,
-        )
-        self.assertIn("selfTestPresentFenceOffsetNs", transport)
-        self.assertIn("selfTestPresentFenceOffsetNs < 0L", transport)
-        self.assertIn(
-            "selfTestPresentFenceOffsetNs > selfTestRefreshDurationNs * 2L",
-            transport,
-        )
-
-    def test_lsfg_physical_self_test_uses_bounded_symmetric_measurement_tolerance(self):
-        native = self.read(
-            "unified-android/lsfg-qualification-native/lsfg_qualification_jni.cpp"
-        )
-        helper = native.split(
-            "bool physicalTargetWithinTolerance", 1
-        )[1].split("std::string jstringValue", 1)[0]
-        self.assertIn("actualPresentTimeNs - desiredPresentTimeNs <= maximumLateNs", helper)
-        self.assertIn("desiredPresentTimeNs - actualPresentTimeNs <= earlyToleranceNs", helper)
-        self_test = native.split(
-            "void runBoundedSurfaceControlSelfTest", 1
-        )[1].split("void runBoundedLiveSurfaceControlSelfTest", 1)[0]
-        self.assertIn("intervalError <= intervalTolerance", self_test)
-        self.assertIn("firstPhysicalTargetMatched && secondPhysicalTargetMatched", self_test)
-        self.assertIn("refresh * 2ULL", self_test)
-        self.assertNotIn("firstNormalizedActual >= firstPhysical &&", self_test)
-
-    def test_lsfg_retries_only_fenceless_startup_evidence_once(self):
-        native = self.read(
-            "unified-android/lsfg-qualification-native/lsfg_qualification_jni.cpp"
-        )
-        presenter = self.read(
-            "unified-android/lsfg-qualification-native/"
-            "owned_surface_control_presenter.cpp"
-        )
-        self.assertIn("kSurfaceControlSelfTestAttempts = 2U", native)
-        self.assertIn(
-            "catch (const emufusion::lsfg::PresentFenceUnavailable&)", native
-        )
-        self.assertIn("if (attempt + 1U == kSurfaceControlSelfTestAttempts) throw;", native)
-        self.assertIn("takeUnavailablePresentFences()", presenter)
-        self.assertIn(
-            "throw emufusion::lsfg::PresentFenceUnavailable(", native
-        )
-        self.assertIn("omitted its present fence", native)
-        self.assertIn("emufusion-lsfg-live-surface-control-v8-", native)
-        runtime = self.read(
-            "unified-android/qualification-src/com/thorium/preview/game/"
-            "LsfgQualificationRuntime.java"
-        )
-        self.assertIn("emufusion-lsfg-live-surface-control-v8-", runtime)
-
     def test_fixed_rate_legacy_systems_use_core_cadence_not_image_uniqueness(self):
         controller = (ROOT / pathlib.Path(
             "unified-android/src/com/thorium/lucent/video/AdaptiveFrameRateController.java"
@@ -1428,7 +1362,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         )
         self.assertIn("new DisplayFrameGenerator", factory)
         self.assertIn("Direct presentation has no renderer", factory)
-        self.assertIn("LSFG selected without an integrated renderer", factory)
+        self.assertIn("no renderer for backend", factory)
 
     def test_n64_frontend_fbo_uses_title_dynamic_written_bounds(self):
         backend = self.read(
@@ -1481,90 +1415,22 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
             present,
         )
 
-    def test_private_lsfg_requires_explicit_mode_and_packaged_transport(self):
-        settings = self.read(
-            "unified-android/src/com/thorium/preview/game/FrameGenerationSettings.java"
-        )
-        setter = settings.split(
-            "public static synchronized void setMode(Context context, Mode mode)", 1
-        )[1].split(
-            "private static void persistMode", 1
-        )[0]
-        # The owner now explicitly permits LSFG beta through the ordinary
-        # menu. Preserve that choice, but Off/Alpha/package presence alone
-        # still cannot activate its optional transport.
-        self.assertIn("Mode safe = mode == null ? Mode.OFF : mode;", setter)
-        self.assertIn("persistMode(preferences(context), safe);", setter)
-        transport = settings.split(
-            "Context context, int displayId, Mode launchMode)", 1
-        )[1].split("static final class QualificationTransport", 1)[0]
-        self.assertIn("displayId != Display.DEFAULT_DISPLAY", transport)
-        self.assertIn("launchMode != Mode.LSFG) return null;", transport)
-        self.assertIn("ExternalFrameGenerationTransportLoader.lsfgQualification(context)",
-                      transport)
-        self.assertIn("if (factory == null) return null;", transport)
-        host = self.read(
-            "unified-android/src/com/thorium/preview/game/InWindowGameHost.java"
-        )
-        request = host.split(
-            "private static GameLaunchRequest requestFrom", 1
-        )[1].split(
-            "private static String clean", 1
-        )[0]
-        self.assertIn("FrameGenerationSettings.mode(activity)", request)
-        self.assertIn("qualificationSession,\n                launchMode", request)
-        self.assertNotIn("launchMode = FrameGenerationSettings.Mode.LSFG", request)
-
-    def test_failed_lsfg_does_not_authorize_a_different_generator(self):
-        settings = self.read(
-            "unified-android/src/com/thorium/preview/game/FrameGenerationSettings.java"
-        )
-        lsfg_selection = settings.split("if (selected == Mode.LSFG)", 1)[1].split(
-            "return FrameGenerationBackendPolicy.select(false,", 2
-        )
-        # The first return after the LSFG branch must disable generation;
-        # neither unavailable LSFG nor the unselected Alpha arm can be ready.
-        self.assertEqual(len(lsfg_selection), 3)
-        branch = lsfg_selection[1]
-        self.assertIn('"LSFG transport unavailable"', branch)
-        self.assertIn('"Built-in (Alpha) was not selected"', branch)
-        self.assertNotIn("Assessment.ready()", branch)
-        surface = self.read(
-            "unified-android/src/com/thorium/preview/game/GameSurfaceView.java"
-        )
-        startup = surface.split("private void createGenerator(", 1)[1].split(
-            "private void useDirectAfterUnavailableLsfg(", 1
-        )[0]
-        failure_paths = startup.split(
-            '" qualification unavailable after bounded retry;', 1
-        )[1].split("FrameGenerationBackendPolicy.Selection selection", 1)[0]
-        self.assertEqual(failure_paths.count("useDirectAfterUnavailableLsfg(output);"), 2)
-        self.assertEqual(failure_paths.count("return;"), 2)
-        self.assertIn("launchMode == FrameGenerationSettings.Mode.LSFG", failure_paths)
-        direct = surface.split("private void useDirectAfterUnavailableLsfg(", 1)[1].split(
-            "private void requestDirectFrameRate(", 1
-        )[0]
-        self.assertIn("frameGenerator = null;", direct)
-        self.assertIn("activeBackend = FrameGenerationBackendPolicy.Backend.DIRECT;", direct)
-        self.assertIn("engineSurface = output;", direct)
-        self.assertNotIn("FrameGenerationRendererFactory.create", direct)
-        self.assertIn("LSFG could not start. Using direct playback", direct)
-
     def test_owner_setting_is_explicit_three_way_and_off_is_a_hard_bypass(self):
         setting = self.read(
             "unified-android/src/com/thorium/preview/game/FrameGenerationSettings.java"
         )
         self.assertIn('enum Mode', setting)
         self.assertIn('OFF("off")', setting)
-        self.assertIn('BUILT_IN_ALPHA("built-in-alpha")', setting)
-        self.assertIn('LSFG("lsfg")', setting)
+        # On/Off only (owner, 2026-10-11): Built-in (Alpha) and LSFG are gone;
+        # their stored values migrate to On.
+        self.assertNotIn('BUILT_IN_ALPHA', setting)
+        self.assertNotIn('LSFG("lsfg")', setting)
+        self.assertIn('normalized.equals("lsfg")', setting)
         # AUTO (2026-10-11): the built-in backend with the lock-to-30 tier
         # policy. Opt-in only: OFF stays the default and migration target, and
         # the forced-OFF mode version is unchanged.
         self.assertIn('AUTO("auto")', setting)
-        self.assertIn('return this == AUTO || this == AUTO_TRIPLE || this == BUILT_IN_ALPHA;',
-                      setting)
-        self.assertIn('return this == AUTO || this == AUTO_TRIPLE;', setting)
+        self.assertGreaterEqual(setting.count('return this == AUTO || this == AUTO_TRIPLE;'), 2)
         # AUTO (TRIPLE): the owner's optional tripling ceiling, timeline only.
         self.assertIn('AUTO_TRIPLE("auto-triple")', setting)
         self.assertIn('return this == AUTO_TRIPLE ? TRIPLE_MULTIPLIER : MAX_MULTIPLIER;', setting)
@@ -1577,11 +1443,9 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertNotIn('ensureExternalBackend', setting)
         self.assertNotIn('sendBroadcast', setting)
         self.assertIn('FrameGenerationBackendPolicy.Assessment.ready()', setting)
-        self.assertIn('launchMode != Mode.LSFG', setting)
+
         self.assertNotIn('Lossless.dll', setting)
-        self.assertIn('RifeQualificationRuntime', setting)
-        self.assertIn('selfTestPassed=false/deadlineQualified=false', setting)
-        self.assertIn('builtInAssessment', setting)
+        self.assertNotIn('RifeQualificationRuntime', setting)
         build = self.read("unified-android/build.sh")
         self.assertIn('copy the exact <queries> block here', build)
         self.assertIn('android-companion/AndroidManifest.xml', build)
@@ -1621,7 +1485,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
 
         service = self.read("android-companion/src/com/thorium/preview/PreviewService.java")
         self.assertGreaterEqual(service.count('"/settings/frame-generation"'), 3)
-        self.assertIn('mode must be off, auto, auto-triple, built-in-alpha, or lsfg', service)
+        self.assertIn('mode must be off, on (auto), or auto-triple', service)
         self.assertIn("FrameGenerationSettings.Mode", service)
         self.assertIn("FrameGenerationSettings.setMode(this, parsed)", service)
         self.assertIn("legacy frame-generation enable is disabled", service)
@@ -1630,16 +1494,17 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         theme = self.read("theme/theme.qml")
         self.assertIn('property string frameGenerationMode: "off"', theme)
         self.assertIn('"FRAME GENERATION"', theme)
-        self.assertIn('return "BUILT-IN (ALPHA)"', theme)
-        self.assertIn('return "LSFG"', theme)
-        self.assertIn('return "OFF"', theme)
-        self.assertIn('if (frameGenerationMode === "auto") return "AUTO"', theme)
-        self.assertIn('var modes = ["off", "auto", "auto-triple", "built-in-alpha", "lsfg"]', theme)
+        # On/Off plus "Allow triple" (owner, 2026-10-11).
+        self.assertIn('return frameGenerationMode === "off" ? "OFF" : "ON"', theme)
+        self.assertIn('"ALLOW TRIPLE FRAME RATE"', theme)
+        self.assertIn('return frameGenerationAllowTriple ? "auto-triple" : "auto"', theme)
+        self.assertNotIn('"built-in-alpha"', theme)
+        self.assertNotIn('"lsfg"', theme)
         self.assertIn('lucentFrameGenerationThreeModeV3', theme)
         self.assertIn('property bool frameGenerationModeConfirmed: false', theme)
         self.assertIn('if (frameGenerationModePending || !frameGenerationModeConfirmed)', theme)
         self.assertIn('if (pendingGame) root.launchConfirmed(pendingGame)', theme)
-        self.assertIn("cycleFrameGenerationMode", theme)
+        self.assertIn("toggleFrameGeneration()", theme)
         self.assertNotIn('losslessScalingAvailable', theme)
 
         host = self.read(
@@ -1800,8 +1665,11 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("Math.min(displayRefreshHz, source)", controller)
         self.assertIn("return Math.min(1f,", controller)
         self.assertNotIn("return Math.min(1.5f", controller)
-        self.assertIn("boolean sustainable = frameRate.hasSustainableGenerationRate()",
+        # The timeline keeps generating through a brief clock revocation;
+        # the legacy lattice still follows the controller's sustainability.
+        self.assertIn("boolean sustainable = timelineActive ? builtinGenerationPlanned() :",
                       generator)
+        self.assertIn("frameRate.hasSustainableGenerationRate();", generator)
         self.assertIn("else drawTexture2d(historyTextures[previousIndex])", generator)
         self.assertIn("phase > 0f && phase < 1f", generator)
         self.assertIn("selectBufferedPresentation(", generator)
@@ -1945,7 +1813,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         prepare = fifo[fifo.index("private void prepareBufferedPairIfPossible"):
                        fifo.index("private void copyBufferedEndpoints")]
         self.assertIn(
-            "boolean generatedTimeline = frameRate.generatesIntermediateFrames()",
+            "boolean generatedTimeline = builtinGenerationPlanned()",
             prepare,
         )
         self.assertIn(
@@ -2430,10 +2298,13 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("estimateMotion()", generator)
         self.assertIn("uBackwardMotion", generator)
         self.assertIn("uForwardMotion", generator)
-        self.assertIn("previousUv=clamp(vTexCoord-forward*uPhase*previousGate",
+        # Warp vectors are the measured fields refined to the content's
+        # source position at this phase (p = x - t*F(p)), validated only.
+        self.assertIn("previousUv=clamp(vTexCoord-warpForward*uPhase*previousGate",
                       generator)
-        self.assertIn("currentUv=clamp(vTexCoord-backward*(1.0-uPhase)*currentGate",
+        self.assertIn("currentUv=clamp(vTexCoord-warpBackward*(1.0-uPhase)*currentGate",
                       generator)
+        self.assertIn("vec2 warpForward=forward;vec2 warpBackward=backward;", generator)
         self.assertGreaterEqual(generator.count(
             "previousGate=step(0.02,previousReliability)"), 2)
         self.assertGreaterEqual(generator.count(
@@ -4390,8 +4261,11 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         badge = host.split("private void updateFrameRateBadge(", 1)[1].split(
             "private void observeReportedOutput(", 1)[0]
         self.assertIn("request.frameGenerationMode == FrameGenerationSettings.Mode.OFF", badge)
-        self.assertIn("boolean generating = qualified && target > source + 0.5", badge)
-        self.assertIn("activeFrameGenerationBackend()", badge)
+        # Two honest numbers (owner, 2026-10-11): real fps and the displayed
+        # rate counting only verified generated frames; never a backend name.
+        self.assertNotIn("activeFrameGenerationBackend()", badge)
+        self.assertIn('"%.0f → %.0f fps", real, displayed', badge)
+        self.assertIn("showVerifiedFrameRates(real, displayed)", host)
         self.assertNotIn('"S-- T-- A-- Backend="', host)
         self.assertIn("setFrameRateListener", host)
         self.assertIn("observeReportedOutput(actual)", host)
@@ -4482,386 +4356,6 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("frameRate.setGenerationAvailable(false)", reject)
         self.assertIn('teardownDenseEpoch("runtime-reject")', reject)
         self.assertIn('" recoverable="', reject)
-
-    def test_external_transport_selects_surfacecontrol_timeline_only_when_required(self):
-        generator = self.read(
-            "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
-        )
-        request = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
-            "FrameGenerationPresentationRequest.java"
-        )
-        transport = self.read(
-            "unified-android/qualification-src/com/thorium/preview/game/"
-            "RifePresentationTransport.java"
-        )
-        bridge = self.read(
-            "experiments/rife-ncnn-vulkan-android/android-benchmark/app/src/"
-            "main/java/com/emufusion/rifebenchmark/NativeRifeBridge.java"
-        )
-        presenter = self.read(
-            "unified-android/lsfg-qualification-native/"
-            "owned_surface_control_presenter.cpp"
-        )
-        native = self.read(
-            "experiments/rife-ncnn-vulkan-android/android-benchmark/"
-            "app/src/main/cpp/rife_benchmark_jni.cpp"
-        )
-        self.assertIn("implements Choreographer.VsyncCallback", generator)
-        self.assertIn("frameData.getFrameTimelines()", generator)
-        java_timeline_copy = generator.split(
-            "private void onVsyncFrame(Choreographer.FrameData frameData)", 1
-        )[1].split("private void postNextFrameCallback()", 1)[0]
-        self.assertIn("externalTransport == null", java_timeline_copy)
-        self.assertIn("copyCompositorFrameTimelines(", generator)
-        self.assertIn("externalTransport.requiresCompositorFrameTimeline()",
-                      generator)
-        self.assertIn("compositorFrameTimelineNativeCallbackSequence", generator)
-        self.assertIn("compositorFrameTimelineNativeFrameTimeNs", generator)
-        selection = generator.split(
-            "CompositorFrameTimeline.selectRefreshSafeTarget(", 1
-        )[1].split("frameRate.selectBufferedPresentation(", 1)[0]
-        self.assertIn("if (compositorTimeline == null)", selection)
-        self.assertIn("return;", selection)
-        self.assertIn("withTargetCompositorFrameTimeline(", generator)
-        self.assertIn("expectedPresentationTimeNs()", generator)
-        self.assertIn("hasCompositorFrameTimeline()", request)
-        self.assertIn("MAX_COMPOSITOR_TIMELINE_DIAGNOSTIC_LOGS = 12", generator)
-        self.assertIn("CompositorFrameTimeline.probe(", generator)
-        self.assertIn(
-            "CompositorFrameTimeline.selectEarliestRefreshSafeTarget(", generator
-        )
-        bootstrap_selector = self.read(
-            "unified-android/src/com/thorium/lucent/video/"
-            "CompositorFrameTimeline.java"
-        ).split(
-            "public static Selection selectEarliestRefreshSafeTarget(", 1
-        )[1].split(
-            "public static Selection select(", 1
-        )[0]
-        self.assertIn(
-            "hasRefreshDerivedSubmissionReserve(", bootstrap_selector
-        )
-        self.assertIn("deadlinesNs[index]", bootstrap_selector)
-        self.assertIn("fromCompositorTimeline(", generator)
-        self.assertIn("Compositor frame-timeline miss", generator)
-        self.assertIn("compositorFrameTimelineSuppliedCount", generator)
-        self.assertIn('" copied=" + probe.suppliedCount()', generator)
-        self.assertIn("recordCompositorFrameTimelineProbe(probe)", generator)
-        self.assertIn("externalFrameTimelineProbeLive=", generator)
-        self.assertIn("externalFrameTimelineProbeNoLive=", generator)
-        self.assertIn(
-            "surfaceControlPresentation != request.hasCompositorFrameTimeline()",
-            transport,
-        )
-        self.assertIn(
-            "RIFE presentation timing contract does not match its output path",
-            transport,
-        )
-        self.assertIn("request.compositorFrameTimelineVsyncId()", transport)
-        self.assertIn(
-            "request.compositorTokenExpectedPresentationTimeNs()", transport
-        )
-        self.assertIn("request.compositorFrameTimelineDeadlineNs()", transport)
-        self.assertIn("compositorFrameTimelineVsyncId", bridge)
-        self.assertIn("compositorFrameTimelineExpectedNs", bridge)
-        self.assertIn("compositorFrameTimelineDeadlineNs", bridge)
-        self.assertIn('"ASurfaceTransaction_setFrameTimeline"', presenter)
-        self.assertIn('"AChoreographer_postVsyncCallback"', presenter)
-        self.assertIn("enableNativeFrameTimelineSource()", presenter)
-        self.assertIn("nativeFrameTimeline(", presenter)
-        self.assertIn("nativeCopySurfaceControlFrameTimelines", native)
-        self.assertIn("enableNativeFrameTimelineSource();", native)
-        self.assertIn('"nativeFrameTimelineSource\\\":', native)
-        self.assertIn("requiresCompositorFrameTimeline()", transport)
-        timeline_method = transport.split(
-            "@Override public boolean requiresCompositorFrameTimeline()", 1
-        )[1].split("@Override public boolean usesAppOwnedPresentation()", 1)[0]
-        self.assertIn("return false;", timeline_method)
-        self.assertIn("takeUnavailablePresentFences", presenter)
-        self.assertIn("markDropped", presenter)
-        live_present = presenter.split(
-            "bool present(AHardwareBuffer* buffer", 1
-        )[1].split("std::optional<Completion> pollCompletion", 1)[0]
-        transaction_configuration = live_present.split(
-            "ASurfaceTransaction_setBuffer(", 1
-        )[1].split("ASurfaceTransaction_setOnComplete", 1)[0]
-        self.assertEqual(
-            transaction_configuration.count("setFrameTimeline_(transaction"), 1
-        )
-        self.assertEqual(
-            transaction_configuration.count(
-                "ASurfaceTransaction_setDesiredPresentTime"
-            ),
-            1,
-        )
-        # One Android timestamp policy per transaction: the validated
-        # compositor token alone (keeps SurfaceFlinger backpressure), or the
-        # explicit desired-present bound for tokenless calibration -- never
-        # both (Thor 13d7 overwrite of an uncommitted predecessor).
-        self.assertIn("Select ONE Android timestamp policy",
-                      transaction_configuration)
-        self.assertRegex(
-            transaction_configuration,
-            r"if \(compositorFrameTimelineVsyncId != 0\) \{\s+"
-            r"setFrameTimeline_\(transaction, [^;]*;\s+"
-            r"\} else \{\s+"
-            r"ASurfaceTransaction_setDesiredPresentTime\(",
-        )
-        self.assertLess(
-            live_present.index("setFrameTimeline_(transaction"),
-            live_present.index("ASurfaceTransaction_setDesiredPresentTime"),
-        )
-        self.assertLess(
-            live_present.index("ASurfaceTransaction_setDesiredPresentTime"),
-            live_present.index("ASurfaceTransaction_apply(transaction)"),
-        )
-        self.assertIn("kMinFrameTimelineSubmissionReserveNs", live_present)
-        self.assertIn("kMaxFrameTimelineTargetErrorNs", live_present)
-        self.assertIn("absoluteDifference(", live_present)
-        self.assertIn("nativeFrameTimeline(", live_present)
-        self.assertIn(
-            "timeline->deadlineNs != compositorFrameTimelineDeadlineNs",
-            live_present,
-        )
-        transaction_create = live_present.index(
-            "transactionOwner(ASurfaceTransaction_create(), &ASurfaceTransaction_delete)"
-        )
-        self.assertLess(
-            live_present.index(
-                "timeline->deadlineNs != compositorFrameTimelineDeadlineNs"
-            ),
-            transaction_create,
-        )
-        self.assertLess(
-            live_present.index("kMinFrameTimelineSubmissionReserveNs"),
-            transaction_create,
-        )
-        # Rejections now preserve present identity/reason through the ledger
-        # helper, rather than returning an unreported false.
-        # The result is captured so the RAII entry fence can be disarmed: an
-        # explicit false returns the caller's acquire FD untouched.
-        for reason in ("frame-timeline-api-missing", "timeline-revised",
-                       "submission-window-missed"):
-            self.assertRegex(
-                live_present[:transaction_create],
-                r"const bool result = rejectImmediate\(presentId, \""
-                + re.escape(reason) +
-                r"\",[^;]*;\s+entryFence\.fd = -1;\s+return result;",
-            )
-        self.assertIn("transactionApplyStartNs", live_present)
-        self.assertIn("transactionApplyEndNs", live_present)
-        self.assertIn("std::lock_guard<std::mutex> applyLock(applyMutex_)",
-                      live_present)
-        timed_worker = presenter.split(
-            "void timedApplyWorkerMain()", 1
-        )[1].split("void rejectScheduled", 1)[0]
-        self.assertNotIn("kTimedApplyOpeningReserveNs", presenter)
-        self.assertIn("kMinFrameTimelineSubmissionReserveNs =\n"
-                      "            2'000'000ULL", presenter)
-        # Ready FIFO output is submitted promptly to its unchanged target.
-        # The old deliberate deadline-minus-reserve sleep/spin consumed the
-        # hardware margin. Actual worker/FD/deadline behavior is exercised by
-        # test_lsfg_surface_early_submission, not certified by these strings.
-        self.assertNotIn("kTimedApplySpinLeadNs", presenter)
-        self.assertNotIn("scheduledCondition.wait_until", timed_worker)
-        self.assertIn("state_->scheduled.front()", timed_worker)
-        self.assertIn("state_->scheduled.pop_front()", timed_worker)
-        self.assertIn('"deadline-expired-at-handoff"', live_present)
-        self.assertIn(
-            "if (state_->closing || state_->dispatchFailurePresentId != 0) return;",
-            timed_worker,
-        )
-        self.assertIn("latestTimeline = nativeFrameTimeline(vsyncId)", timed_worker)
-        self.assertIn("Absence is therefore", timed_worker)
-        self.assertNotIn('"timeline-missing"', timed_worker)
-        self.assertIn(
-            "latestTimeline->expectedPresentationTimeNs != expectedNs",
-            timed_worker,
-        )
-        self.assertIn("latestTimeline->deadlineNs != deadlineNs", timed_worker)
-        self.assertLess(
-            timed_worker.index("latestTimeline = nativeFrameTimeline(vsyncId)"),
-            timed_worker.index("applyScheduled(presentId)"),
-        )
-        self.assertIn("if (deadlineNs <= applyNowNs)", timed_worker)
-        self.assertLess(timed_worker.index("if (deadlineNs <= applyNowNs)"),
-                        timed_worker.index("applyScheduled(presentId)"))
-        self.assertIn("rejectScheduled(presentId,", timed_worker)
-        for reason in (
-            '"refresh-invalid"',
-            '"expected-revised"',
-            '"deadline-revised"',
-            '"deadline-expired"',
-            '"apply-exception"',
-        ):
-            self.assertIn(reason, timed_worker)
-        self.assertNotIn("sync_wait", timed_worker)
-        self.assertNotIn("vkWait", timed_worker)
-        self.assertIn("canSubmitFrameTimeline(", presenter)
-        self.assertGreaterEqual(native.count("transport->refresh_duration_ns"), 6)
-        bridge_endpoint = bridge.split(
-            "public int enqueueHardwareBufferRifePresentation(\n"
-            "            Image previous,\n"
-            "            Image current,\n"
-            "            Image lookahead,\n"
-            "            int width,\n"
-            "            int height,\n"
-            "            long interpolationTimestampNs,\n"
-            "            long desiredPresentTimeNs,\n"
-            "            long proofSequence,\n"
-            "            long compositorFrameTimelineVsyncId,\n"
-            "            long compositorFrameTimelineExpectedNs,", 1
-        )[1].split("public int prepareHardwareBufferRifeOutput", 1)[0]
-        self.assertIn(
-            "(compositorFrameTimelineExpectedNs == 0L)", bridge_endpoint
-        )
-        self.assertIn(
-            "compositorFrameTimelineExpectedNs,\n"
-            "                    compositorFrameTimelineDeadlineNs",
-            bridge_endpoint,
-        )
-        bridge_prepared = bridge.split(
-            "public int enqueuePreparedHardwareBufferRifePresentation(\n"
-            "            long proofSequence, long desiredPresentTimeNs,\n"
-            "            long compositorFrameTimelineVsyncId,\n"
-            "            long compositorFrameTimelineExpectedNs,", 1
-        )[1].split("public void scheduleHardwareBufferRifePresentationRelease", 1)[0]
-        self.assertIn(
-            "(compositorFrameTimelineExpectedNs == 0L)", bridge_prepared
-        )
-        self.assertIn(
-            "compositorFrameTimelineExpectedNs,\n"
-            "                compositorFrameTimelineDeadlineNs",
-            bridge_prepared,
-        )
-        endpoint_native = native.split(
-            "NativeRifeBridge_nativeEnqueueHardwareBufferRifePresentation(", 1
-        )[1].split(
-            "NativeRifeBridge_nativeScheduleHardwareBufferRifePresentationRelease(",
-            1,
-        )[0]
-        self.assertLess(
-            endpoint_native.index("canSubmitFrameTimeline("),
-            endpoint_native.index("AHardwareBuffer_fromHardwareBuffer"),
-        )
-        self.assertIn("compositor_frame_timeline_deadline_ns", endpoint_native)
-        self.assertIn("compositor_frame_timeline_expected_ns", endpoint_native)
-        self.assertIn(
-            "(compositor_frame_timeline_expected_ns == 0)", endpoint_native
-        )
-        self.assertIn("if (!presented)", endpoint_native)
-        nonvisible = endpoint_native.split("if (!presented)", 1)[1].split(
-            "transport->surface_control_rows.push_back", 1
-        )[0]
-        self.assertIn("return 2;", nonvisible)
-        self.assertNotIn("++transport->next_present_id", nonvisible)
-        self.assertNotIn("++transport->present_calls", nonvisible)
-        prepared_native = native.split(
-            "NativeRifeBridge_nativeEnqueuePreparedHardwareBufferRifePresentation(",
-            1,
-        )[1].split(
-            "NativeRifeBridge_nativeEnqueueHardwareBufferRifePresentation(", 1
-        )[0]
-        self.assertIn(
-            "if (!transport->surface_control_presenter->present(",
-            prepared_native,
-        )
-        self.assertIn("compositor_frame_timeline_expected_ns", prepared_native)
-        self.assertIn(
-            "(compositor_frame_timeline_expected_ns == 0)", prepared_native
-        )
-        self.assertIn("return 0;", prepared_native)
-        enqueue_java = transport.split(
-            "@Override public EnqueueResult enqueue(", 1
-        )[1].split("@Override public", 1)[0]
-        self.assertIn("boolean physicalPresentationSkipped = result == 2", enqueue_java)
-        self.assertIn(
-            "physicalPresentationSkipped ? 0L :\n                                nextPresentId++",
-            enqueue_java,
-        )
-        self.assertIn(
-            "if (!physicalPresentationSkipped) submitted.addLast(pending)",
-            enqueue_java,
-        )
-        self.assertLess(
-            enqueue_java.index("nativeInFlight = pending"),
-            enqueue_java.index('"compositor-reserve-post-work"'),
-        )
-        self.assertLess(
-            enqueue_java.index("nativePending = true"),
-            enqueue_java.index('"compositor-reserve-post-work"'),
-        )
-        self.assertIn("return EnqueueResult.NOT_READY", enqueue_java)
-        self.assertIn("long[] values = new long[15]", bridge)
-        self.assertIn("frameTimelineDeadlineNs", bridge)
-        self.assertIn("transactionApplyStartNs", bridge)
-        self.assertIn("transactionApplyEndNs", bridge)
-        self.assertIn("RIFE compositor deadline miss evidence", transport)
-        vulkan_timing = native.split(
-            "struct BenchmarkPastPresentationTimingGoogle", 1
-        )[1].split("};", 1)[0]
-        self.assertNotIn("frame_timeline_deadline", vulkan_timing)
-        surface_timing = native.split(
-            "struct SurfaceControlPresentationTiming", 1
-        )[1].split("};", 1)[0]
-        self.assertIn("frame_timeline_deadline", surface_timing)
-        self.assertIn("transaction_apply_start", surface_timing)
-        self.assertIn("transaction_apply_end", surface_timing)
-        self.assertIn("bool physical_dropped = false", native)
-        self.assertIn("bool event_queued = false", native)
-        self.assertIn("takeUnavailablePresentFences()", native)
-        self.assertIn("markDropped(present_id)", native)
-        rejected = presenter.split("void rejectScheduled", 1)[1].split(
-            "static void postNativeFrameTimelineCallback", 1
-        )[0]
-        self.assertIn("::close(row.acquireFenceFd)", rejected)
-        self.assertIn("row.submissionRejected = true", rejected)
-        self.assertIn("row.released = true", rejected)
-        teardown = presenter.split("~Impl()", 1)[1].split(
-            "bool present(AHardwareBuffer* buffer", 1
-        )[0]
-        self.assertLess(
-            teardown.index("timedApplyStop_.store"),
-            teardown.index("timedApplyWorker_.join"),
-        )
-        self.assertLess(
-            teardown.index("timedApplyWorker_.join"),
-            teardown.index("ASurfaceControl_release(surface_)"),
-        )
-        dropped = native.split(
-            "takeUnavailablePresentFences();", 1
-        )[1].split(
-            "surface_control_presenter->pollCompletion()", 1
-        )[0]
-        self.assertIn("found->physical_dropped = true", dropped)
-        self.assertIn("dropped_timing.physical_dropped = true", native)
-        self.assertIn("return 2;", native.split(
-            "nativePollPresentationTiming", 1
-        )[1].split("nativeClosePresentationSurface", 1)[0])
-        self.assertIn("if (result == 2)", bridge)
-        self.assertIn("PresentationTiming.dropped(values[0])", bridge)
-        self.assertIn("if (timing.dropped)", transport)
-        self.assertIn("PresentationEvent.dropped(", transport)
-        generator_poll = generator.split(
-            "private void pollPhysicalPresentations()", 1
-        )[1].split("private boolean externalPathManuallyCertified", 1)[0]
-        self.assertIn("event.kind ==", generator_poll)
-        self.assertIn("externalPresentationLedger.physicallyDropped(",
-                      generator_poll)
-        self.assertIn("externalPhysicalCadence.recordDropped(", generator_poll)
-        self.assertLess(
-            generator_poll.index("externalPresentationLedger.physicallyDropped("),
-            generator_poll.index("ExternalPresentationLedger.Commit commit"),
-        )
-        retirement = native.split(
-            "for (auto iterator = transport->surface_control_rows.begin();", 1
-        )[1].split("return 0;", 1)[0]
-        self.assertIn("!iterator->physical_dropped", retirement)
-        self.assertIn("!iterator->event_queued", retirement)
-        self.assertIn("kMaximumRejectionLogs = 12", presenter)
-        self.assertIn("Timed apply rejected presentId=%llu reason=%s", presenter)
-        self.assertIn('scheduledRejected', presenter)
 
     def test_in_poll_rejection_degrades_selected_synthetic_to_endpoint_hold(self):
         generator = self.read(
@@ -5026,7 +4520,7 @@ class BoxPyramidTest(unittest.TestCase):
         source = (ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" /
                   "game" / "DisplayFrameGenerator.java").read_text()
         self.assertIn("private long denseGpuBudgetUs() {", source)
-        self.assertIn("int scans = frameRate.panelScansPerOutput();", source)
+        self.assertIn("int scans = presentationScansPerOutput();", source)
         self.assertIn("if (scans < 2 || panelPeriodUs <= 0L) return DENSE_GPU_BUDGET_US;", source)
         self.assertIn("periodUs * 4L / 5L - DENSE_GPU_BUDGET_WARP_RESERVE_US", source)
         self.assertRegex(source, r'if \(total > denseGpuBudgetUs\(\)\)\s*\{\s*'

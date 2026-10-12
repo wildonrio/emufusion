@@ -25,7 +25,7 @@ rejects a conflicting flag rather than silently producing a reduced APK.
 It reuses staged cores by default; their existing source, hash and asset checks
 still run. Set the relevant `LUCENT_REUSE_...` flag to `0` to rebuild cores.
 Optional frame-generation flags are not changed by this profile. Match those
-flags to the intended deployment before replacing an existing LSFG/RIFE build;
+flags to the intended deployment before replacing an existing RIFE build;
 the default emulator-only profile is not feature-equivalent to those builds.
 
 The signed output must pass `tools/verify_portable_bundle.py`, in addition to

@@ -21,7 +21,7 @@ class WidescreenEnhancementsTest(unittest.TestCase):
         self.assertIn('"WIDESCREEN ENHANCEMENTS"', theme)
         # 2026-09-06: slot 23 (WIDESCREEN HACK) sits directly under the native
         # 16:9 row; the tail order otherwise keeps the legal notice last.
-        self.assertIn('settingsTailSlots: [17, 21, 22, 23, 20, 19, 24, 18]', theme)
+        self.assertIn('settingsTailSlots: [17, 21, 25, 22, 23, 20, 19, 24, 18]', theme)
         # The old flag's default stays true even though the hack defaults off.
         self.assertIn('getBoolean(HACK_ENABLED, false)', settings)
 

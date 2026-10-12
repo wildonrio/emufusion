@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import unittest
 
-from tools.tests.test_lsfg_endpoint_lifetime import method
+from tools.tests.test_native_source_image_renderer_wiring import method
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "unified-android/src"

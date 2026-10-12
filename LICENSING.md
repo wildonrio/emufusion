@@ -52,13 +52,6 @@ notices described in `THIRD_PARTY_NOTICES.md`. Normal builds contain none of
 that payload. The qualification manifest keeps product routing disabled; its
 presence is not a product-quality claim.
 
-An independently requested LSFG qualification APK may link the pinned public
-MIT `lsfg-vk-android` wrapper into an EmuFusion-owned Android host. The
-user-owned `Lossless.dll` and every derived shader remain outside the APK and
-repository; the conditional runtime accepts them only from app-private local
-storage. This personal qualification route grants no redistribution right and
-does not make LSFG product-qualified.
-
 ## Standalone EmuFusion theme
 
 The contents of `theme/` may also be downloaded and used independently with an

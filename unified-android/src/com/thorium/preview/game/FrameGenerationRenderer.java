@@ -17,6 +17,13 @@ public interface FrameGenerationRenderer extends AutoCloseable {
     interface StatsListener {
         void onFrameRate(double sustainedSourceFps, double selectedOutputFps,
                          double actualPresentedFps, boolean cadenceQualified);
+
+        /**
+         * Once a second while the built-in generator presents: real images
+         * shown per second, and that plus generated images that passed the
+         * per-frame motion verification (never duplicates or cross-fades).
+         */
+        default void onDisplayedFrameRate(double realFps, double displayedFps) {}
     }
 
     /** The only Surface an emulator receives. */
