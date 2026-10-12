@@ -13,11 +13,15 @@ import subprocess
 import tempfile
 import unittest
 
+from tools.tests import aps3e_locked_source as locked
+
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / ('docs/qa/android-portability-2026-10-06-ps3-wide-pointer/'
-                 'native-source/app/src/main/cpp/rpcs3/rpcs3/Emu/Cell')
 PATCH = ROOT / 'engines/patches/aps3e-spurs-thread-argument-map.patch'
-RELATIVE = Path('app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp')
+CELL = Path('app/src/main/cpp/rpcs3/rpcs3/Emu/Cell')
+RELATIVE = CELL / 'SPUThread.cpp'
+# The Cell sources this patch applies to: the pinned archive with the earlier
+# locked patches (formerly a docs/qa snapshot of the same bytes). Set in setUpClass.
+SOURCE = None
 
 
 def startup(source):
@@ -82,7 +86,7 @@ int main(int argc, char**) {
 '''
 
 
-class SpursArgumentMapTest(unittest.TestCase):
+class SpursArgumentMapLockTest(unittest.TestCase):
     def test_normal_recipe_records_the_exact_patch_once(self):
         lock = json.loads((ROOT / 'engines/aps3e-source-lock.json').read_text())
         matches = [p for p in lock['patches'] if p['path'] == str(PATCH.relative_to(ROOT))]
@@ -91,8 +95,14 @@ class SpursArgumentMapTest(unittest.TestCase):
         self.assertEqual(matches[0]['bytes'], PATCH.stat().st_size)
         self.assertEqual(matches[0]['upstreamCommit'], '9d020a3e5956134bd55d610082d82228bdfa0a96')
 
+
+@unittest.skipUnless(locked.available(), 'pinned aPS3e archive absent: ' + str(locked.ARCHIVE))
+class SpursArgumentMapTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        global SOURCE
+        SOURCE = locked.state_before(str(PATCH.relative_to(ROOT)), extra=(
+            str(CELL / 'lv2/sys_spu.h'), str(CELL / 'lv2/sys_spu.cpp'))) / CELL
         cls.temporary = tempfile.TemporaryDirectory(prefix='emufusion-spu-map-')
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.directory = Path(cls.temporary.name)

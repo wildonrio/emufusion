@@ -3,6 +3,8 @@
 The real Android GPU probe reproduces this at allocation1025. This executable
 recording-driver test also covers hard failures and bounded fresh-pool failure.
 """
+import hashlib
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,8 +12,38 @@ import unittest
 from tools.tests import test_dolphin_descriptor_batches as batch
 
 PATCH=batch.ROOT/'engines/patches/dolphin-libretro-descriptor-errors.patch'
+PINNED=batch.SOURCE/batch.REL/'CommandBufferManager.cpp'
 
 class DescriptorErrorsTest(unittest.TestCase):
+    def test_lock_records_the_exact_patch(self):
+        lock=json.loads((batch.ROOT/'engines/dolphin-source-lock.json').read_text())
+        rows=[row for row in lock['patches'] if row['path']==str(PATCH.relative_to(batch.ROOT))]
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]['sha256'],hashlib.sha256(PATCH.read_bytes()).hexdigest())
+
+    @unittest.skipUnless(PINNED.is_file(),'pinned Dolphin source absent: '+str(PINNED))
+    def test_locked_patch_applies_exactly_to_the_pinned_source_and_reverses(self):
+        with tempfile.TemporaryDirectory(prefix='dolphin-descriptor-apply-') as directory:
+            directory=Path(directory)
+            for name in ('CommandBufferManager.cpp','CommandBufferManager.h'):
+                target=directory/batch.REL/name; target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_bytes((batch.SOURCE/batch.REL/name).read_bytes())
+            original=(directory/batch.REL/'CommandBufferManager.cpp').read_bytes()
+            subprocess.run(['patch','--batch','--fuzz=0','-p1','-i',str(PATCH)],
+                           cwd=directory,check=True,capture_output=True)
+            fixed=(directory/batch.REL/'CommandBufferManager.cpp').read_bytes()
+            self.assertNotEqual(fixed,original)
+            self.assertIn(b'AllocateDescriptorSet',fixed)
+            subprocess.run(['patch','--batch','--fuzz=0','-R','-p1','-i',str(PATCH)],
+                           cwd=directory,check=True,capture_output=True)
+            self.assertEqual((directory/batch.REL/'CommandBufferManager.cpp').read_bytes(),original)
+
+    # The recording-driver scaffolding is built from the closed descriptor-batch
+    # diagnostic's patch (docs/qa, removed by the build disk cleanup); it is not
+    # a locked patch and has no other copy, so this executable check runs only
+    # where that diagnostic is still present.
+    @unittest.skipUnless(batch.PATCH.is_file() and batch.HEADERS.is_dir() and PINNED.is_file(),
+                         'closed descriptor-batch diagnostic or pinned sources absent: '+str(batch.PATCH))
     def test_original_fails_and_corrected_methods_pass(self):
         with tempfile.TemporaryDirectory(prefix='dolphin-descriptor-errors-') as directory:
             directory=Path(directory)

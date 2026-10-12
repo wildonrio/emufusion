@@ -9,17 +9,26 @@ import sys
 import tempfile
 import unittest
 
+from tools.tests import aps3e_locked_source as locked
+
 ROOT = Path(__file__).resolve().parents[2]
 QA = ROOT / 'docs/qa/android-portability-2026-10-06-ps3-wide-pointer'
-spec = importlib.util.spec_from_file_location('wide_prepare', QA / 'prepare.py')
-PREPARE = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(PREPARE)
+PATCH = ROOT / 'engines/patches/aps3e-android-full-address-atomic-ptr.patch'
+PREPARE = None
+if (QA / 'prepare.py').is_file():
+    spec = importlib.util.spec_from_file_location('wide_prepare', QA / 'prepare.py')
+    PREPARE = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(PREPARE)
 
 
 class WidePointerTests(unittest.TestCase):
+    @unittest.skipUnless((QA / 'wide-pointer.patch').is_file(),
+                         'archived tested candidate patch absent: ' + str(QA / 'wide-pointer.patch'))
+    def test_normal_build_patch_is_the_archived_tested_candidate(self):
+        self.assertEqual(PATCH.read_bytes(), (QA / 'wide-pointer.patch').read_bytes())
+
     def test_normal_build_records_the_exact_tested_full_address_patch(self):
-        patch = ROOT / 'engines/patches/aps3e-android-full-address-atomic-ptr.patch'
-        self.assertEqual(patch.read_bytes(), (QA / 'wide-pointer.patch').read_bytes())
+        patch = PATCH
         lock = json.loads((ROOT / 'engines/aps3e-source-lock.json').read_text())
         paths = [p['path'] for p in lock['patches']]
         name = str(patch.relative_to(ROOT))
@@ -35,25 +44,30 @@ class WidePointerTests(unittest.TestCase):
         self.assertFalse(build['traceEnabled'])
         self.assertIn('ICO still stalls', build['limitations'])
 
+    @unittest.skipUnless(PREPARE is not None and locked.available(),
+                         'closed diagnostic or pinned aPS3e archive absent')
     def test_patch_roundtrip_matches_actual_candidate_headers(self):
-        if not (QA / 'wide-pointer.patch').is_file():
-            self.skipTest('local-only input absent: ' + str(QA / 'wide-pointer.patch'))
+        # The headers as the patch finds them: the pinned archive with the
+        # earlier locked patches, byte for byte the diagnostic's pinned inputs.
+        source = locked.state_before(str(PATCH.relative_to(ROOT)), extra=tuple(
+            'app/src/main/cpp/rpcs3/' + name for name in PREPARE.HASHES)) / 'app/src/main/cpp/rpcs3'
+        for name, expected in PREPARE.HASHES.items():
+            self.assertEqual(hashlib.sha256((source / name).read_bytes()).hexdigest(), expected, name)
         with tempfile.TemporaryDirectory(prefix='aps3e-wide-roundtrip-') as temp:
             root = Path(temp)
             prefix = root / 'app/src/main/cpp/rpcs3'
             for name in PREPARE.HASHES:
-                original = (PREPARE.SOURCE / name).read_bytes()
+                original = (source / name).read_bytes()
                 path = prefix / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(original)
-            patch = QA / 'wide-pointer.patch'
-            subprocess.run(['git', 'apply', '--unsafe-paths', str(patch)], cwd=root, check=True)
+            subprocess.run(['git', 'apply', '--unsafe-paths', str(PATCH)], cwd=root, check=True)
             for name in PREPARE.HASHES:
                 self.assertEqual((prefix / name).read_text(),
-                    PREPARE.transform(name, (PREPARE.SOURCE / name).read_text()))
-            subprocess.run(['git', 'apply', '--unsafe-paths', '--reverse', str(patch)], cwd=root, check=True)
+                    PREPARE.transform(name, (source / name).read_text()))
+            subprocess.run(['git', 'apply', '--unsafe-paths', '--reverse', str(PATCH)], cwd=root, check=True)
             for name in PREPARE.HASHES:
-                self.assertEqual((prefix / name).read_bytes(), (PREPARE.SOURCE / name).read_bytes())
+                self.assertEqual((prefix / name).read_bytes(), (source / name).read_bytes())
 
     def test_actual_headers_old_failure_wide_pass_nonandroid_regression(self):
         if not (QA / 'pointer_test.cpp').is_file():

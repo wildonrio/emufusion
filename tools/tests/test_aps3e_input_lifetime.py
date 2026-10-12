@@ -10,11 +10,21 @@ import subprocess
 import tempfile
 import unittest
 
+from tools.tests import aps3e_locked_source as locked
+
 ROOT = Path(__file__).resolve().parents[2]
-SNAPSHOT = ROOT / 'docs/qa/android-portability-2026-10-06-ps3-wide-pointer/native-source'
 RELATIVE = Path('app/src/main/cpp')
 PATCH = ROOT / 'engines/patches/aps3e-input-lifetime.patch'
 NAMES = ('aps3e_emu.cpp', 'aps3e_rp3_impl.cpp')
+_snapshot = []
+
+
+def snapshot():
+    """The sources this patch applies to: the pinned archive with the earlier
+    locked patches (formerly a docs/qa snapshot of the same files)."""
+    if not _snapshot:
+        _snapshot.append(locked.state_before(str(PATCH.relative_to(ROOT))))
+    return _snapshot[0]
 
 
 def method(text, signature):
@@ -29,7 +39,7 @@ def method(text, signature):
 
 
 def sources(patched):
-    original = {name: (SNAPSHOT / RELATIVE / name).read_bytes() for name in NAMES}
+    original = {name: (snapshot() / RELATIVE / name).read_bytes() for name in NAMES}
     if not patched:
         return {name: payload.decode() for name, payload in original.items()}
     with tempfile.TemporaryDirectory() as temporary:
@@ -41,7 +51,7 @@ def sources(patched):
         result = {name: (folder / name).read_text() for name in NAMES}
         subprocess.run(['git', 'apply', '--reverse', str(PATCH)], cwd=temporary, check=True)
         assert all((folder / name).read_bytes() == payload for name, payload in original.items())
-    assert all((SNAPSHOT / RELATIVE / name).read_bytes() == payload for name, payload in original.items())
+    assert all((snapshot() / RELATIVE / name).read_bytes() == payload for name, payload in original.items())
     return result
 
 
@@ -224,7 +234,8 @@ int main(int argc, char** argv) {
 '''
 
 
-@unittest.skipUnless(SNAPSHOT.is_dir() and shutil.which('c++'), 'source/compiler absent')
+@unittest.skipUnless(locked.available() and shutil.which('c++'),
+                     'pinned aPS3e archive or compiler absent')
 class InputLifetimeTest(unittest.TestCase):
     def run_cases(self, patched, scenarios):
         text = sources(patched)

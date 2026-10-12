@@ -6,18 +6,27 @@ import subprocess
 import tempfile
 import unittest
 
+from tools.tests import aps3e_locked_source as locked
+
 ROOT = Path(__file__).resolve().parents[2]
 QA = ROOT / 'docs/qa/android-portability-2026-10-06-ps3-ppu-interpreter'
 PATCH = ROOT / 'engines/patches/aps3e-ppu-interpreter-mmio.patch'
 RELATIVE = Path('app/src/main/cpp/rpcs3/rpcs3/Emu/Cell')
-SPEC = importlib.util.spec_from_file_location('mmio_prepare', QA / 'prepare_mmio.py')
-PREPARE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(PREPARE)
+PREPARE = None
+if (QA / 'prepare_mmio.py').is_file():
+    SPEC = importlib.util.spec_from_file_location('mmio_prepare', QA / 'prepare_mmio.py')
+    PREPARE = importlib.util.module_from_spec(SPEC)
+    SPEC.loader.exec_module(PREPARE)
 
 
 class InterpreterMMIOTests(unittest.TestCase):
+    @unittest.skipUnless(PREPARE is not None and locked.available(),
+                         'closed diagnostic or pinned aPS3e archive absent')
     def test_patch_matches_compiled_candidate_and_roundtrips(self):
-        original = PREPARE.SOURCE.read_bytes()
+        # The interpreter as the patch finds it: the pinned archive with the
+        # earlier locked patches (the live build tree may have moved on).
+        original = (locked.state_before(str(PATCH.relative_to(ROOT))) / RELATIVE /
+                    'PPUInterpreter.cpp').read_bytes()
         with tempfile.TemporaryDirectory(prefix='aps3e-mmio-patch-') as directory:
             root = Path(directory)
             target = root / RELATIVE / 'PPUInterpreter.cpp'
@@ -27,7 +36,14 @@ class InterpreterMMIOTests(unittest.TestCase):
             subprocess.run([*command, str(PATCH)], cwd=root, check=True)
             self.assertEqual(target.read_text(), PREPARE.transform(original))
             header = target.parent / 'ppu_interpreter_mmio.h'
-            self.assertEqual(header.read_bytes(), (QA / header.name).read_bytes())
+            if (QA / header.name).is_file():
+                self.assertEqual(header.read_bytes(), (QA / header.name).read_bytes())
+            else:
+                # The compiled candidate's archived copy is gone: the created
+                # header must still define what the transformed source calls.
+                text = header.read_text()
+                for name in ('ppu_interpreter_write32', 'ppu_interpreter_read_value'):
+                    self.assertIn(name, text)
             again = subprocess.run([*command, '--check', str(PATCH)], cwd=root,
                                    capture_output=True)
             self.assertNotEqual(again.returncode, 0)

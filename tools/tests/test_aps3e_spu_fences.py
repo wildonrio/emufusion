@@ -1,19 +1,37 @@
 """Ordering-transform scope and reproducible patch, not a gameplay acceptance test."""
 import difflib
+import hashlib
 import importlib.util
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
+from tools.tests import aps3e_locked_source as locked
+
 ROOT = Path(__file__).resolve().parents[2]
 QA = ROOT / 'docs/qa/android-portability-2026-10-06-ps3-spu-fences'
-spec = importlib.util.spec_from_file_location('spu_fences', QA / 'prepare.py')
-m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
+m = None
 
 
+@unittest.skipUnless((QA / 'prepare.py').is_file() and locked.available(),
+                     'closed diagnostic or pinned aPS3e archive absent')
 class SpuFencesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # The diagnostic was reviewed against SPUThread.cpp as it stands before
+        # the SPURS argument-map patch (its docs/qa snapshot is gone); rebuild
+        # those exact bytes from the pinned archive and the locked patches.
+        global m
+        spec = importlib.util.spec_from_file_location('spu_fences', QA / 'prepare.py')
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        m.SOURCE = locked.state_before('engines/patches/aps3e-spurs-thread-argument-map.patch') / \
+            'app/src/main/cpp/rpcs3/rpcs3/Emu/Cell/SPUThread.cpp'
+
+    def test_rebuilt_source_is_the_reviewed_input(self):
+        self.assertEqual(hashlib.sha256(m.SOURCE.read_bytes()).hexdigest(), m.SOURCE_SHA)
+
     def test_scope_no_decoder_config_or_hash_predicate_change(self):
         old = m.SOURCE.read_text()
         new = m.transform(old)
