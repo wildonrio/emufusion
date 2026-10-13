@@ -29,15 +29,19 @@ public final class TimelineSchedulerSwitch {
     // comparisons: 0 the earlier two-sample combination, 1 the phase-field
     // candidates, 2 those with per-pixel selection among neighbouring cell
     // vectors, 3 also a coarse-to-fine phase-field search, 4 level 1 with a
-    // vector-median phase field (default: 1-2% better than 1 on every hold-out
-    // game, Thor 2026-10-12, for a negligible low-resolution pass).
+    // vector-median phase field (1-2% better than 1 on every hold-out game,
+    // Thor 2026-10-12, for a negligible low-resolution pass), 5 (default)
+    // level 4 with its match costs on the pyramid's quarter-resolution images:
+    // equal or better on all seven hold-out games (SM3DW 0.699 -> 0.695 of a
+    // cross-fade, Wind Waker HD 0.523 -> 0.516, Star Fox 64 1.009 -> 0.981)
+    // and far cheaper than sampling the full-resolution history (2026-10-13).
     static final String SYNTH_GLOBAL = "emufusion_framegen_synth";
     // QA only: emufusion_framegen_work_floor 0..4 holds the dense work level
     // at least there, so hold-out and timing runs can measure each level
     // (delete after tests; the product never sets it).
     static final String WORK_FLOOR_GLOBAL = "emufusion_framegen_work_floor";
     private static volatile int workFloor;
-    static final int DEFAULT_SYNTHESIS_LEVEL = 4;
+    static final int DEFAULT_SYNTHESIS_LEVEL = 5;
     private static volatile int synthesisLevel = DEFAULT_SYNTHESIS_LEVEL;
 
     private TimelineSchedulerSwitch() {}
@@ -70,7 +74,7 @@ public final class TimelineSchedulerSwitch {
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default synthesis.
         }
-        synthesisLevel = Math.max(0, Math.min(4, level));
+        synthesisLevel = Math.max(0, Math.min(5, level));
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(

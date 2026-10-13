@@ -2152,7 +2152,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private static final int HOLDOUT_RING = 4;
     private static final int HOLDOUT_LEVELS = 3;
     // Synthesis levels scored side by side on every hold-out pair.
-    private static final int[] HOLDOUT_LEVEL_IDS = {0, 1, 4};
+    // 0 endpoint fields only, 4 the production phase field, 5 the phase field
+    // matched on the quarter-resolution pyramid images (2026-10-13).
+    private static final int[] HOLDOUT_LEVEL_IDS = {0, 4, 5};
     private boolean holdoutMode;
     private boolean holdoutWithholdNext;
     private final int[] holdoutReferenceTextures = new int[HOLDOUT_REFERENCES];
@@ -11305,8 +11307,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glViewport(0, 0, densePhaseWidth, densePhaseHeight);
         GLES20.glUseProgram(densePhaseProgram);
         bindQuad(densePhaseProgram);
-        bindTexture(densePhaseProgram, "uPrevious", historyTextures[previousIndex], 0);
-        bindTexture(densePhaseProgram, "uCurrent", historyTextures[currentIndex], 1);
+        // Matching on the pyramid's quarter-resolution box images (built once
+        // per real frame) instead of the full-resolution history: each cell's
+        // ~190 cost taps spread 7.5 px apart over an 8 MB texture made the
+        // field cost 1.1-2.8 ms per generated frame (PS3/Eden, 2026-10-13).
+        boolean quarter = phaseMatchesQuarterImages() && denseQuarterImagesAvailable();
+        bindTexture(densePhaseProgram, "uPrevious",
+                quarter ? denseBoxTextures[0][0] : historyTextures[previousIndex], 0);
+        bindTexture(densePhaseProgram, "uCurrent",
+                quarter ? denseBoxTextures[1][0] : historyTextures[currentIndex], 1);
         bindTexture(densePhaseProgram, "uForwardMotion", activeForwardFlow(), 2);
         bindTexture(densePhaseProgram, "uBackwardMotion", activeBackwardFlow(), 3);
         boolean seedsReady = denseV28ReducedAnalysisRequested && denseGlobalSeedTextures[0] != 0;
@@ -11329,7 +11338,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 synthesisLevel == 3 ? 1f : 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         densePhaseBoundTexture = densePhaseTexture;
-        if (synthesisLevel == 4 && densePhaseMedianProgram != 0 && densePhaseMedianFramebuffer != 0) {
+        if ((synthesisLevel == 4 || synthesisLevel == 5) &&
+                densePhaseMedianProgram != 0 && densePhaseMedianFramebuffer != 0) {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, densePhaseMedianFramebuffer);
             GLES20.glUseProgram(densePhaseMedianProgram);
             bindQuad(densePhaseMedianProgram);
@@ -11341,6 +11351,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, state[0]);
         GLES20.glViewport(state[1], state[2], state[3], state[4]);
         return true;
+    }
+
+    /** Synthesis 5 (QA): level 4 with phase costs on the quarter-resolution images. */
+    private boolean phaseMatchesQuarterImages() { return synthesisLevel == 5; }
+
+    /** Whether this geometry's pyramid builds the history/4 box images. */
+    private boolean denseQuarterImagesAvailable() {
+        return denseBoxWidths[0] >= denseLevelWidths[1] &&
+                denseBoxHeights[0] >= denseLevelHeights[1];
     }
 
     private void drawMotionFrame(float phase) {

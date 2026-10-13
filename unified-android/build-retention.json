@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "56694e675ed18d85fcfe4f31e9dce204d53aa065903d690a6896d4bafcb7fa4a": "Current release 3.2.59 (133). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
-    "0d85c9da3a6ffb115359ffed945b5d8e8991315cf93077fcfebda8619d30cc12": "Rollback 3.2.58 (132) until 3.2.59 settles."
+    "978fcfd633f8548a2bb15a274e9815f0be6a82aeaf3d39841de07295f6027358": "Current release 3.2.60 (134). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
+    "56694e675ed18d85fcfe4f31e9dce204d53aa065903d690a6896d4bafcb7fa4a": "Rollback 3.2.59 (133) until 3.2.60 settles."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -329,6 +329,10 @@
     "unified-android/build/emufusion-3.2.58-phase2-phase3-qualification-b34b92a7608349d9bd53fe656e6dbc8e56164cd69682f4794013c252a18988f5.apk": {
       "sha256": "b34b92a7608349d9bd53fe656e6dbc8e56164cd69682f4794013c252a18988f5",
       "reason": "Superseded 2026-10-13: gating visible misses too left Cemu at full work for ~8 s at each start (SM3DW 261 late callbacks vs 38). Replaced by the shader-time-only gate; Thor evidence in the goal doc."
+    },
+    "unified-android/build/emufusion-3.2.60-phase2-phase3-qualification-8a54cf58dd833af96c2888f7de40b67db50a7d3c5b838d41914708d8a652eb38.apk": {
+      "sha256": "8a54cf58dd833af96c2888f7de40b67db50a7d3c5b838d41914708d8a652eb38",
+      "reason": "Closed 2026-10-13 hold-out diagnostic (variant 5 = quarter-resolution phase matching): equal or better on all seven games; superseded by the candidate that makes it the default."
     }
   }
 }

@@ -100,8 +100,11 @@ class PhaseSynthesisTest(unittest.TestCase):
 
     def test_synthesis_defaults_on_with_a_qa_only_override(self):
         self.assertIn('SYNTH_GLOBAL = "emufusion_framegen_synth"', SWITCH)
-        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 4;", SWITCH)
-        self.assertIn("synthesisLevel = Math.max(0, Math.min(4, level));", SWITCH)
+        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 5;", SWITCH)
+        # 5 (QA): level 4 matched on the quarter-resolution pyramid images.
+        self.assertIn("synthesisLevel = Math.max(0, Math.min(5, level));", SWITCH)
+        self.assertIn("private static final int[] HOLDOUT_LEVEL_IDS = {0, 4, 5};", GENERATOR)
+        self.assertIn("private boolean phaseMatchesQuarterImages() { return synthesisLevel == 5; }", GENERATOR)
         self.assertIn("synthesisEnabled = synthesisLevel > 0;", GENERATOR)
         self.assertIn('"#define PHASE_SYNTHESIS\\n#define PHASE_NEIGHBORS\\n" + MOTION_INTERPOLATE_SHADER', GENERATOR)
 
