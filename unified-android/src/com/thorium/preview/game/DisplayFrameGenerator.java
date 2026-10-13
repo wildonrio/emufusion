@@ -4324,6 +4324,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         densePhaseMedianProgram = createProgram(VERTEX_SHADER, PHASE_MEDIAN_SHADER);
         synthesisLevel = TimelineSchedulerSwitch.synthesisLevel();
         qaWorkFloor = TimelineSchedulerSwitch.workFloor();
+        solveMatchesQuarterImages = TimelineSchedulerSwitch.solveQuarter();
         denseWorkLevel = Math.max(denseWorkLevel, qaWorkFloor);
         synthesisEnabled = synthesisLevel > 0;
         predictionProofProgram = createProgram(
@@ -6802,6 +6803,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int denseWorkLevel;
     // QA only (emufusion_framegen_work_floor): the lowest work level used.
     private int qaWorkFloor;
+    // The finest solve level samples the pyramid's history/4 box images, like
+    // the phase field since 3.2.60: its patch taps sit a cell (15 px at 1080p)
+    // apart, so full-resolution sampling aliased and missed the cache. Same
+    // hold-out quality (God of War II 0.550 = 0.550, SM3DW 0.688 -> 0.683,
+    // Wind Waker HD 0.543 -> 0.527); each direction 2.0 -> 0.9 ms
+    // (2026-10-13). QA: emufusion_framegen_solve_quarter=0 turns it off.
+    private boolean solveMatchesQuarterImages;
 
     /** One independent failed pair, never a repeated rolling-window maximum. */
     private void shedDenseWork(String reason) {
@@ -7210,10 +7218,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private void solveDenseDirection(int direction, int reference, int target,
                                      boolean temporalGuideReady) {
         int prior = 0;
+        boolean quarter = solveMatchesQuarterImages && denseQuarterImagesAvailable();
         for (int level = DENSE_LEVELS - 1; level >= 0; --level) {
-            int ref = level == 0 ? reference :
+            int ref = level == 0 ? (quarter ? denseBoxTextures[direction == 0 ? 0 : 1][0] : reference) :
                     densePyramidTextures[direction == 0 ? 0 : 1][level - 1];
-            int dst = level == 0 ? target :
+            int dst = level == 0 ? (quarter ? denseBoxTextures[direction == 0 ? 1 : 0][0] : target) :
                     densePyramidTextures[direction == 0 ? 1 : 0][level - 1];
             int width = denseLevelWidths[level];
             int height = denseLevelHeights[level];

@@ -105,6 +105,11 @@ class PhaseSynthesisTest(unittest.TestCase):
         self.assertIn("synthesisLevel = Math.max(0, Math.min(5, level));", SWITCH)
         self.assertIn("private static final int[] HOLDOUT_LEVEL_IDS = {0, 4, 5};", GENERATOR)
         self.assertIn("private boolean phaseMatchesQuarterImages() { return synthesisLevel == 5; }", GENERATOR)
+        # The finest solve uses the same quarter-resolution images by default.
+        self.assertIn("private static volatile boolean solveQuarter = true;", SWITCH)
+        self.assertIn("SOLVE_QUARTER_GLOBAL, 1) != 0;", SWITCH)
+        self.assertIn("boolean quarter = solveMatchesQuarterImages && denseQuarterImagesAvailable();", GENERATOR)
+        self.assertIn("int ref = level == 0 ? (quarter ? denseBoxTextures[direction == 0 ? 0 : 1][0] : reference) :", GENERATOR)
         self.assertIn("synthesisEnabled = synthesisLevel > 0;", GENERATOR)
         self.assertIn('"#define PHASE_SYNTHESIS\\n#define PHASE_NEIGHBORS\\n" + MOTION_INTERPOLATE_SHADER', GENERATOR)
 

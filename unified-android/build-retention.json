@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "978fcfd633f8548a2bb15a274e9815f0be6a82aeaf3d39841de07295f6027358": "Current release 3.2.60 (134). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
-    "56694e675ed18d85fcfe4f31e9dce204d53aa065903d690a6896d4bafcb7fa4a": "Rollback 3.2.59 (133) until 3.2.60 settles."
+    "faf2a8de3225325446e537fa10baadb50c3524587ab56775c6de209fb0344441": "Current release 3.2.61 (135). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
+    "978fcfd633f8548a2bb15a274e9815f0be6a82aeaf3d39841de07295f6027358": "Rollback 3.2.60 (134) until 3.2.61 settles."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -333,6 +333,10 @@
     "unified-android/build/emufusion-3.2.60-phase2-phase3-qualification-8a54cf58dd833af96c2888f7de40b67db50a7d3c5b838d41914708d8a652eb38.apk": {
       "sha256": "8a54cf58dd833af96c2888f7de40b67db50a7d3c5b838d41914708d8a652eb38",
       "reason": "Closed 2026-10-13 hold-out diagnostic (variant 5 = quarter-resolution phase matching): equal or better on all seven games; superseded by the candidate that makes it the default."
+    },
+    "unified-android/build/emufusion-3.2.61-phase2-phase3-qualification-c6db57997454fbaed85020e788e8c0ea3a115b101d7dd0610778f193b2d9204f.apk": {
+      "sha256": "c6db57997454fbaed85020e788e8c0ea3a115b101d7dd0610778f193b2d9204f",
+      "reason": "Closed 2026-10-13 diagnostic: QA switch for the quarter-resolution finest solve (quality-neutral, half the solve cost); superseded by the candidate that makes it the default."
     }
   }
 }

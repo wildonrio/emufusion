@@ -41,6 +41,12 @@ public final class TimelineSchedulerSwitch {
     // (delete after tests; the product never sets it).
     static final String WORK_FLOOR_GLOBAL = "emufusion_framegen_work_floor";
     private static volatile int workFloor;
+    // The finest motion solve runs on the pyramid's quarter-resolution images
+    // instead of the full history (default since 2026-10-13: same hold-out
+    // quality, half the solve cost); QA only: emufusion_framegen_solve_quarter=0
+    // restores the full-resolution solve for comparisons.
+    static final String SOLVE_QUARTER_GLOBAL = "emufusion_framegen_solve_quarter";
+    private static volatile boolean solveQuarter = true;
     static final int DEFAULT_SYNTHESIS_LEVEL = 5;
     private static volatile int synthesisLevel = DEFAULT_SYNTHESIS_LEVEL;
 
@@ -83,6 +89,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings never raise the work level.
         }
         workFloor = Math.max(0, Math.min(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL, floor));
+        boolean quarter = true;
+        try {
+            if (context != null) quarter = Settings.Global.getInt(
+                    context.getContentResolver(), SOLVE_QUARTER_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default quarter-resolution solve.
+        }
+        solveQuarter = quarter;
     }
 
     static boolean enabled() { return enabled; }
@@ -97,6 +111,8 @@ public final class TimelineSchedulerSwitch {
     static int synthesisLevel() { return synthesisLevel; }
 
     static int workFloor() { return workFloor; }
+
+    static boolean solveQuarter() { return solveQuarter; }
 
     /** Generation ceiling for a timeline generator built after the last refresh. */
     static int maxMultiplier() { return maxMultiplier; }
