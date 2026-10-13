@@ -337,6 +337,10 @@
     "unified-android/build/emufusion-3.2.61-phase2-phase3-qualification-c6db57997454fbaed85020e788e8c0ea3a115b101d7dd0610778f193b2d9204f.apk": {
       "sha256": "c6db57997454fbaed85020e788e8c0ea3a115b101d7dd0610778f193b2d9204f",
       "reason": "Closed 2026-10-13 diagnostic: QA switch for the quarter-resolution finest solve (quality-neutral, half the solve cost); superseded by the candidate that makes it the default."
+    },
+    "unified-android/build/emufusion-3.2.63-phase2-phase3-qualification-e8145642c19e11992aad8624933acd638572748d33181c52663dbeac039240d1.apk": {
+      "sha256": "e8145642c19e11992aad8624933acd638572748d33181c52663dbeac039240d1",
+      "reason": "Closed 2026-10-13 trial: phase field on a 4x (512x288) grid with the same cost patch. Negative on the hold-out (God of War II, same scene: 0.549 -> 0.580 of a cross-fade; SM3DW and Wind Waker HD also worse); reverted in source; Thor restored to 3.2.62 (136) with identity preserved."
     }
   }
 }
