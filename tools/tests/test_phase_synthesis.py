@@ -25,6 +25,20 @@ def shader(name):
     return text
 
 
+def shader_constant(name):
+    """A shader constant up to its terminating ';' (for shaders whose last
+    line does not end in a bare closing brace)."""
+    start = GENERATOR.index("private static final String %s =" % name)
+    end = GENERATOR.index('\\n";', start) + 4
+    text = ""
+    for line in GENERATOR[start:end].split("\n"):
+        if line.strip().startswith("//"):
+            continue
+        for part in re.findall(r'"((?:[^"\\]|\\.)*)"', line):
+            text += ast.literal_eval('"' + part + '"')
+    return text
+
+
 def method(signature):
     start = GENERATOR.index(signature)
     brace = GENERATOR.index("{", start)
@@ -47,6 +61,7 @@ class PhaseSynthesisTest(unittest.TestCase):
             "phase": shader("DENSE_PHASE_SHADER"),
             "median": shader("PHASE_MEDIAN_SHADER"),
             "holdout": shader("HOLDOUT_SHADER"),
+            "cut": shader_constant("DENSE_GLOBAL_CUT_SHADER"),
             "interpolate": shader("MOTION_INTERPOLATE_SHADER"),
             "synth": "#define PHASE_SYNTHESIS\n" + shader("MOTION_INTERPOLATE_SHADER"),
             "neighbors": "#define PHASE_SYNTHESIS\n#define PHASE_NEIGHBORS\n" +

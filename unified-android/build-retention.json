@@ -377,6 +377,14 @@
     "unified-android/build/emufusion-3.2.66-phase2-phase3-qualification-043ef7a8aa3d3a41cef0885435a92de48a2a6074a5d31cf38ee07b3ac192b03e.apk": {
       "sha256": "043ef7a8aa3d3a41cef0885435a92de48a2a6074a5d31cf38ee07b3ac192b03e",
       "reason": "Closed 2026-10-13 hold-out trial: synthesis 14 (12 + neighbour selection) beat 12 (SM3DW 0.521->0.510, Wind Waker HD 0.415->0.404, Sunshine 0.737->0.708, God of War II equal) at the same GPU time per pair; superseded by the candidate making 14 the default on the prepared warp; Thor moved to it with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-92302f054aa2415ea246dec90e4fcae21ede08fd177d2c66460f54113e8c359a.apk": {
+      "sha256": "92302f054aa2415ea246dec90e4fcae21ede08fd177d2c66460f54113e8c359a",
+      "reason": "Closed 2026-10-13 hold-out trial: synthesis 15 (gain-compensated comparisons and cut test). Better on Sunshine (0.715->0.704) and Link's Awakening (1.068->1.043) but Ocarina of Time 0.839->0.925 (real cuts no longer held). Superseded by a conservative cut override."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-fe2c29adb21e982b0d9e2e15ed92bbbf014e95ca1404a721182fc628052b4006.apk": {
+      "sha256": "fe2c29adb21e982b0d9e2e15ed92bbbf014e95ca1404a721182fc628052b4006",
+      "reason": "Closed 2026-10-13 hold-out trial: synthesis 15 with a conservative cut override (clear global gain only). Neutral (Ocarina 0.699=0.699, Link's Awakening 1.115->1.110, Sunshine/Star Fox equal); the motivating Star Fox lighting pair is local (gain 0.89, 34% still differing) so no global gain explains it. Holding the left endpoint stays: on real cuts a fade is a double exposure. Reverted; Thor restored to 3.2.67 (141) with identity preserved."
     }
   }
 }
