@@ -39,6 +39,7 @@ public final class PhysicalPresentationClock {
     private long frequencyLastActualNs;
     private long frequencyScans;
     private long frequencyDiscontinuities;
+    private long offModelReanchors;
     private long sustainedAnchorNs;
     private long sustainedScans;
     private static final long TRIM_WINDOW_NS = 20_000_000_000L;
@@ -114,14 +115,27 @@ public final class PhysicalPresentationClock {
         }
         if (actualPresentNs <= lastActualNs) return false;
         long deltaNs = actualPresentNs - lastActualNs;
-        long scanDelta = roundedPositiveQuotient(deltaNs, nominalPeriodNs);
+        // Count scans with the measured period: over a multi-second gap the
+        // nominal one drifts by the panel's offset (119.94 Hz on a nominal
+        // 120 Hz Thor mode: 4 us a scan).
+        long periodNs = estimatedPeriodNs > 0L ? estimatedPeriodNs : nominalPeriodNs;
+        long scanDelta = roundedPositiveQuotient(deltaNs, periodNs);
         if (scanDelta <= 0L || observedScans > Long.MAX_VALUE - scanDelta)
             return false;
-        long modeledDeltaNs = saturatingMultiply(nominalPeriodNs, scanDelta);
+        long modeledDeltaNs = saturatingMultiply(periodNs, scanDelta);
         if (modeledDeltaNs == Long.MAX_VALUE ||
                 absoluteDifference(deltaNs, modeledDeltaNs) >
-                        nominalPeriodNs / MAX_PERIOD_ERROR_DIVISOR)
+                        nominalPeriodNs / MAX_PERIOD_ERROR_DIVISOR) {
+            // Off the scan model: re-anchor on this row. Keeping the old
+            // anchor made every later row look off-model as well, and the
+            // clock accepted nothing until an epoch reset (God of War II after
+            // a 4-s load, ~20 s without generation, 2026-10-13).
+            ++offModelReanchors;
+            lastActualNs = actualPresentNs;
+            trackedPhaseNs = planningPhaseNs;
+            recordFrequencySample(actualPresentNs);
             return false;
+        }
         observedScans += scanDelta;
         lastActualNs = actualPresentNs;
         recordFrequencySample(actualPresentNs);
@@ -211,6 +225,8 @@ public final class PhysicalPresentationClock {
     public long observedScans() { return observedScans; }
     public long frequencyObservedScans() { return frequencyScans; }
     public long frequencyDiscontinuities() { return frequencyDiscontinuities; }
+    /** Rows that did not fit the scan model and re-anchored the clock. */
+    public long offModelReanchors() { return offModelReanchors; }
 
     /**
      * Frequency evidence for a future guest/audio trim, not cadence acceptance.

@@ -19,7 +19,34 @@ public final class PhysicalPresentationClockTest {
         sustainedFrequencyTracksRecentOscillatorInsteadOfSessionAverage();
         recentFrequencyCountsSkippedScansAndBoundsFenceNoise();
         subSecondStallKeepsSustainedAdmissionButLongIdleRestarts();
+        longLoadGapDoesNotFreezeTheClock();
         System.out.println("PhysicalPresentationClockTest passed");
+    }
+
+    /**
+     * God of War II on the Thor (2026-10-13): after a 4-s load the panel clock
+     * accepted no row for ~20 s, so generation could not be admitted. The
+     * panel scans at 119.94 Hz against a nominal 120; over the gap that drift
+     * crossed the quarter-scan tolerance, the row was rejected without moving
+     * the anchor, and every later row measured against the stale anchor.
+     */
+    private static void longLoadGapDoesNotFreezeTheClock() {
+        long nominal = 8_333_333L, period = 8_337_500L;
+        PhysicalPresentationClock clock = new PhysicalPresentationClock();
+        clock.seedFrequencyHz(1e9 / period);
+        long start = 1_000_000_000L, scan = 0L;
+        clock.record(start, nominal);
+        while (scan < 1800L) check(clock.record(start + ++scan * period, nominal), "row accepted");
+        scan += 540L;  // a 4.5-s load: 540 scans, 2.25 ms of drift against nominal
+        clock.record(start + scan * period, nominal);
+        int accepted = 0;
+        for (int row = 0; row < 360; ++row)  // 60 fps passthrough: every 2 scans, 6 s
+            if (clock.record(start + (scan += 2) * period, nominal)) ++accepted;
+        check(accepted == 360, "rows after a long gap are accepted again: " + accepted);
+        check(clock.frequencyObservedScans() >= 600, "the frequency path counts again: " +
+                clock.frequencyObservedScans());
+        check(clock.sustainedFrequencyHz(start + scan * period) > 0.0,
+                "the seeded rate is confirmed again within seconds");
     }
 
     private static void subSecondStallKeepsSustainedAdmissionButLongIdleRestarts() {

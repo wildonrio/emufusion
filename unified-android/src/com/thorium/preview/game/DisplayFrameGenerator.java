@@ -8206,6 +8206,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " physicalHz=" + String.format(java.util.Locale.US, "%.2f", physicalPanelHz()) +
                 " admissionHz=" + String.format(java.util.Locale.US, "%.2f", admissionPanelHz()) +
                 " clockScans=" + builtInPhysicalClock.frequencyObservedScans() +
+                " clockReanchors=" + builtInPhysicalClock.offModelReanchors() +
                 " clockDiscontinuities=" + builtInPhysicalClock.frequencyDiscontinuities() +
                 " suspended=" + (denseGpuAdaptation.generationDisabled() ? 1 : 0));
     }
