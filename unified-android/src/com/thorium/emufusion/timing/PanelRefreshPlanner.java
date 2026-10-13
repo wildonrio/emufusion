@@ -15,7 +15,8 @@ package com.thorium.emufusion.timing;
  * a mode that is a multiple of twice the natural rate also holds 2x of every
  * integer division of it (60 -> 30 -> 20), so the frame-rate controller can
  * change tiers without a mid-game mode switch. The multiplier is capped by the
- * owner's setting -- double by default, triple only when asked.</p>
+ * owner's setting (up to 3x with On, 4x with "Allow 4x"). A source with no
+ * fixed clock is planned on the fastest mode instead ({@link #variable}).</p>
  *
  * <p>Pure Java: the caller supplies the display's mode list.</p>
  */
@@ -25,12 +26,14 @@ public final class PanelRefreshPlanner {
     // Panel and console rates are reported as floats (60.000004, 119.88).
     private static final double RELATIVE_TOLERANCE = 0.002;
     private static final int MAX_SCANS_PER_OUTPUT = 8;
+    /** The "Allow 4x" ceiling (FrameGenerationSettings.FOUR_X_MULTIPLIER). */
+    private static final int MAX_MULTIPLIER = 4;
 
     /** The selected mode and how the source occupies it. */
     public static final class Plan {
         public final double panelHz;
         public final double sourceHz;
-        /** Output frames per source frame: 1 = direct, 2 = doubled, 3 = tripled. */
+        /** Output frames per source frame: 1 = direct, 2 = doubled, 3 = tripled; 0 = set by the timeline. */
         public final int multiplier;
         /** Panel scans each output frame is held for; 0 when not uniform. */
         public final int scansPerOutput;
@@ -87,7 +90,7 @@ public final class PanelRefreshPlanner {
                                  double variableRefreshMaxHz) {
         double source = sourceOrDefault(sourceHz);
         double[] rates = validRates(panelRates);
-        int ceiling = Math.max(1, Math.min(3, maxMultiplier));
+        int ceiling = Math.max(1, Math.min(MAX_MULTIPLIER, maxMultiplier));
         Plan best = null;
         for (int multiplier = ceiling; multiplier >= 1; --multiplier) {
             Plan candidate = null;
@@ -102,6 +105,24 @@ public final class PanelRefreshPlanner {
         }
         if (best != null) return best;
         return direct(source, rates);
+    }
+
+    /**
+     * Generation for a source with no fixed clock: the Switch, Wii U and PS3
+     * engines and the 3D cores run anywhere from 20 to 60 fps and change rate
+     * in play, so no mode is an exact multiple of them. The timeline places
+     * each output at its own source time and picks the output lattice from
+     * the measured rate, so the fastest mode gives it the most outputs to
+     * choose from: 144 Hz on a 60/90/120/144 phone (the Thor's 120 as
+     * before), or an adaptive panel's maximum. The plan is non-uniform by
+     * construction (multiplier 0: decided by the timeline, not here).
+     */
+    public static Plan variable(double[] panelRates, double variableRefreshMaxHz) {
+        double[] rates = validRates(panelRates);
+        if (variableRefreshMaxHz > 0.0)
+            return new Plan(variableRefreshMaxHz, 0.0, 0, 0, true);
+        if (rates.length == 0) return new Plan(2.0 * DEFAULT_SOURCE_HZ, 0.0, 0, 0, false);
+        return new Plan(rates[rates.length - 1], 0.0, 0, 0, false);
     }
 
     /** Lowest rate whose scans divide evenly into source * multiplier outputs. */

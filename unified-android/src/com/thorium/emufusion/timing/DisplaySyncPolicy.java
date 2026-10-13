@@ -59,6 +59,20 @@ public final class DisplaySyncPolicy {
         return permitsCoreClockCorrection(declaredHz, target) ? target : 0.0;
     }
 
+    /**
+     * Whether a source clock is shown on an exact scan lattice by this panel
+     * rate: every frame held for the same whole number of scans (60 on 120 or
+     * 144? 120 yes, 144 no; 72 on 144 yes; 45 on 90 yes).
+     */
+    public static boolean dividesPanel(double sourceHz, double panelHz) {
+        double synchronizedHz = synchronizedSourceHz(sourceHz);
+        if (!Double.isFinite(synchronizedHz) || synchronizedHz <= 1.0 ||
+                !Double.isFinite(panelHz) || panelHz < 20.0 || panelHz > 1000.0) return false;
+        double scans = panelHz / synchronizedHz;
+        long whole = Math.round(scans);
+        return whole >= 1 && Math.abs(scans - whole) <= 0.002 * scans;
+    }
+
     public static boolean isUniformOnThor(double sourceHz) {
         double synchronizedHz = synchronizedSourceHz(sourceHz);
         for (double candidate : UNIFORM_SOURCE_RATES)

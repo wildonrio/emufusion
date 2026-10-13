@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "11c08ad4ee1bc5757d7b20380ccaf553729618f748d5446bb56f2257c86acfab": "Rollback 3.2.62 (136) until 3.2.63 settles.",
-    "118cab95952b2cf94ae1a813d2ab889c7e937dac888f874b4bdb2756b94eee52": "Current release 3.2.63 (137). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "118cab95952b2cf94ae1a813d2ab889c7e937dac888f874b4bdb2756b94eee52": "Rollback 3.2.63 (137) until 3.2.64 settles.",
+    "5e00a519027aae324dc2ba726f8a76c8bd4b7f43dbd33d1eb024d991353eb192": "Current release 3.2.64 (138). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -353,6 +353,10 @@
     "unified-android/build/emufusion-3.2.63-phase2-phase3-qualification-d925164bf732b7106c3411bc8a2c9db24bb4eeb02f7497142bc5225eee58e07c.apk": {
       "sha256": "d925164bf732b7106c3411bc8a2c9db24bb4eeb02f7497142bc5225eee58e07c",
       "reason": "Superseded 2026-10-13 candidate (prepared warp by default): its sweep found the stale timer-slot re-arm loop (Sonic Superstars 4x fell to 60 Hz); replaced by the candidate that fixes it, installed with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.63-phase2-phase3-qualification-bde20693d0c37440bd5a86002bb3bc60ee1c57f79ce34114599189b91f2b0e94.apk": {
+      "sha256": "bde20693d0c37440bd5a86002bb3bc60ee1c57f79ce34114599189b91f2b0e94",
+      "reason": "Closed 2026-10-13 diagnostic: 3.2.63 with a logging-only Eden adapter (NCE data aborts, InvalidHandle SVCs, split backtraces) for Link's Awakening's boot panic; 11 launches (5 fresh, 6 after Cemu in-process) did not reproduce it. The diagnostics ship in the 3.2.64 candidate instead; Thor moved to that candidate with identity preserved."
     }
   }
 }

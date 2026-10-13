@@ -172,6 +172,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private float denseCoarsestStep() {
         return Math.max(4.5f, (activeFlowLimitPixels() - 11f) / 8f);
     }
+    /** Budget before the panel period is known: one 120 Hz scan less the reserve. */
     private static final long DENSE_GPU_BUDGET_US = 7333L;
     private static final long DENSE_GPU_BUDGET_WARP_RESERVE_US = 1000L;
 
@@ -185,14 +186,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      */
     private long denseGpuBudgetUs() {
         // Use the actual number of panel holds per output: on a 120-Hz panel,
-        // 30 -> 60 uses two holds; 20 -> 40 uses three. No x3 generation.
+        // 30 -> 60 uses two holds; 20 -> 40 uses three. One hold gets the
+        // panel period less the reserve: 7333 us at 120 Hz (the former fixed
+        // budget), 5944 at 144, 10111 at 90.
         if (frameRate == null) return DENSE_GPU_BUDGET_US;
         int scans = presentationScansPerOutput();
         long panelPeriodUs = frameRate.panelPeriodNs() / 1000L;
-        if (scans < 2 || panelPeriodUs <= 0L) return DENSE_GPU_BUDGET_US;
+        if (panelPeriodUs <= 0L) return DENSE_GPU_BUDGET_US;
+        long oneScanUs = Math.max(1000L, panelPeriodUs - DENSE_GPU_BUDGET_WARP_RESERVE_US);
+        if (scans < 2) return oneScanUs;
         long periodUs = panelPeriodUs * scans;
-        return Math.max(DENSE_GPU_BUDGET_US,
-                periodUs * 4L / 5L - DENSE_GPU_BUDGET_WARP_RESERVE_US);
+        return Math.max(oneScanUs, periodUs * 4L / 5L - DENSE_GPU_BUDGET_WARP_RESERVE_US);
     }
     private static final int DENSE_WALL_PROMOTION = 0;
     private static final int DENSE_WALL_SIGNATURE = 1;
@@ -8234,12 +8238,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (!timelineMode || !frameRate.generationAvailable()) return 0;
         double panelHz = frameRate.panelHz();
         double sourceHz = frameRate.sustainedMeasuredSourceHz();
-        // Up to a little above half the panel: a source wobbling 55-60 FPS
-        // measures 60 at times, and the controller plans only a uniform
-        // qualified clock, so neither generated (Wii U SM3DW, 2026-10-12).
+        // Any source the panel can show at least 1.25x of: a source wobbling
+        // 55-60 FPS measures 60 at times, and the controller plans only a
+        // uniform qualified clock, so neither generated (Wii U SM3DW,
+        // 2026-10-12). This was half the panel (0.53), which on a 90 Hz mode
+        // left 55-60 FPS games ungenerated and on 144 Hz capped sources at 76.
         // The controller's own plan still takes precedence when it has one.
         if (!(panelHz > 0.0) || !(sourceHz >= VARIABLE_SOURCE_MIN_HZ) ||
-                sourceHz > panelHz * VARIABLE_SOURCE_MAX_PANEL_FRACTION) return 0;
+                sourceHz * VARIABLE_SOURCE_MIN_GAIN > panelHz) return 0;
         int multiplier = TimelineSchedulerSwitch.maxMultiplier();
         int fresh = freshVariableSourceScans(panelHz, sourceHz, multiplier);
         int previous = timelineScansPerOutput;
@@ -8271,7 +8277,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         int fallback = 0;
         for (int scans = 1; scans <= 12; ++scans) {
             double output = panelHz / scans;
-            if (output < sourceHz * 1.25) break;
+            if (output < sourceHz * VARIABLE_SOURCE_MIN_GAIN) break;
             if (output > multiplier * sourceHz * 1.3) continue;
             if (output <= multiplier * sourceHz * 1.12) return scans;
             if (fallback == 0) fallback = scans;
@@ -8305,8 +8311,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     /** Below this a pair spans > 50 ms and the motion between them is not worth guessing. */
     private static final double VARIABLE_SOURCE_MIN_HZ = 19.5;
-    /** Highest source the timeline owns, as a fraction of the panel (63.6 Hz on 120 Hz). */
-    private static final double VARIABLE_SOURCE_MAX_PANEL_FRACTION = 0.53;
+    /** Least output/source gain worth generating for (fresh lattices use the same 1.25). */
+    private static final double VARIABLE_SOURCE_MIN_GAIN = 1.25;
 
     /** Measured unique source x whole multiplier lands on the timeline's output rate (1%). */
     private boolean sourceFitsTimelineLattice() {

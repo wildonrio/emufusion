@@ -34,13 +34,14 @@ class VariableSourceGenerationTest(unittest.TestCase):
         harness = r'''
 public class VariableProbe {
   static final double VARIABLE_SOURCE_MIN_HZ = 19.5;
-  static final double VARIABLE_SOURCE_MAX_PANEL_FRACTION = 0.53;
+  static final double VARIABLE_SOURCE_MIN_GAIN = 1.25;
   boolean timelineMode = true; int timelineScansPerOutput;
   static final long TIMELINE_LATTICE_RETAIN_NS = 10_000_000_000L;
   int timelineReleasedScans; long timelineReleasedAtNs;
   static int multiplier = 2;
   static class TimelineSchedulerSwitch { static int maxMultiplier() { return multiplier; } }
-  static class Rate { boolean available = true; double panel = 119.95, source;
+  static double panelHz = 119.95;
+  static class Rate { boolean available = true; double panel = panelHz, source;
     boolean generationAvailable() { return available; } double panelHz() { return panel; }
     double sustainedMeasuredSourceHz() { return source; } }
   final Rate frameRate = new Rate();
@@ -65,7 +66,8 @@ public class VariableProbe {
     check(scans(19.0, 0) == 0, "below the floor: no generation");
     check(scans(60.5, 0) == 1, "an unqualified ~60-FPS source (SM3DW 55-60) still doubles to 120");
     check(scans(59.9, 2) == 1, "and leaves a 60 lattice for 120 when it rises to 60");
-    check(scans(64.0, 0) == 0, "well above half the panel: the controller owns it");
+    check(scans(64.0, 0) == 1, "a 64-FPS source the controller does not plan still gains 1.9x at 120");
+    check(scans(97.0, 0) == 0, "within 1.25x of the panel: not worth generating");
     check(scans(26.0, 2) == 2, "hysteresis keeps 60 for a dip to 26");
     check(scans(23.0, 2) == 3, "a sustained 23 leaves 60");
     check(scans(50.0, 0) == 1, "50 FPS -> 120 (60 gains too little; there was no generation)");
@@ -89,6 +91,19 @@ public class VariableProbe {
     check(afterRelease(24.0, 1, 11_000_000_000L) == 2, "a long release starts fresh");
     check(afterRelease(20.0, 1, 600_000_000L) == 2,
           "a retained lattice still has to fit the source (120 is 6x at 20)");
+    multiplier = 3; panelHz = 90.0;
+    check(scans(57.0, 0) == 1, "90 Hz phone: a 55-60 FPS game fills 90 (was ungenerated)");
+    check(scans(30.0, 0) == 1, "90 Hz: 30 FPS triples to 90");
+    check(scans(73.0, 0) == 0, "90 Hz: 73 FPS gains too little");
+    panelHz = 144.0;
+    check(scans(50.0, 0) == 1, "144 Hz: a 50-FPS Switch game fills 144");
+    check(scans(90.0, 0) == 1, "144 Hz: a 90-FPS source fills 144 (1.6x)");
+    check(scans(115.0, 0) == 1, "144 Hz: up to 115 FPS");
+    check(scans(116.0, 0) == 0, "144 Hz: above 115 gains too little");
+    check(scans(30.0, 0) == 2, "144 Hz: 30 FPS at On takes 72 (144 would be 4.8x)");
+    multiplier = 4;
+    check(scans(36.0, 0) == 1, "144 Hz with Allow 4x: 36 FPS reaches 144");
+    panelHz = 119.95; multiplier = 3;
     VariableProbe off = new VariableProbe(); off.frameRate.source = 30; off.frameRate.available = false;
     check(off.variableSourceScans() == 0, "generation unavailable");
     System.out.println("VARIABLE_OK");

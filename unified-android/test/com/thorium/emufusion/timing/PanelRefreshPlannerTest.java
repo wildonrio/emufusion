@@ -14,6 +14,8 @@ public final class PanelRefreshPlannerTest {
         tripleOnlyWhenAllowed();
         palAndVariableRefresh();
         inputsAreSanitized();
+        variableSourcesTakeTheFastestMode();
+        fourTimesWhenAllowed();
         System.out.println("PanelRefreshPlannerTest passed");
     }
 
@@ -71,6 +73,33 @@ public final class PanelRefreshPlannerTest {
                 "duplicate modes collapse");
         PanelRefreshPlanner.Plan none = PanelRefreshPlanner.generated(60, new double[0], 2, 0);
         check(!none.uniform(), "no modes cannot claim a lattice");
+    }
+
+    private static void variableSourcesTakeTheFastestMode() {
+        // Switch/Wii U/PS3 and the 3D cores have no fixed clock: the timeline
+        // fills whichever lattice the measured rate allows, so give it the most.
+        PanelRefreshPlanner.Plan thor = PanelRefreshPlanner.variable(THOR, 0);
+        check(Math.abs(thor.panelHz - 120.00001) < 1e-3 && !thor.uniform() && thor.multiplier == 0,
+                "the Thor keeps its 120 Hz mode for variable sources");
+        check(Math.abs(PanelRefreshPlanner.variable(PHONE_144, 0).panelHz - 144) < 1e-6,
+                "a 60/90/120/144 phone gives variable sources 144 Hz");
+        check(Math.abs(PanelRefreshPlanner.variable(PHONE_90, 0).panelHz - 90) < 1e-6,
+                "a 60/90 phone gives them 90 Hz");
+        check(Math.abs(PanelRefreshPlanner.variable(new double[] {60, 120, 165}, 0).panelHz - 165) < 1e-6,
+                "165 Hz panels too");
+        PanelRefreshPlanner.Plan arr = PanelRefreshPlanner.variable(PHONE_144, 144);
+        check(arr.variableRefresh && Math.abs(arr.panelHz - 144) < 1e-6,
+                "an adaptive panel offers its maximum");
+        check(Math.abs(PanelRefreshPlanner.variable(new double[0], 0).panelHz - 120) < 1e-6,
+                "no mode list falls back to 2 x 60");
+    }
+
+    private static void fourTimesWhenAllowed() {
+        plan(PanelRefreshPlanner.generated(30, THOR, 4, 0), 120, 4, 1);
+        plan(PanelRefreshPlanner.generated(30, THOR, 3, 0), 60, 2, 1);
+        plan(PanelRefreshPlanner.generated(36, PHONE_144, 4, 0), 144, 4, 1);
+        plan(PanelRefreshPlanner.generated(60, PHONE_144, 4, 0), 120, 2, 1);
+        plan(PanelRefreshPlanner.generated(30, PHONE_144, 9, 0), 120, 4, 1);
     }
 
     private static void plan(PanelRefreshPlanner.Plan plan, double panelHz, int multiplier,

@@ -4529,7 +4529,11 @@ class BoxPyramidTest(unittest.TestCase):
                   "game" / "DisplayFrameGenerator.java").read_text()
         self.assertIn("private long denseGpuBudgetUs() {", source)
         self.assertIn("int scans = presentationScansPerOutput();", source)
-        self.assertIn("if (scans < 2 || panelPeriodUs <= 0L) return DENSE_GPU_BUDGET_US;", source)
+        # One hold gets the measured panel period less the reserve (7333 us at
+        # 120 Hz, 5944 at 144, 10111 at 90), not a fixed 120 Hz constant.
+        self.assertIn("if (panelPeriodUs <= 0L) return DENSE_GPU_BUDGET_US;", source)
+        self.assertIn("long oneScanUs = Math.max(1000L, panelPeriodUs - DENSE_GPU_BUDGET_WARP_RESERVE_US);", source)
+        self.assertIn("if (scans < 2) return oneScanUs;", source)
         self.assertIn("periodUs * 4L / 5L - DENSE_GPU_BUDGET_WARP_RESERVE_US", source)
         self.assertRegex(source, r'if \(total > denseGpuBudgetUs\(\)\)\s*\{\s*'
                          r'failDenseGpuPairOnce\(sequence, "async-gpu-pair-over-budget"\);')

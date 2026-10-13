@@ -4,6 +4,7 @@ import com.thorium.emufusion.TestSupport;
 
 public final class DisplaySyncPolicyTest {
     public static void main(String[] args) {
+        divisorsOfAnyPanelMode();
         nearStandardConsoleClocksBecomeExactDivisors();
         everyCanonicalRateSelectsAnExactPanelMultiple();
         strictDirectModeUsesTheSmallestExactNativePanelRate();
@@ -14,6 +15,20 @@ public final class DisplaySyncPolicyTest {
         genuinePalClockIsNeverSilentlySpedUp();
         invalidRatesRemainInvalid();
         physicalDivisorRespectsOriginalClock();
+    }
+
+    private static void divisorsOfAnyPanelMode() {
+        check(DisplaySyncPolicy.dividesPanel(60.0, 120.0), "60 on 120");
+        check(DisplaySyncPolicy.dividesPanel(59.73, 120.0), "an NTSC clock synchronizes first");
+        check(!DisplaySyncPolicy.dividesPanel(60.0, 144.0), "60 judders on 144");
+        check(DisplaySyncPolicy.dividesPanel(72.0, 144.0), "72 on 144");
+        check(DisplaySyncPolicy.dividesPanel(48.0, 144.0), "48 on 144");
+        check(DisplaySyncPolicy.dividesPanel(45.0, 90.0), "45 on 90");
+        check(DisplaySyncPolicy.dividesPanel(30.0, 90.0), "30 on 90");
+        check(!DisplaySyncPolicy.dividesPanel(40.0, 90.0), "40 judders on 90");
+        check(DisplaySyncPolicy.dividesPanel(60.0, 60.000004f), "a float mode rate");
+        check(!DisplaySyncPolicy.dividesPanel(0.0, 120.0) && !DisplaySyncPolicy.dividesPanel(60.0, 0.0) &&
+                !DisplaySyncPolicy.dividesPanel(Double.NaN, 120.0), "invalid rates divide nothing");
     }
 
     private static void physicalDivisorRespectsOriginalClock() {
@@ -174,5 +189,9 @@ public final class DisplaySyncPolicyTest {
         TestSupport.truth(Float.compare(120.0f,
                         DisplaySyncPolicy.panelRefreshHz(119.88)) == 0,
                 "120 Hz content uses the 120 Hz panel mode");
+    }
+
+    private static void check(boolean condition, String message) {
+        if (!condition) throw new AssertionError(message);
     }
 }

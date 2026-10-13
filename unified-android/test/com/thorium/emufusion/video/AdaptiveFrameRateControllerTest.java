@@ -29,6 +29,7 @@ public final class AdaptiveFrameRateControllerTest {
         oneTwentyHzPanelUsesOnlyDirectOrDoubleOutputs();
         rationalPanelClockRemainsExactInUniformPlan();
         measuredPanelClockLatchesPhysicalScanPeriod();
+        highRefreshPanelClocksSnapToTheirModes();
         measuredFractionalPanelClockPreservesRationalIdentity();
         smallNominalPanelBiasDoesNotLoseTheExactScanPlan();
         missedDisplayCallbacksDoNotHalvePanelClock();
@@ -1099,6 +1100,22 @@ public final class AdaptiveFrameRateControllerTest {
                 "panel clock keeps measured non-integer refresh");
         near(120.0, value.declaredPanelHz(), 0.0,
                 "declared Android mode remains separate telemetry");
+    }
+
+    private static void highRefreshPanelClocksSnapToTheirModes() {
+        double[][] cases = {{144.0, 144.02}, {90.0, 89.99}, {165.0, 165.03}, {240.0, 239.98}};
+        for (double[] row : cases) {
+            AdaptiveFrameRateController value = new AdaptiveFrameRateController(row[0]);
+            long periodNs = Math.round(1_000_000_000.0 / row[1]);
+            long frameNs = 12_000_000_000L;
+            boolean changed = false;
+            for (int sample = 0; sample <= 240; ++sample) {
+                changed |= value.observeDisplayFrameTime(frameNs);
+                frameNs += periodNs;
+            }
+            check(changed && value.panelClockMeasured(), "a " + row[0] + " Hz panel clock latches");
+            near(row[0], value.panelHz(), 1e-9, "a " + row[1] + " Hz measurement snaps to its mode");
+        }
     }
 
     private static void missedDisplayCallbacksDoNotHalvePanelClock() {

@@ -42,10 +42,12 @@ class DirectCadenceNormalizationTest(unittest.TestCase):
             "unified-android/src/com/thorium/preview/game/GameSurfaceView.java")
         self.assertIn("declaredVideoHz = ((LibretroEngineSession) session)", host)
         self.assertIn("declaredVideoHz = ((PpssppGlesEngineSession) session)", host)
-        self.assertGreaterEqual(host.count("setDirectPresentationHz(directPanelHz)"), 2)
+        self.assertGreaterEqual(host.count("setDirectPresentationHz(directPanelHz, sourceClock)"), 2)
         self.assertIn("directSurfaceCadenceHz(declaredVideoHz)", host)
         self.assertIn("directSurfaceCadenceHz(authoritativeHz)", host)
-        self.assertIn("DisplaySyncPolicy.isUniformOnThor(synchronizedHz)", host)
+        # The vote follows the requested mode (60/90/120/144...), not a Thor-only 120 lattice.
+        self.assertIn("DisplaySyncPolicy.dividesPanel(synchronizedHz, panelHz)", host)
+        self.assertIn("PanelRefreshPlanner.variable(rates, variableMaxHz)", host)
         self.assertIn("requestNativePanelMode();", host)
         # Every offered mode is considered (PanelRefreshPlanner), not just 60/120.
         self.assertIn("requestNativePanelMode(plannedPanelHz(declaredVideoHz));", host)
@@ -63,7 +65,8 @@ class DirectCadenceNormalizationTest(unittest.TestCase):
             self.assertIn("uses the selected native panel mode", off_branch)
             self.assertIn("Surface.FRAME_RATE_COMPATIBILITY_DEFAULT", source)
             self.assertIn("Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE", source)
-            self.assertIn("directPresentationHz >= 119.5f", source)
+            self.assertIn("int compatibility = directPresentationSourceClock", source)
+            self.assertIn("value <= 1000.0f", source)
 
     def test_steady_state_video_transfer_uses_three_owned_buffers_without_jni_alloc(self):
         java = self.read("unified-android/src/com/thorium/preview/LibretroHost.java")

@@ -44,6 +44,8 @@ public final class GameSurface extends TextureView
     private FrameGenerationRenderer.StatsListener frameRateListener;
     private Runnable firstSubmittedFrameListener;
     private float directPresentationHz = 60.0f;
+    // FIXED_SOURCE for a source clock, DEFAULT for the panel mode itself.
+    private boolean directPresentationSourceClock = true;
     private boolean firstFrameSubmitted;
     private FrameGenerationBackendPolicy.Backend activeBackend =
             FrameGenerationBackendPolicy.Backend.DIRECT;
@@ -112,9 +114,16 @@ public final class GameSurface extends TextureView
         if (frameGenerator != null) frameGenerator.setStatsListener(value);
     }
 
-    public void setDirectPresentationHz(float value) {
-        if (Float.isFinite(value) && value >= 20.0f && value <= 120.0f) {
+    /**
+     * @param value the source clock to repeat on the panel's scan lattice,
+     *        or the requested panel mode itself when no clock divides it
+     * @param sourceClock whether {@code value} is a fixed source clock
+     *        (FIXED_SOURCE) rather than the panel mode (DEFAULT)
+     */
+    public void setDirectPresentationHz(float value, boolean sourceClock) {
+        if (Float.isFinite(value) && value >= 20.0f && value <= 1000.0f) {
             directPresentationHz = value;
+            directPresentationSourceClock = sourceClock;
             if (activeBackend == FrameGenerationBackendPolicy.Backend.DIRECT &&
                     outputSurface != null && outputSurface.isValid())
                 requestDirectFrameRate(outputSurface);
@@ -282,9 +291,9 @@ public final class GameSurface extends TextureView
     private void requestDirectFrameRate(Surface surface) {
         if (surface == null || Build.VERSION.SDK_INT < 30) return;
         try {
-            int compatibility = directPresentationHz >= 119.5f
-                    ? Surface.FRAME_RATE_COMPATIBILITY_DEFAULT
-                    : Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE;
+            int compatibility = directPresentationSourceClock
+                    ? Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
+                    : Surface.FRAME_RATE_COMPATIBILITY_DEFAULT;
             if (Build.VERSION.SDK_INT >= 31)
                 surface.setFrameRate(directPresentationHz,
                         compatibility,

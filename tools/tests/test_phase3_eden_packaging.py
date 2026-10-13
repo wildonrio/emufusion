@@ -48,7 +48,8 @@ SUPERSEDED_COMMIT = "5ec94b19714f75489cdfc62d890d2f94d45514ce"
 # October7 adds previously missing stick-click routes; runtime acceptance pending.
 # October 11 passes the frontend-provisioned per-GPU driver (Turnip) to Eden.
 # 3.2.34 runs the guest natively (NCE) and flushes saves for process replacement.
-ADAPTER_SHA256 = "bc18590a0cad64cc1059d62bdf1e69d5cabad80f952b132d876adce26f26ba79"
+# 3.2.64 adds bounded, logging-only diagnostics for guest faults and InvalidHandle.
+ADAPTER_SHA256 = "0106ea5229c8353f58d3c7d3fc597fc47246232b393ce141283e42a7a4d624b1"
 ADAPTER_LIBRARY = "libemufusion_native_adapter_eden.so"
 STAGED_ADAPTER = ROOT / "engines" / "build" / "arm64-v8a" / ADAPTER_LIBRARY
 ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-emufusion-adapter.cpp"

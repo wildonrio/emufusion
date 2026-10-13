@@ -203,9 +203,14 @@ public final class AdaptiveFrameRateController {
     private static final double PANEL_CLOCK_MODE_TOLERANCE_FRACTION = 0.05;
     private static final double PANEL_CLOCK_PERIOD_RMS_FRACTION = 0.002;
     private static final double PANEL_CLOCK_PERIOD_MAX_FRACTION = 0.01;
+    // Phones offer more than the Thor's 60/120 (e.g. 60/90/120/144); a
+    // measured 144.02 snaps to its mode like 120.008 does to 120.
     private static final double[] CANONICAL_PANEL_HZ = {
             60000.0 / 1001.0, 60.0,
-            120000.0 / 1001.0, 120.0
+            90000.0 / 1001.0, 90.0,
+            120000.0 / 1001.0, 120.0,
+            144000.0 / 1001.0, 144.0,
+            165.0, 240.0
     };
 
     private double displayRefreshHz;

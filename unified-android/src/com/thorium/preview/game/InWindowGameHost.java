@@ -964,7 +964,8 @@ public final class InWindowGameHost
             layer.setDisplayAspect(0f);
             double authoritativeHz = authoritativeVideoHz(request.systemId);
             layer.setAuthoritativeSourceHz(authoritativeHz);
-            layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz));
+            layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz),
+                    directSurfaceVotesSourceClock(authoritativeHz));
             gameSurface = layer;
             Log.i(TAG, "Strict Off: direct isolated SurfaceView path engine=" +
                     request.engineId + " system=" + request.systemId);
@@ -976,7 +977,8 @@ public final class InWindowGameHost
             layer.setDisplayAspect(0f);
             double authoritativeHz = authoritativeVideoHz(request.systemId);
             layer.setAuthoritativeSourceHz(authoritativeHz);
-            layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz));
+            layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz),
+                    directSurfaceVotesSourceClock(authoritativeHz));
             gameSurface = layer;
         }
         FrameLayout.LayoutParams videoParams = match();
@@ -1108,20 +1110,27 @@ public final class InWindowGameHost
     /**
      * The panel rate for this launch from every fixed rate the display offers
      * (PanelRefreshPlanner): direct presentation on an exact multiple of the
-     * game's clock, or with frame generation the lowest rate holding twice it.
-     * A clock not yet known (native adapters) plans for 60 x 2, which on the
-     * Thor is the 120 Hz mode it always used.
+     * game's clock, or with frame generation the lowest rate holding a
+     * multiple of it. With generation on, a clock not known at launch (native
+     * adapters, 3D cores) takes the fastest mode, which the timeline fills
+     * (120 Hz on the Thor, as it always used). Off, it plans for 60 x 2.
      */
     private float plannedPanelHz(double declaredHz) {
         Display display = activity.getDisplay();
-        if (display == null) return 120.0f;
+        if (display == null) return plannedPanelHz > 0.0f ? plannedPanelHz : 120.0f;
         double source = declaredHz > 1.0 && declaredHz < 1000.0
                 ? DisplaySyncPolicy.synchronizedSourceHz(declaredHz) : 0.0;
         double[] rates = supportedRefreshRates(display);
         double variableMaxHz = variableRefreshMaxHz(display, rates);
+        boolean generating = request.frameGenerationMode != FrameGenerationSettings.Mode.OFF;
         PanelRefreshPlanner.Plan plan =
-                request.frameGenerationMode == FrameGenerationSettings.Mode.OFF && source > 0.0
+                !generating && source > 0.0
                         ? PanelRefreshPlanner.direct(source, rates)
+                        // No fixed clock (Switch, Wii U, PS3, 3D cores): the
+                        // timeline fills the fastest mode -- 144 Hz on a
+                        // 60/90/120/144 phone, 120 on the Thor as before.
+                        : generating && !(source > 0.0)
+                        ? PanelRefreshPlanner.variable(rates, variableMaxHz)
                         : PanelRefreshPlanner.generated(source, rates,
                                 request.frameGenerationMode == null
                                         ? FrameGenerationSettings.MAX_MULTIPLIER
@@ -1131,8 +1140,15 @@ public final class InWindowGameHost
                 " modes=" + java.util.Arrays.toString(rates) + " " + plan);
         // An adaptive panel follows the Surface's frame-rate vote from its
         // fastest mode; a fixed one needs the exact listed mode.
-        return (float) (plan.variableRefresh ? rates[rates.length - 1] : plan.panelHz);
+        float panelHz = (float) (plan.variableRefresh && rates.length > 0
+                ? rates[rates.length - 1] : plan.panelHz);
+        if (panelHz >= 20.0f && panelHz <= 1000.0f) plannedPanelHz = panelHz;
+        return panelHz;
     }
+
+    // The mode this launch asked for; the direct Surface's vote must agree
+    // with it (a fixed 120 vote fought a 144 Hz mode request).
+    private float plannedPanelHz;
 
     /** Distinct refresh rates offered at the current resolution, ascending. */
     private static double[] supportedRefreshRates(Display display) {
@@ -1211,17 +1227,23 @@ public final class InWindowGameHost
     }
 
     /**
-     * The window owns the physical 120 Hz mode; the direct Surface separately
+     * The window owns the physical mode; the direct Surface separately
      * declares the source clock so SurfaceFlinger can repeat each buffer on an
-     * exact integer scan lattice. Unknown/non-uniform clocks retain a 120 Hz
-     * default vote until the engine reports its real rate.
+     * exact integer scan lattice of that mode. A clock the mode does not
+     * divide, or one not known yet, votes the planned mode itself (it was a
+     * fixed 120 vote, which on a 144 Hz phone fought the window's request).
      */
-    private static float directSurfaceCadenceHz(double declaredHz) {
+    private float directSurfaceCadenceHz(double declaredHz) {
+        return directSurfaceVotesSourceClock(declaredHz)
+                ? (float) DisplaySyncPolicy.synchronizedSourceHz(declaredHz)
+                : plannedPanelHz > 0.0f ? plannedPanelHz : 120.0f;
+    }
+
+    private boolean directSurfaceVotesSourceClock(double declaredHz) {
+        float panelHz = plannedPanelHz > 0.0f ? plannedPanelHz : 120.0f;
         double synchronizedHz = DisplaySyncPolicy.synchronizedSourceHz(declaredHz);
-        if (synchronizedHz >= 20.0 && synchronizedHz <= 120.0 &&
-                DisplaySyncPolicy.isUniformOnThor(synchronizedHz))
-            return (float) synchronizedHz;
-        return 120.0f;
+        return synchronizedHz >= 20.0 && synchronizedHz <= panelHz + 0.5 &&
+                DisplaySyncPolicy.dividesPanel(synchronizedHz, panelHz);
     }
 
     private FrameLayout.LayoutParams match() {
@@ -2732,13 +2754,15 @@ public final class InWindowGameHost
             // increased presentation misses; whole-clock synchronization and
             // physical pacing must be qualified before enabling that path.
             if (declaredVideoHz > 1.0 && declaredVideoHz < 1000.0) {
-                float directPanelHz = directSurfaceCadenceHz(declaredVideoHz);
                 if (request.frameGenerationMode == FrameGenerationSettings.Mode.OFF)
                     requestNativePanelMode(plannedPanelHz(declaredVideoHz));
+                // After the re-plan: the vote must agree with the mode now requested.
+                float directPanelHz = directSurfaceCadenceHz(declaredVideoHz);
+                boolean sourceClock = directSurfaceVotesSourceClock(declaredVideoHz);
                 if (gameSurface instanceof GameSurface)
-                    ((GameSurface) gameSurface).setDirectPresentationHz(directPanelHz);
+                    ((GameSurface) gameSurface).setDirectPresentationHz(directPanelHz, sourceClock);
                 else if (gameSurface instanceof GameSurfaceView)
-                    ((GameSurfaceView) gameSurface).setDirectPresentationHz(directPanelHz);
+                    ((GameSurfaceView) gameSurface).setDirectPresentationHz(directPanelHz, sourceClock);
             }
             if (gameSurface instanceof GameSurfaceView &&
                     session instanceof LibretroEngineSession &&
