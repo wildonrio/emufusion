@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "a3426957985001c750fd33ed79a9a9c53da627c131f6f8e20440fe23631ecb69": "Rollback 3.2.65 (139) until 3.2.66 settles.",
-    "567185985752951a680779b7e8e6edc7970b6d4081a2526c4784742b7e9b14dc": "Current release 3.2.66 (140). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "567185985752951a680779b7e8e6edc7970b6d4081a2526c4784742b7e9b14dc": "Rollback 3.2.66 (140) until 3.2.67 settles.",
+    "60304512af0fd4f6754349336ff6b54b420cffa431ea53f41a9c06be728a2a7a": "Current release 3.2.67 (141). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {

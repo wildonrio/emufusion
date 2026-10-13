@@ -6,6 +6,17 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+October 13 (latest) **— 3.2.67 (141): a variable source's panel mode is re-picked once its rate is known.**
+
+Variable-rate games (the Switch, Wii U and PS3 engines, the 3D cores) launch on the panel's fastest mode since 3.2.64, because their rate is unknown at launch. The best mode depends on the rate they actually run at. On a 60/90/120/144 phone with Allow 4×, a 30 fps game reaches 120 Hz (4×) on the 120 Hz mode but only 72 Hz on 144 (4.8× exceeds the ceiling, so the lattice falls to 2.4×). At On, 30 fps reaches 90 Hz on the 90 Hz mode, while 50 fps is best at 144.
+- `PanelRefreshPlanner.bestForVariable` picks the mode that gives the highest generated output under the timeline's own lattice rule (`variableScans`, the same as `freshVariableSourceScans`). Ties go to the higher mode.
+- `PanelModeReplanner` asks for it only after the generator's sustained source rate has held within 10% for 8 s, only for at least 15% more output, with a 30-s cooldown and at most two switches a session.
+- The host feeds it from the once-a-second frame-rate callback. The generator already follows mode changes (`setPanelRefreshHz`).
+- On the Thor (60/120) the best mode is always 120, so nothing changes there. A Thor sweep confirmed no re-plan in any run, with the same panel plans as 3.2.66.
+- Tests: `PanelRefreshPlannerTest` (best modes on 60/90/120/144, 60/90 and the Thor; a steady 30 fps game moves 144 → 120, a later steady 50 fps earns 144 back after the cooldown, a wobbling rate never moves, at most two switches) and `test_panel_replan` (wiring).
+
+**Thor (3.2.67, `60304512`):** God of War II 59.5 → 119, 95% of refreshes new at 120 Hz; SM3DW 48.6 → 113; PS3 57 → 102; SNES 58 → 103; Link's Awakening 37 → 66; Sonic Superstars 23 → 43; Wind Waker HD at 4× 29 → 108. No re-plan logged.
+
 October 13 (latest) **— 3.2.66 (140): per-pixel neighbour selection on the searched phase field (synthesis 14, the new default).**
 
 The phase field holds one vector per 7.5-px cell, and the warp interpolated it bilinearly, so vectors blend across motion boundaries: a character's limb takes part of the background's motion. Synthesis 6 already let each output pixel choose among the four nearest cell vectors, weighted by bilinear share, match confidence and how well that vector's A and B samples agree at the pixel. On the unsearched field it gained 0.2–1.4% for about 40% more warp cost. On the searched field (12) the cell vectors are right more often, and the selection now pays. Hold-out, same pairs (error vs a cross-fade):

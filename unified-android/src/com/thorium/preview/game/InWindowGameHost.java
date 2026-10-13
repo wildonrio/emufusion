@@ -51,6 +51,7 @@ import com.thorium.emufusion.cheats.CheatPanelSnapshot;
 import com.thorium.emufusion.emulators.NativeAdapterStopPolicy;
 import com.thorium.emufusion.metadata.EngineSystemIdResolver;
 import com.thorium.emufusion.timing.DisplaySyncPolicy;
+import com.thorium.emufusion.timing.PanelModeReplanner;
 import com.thorium.emufusion.timing.PanelRefreshPlanner;
 import com.thorium.preview.MenuSoundPlayer;
 import com.thorium.preview.AppVolumeController;
@@ -1037,6 +1038,7 @@ public final class InWindowGameHost
                                                       double actual, boolean qualified) {
                         mainHandler.post(() -> {
                             observeReportedOutput(actual);
+                            observeSourceForPanelReplan(source);
                             // Delivery/GPU load must never downclock the guest.
                             // Near-native display synchronization is owned by
                             // each engine session.
@@ -1143,7 +1145,28 @@ public final class InWindowGameHost
         float panelHz = (float) (plan.variableRefresh && rates.length > 0
                 ? rates[rates.length - 1] : plan.panelHz);
         if (panelHz >= 20.0f && panelHz <= 1000.0f) plannedPanelHz = panelHz;
+        // A variable source launched on the fastest mode is re-planned once
+        // its rate is known (a 30 fps game at 4x serves 120 Hz better than
+        // 144); fixed modes only, and never on the Thor's 60/120 pair.
+        if (generating && !(source > 0.0) && !plan.variableRefresh && panelReplanner == null)
+            panelReplanner = new PanelModeReplanner(rates,
+                    request.frameGenerationMode == null ? FrameGenerationSettings.MAX_MULTIPLIER
+                            : request.frameGenerationMode.maxMultiplier(), panelHz);
         return panelHz;
+    }
+
+    private PanelModeReplanner panelReplanner;
+
+    /** Main thread: the generator's sustained source rate, once a second. */
+    private void observeSourceForPanelReplan(double sourceHz) {
+        if (panelReplanner == null || gameSurface == null) return;
+        double next = panelReplanner.observe(sourceHz, android.os.SystemClock.uptimeMillis());
+        if (!(next > 0.0)) return;
+        Log.i(TAG, "Panel re-plan system=" + request.systemId + " sourceHz=" +
+                String.format(Locale.US, "%.1f", sourceHz) + " from=" + plannedPanelHz +
+                " to=" + next);
+        plannedPanelHz = (float) next;
+        requestNativePanelMode((float) next);
     }
 
     // The mode this launch asked for; the direct Surface's vote must agree

@@ -16,6 +16,8 @@ public final class PanelRefreshPlannerTest {
         inputsAreSanitized();
         variableSourcesTakeTheFastestMode();
         fourTimesWhenAllowed();
+        bestModeForAMeasuredVariableSource();
+        replannerSwitchesOnlyForASteadyClearGain();
         System.out.println("PanelRefreshPlannerTest passed");
     }
 
@@ -100,6 +102,44 @@ public final class PanelRefreshPlannerTest {
         plan(PanelRefreshPlanner.generated(36, PHONE_144, 4, 0), 144, 4, 1);
         plan(PanelRefreshPlanner.generated(60, PHONE_144, 4, 0), 120, 2, 1);
         plan(PanelRefreshPlanner.generated(30, PHONE_144, 9, 0), 120, 4, 1);
+    }
+
+    private static void bestModeForAMeasuredVariableSource() {
+        near(PanelRefreshPlanner.bestForVariable(30, PHONE_144, 4), 120, "30 fps at 4x: 120 (4x), not 144 (72 Hz)");
+        near(PanelRefreshPlanner.bestForVariable(30, PHONE_144, 3), 90, "30 fps at 3x: 90 (3x)");
+        near(PanelRefreshPlanner.bestForVariable(50, PHONE_144, 3), 144, "50 fps at 3x: 144");
+        near(PanelRefreshPlanner.bestForVariable(40, PHONE_144, 3), 120, "40 fps at 3x: 120 (3x)");
+        near(PanelRefreshPlanner.bestForVariable(57, PHONE_90, 3), 90, "57 fps on a 60/90 phone: 90");
+        near(PanelRefreshPlanner.bestForVariable(45, THOR, 3), 120.00001, "the Thor always 120");
+        near(PanelRefreshPlanner.bestForVariable(24, THOR, 4), 120.00001, "the Thor always 120");
+        near(PanelRefreshPlanner.bestForVariable(10, PHONE_144, 3), 120, "equal outputs keep the higher mode");
+        check(PanelRefreshPlanner.variableScans(144, 30, 4) == 2, "30 fps on 144 at 4x is the 72 Hz lattice");
+        check(PanelRefreshPlanner.variableScans(120, 30, 4) == 1, "and 120 on a 120 Hz panel");
+    }
+
+    private static void replannerSwitchesOnlyForASteadyClearGain() {
+        PanelModeReplanner value = new PanelModeReplanner(PHONE_144, 4, 144);
+        long t = 0;
+        double switched = 0;
+        for (int i = 0; i < 20 && switched == 0; ++i, t += 1000) switched = value.observe(30 + (i % 2) * 0.8, t);
+        near(switched, 120, "a steady 30 fps game moves to 120");
+        check(t >= PanelModeReplanner.STEADY_MS, "only after it held steady");
+        for (int i = 0; i < 20; ++i, t += 1000)
+            check(value.observe(50, t) == 0, "within the cooldown nothing moves");
+        double back = 0;
+        for (int i = 0; i < 60 && back == 0; ++i, t += 1000) back = value.observe(50, t);
+        near(back, 144, "a sustained 50 fps later earns 144 again");
+        for (int i = 0; i < 200; ++i, t += 1000) value.observe(i % 40 < 20 ? 30 : 50, t);
+        check(value.switches() <= PanelModeReplanner.MAX_SWITCHES, "never more than two switches a session");
+        PanelModeReplanner thor = new PanelModeReplanner(THOR, 4, 120.00001);
+        for (int i = 0; i < 120; ++i) check(thor.observe(20 + i % 40, i * 1000L) == 0, "the Thor never re-plans");
+        PanelModeReplanner wobbly = new PanelModeReplanner(PHONE_144, 4, 144);
+        for (int i = 0; i < 60; ++i) check(wobbly.observe(i % 2 == 0 ? 30 : 45, i * 1000L) == 0,
+                "a rate that never settles keeps the launch mode");
+    }
+
+    private static void near(double actual, double expected, String message) {
+        check(Math.abs(actual - expected) < 0.01, message + ": " + actual);
     }
 
     private static void plan(PanelRefreshPlanner.Plan plan, double panelHz, int multiplier,

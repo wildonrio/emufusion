@@ -125,6 +125,49 @@ public final class PanelRefreshPlanner {
         return new Plan(rates[rates.length - 1], 0.0, 0, 0, false);
     }
 
+    /**
+     * Scans per output the timeline takes for a measured variable source on a
+     * panel: the same rule as DisplayFrameGenerator.freshVariableSourceScans
+     * (gain at least 1.25; prefer an output within 1.12 x the multiplier,
+     * else within 1.3 x). 0 when no output is worth generating.
+     */
+    public static int variableScans(double panelHz, double sourceHz, int multiplier) {
+        if (!(panelHz > 0.0) || !(sourceHz > 0.0) || multiplier < 1) return 0;
+        int fallback = 0;
+        for (int scans = 1; scans <= 12; ++scans) {
+            double output = panelHz / scans;
+            if (output < sourceHz * 1.25) break;
+            if (output > multiplier * sourceHz * 1.3) continue;
+            if (output <= multiplier * sourceHz * 1.12) return scans;
+            if (fallback == 0) fallback = scans;
+        }
+        return fallback;
+    }
+
+    /**
+     * The fixed mode giving a measured variable source the highest generated
+     * output (ties: the higher mode, the launch mode, which leaves the
+     * timeline room to keep a higher lattice), or 0 when no mode generates
+     * for it. On a
+     * 60/90/120/144 phone a 30 fps game with Allow 4x takes 120 (4x) rather
+     * than 144 (72 Hz at 2.4x); a 50 fps game takes 144.
+     */
+    public static double bestForVariable(double sourceHz, double[] panelRates, int maxMultiplier) {
+        double[] rates = validRates(panelRates);
+        int multiplier = Math.max(1, Math.min(MAX_MULTIPLIER, maxMultiplier));
+        double bestPanel = 0.0, bestOutput = 0.0;
+        for (double panel : rates) {
+            int scans = variableScans(panel, sourceHz, multiplier);
+            if (scans <= 0) continue;
+            double output = panel / scans;
+            if (output >= bestOutput * (1.0 - RELATIVE_TOLERANCE)) {
+                bestOutput = output;
+                bestPanel = panel;
+            }
+        }
+        return bestPanel;
+    }
+
     /** Lowest rate whose scans divide evenly into source * multiplier outputs. */
     private static Plan lowestLattice(double source, int multiplier, double[] ascending) {
         double output = source * multiplier;
