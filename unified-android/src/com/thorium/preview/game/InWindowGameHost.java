@@ -1047,7 +1047,17 @@ public final class InWindowGameHost
                     }
 
                     @Override public void onDisplayedFrameRate(double real, double displayed) {
-                        mainHandler.post(() -> showVerifiedFrameRates(real, displayed));
+                        mainHandler.post(() -> {
+                            // The verified counts arrive every second on every
+                            // generation path. The committed "actual" above is
+                            // the controller's own plan and stays 0 while the
+                            // timeline scheduler presents, which blacked out a
+                            // running SM3DW after two minutes without input
+                            // (2026-10-13 soak). Only a picture that really
+                            // stopped changing may count as static.
+                            observeReportedOutput(Math.max(real, displayed));
+                            showVerifiedFrameRates(real, displayed);
+                        });
                     }
                 };
         if (gameSurface instanceof GameSurfaceView)
@@ -1662,10 +1672,11 @@ public final class InWindowGameHost
      * the theme's QML screensaver renders BENEATH the gameplay view (starting
      * it under a live game is exactly the phantom 120 Hz video layer QA hit),
      * so the HOST owns burn-in protection while a game runs. A truly static
-     * game screen — zero committed presentation output, meaning the source
-     * stopped producing unique frames — for two continuous minutes fades in a
-     * pure-black guard (zero OLED emission, stronger protection than any
-     * moving video). Any input or the first new frame removes it instantly.
+     * game screen — no committed presentation output and no new real or
+     * verified generated image, meaning the source stopped producing unique
+     * frames — for two continuous minutes fades in a pure-black guard (zero
+     * OLED emission, stronger protection than any moving video). Any input or
+     * the first new frame removes it instantly.
      */
     private static final long OLED_GUARD_STATIC_MS = 120_000L;
     private static final long GAMEPLAY_REASSERT_MS = 60_000L;

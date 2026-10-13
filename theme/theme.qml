@@ -3127,7 +3127,7 @@ FocusScope {
             "Use verified built-in emulator 16:9 options; unsupported systems are unchanged",
             "Off by default: true 16:9 geometry for N64, PS1, PS2, GC, Wii, Dreamcast, PSP",
             "",
-            "When frame generation is on, also quadruple 30 fps games (30 to 120)"
+            "When frame generation is on, allow up to four times the frame rate"
         ]
         return descriptions[settingSlot(index)]
     }

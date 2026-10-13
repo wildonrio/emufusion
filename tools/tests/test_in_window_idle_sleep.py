@@ -105,6 +105,17 @@ public class IdleScreenHost {
         shown = java_block(source, 'private void dismissLaunchCurtain()')
         self.assertLess(shown.index('if (curtain == null) return'), shown.index('gameplayPresented = true'))
 
+    def test_oled_guard_sees_frames_the_timeline_presents(self):
+        # The committed "actual" is the controller's own plan and reads 0 while
+        # the timeline scheduler presents; the per-second verified counts must
+        # also reach the guard, or a running game blacks out after two minutes.
+        source = HOST.read_text()
+        displayed = source.split('public void onDisplayedFrameRate(double real, double displayed)', 1)[1]
+        displayed = displayed.split('};', 1)[0]
+        self.assertIn('observeReportedOutput(Math.max(real, displayed))', displayed)
+        self.assertIn('showVerifiedFrameRates(real, displayed)', displayed)
+        self.assertIn('observeReportedOutput(actual)', source)
+
     def test_policy_does_not_change_system_settings_or_other_window_owners(self):
         source = HOST.read_text()
         update = java_block(source, 'private void updateGameplayScreenOn()')
