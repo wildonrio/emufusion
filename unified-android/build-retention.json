@@ -393,6 +393,10 @@
     "unified-android/build/emufusion-3.2.67-phase2-phase3-qualification-bac923ae0a0b37b1b0b5f32339ebbd410754bc26139a3bf3849314885e0cf6fd.apk": {
       "sha256": "bac923ae0a0b37b1b0b5f32339ebbd410754bc26139a3bf3849314885e0cf6fd",
       "reason": "Closed 2026-10-13 hold-out candidate dump (QA emufusion_framegen_holdout=2): our four-candidate blend 0.640 of a cross-fade vs 0.630 for the best single candidate per 8x8 block over 44 pairs, so better candidate weighting has ~1.5% headroom. Diagnostic not shipped; Thor moved on to 3.2.68 (142) with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-1abd5137f6c5eac0382e9bca580aa391996887fdd3268a59aa664b0e393995c7.apk": {
+      "sha256": "1abd5137f6c5eac0382e9bca580aa391996887fdd3268a59aa664b0e393995c7",
+      "reason": "Closed 2026-10-13 A/B: QA emufusion_framegen_exhaustive_held (per-pixel held-frame check for software images). Only melonDS and SwanStation use the software signature; DS intro: signature caught 0 of ~15 changes/s on the CPU path, then the GPU signature path (not covered) took over and held frames on the 20 Hz slots were shown anyway; PlayStation 0 misses. Not shipped; Thor restored to 3.2.68 (142) with identity preserved."
     }
   }
 }
