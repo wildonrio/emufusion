@@ -1,5 +1,7 @@
 package com.thorium.preview.game;
 
+import com.thorium.emufusion.video.GpuWorkAdaptationPolicy;
+
 import android.content.Context;
 import android.provider.Settings;
 
@@ -30,6 +32,11 @@ public final class TimelineSchedulerSwitch {
     // vector-median phase field (default: 1-2% better than 1 on every hold-out
     // game, Thor 2026-10-12, for a negligible low-resolution pass).
     static final String SYNTH_GLOBAL = "emufusion_framegen_synth";
+    // QA only: emufusion_framegen_work_floor 0..4 holds the dense work level
+    // at least there, so hold-out and timing runs can measure each level
+    // (delete after tests; the product never sets it).
+    static final String WORK_FLOOR_GLOBAL = "emufusion_framegen_work_floor";
+    private static volatile int workFloor;
     static final int DEFAULT_SYNTHESIS_LEVEL = 4;
     private static volatile int synthesisLevel = DEFAULT_SYNTHESIS_LEVEL;
 
@@ -64,6 +71,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default synthesis.
         }
         synthesisLevel = Math.max(0, Math.min(4, level));
+        int floor = 0;
+        try {
+            if (context != null) floor = Settings.Global.getInt(
+                    context.getContentResolver(), WORK_FLOOR_GLOBAL, 0);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings never raise the work level.
+        }
+        workFloor = Math.max(0, Math.min(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL, floor));
     }
 
     static boolean enabled() { return enabled; }
@@ -76,6 +91,8 @@ public final class TimelineSchedulerSwitch {
     static boolean holdout() { return holdout; }
 
     static int synthesisLevel() { return synthesisLevel; }
+
+    static int workFloor() { return workFloor; }
 
     /** Generation ceiling for a timeline generator built after the last refresh. */
     static int maxMultiplier() { return maxMultiplier; }

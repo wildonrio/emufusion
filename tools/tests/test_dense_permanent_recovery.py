@@ -65,7 +65,7 @@ public class DenseRejectionTest {
     static final String TAG="fixture";
     boolean densePyramidEnabled=true,densePyramidUnavailable,densePerformanceRejected;
     boolean reportedCadenceQualified=true;
-    int denseWorkLevel,denseTransientRejections,generatorId;
+    int denseWorkLevel,qaWorkFloor,denseTransientRejections,generatorId;
     int reportedSourceTenths,reportedOutputTenths,reportedTargetTenths;
     String reportedBackendLabel="Built-in";
     int invalidations,teardowns,reports,recoveries;

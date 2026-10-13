@@ -36,12 +36,14 @@ package com.thorium.emufusion.video;
  */
 public final class GpuWorkAdaptationPolicy {
     /**
-     * Work levels: 1 trims the coarsest solve and refinement, 2 drops the
-     * reciprocal refinement and the phase field, 3 halves the finer solve
-     * levels (a GPU an engine already saturates: Cemu blocked our swaps 12.5 ms
-     * p95 at level 2, 2026-10-12). Level 3 needs three consecutive blocks at
-     * level 2 each with at least 5% of pairs missed, so a startup hitch alone
-     * never costs motion reach.
+     * Work levels: 1 trims the coarsest solve and the fill, 2 drops the
+     * reciprocal refinement, 3 halves the finer solve levels (a GPU an engine
+     * already saturates: Cemu blocked our swaps 12.5 ms p95, 2026-10-12), 4
+     * drops the per-output phase field, the largest quality contributor
+     * (20-30% less hold-out error on SM3DW, Wind Waker HD, God of War II), so
+     * it goes last (2026-10-13). The last level needs three consecutive blocks
+     * at level 3 each with at least 5% of pairs missed, so a startup hitch
+     * alone never costs it.
      *
      * <p>Levels 1 and 2 used to follow the first failures: two over-budget
      * pairs a few seconds into a game (shader compiles; GPU timers also span
@@ -56,7 +58,7 @@ public final class GpuWorkAdaptationPolicy {
      * startup hitch costs the per-phase field for one recovery window, not
      * the session.</p>
      */
-    public static final int DEFAULT_MAX_WORK_LEVEL = 3;
+    public static final int DEFAULT_MAX_WORK_LEVEL = 4;
     public static final int DEFAULT_RECOVERY_GOOD_PAIRS = 1200;
     public static final int DEFAULT_FAILURES_AT_MINIMUM = 30;
     /** Completed pairs without a failure that clear the minimum-work count (~10 s at 60). */

@@ -46,9 +46,10 @@ public final class GpuPairTimingLedgerTest {
     private static void joinedFailuresAreIndependentAndBounded() {
         GpuPairTimingLedger ledger = new GpuPairTimingLedger(4);
         GpuWorkAdaptationPolicy policy = new GpuWorkAdaptationPolicy();
-        // Four blocks of over-budget pairs: each cheap level needs two blocks
-        // of sustained pressure (GpuWorkAdaptationPolicy, 2026-10-12).
-        int pairs = 4 * GpuWorkAdaptationPolicy.DEFAULT_PERSISTENCE_BLOCK_PAIRS;
+        // Two blocks of over-budget pairs per level below the last: each needs
+        // sustained pressure (GpuWorkAdaptationPolicy, 2026-10-12).
+        int pairs = 2 * (GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1) *
+                GpuWorkAdaptationPolicy.DEFAULT_PERSISTENCE_BLOCK_PAIRS;
         for (int pair = 1; pair <= pairs; ++pair) {
             stages(ledger, pair, 100L);
             check(ledger.expectWarp(pair, pair), "fresh warp owns its pair");

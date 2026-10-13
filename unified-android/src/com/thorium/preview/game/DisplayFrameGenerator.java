@@ -4321,6 +4321,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         densePhaseProgram = createProgram(VERTEX_SHADER, DENSE_PHASE_SHADER);
         densePhaseMedianProgram = createProgram(VERTEX_SHADER, PHASE_MEDIAN_SHADER);
         synthesisLevel = TimelineSchedulerSwitch.synthesisLevel();
+        qaWorkFloor = TimelineSchedulerSwitch.workFloor();
+        denseWorkLevel = Math.max(denseWorkLevel, qaWorkFloor);
         synthesisEnabled = synthesisLevel > 0;
         predictionProofProgram = createProgram(
                 VERTEX_SHADER, MOTION_PREDICTION_PROOF_SHADER);
@@ -6796,6 +6798,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // Minimum-work overload has a bounded Direct fallback. Quality recovery
     // requires consecutive complete timing AND independent physical headroom.
     private int denseWorkLevel;
+    // QA only (emufusion_framegen_work_floor): the lowest work level used.
+    private int qaWorkFloor;
 
     /** One independent failed pair, never a repeated rolling-window maximum. */
     private void shedDenseWork(String reason) {
@@ -6804,7 +6808,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void applyDenseGpuDecision(GpuWorkAdaptationPolicy.Decision decision, String reason) {
-        denseWorkLevel = denseGpuAdaptation.workLevel();
+        denseWorkLevel = Math.max(denseGpuAdaptation.workLevel(), qaWorkFloor);
         if (decision != GpuWorkAdaptationPolicy.Decision.UNCHANGED) {
             Log.w(TAG, "Dense GPU adaptation generator=" + generatorId +
                     " decision=" + decision +
@@ -6883,7 +6887,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             denseGpuAdaptation.onFailure(denseGpuFailure(reason));
         else
             denseGpuAdaptation.invalidateRecoveryEvidence();
-        denseWorkLevel = denseGpuAdaptation.workLevel();
+        denseWorkLevel = Math.max(denseGpuAdaptation.workLevel(), qaWorkFloor);
         // Sustained overload suspends generation instead of ending it for the
         // session: a GPU-heavy engine's heavy stretch passes (Wind Waker HD's
         // title sequence on Cemu, 2026-10-12), and the refresh retries after
@@ -11282,10 +11286,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private boolean renderPhaseField(float phase) {
         if (!synthesisEnabled || !densePyramidEnabled || densePhaseProgram == 0 ||
                 densePhaseFramebuffer == 0 || densePhaseWidth <= 0) return false;
-        // At the deepest GPU work reduction (a GPU-heavy engine still missing
-        // panel deadlines) the per-output phase field is the next work to
-        // shed: the endpoint-field warp alone, before generation would stop.
-        if (denseWorkLevel >= 2 && !holdoutMode) return false;
+        // The per-output phase field is the last work shed: on the high-end
+        // hold-out it cuts error 20-30% (SM3DW 0.89 -> 0.70 of a cross-fade,
+        // God of War II 0.79 -> 0.55), and it used to go at level 2, where
+        // every Cemu/Eden/PS3 session sat (2026-10-13). Only steady misses
+        // after the solver has been halved remove it now.
+        if (denseWorkLevel >= 4 && !holdoutMode) return false;
         if (maxFragmentTextureUnits == 0) {
             int[] units = new int[1];
             GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_IMAGE_UNITS, units, 0);
