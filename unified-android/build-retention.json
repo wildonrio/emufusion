@@ -385,6 +385,10 @@
     "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-fe2c29adb21e982b0d9e2e15ed92bbbf014e95ca1404a721182fc628052b4006.apk": {
       "sha256": "fe2c29adb21e982b0d9e2e15ed92bbbf014e95ca1404a721182fc628052b4006",
       "reason": "Closed 2026-10-13 hold-out trial: synthesis 15 with a conservative cut override (clear global gain only). Neutral (Ocarina 0.699=0.699, Link's Awakening 1.115->1.110, Sunshine/Star Fox equal); the motivating Star Fox lighting pair is local (gain 0.89, 34% still differing) so no global gain explains it. Holding the left endpoint stays: on real cuts a fade is a double exposure. Reverted; Thor restored to 3.2.67 (141) with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-c4dd24a7c75d4dd08235fcc5f37158daa9f6802f3f17da514c13f117bc233420.apk": {
+      "sha256": "c4dd24a7c75d4dd08235fcc5f37158daa9f6802f3f17da514c13f117bc233420",
+      "reason": "Closed 2026-10-13 hold-out trial: synthesis 16 (sharper neighbour agreement, 400) slightly worse everywhere (SM3DW 0.571->0.574, Wind Waker HD 0.449->0.453); 17 (search above 0.08) within 0.002 of 14 at more cost. Reverted; Thor restored to 3.2.67 (141) with identity preserved."
     }
   }
 }
