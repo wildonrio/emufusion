@@ -6,6 +6,37 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+October 13 (latest) **— 3.2.65 (139): the phase field searches where it matches poorly; lower-panel previews are no longer cropped; one disturbance costs one work level.**
+
+**Phase-field search (synthesis 12, the new default).** The per-phase motion field chose each 7.5-px cell's vector among about 18 candidates taken from the endpoint fields. A small sprite moving against the camera (SM3DW's running characters, where most hold-out error sat) is off every candidate by more than the cells resolve, so the field could not follow it. Synthesis 3 had a 4-, 2- and 1-px search around the winner, but the median-filtered, quarter-resolution levels 4 and 5 dropped it. Four hold-out runs (error vs a cross-fade; levels compared on the same pairs) settled the shape:
+
+| Variant | SM3DW | Wind Waker HD | God of War II | Sunshine | Star Fox 64 |
+|---|---|---|---|---|---|
+| 5 (previous default) | 0.601 | 0.523 | 0.544 | 0.807 | 0.948 |
+| 9: search 4, 2, 1 px | 0.559 | 0.469 | 0.527 | 0.788 | 0.941 |
+| 8: search 16, 8, 4, 2 px | 0.540 | 0.450 | 0.519 | 0.777 | 0.931 |
+
+- Wider (32 px start, level 10) was worse everywhere, from false matches. A 1-px finish (level 11) gained at most 0.004.
+- Level 12 searches only cells whose best candidate matches poorly (15 channel differences above 0.15). Well-matched background skips the search, and the quality stays within 0.003 of level 8.
+- Link's Awakening's rain movie was the one regression (0.912 → 0.921): rain streaks outrun any field.
+- GPU time per pair, normal play: SM3DW 3.0 / 3.2 / 2.9 ms (levels 5 / 8 / 12), Wind Waker HD at 4× 2.9 / 3.1 / 2.9. Level 8 raised Cemu's swap p95 to 5.1 ms; level 12 kept it at 3.1.
+- In the hold-out crops the doubled cat-Mario head of level 5 becomes one figure; a slight ghost remains.
+
+**Tried and rejected: a consensus blend (QA 13).** Each of the warp's four samples (two per real frame, under the phase and endpoint fields) was weighted by its agreement with the other three, to suppress a single wrong sample at an occlusion. Against 12 on the same pairs it changed nothing that matters: SM3DW 0.529 → 0.530, Wind Waker HD 0.468 → 0.470, God of War II 0.520 → 0.519, Sunshine 0.412 → 0.410, Star Fox 64 0.720 → 0.714. The remaining Wind Waker HD error is foam that changes shape and the title's sparkle particles (content limits); SM3DW's is articulated limbs.
+
+**Lower-panel previews show the whole video (owner: the bottom screen was "cutting off half the preview videos").** `PreviewActivity` scaled each preview to fill the Thor's 1240×1080 bottom screen. A 16:9 video was scaled 1.55× and lost a third of its width; a 4:3 one lost 14%. It is now contained: full width (or height), centred on the panel's background. The scale is `PreviewVideoFit.contain` (`test_lower_panel_preview_fit`). The upper panel is 16:9 and was unaffected.
+
+**One work level per burst of misses.** A missed frame sheds a work level at once, and every miss used to count. On the 3DS three misses inside 230 ms (window-manager activity on the device) took the generator from level 0 to 3. At 30 pairs/s recovery outlasted the session. A visible miss now sheds a further level only after 12 pairs have completed at the current one (0.2–0.4 s), since the frames still in flight were submitted at the old level. A burst with nothing completed in between costs one level; misses that keep coming still descend (Cemu at start-up: level 3 within about two such windows). The last level keeps its sustained-block gate. Tests: `GpuWorkAdaptationPolicyTest.oneDisturbanceCostsOneLevel` and the updated start-up case.
+
+**Diagnostic: presentation reset callers.** Link's Awakening's timeline re-primed 16 times while it owned presentation (each drops the pair on screen), all labelled only `presentation-reset`. The health snapshot now lists each caller and its count (`presentationResets=method:line=n,...`).
+
+**Thor (3.2.65, `a3426957`):**
+- SM3DW 52.5 → 115 average displayed, 98% of refreshes new at 120 Hz; God of War II 59 → 118, 100%; PS3 56.5 → 99; SNES 58.5 → 102; Wind Waker HD 29 → 58, 99% even 60; Link's Awakening 43 → 72; 3DS 30 → 58.5 (work level 0 for the session this time).
+- At 4×: Star Fox 64 29 → 108, 100% at 120 Hz; Sonic Superstars 23 → 72, 86%. Wind Waker HD 29 → 105–112 in six A/B runs: late callbacks 70/73/158 at synthesis 5 and 83/113/126 at 12, the same within Cemu's spread. Cemu reaches level 4 there, where the phase field is off.
+- No Eden panic, skipped NCE fault or timer-wrap rejection in any run. Mario Kart: Double Dash: CHECK only from the known recorder device loss.
+- Lower panel after the fix: Sega Genesis previews (4:3) show their whole frame with 75-px bars; the right-edge HUD and full titles are visible.
+- Presentation resets attributed (Link's Awakening): `setGenerationAvailable` 15, `acceptPresentationEndpoint` 6, `invalidateBufferedPairForReprime` 6, `setExactDoubleEndpointLatticeRequired` 3, `setAuthoritativeSourceHz` 3, `switchTimelineOwnership` 2, tier policy 1, panel latch 1. Most availability toggles came during the game's own presentation stalls (one present a second for ~6 s), when there is nothing to generate.
+
 October 13 (latest) **— 3.2.64 (138): panels beyond 60/120 Hz; Eden logs the faults behind Link's Awakening's boot panic.**
 
 **Other refresh rates (owner: phones offer 60/90/120/144 Hz and more; frame generation should use them).** The Thor exposes only 60 and 120 Hz, and several launch and presentation decisions assumed that pair. A read-only audit found them; this release changes the ones that kept a 90/144 Hz panel from being filled:

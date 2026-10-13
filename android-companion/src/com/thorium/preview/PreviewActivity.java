@@ -1411,7 +1411,7 @@ public final class PreviewActivity extends Activity
                             + " size=" + mediaPlayer.getVideoWidth() + "x"
                             + mediaPlayer.getVideoHeight()
                             + " durationMs=" + mediaPlayer.getDuration());
-                    applyCrop(mediaPlayer.getVideoWidth(), mediaPlayer.getVideoHeight());
+                    applyFit(mediaPlayer.getVideoWidth(), mediaPlayer.getVideoHeight());
                     prepared = true;
                     // A decoder that finishes preparing mid-break must not
                     // undo the break; resumePlayers() starts it afterwards.
@@ -1467,18 +1467,14 @@ public final class PreviewActivity extends Activity
             }
         }
 
-        private void applyCrop(int videoWidth, int videoHeight) {
+        /** Shows the whole video (PreviewVideoFit), never a cropped middle. */
+        private void applyFit(int videoWidth, int videoHeight) {
             int width = view.getWidth();
             int height = view.getHeight();
             if (width <= 0 || height <= 0 || videoWidth <= 0 || videoHeight <= 0) return;
-            float viewAspect = width / (float) height;
-            float videoAspect = videoWidth / (float) videoHeight;
-            float scaleX = 1f;
-            float scaleY = 1f;
-            if (videoAspect > viewAspect) scaleX = videoAspect / viewAspect;
-            else scaleY = viewAspect / videoAspect;
+            float[] scale = PreviewVideoFit.contain(width, height, videoWidth, videoHeight);
             Matrix matrix = new Matrix();
-            matrix.setScale(scaleX, scaleY, width / 2f, height / 2f);
+            matrix.setScale(scale[0], scale[1], width / 2f, height / 2f);
             view.setTransform(matrix);
         }
 
@@ -1509,7 +1505,7 @@ public final class PreviewActivity extends Activity
 
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-            if (player != null) applyCrop(player.getVideoWidth(), player.getVideoHeight());
+            if (player != null) applyFit(player.getVideoWidth(), player.getVideoHeight());
         }
 
         @Override

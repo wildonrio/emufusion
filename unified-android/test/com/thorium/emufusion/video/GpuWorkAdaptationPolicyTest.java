@@ -6,6 +6,7 @@ public final class GpuWorkAdaptationPolicyTest {
         overBudgetShaderTimeAloneNeverDisables();
         oneEmulatorHitchDoesNotDisable();
         startupHitchKeepsFullWork();
+        oneDisturbanceCostsOneLevel();
         steadyPressureStepsTheCheapLevels();
         unknownHeadroomRecoversOnShaderEvidence();
         recoveryBacksOffWhenALevelDoesNotHold();
@@ -125,13 +126,49 @@ public final class GpuWorkAdaptationPolicyTest {
         for (int good = 0; good < 600; ++good) value.onCompletedPair(++pair, 3000L, 7333L, false);
         eq(0, value.workLevel(), "a few over-budget pairs keep the per-phase field");
         eq(0, value.reductionCount(), "nothing was shed");
-        // A visible hitch sheds at once (Cemu cannot wait), and recovery on
-        // shader slack with unknown headroom earns it back.
+        // A visible hitch sheds at once (Cemu cannot wait), but one burst
+        // with nothing completed in between costs one level, not three.
         for (int miss = 0; miss < 30; ++miss) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
-        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "visible misses shed the cheap levels at once");
+        eq(1, value.workLevel(), "a burst of misses sheds one level at once");
+        // Misses that keep coming while pairs complete shed the cheap levels.
+        for (int round = 0; round < 3 && value.workLevel() < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1; ++round) {
+            for (int good = 0; good < GpuWorkAdaptationPolicy.REDUCTION_SETTLE_PAIRS; ++good)
+                value.onCompletedPair(++pair, 3000L, 7333L, false);
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        }
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "persisting misses shed the cheap levels");
+        // ...and recovery on shader slack with unknown headroom earns it back.
         for (int i = 0; i < 4 * value.recoveryWindowPairs() && value.workLevel() > 0; ++i)
             value.onCompletedPair(++pair, 3000L, 7333L, false);
         eq(0, value.workLevel(), "recovery restores full work after the hitch");
+    }
+
+    /** 3DS 2026-10-13: three misses in 230 ms (seven pairs) took level 0 to 3 for the session. */
+    private static void oneDisturbanceCostsOneLevel() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        for (int good = 0; good < 300; ++good) value.onCompletedPair(++pair, 3000L, 7333L, false);
+        value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        value.onCompletedPair(++pair, 3000L, 7333L, false);
+        value.onCompletedPair(++pair, 3000L, 7333L, false);
+        value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        for (int good = 0; good < 4; ++good) value.onCompletedPair(++pair, 3000L, 7333L, false);
+        value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        eq(1, value.workLevel(), "one disturbance costs one level");
+        eq(1, value.reductionCount(), "one reduction");
+        eq(3, value.failureCount(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS), "every miss is still counted");
+        eq(0, value.consecutiveHealthyPairs(), "and clears recovery");
+        // Cemu at startup: about one pair in three missed for seconds.
+        int rounds = 0;
+        while (value.workLevel() < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1 && rounds < 200) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            value.onCompletedPair(++pair, 3000L, 7333L, false);
+            value.onCompletedPair(++pair, 3000L, 7333L, false);
+            ++rounds;
+        }
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "steady misses still reach level 3");
+        check(rounds <= 2 * GpuWorkAdaptationPolicy.REDUCTION_SETTLE_PAIRS / 2 + 2,
+                "within about two settle windows of pairs: " + rounds);
     }
 
     private static void steadyPressureStepsTheCheapLevels() {

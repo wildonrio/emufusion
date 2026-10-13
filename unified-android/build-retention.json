@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "118cab95952b2cf94ae1a813d2ab889c7e937dac888f874b4bdb2756b94eee52": "Rollback 3.2.63 (137) until 3.2.64 settles.",
-    "5e00a519027aae324dc2ba726f8a76c8bd4b7f43dbd33d1eb024d991353eb192": "Current release 3.2.64 (138). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "5e00a519027aae324dc2ba726f8a76c8bd4b7f43dbd33d1eb024d991353eb192": "Rollback 3.2.64 (138) until 3.2.65 settles.",
+    "a3426957985001c750fd33ed79a9a9c53da627c131f6f8e20440fe23631ecb69": "Current release 3.2.65 (139). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -357,6 +357,22 @@
     "unified-android/build/emufusion-3.2.63-phase2-phase3-qualification-bde20693d0c37440bd5a86002bb3bc60ee1c57f79ce34114599189b91f2b0e94.apk": {
       "sha256": "bde20693d0c37440bd5a86002bb3bc60ee1c57f79ce34114599189b91f2b0e94",
       "reason": "Closed 2026-10-13 diagnostic: 3.2.63 with a logging-only Eden adapter (NCE data aborts, InvalidHandle SVCs, split backtraces) for Link's Awakening's boot panic; 11 launches (5 fresh, 6 after Cemu in-process) did not reproduce it. The diagnostics ship in the 3.2.64 candidate instead; Thor moved to that candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.65-phase2-phase3-qualification-9e57c98abc053f428c9d51aa6c3db942c231461bf776f5e2857d28bdd986e1f6.apk": {
+      "sha256": "9e57c98abc053f428c9d51aa6c3db942c231461bf776f5e2857d28bdd986e1f6",
+      "reason": "Closed 2026-10-13 hold-out trial: phase-field search levels 8/9 vs 5. Level 8 (16..2 px) cut error vs a cross-fade on SM3DW 0.601->0.540, Wind Waker HD 0.523->0.450, God of War II 0.544->0.519, Sunshine 0.807->0.777, Star Fox 64 0.948->0.931 (Link's Awakening's rain movie 0.912->0.921). Superseded by the candidate adding levels 10/11; Thor moved to it with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.65-phase2-phase3-qualification-ceeb0542d954b37fc95862c89f57e115203b35ca90c00ed85bcf3640b66b362e.apk": {
+      "sha256": "ceeb0542d954b37fc95862c89f57e115203b35ca90c00ed85bcf3640b66b362e",
+      "reason": "Closed 2026-10-13 hold-out trial: search levels 8/10/11. Level 10 (32..2 px) worse than 8 everywhere (false matches); 11 (16..1) equal or marginally better than 8 (SM3DW 0.547->0.545, Wind Waker HD 0.429->0.425). Superseded by the candidate adding level 12; Thor moved to it with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.65-phase2-phase3-qualification-16b46fdb507ea1d86adb2a6aa1e58152f97e3e4e0b05f6e31195a6305175fef5.apk": {
+      "sha256": "16b46fdb507ea1d86adb2a6aa1e58152f97e3e4e0b05f6e31195a6305175fef5",
+      "reason": "Closed 2026-10-13 trial: search level 12 (poorly matched cells only) kept level 8's quality (SM3DW 0.529/0.530, Wind Waker HD 0.487/0.490, God of War II 0.523/0.524) at level 5's GPU time per pair; superseded by the candidate that makes 12 the default; Thor moved to it with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.65-phase2-phase3-qualification-42e53cdcf9e6fd41bc5d80ba820ba108cf22fa8be945c5b5fabb2806cec8b0be.apk": {
+      "sha256": "42e53cdcf9e6fd41bc5d80ba820ba108cf22fa8be945c5b5fabb2806cec8b0be",
+      "reason": "Superseded 2026-10-13 3.2.65 candidate: full release sweep passed; consensus blend (13) rejected; Wind Waker HD 4x A/B levels 5 vs 12 equal (late 70/73/158 vs 83/113/126). Replaced by the same code plus the lower-panel preview fit; Thor moved to it with identity preserved."
     }
   }
 }

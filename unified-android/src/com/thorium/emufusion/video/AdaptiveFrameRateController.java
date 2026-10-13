@@ -4472,6 +4472,7 @@ public final class AdaptiveFrameRateController {
     }
 
     public void resetPresentation() {
+        recordPresentationResetCaller();
         discardPendingMidpoint();
         promotedSequence = 0L;
         lastPromotionNs = 0L;
@@ -4482,6 +4483,37 @@ public final class AdaptiveFrameRateController {
         selectedPhase = 1f;
         ++presentationEpoch;
         resetBufferedPresentation();
+    }
+
+    // Diagnostic: which call sites reset presentation (each reset drops the
+    // pair on screen and re-primes). Link's Awakening saw 16 resets while the
+    // timeline owned presentation, all labelled only "presentation-reset"
+    // (Thor, 2026-10-13). Bounded by the number of call sites.
+    private final java.util.LinkedHashMap<String, Integer> presentationResetCallers =
+            new java.util.LinkedHashMap<>();
+
+    private void recordPresentationResetCaller() {
+        StackTraceElement[] trace = new Throwable().getStackTrace();
+        String caller = "?";
+        for (int i = 1; i < trace.length && i < 4; ++i) {
+            if (trace[i].getMethodName().equals("resetPresentation")) continue;
+            caller = trace[i].getMethodName() + ":" + trace[i].getLineNumber();
+            break;
+        }
+        Integer count = presentationResetCallers.get(caller);
+        if (count == null && presentationResetCallers.size() >= 48) caller = "other";
+        count = presentationResetCallers.get(caller);
+        presentationResetCallers.put(caller, count == null ? 1 : count + 1);
+    }
+
+    /** "method:line=count,..." for every presentation reset this session. */
+    public String presentationResetCallers() {
+        StringBuilder out = new StringBuilder();
+        for (java.util.Map.Entry<String, Integer> entry : presentationResetCallers.entrySet()) {
+            if (out.length() > 0) out.append(',');
+            out.append(entry.getKey()).append('=').append(entry.getValue());
+        }
+        return out.length() == 0 ? "none" : out.toString();
     }
 
     private void updateTier() {

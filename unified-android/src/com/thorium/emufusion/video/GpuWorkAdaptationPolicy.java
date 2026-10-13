@@ -100,6 +100,12 @@ public final class GpuWorkAdaptationPolicy {
     private int recoveryWindowPairs;
     private int pairsSinceRestoration = Integer.MAX_VALUE;
     private int pairsSinceFailure;
+    // Product policy: pairs completed at the current level. A visible miss
+    // sheds a further level only once the last reduction has been observed
+    // working; a burst with nothing completed in between costs one level.
+    private int pairsAtLevel = Integer.MAX_VALUE / 2;
+    /** Completed pairs at a new level before another visible miss sheds again (0.2-0.4 s). */
+    public static final int REDUCTION_SETTLE_PAIRS = 12;
     // Observations (completed or failed) since the current burst's first failure.
     private int burstObservations;
     private final long[] failuresByReason = new long[Failure.values().length];
@@ -184,6 +190,8 @@ public final class GpuWorkAdaptationPolicy {
         lastPairSequence = pairSequence;
         if (shaderBudgetUs <= 0L) return onFailure(Failure.TIMER_INVALID);
         if (totalGpuUs <= 0L) return onFailure(Failure.TIMER_MISSING);
+        // Completed at this level, over budget or not: the level is working.
+        if (pairsAtLevel < Integer.MAX_VALUE / 2) ++pairsAtLevel;
         if (totalGpuUs > shaderBudgetUs) return onFailure(Failure.GPU_OVER_BUDGET);
         if (disabled) return Decision.DISABLE_GENERATION;
         if (failuresAtMinimum > 0) ++burstObservations;
@@ -220,6 +228,7 @@ public final class GpuWorkAdaptationPolicy {
         if (++consecutiveHealthyPairs < recoveryWindowPairs) return Decision.UNCHANGED;
         --workLevel;
         ++restorations;
+        pairsAtLevel = 0;
         consecutiveHealthyPairs = 0;
         pairsSinceRestoration = 0;
         clearBurst();
@@ -255,7 +264,18 @@ public final class GpuWorkAdaptationPolicy {
             observeStep(false, true);
             if (pressureBlocks < STEP_BLOCKS) return Decision.UNCHANGED;
         }
-        if (workLevel < maxWorkLevel) return reduce();
+        if (workLevel < maxWorkLevel) {
+            // One disturbance misses several frames before the cheaper level
+            // can show (frames in flight were submitted at the old one): a
+            // 230-ms burst of three took the 3DS from level 0 to 3 for the
+            // rest of its session (Thor, 2026-10-13). Wait until pairs have
+            // completed at this level; misses that keep coming still shed.
+            // (The last level keeps its own sustained-block gate above.)
+            if (stepsNeedBlocks() && reason != Failure.GPU_OVER_BUDGET &&
+                    workLevel < maxWorkLevel - 1 && pairsAtLevel < REDUCTION_SETTLE_PAIRS)
+                return Decision.UNCHANGED;
+            return reduce();
+        }
         // Nothing left to shed, and over-budget shader time is not a visible
         // failure: keep generating and let physical misses decide.
         if (reason == Failure.GPU_OVER_BUDGET) {
@@ -302,6 +322,7 @@ public final class GpuWorkAdaptationPolicy {
     private Decision reduce() {
         ++workLevel;
         ++reductions;
+        pairsAtLevel = 0;
         clearBurst();
         pairsSinceFailure = 0;
         if (pairsSinceRestoration < recoveryWindowPairs)

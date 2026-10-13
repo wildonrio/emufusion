@@ -104,12 +104,12 @@ class PhaseSynthesisTest(unittest.TestCase):
 
     def test_synthesis_defaults_on_with_a_qa_only_override(self):
         self.assertIn('SYNTH_GLOBAL = "emufusion_framegen_synth"', SWITCH)
-        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 5;", SWITCH)
+        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 12;", SWITCH)
         # 5 (QA): level 4 matched on the quarter-resolution pyramid images.
         # 6/7 (QA): level 5 with per-pixel neighbour selection, soft and sharp.
-        self.assertIn("synthesisLevel = Math.max(0, Math.min(7, level));", SWITCH)
+        self.assertIn("synthesisLevel = Math.max(0, Math.min(13, level));", SWITCH)
         # Hold-out variants are a QA setting; 100+ adds the prepared warp.
-        self.assertIn("static final int[] DEFAULT_HOLDOUT_LEVELS = {0, 5, 105};", SWITCH)
+        self.assertIn("static final int[] DEFAULT_HOLDOUT_LEVELS = {5, 12, 112};", SWITCH)
         self.assertIn("holdoutPreparedOverride = holdoutLevelIds[level] >= 100;", GENERATOR)
         self.assertIn("synthesisLevel = holdoutLevelIds[level] % 100;", GENERATOR)
         self.assertIn("private boolean phaseMatchesQuarterImages() { return synthesisLevel >= 5; }", GENERATOR)
@@ -124,3 +124,15 @@ class PhaseSynthesisTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PhaseSearchTest(unittest.TestCase):
+    """The default synthesis searches around a poorly matched phase winner."""
+
+    def test_default_searches_only_poorly_matched_cells(self):
+        generator = (Path(__file__).resolve().parents[2] / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java").read_text()
+        self.assertIn('" if(uPhaseSearch>0.5&&best>uPhaseSearchAbove){\\n" +', generator)
+        self.assertIn("boolean search = synthesisLevel == 3 || synthesisLevel >= 8;", generator)
+        self.assertIn("if (synthesisLevel == 12 || synthesisLevel == 13) { searchStart = 16f; searchRounds = 4f; }", generator)
+        self.assertIn('synthesisLevel == 12 || synthesisLevel == 13 ? 0.15f : -1f);', generator)
+

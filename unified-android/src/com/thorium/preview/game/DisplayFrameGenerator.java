@@ -416,7 +416,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "uniform float uSeedEnabled;\n" +
             "uniform vec2 uFlowRange,uCell,uSourcePixel,uSeedSourceSize;\n" +
             "uniform float uPhase;\n" +
-            "uniform float uPhaseSearch;\n" +
+            "uniform float uPhaseSearch,uPhaseSearchStart,uPhaseSearchRounds,uPhaseSearchAbove;\n" +
             "varying vec2 vTexCoord;\n" +
             "float seedUnp(vec2 p){float r=floor(p.x*255.0+.5)*256.0+floor(p.y*255.0+.5);return r>=32768.0?r-65536.0:r;}\n" +
             "vec2 seedDec(vec4 f){return vec2(seedUnp(f.rg),seedUnp(f.ba))/256.0;}\n" +
@@ -466,9 +466,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // output pixels, eight directions), so the field can leave the
             // endpoint fields' candidates where both are wrong (occlusion
             // edges, fast or zooming motion). Cheap at analysis resolution.
-            " if(uPhaseSearch>0.5){\n" +
-            "  float sp=4.0;\n" +
-            "  for(int k=0;k<3;k++){\n" +
+            " if(uPhaseSearch>0.5&&best>uPhaseSearchAbove){\n" +
+            "  float sp=uPhaseSearchStart;\n" +
+            "  for(int k=0;k<5;k++){\n" +
+            "   if(float(k)>=uPhaseSearchRounds)break;\n" +
             "   vec2 sb2=bv;\n" +
             "   for(int i=0;i<9;i++){\n" +
             "    if(i==4)continue;\n" +
@@ -1327,7 +1328,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "vec2 seedDec(vec4 f){return vec2(seedUnp(f.rg),seedUnp(f.ba))/256.0;}\n" +
             "uniform float uPhase;\n" +
             "uniform float uDenseEncoding;\n" +
-            "uniform sampler2D uPhaseFlow;uniform float uPhaseFieldEnabled;uniform vec2 uPhaseSize;\n" +
+            "uniform sampler2D uPhaseFlow;uniform float uPhaseFieldEnabled;uniform vec2 uPhaseSize;uniform float uConsensus;\n" +
             "#ifdef PREPARED_WARP\n" +
             "uniform sampler2D uWarp0,uWarp1,uWarp2;\n" +
             "#endif\n" +
@@ -1601,6 +1602,21 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "#endif\n" +
             "  float wA2=(1.0-uPhase)*(0.02+previousReliability*previousGate)*(0.02+k2)*(0.02+k2);\n" +
             "  float wB2=uPhase*(0.02+currentReliability*currentGate)*(0.02+k2)*(0.02+k2);\n" +
+            // QA level 13: each sample weighted by how well it agrees with the
+            // other three (their own weights averaging), so a single wrong
+            // sample (one side's warp failing at an occlusion) stops ghosting;
+            // where all four agree every factor is 1 and nothing changes.
+            "  if(uConsensus>0.5){\n" +
+            "   float kc=150.0;\n" +
+            "   float e11=exp(-g1*g1*kc),e22=exp(-g2*g2*kc);\n" +
+            "   float dAa=maxDiff(a1,a.rgb),dAb=maxDiff(a1,b.rgb),dBa=maxDiff(b1,a.rgb),dBb=maxDiff(b1,b.rgb);\n" +
+            "   float eAa=exp(-dAa*dAa*kc),eAb=exp(-dAb*dAb*kc),eBa=exp(-dBa*dBa*kc),eBb=exp(-dBb*dBb*kc);\n" +
+            "   float cA1=(wB1*e11+wA2*eAa+wB2*eAb)/(wB1+wA2+wB2+1e-6);\n" +
+            "   float cB1=(wA1*e11+wA2*eBa+wB2*eBb)/(wA1+wA2+wB2+1e-6);\n" +
+            "   float cA2=(wA1*eAa+wB1*eBa+wB2*e22)/(wA1+wB1+wB2+1e-6);\n" +
+            "   float cB2=(wA1*eAb+wB1*eBb+wA2*e22)/(wA1+wB1+wA2+1e-6);\n" +
+            "   wA1*=0.05+cA1;wB1*=0.05+cB1;wA2*=0.05+cA2;wB2*=0.05+cB2;\n" +
+            "  }\n" +
             "  float ws=wA1+wB1+wA2+wB2;\n" +
             "  selectedPrediction=(wA1*a1+wB1*b1+wA2*a.rgb+wB2*b.rgb)/ws;\n" +
             "  predictionAdmission=max(predictionAdmission,step(0.3,c1));\n" +
@@ -11445,8 +11461,29 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         uniform2(densePhaseProgram, "uSeedSourceSize",
                 Math.max(1f, historyWidth), Math.max(1f, historyHeight));
         GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhase"), phase);
+        // Search around the winner: level 3 (4, 2, 1 px), and the QA
+        // hold-out levels 8 (16, 8, 4, 2 px: small sprites moving against the
+        // camera are off every candidate by more than 7 px) and 9 (4, 2, 1),
+        // both otherwise level 5.
+        // QA 10: 32..2 px (reach 62); 11: 16..1 px (reach 31, finer finish).
+        float searchStart = synthesisLevel == 8 || synthesisLevel == 11 ? 16f :
+                synthesisLevel == 10 ? 32f : 4f;
+        float searchRounds = synthesisLevel == 8 ? 4f :
+                synthesisLevel == 10 || synthesisLevel == 11 ? 5f : 3f;
+        boolean search = synthesisLevel == 3 || synthesisLevel >= 8;
+        // QA 12: level 8, searching only cells whose best candidate matches
+        // poorly (15 channel differences above 0.15, ~0.01 per channel), where
+        // small sprites and occlusion edges are; well-matched background skips it.
+        // (13 is 12 with the consensus blend; its field is 12's.)
+        if (synthesisLevel == 12 || synthesisLevel == 13) { searchStart = 16f; searchRounds = 4f; }
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearchAbove"),
+                synthesisLevel == 12 || synthesisLevel == 13 ? 0.15f : -1f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearch"),
-                synthesisLevel == 3 ? 1f : 0f);
+                search ? 1f : 0f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearchStart"),
+                searchStart);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearchRounds"),
+                searchRounds);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         densePhaseBoundTexture = densePhaseTexture;
         if (synthesisLevel >= 4 &&
@@ -11618,6 +11655,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 phaseField ? densePhaseBoundTexture : historyTextures[previousIndex], phaseField ? 9 : 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
                 "uPhaseFieldEnabled"), phaseField ? 1f : 0f);
+        int consensus = GLES20.glGetUniformLocation(interpolateProgram, "uConsensus");
+        if (consensus >= 0) GLES20.glUniform1f(consensus, synthesisLevel == 13 ? 1f : 0f);
         uniform2(interpolateProgram, "uPhaseSize",
                 Math.max(1f, densePhaseWidth), Math.max(1f, densePhaseHeight));
         if (prepared) {
@@ -12930,6 +12969,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " builtinQueueReserveUs=" + builtinQueueReserveNs / 1000L +
                 (timelineMode ? " timelineMode=1 timelineActive=" + (timelineActive ? 1 : 0) +
                         " " + timeline.diagnostics() : "") +
+                " presentationResets=" + frameRate.presentationResetCallers() +
                 " endpointAdmissionLagMs4/8/16/33/more=" + endpointAdmissionLagBuckets[0] + "/" +
                         endpointAdmissionLagBuckets[1] + "/" + endpointAdmissionLagBuckets[2] + "/" +
                         endpointAdmissionLagBuckets[3] + "/" + endpointAdmissionLagBuckets[4] +
