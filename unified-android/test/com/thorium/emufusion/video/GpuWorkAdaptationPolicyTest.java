@@ -5,6 +5,10 @@ public final class GpuWorkAdaptationPolicyTest {
         twelveHundredBadPairsNeverRestoreQuality();
         overBudgetShaderTimeAloneNeverDisables();
         oneEmulatorHitchDoesNotDisable();
+        startupHitchKeepsFullWork();
+        steadyPressureStepsTheCheapLevels();
+        unknownHeadroomRecoversOnShaderEvidence();
+        recoveryBacksOffWhenALevelDoesNotHold();
         screenshotSpikeAfterStrayMissesDoesNotDisable();
         suspensionResumesAtMinimumWorkAndCanDisableAgain();
         lastLevelNeedsSteadyMisses();
@@ -87,9 +91,7 @@ public final class GpuWorkAdaptationPolicyTest {
     private static void oneEmulatorHitchDoesNotDisable() {
         // GameCube 2026-10-11: one 0.35 s stall missed thirty frames at once.
         GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
-        long pair = 0;
-        for (int i = 0; i < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
-        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "the first misses shed work, but not the last level");
+        long pair = steadyMissesTo(value, GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, 0L);
         for (int hitch = 0; hitch < 3; ++hitch) {
             for (int miss = 0; miss < 40; ++miss)
                 value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
@@ -102,6 +104,81 @@ public final class GpuWorkAdaptationPolicyTest {
             value.onCompletedPair(++pair, 500L, 1000L, true);
         }
         check(value.generationDisabled(), "half the frames missing for seconds is overload");
+    }
+
+    /** Steady 1-in-10 visible misses until the policy reaches {@code level}. */
+    private static long steadyMissesTo(GpuWorkAdaptationPolicy value, int level, long pair) {
+        int rounds = 0;
+        while (value.workLevel() < level) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            for (int good = 0; good < 9; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
+            check(++rounds < 1000, "steady misses reach level " + level);
+        }
+        return pair;
+    }
+
+    /** Dolphin/PS2/PS3/Eden 2026-10-12: two over-budget pairs at startup took level 0 to 2. */
+    private static void startupHitchKeepsFullWork() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        for (int i = 0; i < 3; ++i) value.onCompletedPair(++pair, 9000L, 7333L, false);
+        for (int good = 0; good < 600; ++good) value.onCompletedPair(++pair, 3000L, 7333L, false);
+        eq(0, value.workLevel(), "a few over-budget pairs keep the per-phase field");
+        eq(0, value.reductionCount(), "nothing was shed");
+        // A visible hitch sheds at once (Cemu cannot wait), and recovery on
+        // shader slack with unknown headroom earns it back.
+        for (int miss = 0; miss < 30; ++miss) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "visible misses shed the cheap levels at once");
+        for (int i = 0; i < 4 * value.recoveryWindowPairs() && value.workLevel() > 0; ++i)
+            value.onCompletedPair(++pair, 3000L, 7333L, false);
+        eq(0, value.workLevel(), "recovery restores full work after the hitch");
+    }
+
+    private static void steadyPressureStepsTheCheapLevels() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = steadyMissesTo(value, 1, 0L);
+        check(pair <= 2 * GpuWorkAdaptationPolicy.DEFAULT_PERSISTENCE_BLOCK_PAIRS,
+                "steady misses shed the first level within two blocks: " + pair);
+        // A quarter of pairs over the shader budget is pressure too.
+        GpuWorkAdaptationPolicy busy = new GpuWorkAdaptationPolicy();
+        long busyPair = 0;
+        for (int i = 0; i < 400 && busy.workLevel() < 1; ++i)
+            busy.onCompletedPair(++busyPair, i % 3 == 0 ? 9000L : 5000L, 7333L, false);
+        eq(1, busy.workLevel(), "sustained over-budget shader time sheds a level");
+    }
+
+    /** Thor: ~97% of pairs have unknown physical headroom, which used to forbid restoring. */
+    private static void unknownHeadroomRecoversOnShaderEvidence() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = steadyMissesTo(value, 1, 0L);
+        int window = value.recoveryWindowPairs();
+        int restoredAt = -1;
+        for (int i = 0; i < window && restoredAt < 0; ++i) {
+            // Marginal timer readings interleave without resetting the streak.
+            if (i % 50 == 0) value.onCompletedPair(++pair, 6500L, 7333L, false);
+            if (value.onCompletedPair(++pair, 3000L, 7333L, false) ==
+                    GpuWorkAdaptationPolicy.Decision.RESTORE_WORK) restoredAt = i;
+        }
+        check(restoredAt >= window - 20, "unknown headroom with shader slack restores after a full window: " + restoredAt);
+        eq(0, value.workLevel(), "full work is back");
+        value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        eq(0, value.consecutiveHealthyPairs(), "a visible miss still clears recovery");
+    }
+
+    private static void recoveryBacksOffWhenALevelDoesNotHold() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = steadyMissesTo(value, 1, 0L);
+        int first = value.recoveryWindowPairs();
+        for (int i = 0; i < first; ++i) value.onCompletedPair(++pair, 3000L, 7333L, false);
+        eq(0, value.workLevel(), "restored");
+        pair = steadyMissesTo(value, 1, pair);  // the restored level did not hold
+        eq(2 * first, value.recoveryWindowPairs(), "the next restoration waits twice as long");
+        for (int round = 0; round < 6; ++round) {
+            int window = value.recoveryWindowPairs();
+            for (int i = 0; i < window; ++i) value.onCompletedPair(++pair, 3000L, 7333L, false);
+            pair = steadyMissesTo(value, 1, pair);
+        }
+        eq(8 * first, value.recoveryWindowPairs(), "backoff is capped at eight windows");
     }
 
     /** Steady misses earn the last level; a clean window then clears the burst. */
@@ -120,9 +197,7 @@ public final class GpuWorkAdaptationPolicyTest {
 
     private static void lastLevelNeedsSteadyMisses() {
         GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
-        long pair = 0;
-        for (int i = 0; i < 2; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
-        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "the first misses shed the cheap levels");
+        long pair = steadyMissesTo(value, GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, 0L);
         // One 0.35 s hitch: thirty misses at once, then clean pairs.
         for (int miss = 0; miss < 30; ++miss) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
         for (int good = 0; good < 600; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
@@ -143,7 +218,8 @@ public final class GpuWorkAdaptationPolicyTest {
         long pair = 0;
         check(value.onPresentationBackpressure() == GpuWorkAdaptationPolicy.Decision.UNCHANGED,
                 "backpressure alone does not shed the cheap levels");
-        for (int i = 0; i < 2; ++i) value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        pair = steadyMissesTo(value, GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, pair);
+        for (int good = 0; good < 600; ++good) value.onCompletedPair(++pair, 500L, 1000L, true);
         eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "fixture at the level below the last");
         int rounds = 0;
         while (value.workLevel() < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL && rounds < 100) {
@@ -222,7 +298,7 @@ public final class GpuWorkAdaptationPolicyTest {
     }
 
     private static void restorationRequiresConsecutiveEvidenceAndHeadroom() {
-        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy(1, 1200, 30);
         value.onFailure(GpuWorkAdaptationPolicy.Failure.GPU_OVER_BUDGET);
         for (int pair = 1; pair < 1200; ++pair)
             check(value.onCompletedPair(pair, 500L, 1000L, true) ==

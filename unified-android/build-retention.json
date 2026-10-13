@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "4c6c5a5129f16344e291c3df09453a72126dfb4762f9af779e72eb867c145bab": "Current release 3.2.57 (131). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
-    "1f1a801dc66ff22154e993bbba087790661ce313c94b0a9a04a8c32fb9807d79": "Rollback 3.2.56 (130) until 3.2.57 settles."
+    "0d85c9da3a6ffb115359ffed945b5d8e8991315cf93077fcfebda8619d30cc12": "Current release 3.2.58 (132). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
+    "4c6c5a5129f16344e291c3df09453a72126dfb4762f9af779e72eb867c145bab": "Rollback 3.2.57 (131) until 3.2.58 settles."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -317,6 +317,18 @@
     "unified-android/build/lucent-3.2.16-lsfg-framegen-qualification-fda1b54f0845ca645c6da488530c71eabf9b4ec3bdb5e5aa8b91840193938dfb.apk": {
       "sha256": "fda1b54f0845ca645c6da488530c71eabf9b4ec3bdb5e5aa8b91840193938dfb",
       "reason": "October9 BlastEm-fix candidate superseded by 25332 (adds wedged-exit restart; identical natives). Its Sonic 2 soak/gameplay trial is closed and recorded in docs/qa/android-portability-2026-10-08-current-build-survey/results.json."
+    },
+    "unified-android/build/emufusion-3.2.58-phase2-phase3-qualification-4ce6683c765a57ac4d152c45d5797da27e11a8f2104443d7db920239be289235.apk": {
+      "sha256": "4ce6683c765a57ac4d152c45d5797da27e11a8f2104443d7db920239be289235",
+      "reason": "Closed 2026-10-12 content-clock trial (timeline fed fitted guest-tick times). Negative: endpoint stamps were already regular (0.1-0.35 ms corrections) and the fitted slope drifted against display-locked libretro stamps (Dolphin timing error 0.001 -> 3 ms). Reverted in source; Thor restored to 3.2.57 (131) with identity preserved. Evidence in the goal doc."
+    },
+    "unified-android/build/emufusion-3.2.58-phase2-phase3-qualification-13256281f06f1fd6ffad995415e9c7fb15076082acd9da6ed33fa49ae78d7b20.apk": {
+      "sha256": "13256281f06f1fd6ffad995415e9c7fb15076082acd9da6ed33fa49ae78d7b20",
+      "reason": "Superseded 2026-10-12 by the combined 3.2.58 candidate b34b92a7 (same 3x/4x policy plus the work-level fix); its Thor sweep evidence is in the goal doc."
+    },
+    "unified-android/build/emufusion-3.2.58-phase2-phase3-qualification-b34b92a7608349d9bd53fe656e6dbc8e56164cd69682f4794013c252a18988f5.apk": {
+      "sha256": "b34b92a7608349d9bd53fe656e6dbc8e56164cd69682f4794013c252a18988f5",
+      "reason": "Superseded 2026-10-13: gating visible misses too left Cemu at full work for ~8 s at each start (SM3DW 261 late callbacks vs 38). Replaced by the shader-time-only gate; Thor evidence in the goal doc."
     }
   }
 }

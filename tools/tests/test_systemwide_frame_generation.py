@@ -1431,9 +1431,14 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         # the forced-OFF mode version is unchanged.
         self.assertIn('AUTO("auto")', setting)
         self.assertGreaterEqual(setting.count('return this == AUTO || this == AUTO_TRIPLE;'), 2)
-        # AUTO (TRIPLE): the owner's optional tripling ceiling, timeline only.
+        # On fills the panel up to 3x; "Allow 4x" (stored as auto-triple, so
+        # earlier choices carry over) raises it to 4x (owner, 2026-10-12).
+        # Both exceed the one-midpoint lattice, so both need the timeline.
         self.assertIn('AUTO_TRIPLE("auto-triple")', setting)
-        self.assertIn('return this == AUTO_TRIPLE ? TRIPLE_MULTIPLIER : MAX_MULTIPLIER;', setting)
+        self.assertIn('public static final int MAX_MULTIPLIER = 3;', setting)
+        self.assertIn('public static final int FOUR_X_MULTIPLIER = 4;', setting)
+        self.assertIn('return this == AUTO_TRIPLE ? FOUR_X_MULTIPLIER : MAX_MULTIPLIER;', setting)
+        self.assertIn('public boolean requiresTimelineScheduler() { return maxMultiplier() > 2; }', setting)
         self.assertIn('if (selected.usesBuiltInBackend())', setting)
         self.assertIn('private static final int CURRENT_MODE_VERSION = 3;', setting)
         self.assertIn('String stored = prefs.getString(MODE, Mode.OFF.storedValue());', setting)
@@ -1494,9 +1499,10 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         theme = self.read("theme/theme.qml")
         self.assertIn('property string frameGenerationMode: "off"', theme)
         self.assertIn('"FRAME GENERATION"', theme)
-        # On/Off plus "Allow triple" (owner, 2026-10-11).
+        # On/Off plus "Allow 4x" (owner, 2026-10-11; 4x since 2026-10-12).
         self.assertIn('return frameGenerationMode === "off" ? "OFF" : "ON"', theme)
-        self.assertIn('"ALLOW TRIPLE FRAME RATE"', theme)
+        self.assertIn('"ALLOW 4X FRAME RATE"', theme)
+        self.assertNotIn('ALLOW TRIPLE', theme)
         self.assertIn('return frameGenerationAllowTriple ? "auto-triple" : "auto"', theme)
         self.assertNotIn('"built-in-alpha"', theme)
         self.assertNotIn('"lsfg"', theme)

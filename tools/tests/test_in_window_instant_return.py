@@ -77,11 +77,13 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # upper-right preview instead of covering it; library chrome only.
         # The FRAME GENERATION picker gained AUTO (listed after OFF); a Settings
         # value only, it does not alter the in-window return flow.
+        # The "Allow triple" option became "Allow 4X" when On began tripling
+        # (owner, 2026-10-12); Settings text only.
         # The pin exists so unrelated runtime-return work cannot alter the theme
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "8c716d85876070e0e40f45652b4bf374ecca58f3ee3d7ad66a67471c0bbd622d",
+            "a5fca10c7187dcbb1dc92c1c5aee96c07a0c8efce78ede5537532228029bd753",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):

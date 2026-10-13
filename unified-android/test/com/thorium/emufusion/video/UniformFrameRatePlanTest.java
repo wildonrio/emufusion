@@ -167,7 +167,20 @@ public final class UniformFrameRatePlanTest {
         near(144.0, UniformFrameRatePlan.select(48.0, 144.0, 3.0, 0.0).outputHz(), 1e-9,
                 "48 triples to 144");
         near(80.0, UniformFrameRatePlan.select(40.0, 120.0, 2.0, 0.0).outputHz() * 2.0, 1e-9,
-                "the default ceiling never triples (40 stays Direct)");
+                "a 2x ceiling never triples (40 stays Direct)");
+        // "Allow 4x" (owner, 2026-10-12): 30 fps games reach 120 Hz.
+        UniformFrameRatePlan thirty = UniformFrameRatePlan.select(30.0, 120.0,
+                UniformFrameRatePlan.QUAD_GENERATION_FACTOR, 0.0);
+        near(120.0, thirty.outputHz(), 1e-9, "30 quadruples to 120");
+        eq(1, thirty.panelScansPerOutput(), "30x4 holds one scan");
+        near(120.0, UniformFrameRatePlan.select(40.0, 120.0, 4.0, 0.0).outputHz(), 1e-9,
+                "40 still triples to 120 under the 4x ceiling");
+        near(60.0, UniformFrameRatePlan.select(15.0, 120.0, 4.0, 0.0).outputHz(), 1e-9,
+                "15 quadruples to 60");
+        near(120.0, UniformFrameRatePlan.select(60.0, 120.0, 4.0, 0.0).outputHz(), 1e-9,
+                "60 still doubles to 120");
+        check(UniformFrameRatePlan.select(29.983, 119.906, 4.0, 0.005).panelScansPerOutput() == 1,
+                "the timeline quadruples a near-divisor 30 Hz clock");
         // Timeline tolerance: the Thor's 3DS clock against its measured panel.
         check(!UniformFrameRatePlan.select(29.983, 119.906, 2.0).generatesIntermediateFrames(),
                 "the exact lattice refuses a clock just off the divisor");

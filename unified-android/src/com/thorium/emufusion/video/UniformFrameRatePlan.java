@@ -13,8 +13,10 @@ package com.thorium.emufusion.video;
 public final class UniformFrameRatePlan {
     private static final int MAX_PANEL_DIVISOR = 1000;
     public static final double MAX_GENERATION_FACTOR = 2.0;
-    /** The owner's optional ceiling (AUTO (TRIPLE)); timeline scheduler only. */
+    /** Frame generation On fills the panel up to 3x (timeline scheduler only). */
     public static final double TRIPLE_GENERATION_FACTOR = 3.0;
+    /** The owner's "Allow 4x" ceiling: 30 fps games reach 120 Hz (timeline only). */
+    public static final double QUAD_GENERATION_FACTOR = 4.0;
     // Nanosecond timestamp quantization turns an exact nominal60 period into
     // 59.9999988 Hz.  Ten microhertz admits that representation error while
     // remaining four orders of magnitude below the 29.97-vs-30 distinction.
@@ -68,7 +70,8 @@ public final class UniformFrameRatePlan {
      * small relative distance from an exact divisor. Only the timeline
      * scheduler, which samples each output at its own source time, may pass
      * either: the exact one-midpoint lattice needs both exact. The highest
-     * output wins (40 fps on 120 Hz triples to 120; 30 doubles to 60).
+     * output wins (40 fps on 120 Hz triples to 120; 30 doubles to 60, or
+     * quadruples to 120 when 4x is allowed).
      */
     public static UniformFrameRatePlan select(double sourceHz, double panelHz,
                                               double maxGenerationFactor,
@@ -78,8 +81,10 @@ public final class UniformFrameRatePlan {
         double tolerance = Double.isFinite(relativeTolerance) && relativeTolerance > 0.0
                 ? Math.min(0.02, relativeTolerance) : 0.0;
         if (Double.isFinite(maxGenerationFactor)) {
-            int divisor = maxGenerationFactor >= TRIPLE_GENERATION_FACTOR
-                    ? panelDivisor(sourceHz * 3.0, panelHz, tolerance) : 0;
+            int divisor = maxGenerationFactor >= QUAD_GENERATION_FACTOR
+                    ? panelDivisor(sourceHz * 4.0, panelHz, tolerance) : 0;
+            if (divisor == 0 && maxGenerationFactor >= TRIPLE_GENERATION_FACTOR)
+                divisor = panelDivisor(sourceHz * 3.0, panelHz, tolerance);
             if (divisor == 0 && maxGenerationFactor >= MAX_GENERATION_FACTOR)
                 divisor = panelDivisor(sourceHz * 2.0, panelHz, tolerance);
             if (divisor == 0) divisor = panelDivisor(sourceHz, panelHz, tolerance);

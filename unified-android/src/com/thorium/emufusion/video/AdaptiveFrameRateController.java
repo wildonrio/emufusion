@@ -214,7 +214,7 @@ public final class AdaptiveFrameRateController {
 
     public void setMaxGenerationFactor(double factor) {
         maxGenerationFactor = Double.isFinite(factor)
-                ? Math.min(UniformFrameRatePlan.TRIPLE_GENERATION_FACTOR,
+                ? Math.min(UniformFrameRatePlan.QUAD_GENERATION_FACTOR,
                         Math.max(1.0, factor)) : Double.NaN;
     }
 

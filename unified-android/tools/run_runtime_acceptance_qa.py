@@ -71,9 +71,9 @@ MAIN_ACTIVITY = "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 # the very APK it had just built, before any game launch.  Keep this as a byte
 # identity gate rather than weakening it to a structural/theme-name check.
 # Re-pinned for the WIDESCREEN HACK Settings slot (23) and the AUTO frame-
-# generation mode; the theme.qml byte identity otherwise stays the reviewed
-# product source.
-FROZEN_THEME_QML = "8c716d85876070e0e40f45652b4bf374ecca58f3ee3d7ad66a67471c0bbd622d"
+# generation mode, and for the "Allow 4X" frame-rate option (2026-10-12); the
+# theme.qml byte identity otherwise stays the reviewed product source.
+FROZEN_THEME_QML = "a5fca10c7187dcbb1dc92c1c5aee96c07a0c8efce78ede5537532228029bd753"
 FROZEN_THEME_CFG = "b10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9"
 ROUTE = re.compile(r"In-window route accepted engine=([^ ]+) system=([^\s]+)")
 RETURN = re.compile(

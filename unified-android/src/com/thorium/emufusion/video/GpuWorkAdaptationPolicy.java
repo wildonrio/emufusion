@@ -39,9 +39,22 @@ public final class GpuWorkAdaptationPolicy {
      * Work levels: 1 trims the coarsest solve and refinement, 2 drops the
      * reciprocal refinement and the phase field, 3 halves the finer solve
      * levels (a GPU an engine already saturates: Cemu blocked our swaps 12.5 ms
-     * p95 at level 2, 2026-10-12). Levels 1 and 2 follow the first misses;
-     * level 3 needs three consecutive blocks at level 2 each with at least 5%
-     * of pairs missed, so a startup hitch alone never costs motion reach.
+     * p95 at level 2, 2026-10-12). Level 3 needs three consecutive blocks at
+     * level 2 each with at least 5% of pairs missed, so a startup hitch alone
+     * never costs motion reach.
+     *
+     * <p>Levels 1 and 2 used to follow the first failures: two over-budget
+     * pairs a few seconds into a game (shader compiles; GPU timers also span
+     * the emulator's own work) took Dolphin, PS2, PS3 and Eden sessions from
+     * level 0 to 2 within 50 ms, and since physical headroom is unknown for
+     * ~97% of Thor pairs nothing ever restored them, so the high-end systems
+     * ran without the per-phase motion field for the whole session
+     * (2026-10-12). In the product policy shader time over budget now sheds
+     * those levels only after two consecutive blocks with a quarter of pairs
+     * over budget; a visible miss still sheds at once, and recovery may
+     * proceed on shader-time evidence while headroom is merely unknown, so a
+     * startup hitch costs the per-phase field for one recovery window, not
+     * the session.</p>
      */
     public static final int DEFAULT_MAX_WORK_LEVEL = 3;
     public static final int DEFAULT_RECOVERY_GOOD_PAIRS = 1200;
@@ -75,6 +88,15 @@ public final class GpuWorkAdaptationPolicy {
     // which a single hitch (its misses inside one or two blocks) cannot give.
     private int steadyMissBlocks;
     private static final int LAST_STEP_BLOCKS = 3;
+    // Lower steps on shader time alone (product policy): consecutive blocks
+    // with a quarter of pairs over the shader budget.
+    private static final int STEP_BLOCKS = 2;
+    private int blockOverBudget;
+    private int pressureBlocks;
+    // Recovery window, doubled (to 8x) when work had to be shed again within
+    // one window of a restoration, so a level that does not fit stops cycling.
+    private int recoveryWindowPairs;
+    private int pairsSinceRestoration = Integer.MAX_VALUE;
     private int pairsSinceFailure;
     // Observations (completed or failed) since the current burst's first failure.
     private int burstObservations;
@@ -137,6 +159,7 @@ public final class GpuWorkAdaptationPolicy {
         this.minDisableSpanPairs = minDisableSpanPairs;
         this.persistenceBlockPairs = persistenceBlockPairs;
         this.persistenceBlocks = persistenceBlocks;
+        this.recoveryWindowPairs = recoveryGoodPairs;
     }
 
     /**
@@ -162,32 +185,41 @@ public final class GpuWorkAdaptationPolicy {
         if (totalGpuUs > shaderBudgetUs) return onFailure(Failure.GPU_OVER_BUDGET);
         if (disabled) return Decision.DISABLE_GENERATION;
         if (failuresAtMinimum > 0) ++burstObservations;
+        if (pairsSinceRestoration < Integer.MAX_VALUE) ++pairsSinceRestoration;
         if (workLevel >= blockObservedLevel()) observeAtMinimum(false);
+        else if (stepsNeedBlocks()) observeStep(false, false);
         // A window of failure-free pairs ends a burst; isolated misses spread
         // across a long session never add up to a disable.
         if (++pairsSinceFailure >= failureWindowPairs) clearBurst();
         if (!physicalHeadroomVerified) {
             ++physicalHeadroomUnknownPairs;
-            consecutiveHealthyPairs = 0;
-            return Decision.UNCHANGED;
+            // Unknown is not a miss: in the product policy shader-time slack
+            // may still earn recovery (any failure resets it).
+            if (!stepsNeedBlocks()) {
+                consecutiveHealthyPairs = 0;
+                return Decision.UNCHANGED;
+            }
         }
         // floor(4 * budget / 5), without overflowing a long multiplication.
         long recoveryBudgetUs = shaderBudgetUs - shaderBudgetUs / 5L -
                 (shaderBudgetUs % 5L == 0L ? 0L : 1L);
         if (totalGpuUs > recoveryBudgetUs) {
             ++marginalShaderPairs;
-            consecutiveHealthyPairs = 0;
+            // Timer noise: a marginal pair neither banks nor (in the product
+            // policy) spends recovery evidence.
+            if (!stepsNeedBlocks()) consecutiveHealthyPairs = 0;
             return Decision.UNCHANGED;
         }
-        ++verifiedHealthyPairs;
+        if (physicalHeadroomVerified) ++verifiedHealthyPairs;
         if (workLevel == 0) {
             consecutiveHealthyPairs = 0;
             return Decision.UNCHANGED;
         }
-        if (++consecutiveHealthyPairs < recoveryGoodPairs) return Decision.UNCHANGED;
+        if (++consecutiveHealthyPairs < recoveryWindowPairs) return Decision.UNCHANGED;
         --workLevel;
         ++restorations;
         consecutiveHealthyPairs = 0;
+        pairsSinceRestoration = 0;
         clearBurst();
         return Decision.RESTORE_WORK;
     }
@@ -212,13 +244,16 @@ public final class GpuWorkAdaptationPolicy {
             observeAtMinimum(visible);
             if (steadyMissBlocks < LAST_STEP_BLOCKS) return Decision.UNCHANGED;
         }
-        if (workLevel < maxWorkLevel) {
-            ++workLevel;
-            ++reductions;
-            clearBurst();
-            pairsSinceFailure = 0;
-            return Decision.REDUCE_WORK;
+        if (workLevel < maxWorkLevel - 1 && stepsNeedBlocks() &&
+                reason == Failure.GPU_OVER_BUDGET) {
+            // Shader time alone (timers also span the emulator's work) sheds
+            // a lower level only when it persists. A visible miss still sheds
+            // at once: gating those too left Cemu at full work for 8 s of
+            // ~25 late callbacks a second at every start (2026-10-12).
+            observeStep(false, true);
+            if (pressureBlocks < STEP_BLOCKS) return Decision.UNCHANGED;
         }
+        if (workLevel < maxWorkLevel) return reduce();
         // Nothing left to shed, and over-budget shader time is not a visible
         // failure: keep generating and let physical misses decide.
         if (reason == Failure.GPU_OVER_BUDGET) {
@@ -248,16 +283,45 @@ public final class GpuWorkAdaptationPolicy {
      * disable.
      */
     public Decision onPresentationBackpressure() {
+        // A saturated GPU is never evidence of headroom to restore work.
+        consecutiveHealthyPairs = 0;
         if (disabled || !lastStepNeedsBlock() || workLevel != maxWorkLevel - 1)
             return Decision.UNCHANGED;
         ++backpressureEvents;
+        // Pressure keeps the burst open: after a failure-free window every
+        // completed pair used to clear the blocks, so steady blocked presents
+        // could never earn the last level.
+        pairsSinceFailure = 0;
         observeAtMinimum(true);
         if (steadyMissBlocks < LAST_STEP_BLOCKS) return Decision.UNCHANGED;
+        return reduce();
+    }
+
+    private Decision reduce() {
         ++workLevel;
         ++reductions;
         clearBurst();
         pairsSinceFailure = 0;
+        if (pairsSinceRestoration < recoveryWindowPairs)
+            recoveryWindowPairs = Math.min(recoveryGoodPairs * 8, recoveryWindowPairs * 2);
+        pairsSinceRestoration = Integer.MAX_VALUE;
         return Decision.REDUCE_WORK;
+    }
+
+    /** Product policy: every work step needs pressure sustained over blocks. */
+    private boolean stepsNeedBlocks() { return lastStepNeedsBlock(); }
+
+    /** One observation below the last levels; a block closes as pressured or not. */
+    private void observeStep(boolean visibleMiss, boolean overBudget) {
+        if (visibleMiss) ++blockMisses;
+        if (overBudget) ++blockOverBudget;
+        if (++blockObservations < persistenceBlockPairs) return;
+        boolean pressured = (long) blockMisses * 20L >= blockObservations ||
+                (long) blockOverBudget * 4L >= blockObservations;
+        pressureBlocks = pressured ? pressureBlocks + 1 : 0;
+        blockObservations = 0;
+        blockMisses = 0;
+        blockOverBudget = 0;
     }
 
     /** The product policy's last work level must be earned by a sustained block. */
@@ -285,8 +349,10 @@ public final class GpuWorkAdaptationPolicy {
         burstObservations = 0;
         blockObservations = 0;
         blockMisses = 0;
+        blockOverBudget = 0;
         overloadedBlocks = 0;
         steadyMissBlocks = 0;
+        pressureBlocks = 0;
     }
 
     /**
@@ -338,4 +404,6 @@ public final class GpuWorkAdaptationPolicy {
     public long resumeCount() { return resumes; }
     public long backpressureEventCount() { return backpressureEvents; }
     public long evidenceEpochCount() { return evidenceEpochs; }
+    /** Healthy pairs the next restoration needs (doubles when a level would not hold). */
+    public int recoveryWindowPairs() { return recoveryWindowPairs; }
 }

@@ -17,13 +17,15 @@ public final class FrameGenerationSettings {
     private static final String MODE = "mode";
 
     /**
-     * Output frames per real frame the generator may produce. Doubling is the
-     * owner's default ceiling (more creates too many artifacts); the panel
-     * planner never asks for more than this unless the owner picks
-     * AUTO (TRIPLE), whose ceiling is {@link #TRIPLE_MULTIPLIER}.
+     * Output frames per real frame the generator may produce. On fills the
+     * panel up to 3x, so 40-55 fps games reach 120 Hz (owner, 2026-10-12: the
+     * high-end systems matter most and mostly run 30-55 fps; the 2x ceiling
+     * left Link's Awakening at 60). The "Allow 4x" option (stored as
+     * AUTO_TRIPLE) raises it to {@link #FOUR_X_MULTIPLIER} so 30 fps games
+     * reach 120 too.
      */
-    public static final int MAX_MULTIPLIER = 2;
-    public static final int TRIPLE_MULTIPLIER = 3;
+    public static final int MAX_MULTIPLIER = 3;
+    public static final int FOUR_X_MULTIPLIER = 4;
 
     private FrameGenerationSettings() {}
 
@@ -37,9 +39,9 @@ public final class FrameGenerationSettings {
          */
         AUTO("auto"),
         /**
-         * AUTO allowed to triple (40->120, 20->60) as well as double, on the
-         * timeline scheduler -- the owner's optional setting; doubling stays
-         * the default because each extra generated frame adds artifacts.
+         * On with "Allow 4x": AUTO's ceiling raised to 4x (30->120, 15->60).
+         * The stored value keeps its original name so existing choices carry
+         * over (it was "Allow triple" before 3x became On's default).
          */
         AUTO_TRIPLE("auto-triple");
 
@@ -61,11 +63,11 @@ public final class FrameGenerationSettings {
 
         /** Output frames per real frame this mode may generate. */
         public int maxMultiplier() {
-            return this == AUTO_TRIPLE ? TRIPLE_MULTIPLIER : MAX_MULTIPLIER;
+            return this == AUTO_TRIPLE ? FOUR_X_MULTIPLIER : MAX_MULTIPLIER;
         }
 
-        /** Tripling needs the timeline scheduler; the one-midpoint lattice cannot. */
-        public boolean requiresTimelineScheduler() { return this == AUTO_TRIPLE; }
+        /** Beyond 2x needs the timeline scheduler; the one-midpoint lattice cannot. */
+        public boolean requiresTimelineScheduler() { return maxMultiplier() > 2; }
 
         public static Mode parse(String value) {
             if (value != null) {

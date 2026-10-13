@@ -119,7 +119,8 @@ FocusScope {
     // Explicit and fail-closed. No legacy Boolean is allowed to silently turn
     // an experimental renderer back on after an update.
     property string frameGenerationMode: "off"
-    // Owner option: frame generation may triple (40->120, 20->60) when on.
+    // Owner option "Allow 4x": frame generation may quadruple (30->120) when
+    // on; On alone already triples (40->120). Stored under its old name.
     // Kept separately so turning generation off and on keeps the choice.
     property bool frameGenerationAllowTriple: false
     // The displayed value is committed Android state, never an optimistic UI
@@ -2324,7 +2325,7 @@ FocusScope {
     }
 
     // On is one mode on the service side: "auto", or "auto-triple" when the
-    // owner allows tripling.
+    // owner allows 4x.
     function frameGenerationOnMode() {
         return frameGenerationAllowTriple ? "auto-triple" : "auto"
     }
@@ -3092,7 +3093,7 @@ FocusScope {
                 "PIP / BOX ART ORDER", "EMULATOR FOR EACH SYSTEM",
                 "LEGAL NOTICE", "GAMES WITH NO BOX ART", "VIDEO SCREENSAVER",
                 "FRAME GENERATION", "WIDESCREEN ENHANCEMENTS",
-                "WIDESCREEN HACK", "PRIVATE DIAGNOSTICS", "ALLOW TRIPLE FRAME RATE"]
+                "WIDESCREEN HACK", "PRIVATE DIAGNOSTICS", "ALLOW 4X FRAME RATE"]
         return titles[settingSlot(index)]
     }
 
@@ -3122,11 +3123,11 @@ FocusScope {
             "Trademarks, third-party content, and your responsibilities",
             "Choose once per game: keep it, hide it, or delete the ROM",
             "After two still minutes, play one synchronized preview on both screens",
-            "On: doubles the frame rate on a fixed refresh rate your screen supports",
+            "On: up to triples the frame rate, to a refresh rate your screen supports",
             "Use verified built-in emulator 16:9 options; unsupported systems are unchanged",
             "Off by default: true 16:9 geometry for N64, PS1, PS2, GC, Wii, Dreamcast, PSP",
             "",
-            "When frame generation is on, also triple 40 and 20 fps games (40 to 120)"
+            "When frame generation is on, also quadruple 30 fps games (30 to 120)"
         ]
         return descriptions[settingSlot(index)]
     }

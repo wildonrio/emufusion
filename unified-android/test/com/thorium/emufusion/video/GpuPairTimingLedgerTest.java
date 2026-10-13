@@ -46,7 +46,10 @@ public final class GpuPairTimingLedgerTest {
     private static void joinedFailuresAreIndependentAndBounded() {
         GpuPairTimingLedger ledger = new GpuPairTimingLedger(4);
         GpuWorkAdaptationPolicy policy = new GpuWorkAdaptationPolicy();
-        for (int pair = 1; pair <= 32; ++pair) {
+        // Four blocks of over-budget pairs: each cheap level needs two blocks
+        // of sustained pressure (GpuWorkAdaptationPolicy, 2026-10-12).
+        int pairs = 4 * GpuWorkAdaptationPolicy.DEFAULT_PERSISTENCE_BLOCK_PAIRS;
+        for (int pair = 1; pair <= pairs; ++pair) {
             stages(ledger, pair, 100L);
             check(ledger.expectWarp(pair, pair), "fresh warp owns its pair");
             eq(0L, ledger.takeCompletedPair(), "five cheap stages cannot hide missing warp");
@@ -66,7 +69,7 @@ public final class GpuPairTimingLedgerTest {
         ledger.beginEvidenceEpoch();
         policy.beginEvidenceEpoch();
         eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, policy.workLevel(), "resetting timing ownership cannot restore shed work");
-        eq(32L, policy.failureCount(), "epoch reset preserves failure accounting");
+        eq(pairs, policy.failureCount(), "epoch reset preserves failure accounting");
     }
 
     private static void stages(GpuPairTimingLedger ledger, long pair, long cost) {
