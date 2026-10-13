@@ -6,6 +6,28 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+October 13 (latest) **— 3.2.66 (140): per-pixel neighbour selection on the searched phase field (synthesis 14, the new default).**
+
+The phase field holds one vector per 7.5-px cell, and the warp interpolated it bilinearly, so vectors blend across motion boundaries: a character's limb takes part of the background's motion. Synthesis 6 already let each output pixel choose among the four nearest cell vectors, weighted by bilinear share, match confidence and how well that vector's A and B samples agree at the pixel. On the unsearched field it gained 0.2–1.4% for about 40% more warp cost. On the searched field (12) the cell vectors are right more often, and the selection now pays. Hold-out, same pairs (error vs a cross-fade):
+
+| Variant | SM3DW | Wind Waker HD | God of War II | Sunshine | Star Fox 64 |
+|---|---|---|---|---|---|
+| 12 (3.2.65 default) | 0.521 | 0.415 | 0.520 | 0.737 | 0.796 |
+| 14: 12 + neighbour selection | 0.510 | 0.404 | 0.520 | 0.708 | 0.790 |
+| 6: neighbours without search | 0.577 | 0.479 | 0.543 | 0.799 | 0.811 |
+
+Normal play, GPU time per pair, 12 → 14: God of War II 5.4 → 5.5 ms, PS3 5.2 → 5.5, SM3DW 2.9 → 3.1, Wind Waker HD at 4× 3.0 → 2.9. Visible-warp time and late callbacks were unchanged, even on the per-pixel warp. The neighbour levels used to fall back to that per-pixel warp. They now have a prepared-warp program, since the selection reads only the warped samples, reliabilities and gates the prepared targets carry. `test_phase_synthesis` now compiles every prepared variant with glslangValidator; the test previously skipped when Homebrew's bin was not on PATH.
+
+The prepared and per-pixel paths give the same frames: on the hold-out, 14 and 114 (prepared) scored identically (SM3DW 0.509, Wind Waker HD 0.464, God of War II 0.518, against 12's 0.523, 0.478, 0.519). In the same session, warp time for 12 and 14 was equal: God of War II 1.5 / 1.5 ms, PS3 1.6 / 1.6, 3DS 1.2–2.3 either way.
+
+Also: the theme comment that described lower-panel previews as cropped now says contained (frozen theme digest re-pinned).
+
+**Thor (3.2.66, `56718598`):**
+- SM3DW 52 → 114.5 average displayed; PS3 56 → 100, 98% of refreshes new at 120 Hz; God of War II 52 → 103 (a slower scene this run, 100% new); SNES 58 → 102, 99%; Wind Waker HD 29 → 57; Link's Awakening 41 → 69; 3DS 30 → 58, 95% even 60; OoT 19 → 55.
+- At 4×: Star Fox 64 28 → 115; Sonic Superstars 22 → 64.5; Wind Waker HD 29 → 106 (101 late callbacks, inside Cemu's spread).
+- Warp times read 0.2–0.8 ms higher than the 3.2.65 sweep in every case, synthesis 12 included. The device had been under test for hours, and the same-session A/B above shows no cost from neighbour selection.
+- No Eden panic, skipped NCE fault or timer-wrap rejection. Mario Kart: Double Dash: CHECK only from the known recorder device loss.
+
 October 13 (latest) **— 3.2.65 (139): the phase field searches where it matches poorly; lower-panel previews are no longer cropped; one disturbance costs one work level.**
 
 **Phase-field search (synthesis 12, the new default).** The per-phase motion field chose each 7.5-px cell's vector among about 18 candidates taken from the endpoint fields. A small sprite moving against the camera (SM3DW's running characters, where most hold-out error sat) is off every candidate by more than the cells resolve, so the field could not follow it. Synthesis 3 had a 4-, 2- and 1-px search around the winner, but the median-filtered, quarter-resolution levels 4 and 5 dropped it. Four hold-out runs (error vs a cross-fade; levels compared on the same pairs) settled the shape:

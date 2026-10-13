@@ -40,7 +40,8 @@ def method(signature):
 
 
 class PhaseSynthesisTest(unittest.TestCase):
-    @unittest.skipUnless(shutil.which("glslangValidator"), "glslangValidator not installed")
+    @unittest.skipUnless(shutil.which("glslangValidator") or Path("/opt/homebrew/bin/glslangValidator").exists(),
+                         "glslangValidator not installed")
     def test_phase_and_interpolate_shaders_compile_as_gles2(self):
         variants = {
             "phase": shader("DENSE_PHASE_SHADER"),
@@ -50,12 +51,18 @@ class PhaseSynthesisTest(unittest.TestCase):
             "synth": "#define PHASE_SYNTHESIS\n" + shader("MOTION_INTERPOLATE_SHADER"),
             "neighbors": "#define PHASE_SYNTHESIS\n#define PHASE_NEIGHBORS\n" +
                          shader("MOTION_INTERPOLATE_SHADER"),
+            "warp-prep": "#define WARP_PREP\n" + shader("MOTION_INTERPOLATE_SHADER"),
+            "prepared": "#define PREPARED_WARP\n" + shader("MOTION_INTERPOLATE_SHADER"),
+            "prepared-synth": "#define PHASE_SYNTHESIS\n#define PREPARED_WARP\n" +
+                              shader("MOTION_INTERPOLATE_SHADER"),
+            "prepared-neighbors": "#define PHASE_SYNTHESIS\n#define PHASE_NEIGHBORS\n"
+                                  "#define PREPARED_WARP\n" + shader("MOTION_INTERPOLATE_SHADER"),
         }
         with tempfile.TemporaryDirectory(prefix="phase-synthesis-") as temporary:
             for name, source in variants.items():
                 path = Path(temporary, name + ".frag")
                 path.write_text("#version 100\n" + source)
-                result = subprocess.run(["glslangValidator", str(path)],
+                result = subprocess.run([shutil.which("glslangValidator") or "/opt/homebrew/bin/glslangValidator", str(path)],
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, name + "\n" + result.stdout + result.stderr)
 
@@ -80,11 +87,12 @@ class PhaseSynthesisTest(unittest.TestCase):
         self.assertLess(draw.index("boolean phaseField = renderPhaseField(phase);"),
                         draw.index("GLES20.glUseProgram(interpolateProgram);"))
         self.assertIn("final int interpolateProgram = prepared ?\n"
-                      "                (phaseField ? preparedSynthProgram : preparedProgram) :\n"
+                      "                (phaseField ? (neighbours ? preparedNeighborsProgram : preparedSynthProgram) :\n"
+                      "                        preparedProgram) :\n"
                       "                !phaseField ? this.interpolateProgram :\n"
                       "                synthesisLevel == 7 ? interpolateSharpNeighborsProgram :\n"
-                      "                synthesisLevel == 2 || synthesisLevel == 3 || synthesisLevel == 6 ?\n"
-                      "                        interpolateNeighborsProgram :\n"
+                      "                synthesisLevel == 2 || synthesisLevel == 3 || synthesisLevel == 6 ||\n"
+                      "                        synthesisLevel == 14 ? interpolateNeighborsProgram :\n"
                       "                interpolateSynthProgram;", draw)
         self.assertIn('"uPhaseFlow",\n                phaseField ? densePhaseBoundTexture : '
                       "historyTextures[previousIndex], phaseField ? 9 : 0);", draw)
@@ -104,12 +112,12 @@ class PhaseSynthesisTest(unittest.TestCase):
 
     def test_synthesis_defaults_on_with_a_qa_only_override(self):
         self.assertIn('SYNTH_GLOBAL = "emufusion_framegen_synth"', SWITCH)
-        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 12;", SWITCH)
+        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 14;", SWITCH)
         # 5 (QA): level 4 matched on the quarter-resolution pyramid images.
         # 6/7 (QA): level 5 with per-pixel neighbour selection, soft and sharp.
-        self.assertIn("synthesisLevel = Math.max(0, Math.min(13, level));", SWITCH)
+        self.assertIn("synthesisLevel = Math.max(0, Math.min(14, level));", SWITCH)
         # Hold-out variants are a QA setting; 100+ adds the prepared warp.
-        self.assertIn("static final int[] DEFAULT_HOLDOUT_LEVELS = {5, 12, 112};", SWITCH)
+        self.assertIn("static final int[] DEFAULT_HOLDOUT_LEVELS = {12, 14, 114};", SWITCH)
         self.assertIn("holdoutPreparedOverride = holdoutLevelIds[level] >= 100;", GENERATOR)
         self.assertIn("synthesisLevel = holdoutLevelIds[level] % 100;", GENERATOR)
         self.assertIn("private boolean phaseMatchesQuarterImages() { return synthesisLevel >= 5; }", GENERATOR)
@@ -133,6 +141,6 @@ class PhaseSearchTest(unittest.TestCase):
         generator = (Path(__file__).resolve().parents[2] / "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java").read_text()
         self.assertIn('" if(uPhaseSearch>0.5&&best>uPhaseSearchAbove){\\n" +', generator)
         self.assertIn("boolean search = synthesisLevel == 3 || synthesisLevel >= 8;", generator)
-        self.assertIn("if (synthesisLevel == 12 || synthesisLevel == 13) { searchStart = 16f; searchRounds = 4f; }", generator)
-        self.assertIn('synthesisLevel == 12 || synthesisLevel == 13 ? 0.15f : -1f);', generator)
+        self.assertIn("if (thresholdedSearch) { searchStart = 16f; searchRounds = 4f; }", generator)
+        self.assertIn("thresholdedSearch ? 0.15f : -1f);", generator)
 

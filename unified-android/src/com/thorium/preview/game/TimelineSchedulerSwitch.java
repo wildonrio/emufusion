@@ -38,7 +38,8 @@ public final class TimelineSchedulerSwitch {
     // 8 and 9 (hold-out experiments) are level 5 with a search around the
     // phase winner: 8 reaches 30 px (16, 8, 4, 2), 9 the level-3 7 px,
     // 10 reaches 62 px (32..2), 11 is 8 finished at 1 px (16..1), 12 is 8
-    // searching only poorly matched cells, 13 is 12 with a consensus blend.
+    // searching only poorly matched cells, 13 is 12 with a consensus blend
+    // (no gain: within 0.006 on five games), 14 is 12 with neighbour selection.
     static final String SYNTH_GLOBAL = "emufusion_framegen_synth";
     // QA only: emufusion_framegen_work_floor 0..4 holds the dense work level
     // at least there, so hold-out and timing runs can measure each level
@@ -62,13 +63,15 @@ public final class TimelineSchedulerSwitch {
     // QA only: emufusion_framegen_holdout_levels "a,b,c" picks the three
     // synthesis variants the hold-out compares (100+ = with the prepared warp).
     static final String HOLDOUT_LEVELS_GLOBAL = "emufusion_framegen_holdout_levels";
-    static final int[] DEFAULT_HOLDOUT_LEVELS = {5, 12, 112};
+    static final int[] DEFAULT_HOLDOUT_LEVELS = {12, 14, 114};
     private static volatile int[] holdoutLevels = DEFAULT_HOLDOUT_LEVELS.clone();
-    // 12 since 2026-10-13: the phase winner is searched (16, 8, 4, 2 px)
-    // where it matches poorly. Hold-out vs 5: SM3DW 0.601 -> 0.530 of a
-    // cross-fade, Wind Waker HD 0.523 -> 0.490, God of War II 0.544 -> 0.524,
-    // at the same GPU time per pair (well-matched background skips it).
-    static final int DEFAULT_SYNTHESIS_LEVEL = 12;
+    // 12 (3.2.65): the phase winner is searched (16, 8, 4, 2 px) where it
+    // matches poorly. Hold-out vs 5: SM3DW 0.601 -> 0.530 of a cross-fade,
+    // Wind Waker HD 0.523 -> 0.490, God of War II 0.544 -> 0.524, at the same
+    // GPU time per pair. 14 (3.2.66) adds per-pixel selection among the four
+    // nearest cell vectors: vs 12 SM3DW 0.521 -> 0.510, Wind Waker HD 0.415
+    // -> 0.404, Sunshine 0.737 -> 0.708, God of War II equal; same GPU time.
+    static final int DEFAULT_SYNTHESIS_LEVEL = 14;
     private static volatile int synthesisLevel = DEFAULT_SYNTHESIS_LEVEL;
 
     private TimelineSchedulerSwitch() {}
@@ -101,7 +104,7 @@ public final class TimelineSchedulerSwitch {
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default synthesis.
         }
-        synthesisLevel = Math.max(0, Math.min(13, level));
+        synthesisLevel = Math.max(0, Math.min(14, level));
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -136,7 +139,7 @@ public final class TimelineSchedulerSwitch {
         holdoutLevels = parseHoldoutLevels(levels);
     }
 
-    /** Three ids in 0..13 or 100..113; anything else falls back to the default. */
+    /** Three ids in 0..14 or 100..114; anything else falls back to the default. */
     static int[] parseHoldoutLevels(String value) {
         if (value == null) return DEFAULT_HOLDOUT_LEVELS.clone();
         String[] parts = value.split(",");
@@ -146,7 +149,7 @@ public final class TimelineSchedulerSwitch {
             for (int i = 0; i < 3; ++i) {
                 ids[i] = Integer.parseInt(parts[i].trim());
                 int level = ids[i] % 100;
-                if (ids[i] < 0 || ids[i] > 113 || (ids[i] > 13 && ids[i] < 100) || level > 13)
+                if (ids[i] < 0 || ids[i] > 114 || (ids[i] > 14 && ids[i] < 100) || level > 14)
                     return DEFAULT_HOLDOUT_LEVELS.clone();
             }
         } catch (NumberFormatException invalid) {

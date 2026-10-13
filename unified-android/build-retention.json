@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "5e00a519027aae324dc2ba726f8a76c8bd4b7f43dbd33d1eb024d991353eb192": "Rollback 3.2.64 (138) until 3.2.65 settles.",
-    "a3426957985001c750fd33ed79a9a9c53da627c131f6f8e20440fe23631ecb69": "Current release 3.2.65 (139). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "a3426957985001c750fd33ed79a9a9c53da627c131f6f8e20440fe23631ecb69": "Rollback 3.2.65 (139) until 3.2.66 settles.",
+    "567185985752951a680779b7e8e6edc7970b6d4081a2526c4784742b7e9b14dc": "Current release 3.2.66 (140). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -373,6 +373,10 @@
     "unified-android/build/emufusion-3.2.65-phase2-phase3-qualification-42e53cdcf9e6fd41bc5d80ba820ba108cf22fa8be945c5b5fabb2806cec8b0be.apk": {
       "sha256": "42e53cdcf9e6fd41bc5d80ba820ba108cf22fa8be945c5b5fabb2806cec8b0be",
       "reason": "Superseded 2026-10-13 3.2.65 candidate: full release sweep passed; consensus blend (13) rejected; Wind Waker HD 4x A/B levels 5 vs 12 equal (late 70/73/158 vs 83/113/126). Replaced by the same code plus the lower-panel preview fit; Thor moved to it with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.66-phase2-phase3-qualification-043ef7a8aa3d3a41cef0885435a92de48a2a6074a5d31cf38ee07b3ac192b03e.apk": {
+      "sha256": "043ef7a8aa3d3a41cef0885435a92de48a2a6074a5d31cf38ee07b3ac192b03e",
+      "reason": "Closed 2026-10-13 hold-out trial: synthesis 14 (12 + neighbour selection) beat 12 (SM3DW 0.521->0.510, Wind Waker HD 0.415->0.404, Sunshine 0.737->0.708, God of War II equal) at the same GPU time per pair; superseded by the candidate making 14 the default on the prepared warp; Thor moved to it with identity preserved."
     }
   }
 }

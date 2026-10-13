@@ -2128,7 +2128,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final int[] warpPrepTextures = new int[3];
     private final int[] warpPrepFramebuffers = new int[3];
     private final int[] warpPrepState = new int[5];
-    private int warpPrepProgram, preparedProgram, preparedSynthProgram;
+    private int warpPrepProgram, preparedProgram, preparedSynthProgram, preparedNeighborsProgram;
     private boolean warpPrepReady;
     private long warpPrepKeyPromotion = -1L;
     private int warpPrepKeyPhaseBits, warpPrepKeyForward, warpPrepKeyBackward;
@@ -4405,6 +4405,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 "#define PREPARED_WARP\n" + MOTION_INTERPOLATE_SHADER);
         preparedSynthProgram = createProgram(VERTEX_SHADER,
                 "#define PHASE_SYNTHESIS\n#define PREPARED_WARP\n" + MOTION_INTERPOLATE_SHADER);
+        // Per-pixel neighbour selection on the prepared warp: it reads only
+        // the warped samples, reliabilities and gates the prepared targets
+        // carry, so the neighbour levels need not fall back to per-pixel motion.
+        preparedNeighborsProgram = createProgram(VERTEX_SHADER,
+                "#define PHASE_SYNTHESIS\n#define PHASE_NEIGHBORS\n#define PREPARED_WARP\n" +
+                        MOTION_INTERPOLATE_SHADER);
         preparedWarpDefault = TimelineSchedulerSwitch.preparedWarp();
         holdoutLevelIds = TimelineSchedulerSwitch.holdoutLevels();
         interpolateSharpNeighborsProgram = createProgram(VERTEX_SHADER,
@@ -11475,9 +11481,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // poorly (15 channel differences above 0.15, ~0.01 per channel), where
         // small sprites and occlusion edges are; well-matched background skips it.
         // (13 is 12 with the consensus blend; its field is 12's.)
-        if (synthesisLevel == 12 || synthesisLevel == 13) { searchStart = 16f; searchRounds = 4f; }
+        boolean thresholdedSearch = synthesisLevel == 12 || synthesisLevel == 13 ||
+                synthesisLevel == 14;
+        if (thresholdedSearch) { searchStart = 16f; searchRounds = 4f; }
         GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearchAbove"),
-                synthesisLevel == 12 || synthesisLevel == 13 ? 0.15f : -1f);
+                thresholdedSearch ? 0.15f : -1f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearch"),
                 search ? 1f : 0f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearchStart"),
@@ -11597,16 +11605,23 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         boolean prepSeeds = densePyramidEnabled && denseV28ReducedAnalysisRequested &&
                 denseGlobalSeedTextures[0] != 0;
+        // QA 14: the default searched field (12) with soft per-pixel
+        // selection among the four nearest cell vectors (as 6).
         boolean neighbours = synthesisLevel == 2 || synthesisLevel == 3 ||
-                synthesisLevel == 6 || synthesisLevel == 7;
-        boolean prepared = preparedWarpActive() && !(phaseField && neighbours) &&
+                synthesisLevel == 6 || synthesisLevel == 7 || synthesisLevel == 14;
+        // The sharp variant (7) has no prepared program; the soft ones do.
+        boolean preparedNeighbours = neighbours && synthesisLevel != 7 &&
+                preparedNeighborsProgram != 0;
+        boolean prepared = preparedWarpActive() &&
+                !(phaseField && neighbours && !preparedNeighbours) &&
                 maxFragmentTextureUnits >= 13 && renderWarpPrep(phase, prepSeeds);
         final int interpolateProgram = prepared ?
-                (phaseField ? preparedSynthProgram : preparedProgram) :
+                (phaseField ? (neighbours ? preparedNeighborsProgram : preparedSynthProgram) :
+                        preparedProgram) :
                 !phaseField ? this.interpolateProgram :
                 synthesisLevel == 7 ? interpolateSharpNeighborsProgram :
-                synthesisLevel == 2 || synthesisLevel == 3 || synthesisLevel == 6 ?
-                        interpolateNeighborsProgram :
+                synthesisLevel == 2 || synthesisLevel == 3 || synthesisLevel == 6 ||
+                        synthesisLevel == 14 ? interpolateNeighborsProgram :
                 interpolateSynthProgram;
         GLES20.glUseProgram(interpolateProgram);
         bindQuad(interpolateProgram);
@@ -14525,9 +14540,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         java.util.Arrays.fill(warpPrepFramebuffers, 0);
         warpPrepReady = false;
         warpPrepKeyPromotion = -1L;
-        for (int program : new int[] {warpPrepProgram, preparedProgram, preparedSynthProgram})
+        for (int program : new int[] {warpPrepProgram, preparedProgram, preparedSynthProgram,
+                preparedNeighborsProgram})
             if (program != 0) GLES20.glDeleteProgram(program);
-        warpPrepProgram = preparedProgram = preparedSynthProgram = 0;
+        warpPrepProgram = preparedProgram = preparedSynthProgram = preparedNeighborsProgram = 0;
         densePhaseMedianTexture = densePhaseMedianFramebuffer = densePhaseBoundTexture = 0;
             GLES20.glDeleteTextures(2, denseFillTextures, 0);
         if (denseGlobalCoarseCostTextures[0] != 0)

@@ -73,7 +73,7 @@ MAIN_ACTIVITY = "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 # Re-pinned for the WIDESCREEN HACK Settings slot (23) and the AUTO frame-
 # generation mode, and for the "Allow 4X" frame-rate option (2026-10-12); the
 # theme.qml byte identity otherwise stays the reviewed product source.
-FROZEN_THEME_QML = "a5fca10c7187dcbb1dc92c1c5aee96c07a0c8efce78ede5537532228029bd753"
+FROZEN_THEME_QML = "69fa42240933ad78b89fb68d5a247698279de948509deae5ee1a6d8e22a28dec"
 FROZEN_THEME_CFG = "b10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9"
 ROUTE = re.compile(r"In-window route accepted engine=([^ ]+) system=([^\s]+)")
 RETURN = re.compile(

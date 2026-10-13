@@ -6432,8 +6432,8 @@ FocusScope {
             anchors.fill: parent
             source: root.gameplayActive ? "" : root.screensaverSourceA
             // The Thor upper panel is 16:9. A 16:9 preview therefore displays
-            // its complete wide frame here, while PreviewActivity independently
-            // crops that same source to fill the differently shaped lower panel.
+            // its complete wide frame here, and PreviewActivity independently
+            // contains that same source within the differently shaped lower panel.
             fillMode: VideoOutput.PreserveAspectCrop
             muted: true
             loops: 1
