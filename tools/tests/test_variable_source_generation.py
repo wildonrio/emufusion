@@ -36,6 +36,8 @@ public class VariableProbe {
   static final double VARIABLE_SOURCE_MIN_HZ = 19.5;
   static final double VARIABLE_SOURCE_MAX_PANEL_FRACTION = 0.53;
   boolean timelineMode = true; int timelineScansPerOutput;
+  static final long TIMELINE_LATTICE_RETAIN_NS = 10_000_000_000L;
+  int timelineReleasedScans; long timelineReleasedAtNs;
   static int multiplier = 2;
   static class TimelineSchedulerSwitch { static int maxMultiplier() { return multiplier; } }
   static class Rate { boolean available = true; double panel = 119.95, source;
@@ -45,6 +47,11 @@ public class VariableProbe {
 ''' + body + r'''
   static int scans(double source, int previous) {
     VariableProbe p = new VariableProbe(); p.frameRate.source = source; p.timelineScansPerOutput = previous;
+    return p.variableSourceScans();
+  }
+  static int afterRelease(double source, int released, long agoNs) {
+    VariableProbe p = new VariableProbe(); p.frameRate.source = source;
+    p.timelineReleasedScans = released; p.timelineReleasedAtNs = System.nanoTime() - agoNs;
     return p.variableSourceScans();
   }
   static void check(boolean ok, String why) { if (!ok) throw new AssertionError(why); }
@@ -74,6 +81,14 @@ public class VariableProbe {
     check(scans(21.0, 3) == 3, "a sustained low rate keeps 40");
     multiplier = 3;
     check(scans(20.0, 0) == 2, "triple: 20 FPS -> 60");
+    multiplier = 4;
+    check(scans(24.0, 0) == 2, "4x: a fresh 24-FPS source takes 60 (120 would be 5x)");
+    check(scans(24.0, 1) == 1, "4x: hysteresis keeps 120 when a 30-FPS source dips to 24");
+    check(afterRelease(24.0, 1, 600_000_000L) == 1,
+          "a transient release does not reset the lattice: Sonic at 24 keeps 120");
+    check(afterRelease(24.0, 1, 11_000_000_000L) == 2, "a long release starts fresh");
+    check(afterRelease(20.0, 1, 600_000_000L) == 2,
+          "a retained lattice still has to fit the source (120 is 6x at 20)");
     VariableProbe off = new VariableProbe(); off.frameRate.source = 30; off.frameRate.available = false;
     check(off.variableSourceScans() == 0, "generation unavailable");
     System.out.println("VARIABLE_OK");

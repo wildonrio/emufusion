@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "11c08ad4ee1bc5757d7b20380ccaf553729618f748d5446bb56f2257c86acfab": "Current release 3.2.62 (136). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
-    "faf2a8de3225325446e537fa10baadb50c3524587ab56775c6de209fb0344441": "Rollback 3.2.61 (135) until 3.2.62 settles."
+    "11c08ad4ee1bc5757d7b20380ccaf553729618f748d5446bb56f2257c86acfab": "Rollback 3.2.62 (136) until 3.2.63 settles.",
+    "118cab95952b2cf94ae1a813d2ab889c7e937dac888f874b4bdb2756b94eee52": "Current release 3.2.63 (137). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -341,6 +341,18 @@
     "unified-android/build/emufusion-3.2.63-phase2-phase3-qualification-e8145642c19e11992aad8624933acd638572748d33181c52663dbeac039240d1.apk": {
       "sha256": "e8145642c19e11992aad8624933acd638572748d33181c52663dbeac039240d1",
       "reason": "Closed 2026-10-13 trial: phase field on a 4x (512x288) grid with the same cost patch. Negative on the hold-out (God of War II, same scene: 0.549 -> 0.580 of a cross-fade; SM3DW and Wind Waker HD also worse); reverted in source; Thor restored to 3.2.62 (136) with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.63-phase2-phase3-qualification-2ff1e99c4505c69ccba4b1664fcb175204b38d71a739aacdc4a28bfe6c15827e.apk": {
+      "sha256": "2ff1e99c4505c69ccba4b1664fcb175204b38d71a739aacdc4a28bfe6c15827e",
+      "reason": "Closed 2026-10-13 hold-out diagnostic: per-pixel neighbour selection on the quarter-matched phase field gave only 0.2-1.4% (soft) or worse (sharp) for ~40% more warp cost; not shipped."
+    },
+    "unified-android/build/emufusion-3.2.63-phase2-phase3-qualification-8f39aeedc019ea1a50a6caa0b5b85cc92f81ffc02f7a1f24a5f2ffa31a86bf80.apk": {
+      "sha256": "8f39aeedc019ea1a50a6caa0b5b85cc92f81ffc02f7a1f24a5f2ffa31a86bf80",
+      "reason": "Closed 2026-10-13 diagnostic: prepared warp behind a QA switch (equal/better hold-out, warp 15-50% cheaper); superseded by the candidate that makes it the default."
+    },
+    "unified-android/build/emufusion-3.2.63-phase2-phase3-qualification-d925164bf732b7106c3411bc8a2c9db24bb4eeb02f7497142bc5225eee58e07c.apk": {
+      "sha256": "d925164bf732b7106c3411bc8a2c9db24bb4eeb02f7497142bc5225eee58e07c",
+      "reason": "Superseded 2026-10-13 candidate (prepared warp by default): its sweep found the stale timer-slot re-arm loop (Sonic Superstars 4x fell to 60 Hz); replaced by the candidate that fixes it, installed with identity preserved."
     }
   }
 }

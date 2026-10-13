@@ -47,6 +47,19 @@ public final class TimelineSchedulerSwitch {
     // restores the full-resolution solve for comparisons.
     static final String SOLVE_QUARTER_GLOBAL = "emufusion_framegen_solve_quarter";
     private static volatile boolean solveQuarter = true;
+    // The warp's motion logic evaluated per phase-grid cell instead of per
+    // output pixel (PREPARED_WARP; default since 2026-10-13: equal or better on
+    // the paired hold-out, warp 1.2 -> 0.6 ms on Cemu, Wind Waker HD at 4x
+    // 181 -> 46 late callbacks). QA: emufusion_framegen_prepared_warp=0 turns
+    // it off for comparisons.
+    static final String PREPARED_WARP_GLOBAL = "emufusion_framegen_prepared_warp";
+    static final boolean DEFAULT_PREPARED_WARP = true;
+    private static volatile boolean preparedWarp = DEFAULT_PREPARED_WARP;
+    // QA only: emufusion_framegen_holdout_levels "a,b,c" picks the three
+    // synthesis variants the hold-out compares (100+ = with the prepared warp).
+    static final String HOLDOUT_LEVELS_GLOBAL = "emufusion_framegen_holdout_levels";
+    static final int[] DEFAULT_HOLDOUT_LEVELS = {0, 5, 105};
+    private static volatile int[] holdoutLevels = DEFAULT_HOLDOUT_LEVELS.clone();
     static final int DEFAULT_SYNTHESIS_LEVEL = 5;
     private static volatile int synthesisLevel = DEFAULT_SYNTHESIS_LEVEL;
 
@@ -80,7 +93,7 @@ public final class TimelineSchedulerSwitch {
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default synthesis.
         }
-        synthesisLevel = Math.max(0, Math.min(5, level));
+        synthesisLevel = Math.max(0, Math.min(7, level));
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -97,6 +110,41 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default quarter-resolution solve.
         }
         solveQuarter = quarter;
+        boolean prepared = DEFAULT_PREPARED_WARP;
+        try {
+            if (context != null) prepared = Settings.Global.getInt(context.getContentResolver(),
+                    PREPARED_WARP_GLOBAL, DEFAULT_PREPARED_WARP ? 1 : 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default warp.
+        }
+        preparedWarp = prepared;
+        String levels = null;
+        try {
+            if (context != null) levels = Settings.Global.getString(
+                    context.getContentResolver(), HOLDOUT_LEVELS_GLOBAL);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default comparison.
+        }
+        holdoutLevels = parseHoldoutLevels(levels);
+    }
+
+    /** Three ids in 0..7 or 100..107; anything else falls back to the default. */
+    static int[] parseHoldoutLevels(String value) {
+        if (value == null) return DEFAULT_HOLDOUT_LEVELS.clone();
+        String[] parts = value.split(",");
+        if (parts.length != 3) return DEFAULT_HOLDOUT_LEVELS.clone();
+        int[] ids = new int[3];
+        try {
+            for (int i = 0; i < 3; ++i) {
+                ids[i] = Integer.parseInt(parts[i].trim());
+                int level = ids[i] % 100;
+                if (ids[i] < 0 || ids[i] > 107 || (ids[i] > 7 && ids[i] < 100) || level > 7)
+                    return DEFAULT_HOLDOUT_LEVELS.clone();
+            }
+        } catch (NumberFormatException invalid) {
+            return DEFAULT_HOLDOUT_LEVELS.clone();
+        }
+        return ids;
     }
 
     static boolean enabled() { return enabled; }
@@ -113,6 +161,10 @@ public final class TimelineSchedulerSwitch {
     static int workFloor() { return workFloor; }
 
     static boolean solveQuarter() { return solveQuarter; }
+
+    static boolean preparedWarp() { return preparedWarp; }
+
+    static int[] holdoutLevels() { return holdoutLevels.clone(); }
 
     /** Generation ceiling for a timeline generator built after the last refresh. */
     static int maxMultiplier() { return maxMultiplier; }

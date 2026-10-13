@@ -79,9 +79,13 @@ class PhaseSynthesisTest(unittest.TestCase):
         draw = method("private void drawMotionFrame(float phase)")
         self.assertLess(draw.index("boolean phaseField = renderPhaseField(phase);"),
                         draw.index("GLES20.glUseProgram(interpolateProgram);"))
-        self.assertIn("final int interpolateProgram = !phaseField ? this.interpolateProgram :\n"
-                      "                synthesisLevel == 2 || synthesisLevel == 3 ? "
-                      "interpolateNeighborsProgram :\n                interpolateSynthProgram;", draw)
+        self.assertIn("final int interpolateProgram = prepared ?\n"
+                      "                (phaseField ? preparedSynthProgram : preparedProgram) :\n"
+                      "                !phaseField ? this.interpolateProgram :\n"
+                      "                synthesisLevel == 7 ? interpolateSharpNeighborsProgram :\n"
+                      "                synthesisLevel == 2 || synthesisLevel == 3 || synthesisLevel == 6 ?\n"
+                      "                        interpolateNeighborsProgram :\n"
+                      "                interpolateSynthProgram;", draw)
         self.assertIn('"uPhaseFlow",\n                phaseField ? densePhaseBoundTexture : '
                       "historyTextures[previousIndex], phaseField ? 9 : 0);", draw)
         self.assertIn('"uPhaseFieldEnabled"), phaseField ? 1f : 0f);', draw)
@@ -102,9 +106,13 @@ class PhaseSynthesisTest(unittest.TestCase):
         self.assertIn('SYNTH_GLOBAL = "emufusion_framegen_synth"', SWITCH)
         self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 5;", SWITCH)
         # 5 (QA): level 4 matched on the quarter-resolution pyramid images.
-        self.assertIn("synthesisLevel = Math.max(0, Math.min(5, level));", SWITCH)
-        self.assertIn("private static final int[] HOLDOUT_LEVEL_IDS = {0, 4, 5};", GENERATOR)
-        self.assertIn("private boolean phaseMatchesQuarterImages() { return synthesisLevel == 5; }", GENERATOR)
+        # 6/7 (QA): level 5 with per-pixel neighbour selection, soft and sharp.
+        self.assertIn("synthesisLevel = Math.max(0, Math.min(7, level));", SWITCH)
+        # Hold-out variants are a QA setting; 100+ adds the prepared warp.
+        self.assertIn("static final int[] DEFAULT_HOLDOUT_LEVELS = {0, 5, 105};", SWITCH)
+        self.assertIn("holdoutPreparedOverride = holdoutLevelIds[level] >= 100;", GENERATOR)
+        self.assertIn("synthesisLevel = holdoutLevelIds[level] % 100;", GENERATOR)
+        self.assertIn("private boolean phaseMatchesQuarterImages() { return synthesisLevel >= 5; }", GENERATOR)
         # The finest solve uses the same quarter-resolution images by default.
         self.assertIn("private static volatile boolean solveQuarter = true;", SWITCH)
         self.assertIn("SOLVE_QUARTER_GLOBAL, 1) != 0;", SWITCH)

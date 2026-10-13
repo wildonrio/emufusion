@@ -204,6 +204,9 @@ public class EglBindingFixture {
     void closeNativeSourceImageObserver(){}
     void releaseVerifyResources(){}
     void releaseHoldoutResources(){}
+    // Prepared-warp targets (arrays, flags) released in releaseGl.
+    final int[] warpPrepTextures=new int[3],warpPrepFramebuffers=new int[3];
+    boolean warpPrepReady;long warpPrepKeyPromotion;
     SCALAR_FIELDS
     PRODUCTION_METHODS
     static EglBindingFixture initialized(boolean appOwned){
