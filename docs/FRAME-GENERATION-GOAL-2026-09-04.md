@@ -6,7 +6,15 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 14 (latest) **— 3.2.83 (157): DIS finds fast motion from its coarsest level; cuts need 60% of the frame unexplained.**
+October 14 (latest) **— 3.2.84 (158): a fade between two flat frames is a fade, not a cut; synthetic behaviour suite in the repository.**
+
+`tools/learned_framegen/synth_suite.py` (tested for exact pans, a linear fade and determinism) writes the synthetic behaviour cases with their true middle frames in the captured hold-out layout, so `dis_eval.py` scores them like the captured games. A randomised generator built on it (sprites at random speeds over flat and textured backgrounds, UI boxes and text appearing, vanishing or fading in place, global fades, pans), scored per kind, found one plain bug: a global fade over a solid colour scored 31 times a cross-fade's error. The fade fit (current = gain x previous + offset on the 12x8 luma grid) needs variance in the previous frame, so a fade between flat frames fell to the cut rule and held the left frame, a frozen frame in every solid-colour fade. Two flat frames that differ now count as a fade: those fades 31 -> 1.5 (rounding against an exact cross-fade); captured games unchanged or better (Mega Man 11's save-notice dimming 1.691 -> 1.653, Barbie 0.787 -> 0.782). A flat frame next to a textured one (a cut or fade to or from black) stays as it was: bounding the fit there won Dread but lost Wind Waker HD and Barbie (3.2.80 entry).
+
+Thor (one short gated smoke run): SM3DW 48.7 -> 103.8 displayed, GPU 2.6 ms per pair, work level 0, 6 late callbacks, PASS.
+
+**Thor (3.2.84, `cfc6537f`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 14 **— 3.2.83 (157): DIS finds fast motion from its coarsest level; cuts need 60% of the frame unexplained.**
 
 A synthetic behaviour suite with exact ground truth (the withheld middle frame rendered directly), scored for both engines through the LSFG reference harness: camera pans at 2-24 px, a static HUD over a fast pan, textured objects at 4-32 px over a textured background, flat-coloured outlined sprites at 16-48 px over flat and textured backgrounds, rotation, text appearing and vanishing, a linear fade, pixel-art scrolling at 1 and 2 px. Ours was better or equal everywhere (pans 0.011-0.029 of a cross-fade vs LSFG 0.063-0.440, text appearing 0.750 vs 1.430, rotation 0.162 vs 0.240) except fast large motion: a sprite moving 48 px per frame over a flat background scored 0.662 against LSFG's 0.005. At DIS's coarsest pyramid level (1/16 scale) 48 px is 3 px, and its Gauss-Newton starts from zero motion. Each coarsest-level patch now scores every whole-pixel start within 2 px by mean-normalised SSD, zero motion favoured (another start must be 20% better), and starts from the best: that sprite 0.662 -> 0.020. Both engines still lose fast sprites over a textured background (32 px: ours 0.862, LSFG 0.865).
 

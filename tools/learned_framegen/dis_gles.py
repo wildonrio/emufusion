@@ -315,6 +315,11 @@ SKIP_FLAT_CROSS = True
 # last step, and bounding it won Dread but lost Wind Waker HD and Barbie).
 FADE_GAIN = None        # (min, max)
 FADE_COVERAGE = None    # fraction of samples with |C - A| > 1 grey level
+# Two flat frames that differ are a fade: the gain fit is undefined there, so a
+# fade between solid-colour screens fell to the cut rule and held the left frame
+# (synthetic flat fades 31x a cross-fade's error -> rounding; Mega Man 11's
+# save-notice dimming 1.691 -> 1.653; nothing worse over 28 games).
+FLAT_FADE = True
 # A cut is 60% of the 12x8 grid unexplained along DIS. 0.25 held animated sea
 # in Link's Awakening and a Mario Kart Wii turn (0.5: Link's Awakening 1.302 ->
 # 1.182, Mario Kart Wii 0.752 -> 0.692); one sea pair still sat at 0.45-0.53
@@ -340,7 +345,8 @@ def cut_shader():
     "  sa+=a;sb+=b;saa+=a*a;sab+=a*b;sbb+=b*b;d+=abs(b-a);}\n"
     " float fade=0.0,va=n*saa-sa*sa;\n"
     " if(va>=n*n*0.0009){float g=(n*sab-sa*sb)/va,o=(sb-g*sa)/n,rms=sqrt(max(0.0,(sbb-g*sab-o*sb)/n)),change=d/n;\n"
-    "  fade=step(0.015,change)*step(rms,0.25*change)*step(rms,0.02)" + extra + ";}\n"
+    "  fade=step(0.015,change)*step(rms,0.25*change)*step(rms,0.02)" + extra + ";}\n" +
+    (" else fade=step(n*sbb-sb*sb,n*n*0.0009)*step(0.015,d/n);\n" if FLAT_FADE else "") +
     " o0=vec4(min(n0,n1)/n,fade,0.0,1.0);}\n")
 
 

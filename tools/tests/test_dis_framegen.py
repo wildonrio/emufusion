@@ -135,6 +135,8 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn("float m=max(1.0,d);float w=1.0/(m*m);", shaders["DENSIFY_SHARP"])
         self.assertIn("n1+=step(0.12,abs(texture(uGrayC,q).r-a));", shaders["CUT"])
         self.assertIn("o0=vec4(min(n0,n1)/n,fade,0.0,1.0);", shaders["CUT"])
+        # Two flat frames that differ are a fade, not a cut.
+        self.assertIn(" else fade=step(n*sbb-sb*sb,n*n*0.0009)*step(0.015,d/n);", shaders["CUT"])
         runtime = RUNTIME.read_text()
         self.assertIn("densify = link(v, sharp ? DenseInverseSearchShaders.DENSIFY_SHARP : DenseInverseSearchShaders.DENSIFY);",
                       runtime)
