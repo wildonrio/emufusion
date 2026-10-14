@@ -497,6 +497,10 @@
     "unified-android/build/emufusion-3.2.73-phase2-phase3-qualification-45406353320df1f5f8f9a0122fb24b36884283511039fc986e8f2222c2c4c5c4.apk": {
       "sha256": "45406353320df1f5f8f9a0122fb24b36884283511039fc986e8f2222c2c4c5c4",
       "reason": "Closed 2026-10-14 trial 195: hold-out levels 23 (vector-median DIS motion: identical to 22, removed) and 24 (per-phase refinement: better than 21 on every 2-D game, shipped as the 2-D default in 3.2.74). Thor on 3.2.74 with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.74-phase2-phase3-qualification-6986a2ecabbba0c01f669f8b323ca3c3e16092cccda0e79ea6b95028df97b228.apk": {
+      "sha256": "6986a2ecabbba0c01f669f8b323ca3c3e16092cccda0e79ea6b95028df97b228",
+      "reason": "Closed 2026-10-14 trial 197: hold-out level 25 (DIS per-phase motion as a candidate in synthesis 15 phase field) scored identically to 22 on six 3-D games; reverted. Thor restored to 3.2.74 with identity preserved."
     }
   }
 }
