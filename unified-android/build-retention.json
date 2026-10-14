@@ -453,6 +453,10 @@
     "unified-android/build/emufusion-3.2.70-phase2-phase3-qualification-e3995da719f42827340809bdbfc75a239ff30a2e4d0f8b4137f106496ad5ddee.apk": {
       "sha256": "e3995da719f42827340809bdbfc75a239ff30a2e4d0f8b4137f106496ad5ddee",
       "reason": "Closed 2026-10-14 trial 181: phase-field reuse work level (3.2.70 version); shipped as 3.2.71 build 182 (version bump only). Thor on 3.2.71 with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.71-phase2-phase3-qualification-cb2e06e5ca908812b01504eca107de722fc0104d2b39ba8bb27838c8d0e19757.apk": {
+      "sha256": "cb2e06e5ca908812b01504eca107de722fc0104d2b39ba8bb27838c8d0e19757",
+      "reason": "Closed 2026-10-14 trial 183: lighter work level 4 (reused field without search or neighbour selection). Wind Waker HD at 4x still reached level 5 within a minute (swap backpressure from Cemu) and level 5 removed late callbacks entirely, so the descent is right; SM3DW did not need level 4. Reverted to 3.2.71; Thor to be restored to 3.2.71."
     }
   }
 }

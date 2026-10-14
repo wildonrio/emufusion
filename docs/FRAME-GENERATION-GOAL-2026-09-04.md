@@ -6,6 +6,8 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+October 14 **— Measured: Wind Waker HD at 4× cannot afford any motion field on the Thor; the descent is right.** A lighter work level 4 (the reused midpoint field without the search or the neighbour selection) still went to level 5 within a minute of a ten-minute 4× soak: Cemu saturates the GPU and our swaps block (`present-backpressure`). At level 5 late callbacks fell to zero in every steady minute (against 64 at level 4 in a shorter run), so dropping the field there buys pacing, which matters more. SM3DW did not need level 4 in the same session. Reverted to 3.2.71's level 4; the trial APK is retired.
+
 October 14 **— 3.2.71 (145): heavy games keep a motion field under load.**
 
 The per-phase motion field is the largest quality contributor (20–30% less hold-out error) and the last work shed: at work level 4 it was dropped, leaving the plain endpoint-field warp. SM3DW sat at that level in normal play, and Wind Waker HD at 4× (three phases a pair, each re-estimating the field) for whole sessions. A new level 4 matches the field once per pair, at the midpoint, and reuses it for every output phase; dropping the field moves to level 5 (`GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL` 5, the last level still needing sustained visible misses). Hold-out QA keeps rendering the field per phase.
