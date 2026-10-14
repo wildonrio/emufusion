@@ -18,7 +18,8 @@ Per generated phase t, coarse to fine over the levels:
     3x3 convs 9->16->16->16->2 give ONE motion increment d: f = up(f) + d,
     b = up(b) - d;
   * at the three finest levels, head 2 (same shapes, own weights) refines the
-    same coarser field from the same correlation into a second hypothesis F2,
+    same coarser field from the same normalised correlation into a second
+    hypothesis F2,
     and a visibility branch turns both coarser fields into endpoint matches,
     scores them with four 3x3 correlation volumes (36 channels), and through
     1x1 36->8, 3x3 8->8 x3, 3x3 8->4 accumulates four logits W over levels;
@@ -43,9 +44,16 @@ def conv(cin, cout, stride=1, kernel=3):
 
 
 def store8(x):
-    """clip(x, 0, 1) quantised to 1/255 (an RGBA8 render target), straight-through."""
+    """clip(x, 0, 1) quantised to 1/255 (an RGBA8 render target).
+
+    The forward value is exactly what the device stores. The backward pass is
+    leaky (slope 0.05 outside [0, 1]): with a hard clip a layer whose outputs
+    all leave [0, 1] gets no gradient and never recovers (the heads' last
+    hidden layer died this way and the network collapsed to a cross-fade).
+    """
     y = x.clamp(0, 1)
-    return y + (torch.round(y * 255) / 255 - y).detach()
+    soft = y + 0.05 * (x - y)
+    return soft + (torch.round(y * 255) / 255 - soft).detach()
 
 
 def sample(image, field):
@@ -103,9 +111,15 @@ def nine_shifts(features):
 
 
 def correlate(vector, nine):
-    """Dot products of one feature vector (N,C,h,w) with nine candidates (N,9C,h,w)."""
+    """Matching score of one feature vector (N,C,h,w) against nine candidates (N,9C,h,w).
+
+    Negative squared feature distance. (A raw dot product of [0, 1] features
+    rewards bright candidates rather than matching ones, so an untrained
+    network never finds the motion in it; the distance is a matching cost
+    even for random features and costs the same on the GPU.)
+    """
     n, c, h, w = vector.shape
-    return (nine.view(n, 9, c, h, w) * vector.unsqueeze(1)).sum(2)
+    return -((nine.view(n, 9, c, h, w) - vector.unsqueeze(1)) ** 2).sum(2)
 
 
 class Encoder(nn.Module):
@@ -126,17 +140,21 @@ class Encoder(nn.Module):
 class Head(nn.Module):
     """Correlation (9) -> 16 -> 16 -> 16 -> one motion increment (2)."""
 
-    def __init__(self, width=16):
+    def __init__(self, width=16, affine=True):
         super().__init__()
-        self.affine = nn.Conv2d(9, 9, 1, groups=9)
+        self.affine = nn.Conv2d(9, 9, 1, groups=9) if affine else None
         self.c1 = conv(9, width)
         self.c2 = conv(width, width)
         self.c3 = conv(width, width)
         self.c4 = conv(width, 2)
         with torch.no_grad():
-            self.affine.weight.fill_(1.0 / FEATURES)
-            self.affine.bias.zero_()
-            self.c4.weight.mul_(0.1)
+            if self.affine is not None:
+                self.affine.weight.fill_(1.0 / FEATURES)
+                self.affine.bias.zero_()
+            # Near-zero increment at init: the head is shared by every level and
+            # the field doubles per level, so a constant offset grows ~31x. Not
+            # exactly zero: zero weights block all gradient to the layers before.
+            self.c4.weight.normal_(0.0, 1e-3)
             self.c4.bias.zero_()
 
     def correlation(self, raw):
@@ -163,7 +181,7 @@ class Visibility(nn.Module):
         with torch.no_grad():
             self.affine.weight.fill_(1.0 / FEATURES)
             self.affine.bias.zero_()
-            self.c4.weight.mul_(0.1)
+            self.c4.weight.normal_(0.0, 1e-3)
             self.c4.bias.zero_()
 
     def forward(self, raw):
@@ -175,20 +193,31 @@ class Visibility(nn.Module):
         return self.c4(x)
 
 
-def endpoint_matches(field, t):
+def endpoint_matches(coarse, size, t):
     """For each texel taken as a pixel of B (resp. A), its match in A (resp. B).
 
-    field: (N,4,h,w) half-interval vectors (f toward A, b toward B) at phase t.
-    Returns displacements (N,2,h,w): B-pixel -> A match, A-pixel -> B match.
+    coarse: (N,4,h',w') coarser-level half-interval vectors (f toward A, b
+    toward B) at phase t, in coarse texels; it is read bilinearly at the
+    displaced points, as the device reads the coarse texture.
+    Returns displacements (N,2,h,w) in texels of `size`: B-pixel -> A match,
+    A-pixel -> B match.
     """
     tt = t.view(-1, 1, 1, 1)
-    f, b = field[:, 0:2], field[:, 2:4]
+    h, w = size
+    ch, cw = coarse.shape[-2:]
+    scale = torch.tensor([w / cw, h / ch, w / cw, h / ch], device=coarse.device,
+                         dtype=coarse.dtype).view(1, 4, 1, 1)
+    inverse = (1 / scale[:, :2])
+
+    def at(offset):
+        return sample(coarse, offset * inverse) * scale
+
+    here = at(coarse.new_zeros(coarse.shape[0], 2, h, w))
+    f, b = here[:, 0:2], here[:, 2:4]
     q = -2 * (1 - tt) * b               # B pixel y sits at y + q at time t
-    fq = sample(field, q)
-    to_a = q + 2 * tt * fq[:, 0:2]
+    to_a = q + 2 * tt * at(q)[:, 0:2]
     q2 = -2 * tt * f                    # A pixel z sits at z + q2 at time t
-    fq2 = sample(field, q2)
-    to_b = q2 + 2 * (1 - tt) * fq2[:, 2:4]
+    to_b = q2 + 2 * (1 - tt) * at(q2)[:, 2:4]
     return to_a, to_b
 
 
@@ -199,7 +228,7 @@ class PhaseNet(nn.Module):
         self.delta_levels = delta_levels
         self.encoder = Encoder()
         self.head1 = Head(head_width)
-        self.head2 = Head(head_width)
+        self.head2 = Head(head_width, affine=False)
         self.visibility = Visibility()
 
     def features(self, image):
@@ -211,40 +240,49 @@ class PhaseNet(nn.Module):
                 level = F.avg_pool2d(level, 2, ceil_mode=True)
         return out
 
-    def fields(self, feats_a, feats_b, t):
-        """Per-phase work: F1, F2 (N,4,h,w half-interval vectors in Q_0 texels) and W."""
+    def fields(self, feats_a, feats_b, t, collect=None):
+        """Per-phase work: F1, F2 (N,4,h,w half-interval vectors in Q_0 texels) and W.
+
+        collect: optional list receiving (F1, F2 or None) after every level
+        (coarse to fine), for deep supervision during training.
+        """
         tt = t.view(-1, 1, 1, 1)
         f1 = f2 = logits = None
         for k in reversed(range(self.levels)):
             fa, fb = feats_a[k], feats_b[k]
             n, _, h, w = fa.shape
             coarse = fa.new_zeros(n, 4, h, w) if f1 is None else upsample_field(f1, (h, w))
-            coarse2 = None if f2 is None else upsample_field(f2, (h, w))
             wa = sample(fa, 2 * tt * coarse[:, 0:2])
             nb = sample(nine_shifts(fb), 2 * (1 - tt) * coarse[:, 2:4])
             raw = correlate(wa, nb)
-            d1 = self.head1(self.head1.correlation(raw))
+            corr = self.head1.correlation(raw)
+            d1 = self.head1(corr)
             new_f1 = coarse + torch.cat([d1, -d1], 1)
             if k < self.delta_levels:
-                d2 = self.head2(self.head2.correlation(raw))
+                # Head 2 reads the same normalised correlation (one pass on the device).
+                d2 = self.head2(corr)
                 new_f2 = coarse + torch.cat([d2, -d2], 1)
-                other = coarse2 if coarse2 is not None else coarse
+                low1 = f1 if f1 is not None else fa.new_zeros(n, 4, 1, 1)
+                low2 = f2 if f2 is not None else low1
                 volumes = []
-                for field in (coarse, other):
-                    to_a, to_b = endpoint_matches(field, t)
+                for low in (low1, low2):
+                    to_a, to_b = endpoint_matches(low, (h, w), t)
                     volumes.append(correlate(sample(fa, to_a), nine_shifts(fb)))
                     volumes.append(correlate(sample(fb, to_b), nine_shifts(fa)))
                 step = self.visibility(torch.cat(volumes, 1))
                 logits = step if logits is None else step + upsample(logits, (h, w))
                 f2 = new_f2
             f1 = new_f1
+            if collect is not None:
+                collect.append((f1, f2 if k < self.delta_levels else None))
         return f1, f2, logits
 
     def synthesize(self, a, b, t, f1, f2, logits):
         h, w = a.shape[-2:]
         tt = t.view(-1, 1, 1, 1)
         g1, g2 = upsample_field(f1, (h, w)), upsample_field(f2, (h, w))
-        wl = upsample(logits, (h, w))
+        lh, lw = logits.shape[-2:]
+        to_low = torch.tensor([lw / w, lh / h], device=a.device, dtype=a.dtype).view(1, 2, 1, 1)
         candidates = (
             (a, 2 * tt * g1[:, 0:2], 0, 1 - tt),
             (b, 2 * (1 - tt) * g1[:, 2:4], 1, tt),
@@ -254,7 +292,9 @@ class PhaseNet(nn.Module):
         colours, scores, phases = [], [], []
         for image, offset, channel, phase in candidates:
             colours.append(sample(image, offset))
-            scores.append(sample(wl[:, channel:channel + 1], offset))
+            # Logits are read from the low-resolution map at the candidate's
+            # source position (GL: one bilinear tap of the Q_0 texture).
+            scores.append(sample(logits[:, channel:channel + 1], offset * to_low))
             phases.append(phase.expand_as(scores[-1]))
         soft = torch.softmax(torch.cat(scores, 1), 1)
         weights = soft * torch.cat(phases, 1)
@@ -262,10 +302,33 @@ class PhaseNet(nn.Module):
         out = sum(weights[:, i:i + 1] * colours[i] for i in range(4))
         return out, g1, g2, weights
 
+    def clipped_layers(self):
+        """Every conv whose output is stored to RGBA8 (clip activation), in forward order."""
+        e, h1, h2, v = self.encoder, self.head1, self.head2, self.visibility
+        return [e.c0, e.c1, e.c2, e.c3, h1.affine, h1.c1, h1.c2, h1.c3, h2.c1, h2.c2, h2.c3,
+                v.affine, v.c0, v.c1, v.c2, v.c3]
+
+    @torch.no_grad()
+    def calibrate(self, a, b, t, mean=0.5, spread=0.2, rounds=2):
+        """Data-dependent init: each clipped layer's pre-activation gets per-channel
+        mean 0.5 and std 0.2, so training starts inside the linear range of the
+        clip (otherwise gradients vanish through the stacked clips)."""
+        for layer in self.clipped_layers() * rounds:
+            stats = []
+            hook = layer.register_forward_hook(lambda m, i, o: stats.append(o.detach()))
+            self.forward(a, b, t)
+            hook.remove()
+            x = torch.cat([o.transpose(0, 1).reshape(o.shape[1], -1) for o in stats], 1)
+            mu, sd = x.mean(1), x.std(1).clamp(min=1e-4)
+            gain = spread / sd
+            layer.weight.mul_(gain.view(-1, *([1] * (layer.weight.dim() - 1))))
+            layer.bias.copy_((layer.bias - mu) * gain + mean)
+
     def forward(self, a, b, t):
-        f1, f2, logits = self.fields(self.features(a), self.features(b), t)
+        levels = []
+        f1, f2, logits = self.fields(self.features(a), self.features(b), t, levels)
         out, g1, g2, weights = self.synthesize(a, b, t, f1, f2, logits)
-        return out, {'f1': g1, 'f2': g2, 'weights': weights}
+        return out, {'f1': g1, 'f2': g2, 'weights': weights, 'levels': levels}
 
 
 def parameter_count(model):

@@ -112,7 +112,16 @@ public final class TimelineSchedulerSwitch {
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default synthesis.
         }
-        synthesisLevel = Math.max(0, Math.min(15, level));
+        synthesisLevel = level == DIS_SYNTHESIS_LEVEL || level == DIS_MOTION_SYNTHESIS_LEVEL ? level :
+                Math.max(0, Math.min(15, level));
+        boolean dis = true;
+        try {
+            if (context != null) dis = Settings.Global.getInt(
+                    context.getContentResolver(), DIS_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        disDefault = dis;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -155,7 +164,28 @@ public final class TimelineSchedulerSwitch {
         holdoutLevels = parseHoldoutLevels(levels);
     }
 
-    /** Three ids in 0..15 or 100..115; anything else falls back to the default. */
+    /**
+     * Synthesis 21: GPU dense inverse search flow (DenseInverseSearchFlow),
+     * QA-selectable for normal play and as a hold-out level.
+     */
+    static final int DIS_SYNTHESIS_LEVEL = 21;
+
+    /** Synthesis 22 (QA): synthesis 15 with DIS motion in place of the block matcher's. */
+    static final int DIS_MOTION_SYNTHESIS_LEVEL = 22;
+
+    /**
+     * DIS by default. Small (2-D) sources render synthesis 21 and larger ones
+     * synthesis 15 with DIS motion (22): on paired Thor hold-outs 21 beat
+     * synthesis 15 by 15-35% on 2-D games (Mega Drive, SNES, GBA, NES) and 22
+     * beat it by 10-15% on SM3DW, Ocarina of Time and Star Fox 64, equal on
+     * Link's Awakening. QA: 0 restores the block matcher and synthesis 15.
+     */
+    static final String DIS_GLOBAL = "emufusion_framegen_dis";
+    private static volatile boolean disDefault = true;
+
+    static boolean disDefault() { return disDefault; }
+
+    /** Three ids in 0..15, 100..115, 21 (DIS) or 22 (DIS motion); anything else falls back to the default. */
     static int[] parseHoldoutLevels(String value) {
         if (value == null) return DEFAULT_HOLDOUT_LEVELS.clone();
         String[] parts = value.split(",");
@@ -165,6 +195,7 @@ public final class TimelineSchedulerSwitch {
             for (int i = 0; i < 3; ++i) {
                 ids[i] = Integer.parseInt(parts[i].trim());
                 int level = ids[i] % 100;
+                if (ids[i] == DIS_SYNTHESIS_LEVEL || ids[i] == DIS_MOTION_SYNTHESIS_LEVEL) continue;
                 if (ids[i] < 0 || ids[i] > 115 || (ids[i] > 15 && ids[i] < 100) || level > 15)
                     return DEFAULT_HOLDOUT_LEVELS.clone();
             }

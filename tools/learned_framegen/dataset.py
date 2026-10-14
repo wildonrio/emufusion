@@ -65,10 +65,16 @@ class TripletDataset(torch.utils.data.Dataset):
         t = float(meta.get('phase', 0.5))
         a, b, c = (load_rgb(folder / f'{k}.png') for k in 'ABC')
         h, w = a.shape[:2]
+        teacher_path = folder / 'teacher.npy'
+        if teacher_path.exists():
+            teacher = np.load(teacher_path).astype(np.float32)
+        else:
+            teacher = np.zeros((h, w, 5), np.float32)
         # Small native (2-D) images are also seen at 2x nearest, the scale the
         # device can analyse them at.
         if self.augment and max(h, w) <= 400 and random.random() < 0.5:
-            a, b, c = (np.repeat(np.repeat(v, 2, 0), 2, 1) for v in (a, b, c))
+            a, b, c, teacher = (np.repeat(np.repeat(v, 2, 0), 2, 1) for v in (a, b, c, teacher))
+            teacher = teacher * np.array([2, 2, 2, 2, 1], np.float32)
             h, w = a.shape[:2]
         size = self.crop
         mask = np.ones((h, w), np.float32)
@@ -76,20 +82,36 @@ class TripletDataset(torch.utils.data.Dataset):
             ph, pw = max(0, size - h), max(0, size - w)
             pad = ((0, ph), (0, pw), (0, 0))
             a, b, c = (np.pad(x, pad, mode='edge') for x in (a, b, c))
+            teacher = np.pad(teacher, pad)
             mask = np.pad(mask, ((0, ph), (0, pw)))
             h, w = a.shape[:2]
         y = random.randint(0, h - size) if self.augment else (h - size) // 2
         x = random.randint(0, w - size) if self.augment else (w - size) // 2
-        a, b, c = (v[y:y + size, x:x + size] for v in (a, b, c))
+        if self.augment and random.random() < 0.8:
+            # Motion is sparse (most crops barely move), which lets both losses
+            # settle on zero motion: prefer the most-moving of several crops.
+            moving = (np.abs(teacher[..., :4]).sum(2) > 1.0).astype(np.float32) * teacher[..., 4]
+            best = -1.0
+            for _ in range(8):
+                yy, xx = random.randint(0, h - size), random.randint(0, w - size)
+                score = float(moving[yy:yy + size:4, xx:xx + size:4].mean())
+                if score > best:
+                    best, y, x = score, yy, xx
+        a, b, c, teacher = (v[y:y + size, x:x + size] for v in (a, b, c, teacher))
         mask = mask[y:y + size, x:x + size]
         if self.augment:
             if random.random() < 0.5:
-                a, b, c, mask = (v[:, ::-1] for v in (a, b, c, mask))
+                a, b, c, mask, teacher = (v[:, ::-1] for v in (a, b, c, mask, teacher))
+                teacher = teacher * np.array([-1, 1, -1, 1, 1], np.float32)
             if random.random() < 0.2:
-                a, b, c, mask = (v[::-1] for v in (a, b, c, mask))
+                a, b, c, mask, teacher = (v[::-1] for v in (a, b, c, mask, teacher))
+                teacher = teacher * np.array([1, -1, 1, -1, 1], np.float32)
             if random.random() < 0.5:
                 a, c, t = c, a, 1.0 - t
+                teacher = teacher[..., [2, 3, 0, 1, 4]]
         stack = np.stack([a, b, c]).astype(np.float32) / 255.0
         frames = torch.from_numpy(np.ascontiguousarray(stack)).permute(0, 3, 1, 2)
+        teacher = torch.from_numpy(np.ascontiguousarray(teacher)).permute(2, 0, 1)
+        teacher[4] *= torch.from_numpy(np.ascontiguousarray(mask))
         return frames, torch.tensor(t, dtype=torch.float32), \
-            torch.from_numpy(np.ascontiguousarray(mask))[None]
+            torch.from_numpy(np.ascontiguousarray(mask))[None], teacher

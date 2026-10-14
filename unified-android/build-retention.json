@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "f4662c3bd5a0cd1b46b88a86d5518fdd7e5d88db97791dce47e54f3d4c49965b": "Rollback 3.2.71 (145) until 3.2.72 settles.",
-    "cca84a6db1cb8772f486b19657e22b5a52e5a35b69e34158edb6299c4868e217": "Current release 3.2.72 (146). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "cca84a6db1cb8772f486b19657e22b5a52e5a35b69e34158edb6299c4868e217": "Rollback 3.2.72 (146) until 3.2.73 settles.",
+    "56b3ca23e820da2997ada724149599fb158ff33244a34bbc2c28c81905e123a6": "Current release 3.2.73 (147). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -461,6 +461,34 @@
     "unified-android/build/emufusion-3.2.71-phase2-phase3-qualification-b978df8a8f0517c9e42a39810b834b32b8146ca8d23816b563f9c6e42871c5c6.apk": {
       "sha256": "b978df8a8f0517c9e42a39810b834b32b8146ca8d23816b563f9c6e42871c5c6",
       "reason": "Closed 2026-10-14 trial 184: palette-fade detection (fitted gain/offset over a 12x8 luma grid takes the temporal blend). Shipped unchanged in 3.2.72 build 185 with the training capture added. Thor on 3.2.72 with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.72-phase2-phase3-qualification-de2d6c3f5104cd66de9d06ad67b31c1e460614520db589c4bd06a90a1f422b42.apk": {
+      "sha256": "de2d6c3f5104cd66de9d06ad67b31c1e460614520db589c4bd06a90a1f422b42",
+      "reason": "Compile-only check 186 of the learned estimator with placeholder (untrained) weights; never installed. Superseded by builds with trained weights."
+    },
+    "unified-android/build/emufusion-3.2.72-phase2-phase3-qualification-9f66644d793836286adaadd3876e43b44c89a0b1f5e6cb9c860826fc2b1332ff.apk": {
+      "sha256": "9f66644d793836286adaadd3876e43b44c89a0b1f5e6cb9c860826fc2b1332ff",
+      "reason": "Closed 2026-10-14 trial 187: first GPU DIS (synthesis 21, stride 4, quarter-res flow for 3-D). Paired Thor hold-out: wins on 2-D (GBA 0.550->0.388), loses on 3-D (SM3DW 0.529->0.593). Superseded by 189-191."
+    },
+    "unified-android/build/emufusion-3.2.72-phase2-phase3-qualification-e2ede54b04b76b62b86cb19477f44b429b9d2ee368f9d510173addd7efa698c8.apk": {
+      "sha256": "e2ede54b04b76b62b86cb19477f44b429b9d2ee368f9d510173addd7efa698c8",
+      "reason": "Closed 2026-10-14 build 188: DIS with fixed-point source lookup; never installed (superseded by 189 before testing)."
+    },
+    "unified-android/build/emufusion-3.2.72-phase2-phase3-qualification-897efc2c7c579e74401ff365ee6cffa55838dc847d0fdfb2f632b93ed69317b6.apk": {
+      "sha256": "897efc2c7c579e74401ff365ee6cffa55838dc847d0fdfb2f632b93ed69317b6",
+      "reason": "Closed 2026-10-14 trial 189: DIS stride 3, full-res flow, DIS default for 2-D. Hold-out better on 5/8 games, but normal play cost 7-18 ms per pair (patch arrays spilled registers). Superseded by 190."
+    },
+    "unified-android/build/emufusion-3.2.72-phase2-phase3-qualification-9f1e47311c2973df2a97c491ee2f75c363a7d51aa1185b21869ef859432b58dc.apk": {
+      "sha256": "9f1e47311c2973df2a97c491ee2f75c363a7d51aa1185b21869ef859432b58dc",
+      "reason": "Closed 2026-10-14 trial 190: array-free DIS (gradient textures), warp 1.5-2.3 ms; hold-out showed synthesis 15 with DIS motion (22) best on 3-D. Superseded by 191 (default policy)."
+    },
+    "unified-android/build/emufusion-3.2.72-phase2-phase3-qualification-d7dc19316157895c26045d9303b1237fe5d39a2496b270ac621620d1070a14bb.apk": {
+      "sha256": "d7dc19316157895c26045d9303b1237fe5d39a2496b270ac621620d1070a14bb",
+      "reason": "Closed 2026-10-14 trial 191: DIS default policy (21 for 2-D, 22 for larger). Hold-out confirmed 22 >= 15 on all 3-D games; SM3DW/WWHD fell to work level 5 with full-res DIS. Superseded by 193 (3.2.73)."
+    },
+    "unified-android/build/emufusion-3.2.73-phase2-phase3-qualification-37315087a65f44ac3c9d05c203e13ab4d7e9977cb836d09deeec07099a47f267.apk": {
+      "sha256": "37315087a65f44ac3c9d05c203e13ab4d7e9977cb836d09deeec07099a47f267",
+      "reason": "Closed 2026-10-14 candidate 192 (3.2.73 version): DIS stopped at half resolution only from work level 3; SM3DW/WWHD still at level 5. Superseded by 193 (half resolution for 3-D always)."
     }
   }
 }

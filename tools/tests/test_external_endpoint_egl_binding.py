@@ -214,6 +214,9 @@ public class EglBindingFixture {
     void closeNativeSourceImageObserver(){}
     void releaseVerifyResources(){}
     void releaseHoldoutResources(){}
+    // GPU dense inverse search (synthesis 21) released in releaseGl.
+    static class DisFlowStub{void release(){}}
+    DisFlowStub disFlow;
     // Prepared-warp targets (arrays, flags) released in releaseGl.
     final int[] warpPrepTextures=new int[3],warpPrepFramebuffers=new int[3];
     boolean warpPrepReady;long warpPrepKeyPromotion;

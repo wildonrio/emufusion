@@ -4491,6 +4491,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         densePhaseMedianProgram = createProgram(VERTEX_SHADER, PHASE_MEDIAN_SHADER);
         structureMaskProgram = createProgram(VERTEX_SHADER, STRUCTURE_MASK_SHADER);
         synthesisLevel = TimelineSchedulerSwitch.synthesisLevel();
+        disMotionNormal = synthesisLevel == TimelineSchedulerSwitch.DIS_MOTION_SYNTHESIS_LEVEL;
+        if (disMotionNormal) synthesisLevel = TimelineSchedulerSwitch.DEFAULT_SYNTHESIS_LEVEL;
+        disDefault = TimelineSchedulerSwitch.disDefault();
         qaWorkFloor = TimelineSchedulerSwitch.workFloor();
         solveMatchesQuarterImages = TimelineSchedulerSwitch.solveQuarter();
         denseWorkLevel = Math.max(denseWorkLevel, qaWorkFloor);
@@ -6492,13 +6495,20 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         historyTextures[previousIndex]);
             }
             endDenseStage();
+            // DIS motion replaces the block matcher's search in normal play;
+            // the hold-out keeps both for paired comparisons. DIS runs in the
+            // forward stage and the reverse stage stays bracketed (empty), so
+            // the timer's stage pairs stay complete.
             beginDenseStage(DenseGpuTimer.FORWARD_SOLVE);
-            solveDenseDirection(0, historyTextures[previousIndex],
-                    historyTextures[currentIndex], temporalGuide);
+            boolean disOnly = !holdoutMode && disMotionForPlay() && estimateDisMotion();
+            if (!disOnly)
+                solveDenseDirection(0, historyTextures[previousIndex],
+                        historyTextures[currentIndex], temporalGuide);
             endDenseStage();
             beginDenseStage(DenseGpuTimer.REVERSE_SOLVE);
-            solveDenseDirection(1, historyTextures[currentIndex],
-                    historyTextures[previousIndex], temporalGuide);
+            if (!disOnly)
+                solveDenseDirection(1, historyTextures[currentIndex],
+                        historyTextures[previousIndex], temporalGuide);
             endDenseStage();
             beginDenseStage(DenseGpuTimer.VALIDATION);
             // The independently searched fields may still occupy different
@@ -6506,19 +6516,22 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // field one reciprocal proposal under ITS OWN image objective
             // before validation. A stricter gain margin prevents a merely
             // tied inverse from manufacturing cycle agreement.
-            if (denseV28ReducedAnalysisRequested && denseWorkLevel < 2) {
-                refineDenseReciprocalDirection(0, historyTextures[previousIndex],
+            if (!disOnly) {
+                if (denseV28ReducedAnalysisRequested && denseWorkLevel < 2) {
+                    refineDenseReciprocalDirection(0, historyTextures[previousIndex],
+                            historyTextures[currentIndex]);
+                    refineDenseReciprocalDirection(1, historyTextures[currentIndex],
+                            historyTextures[previousIndex]);
+                }
+                validateDenseDirection(0, historyTextures[previousIndex],
                         historyTextures[currentIndex]);
-                refineDenseReciprocalDirection(1, historyTextures[currentIndex],
+                validateDenseDirection(1, historyTextures[currentIndex],
                         historyTextures[previousIndex]);
+                fillDenseDirection(0);
+                fillDenseDirection(1);
             }
-            validateDenseDirection(0, historyTextures[previousIndex],
-                    historyTextures[currentIndex]);
-            validateDenseDirection(1, historyTextures[currentIndex],
-                    historyTextures[previousIndex]);
-            fillDenseDirection(0);
-            fillDenseDirection(1);
             endDenseStage();
+            if (!disOnly && disMotionWanted()) estimateDisMotion();
             checkGl("estimate dense bidirectional motion");
             maybeDumpDenseFlow(previousIndex, currentIndex);
             denseTemporalGuideReady = true;
@@ -7635,9 +7648,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     /** Two neighbour-fill passes, ping-ponging so the result lands back in the validated texture. */
     private void fillDenseDirection(int direction) {
+        fillDenseField(denseValidatedTextures, denseFillTextures, direction);
+    }
+
+    private void fillDenseField(int[] validated, int[] fills, int direction) {
         if (denseFillProgram == 0) return;
-        int source = denseValidatedTextures[direction];
-        int scratch = denseFillTextures[direction];
+        int source = validated[direction];
+        int scratch = fills[direction];
         // Passes 0-1: strict fill of isolated rejections from validated
         // neighbours.  Passes 2-3: relaxed diffusion into flat cells.  Even
         // pass count, so the result lands back in the validated texture.
@@ -7646,7 +7663,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // validated texture.
         int passes = denseWorkLevel == 0 ? 6 : denseWorkLevel == 1 ? 2 : 0;
         for (int pass = 0; pass < passes; ++pass) {
-            int destination = (pass & 1) == 0 ? scratch : denseValidatedTextures[direction];
+            int destination = (pass & 1) == 0 ? scratch : validated[direction];
             int input = (pass & 1) == 0 ? source : scratch;
             attachDenseTarget(destination, denseAnalysisWidth, denseAnalysisHeight);
             GLES20.glUseProgram(denseFillProgram);
@@ -7660,12 +7677,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void validateDenseDirection(int direction, int reference, int target) {
-        attachDenseTarget(denseValidatedTextures[direction], denseAnalysisWidth,
+        validateDenseField(denseFinalTextures, denseValidatedTextures, direction, reference, target);
+    }
+
+    private void validateDenseField(int[] finals, int[] validated, int direction, int reference,
+                                    int target) {
+        attachDenseTarget(validated[direction], denseAnalysisWidth,
                 denseAnalysisHeight);
         GLES20.glUseProgram(denseCycleProgram);
         bindQuad(denseCycleProgram);
-        bindTexture(denseCycleProgram, "uFlow", denseFinalTextures[direction], 0);
-        bindTexture(denseCycleProgram, "uReverseFlow", denseFinalTextures[1-direction], 1);
+        bindTexture(denseCycleProgram, "uFlow", finals[direction], 0);
+        bindTexture(denseCycleProgram, "uReverseFlow", finals[1-direction], 1);
         bindTexture(denseCycleProgram, "uReference", reference, 2);
         bindTexture(denseCycleProgram, "uTarget", target, 3);
         uniform2(denseCycleProgram, "uSourceSize", historyWidth, historyHeight);
@@ -11095,10 +11117,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private int activeBackwardFlow() {
+        if (densePyramidEnabled && disMotionUsable()) return disFlow.motionValidated[0];
         return densePyramidEnabled ? denseValidatedTextures[0] : flowTextures[2];
     }
 
     private int activeForwardFlow() {
+        if (densePyramidEnabled && disMotionUsable()) return disFlow.motionValidated[1];
         return densePyramidEnabled ? denseValidatedTextures[1] : reverseFlowTextures[2];
     }
 
@@ -11222,14 +11246,19 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         try {
             // Every level renders the same pair from the same fields, so the
             // comparison is paired and independent of scene variation.
+            holdoutRendering = true;
             for (int level = 0; level < HOLDOUT_LEVELS; ++level) {
                 holdoutPreparedOverride = holdoutLevelIds[level] >= 100;
                 synthesisLevel = holdoutLevelIds[level] % 100;
+                disMotionActive = synthesisLevel == TimelineSchedulerSwitch.DIS_MOTION_SYNTHESIS_LEVEL;
+                if (disMotionActive) synthesisLevel = TimelineSchedulerSwitch.DEFAULT_SYNTHESIS_LEVEL;
                 synthesisEnabled = synthesisLevel > 0;
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, holdoutGeneratedFramebuffers[level]);
                 GLES20.glViewport(0, 0, holdoutWidth, holdoutHeight);
                 drawMotionFrame(phase);
             }
+            holdoutRendering = false;
+            disMotionActive = false;
             synthesisLevel = savedLevel;
             synthesisEnabled = savedEnabled;
             holdoutPreparedOverride = false;
@@ -11257,6 +11286,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             synthesisLevel = savedLevel;
             synthesisEnabled = savedEnabled;
             holdoutPreparedOverride = false;
+            holdoutRendering = false;
+            disMotionActive = false;
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
             GLES20.glViewport(0, 0, outputWidth, outputHeight);
         }
@@ -11890,6 +11921,113 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     /** Synthesis 5 (QA): level 4 with phase costs on the quarter-resolution images. */
     private boolean phaseMatchesQuarterImages() { return synthesisLevel >= 5; }
 
+    // Synthesis 21: GPU dense inverse search. Luma pyramids are built once per
+    // real frame and both flows once per pair (they do not depend on the
+    // phase); the output pass draws on this generator's destination quad.
+    private DenseInverseSearchFlow disFlow;
+    private long disEstimateKeyA, disEstimateKeyB;
+    private boolean disDefault;
+    // Hold-out levels render exactly the synthesis they name.
+    private boolean holdoutRendering;
+
+    /**
+     * Where DIS stops. 2-D sources (synthesis 21 samples the flow directly)
+     * use the full analysis resolution, a half from work level 3. For larger
+     * sources the flow is box-averaged onto the solver's grid (128x72), so a
+     * half (240x135 at 1080p) already oversamples it at about a third of the
+     * cost (full resolution cost Cemu's SM3DW 2.2 ms per pair and the session
+     * fell to work level 5); a quarter from work level 3.
+     */
+    private int disStopLevel() {
+        int base = disSmallSource() ? 0 : 1;
+        return denseWorkLevel >= 3 ? base + 1 : base;
+    }
+
+    /** 2-D cores' native images; larger (3-D) sources keep synthesis 15. */
+    private boolean disSmallSource() { return historyWidth <= 400 && historyHeight <= 300; }
+
+    // Synthesis 22 (QA, hold-out id 22): synthesis 15 fed by DIS motion. The
+    // DIS flows are box-averaged onto the solver's grid in its raw format and
+    // go through the same validation and fill, so the per-phase field,
+    // prepared warp, HUD hold and structure mask all run unchanged.
+    private boolean disMotionNormal;
+    // While the hold-out renders: whether the current level is id 22.
+    private boolean disMotionActive;
+    private long disMotionPromotion = -1L;
+
+    /** Normal play: synthesis 15 takes DIS motion (explicit 22, or the default for larger sources). */
+    private boolean disMotionForPlay() {
+        return disMotionNormal || (disDefault && !disSmallSource());
+    }
+
+    private boolean disMotionWanted() {
+        if (disMotionForPlay()) return true;
+        if (!holdoutMode) return false;
+        for (int id : holdoutLevelIds) if (id == TimelineSchedulerSwitch.DIS_MOTION_SYNTHESIS_LEVEL) return true;
+        return false;
+    }
+
+    private boolean disMotionUsable() {
+        boolean wanted = holdoutRendering ? disMotionActive : disMotionForPlay();
+        return wanted && disFlow != null && disMotionPromotion == densePromotions &&
+                disFlow.motionValidated[0] != 0;
+    }
+
+    /**
+     * Runs inside estimateDenseMotion, before densePromotions advances to this
+     * pair. False when DIS is unavailable on this device (the block matcher's
+     * fields are used instead).
+     */
+    private boolean estimateDisMotion() {
+        if (disFlow == null) disFlow = new DenseInverseSearchFlow();
+        if (!disFlow.ensure(historyWidth, historyHeight) ||
+                !disFlow.ensureMotionTextures(denseAnalysisWidth, denseAnalysisHeight)) return false;
+        long keyA = historyFrameKey(previousIndex);
+        long keyB = historyFrameKey(currentIndex);
+        if (!disFlow.holds(0, keyA) && disFlow.holds(1, keyA)) disFlow.swapSlots();
+        if (!disFlow.holds(0, keyA)) disFlow.encode(0, historyTextures[previousIndex], keyA);
+        if (!disFlow.holds(1, keyB)) disFlow.encode(1, historyTextures[currentIndex], keyB);
+        if (keyA != disEstimateKeyA || keyB != disEstimateKeyB) {
+            disFlow.estimate(disStopLevel());
+            disEstimateKeyA = keyA;
+            disEstimateKeyB = keyB;
+        }
+        float limit = Math.min(denseMaxFlowPixels(), flowLimitPixels(historyWidth, historyHeight));
+        disFlow.writeRaw(historyWidth, historyHeight, limit);
+        validateDenseField(disFlow.motionRaw, disFlow.motionValidated, 0,
+                historyTextures[previousIndex], historyTextures[currentIndex]);
+        validateDenseField(disFlow.motionRaw, disFlow.motionValidated, 1,
+                historyTextures[currentIndex], historyTextures[previousIndex]);
+        fillDenseField(disFlow.motionValidated, disFlow.motionFill, 0);
+        fillDenseField(disFlow.motionValidated, disFlow.motionFill, 1);
+        disMotionPromotion = densePromotions + 1;
+        return true;
+    }
+
+    private long historyFrameKey(int index) {
+        return ((long) (index + 1) << 40) | historyWrites[index];
+    }
+
+    private boolean drawDisFrame(float phase) {
+        if (disFlow == null) disFlow = new DenseInverseSearchFlow();
+        if (historyWidth <= 0 || historyHeight <= 0 ||
+                !disFlow.ensure(historyWidth, historyHeight)) return false;
+        long keyA = historyFrameKey(previousIndex);
+        long keyB = historyFrameKey(currentIndex);
+        if (!disFlow.holds(0, keyA) && disFlow.holds(1, keyA)) disFlow.swapSlots();
+        if (!disFlow.holds(0, keyA)) disFlow.encode(0, historyTextures[previousIndex], keyA);
+        if (!disFlow.holds(1, keyB)) disFlow.encode(1, historyTextures[currentIndex], keyB);
+        if (keyA != disEstimateKeyA || keyB != disEstimateKeyB) {
+            disFlow.estimate(disStopLevel());
+            disEstimateKeyA = keyA;
+            disEstimateKeyB = keyB;
+        }
+        disFlow.bindGenerate(historyTextures[previousIndex], historyTextures[currentIndex], phase);
+        bindQuad(disFlow.generateProgram());
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        return true;
+    }
+
     /** Whether this geometry's pyramid builds the history/4 box images. */
     private boolean denseQuarterImagesAvailable() {
         return denseBoxWidths[0] >= denseLevelWidths[1] &&
@@ -11897,6 +12035,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void drawMotionFrame(float phase) {
+        boolean dis = synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL ||
+                (disDefault && !holdoutRendering && disSmallSource());
+        if (dis && drawDisFrame(phase)) return;
         boolean phaseField = renderPhaseField(phase);
         if (maxFragmentTextureUnits == 0) {
             int[] units = new int[1];
@@ -13112,8 +13253,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     /** Bounded post-swap readback of independently validated dense fields. */
     private void sampleDenseFlowTelemetry() {
         if (!denseResourcesReady || denseProofPixels == null) return;
-        long backward = readDenseValidCells(denseValidatedTextures[0]);
-        long forward = readDenseValidCells(denseValidatedTextures[1]);
+        long backward = readDenseValidCells(activeBackwardFlow());
+        long forward = readDenseValidCells(activeForwardFlow());
         denseProofCells += (long) PROOF_WIDTH * PROOF_HEIGHT;
         denseBackwardValidCells += backward;
         denseForwardValidCells += forward;
@@ -14804,6 +14945,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         releaseVerifyResources();
         releaseHoldoutResources();
+        if (disFlow != null) disFlow.release();
+        disFlow = null;
         if (frameBuffer != 0) GLES20.glDeleteFramebuffers(1, new int[]{frameBuffer}, 0);
         if (historyTextures[0] != 0 || historyTextures[1] != 0)
             GLES20.glDeleteTextures(2, historyTextures, 0);

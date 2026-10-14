@@ -6,7 +6,32 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 14 (latest) **— 3.2.72 (146): palette fades take the temporal blend; training capture for a learned estimator.**
+October 14 (latest) **— 3.2.73 (147): dense inverse search motion: 2-D games 7–35% closer to the real frame, 3-D games 4–11% (Link's Awakening and Sonic equal).**
+
+**What and why.** Owner, October 14: follow the REA study of Lossless Scaling instead of more hand-tuning. Its network (a shared feature encoder per pyramid level, a ±1-texel correlation on a phase-centred warp, a shared refiner, a second head and a learned visibility branch) is a small trained network; our block matcher is hand-written. We built a network of that structure with our own weights (`tools/learned_framegen/`, PyTorch on this Mac, frames captured from the Thor's hold-out path) and a GLES exporter whose passes match PyTorch at 61–63 dB on the desktop GPU (`verify_gles.py`). Training from scratch collapsed to a cross-fade every time (motion is sparse in game footage; even supervision by teacher flows could not beat zero motion), so the learned runtime is staged outside the app (`tools/learned_framegen/android/`). The measurement that came out of it: a classical dense optical flow, OpenCV's DIS (Kroeger et al., ECCV 2016), interpolated the captured triplets 15–45% closer to the withheld real frame than our block matcher. We implemented DIS on the GPU ourselves from the paper (methods only):
+- per real frame: luma box-filtered to the analysis size (native up to 640 wide, a half up to 1280, else a quarter), a 2×2-mean pyramid and an (intensity, gradient) RGBA16F texture per level;
+- per pair, both directions, coarse to fine down to full analysis resolution: 8×8 patches on a 3-px grid align by inverse-compositional Gauss-Newton (6 iterations, mean-normalised, keeping the start when the search got worse); densification gives every pixel the 1/max(1, |error|)-weighted mean of its covering patches;
+- shaders are generated (`dis_gles.py` → `DenseInverseSearchShaders.java`); `dis_eval.py` runs the same GLSL on the Mac over 270 captured triplets in 12 s and scores it like the hold-out, which made the parameter sweep (stride 4→3: up to −16%; 12→6 iterations: equal) a matter of minutes.
+
+**How it is used.** Small (2-D) sources (history ≤ 400×300) render synthesis 21: both images sampled where the content comes from (two fixed-point steps along each flow, 1–3% better than sampling at the output pixel) and blended by the phase. Larger sources keep synthesis 15 but take DIS motion in place of the block matcher (22): the flows (at half the analysis resolution) are box-averaged onto the solver's grid in its raw format and pass through the same validation and fill, so the per-phase field, prepared warp, HUD hold and structure mask run unchanged; in normal play the block matcher's search is skipped. Weighting candidates by forward-backward flow consistency was tried and scored much worse (SM3DW 0.41 → 1.78). QA: `emufusion_framegen_dis=0` restores the block matcher; `emufusion_framegen_synth` 21/22 and hold-out ids 21/22 select either path explicitly.
+
+**Paired Thor hold-out** (same withheld frames, error vs a cross-fade; 15 → DIS path):
+- 2-D, synthesis 21: Mega Drive 0.814 → 0.527, SNES 0.531 → 0.453 (one run), GBA 0.631 → 0.534, NES 0.762 → 0.706 (another; Mega Drive 0.972 → 0.991 there, its one loss).
+- 3-D, synthesis 22 at half the analysis resolution: SM3DW 0.475 → 0.440, Ocarina of Time 0.614 → 0.587, God of War II 0.596 → 0.557; at full resolution (earlier candidate): Star Fox 64 0.838 → 0.743, Wind Waker HD 0.533 → 0.497, Link's Awakening 1.022 → 1.025, Sonic Superstars 0.923 → 0.919.
+- Plain DIS (21) on 3-D is mixed (Wind Waker HD 0.470 and Sonic 0.856 better; God of War II 0.895 and Link's Awakening 1.178 much worse): the hand-written synthesis's occlusion handling is what makes DIS motion pay off there.
+
+**First port was 7× too slow.** The patch search kept its 8×8 template and gradients in per-fragment arrays; on Adreno that spilled registers and the warp took 6.8–17.5 ms per pair on 2-D cores (work level 5, up to 495 late callbacks on Mega Drive). Precomputing the (intensity, gradient) texture once per real frame and taking the SSD check from running sums brought it to 1.5–2.3 ms.
+
+**Normal play (Thor, 3.2.73 candidate):**
+- SM3DW 50.8 → 108.2 (work level 4, 8 late callbacks, GPU 2.6 ms per pair), Wind Waker HD (2×) 29.6 → 57.2 (level 4), Link's Awakening 42.4 → 68.6 (level 1), God of War II 58.1 → 116.0 (level 1, GPU 3.8 ms), Sonic Superstars 23.7 → 43.6, PS3 57.4 → 101.8; Mega Drive 59.9 → 115.1, SNES 58.2 → 101.8, NES 58.0 → 81.3, DS 25.0 → 34.3; every run PASS, no device loss.
+- DIS at full analysis resolution for 3-D cost 2.2–2.5 ms per pair and sent Cemu's games to work level 5 (no phase field); since its flow is averaged onto the solver's 128×72 grid, half resolution (240×135 at 1080p) costs 0.6–1.1 ms and kept the quality (above). 2-D keeps full resolution; both drop one level from work level 3.
+
+Also: the QA training capture (3.2.72) captured 6,285 training and 2,431 evaluation triplets from 30 games; the macOS daily /tmp cleanup removed the QA adb wrapper, now rebuilt, and the QA scripts are mirrored outside /tmp.
+
+**Thor (3.2.73, `56b3ca23`):**
+installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 14 **— 3.2.72 (146): palette fades take the temporal blend; training capture for a learned estimator.**
 
 **Fades.** A palette fade (NES, Mega Drive) changes every pixel's brightness while nothing moves, and the motion search chased the brightness change into blocky, displaced output. The global-cut pass now also fits B ≈ g·A + o over a 12×8 luma grid of the pair; when the fit explains the change (mean change ≥ 1.5%, residual ≤ a quarter of it and ≤ 2%), the pair takes the plain temporal blend instead of a warp, as a hard cut takes the hold. Hold-out (3.2.71 → candidate 184, error vs a cross-fade; unpaired runs, so the scenes differ): Mega Drive 0.889 → 0.835, NES 0.945 → 0.590, GBA 1.067 → 1.018, SNES 0.533 → 0.549; OoT 0.591, Link's Awakening 1.043, Star Fox 64 0.597, SM3DW 0.499 (no regression against earlier runs). Test: `test_fitted_fade_takes_the_temporal_blend`.
 
