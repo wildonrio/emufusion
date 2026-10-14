@@ -525,6 +525,30 @@
     "unified-android/build/emufusion-3.2.76-phase2-phase3-qualification-53eb2c5a1d6b7616bea3243ab843f7915698e904495d223baca6dc592d3bfc9a.apk": {
       "sha256": "53eb2c5a1d6b7616bea3243ab843f7915698e904495d223baca6dc592d3bfc9a",
       "reason": "Closed 2026-10-14 trial 205: QA level 27 (synthesis 24 with the static-structure mask): God of War II -3%, Sonic Adventure -2%, 2-D within 0.001; folded into synthesis 24 in 3.2.77."
+    },
+    "unified-android/build/emufusion-3.2.71-phase2-phase3-qualification.apk": {
+      "sha256": "b978df8a8f0517c9e42a39810b834b32b8146ca8d23816b563f9c6e42871c5c6",
+      "reason": "Superseded mutable convenience copy of the last 3.2.71 build (content-addressed artifact retired or released); current is 3.2.77."
+    },
+    "unified-android/build/emufusion-3.2.72-phase2-phase3-qualification.apk": {
+      "sha256": "d7dc19316157895c26045d9303b1237fe5d39a2496b270ac621620d1070a14bb",
+      "reason": "Superseded mutable convenience copy of the last 3.2.72 build (content-addressed artifact retired or released); current is 3.2.77."
+    },
+    "unified-android/build/emufusion-3.2.73-phase2-phase3-qualification.apk": {
+      "sha256": "45406353320df1f5f8f9a0122fb24b36884283511039fc986e8f2222c2c4c5c4",
+      "reason": "Superseded mutable convenience copy of the last 3.2.73 build (content-addressed artifact retired or released); current is 3.2.77."
+    },
+    "unified-android/build/emufusion-3.2.74-phase2-phase3-qualification.apk": {
+      "sha256": "6986a2ecabbba0c01f669f8b323ca3c3e16092cccda0e79ea6b95028df97b228",
+      "reason": "Superseded mutable convenience copy of the last 3.2.74 build (content-addressed artifact retired or released); current is 3.2.77."
+    },
+    "unified-android/build/emufusion-3.2.75-phase2-phase3-qualification.apk": {
+      "sha256": "a3364b0a683e5cb2d2d22d913dfcd8f6a02a867b765e93e23e5f00217479580a",
+      "reason": "Superseded mutable convenience copy of the last 3.2.75 build (content-addressed artifact retired or released); current is 3.2.77."
+    },
+    "unified-android/build/emufusion-3.2.76-phase2-phase3-qualification.apk": {
+      "sha256": "53eb2c5a1d6b7616bea3243ab843f7915698e904495d223baca6dc592d3bfc9a",
+      "reason": "Superseded mutable convenience copy of the last 3.2.76 build (content-addressed artifact retired or released); current is 3.2.77."
     }
   }
 }
