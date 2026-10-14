@@ -61,6 +61,33 @@ GRAD = (HEADER +
     " o0=vec4(f(q),0.5*(f(q+ivec2(1,0))-f(q-ivec2(1,0))),0.5*(f(q+ivec2(0,1))-f(q-ivec2(0,1))),0.0);}\n")
 
 
+# At the coarsest level (no coarser flow) every whole-pixel start within this
+# radius is scored by mean-normalised SSD and Gauss-Newton starts from the best:
+# motion beyond its reach from zero (a sprite moving 48 px per frame is 3 px at
+# the coarsest level) was lost. A non-zero start must beat zero motion's error
+# by COARSE_BIAS (repetitive texture). Offline over 28 games 0.6% better with
+# the cut threshold below (SM3DW 0.347 -> 0.326, PS3 0.612 -> 0.578, N64 0.539
+# -> 0.511, Mega Drive 0.539 -> 0.521; Game Gear 0.196 -> 0.204); synthetic
+# 48 px sprite over a flat background 0.662 -> 0.020 of a cross-fade.
+COARSE_RADIUS = 2
+COARSE_BIAS = 0.8
+
+
+def coarse_search_block():
+    if COARSE_RADIUS is None:
+        return ""
+    R = int(COARSE_RADIUS)
+    init = " if(uHasCoarse<0.5){float best=1e30;\n" if COARSE_BIAS is None else (
+        " if(uHasCoarse<0.5){float best;{float a=0.0,aa=0.0,at=0.0;for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);\n"
+        "   float w=tg(vec2(q)+0.5),t=r(q).x;a+=w;aa+=w*w;at+=w*t;}\n"
+        f"   best={float(COARSE_BIAS)}*(aa-a*a/N+(stt-st*st/N)-2.0*(at-a*st/N));}}\n")
+    return (init +
+            f"  for(int dy=-{R};dy<={R};++dy)for(int dx=-{R};dx<={R};++dx){{vec2 c=vec2(float(dx),float(dy));\n"
+            "   float a=0.0,aa=0.0,at=0.0;for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);\n"
+            "    float w=tg(vec2(q)+0.5+c),t=r(q).x;a+=w;aa+=w*w;at+=w*t;}\n"
+            "   float e=aa-a*a/N+(stt-st*st/N)-2.0*(at-a*st/N);if(e<best){best=e;u0=c;}}}\n")
+
+
 def patch_search_shader():
     return (HEADER +
     f"#define P {PATCH}\n#define S {STRIDE}\n#define ITERS {ITERATIONS}\n"
@@ -77,7 +104,7 @@ def patch_search_shader():
     " float st=0.0,stt=0.0;vec2 g0=vec2(0.0),g1=vec2(0.0);mat2 h=mat2(0.0);\n"
     " for(int y=0;y<P;++y)for(int x=0;x<P;++x){vec3 v=r(o+ivec2(x,y));\n"
     "  st+=v.x;stt+=v.x*v.x;g0+=v.yz;g1+=v.yz*v.x;h+=mat2(v.y*v.y,v.y*v.z,v.y*v.z,v.z*v.z);}\n"
-    " const float N=float(P*P);float m0=st/N;\n"
+    " const float N=float(P*P);float m0=st/N;\n" + coarse_search_block() +
     # Mean-normalised: subtract the patch means from both sides.
     " mat2 hn=h-mat2(g0.x*g0.x,g0.x*g0.y,g0.x*g0.y,g0.y*g0.y)/N+mat2(1e-4,0.0,0.0,1e-4);\n"
     " mat2 hi=inverse(hn);\n"
@@ -288,10 +315,11 @@ SKIP_FLAT_CROSS = True
 # last step, and bounding it won Dread but lost Wind Waker HD and Barbie).
 FADE_GAIN = None        # (min, max)
 FADE_COVERAGE = None    # fraction of samples with |C - A| > 1 grey level
-# A cut is half the 12x8 grid unexplained along DIS (0.25 held animated sea in
-# Link's Awakening and a Mario Kart Wii turn; offline 0.8% better on average,
-# Link's Awakening 1.302 -> 1.182, Mario Kart Wii 0.752 -> 0.692, no loss).
-CUT_THRESHOLD = 0.5
+# A cut is 60% of the 12x8 grid unexplained along DIS. 0.25 held animated sea
+# in Link's Awakening and a Mario Kart Wii turn (0.5: Link's Awakening 1.302 ->
+# 1.182, Mario Kart Wii 0.752 -> 0.692); one sea pair still sat at 0.45-0.53
+# and flipped with small flow changes, while the captured cuts score 0.72+.
+CUT_THRESHOLD = 0.6
 
 
 def cut_shader():

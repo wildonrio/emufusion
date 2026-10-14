@@ -6,7 +6,17 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 14 (latest) **— 3.2.82 (156): the per-phase route stops paying for the block matcher's analysis; flat areas skip the five-tap test.**
+October 14 (latest) **— 3.2.83 (157): DIS finds fast motion from its coarsest level; cuts need 60% of the frame unexplained.**
+
+A synthetic behaviour suite with exact ground truth (the withheld middle frame rendered directly), scored for both engines through the LSFG reference harness: camera pans at 2-24 px, a static HUD over a fast pan, textured objects at 4-32 px over a textured background, flat-coloured outlined sprites at 16-48 px over flat and textured backgrounds, rotation, text appearing and vanishing, a linear fade, pixel-art scrolling at 1 and 2 px. Ours was better or equal everywhere (pans 0.011-0.029 of a cross-fade vs LSFG 0.063-0.440, text appearing 0.750 vs 1.430, rotation 0.162 vs 0.240) except fast large motion: a sprite moving 48 px per frame over a flat background scored 0.662 against LSFG's 0.005. At DIS's coarsest pyramid level (1/16 scale) 48 px is 3 px, and its Gauss-Newton starts from zero motion. Each coarsest-level patch now scores every whole-pixel start within 2 px by mean-normalised SSD, zero motion favoured (another start must be 20% better), and starts from the best: that sprite 0.662 -> 0.020. Both engines still lose fast sprites over a textured background (32 px: ours 0.862, LSFG 0.865).
+
+On the 28 captured games this moved one animated-sea pair in Link's Awakening across the 0.5 cut threshold (its grid sits at 0.45-0.53 depending on small flow changes; captured cuts score 0.72+), so a cut now needs 60%. Together, offline 0.6% better on average: SM3DW 0.347 -> 0.326, PS3 0.612 -> 0.578, N64 0.539 -> 0.511, Mega Drive 0.539 -> 0.521, Mario Kart Wii 0.692 -> 0.681; Game Gear 0.196 -> 0.204, Link's Awakening 1.182 -> 1.194. Against LSFG on the same triplets: ours better on 17 of 28, within 2% on 7 (SM3DW 0.326 vs 0.332 among them), LSFG better on 4 (Dread, 3DS, DS, Link's Awakening 1.194 vs 1.166). A radius of 4 overreached (Link's Awakening +14%, DS +21%).
+
+Thor (one short gated run): SM3DW 47.8 -> 106.6 displayed, GPU 2.6 ms per pair, work level 1, 5 late callbacks, PASS; Odyssey (a near-static menu) PASS.
+
+**Thor (3.2.83, `3d89dc27`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 14 **— 3.2.82 (156): the per-phase route stops paying for the block matcher's analysis; flat areas skip the five-tap test.**
 
 On the per-phase route (every source since 3.2.80) the block matcher's pair pyramid and global seed still ran each pair in normal play, 0.6-0.8 ms (P95) on Link's Awakening and SM3DW, read by nothing: DIS reads the history images, the structure mask the history, and cuts are judged after DIS. They now run only for the hold-out comparison or when DIS is unavailable (the stage stays bracketed so the GPU timer's pairs stay complete). The zero-motion test also skips its five-tap comparison where both one-pixel mismatches are under 2 grey levels: offline over 28 games identical within 0.1%. Six Gauss-Newton iterations stay (four: 0.6% worse offline).
 

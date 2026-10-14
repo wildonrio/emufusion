@@ -146,6 +146,8 @@ def main():
     parser.add_argument('--densify-power', type=float, help='per-phase densification weight exponent (experiment)')
     parser.add_argument('--no-densify-cross', action='store_true', help='per-phase densification at one pixel')
     parser.add_argument('--skip-flat-cross', action='store_true')
+    parser.add_argument('--coarse-radius', type=int)
+    parser.add_argument('--coarse-bias', type=float)
     parser.add_argument('--fade-gain', type=float, nargs=2)
     parser.add_argument('--fade-coverage', type=float)
     parser.add_argument('--cut-threshold', type=float)
@@ -158,6 +160,8 @@ def main():
     if args.densify_power is not None:
         D.PHASE_DENSIFY_POWER = int(args.densify_power) if args.densify_power == int(args.densify_power) else args.densify_power
     if args.skip_flat_cross: D.SKIP_FLAT_CROSS = True
+    if args.coarse_radius is not None: D.COARSE_RADIUS = args.coarse_radius
+    if args.coarse_bias is not None: D.COARSE_BIAS = args.coarse_bias
     if args.fade_gain: D.FADE_GAIN = tuple(args.fade_gain)
     if args.fade_coverage is not None: D.FADE_COVERAGE = args.fade_coverage
     if args.cut_threshold is not None: D.CUT_THRESHOLD = args.cut_threshold

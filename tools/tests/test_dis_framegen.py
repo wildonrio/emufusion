@@ -65,6 +65,9 @@ class DisShaderTest(unittest.TestCase):
         self.assertEqual(dis_gles.GENERATE.count("p=u-uT*fac(p);"), 2)
         self.assertIn("u-=hi*b;", search)
         self.assertIn("if(e1>e0||any(isnan(u))){u=u0;e1=e0;}", search)
+        # Coarsest level: whole-pixel starts within 2 px, zero motion favoured.
+        self.assertIn("for(int dy=-2;dy<=2;++dy)for(int dx=-2;dx<=2;++dx)", search)
+        self.assertIn("best=0.8*(aa-a*a/N+(stt-st*st/N)-2.0*(at-a*st/N));", search)
         self.assertIn("float w=1.0/max(1.0,d);", dis_gles.shaders()["DENSIFY"])
 
 
@@ -120,7 +123,7 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn("w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);", dis_gles.shaders()["GENERATE_PHASE"])
         # 3.2.78: the cut/fade verdict taken after DIS (a camera turn is not a
         # cut), per-pixel zero-motion selection and the sharper densifications.
-        self.assertIn("w=mix(mix(w,a0,uCutEnabled*step(0.5,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));",
+        self.assertIn("w=mix(mix(w,a0,uCutEnabled*step(0.6,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));",
                       dis_gles.shaders()["GENERATE_PHASE"])
         self.assertIn("if(e0+8.0/255.0<eM)w=(1.0-uT)*a0+uT*c0;", dis_gles.shaders()["GENERATE_PHASE"])
         self.assertIn("structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());", generator)
