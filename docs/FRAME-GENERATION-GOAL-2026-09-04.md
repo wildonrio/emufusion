@@ -12,6 +12,8 @@ October 14 (latest) **— 3.2.84 (158): a fade between two flat frames is a fade
 
 Thor (one short gated smoke run): SM3DW 48.7 -> 103.8 displayed, GPU 2.6 ms per pair, work level 0, 6 late callbacks, PASS.
 
+The learned per-pixel selector trained on the real crops plus 2,792 randomised synthetic ones (exact ground truth for appearing, vanishing and fading UI, fades, occlusion and fast sprites) still trades games against each other on the 9 held-out ones: Wind Waker HD 0.700 -> 0.659, Link's Awakening 1.155 -> 1.120, Star Fox 64 0.752 -> 0.735, but NES 0.852 -> 0.929, Mega Drive 0.620 -> 0.655, SNES 0.362 -> 0.375, SM3DW 0.415 -> 0.429. Not adopted.
+
 **Thor (3.2.84, `cfc6537f`):** installed with identity preserved (UID 10206, first-install time unchanged).
 
 October 14 **— 3.2.83 (157): DIS finds fast motion from its coarsest level; cuts need 60% of the frame unexplained.**
