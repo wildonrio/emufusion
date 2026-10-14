@@ -698,7 +698,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "float unp(vec2 p){float r=floor(p.x*255.0+.5)*256.0+floor(p.y*255.0+.5);return r>=32768.0?r-65536.0:r;}\n" +
             "vec2 dec(vec4 f){return vec2(unp(f.rg),unp(f.ba))/256.0;}\n" +
             "float mismatch(vec2 f){float n=0.0;for(int y=0;y<8;y++){for(int x=0;x<12;x++){vec2 uv=vec2((float(x)+.5)/12.0,(float(y)+.5)/8.0);vec2 q=uv+f/uSourceSize;if(any(lessThan(q,vec2(0.0)))||any(greaterThan(q,vec2(1.0)))){continue;}n+=step(.12,abs(lum(texture2D(uTarget,uv).rgb)-lum(texture2D(uReference,q).rgb)));}}return n/96.0;}\n" +
-            "void main(){vec2 seed=dec(texture2D(uCenterSeed,vec2(.5)));float m=min(mismatch(vec2(0.0)),mismatch(seed));gl_FragColor=vec4(m,0.0,0.0,1.0);}\n";
+            // Fade signal (green): the same grid at zero motion fitted as
+            // current = gain * previous + offset. A scene fading (palette fades,
+            // fade to black) changes colour, not position; the warp turned
+            // Sonic's title fade blocky (2026-10-14). A real cut or motion
+            // leaves a large residual and never qualifies.
+            "float fade(){float n=0.0,sa=0.0,sb=0.0,saa=0.0,sab=0.0,sbb=0.0,d=0.0;for(int y=0;y<8;y++){for(int x=0;x<12;x++){vec2 uv=vec2((float(x)+.5)/12.0,(float(y)+.5)/8.0);float a=lum(texture2D(uReference,uv).rgb),b=lum(texture2D(uTarget,uv).rgb);n+=1.0;sa+=a;sb+=b;saa+=a*a;sab+=a*b;sbb+=b*b;d+=abs(b-a);}}\n" +
+            " float va=n*saa-sa*sa;if(va<n*n*.0009)return 0.0;float g=(n*sab-sa*sb)/va;float o=(sb-g*sa)/n;float rms=sqrt(max(0.0,(sbb-g*sab-o*sb)/n));float change=d/n;\n" +
+            " return step(.015,change)*step(rms,.25*change)*step(rms,.02);}\n" +
+            "void main(){vec2 seed=dec(texture2D(uCenterSeed,vec2(.5)));float m=min(mismatch(vec2(0.0)),mismatch(seed));gl_FragColor=vec4(m,fade(),0.0,1.0);}\n";
 
     private static final String DENSE_GLOBAL_REDUCE_SHADER =
             "precision highp float;uniform sampler2D uCosts,uZeroCosts,uCenterSeed;\n" +
@@ -1362,7 +1370,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // path's exact-endpoint hold), and a detected cut never does.
             "#ifdef PHASE_SYNTHESIS\n" +
             " if(uPhaseFieldEnabled*uDenseEncoding>0.5){\n" +
-            "  float qCut=uDenseCutEnabled*step(0.25,texture2D(uDenseCutTex,vec2(0.5)).r);\n" +
+            "  vec4 qCutTex=texture2D(uDenseCutTex,vec2(0.5));\n" +
+            "  float qCut=uDenseCutEnabled*max(step(0.25,qCutTex.r),step(0.5,qCutTex.g));\n" +
             "  vec4 qf=texture2D(uPhaseFlow,vTexCoord);vec2 qv=decodeFlow(qf);\n" +
             "  vec3 qa=texture2D(uPrevious,clamp(vTexCoord-uPhase*qv,vec2(0.0),vec2(1.0))).rgb;\n" +
             "  vec3 qb=texture2D(uCurrent,clamp(vTexCoord+(1.0-uPhase)*qv,vec2(0.0),vec2(1.0))).rgb;\n" +
@@ -1703,7 +1712,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // warped logo again; a real pan explained by the seed sits far
             // below either threshold.
             " float hardCut=uDenseCutEnabled*step(0.25,cutFraction);\n" +
-            " gl_FragColor=vec4(mix(finalColor,rawPrevious,hardCut),1.0);\n" +
+            // A fitted fade has no motion: the plain temporal blend is exact,
+            // and it overrides the cut hold (a fade can exceed the cut grid's
+            // threshold too).
+            " float fading=uDenseCutEnabled*step(0.5,texture2D(uDenseCutTex,vec2(0.5)).g);\n" +
+            " gl_FragColor=vec4(mix(mix(finalColor,rawPrevious,hardCut),mix(rawPrevious,rawCurrent,uPhase),fading),1.0);\n" +
             "}\n";
 
     // Static-structure mask (synthesis 15), one texel per sampling step:
@@ -11258,8 +11271,28 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int holdoutDumpCount;
     private long holdoutDumpLastNs;
 
+    // QA training capture for the learned estimator: with this marker present
+    // the hold-out writes up to TRAIN_CAPTURE_LIMIT triplets (both endpoints,
+    // the withheld real frame between them and the generated hold-out images,
+    // HOD1 format) to files/train. Images wider than 640 are box-filtered to a
+    // half or a quarter. Synchronous readback; QA only.
+    private static final java.io.File TRAIN_CAPTURE_MARKER =
+            new java.io.File("/data/local/tmp/emufusion-train-capture");
+    private static final int TRAIN_CAPTURE_LIMIT = 400;
+    private int trainCaptureCount;
+    private long trainCaptureLastNs;
+    private int trainCaptureTexture;
+    private int trainCaptureWidth;
+    private int trainCaptureHeight;
+
     private void maybeDumpHoldout(int slot, float phase) {
         long now = System.nanoTime();
+        if (trainCaptureCount < TRAIN_CAPTURE_LIMIT && now - trainCaptureLastNs >= 150_000_000L &&
+                TRAIN_CAPTURE_MARKER.exists()) {
+            trainCaptureLastNs = now;
+            captureTrainingTriplet(slot, phase);
+            return;
+        }
         if (holdoutDumpCount >= 8 || now - holdoutDumpLastNs < 700_000_000L ||
                 !HOLDOUT_DUMP_MARKER.exists()) return;
         holdoutDumpLastNs = now;
@@ -11298,6 +11331,61 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         } catch (java.io.IOException | RuntimeException failure) {
             Log.w(TAG, "Hold-out dump failed generator=" + generatorId, failure);
         }
+    }
+
+    private void captureTrainingTriplet(int slot, float phase) {
+        int divisor = densePyramidProgram == 0 ? 1 :
+                historyWidth > 1280 ? 4 : historyWidth > 640 ? 2 : 1;
+        int width = Math.max(1, historyWidth / divisor);
+        int height = Math.max(1, historyHeight / divisor);
+        java.io.File directory = new java.io.File(DENSE_FLOW_DUMP_DIR.getParentFile(), "train");
+        try {
+            directory.mkdirs();
+            if (divisor > 1 && (trainCaptureTexture == 0 ||
+                    trainCaptureWidth != width || trainCaptureHeight != height)) {
+                if (trainCaptureTexture == 0) {
+                    int[] texture = new int[1];
+                    GLES20.glGenTextures(1, texture, 0);
+                    trainCaptureTexture = texture[0];
+                }
+                allocateDenseTexture(trainCaptureTexture, width, height, false);
+                trainCaptureWidth = width;
+                trainCaptureHeight = height;
+            }
+            ++trainCaptureCount;
+            java.io.File file = new java.io.File(directory,
+                    "train-" + generatorId + "-" + trainCaptureCount + ".bin");
+            try (java.io.DataOutputStream out = new java.io.DataOutputStream(
+                    new java.io.BufferedOutputStream(new java.io.FileOutputStream(file), 1 << 16))) {
+                out.writeInt(0x484f4431); // 'HOD1'
+                out.writeFloat(phase);
+                out.writeFloat(activeFlowLimitPixels());
+                out.writeInt(synthesisLevel);
+                out.writeInt(HOLDOUT_LEVELS + 3);
+                for (int level = 0; level < HOLDOUT_LEVELS; ++level)
+                    dumpDensePlane(out, "generated" + holdoutLevelIds[level], holdoutGeneratedTextures[level],
+                            holdoutWidth, holdoutHeight);
+                dumpTrainingPlane(out, "reference", holdoutReferenceTextures[slot], divisor, width, height);
+                dumpTrainingPlane(out, "previous", historyTextures[previousIndex], divisor, width, height);
+                dumpTrainingPlane(out, "current", historyTextures[currentIndex], divisor, width, height);
+            }
+            Log.i(TAG, "Training capture generator=" + generatorId + " file=" + file.getName() +
+                    " phase=" + phase + " history=" + historyWidth + "x" + historyHeight +
+                    " written=" + width + "x" + height);
+        } catch (java.io.IOException | RuntimeException failure) {
+            Log.w(TAG, "Training capture failed generator=" + generatorId, failure);
+        }
+    }
+
+    private void dumpTrainingPlane(java.io.DataOutputStream out, String name, int texture,
+                                   int divisor, int width, int height) throws java.io.IOException {
+        if (divisor == 1) {
+            dumpDensePlane(out, name, texture, historyWidth, historyHeight);
+            return;
+        }
+        drawDensePyramid(texture, historyWidth, historyHeight, trainCaptureTexture, width, height,
+                divisor == 4 ? 1f : 0.5f);
+        dumpDensePlane(out, name, trainCaptureTexture, width, height);
     }
 
     private void pollHoldout() {
@@ -11393,6 +11481,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glDeleteFramebuffers(1, new int[] {holdoutResultFramebuffer}, 0);
         GLES20.glDeleteTextures(1, new int[] {holdoutResultTexture}, 0);
         GLES20.glDeleteTextures(HOLDOUT_REFERENCES, holdoutReferenceTextures, 0);
+        if (trainCaptureTexture != 0) GLES20.glDeleteTextures(1, new int[] {trainCaptureTexture}, 0);
+        trainCaptureTexture = 0;
         if (holdoutProgram != 0) deleteProgram(holdoutProgram);
         holdoutProgram = 0;
     }

@@ -6,6 +6,14 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+October 14 (latest) **— 3.2.72 (146): palette fades take the temporal blend; training capture for a learned estimator.**
+
+**Fades.** A palette fade (NES, Mega Drive) changes every pixel's brightness while nothing moves, and the motion search chased the brightness change into blocky, displaced output. The global-cut pass now also fits B ≈ g·A + o over a 12×8 luma grid of the pair; when the fit explains the change (mean change ≥ 1.5%, residual ≤ a quarter of it and ≤ 2%), the pair takes the plain temporal blend instead of a warp, as a hard cut takes the hold. Hold-out (3.2.71 → candidate 184, error vs a cross-fade; unpaired runs, so the scenes differ): Mega Drive 0.889 → 0.835, NES 0.945 → 0.590, GBA 1.067 → 1.018, SNES 0.533 → 0.549; OoT 0.591, Link's Awakening 1.043, Star Fox 64 0.597, SM3DW 0.499 (no regression against earlier runs). Test: `test_fitted_fade_takes_the_temporal_blend`.
+
+**Training capture (QA only).** Owner, October 14: use the REA study of Lossless Scaling instead of more hand-tuning. Its network (shapes recovered on October 14: one shared 4-layer encoder per pyramid level, a ±1-texel feature correlation on a phase-centred warp, a shared 9→16→16→16→2 refiner per level, a second head and a 4-logit visibility branch on the three finest levels, a four-candidate softmax blend) is a small trained network; our block matcher is hand-written. We are building a network of that structure with our own weights trained on our own emulator footage (methods only; none of its code, shaders or weights). With `/data/local/tmp/emufusion-train-capture` present, the hold-out path writes up to 400 triplets per game (both endpoints, the withheld real frame between them, and our synthesis-15 output for a paired baseline) to `files/train`; images wider than 640 px are written box-filtered to a half or a quarter. Training code: `tools/learned_framegen/` (PyTorch); frames stay on this machine.
+
+**Thor (3.2.72, `cca84a6d`):** installed with identity preserved (UID 10206, first-install time unchanged); captures run from it.
+
 October 14 **— Measured: Wind Waker HD at 4× cannot afford any motion field on the Thor; the descent is right.** A lighter work level 4 (the reused midpoint field without the search or the neighbour selection) still went to level 5 within a minute of a ten-minute 4× soak: Cemu saturates the GPU and our swaps block (`present-backpressure`). At level 5 late callbacks fell to zero in every steady minute (against 64 at level 4 in a shorter run), so dropping the field there buys pacing, which matters more. SM3DW did not need level 4 in the same session. Reverted to 3.2.71's level 4; the trial APK is retired.
 
 October 14 **— 3.2.71 (145): heavy games keep a motion field under load.**

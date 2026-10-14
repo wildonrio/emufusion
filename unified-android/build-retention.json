@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "a69c1b03c180660d882190033be1eefa3b55af225cfb5327b4d642a28969f8bf": "Rollback 3.2.70 (144) until 3.2.71 settles.",
-    "f4662c3bd5a0cd1b46b88a86d5518fdd7e5d88db97791dce47e54f3d4c49965b": "Current release 3.2.71 (145). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "f4662c3bd5a0cd1b46b88a86d5518fdd7e5d88db97791dce47e54f3d4c49965b": "Rollback 3.2.71 (145) until 3.2.72 settles.",
+    "cca84a6db1cb8772f486b19657e22b5a52e5a35b69e34158edb6299c4868e217": "Current release 3.2.72 (146). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -457,6 +457,10 @@
     "unified-android/build/emufusion-3.2.71-phase2-phase3-qualification-cb2e06e5ca908812b01504eca107de722fc0104d2b39ba8bb27838c8d0e19757.apk": {
       "sha256": "cb2e06e5ca908812b01504eca107de722fc0104d2b39ba8bb27838c8d0e19757",
       "reason": "Closed 2026-10-14 trial 183: lighter work level 4 (reused field without search or neighbour selection). Wind Waker HD at 4x still reached level 5 within a minute (swap backpressure from Cemu) and level 5 removed late callbacks entirely, so the descent is right; SM3DW did not need level 4. Reverted to 3.2.71; Thor to be restored to 3.2.71."
+    },
+    "unified-android/build/emufusion-3.2.71-phase2-phase3-qualification-b978df8a8f0517c9e42a39810b834b32b8146ca8d23816b563f9c6e42871c5c6.apk": {
+      "sha256": "b978df8a8f0517c9e42a39810b834b32b8146ca8d23816b563f9c6e42871c5c6",
+      "reason": "Closed 2026-10-14 trial 184: palette-fade detection (fitted gain/offset over a 12x8 luma grid takes the temporal blend). Shipped unchanged in 3.2.72 build 185 with the training capture added. Thor on 3.2.72 with identity preserved."
     }
   }
 }

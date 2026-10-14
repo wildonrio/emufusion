@@ -4519,7 +4519,36 @@ class HardCutHoldTest(unittest.TestCase):
         self.assertIn("float m=min(mismatch(vec2(0.0)),mismatch(seed));", source)
         self.assertIn("drawDenseGlobalCut(reference, target, denseGlobalSeedTextures[direction],", source)
         self.assertIn("float hardCut=uDenseCutEnabled*step(0.25,cutFraction);", source)
-        self.assertIn("gl_FragColor=vec4(mix(finalColor,rawPrevious,hardCut),1.0);", source)
+        self.assertIn("gl_FragColor=vec4(mix(mix(finalColor,rawPrevious,hardCut),"
+                      "mix(rawPrevious,rawCurrent,uPhase),fading),1.0);", source)
+
+    def test_fitted_fade_takes_the_temporal_blend(self):
+        # A palette fade or fade to black changes colour, not position: the
+        # cut pass fits current = gain * previous + offset on its grid at zero
+        # motion (green channel) and the presentation blends instead of
+        # warping (Sonic's title fade came out blocky, 2026-10-14).
+        source = (ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" /
+                  "game" / "DisplayFrameGenerator.java").read_text()
+        self.assertIn("float fade(){", source)
+        self.assertIn("return step(.015,change)*step(rms,.25*change)*step(rms,.02);}", source)
+        self.assertIn("gl_FragColor=vec4(m,fade(),0.0,1.0);", source)
+        self.assertIn("float fading=uDenseCutEnabled*step(0.5,texture2D(uDenseCutTex,vec2(0.5)).g);", source)
+        self.assertIn("float qCut=uDenseCutEnabled*max(step(0.25,qCutTex.r),step(0.5,qCutTex.g));", source)
+
+
+class TrainingCaptureTest(unittest.TestCase):
+    def test_training_capture_is_marker_gated_and_bounded(self):
+        # QA-only triplet capture for the learned estimator: it never runs
+        # without the device marker, writes at most 400 triplets per
+        # generator, and box-filters images wider than 640 px.
+        source = (ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" /
+                  "game" / "DisplayFrameGenerator.java").read_text()
+        self.assertIn('new java.io.File("/data/local/tmp/emufusion-train-capture")', source)
+        self.assertIn("private static final int TRAIN_CAPTURE_LIMIT = 400;", source)
+        self.assertIn("if (trainCaptureCount < TRAIN_CAPTURE_LIMIT && now - trainCaptureLastNs >= 150_000_000L &&\n"
+                      "                TRAIN_CAPTURE_MARKER.exists()) {", source)
+        self.assertIn("historyWidth > 1280 ? 4 : historyWidth > 640 ? 2 : 1;", source)
+        self.assertEqual(source.count("captureTrainingTriplet("), 2)
 
 
 class DenseModeLegacyGlobalBranchTest(unittest.TestCase):
