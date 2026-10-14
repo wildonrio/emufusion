@@ -14,6 +14,8 @@ On the 28 captured games this moved one animated-sea pair in Link's Awakening ac
 
 Thor (one short gated run): SM3DW 47.8 -> 106.6 displayed, GPU 2.6 ms per pair, work level 1, 5 late callbacks, PASS; Odyssey (a near-static menu) PASS.
 
+Measured after release, not adopted: also searching one level finer (twice the step, centred on the coarser estimate) fixes a 32 px sprite over a textured background (0.862 -> 0.370 of a cross-fade, LSFG 0.865) but costs 0.6% on the captured games (Game Gear +8%, Barbie +3%), and a stronger zero bias to curb its spurious matches also weakens the coarsest-level search (SM3DW 0.326 -> 0.340); parked as a patch. A 48 px sprite over texture still fails in both engines. The synthetic linear fade is handled exactly (the verdict fires on every pair; its 1.78 ratio is rounding against a cross-fade that is itself exact).
+
 **Thor (3.2.83, `3d89dc27`):** installed with identity preserved (UID 10206, first-install time unchanged).
 
 October 14 **— 3.2.82 (156): the per-phase route stops paying for the block matcher's analysis; flat areas skip the five-tap test.**
