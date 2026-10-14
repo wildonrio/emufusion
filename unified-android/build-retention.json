@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "abcc5668427deaed19e41446c10ac825ad59ec21bbe8b2787617f686e94e9a7d": "Rollback 3.2.76 (150) until 3.2.77 settles.",
-    "1001c4663a888a3072abb5c16da34e627436a5a9806774dc492cc7ef629d3e14": "Current release 3.2.77 (151). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "1001c4663a888a3072abb5c16da34e627436a5a9806774dc492cc7ef629d3e14": "Rollback 3.2.77 (151) until 3.2.78 settles.",
+    "497b481b31dfc82274e4d95a946125e0ff6003894d490ce79512d16787184957": "Current release 3.2.78 (152). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -549,6 +549,14 @@
     "unified-android/build/emufusion-3.2.76-phase2-phase3-qualification.apk": {
       "sha256": "53eb2c5a1d6b7616bea3243ab843f7915698e904495d223baca6dc592d3bfc9a",
       "reason": "Superseded mutable convenience copy of the last 3.2.76 build (content-addressed artifact retired or released); current is 3.2.77."
+    },
+    "unified-android/build/emufusion-3.2.77-phase2-phase3-qualification-baf59e30d679f908c4ad06868be2052888f190223db29de40d5301b0e99e2b29.apk": {
+      "sha256": "baf59e30d679f908c4ad06868be2052888f190223db29de40d5301b0e99e2b29",
+      "reason": "Closed 2026-10-14 trial 207: QA level 28 (24 + global cut verdict + per-pixel zero-motion selection): God of War II 0.620 -> 0.505, God of War PSP 0.985 -> 0.832; the global cut held fast Star Fox 64 / Sonic Adventure turns. Superseded by 208 (cut after DIS)."
+    },
+    "unified-android/build/emufusion-3.2.77-phase2-phase3-qualification-c95ac83ba30fa018af8692fd1cef6c5a2659df7c635b01d7f4a156d1e804e700.apk": {
+      "sha256": "c95ac83ba30fa018af8692fd1cef6c5a2659df7c635b01d7f4a156d1e804e700",
+      "reason": "Closed 2026-10-14 trial 208: QA 29 (22 + cut after DIS) and 30 (24 + selection + cut after DIS + sharper densification) folded into 3.2.78; Switch and PSP moved to the per-phase route."
     }
   }
 }

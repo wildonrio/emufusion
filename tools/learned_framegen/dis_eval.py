@@ -111,7 +111,8 @@ def pipeline(s, tag, a, c, t, finest):
             prior = dst
         s.draw('GENERATE_PHASE', w, h, [f'{tag}out'],
                [('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
-                ('sampler', 'uPhaseFlow', f'{tag}pf'), ('f1', 'uT', t), ('f2', 'uFlowSize', fw, fh)])
+                ('sampler', 'uPhaseFlow', f'{tag}pf'), ('f1', 'uT', t), ('f2', 'uFlowSize', fw, fh),
+                ('f2', 'uHistorySize', w, h)])
         out = s.folder / f'{tag}.out'
         s.lines.append(f'read {tag}out {out}')
         return out, (w, h)
@@ -135,8 +136,17 @@ def main():
     parser.add_argument('--stride', type=int, default=D.STRIDE)
     parser.add_argument('--phase', action='store_true', help='per-phase symmetric refinement')
     parser.add_argument('--phase-passes', type=int, default=1)
+    parser.add_argument('--densify-power', type=float, help='per-phase densification weight exponent (experiment)')
+    parser.add_argument('--no-densify-cross', action='store_true', help='per-phase densification at one pixel')
+    parser.add_argument('--save', default='', help='write each generated frame (uint8, top row first) here')
     args = parser.parse_args()
+    global SAVE
+    SAVE = args.save
     D.ITERATIONS, D.STRIDE = args.iterations, args.stride
+    if args.densify_power is not None:
+        D.PHASE_DENSIFY_POWER = int(args.densify_power) if args.densify_power == int(args.densify_power) else args.densify_power
+    if args.no_densify_cross:
+        D.PHASE_DENSIFY_CROSS = False
     global PHASE, PHASE_PASSES
     PHASE = args.phase
     PHASE_PASSES = args.phase_passes
@@ -153,7 +163,9 @@ def main():
                 "gl_VertexID==2?3.0:-1.0);gl_Position=vec4(p,0.0,1.0);vTexCoord=0.5*(p+1.0);}\n")
             s = Script(tmp)
             for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY'):
-                s.lines.append(f'prog {name} {tmp}/VERTEX.vert {tmp}/{name}.frag')
+                # The per-phase route's instance densifies its endpoint flows sharply.
+                frag = 'DENSIFY_SHARP' if name == 'DENSIFY' and PHASE else name
+                s.lines.append(f'prog {name} {tmp}/VERTEX.vert {tmp}/{frag}.frag')
             s.lines.append(f'prog GENERATE {tmp}/VERTEX_TRI_UV.vert {tmp}/GENERATE.frag')
             s.lines.append(f'prog GENERATE_PHASE {tmp}/VERTEX_TRI_UV.vert {tmp}/GENERATE_PHASE.frag')
             jobs = []
@@ -171,8 +183,12 @@ def main():
             if run.returncode:
                 print(case, 'harness failed', run.stderr[-2000:]); continue
             tot = np.zeros(4)
-            for folder, a, b, c, out, (w, h) in jobs:
+            for index, (folder, a, b, c, out, (w, h)) in enumerate(jobs):
                 g = np.fromfile(out, np.float32).reshape(h, w, 4)[..., :3]
+                if SAVE:
+                    dest = Path(SAVE) / case; dest.mkdir(parents=True, exist_ok=True)
+                    np.save(dest / f"{index:03d}.npy", np.clip(g * 255 + 0.5, 0, 255).astype(np.uint8))
+                    (dest / f'{index:03d}.txt').write_text(str(folder))
                 n1, c1 = sums(g, a, c, b); tot[0] += n1; tot[1] += c1
                 d15p = folder / 'generated15.png'
                 if d15p.exists():

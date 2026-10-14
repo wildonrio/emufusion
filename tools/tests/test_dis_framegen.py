@@ -45,7 +45,7 @@ class DisShaderTest(unittest.TestCase):
         program_of = {"gray": "GRAY", "down": "DOWN", "grad": "GRAD", "patchSearch": "PATCH_SEARCH",
                       "densify": "DENSIFY", "generate": "GENERATE", "toRaw": "TO_RAW",
                       "phaseSearch": "PHASE_SEARCH", "phaseDensify": "PHASE_DENSIFY",
-                      "generatePhase": "GENERATE_PHASE"}
+                      "generatePhase": "GENERATE_PHASE", "cutProgram": "CUT"}
         used = set(re.findall(r'(?:bind|location)\((\w+), "(\w+)"', runtime))
         self.assertTrue(used)
         for program, name in used:
@@ -75,9 +75,9 @@ class PerSystemRoutingTest(unittest.TestCase):
         generator = GENERATOR.read_text()
         routed = host[host.index("PER_PHASE_MOTION_SYSTEMS = "):]
         routed = routed[:routed.index(";")]
-        for system in ("n64", "gamecube", "gc", "wii", "dreamcast", "ps3"):
+        for system in ("n64", "gamecube", "gc", "wii", "dreamcast", "ps3", "switch", "psp"):
             self.assertIn(f'"{system}"', routed)
-        for system in ("wiiu", "switch", "ps2", "psp"):
+        for system in ("wiiu", "ps2"):
             self.assertNotIn(f'"{system}"', routed)
         self.assertIn("layer.setPerPhaseMotionPreferred(perPhaseMotionPreferred(request.systemId));", host)
         self.assertIn("frameGenerator.setPerPhaseMotionPreferred(perPhaseMotionPreferred);", surface)
@@ -109,19 +109,37 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn("if (dis && drawDisFrame(phase, disPhase)) return;", generator)
         # Synthesis 24 applies synthesis 15's static-structure mask.
         self.assertIn("boolean structure = structureMaskProgram != 0 && renderStructureMask();", generator)
-        self.assertIn("w=mix(w,(1.0-uT)*texture(uFrameA,u).rgb+uT*texture(uFrameC,u).rgb,texture(uStructureMask,u).r);",
+        self.assertIn("w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);", dis_gles.GENERATE_PHASE)
+        # 3.2.78: the cut/fade verdict taken after DIS (a camera turn is not a
+        # cut), per-pixel zero-motion selection and the sharper densifications.
+        self.assertIn("w=mix(mix(w,a0,uCutEnabled*step(0.25,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));",
                       dis_gles.GENERATE_PHASE)
+        self.assertIn("if(e0+8.0/255.0<eM)w=(1.0-uT)*a0+uT*c0;", dis_gles.GENERATE_PHASE)
+        self.assertIn("structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());", generator)
+        self.assertIn("if (perPhase && disPhaseFlow == null) disPhaseFlow = new DenseInverseSearchFlow(true);", generator)
+        self.assertIn("boolean disCut = maxFragmentTextureUnits >= 9 && disMotionUsable();", generator)
+        self.assertIn("disCut ? disFlow.cutTexture() :", generator)
+        shaders = dis_gles.shaders()
+        self.assertIn("float m=max(1.0,d);float w=1.0/(m*m);", shaders["PHASE_DENSIFY"])
+        self.assertIn("float m=max(1.0,d);float w=1.0/(m*m);", shaders["DENSIFY_SHARP"])
+        self.assertIn("n1+=step(0.12,abs(texture(uGrayC,q).r-a));", shaders["CUT"])
+        self.assertIn("o0=vec4(min(n0,n1)/n,fade,0.0,1.0);", shaders["CUT"])
+        runtime = RUNTIME.read_text()
+        self.assertIn("densify = link(v, sharp ? DenseInverseSearchShaders.DENSIFY_SHARP : DenseInverseSearchShaders.DENSIFY);",
+                      runtime)
+        self.assertIn('bind(cutProgram, "uFlowAC", flows[0][used], 2);', runtime)
         # QA 24: motion refined per output phase (symmetric matching at t).
         self.assertIn("static final int DIS_PHASE_SYNTHESIS_LEVEL = 24;", switch)
-        self.assertIn("disFlow.estimatePhase(phase);", generator)
+        self.assertIn("flow.estimatePhase(phase);", generator)
         self.assertIn("if (disFlow != null) disFlow.release();", generator)
         # 2-D at full analysis resolution, larger sources at a half (averaged
         # onto the solver's grid anyway); one level coarser from work level 3.
         self.assertIn("int base = disSmallSource() ? 0 : 1;", generator)
         self.assertIn("return denseWorkLevel >= 3 ? base + 1 : base;", generator)
-        self.assertEqual(generator.count("disFlow.estimate(disStopLevel());"), 2)
+        self.assertEqual(generator.count("disFlow.estimate(disStopLevel());"), 1)
+        self.assertEqual(generator.count(" flow.estimate(disStopLevel());"), 1)
         # Flows depend only on the pair, not the phase.
-        self.assertIn("if (keyA != disEstimateKeyA || keyB != disEstimateKeyB) {", generator)
+        self.assertIn("if (keyA != flow.estimateKeyA || keyB != flow.estimateKeyB) {", generator)
 
     def test_dis_motion_feeds_the_hand_written_synthesis(self):
         generator = GENERATOR.read_text()

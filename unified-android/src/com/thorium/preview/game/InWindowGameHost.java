@@ -1292,16 +1292,20 @@ public final class InWindowGameHost
      * runs of three games; GameCube MKDD 0.765 -> 0.709 and 0.531 -> 0.424
      * (Sunshine equal); Mario Kart Wii 0.748 -> 0.645 and 0.823 -> 0.697;
      * Dreamcast Sonic Adventure 0.859 -> 0.761 and 0.840 -> 0.716; PS3 ICO
-     * 0.779 -> 0.702. Wii U, Switch, PS2 and PSP stay on 22 (SM3DW, Wind
-     * Waker HD, Link's Awakening and both God of War games 14-27% better
-     * there). 3DS and 2-D sources reach 24 by their image size.
+     * 0.779 -> 0.702. Switch and PSP since 3.2.78 (24 with zero-motion
+     * selection, the cut verdict after DIS and sharper densification, vs 22:
+     * Odyssey 0.413 -> 0.360, Dread 0.896 -> 0.836, Sonic Superstars 0.876 ->
+     * 0.803, NSMBU Deluxe 0.445 -> 0.414, God of War PSP 0.848 -> 0.827;
+     * Link's Awakening 1.070 -> 1.112). Wii U and PS2 stay on 22 (SM3DW
+     * 0.442 vs 0.478, Wind Waker HD 0.484 vs 0.494, God of War II 0.512 vs
+     * 0.523). 3DS and 2-D sources reach 24 by their image size.
      */
     static boolean perPhaseMotionPreferred(String systemId) {
         return systemId != null && PER_PHASE_MOTION_SYSTEMS.contains(systemId.trim().toLowerCase(Locale.US));
     }
 
     private static final java.util.Set<String> PER_PHASE_MOTION_SYSTEMS = new java.util.HashSet<>(
-            java.util.Arrays.asList("n64", "gamecube", "gc", "wii", "dreamcast", "ps3"));
+            java.util.Arrays.asList("n64", "gamecube", "gc", "wii", "dreamcast", "ps3", "switch", "psp"));
 
     /**
      * Fixed-clock legacy consoles advance one scan frame per core callback.

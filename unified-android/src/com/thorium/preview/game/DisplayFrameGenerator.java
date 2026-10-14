@@ -11935,7 +11935,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // real frame and both flows once per pair (they do not depend on the
     // phase); the output pass draws on this generator's destination quad.
     private DenseInverseSearchFlow disFlow;
-    private long disEstimateKeyA, disEstimateKeyB;
+    // The per-phase route's own instance: its densifications weigh each patch
+    // by its five-tap error squared (better there, untested under synthesis 22).
+    private DenseInverseSearchFlow disPhaseFlow;
     private boolean disDefault;
     // Hold-out levels render exactly the synthesis they name.
     private boolean holdoutRendering;
@@ -11977,8 +11979,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     /** Normal play renders synthesis 24 and DIS can run on this device. */
     private boolean disPhaseForPlayReady() {
         if (!disDefault || !(disSmallSource() || perPhaseMotionPreferred)) return false;
-        if (disFlow == null) disFlow = new DenseInverseSearchFlow();
-        return disFlow.ensure(historyWidth, historyHeight);
+        if (disPhaseFlow == null) disPhaseFlow = new DenseInverseSearchFlow(true);
+        return disPhaseFlow.ensure(historyWidth, historyHeight);
     }
 
     private boolean disMotionWanted() {
@@ -12009,10 +12011,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (!disFlow.holds(0, keyA) && disFlow.holds(1, keyA)) disFlow.swapSlots();
         if (!disFlow.holds(0, keyA)) disFlow.encode(0, historyTextures[previousIndex], keyA);
         if (!disFlow.holds(1, keyB)) disFlow.encode(1, historyTextures[currentIndex], keyB);
-        if (keyA != disEstimateKeyA || keyB != disEstimateKeyB) {
+        if (keyA != disFlow.estimateKeyA || keyB != disFlow.estimateKeyB) {
             disFlow.estimate(disStopLevel());
-            disEstimateKeyA = keyA;
-            disEstimateKeyB = keyB;
+            disFlow.estimateKeyA = keyA;
+            disFlow.estimateKeyB = keyB;
         }
         float limit = Math.min(denseMaxFlowPixels(), flowLimitPixels(historyWidth, historyHeight));
         convertDisMotion(disFlow.motionRaw, disFlow.motionValidated, disFlow.motionFill, limit);
@@ -12033,41 +12035,44 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return ((long) (index + 1) << 40) | historyWrites[index];
     }
 
-    private long disPhaseKeyA, disPhaseKeyB;
-    private float disPhaseValue = -1f;
-
     private boolean drawDisFrame(float phase, boolean perPhase) {
-        if (disFlow == null) disFlow = new DenseInverseSearchFlow();
+        if (perPhase && disPhaseFlow == null) disPhaseFlow = new DenseInverseSearchFlow(true);
+        if (!perPhase && disFlow == null) disFlow = new DenseInverseSearchFlow();
+        DenseInverseSearchFlow flow = perPhase ? disPhaseFlow : disFlow;
         if (historyWidth <= 0 || historyHeight <= 0 ||
-                !disFlow.ensure(historyWidth, historyHeight)) return false;
+                !flow.ensure(historyWidth, historyHeight)) return false;
         long keyA = historyFrameKey(previousIndex);
         long keyB = historyFrameKey(currentIndex);
-        if (!disFlow.holds(0, keyA) && disFlow.holds(1, keyA)) disFlow.swapSlots();
-        if (!disFlow.holds(0, keyA)) disFlow.encode(0, historyTextures[previousIndex], keyA);
-        if (!disFlow.holds(1, keyB)) disFlow.encode(1, historyTextures[currentIndex], keyB);
-        if (keyA != disEstimateKeyA || keyB != disEstimateKeyB) {
-            disFlow.estimate(disStopLevel());
-            disEstimateKeyA = keyA;
-            disEstimateKeyB = keyB;
+        if (!flow.holds(0, keyA) && flow.holds(1, keyA)) flow.swapSlots();
+        if (!flow.holds(0, keyA)) flow.encode(0, historyTextures[previousIndex], keyA);
+        if (!flow.holds(1, keyB)) flow.encode(1, historyTextures[currentIndex], keyB);
+        if (keyA != flow.estimateKeyA || keyB != flow.estimateKeyB) {
+            flow.estimate(disStopLevel());
+            flow.estimateKeyA = keyA;
+            flow.estimateKeyB = keyB;
         }
         if (perPhase) {
-            if (keyA != disPhaseKeyA || keyB != disPhaseKeyB || phase != disPhaseValue) {
-                disFlow.estimatePhase(phase);
-                disPhaseKeyA = keyA;
-                disPhaseKeyB = keyB;
-                disPhaseValue = phase;
+            if (keyA != flow.phaseKeyA || keyB != flow.phaseKeyB || phase != flow.phaseValue) {
+                flow.estimatePhase(phase);
+                flow.phaseKeyA = keyA;
+                flow.phaseKeyB = keyB;
+                flow.phaseValue = phase;
             }
             // Synthesis 15's static-structure mask (menu text over a switched
             // highlight keeps its rank pattern): paired hold-out 24 -> 24 with
             // it, God of War II 0.653 -> 0.635, Sonic Adventure 0.516 -> 0.506,
             // 2-D games within 0.001.
             boolean structure = structureMaskProgram != 0 && renderStructureMask();
-            disFlow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
-                    structure ? structureMaskTexture : 0, 2f * structureStepPixels());
-            bindQuad(disFlow.generatePhaseProgram());
+            // The cut/fade verdict taken after DIS (a camera turn is not a
+            // cut) and per-pixel zero-motion selection (fixed text over moving
+            // content): paired hold-out vs 3.2.77's 24, Star Fox 64 0.598 ->
+            // 0.557, Sunshine 0.628 -> 0.597, GameCube 0.640 -> 0.622.
+            flow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
+                    structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());
+            bindQuad(flow.generatePhaseProgram());
         } else {
-            disFlow.bindGenerate(historyTextures[previousIndex], historyTextures[currentIndex], phase);
-            bindQuad(disFlow.generateProgram());
+            flow.bindGenerate(historyTextures[previousIndex], historyTextures[currentIndex], phase);
+            bindQuad(flow.generateProgram());
         }
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         return true;
@@ -12154,11 +12159,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         boolean cutReady = seedsReady && maxFragmentTextureUnits >= 9 &&
                 denseGlobalCutTextures[0] != 0;
+        // With DIS motion (22) the cut/fade verdict is taken after DIS: one
+        // global translation cannot explain a camera turn, and those pairs held
+        // the left frame (Star Fox 64, Sonic Adventure). Paired hold-out: equal
+        // or better on all nine 22-routed games (NSMBU Deluxe 0.445 -> 0.424).
+        boolean disCut = maxFragmentTextureUnits >= 9 && disMotionUsable();
         bindTexture(interpolateProgram, "uDenseCutTex",
+                disCut ? disFlow.cutTexture() :
                 cutReady ? denseGlobalCutTextures[0] : historyTextures[currentIndex],
-                cutReady ? 8 : 7);
+                cutReady || disCut ? 8 : 7);
         GLES20.glUniform1f(uniformLocation(interpolateProgram,
-                "uDenseCutEnabled"), cutReady ? 1f : 0f);
+                "uDenseCutEnabled"), cutReady || disCut ? 1f : 0f);
         bindTexture(interpolateProgram, "uPhaseFlow",
                 phaseField ? densePhaseBoundTexture : historyTextures[previousIndex], phaseField ? 9 : 0);
         GLES20.glUniform1f(uniformLocation(interpolateProgram,
@@ -14995,6 +15006,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         releaseHoldoutResources();
         if (disFlow != null) disFlow.release();
         disFlow = null;
+        if (disPhaseFlow != null) disPhaseFlow.release();
+        disPhaseFlow = null;
         if (frameBuffer != 0) GLES20.glDeleteFramebuffers(1, new int[]{frameBuffer}, 0);
         if (historyTextures[0] != 0 || historyTextures[1] != 0)
             GLES20.glDeleteTextures(2, historyTextures, 0);

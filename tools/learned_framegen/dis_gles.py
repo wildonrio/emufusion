@@ -97,7 +97,29 @@ def patch_search_shader():
 
 
 # Every pixel: photometric-error-weighted mean of the covering patches' flows.
+# Endpoint densification: synthesis 22 keeps 1/max(1, e) at one pixel; the
+# per-phase route's instance uses DENSIFY_SHARP (the five-tap error squared).
+DENSIFY_POWER = 1
+DENSIFY_CROSS = False
+
+
+def weight_line(power):
+    if power == 1:
+        return "  float w=1.0/max(1.0,d);"
+    if power == 2:
+        return "  float m=max(1.0,d);float w=1.0/(m*m);"
+    return f"  float w=pow(max(1.0,d),-{float(power)});"
+
+
 def densify_shader():
+    if DENSIFY_CROSS:
+        err = ("  float d=0.0;for(int k=0;k<5;++k){ivec2 o=k==0?ivec2(0):k==1?ivec2(1,0):k==2?ivec2(-1,0):"
+               "k==3?ivec2(0,1):ivec2(0,-1);\n"
+               "   d+=abs(texture(uTarget,(vec2(p+o)+0.5+u)/vec2(uSize)).r-texelFetch(uRef,clamp(p+o,ivec2(0),uSize-1),0).r);}"
+               "d*=255.0/5.0;\n")
+    else:
+        err = "  float d=abs(texture(uTarget,(vec2(p)+0.5+u)/vec2(uSize)).r-i0)*255.0;\n"
+    weight = weight_line(DENSIFY_POWER)
     return (HEADER +
     f"#define P {PATCH}\n#define S {STRIDE}\n"
     "uniform sampler2D uRef,uTarget,uPatches;\n"
@@ -107,9 +129,8 @@ def densify_shader():
     " ivec2 hi=min(p/S,uGrid-1);ivec2 lo=max((p-P+S)/S,ivec2(0));lo=min(lo,hi);\n"
     " vec2 acc=vec2(0.0);float wsum=0.0;\n"
     " for(int gy=lo.y;gy<=hi.y;++gy)for(int gx=lo.x;gx<=hi.x;++gx){\n"
-    "  vec2 u=texelFetch(uPatches,ivec2(gx,gy),0).xy;\n"
-    "  float d=abs(texture(uTarget,(vec2(p)+0.5+u)/vec2(uSize)).r-i0)*255.0;\n"
-    "  float w=1.0/max(1.0,d);acc+=w*u;wsum+=w;}\n"
+    "  vec2 u=texelFetch(uPatches,ivec2(gx,gy),0).xy;\n" + err + weight +
+    "acc+=w*u;wsum+=w;}\n"
     " o0=vec4(acc/max(wsum,1e-6),0.0,1.0);}\n")
 
 # Output on the generator's quad. The source of x in A is the fixed point of
@@ -177,7 +198,21 @@ def phase_search_shader():
     " o0=vec4(v,e,1.0);}\n")
 
 
+# The per-phase densification weighs each patch by 1/max(1, e)^2 of its
+# five-tap (cross) error: sharper motion edges than 1/max(1, e) at one pixel.
+PHASE_DENSIFY_POWER = 2
+PHASE_DENSIFY_CROSS = True
+
+
 def phase_densify_shader():
+    if PHASE_DENSIFY_CROSS:
+        err = ("  float d=0.0;for(int k=0;k<5;++k){vec2 o=k==0?vec2(0.0):k==1?vec2(1.0,0.0):k==2?vec2(-1.0,0.0):"
+               "k==3?vec2(0.0,1.0):vec2(0.0,-1.0);\n"
+               "   d+=abs(texture(uGrayC,(x+o+(1.0-uT)*v)/vec2(uSize)).r-texture(uGrayA,(x+o-uT*v)/vec2(uSize)).r);}"
+               "d*=255.0/5.0;\n")
+    else:
+        err = "  float d=abs(texture(uGrayC,(x+(1.0-uT)*v)/vec2(uSize)).r-texture(uGrayA,(x-uT*v)/vec2(uSize)).r)*255.0;\n"
+    weight = weight_line(PHASE_DENSIFY_POWER)
     return (HEADER +
     f"#define P {PATCH}\n#define S {STRIDE}\n"
     "uniform sampler2D uGrayA,uGrayC,uPatches;uniform ivec2 uSize,uGrid;uniform float uT;\n"
@@ -186,9 +221,8 @@ def phase_densify_shader():
     " ivec2 hi=min(p/S,uGrid-1);ivec2 lo=max((p-P+S)/S,ivec2(0));lo=min(lo,hi);\n"
     " vec2 acc=vec2(0.0);float wsum=0.0;\n"
     " for(int gy=lo.y;gy<=hi.y;++gy)for(int gx=lo.x;gx<=hi.x;++gx){\n"
-    "  vec2 v=texelFetch(uPatches,ivec2(gx,gy),0).xy;\n"
-    "  float d=abs(texture(uGrayC,(x+(1.0-uT)*v)/vec2(uSize)).r-texture(uGrayA,(x-uT*v)/vec2(uSize)).r)*255.0;\n"
-    "  float w=1.0/max(1.0,d);acc+=w*v;wsum+=w;}\n"
+    "  vec2 v=texelFetch(uPatches,ivec2(gx,gy),0).xy;\n" + err + weight +
+    "acc+=w*v;wsum+=w;}\n"
     " o0=vec4(acc/max(wsum,1e-6),0.0,1.0);}\n")
 
 
@@ -201,18 +235,77 @@ GENERATE_PHASE = (HEADER +
     # where a warp of two sampling steps or more covers a marked pixel, the
     # zero-motion blend replaces it.
     "uniform sampler2D uStructureMask;uniform float uStructure,uStructureMinMotionPx;uniform vec2 uHistorySize;\n"
+    # Where the endpoints agree at zero motion by 8 grey levels more than the
+    # warp's two samples agree (mean over a five-tap cross), the pixel did not
+    # move (fixed text over moving fire, a static border the motion would
+    # drag): zero-motion blend. Paired Thor hold-out, God of War II 0.620 ->
+    # 0.505; offline over 28 captured games 0.8% better on average.
+    # The global pass's cut/fade verdict (1x1, as synthesis 15 reads it): a
+    # hard cut holds the left endpoint, a fitted fade is the temporal blend.
+    "uniform sampler2D uCut;uniform float uCutEnabled;\n"
+    "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
     "void main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n"
-    " vec3 w=(1.0-uT)*texture(uFrameA,u-uT*v).rgb+uT*texture(uFrameC,u+(1.0-uT)*v).rgb;\n"
+    " vec3 aw=texture(uFrameA,u-uT*v).rgb,cw=texture(uFrameC,u+(1.0-uT)*v).rgb;\n"
+    " vec3 a0=texture(uFrameA,u).rgb,c0=texture(uFrameC,u).rgb;\n"
+    " vec3 w=(1.0-uT)*aw+uT*cw;\n"
+    " {float eM=md(abs(aw-cw)),e0=md(abs(a0-c0));\n"
+    "  {vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n"
+    "   eM+=md(abs(texture(uFrameA,u-uT*v+dx).rgb-texture(uFrameC,u+(1.0-uT)*v+dx).rgb))"
+    "+md(abs(texture(uFrameA,u-uT*v-dx).rgb-texture(uFrameC,u+(1.0-uT)*v-dx).rgb))"
+    "+md(abs(texture(uFrameA,u-uT*v+dy).rgb-texture(uFrameC,u+(1.0-uT)*v+dy).rgb))"
+    "+md(abs(texture(uFrameA,u-uT*v-dy).rgb-texture(uFrameC,u+(1.0-uT)*v-dy).rgb));\n"
+    "   e0+=md(abs(texture(uFrameA,u+dx).rgb-texture(uFrameC,u+dx).rgb))+md(abs(texture(uFrameA,u-dx).rgb-texture(uFrameC,u-dx).rgb))"
+    "+md(abs(texture(uFrameA,u+dy).rgb-texture(uFrameC,u+dy).rgb))+md(abs(texture(uFrameA,u-dy).rgb-texture(uFrameC,u-dy).rgb));\n"
+    "   eM*=0.2;e0*=0.2;}\n"
+    "  if(e0+8.0/255.0<eM)w=(1.0-uT)*a0+uT*c0;}\n"
     " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
-    "  w=mix(w,(1.0-uT)*texture(uFrameA,u).rgb+uT*texture(uFrameC,u).rgb,texture(uStructureMask,u).r);}\n"
+    "  w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);}\n"
+    " vec4 ct=texture(uCut,vec2(0.5));\n"
+    " w=mix(mix(w,a0,uCutEnabled*step(0.25,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));\n"
     " o0=vec4(w,1.0);}\n")
+
+
+# Cut/fade verdict after DIS (1x1; read like the generator's global pass: r =
+# cut evidence, g = fade). On the same 12x8 luma grid, the fraction whose
+# luminance differs by more than 0.12 at zero motion and along A's DIS flow,
+# the smaller one: a single global translation cannot explain a camera turn
+# or flight forward, and Star Fox 64 / Sonic Adventure turns held the left
+# frame as a "cut". The fade is the global pass's zero-motion fit
+# current = gain * previous + offset.
+CUT = (HEADER +
+    "uniform sampler2D uGrayA,uGrayC,uFlowAC;uniform vec2 uFlowSize;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "void main(){float n0=0.0,n1=0.0,sa=0.0,sb=0.0,saa=0.0,sab=0.0,sbb=0.0,d=0.0;const float n=96.0;\n"
+    " for(int y=0;y<8;++y)for(int x=0;x<12;++x){vec2 uv=vec2((float(x)+0.5)/12.0,(float(y)+0.5)/8.0);\n"
+    "  float a=texture(uGrayA,uv).r,b=texture(uGrayC,uv).r;n0+=step(0.12,abs(b-a));\n"
+    "  vec2 q=uv+texture(uFlowAC,uv).xy/uFlowSize;\n"
+    "  if(all(greaterThanEqual(q,vec2(0.0)))&&all(lessThanEqual(q,vec2(1.0))))n1+=step(0.12,abs(texture(uGrayC,q).r-a));\n"
+    "  sa+=a;sb+=b;saa+=a*a;sab+=a*b;sbb+=b*b;d+=abs(b-a);}\n"
+    " float fade=0.0,va=n*saa-sa*sa;\n"
+    " if(va>=n*n*0.0009){float g=(n*sab-sa*sb)/va,o=(sb-g*sa)/n,rms=sqrt(max(0.0,(sbb-g*sab-o*sb)/n)),change=d/n;\n"
+    "  fade=step(0.015,change)*step(rms,0.25*change)*step(rms,0.02);}\n"
+    " o0=vec4(min(n0,n1)/n,fade,0.0,1.0);}\n")
 
 
 def shaders():
     return {'VERTEX': VERTEX, 'VERTEX_QUAD': VERTEX_QUAD, 'GRAY': GRAY, 'DOWN': DOWN, 'GRAD': GRAD,
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(),
-            'GENERATE_PHASE': GENERATE_PHASE}
+            'GENERATE_PHASE': GENERATE_PHASE, 'CUT': CUT,
+            'DENSIFY_SHARP': sharp_densify_shader()}
+
+
+def sharp_densify_shader():
+    """The per-phase route's endpoint densification: each patch weighted by
+    1/max(1, e)^2 of its five-tap (cross) error. With the per-phase one, 2.2%
+    better offline over 28 captured games; paired Thor hold-out 1-7% better."""
+    global DENSIFY_POWER, DENSIFY_CROSS
+    saved = DENSIFY_POWER, DENSIFY_CROSS
+    DENSIFY_POWER, DENSIFY_CROSS = 2, True
+    try:
+        return densify_shader()
+    finally:
+        DENSIFY_POWER, DENSIFY_CROSS = saved
 
 
 def levels_for(width, height, finest):

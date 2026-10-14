@@ -43,6 +43,8 @@ final class DenseInverseSearchFlow {
     // QA synthesis 24: per-phase symmetric refinement of the DIS motion.
     private int phaseSearch, phaseDensify, generatePhase;
     private int phasePatches, phaseFlow, phaseLevel = -1;
+    // Cut/fade verdict of the last estimate (1x1 RGBA8: r cut evidence, g fade).
+    private int cutProgram, cut;
     // Synthesis 22: DIS motion in the solver's raw format at its analysis grid,
     // then validated and filled by the generator's own passes ([0] current->
     // previous, [1] previous->current, like the solver's directions).
@@ -62,6 +64,16 @@ final class DenseInverseSearchFlow {
     private final int[] savedFramebuffer = new int[1];
     private final int[] savedViewport = new int[4];
     long encodes, estimates;
+    // The pair (and phase) the flows were last estimated for (owner's history keys).
+    long estimateKeyA, estimateKeyB, phaseKeyA, phaseKeyB;
+    float phaseValue = -1f;
+    // The per-phase route's instance: the endpoint densification weighs each
+    // patch by its five-tap error squared (synthesis 22 keeps the original).
+    private final boolean sharp;
+
+    DenseInverseSearchFlow() { this(false); }
+
+    DenseInverseSearchFlow(boolean sharp) { this.sharp = sharp; }
 
     boolean ensure(int width, int height) {
         if (failed) return false;
@@ -105,6 +117,7 @@ final class DenseInverseSearchFlow {
                 }
             }
             zeroField = texture(1, 1, true);
+            cut = rgba8(1, 1, true);
             used = finest;
             slotKey[0] = slotKey[1] = 0L;
             ready = true;
@@ -185,6 +198,12 @@ final class DenseInverseSearchFlow {
                     coarse = flows[d][k];
                 }
             }
+            begin(cutProgram, 1, 1, cut);
+            bind(cutProgram, "uGrayA", pyramid[0][0], 0);
+            bind(cutProgram, "uGrayC", pyramid[1][0], 1);
+            bind(cutProgram, "uFlowAC", flows[0][used], 2);
+            GLES20.glUniform2f(location(cutProgram, "uFlowSize"), sizes[used][0], sizes[used][1]);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
             ++estimates;
         } finally {
             restoreState();
@@ -288,8 +307,11 @@ final class DenseInverseSearchFlow {
      * structureMask 0: none. Otherwise synthesis 15's static-structure mask,
      * applied under warps of minMotionPx or more.
      */
-    void bindGeneratePhase(int frameA, int frameC, float t, int structureMask, float minMotionPx) {
+    void bindGeneratePhase(int frameA, int frameC, float t, int structureMask, float minMotionPx,
+                           int cutVerdict) {
         GLES20.glUseProgram(generatePhase);
+        GLES20.glUniform1f(location(generatePhase, "uCutEnabled"), cutVerdict != 0 ? 1f : 0f);
+        bind(generatePhase, "uCut", cutVerdict != 0 ? cutVerdict : zeroField, 4);
         GLES20.glUniform1f(location(generatePhase, "uStructure"), structureMask != 0 ? 1f : 0f);
         bind(generatePhase, "uStructureMask", structureMask != 0 ? structureMask : zeroField, 3);
         GLES20.glUniform1f(location(generatePhase, "uStructureMinMotionPx"), minMotionPx);
@@ -300,6 +322,9 @@ final class DenseInverseSearchFlow {
         GLES20.glUniform1f(location(generatePhase, "uT"), t);
         GLES20.glUniform2f(location(generatePhase, "uFlowSize"), sizes[used][0], sizes[used][1]);
     }
+
+    /** The last estimate's cut/fade verdict, read like the generator's global cut texture. */
+    int cutTexture() { return cut; }
 
     int generateProgram() { return generate; }
 
@@ -357,12 +382,13 @@ final class DenseInverseSearchFlow {
         down = link(v, DenseInverseSearchShaders.DOWN);
         grad = link(v, DenseInverseSearchShaders.GRAD);
         patchSearch = link(v, DenseInverseSearchShaders.PATCH_SEARCH);
-        densify = link(v, DenseInverseSearchShaders.DENSIFY);
+        densify = link(v, sharp ? DenseInverseSearchShaders.DENSIFY_SHARP : DenseInverseSearchShaders.DENSIFY);
         generate = link(DenseInverseSearchShaders.VERTEX_QUAD, DenseInverseSearchShaders.GENERATE);
         toRaw = link(v, DenseInverseSearchShaders.TO_RAW);
         phaseSearch = link(v, DenseInverseSearchShaders.PHASE_SEARCH);
         phaseDensify = link(v, DenseInverseSearchShaders.PHASE_DENSIFY);
         generatePhase = link(DenseInverseSearchShaders.VERTEX_QUAD, DenseInverseSearchShaders.GENERATE_PHASE);
+        cutProgram = link(v, DenseInverseSearchShaders.CUT);
         int[] ids = new int[1];
         GLES20.glGenFramebuffers(1, ids, 0);
         framebuffer = ids[0];
@@ -433,18 +459,20 @@ final class DenseInverseSearchFlow {
         java.util.Arrays.fill(motionValidated, 0);
         java.util.Arrays.fill(motionFill, 0);
         motionWidth = motionHeight = 0;
-        phasePatches = phaseFlow = 0;
+        phasePatches = phaseFlow = cut = 0;
         phaseLevel = -1;
+        estimateKeyA = estimateKeyB = phaseKeyA = phaseKeyB = 0L;
+        phaseValue = -1f;
         ready = false;
     }
 
     void release() {
         releaseTextures();
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
-                phaseSearch, phaseDensify, generatePhase})
+                phaseSearch, phaseDensify, generatePhase, cutProgram})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
-        phaseSearch = phaseDensify = generatePhase = 0;
+        phaseSearch = phaseDensify = generatePhase = cutProgram = 0;
         uniforms.clear();
         if (framebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {framebuffer}, 0);
         framebuffer = 0;
