@@ -577,6 +577,10 @@
     "unified-android/build/emufusion-3.2.78-phase2-phase3-qualification.apk": {
       "sha256": "497b481b31dfc82274e4d95a946125e0ff6003894d490ce79512d16787184957",
       "reason": "Superseded mutable convenience copy of 3.2.78 (released, unpinned); current is 3.2.80."
+    },
+    "unified-android/build/emufusion-3.2.79-phase2-phase3-qualification.apk": {
+      "sha256": "9939e1e62e6b44b3a4acadfff8ddfe2cc78176ac51dbb80a2db3f2be6bdaac12",
+      "reason": "Superseded mutable convenience copy of 3.2.79 (released, unpinned); current is 3.2.81."
     }
   }
 }
