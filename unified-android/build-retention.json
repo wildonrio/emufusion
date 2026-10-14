@@ -585,6 +585,10 @@
     "unified-android/build/emufusion-3.2.82-phase2-phase3-qualification-803377f437a397e14b1f644e24b7c344ffe27c706dce7dcfebe44cd96acc6fd1.apk": {
       "sha256": "803377f437a397e14b1f644e24b7c344ffe27c706dce7dcfebe44cd96acc6fd1",
       "reason": "Closed 2026-10-14 candidate 216 (3.2.82 pyramid skip without the flat-area five-tap skip); superseded by 217."
+    },
+    "unified-android/build/emufusion-3.2.80-phase2-phase3-qualification.apk": {
+      "sha256": "f93c17751bbf16ef4ff68ad7d3630b0c16b8b77469ec47c475f355f65f79c7d0",
+      "reason": "Superseded mutable convenience copy of 3.2.80; current is 3.2.82."
     }
   }
 }
