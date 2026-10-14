@@ -2238,6 +2238,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private long denseGpuHeadroomPresentationEpoch;
     private long denseGpuPhysicalVerifiedPairs, denseGpuPhysicalUnknownPairs;
     private long denseGpuPhysicalMarginalPairs, denseGpuPhysicalDeadlineMisses;
+    // Deadline misses of real (endpoint) frames: counted, never shed work.
+    private long denseGpuEndpointDeadlineMisses;
     private long denseGpuPhysicalUnboundEvents;
     private long denseGpuPhysicalLastAppMarginNs, denseGpuPhysicalLastCompositorMarginNs;
     private int denseGpuReadyTimestampSupportedMask;
@@ -6866,10 +6868,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                             " shaderCostUs=" + result.shaderCostUs +
                             " shaderBudgetUs=" + result.shaderBudgetUs);
                 }
+                // A real frame on the wrong slot is the engine's pacing (shader
+                // compiles, loads): our work had no frame there. Startup stalls
+                // in Eden's Link's Awakening (wrong-physical-slot, shader cost 0)
+                // shed four levels in four seconds this way. When our work is
+                // too heavy our own generated frames miss, and those still shed.
                 if (result.generated())
                     failDenseGpuPairOnce(result.pairSequence, "physical-pair-deadline-miss");
                 else
-                    shedDenseWork("physical-pair-deadline-miss");
+                    ++denseGpuEndpointDeadlineMisses;
                 if (denseGpuTimer == null) return false;
                 continue;
             }
@@ -10648,6 +10655,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " physicalMarginUnknownPairs=" + denseGpuPhysicalUnknownPairs +
                 " physicalMarginMarginalPairs=" + denseGpuPhysicalMarginalPairs +
                 " physicalDeadlineMisses=" + denseGpuPhysicalDeadlineMisses +
+                " endpointDeadlineMisses=" + denseGpuEndpointDeadlineMisses +
                 " physicalUnboundEvents=" + denseGpuPhysicalUnboundEvents +
                 " physicalPending=" + denseGpuHeadroom.pendingCount() +
                 " readyTimestampSupportedMask=" + denseGpuReadyTimestampSupportedMask +

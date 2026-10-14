@@ -6,7 +6,17 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 14 (latest) **— 3.2.80 (154): one motion route for every source, chosen by nothing but the image; sub-pixel motion is zero; a cut needs half the frame unexplained.**
+October 14 (latest) **— 3.2.81 (155): a real frame on the wrong slot no longer sheds frame-generation work.**
+
+Link's Awakening still reached minimum work within seconds of every start on 3.2.80 (40 s smoke run: work level 5). Its first deadline misses were all `wrong-physical-slot` with shader cost 0: real frames the engine delivered late during its startup shader compiles, with no generated frame of ours involved, and the generator shed a work level for each such endpoint miss as for a late generated frame. Shedding our work cannot help an engine stall, and on the per-phase route the levels mostly coarsen DIS. Endpoint-frame misses are now counted (`endpointDeadlineMisses` in the adaptation health line) and never shed; when our work is too heavy our own generated frames miss, and those still go through the miss-event policy.
+
+Also examined, not changed: where LSFG still beats the per-phase route on SM3DW (0.347 vs 0.332), the largest differences are the title screen's zigzag screen-wipe transition, a menu that appears between frames, and a fast tail swing.
+
+Thor (one 40 s gated run, the same case): Link's Awakening ends at work level 1 with one reduction (3.2.80: level 5), 4 endpoint misses counted that would each have shed a level, 39.1 -> 68.0 displayed, 2 late callbacks, PASS.
+
+**Thor (3.2.81, `e5549a10`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 14 **— 3.2.80 (154): one motion route for every source, chosen by nothing but the image; sub-pixel motion is zero; a cut needs half the frame unexplained.**
 
 The owner asked why the strategy was system-specific when LSFG adds frames to whatever is on screen. Only the choice between two motion routes was (synthesis 24 for 2-D, N64, GameCube, Wii, Dreamcast, PS3, Switch and PSP; 22 for Wii U and PS2, where it had scored 3-8% better); motion, warp and blend never knew the system, and the emulator's own frame clock is an advantage of running inside the engine, not a system rule. The per-system routing is gone: every source renders synthesis 24 (22 remains a QA hold-out level), and the analysis resolution still follows only the image size.
 

@@ -101,6 +101,9 @@ class WorkAdaptationTest(unittest.TestCase):
         self.assertIn("if (!verified && result.outcome == GpuPhysicalHeadroomLedger.Outcome.MARGINAL_HEADROOM)\n"
                       "                denseGpuAdaptation.invalidateRecoveryEvidence();", generator)
         self.assertNotIn("if (!verified) denseGpuAdaptation.invalidateRecoveryEvidence();", generator)
+        # A real frame on the wrong slot is engine pacing: counted, never shed.
+        self.assertIn("                else\n                    ++denseGpuEndpointDeadlineMisses;", generator)
+        self.assertNotIn('shedDenseWork("physical-pair-deadline-miss");', generator)
 
 
 class DisSelectionTest(unittest.TestCase):
