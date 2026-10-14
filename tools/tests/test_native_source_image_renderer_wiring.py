@@ -46,6 +46,7 @@ class RendererSourceImageWiringTest(unittest.TestCase):
             "private boolean latestImageIsUnique(long currentTimestampNs)",
             "private int findSignatureCandidate(long sequence)",
             "private void retainSignatureCandidate(long sequence, long timestampNs,",
+            "private boolean softwarePixelsChangedSincePrevious(int[] colors, int width, int height)",
             "private void clearSignatureCandidates()",
             "private boolean sourceSignatureIsUnique()",
             "private boolean softwareImageIsUnique(int[] colors, int width, int height)",
@@ -205,6 +206,9 @@ public class WiringFixture {
     final int[] signatureCandidateTextures={20,21,22,23,24,25};
     final long[] signatureCandidateSequence=new long[6],signatureCandidateTimestampNs=new long[6];
     final int[] signatureCandidateSubmission=new int[6];
+    final boolean[] signatureCandidatePixelsChanged=new boolean[6];
+    int[] previousSoftwareColors;int previousSoftwareWidth,previousSoftwareHeight;
+    boolean pendingSoftwarePixelsChanged;long softwareSignatureRescues;
     ByteBuffer signaturePixels=ByteBuffer.allocate(8),proofPixels,regionalFlowPixels;
     final byte[] currentSourceSignature=new byte[8],lastSourceSignature=new byte[8];
     final Map<Integer,Long> textureImage=new HashMap<>();

@@ -362,6 +362,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // One second at 120 Hz fits in SurfaceFlinger's 128-entry latency history,
     // letting QA join this exact monotonic window to the exact gameplay layer.
     private static final int HEALTH_INTERVAL = 120;
+    private static final long DENSE_ARM_RETRY_NS = 500_000_000L;
+    private long lastDenseArmAttemptNs;
     private static final AtomicInteger NEXT_GENERATOR_ID = new AtomicInteger(1);
 
     private static final float[] QUAD = {
@@ -4701,6 +4703,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // for the whole session (run nds-b51, 2026-09-02).
         notifyFirstSubmittedFrame();
         clearNativeClassifiedObservation();
+        // Fixed-clock cores count every image; only classified streams compare.
+        pendingSoftwarePixelsChanged = !frameRate.usesAuthoritativeSourceRate() &&
+                softwarePixelsChangedSincePrevious(colors, width, height);
+        previousSoftwareColors = colors;
+        previousSoftwareWidth = width;
+        previousSoftwareHeight = height;
         boolean classifiedUnique;
         if (frameRate.usesAuthoritativeSourceRate()) {
             classifiedFrameReady = true;
@@ -4722,12 +4730,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // endpoint timestamp, interpolation ratio or presentation deadline.
             classifiedPixelVerdictKnown = sourceSignatureReady;
             classifiedUnique = softwareImageIsUnique(colors, width, height);
+            if (!classifiedUnique && pendingSoftwarePixelsChanged) {
+                classifiedUnique = true;
+                ++softwareSignatureRescues;
+            }
+            pendingSoftwarePixelsChanged = false;
             classifiedFrameReady = true;
             classifiedUniqueTexture = latestTexture;
             classifiedUniqueTimestampNs = producerTimestampNs;
             classifiedUniqueSubmission = submittedFrameCount;
             classifyLatestNativeObservation();
         }
+        pendingSoftwarePixelsChanged = false;
         finishNativeClassifiedObservation(classifiedUnique);
         consumeClassifiedFrame(classifiedUnique);
     }
@@ -4825,6 +4839,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * without reading the full framebuffer back to the CPU.
      */
     private boolean latestImageIsUnique(long currentTimestampNs) {
+        boolean pixelsChanged = pendingSoftwarePixelsChanged;
+        pendingSoftwarePixelsChanged = false;
         clearNativeClassifiedObservation();
         classifiedFrameReady = false;
         classifiedUniqueTexture = 0;
@@ -4895,6 +4911,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         throw new IllegalStateException(
                                 "signature result has no retained endpoint sequence=" +
                                         readySequence);
+                    if (!unique && signatureCandidatePixelsChanged[completedCandidate]) {
+                        unique = true;
+                        ++softwareSignatureRescues;
+                    }
                     // Preserve the exact classified candidate for both UNIQUE
                     // and DUPLICATE results.  The latter is a timing endpoint,
                     // not source-rate evidence.  Keep its texture slot reserved
@@ -4914,7 +4934,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 }
                 long sequence = ++denseSignatureSequence;
                 retainSignatureCandidate(sequence, currentTimestampNs,
-                        completedCandidate);
+                        completedCandidate, pixelsChanged);
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer);
                 GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER,
                         GLES20.GL_COLOR_ATTACHMENT0, GLES20.GL_TEXTURE_2D,
@@ -4929,6 +4949,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     signatureCandidateSequence[completedCandidate] = 0L;
                     signatureCandidateTimestampNs[completedCandidate] = 0L;
                     signatureCandidateSubmission[completedCandidate] = 0;
+                    signatureCandidatePixelsChanged[completedCandidate] = false;
                     if (nativeSourceImageObserver != null)
                         nativeSourceImageObserver.releaseCandidate(completedCandidate);
                 }
@@ -5008,6 +5029,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // Bootstrap admits a first endpoint without a prior pixel comparison.
         classifiedPixelVerdictKnown = sourceSignatureReady;
         boolean unique = sourceSignatureIsUnique();
+        if (!unique && pixelsChanged) {
+            unique = true;
+            ++softwareSignatureRescues;
+        }
         classifiedFrameReady = true;
         classifiedUniqueTexture = latestTexture;
         classifiedUniqueTimestampNs = currentTimestampNs;
@@ -5133,8 +5158,39 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return -1;
     }
 
+    // Software images keep their CPU pixels, so an exact comparison with the
+    // previous submitted image backs the 16x9 signature, which samples 144
+    // points and missed small changes (DS intro: about 15 changes a second,
+    // none caught; a moving menu cursor). Snapshots are fresh arrays, so the
+    // previous one is kept by reference. Hardware frames leave this false.
+    private int[] previousSoftwareColors;
+    private int previousSoftwareWidth;
+    private int previousSoftwareHeight;
+    private boolean pendingSoftwarePixelsChanged;
+    private final boolean[] signatureCandidatePixelsChanged =
+            new boolean[SIGNATURE_CANDIDATE_SLOTS];
+    private long softwareSignatureRescues;
+
+    /** True when any pixel differs from the previous software image by >= 3 levels (RGB sum). */
+    private boolean softwarePixelsChangedSincePrevious(int[] colors, int width, int height) {
+        int[] previous = previousSoftwareColors;
+        if (previous == null || previousSoftwareWidth != width ||
+                previousSoftwareHeight != height) return true;
+        int count = width * height;
+        for (int i = 0; i < count; ++i) {
+            int a = colors[i];
+            int b = previous[i];
+            if (a == b) continue;
+            int difference = Math.abs(((a >>> 16) & 0xff) - ((b >>> 16) & 0xff)) +
+                    Math.abs(((a >>> 8) & 0xff) - ((b >>> 8) & 0xff)) +
+                    Math.abs((a & 0xff) - (b & 0xff));
+            if (difference >= 3) return true;
+        }
+        return false;
+    }
+
     private void retainSignatureCandidate(long sequence, long timestampNs,
-                                          int reservedSlot) {
+                                          int reservedSlot, boolean pixelsChanged) {
         int slot = -1;
         for (int index = 0; index < SIGNATURE_CANDIDATE_SLOTS; ++index) {
             if (index != reservedSlot && signatureCandidateSequence[index] == 0L) {
@@ -5152,6 +5208,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         signatureCandidateSequence[slot] = sequence;
         signatureCandidateTimestampNs[slot] = timestampNs;
         signatureCandidateSubmission[slot] = submittedFrameCount;
+        signatureCandidatePixelsChanged[slot] = pixelsChanged;
     }
 
     private void clearSignatureCandidates() {
@@ -5160,6 +5217,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         java.util.Arrays.fill(signatureCandidateSequence, 0L);
         java.util.Arrays.fill(signatureCandidateTimestampNs, 0L);
         java.util.Arrays.fill(signatureCandidateSubmission, 0);
+        java.util.Arrays.fill(signatureCandidatePixelsChanged, false);
     }
 
     /** Records one pixel-distinct image with its immutable producer timestamp. */
@@ -8988,6 +9046,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         long presentationEpochAfterAdvance = schedulerPresentationEpoch();
         refreshProofEvidencePresentationEpoch();
+        // Until dense interpolation is armed, try twice a second instead of
+        // only on the 120th present: the epoch changes of a game's first
+        // seconds kept skipping that boundary, so SM3DW waited 12 s and the
+        // DS 20 s for generation although source and panel were known.
+        // Admission still gates generation itself.
+        long denseArmNow = System.nanoTime();
+        if (!densePyramidEnabled && !densePyramidUnavailable && externalTransport == null &&
+                denseArmNow - lastDenseArmAttemptNs >= DENSE_ARM_RETRY_NS) {
+            lastDenseArmAttemptNs = denseArmNow;
+            refreshQualificationProofState();
+        }
         if (presentationEpochAfterAdvance != presentationEpochBeforeAdvance) {
             // The completed swap belongs to the ending scheduler epoch. Start
             // the next HEALTH window only after the reset/re-prime boundary;
@@ -14323,6 +14392,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " duplicateVerdicts=" + duplicate +
                 " uniqueFrames=" + uniqueFrames +
                 " acceptedEndpoints=" + endpoints +
+                " softwareSignatureRescues=" + softwareSignatureRescues +
                 " hardwareHz=" + String.format(java.util.Locale.US,
                         "%.3f", hardware / seconds) +
                 " uniqueHz=" + String.format(java.util.Locale.US,

@@ -6,6 +6,20 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+October 13 (latest) **— 3.2.70 (144): generation starts within a second; software-rendered images never drop a real change as a repeat.**
+
+Images that repeat their predecessor are not new endpoints. The repeat test compared a 16×9 signature, 144 sampled points (a bilinear draw on the GPU path, point samples on the CPU path), so a change that touched no sample (a small sprite, a menu cursor, a letter of dialogue) was dropped. The earlier measurement found DS's intro changing about 15 times a second with none of the changes caught on the CPU path, and the GPU path took over after a few seconds with the same blind spot. Software-rendered images keep their CPU pixels, and each arrives as a fresh snapshot, so every such image is now also compared pixel by pixel with the previous one (the signature's own ≥ 3-level rule, kept by reference, no copy). On the asynchronous GPU path the verdict travels with the retained candidate and is OR'd in when the GPU result for that candidate arrives. Fixed-clock cores, which count every image, skip the comparison. Diagnostic: `softwareSignatureRescues` in the source admission line. Tests: `test_software_images_back_the_signature_with_an_exact_comparison`; the renderer wiring fixture caught a first version that read the candidate's flag before the candidate was found.
+
+**Generation starts within a second.** Dense interpolation was armed only on the 120th present (`refreshQualificationProofState`), and a present that crossed an epoch change skipped that boundary. A game's first seconds change epochs often (source qualification, panel switch), so generation began 12 s after presenting on SM3DW, 9 s on PS3 and 20 s on the DS, although the source rate and panel clock were known within 2–4 s. Until dense is armed it is now retried twice a second; admission still gates generation itself.
+
+- Time from the game presenting to the timeline taking over (Thor): SM3DW 12 s → 0.5 s, PS3 9 → 1.2 s, DS 20 → 0 s, PlayStation 7 → 0 s, Sonic Superstars 8 → 0 s, God of War II 2.7 → 0.1 s, Link's Awakening 4 → 0 s, SNES/GBA 2 → 0 s.
+- DS file menu with the cursor moving: 661 image changes rescued that the signature had called repeats; real images 9 → 25 a second, displayed 28 → 41 at the badge, text crisp through every transition. Many generated frames there are, by design, the static-structure blend and count as blend-like rather than verified generated. PlayStation's intro: no rescues needed.
+
+**Ten-minute soaks (3.2.69, no input):** PS3 steady (a still menu), Link's Awakening 39–57 → 65–81 with the intro movie's scenes alternating by minute, 3DS 30 → 50–58, Mario Kart Wii 46–58 → 83–108, Wind Waker HD at 4× 12–30 → 48–116 following the title loop (work level 4 throughout). No OLED guard, display timeout, Eden fault or Dolphin device loss in any of them; one transient timer-overflow rejection on the 3DS recovered by itself. GPU time per pair stayed flat from the first minute to the last; the GPU peaked at 85 °C with its clock at 615 MHz.
+
+**Thor (3.2.70, `a69c1b03`):**
+- God of War II 50 → 99 (peak 120), SM3DW 48 → 105 (peak 121), Link's Awakening 37 → 68 (peak 121), SNES 59 → 104, GBA 58 → 82 (peak 120), Sonic Superstars 23 → 42 (peak 120), PlayStation 11 → 33 (peak 20 → 61), DS menu 26 → 37; PS3 on a still menu. All passed with no rejections or engine errors.
+
 October 13 (latest) **— 3.2.69 (143): frame generation on GPUs without timer queries or scanout timestamps; menu text no longer shreds; strict-compiler shaders; less GL-thread work.**
 
 Owner: build the fallbacks anyway. Generation had two hard requirements and failed closed without either (see the 144 Hz emulator entry below). Both now have fallbacks, verified on a 144 Hz Android emulator that lacks both:

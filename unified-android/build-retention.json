@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "bfa225a39b2ba3e8698c4f4a6fe1cb7ae9027fcb605157fe2789f357d1652078": "Rollback 3.2.68 (142) until 3.2.69 settles.",
-    "6cc4dc84354fee0e11b483eb3fc364f00fd786061898b87c8fa2a64c98f27c34": "Current release 3.2.69 (143). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "6cc4dc84354fee0e11b483eb3fc364f00fd786061898b87c8fa2a64c98f27c34": "Rollback 3.2.69 (143) until 3.2.70 settles.",
+    "a69c1b03c180660d882190033be1eefa3b55af225cfb5327b4d642a28969f8bf": "Current release 3.2.70 (144). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -445,6 +445,10 @@
     "unified-android/build/emufusion-3.2.69-phase2-phase3-qualification-c0a5ed002eefff3cef7ad02d3e3c0ede8a570bba4f2f8fc9a14117f2e4c44499.apk": {
       "sha256": "c0a5ed002eefff3cef7ad02d3e3c0ede8a570bba4f2f8fc9a14117f2e4c44499",
       "reason": "Closed 2026-10-13 3.2.69 candidate 177: early-exit census, still inlined; superseded by the per-pair mask pass (178). Thor on 3.2.69 (6cc4dc84) with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.70-phase2-phase3-qualification-b2bdadabe80a5564687bd8e79936bfb67dabaf1c87647f48f4229c7f51638907.apk": {
+      "sha256": "b2bdadabe80a5564687bd8e79936bfb67dabaf1c87647f48f4229c7f51638907",
+      "reason": "Closed 2026-10-13 3.2.70 candidate 179 (software-signature backstop only); superseded by 180, which also arms dense interpolation within a second. Never installed."
     }
   }
 }

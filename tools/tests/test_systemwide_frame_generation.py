@@ -2188,7 +2188,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("int completedCandidate = -1", signature)
         self.assertIn("classifiedFrameReady = true", signature)
         self.assertIn("retainSignatureCandidate(sequence, currentTimestampNs,\n"
-                      "                        completedCandidate)", signature)
+                      "                        completedCandidate, pixelsChanged)", signature)
         self.assertLess(signature.index(
                             "retainSignatureCandidate(sequence, currentTimestampNs,"),
                         signature.index(
@@ -2498,6 +2498,37 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("1.0-smoothstep(0.04,0.18,previousReliability)", interpolation)
         self.assertIn("mix(forward,globalForward,previousGlobalUse)", interpolation)
         self.assertIn("mix(backward,globalBackward,currentGlobalUse)", interpolation)
+
+    def test_software_images_back_the_signature_with_an_exact_comparison(self):
+        # The 16x9 signature samples 144 points and missed small changes (DS
+        # intro: ~15 changes a second, none caught); software images compare
+        # every pixel with the previous one and that verdict travels with the
+        # retained candidate. It is read only after the candidate is found.
+        generator = self.read(
+            "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
+        )
+        upload = generator.split("private void uploadSoftwareFrame(", 1)[1].split(
+            "private void consumeClassifiedFrame(", 1)[0]
+        self.assertIn("pendingSoftwarePixelsChanged = !frameRate.usesAuthoritativeSourceRate() &&", upload)
+        self.assertIn("previousSoftwareColors = colors;", upload)
+        signature = generator.split("private boolean latestImageIsUnique(", 1)[1].split(
+            "private void copyCurrentSignatureToPrevious()", 1)[0]
+        self.assertLess(signature.index("completedCandidate = findSignatureCandidate(readySequence);"),
+                        signature.index("signatureCandidatePixelsChanged[completedCandidate]"))
+        self.assertIn("completedCandidate, pixelsChanged);", signature)
+        self.assertIn("if (!unique && pixelsChanged) {", signature)
+
+    def test_dense_interpolation_arms_within_a_second_of_presenting(self):
+        # Arming only on the 120th present waited 12-20 s at a game's start
+        # (epoch changes skipped the boundary); unarmed, retry twice a second.
+        generator = self.read(
+            "unified-android/src/com/thorium/preview/game/DisplayFrameGenerator.java"
+        )
+        self.assertIn("private static final long DENSE_ARM_RETRY_NS = 500_000_000L;", generator)
+        arm = generator.split("long denseArmNow = System.nanoTime();", 1)[1].split(
+            "if (presentationEpochAfterAdvance != presentationEpochBeforeAdvance)", 1)[0]
+        self.assertIn("!densePyramidEnabled && !densePyramidUnavailable && externalTransport == null", arm)
+        self.assertIn("refreshQualificationProofState();", arm)
 
     def test_quad_binding_tolerates_global_reducer_optimized_texcoord(self):
         generator = self.read(

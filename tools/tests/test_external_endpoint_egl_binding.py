@@ -40,7 +40,14 @@ class ExternalEndpointEglBindingTest(unittest.TestCase):
         for chain in re.findall(r"((?:\w+ = )+)0;", release):
             scalar_names.update(name.strip() for name in chain.split("=") if name.strip())
         scalar_names = sorted(scalar_names)
-        scalars = "\n".join("int " + name + ";" for name in scalar_names)
+        # Sequence keys reset to -1L (e.g. structureMaskPromotion) are longs.
+        long_names = sorted(set(re.findall(r"(\w+) = -1L;", release)) - set(scalar_names))
+        # Skip fields the fixture template below already declares by hand.
+        own_source = Path(__file__).read_text()
+        long_names = [name for name in long_names
+                      if not re.search(r"\b(?:long|int)[^;\n]*\b" + name + r"\b", own_source)]
+        scalars = "\n".join(["int " + name + ";" for name in scalar_names] +
+                             ["long " + name + ";" for name in long_names])
         fixture = r'''
 import java.util.*;
 public class EglBindingFixture {
