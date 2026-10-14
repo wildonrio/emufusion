@@ -6879,7 +6879,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 if (denseGpuTimer == null) return false;
                 continue;
             }
-            if (!verified) denseGpuAdaptation.invalidateRecoveryEvidence();
+            // Unknown physical headroom is not evidence against recovery: the
+            // Thor's compositor proves it for almost no pair (0 of 29519 in a
+            // ten-minute Link's Awakening soak), so this reset kept every
+            // session at its worst work level (consecutive healthy pairs 0-1,
+            // no restoration). Shader time decides; a marginal pair, rendered
+            // after the latch deadline, still spends the credit.
+            if (!verified && result.outcome == GpuPhysicalHeadroomLedger.Outcome.MARGINAL_HEADROOM)
+                denseGpuAdaptation.invalidateRecoveryEvidence();
             // Endpoints maintain continuity, but do not count as healthy
             // generated pairs or borrow another pair's shader measurement.
             if (!result.generated()) continue;

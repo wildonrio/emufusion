@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "1001c4663a888a3072abb5c16da34e627436a5a9806774dc492cc7ef629d3e14": "Rollback 3.2.77 (151) until 3.2.78 settles.",
-    "497b481b31dfc82274e4d95a946125e0ff6003894d490ce79512d16787184957": "Current release 3.2.78 (152). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "497b481b31dfc82274e4d95a946125e0ff6003894d490ce79512d16787184957": "Rollback 3.2.78 (152) until 3.2.79 settles.",
+    "9939e1e62e6b44b3a4acadfff8ddfe2cc78176ac51dbb80a2db3f2be6bdaac12": "Current release 3.2.79 (153). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -561,6 +561,14 @@
     "unified-android/build/emufusion-3.2.77-phase2-phase3-qualification.apk": {
       "sha256": "c95ac83ba30fa018af8692fd1cef6c5a2659df7c635b01d7f4a156d1e804e700",
       "reason": "Superseded mutable convenience copy of the last 3.2.77 build (trial 208, retired); current is 3.2.78."
+    },
+    "unified-android/build/emufusion-3.2.79-phase2-phase3-qualification-e68e242ff61b6c4f46ede1ae54efc4c9672a722a87241b40e52905089a28b548.apk": {
+      "sha256": "e68e242ff61b6c4f46ede1ae54efc4c9672a722a87241b40e52905089a28b548",
+      "reason": "Closed 2026-10-14 candidate 210 (3.2.79 miss events only): Link's Awakening still dropped to level 4 at startup and never restored; superseded by 211/212."
+    },
+    "unified-android/build/emufusion-3.2.79-phase2-phase3-qualification-ecb00a59cd45406d41badbb52a286c89a4c3c91fddfb623be3dae6e52a6cae42.apk": {
+      "sha256": "ecb00a59cd45406d41badbb52a286c89a4c3c91fddfb623be3dae6e52a6cae42",
+      "reason": "Closed 2026-10-14 candidate 211 (isolated events keep recovery): recovery still reset by unknown physical headroom; superseded by 212."
     }
   }
 }

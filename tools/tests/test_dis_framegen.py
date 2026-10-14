@@ -96,6 +96,14 @@ class WorkAdaptationTest(unittest.TestCase):
         test = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "video" /
                 "GpuWorkAdaptationPolicyTest.java").read_text()
         self.assertIn("loneDeadlineMissesDoNotRatchetWork();", test)
+        self.assertIn("stallEventsMinutesApartKeepWork();", test)
+        self.assertIn("public static final int MISS_EVENT_PAIRS = 60;", policy)
+        # Unknown physical headroom (nearly every Thor pair) leaves recovery to
+        # shader time; only a marginal pair spends the credit.
+        generator = GENERATOR.read_text()
+        self.assertIn("if (!verified && result.outcome == GpuPhysicalHeadroomLedger.Outcome.MARGINAL_HEADROOM)\n"
+                      "                denseGpuAdaptation.invalidateRecoveryEvidence();", generator)
+        self.assertNotIn("if (!verified) denseGpuAdaptation.invalidateRecoveryEvidence();", generator)
 
 
 class DisSelectionTest(unittest.TestCase):

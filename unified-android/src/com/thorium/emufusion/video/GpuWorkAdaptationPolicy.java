@@ -110,14 +110,28 @@ public final class GpuWorkAdaptationPolicy {
     /** Completed pairs at a new level before another visible miss sheds again (0.2-0.4 s). */
     public static final int REDUCTION_SETTLE_PAIRS = 12;
     /**
-     * A deadline miss with no other in this many completed pairs (about 10 s
-     * at 60) sheds nothing; the next one within the window does. Recovery
-     * needs 1200 pairs under 80% of the budget, which a GPU-bound engine
-     * never shows, so single misses minutes apart used to ratchet Cemu's
-     * SM3DW from level 2 to 4 over a ten-minute soak (Thor, 2026-10-14).
+     * Deadline misses within this many completed pairs (about 1 s at 60) of
+     * an event's first miss are one event: one engine stall makes two or
+     * three frames late. Eden's Link's Awakening showed such pairs every
+     * 40-60 s and each cost a level (0 -> 4 in six minutes on 3.2.78, GPU
+     * 3.6 of 7.3 ms per pair, never restored).
+     */
+    public static final int MISS_EVENT_PAIRS = 60;
+    /** Misses in one event that are pressure on their own (misses that keep coming). */
+    public static final int MISS_EVENT_PRESSURE = 4;
+    /**
+     * A miss event with no other starting in this many completed pairs
+     * (about 10 s at 60) sheds nothing; the next event within the window
+     * does. Recovery needs 1200 pairs under 80% of the budget, which a
+     * GPU-bound engine never shows, so single misses minutes apart used to
+     * ratchet Cemu's SM3DW from level 2 to 4 over a ten-minute soak (Thor,
+     * 2026-10-14).
      */
     public static final int ISOLATED_MISS_PAIRS = 600;
-    private int pairsSinceDeadlineMiss = Integer.MAX_VALUE / 2;
+    private int pairsSinceMissEvent = Integer.MAX_VALUE / 2;
+    // Misses in the current event, and how long the quiet before it lasted.
+    private int eventMisses;
+    private int previousEventGapPairs = Integer.MAX_VALUE / 2;
     // Observations (completed or failed) since the current burst's first failure.
     private int burstObservations;
     private final long[] failuresByReason = new long[Failure.values().length];
@@ -204,7 +218,7 @@ public final class GpuWorkAdaptationPolicy {
         if (totalGpuUs <= 0L) return onFailure(Failure.TIMER_MISSING);
         // Completed at this level, over budget or not: the level is working.
         if (pairsAtLevel < Integer.MAX_VALUE / 2) ++pairsAtLevel;
-        if (pairsSinceDeadlineMiss < Integer.MAX_VALUE / 2) ++pairsSinceDeadlineMiss;
+        if (pairsSinceMissEvent < Integer.MAX_VALUE / 2) ++pairsSinceMissEvent;
         if (totalGpuUs > shaderBudgetUs) return onFailure(Failure.GPU_OVER_BUDGET);
         if (disabled) return Decision.DISABLE_GENERATION;
         if (failuresAtMinimum > 0) ++burstObservations;
@@ -258,10 +272,24 @@ public final class GpuWorkAdaptationPolicy {
         if (reason == null) reason = Failure.TIMER_INVALID;
         ++failures;
         ++failuresByReason[reason.ordinal()];
-        consecutiveHealthyPairs = 0;
-        boolean isolatedMiss = reason == Failure.PHYSICAL_DEADLINE_MISS &&
-                pairsSinceDeadlineMiss >= ISOLATED_MISS_PAIRS;
-        if (reason == Failure.PHYSICAL_DEADLINE_MISS) pairsSinceDeadlineMiss = 0;
+        boolean isolatedMiss = false;
+        if (reason == Failure.PHYSICAL_DEADLINE_MISS) {
+            if (pairsSinceMissEvent < MISS_EVENT_PAIRS) {
+                isolatedMiss = ++eventMisses < MISS_EVENT_PRESSURE &&
+                        previousEventGapPairs >= ISOLATED_MISS_PAIRS;
+            } else {
+                previousEventGapPairs = pairsSinceMissEvent;
+                isolatedMiss = pairsSinceMissEvent >= ISOLATED_MISS_PAIRS;
+                pairsSinceMissEvent = 0;
+                eventMisses = 1;
+            }
+        }
+        // An isolated stall event is not evidence against the current level
+        // either: with one every 15-20 s (Eden) a 1200-pair recovery window
+        // never completed, so a startup's reductions lasted the session
+        // (Link's Awakening at level 4 for ten minutes, 3.2.79 candidate).
+        // At minimum work every failure still counts against recovery.
+        if (!(isolatedMiss && stepsNeedBlocks() && workLevel < maxWorkLevel)) consecutiveHealthyPairs = 0;
         if (disabled) return Decision.DISABLE_GENERATION;
         if (workLevel < maxWorkLevel && workLevel == maxWorkLevel - 1 && lastStepNeedsBlock()) {
             // The last level costs motion reach; take it only for misses that
@@ -290,8 +318,9 @@ public final class GpuWorkAdaptationPolicy {
             if (stepsNeedBlocks() && reason != Failure.GPU_OVER_BUDGET &&
                     workLevel < maxWorkLevel - 1 && pairsAtLevel < REDUCTION_SETTLE_PAIRS)
                 return Decision.UNCHANGED;
-            // A lone deadline miss is not pressure; a second within the
-            // window (a burst's next miss arrives within milliseconds) is.
+            // A lone miss event (one stall's two or three late frames) is
+            // not pressure; misses that keep coming within it, or another
+            // event within the window, are.
             if (stepsNeedBlocks() && isolatedMiss && workLevel < maxWorkLevel - 1)
                 return Decision.UNCHANGED;
             return reduce();

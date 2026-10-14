@@ -6,7 +6,8 @@ public final class GpuWorkAdaptationPolicyTest {
         overBudgetShaderTimeAloneNeverDisables();
         oneEmulatorHitchDoesNotDisable();
         startupHitchKeepsFullWork();
-        oneDisturbanceCostsOneLevel();
+        oneDisturbanceShedsNothing();
+        stallEventsMinutesApartKeepWork();
         steadyPressureStepsTheCheapLevels();
         unknownHeadroomRecoversOnShaderEvidence();
         recoveryBacksOffWhenALevelDoesNotHold();
@@ -161,8 +162,12 @@ public final class GpuWorkAdaptationPolicyTest {
         eq(1, value.workLevel(), "a repeated miss sheds a level");
     }
 
-    /** 3DS 2026-10-13: three misses in 230 ms (seven pairs) took level 0 to 3 for the session. */
-    private static void oneDisturbanceCostsOneLevel() {
+    /**
+     * 3DS 2026-10-13: three misses in 230 ms (seven pairs) took level 0 to 3
+     * for the session; one stall's late frames are one event and shed nothing
+     * (Link's Awakening on 3.2.78 lost a level to every such stall).
+     */
+    private static void oneDisturbanceShedsNothing() {
         GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
         long pair = 0;
         for (int good = 0; good < 300; ++good) value.onCompletedPair(++pair, 3000L, 7333L, false);
@@ -172,8 +177,8 @@ public final class GpuWorkAdaptationPolicyTest {
         value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
         for (int good = 0; good < 4; ++good) value.onCompletedPair(++pair, 3000L, 7333L, false);
         value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
-        eq(1, value.workLevel(), "one disturbance costs one level");
-        eq(1, value.reductionCount(), "one reduction");
+        eq(0, value.workLevel(), "one disturbance sheds nothing");
+        eq(0, value.reductionCount(), "no reduction");
         eq(3, value.failureCount(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS), "every miss is still counted");
         eq(0, value.consecutiveHealthyPairs(), "and clears recovery");
         // Cemu at startup: about one pair in three missed for seconds.
@@ -187,6 +192,37 @@ public final class GpuWorkAdaptationPolicyTest {
         eq(3, value.workLevel(), "steady misses still reach level 3");
         check(rounds <= 2 * GpuWorkAdaptationPolicy.REDUCTION_SETTLE_PAIRS / 2 + 2,
                 "within about two settle windows of pairs: " + rounds);
+    }
+
+    /** Eden, Link's Awakening (Thor, 3.2.78): two or three late frames every 40-60 s. */
+    private static void stallEventsMinutesApartKeepWork() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        for (int event = 0; event < 10; ++event) {
+            for (int good = 0; good < 2400; ++good) value.onCompletedPair(++pair, 3600L, 7333L, false);
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            value.onCompletedPair(++pair, 3600L, 7333L, false);
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            for (int good = 0; good < 20; ++good) value.onCompletedPair(++pair, 3600L, 7333L, false);
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        }
+        eq(0, value.workLevel(), "stall events minutes apart keep full work");
+        eq(30, value.failureCount(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS), "each miss is counted");
+        // Misses that keep coming within one event are pressure.
+        for (int good = 0; good < 2400; ++good) value.onCompletedPair(++pair, 3600L, 7333L, false);
+        for (int miss = 0; miss < GpuWorkAdaptationPolicy.MISS_EVENT_PRESSURE; ++miss) {
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            value.onCompletedPair(++pair, 3600L, 7333L, false);
+        }
+        eq(1, value.workLevel(), "a fourth miss within one event sheds a level");
+        // Isolated stall events do not reset recovery: the level comes back.
+        for (int event = 0; event < 12 && value.workLevel() > 0; ++event) {
+            for (int good = 0; good < 700; ++good) value.onCompletedPair(++pair, 3600L, 7333L, false);
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+            value.onCompletedPair(++pair, 3600L, 7333L, false);
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        }
+        eq(0, value.workLevel(), "work restores between stall events about 12 s apart");
     }
 
     private static void steadyPressureStepsTheCheapLevels() {
