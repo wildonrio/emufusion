@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "f93c17751bbf16ef4ff68ad7d3630b0c16b8b77469ec47c475f355f65f79c7d0": "Rollback 3.2.80 (154) until 3.2.81 settles.",
-    "e5549a10a8fa1882862caf7191d0e23536eef90899d946b6e7c9328fc7113f33": "Current release 3.2.81 (155). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "e5549a10a8fa1882862caf7191d0e23536eef90899d946b6e7c9328fc7113f33": "Rollback 3.2.81 (155) until 3.2.82 settles.",
+    "1304c79fadf0a20b03335a5ee70f888a99e6093f4137136b533fa7173fb01f82": "Current release 3.2.82 (156). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -581,6 +581,10 @@
     "unified-android/build/emufusion-3.2.79-phase2-phase3-qualification.apk": {
       "sha256": "9939e1e62e6b44b3a4acadfff8ddfe2cc78176ac51dbb80a2db3f2be6bdaac12",
       "reason": "Superseded mutable convenience copy of 3.2.79 (released, unpinned); current is 3.2.81."
+    },
+    "unified-android/build/emufusion-3.2.82-phase2-phase3-qualification-803377f437a397e14b1f644e24b7c344ffe27c706dce7dcfebe44cd96acc6fd1.apk": {
+      "sha256": "803377f437a397e14b1f644e24b7c344ffe27c706dce7dcfebe44cd96acc6fd1",
+      "reason": "Closed 2026-10-14 candidate 216 (3.2.82 pyramid skip without the flat-area five-tap skip); superseded by 217."
     }
   }
 }

@@ -177,7 +177,10 @@ class DisSelectionTest(unittest.TestCase):
                       generator)
         # In normal play DIS replaces the block matcher's search; the hold-out keeps both.
         self.assertIn("boolean disOnly = !holdoutMode &&\n"
-                      "                    (disMotionForPlay() ? estimateDisMotion() : disPhaseForPlayReady());", generator)
+                      "                    (disMotionForPlay() ? estimateDisMotion() : disPhaseOnly);", generator)
+        # The per-phase route skips the block matcher's pyramid and global seed.
+        self.assertIn("boolean disPhaseOnly = !holdoutMode && !disMotionForPlay() && disPhaseForPlayReady();", generator)
+        self.assertIn("            if (!disPhaseOnly) {\n                buildDensePairPyramids();", generator)
         self.assertIn("if (!disDefault) return false;", generator)
         self.assertIn("if (!disOnly && disMotionWanted()) estimateDisMotion();", generator)
         self.assertIn("holdoutRendering = true;", generator)

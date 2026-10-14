@@ -6,7 +6,15 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 14 (latest) **— 3.2.81 (155): a real frame on the wrong slot no longer sheds frame-generation work.**
+October 14 (latest) **— 3.2.82 (156): the per-phase route stops paying for the block matcher's analysis; flat areas skip the five-tap test.**
+
+On the per-phase route (every source since 3.2.80) the block matcher's pair pyramid and global seed still ran each pair in normal play, 0.6-0.8 ms (P95) on Link's Awakening and SM3DW, read by nothing: DIS reads the history images, the structure mask the history, and cuts are judged after DIS. They now run only for the hold-out comparison or when DIS is unavailable (the stage stays bracketed so the GPU timer's pairs stay complete). The zero-motion test also skips its five-tap comparison where both one-pixel mismatches are under 2 grey levels: offline over 28 games identical within 0.1%. Six Gauss-Newton iterations stay (four: 0.6% worse offline).
+
+Thor (one gated run, two games): SM3DW GPU 3.0 -> 2.4 ms per pair, 47.7 -> 104.2 displayed, work level 0; Link's Awakening 3.6 -> 2.9 ms, 38.3 -> 66.0, work level 0 (pyramid stage P95 0 ms on both); 3-4 late callbacks, PASS. Less GPU work also means less heat for the same frames.
+
+**Thor (3.2.82, `1304c79f`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 14 **— 3.2.81 (155): a real frame on the wrong slot no longer sheds frame-generation work.**
 
 Link's Awakening still reached minimum work within seconds of every start on 3.2.80 (40 s smoke run: work level 5). Its first deadline misses were all `wrong-physical-slot` with shader cost 0: real frames the engine delivered late during its startup shader compiles, with no generated frame of ours involved, and the generator shed a work level for each such endpoint miss as for a late generated frame. Shedding our work cannot help an engine stall, and on the per-phase route the levels mostly coarsen DIS. Endpoint-frame misses are now counted (`endpointDeadlineMisses` in the adaptation health line) and never shed; when our work is too heavy our own generated frames miss, and those still go through the miss-event policy.
 

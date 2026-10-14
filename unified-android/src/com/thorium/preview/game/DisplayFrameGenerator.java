@@ -6489,12 +6489,20 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // both directions are invalid.
             densePairMeanDifference = 0f;
             beginDenseStage(DenseGpuTimer.PYRAMID);
-            buildDensePairPyramids();
-            if (denseV28ReducedAnalysisRequested) {
-                buildDenseGlobalSeed(0, historyTextures[previousIndex],
-                        historyTextures[currentIndex]);
-                buildDenseGlobalSeed(1, historyTextures[currentIndex],
-                        historyTextures[previousIndex]);
+            // The per-phase DIS route (every source in normal play since
+            // 3.2.80) reads the history images directly and judges cuts after
+            // DIS: the block matcher's pyramid and global seed cost 0.6-0.8 ms
+            // per pair there for nothing (Thor, Link's Awakening and SM3DW).
+            // The stage stays bracketed so the timer's pairs stay complete.
+            boolean disPhaseOnly = !holdoutMode && !disMotionForPlay() && disPhaseForPlayReady();
+            if (!disPhaseOnly) {
+                buildDensePairPyramids();
+                if (denseV28ReducedAnalysisRequested) {
+                    buildDenseGlobalSeed(0, historyTextures[previousIndex],
+                            historyTextures[currentIndex]);
+                    buildDenseGlobalSeed(1, historyTextures[currentIndex],
+                            historyTextures[previousIndex]);
+                }
             }
             endDenseStage();
             // DIS motion replaces the block matcher's search in normal play;
@@ -6506,7 +6514,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // at draw time; the block matcher is skipped once DIS is available
             // (otherwise its fields are the fallback).
             boolean disOnly = !holdoutMode &&
-                    (disMotionForPlay() ? estimateDisMotion() : disPhaseForPlayReady());
+                    (disMotionForPlay() ? estimateDisMotion() : disPhaseOnly);
             if (!disOnly)
                 solveDenseDirection(0, historyTextures[previousIndex],
                         historyTextures[currentIndex], temporalGuide);

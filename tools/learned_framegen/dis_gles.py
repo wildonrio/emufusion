@@ -255,7 +255,7 @@ def generate_phase_shader():
     # pixels breaks real 1-2 px scrolling (Game Boy, NES).
     " if(length(v*uHistorySize)<1.0)w=(1.0-uT)*a0+uT*c0;else\n"
     " {float eM=md(abs(aw-cw)),e0=md(abs(a0-c0));\n"
-    "  {vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n"
+    + ("  {vec2 dx" if not SKIP_FLAT_CROSS else "  if(max(eM,e0)>2.0/255.0){vec2 dx") + "=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n"
     "   eM+=md(abs(texture(uFrameA,u-uT*v+dx).rgb-texture(uFrameC,u+(1.0-uT)*v+dx).rgb))"
     "+md(abs(texture(uFrameA,u-uT*v-dx).rgb-texture(uFrameC,u+(1.0-uT)*v-dx).rgb))"
     "+md(abs(texture(uFrameA,u-uT*v+dy).rgb-texture(uFrameC,u+(1.0-uT)*v+dy).rgb))"
@@ -278,6 +278,11 @@ def generate_phase_shader():
 # or flight forward, and Star Fox 64 / Sonic Adventure turns held the left
 # frame as a "cut". The fade is the global pass's zero-motion fit
 # current = gain * previous + offset.
+# The five-tap comparison is skipped where both one-pixel mismatches are under
+# 2 grey levels (flat, unchanged areas): 16 fewer full-resolution reads there,
+# offline over 28 games identical within 0.1%.
+SKIP_FLAT_CROSS = True
+
 # Offline experiments: a fade's fitted gain range and the share of samples a
 # fade must change (both off: a step to or from black is a cut or a fade's
 # last step, and bounding it won Dread but lost Wind Waker HD and Barbie).
