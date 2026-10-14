@@ -573,6 +573,10 @@
     "unified-android/build/emufusion-3.2.80-phase2-phase3-qualification-4b8658d887fe2987ae5f900c39cf00bbe7c4330f01d669f0b8ff1ea30c1a2f7a.apk": {
       "sha256": "4b8658d887fe2987ae5f900c39cf00bbe7c4330f01d669f0b8ff1ea30c1a2f7a",
       "reason": "Closed 2026-10-14 candidate 213 (3.2.80 single route + 1 px snap, cut threshold 0.25); superseded by 214 with the 0.5 cut threshold."
+    },
+    "unified-android/build/emufusion-3.2.78-phase2-phase3-qualification.apk": {
+      "sha256": "497b481b31dfc82274e4d95a946125e0ff6003894d490ce79512d16787184957",
+      "reason": "Superseded mutable convenience copy of 3.2.78 (released, unpinned); current is 3.2.80."
     }
   }
 }
