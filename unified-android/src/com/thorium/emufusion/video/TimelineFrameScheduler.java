@@ -67,6 +67,11 @@ public final class TimelineFrameScheduler {
     // period early: 1/16 = 6% faster, invisible, ~0.5 s per 33 ms excess.
     private static final long TRIM_DIVISOR = 16L;
 
+    private int trimExcessQueued = TRIM_EXCESS_QUEUED;
+
+    /** Queued images beyond the steady depth that start trimming (default {@link #TRIM_EXCESS_QUEUED}). */
+    public void setTrimExcessQueued(int images) { trimExcessQueued = Math.max(1, images); }
+
     private long outputPeriodNs;
     private long sourcePeriodNs;
     private double maxBridgePeriods = DEFAULT_MAX_BRIDGE_PERIODS;
@@ -243,7 +248,7 @@ public final class TimelineFrameScheduler {
             ++lateStreaks[Math.min(lateStreak, 3) - 1];
             lateStreak = 0;
         }
-        excessCallbacks = hasRight && excessQueued >= TRIM_EXCESS_QUEUED ? excessCallbacks + 1 : 0;
+        excessCallbacks = hasRight && excessQueued >= trimExcessQueued ? excessCallbacks + 1 : 0;
         if (excessCallbacks >= TRIM_PERSISTENCE_CALLBACKS) {
             // Never trim into the lateness the source has shown: images that
             // reach the renderer 35-90 ms after their stamps (Cemu) queued up

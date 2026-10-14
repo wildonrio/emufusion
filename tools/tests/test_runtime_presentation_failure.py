@@ -384,6 +384,7 @@ public class RuntimeFailureTest {
         void finishNativeClassifiedObservation(boolean unique){nativeClassificationFinishes++;}
         void copyExternalTo(int texture){copies++;}
         void notifyFirstSubmittedFrame(){firstFrames++;}
+        void recordArrival(long submission){}
         boolean latestImageIsUnique(long timestamp){return true;}
         void consumeClassifiedFrame(boolean unique){consumes++;
             if(failExport)throw new IllegalStateException("exact endpoint export");}

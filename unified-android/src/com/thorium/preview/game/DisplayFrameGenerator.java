@@ -2291,6 +2291,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private boolean verifyResourcesReady, verifyUnavailable;
     private long verifyWindowStartNs;
     private long verifyWindowReal, verifyWindowVerified;
+    // Generated images swapped this window, whatever their motion verdict.
+    private long verifyWindowGenerated;
     // Source images the timeline passed (used only as endpoints, never shown).
     private long verifyWindowPassed;
     private long verifyLastRealSequence;
@@ -3284,6 +3286,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (nativeSourceImageObserver != null)
                 nativeSourceImageObserver.observeLatest(producerBufferTimestampNs);
             ++submittedFrameCount;
+            recordArrival(submittedFrameCount);
             ++diagHardwareSubmits;
             notifyFirstSubmittedFrame();
             boolean classifiedUnique;
@@ -3416,6 +3419,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             consumeExternalPresentationDiscontinuities();
             consumeExternalEndpointDiscontinuities();
             pollPhysicalPresentations();
+            if (externalTransport == null) pollSignatureOnVsync();
             if (externalTransport == null) {
                 frameRate.setGenerationAvailable(builtinClockAdmissionReady(
                         densePyramidEnabled, densePyramidUnavailable, displayId,
@@ -4716,6 +4720,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             nativeSourceImageObserver.observeLatest(0L);
         presentationAspect = aspect;
         ++submittedFrameCount;
+        recordArrival(submittedFrameCount);
         ++diagSoftwareSubmits;
         // The launch curtain lifts on the first submitted frame.  Only the
         // SurfaceTexture path notified it, so every software-fed stream
@@ -5171,6 +5176,80 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private long diagDuplicateVerdicts;
     private int diagLastSignatureByteSum;
     private int diagLastChangedPixels;
+
+    // Low latency (owner, 2026-10-14: about half a second of input lag in
+    // Ocarina of Time): a duplicate-check result used to be read only when the
+    // next emulator frame arrived, so every frame entered the presentation
+    // queue one producer interval late (50 ms at 20 fps) and a late result
+    // left a backlog that never drained (one result per arrival). Finished
+    // results are now committed on the next vsync, all of them, oldest first.
+    private long signatureVsyncCommits;
+
+    private void pollSignatureOnVsync() {
+        if (!TimelineSchedulerSwitch.lowLatency() || !denseSignatureBaselineReady ||
+                externalSignatureTimer != null || !signatureReadbackSafe ||
+                !(densePyramidEnabled && denseV28ReducedAnalysisRequested) ||
+                denseGpuTimer == null) return;
+        DenseGpuTimer signatureTimer = denseGpuTimer;
+        try {
+            for (int drained = 0; drained < SIGNATURE_CANDIDATE_SLOTS; ++drained) {
+                long[] row = signatureTimer.pollSignature(denseSignatureSequence);
+                if (row.length == 0) break;
+                if (row.length != DenseGpuTimer.SIGNATURE_RESULT_FIELDS)
+                    throw new IllegalStateException("malformed asynchronous signature row");
+                if (row[0] != DenseGpuTimer.STATUS_OK || row[7] != 1L ||
+                        row[6] < 0L || row[6] > 4L ||
+                        (row[2] != 0L && row[2] != 1L))
+                    throw new IllegalStateException("invalid asynchronous signature" +
+                            " status=" + row[0] + " slot=" + row[3] +
+                            " query=" + row[4] + " age=" + row[6]);
+                long readySequence = row[1];
+                if (readySequence > denseSignatureSequence)
+                    throw new IllegalStateException("future asynchronous signature");
+                denseSignatureMaxQueueAge = Math.max(denseSignatureMaxQueueAge,
+                        denseSignatureSequence - readySequence);
+                ++denseSignatureReady;
+                int candidate = findSignatureCandidate(readySequence);
+                if (candidate < 0)
+                    throw new IllegalStateException(
+                            "signature result has no retained endpoint sequence=" + readySequence);
+                boolean unique = row[2] == 1L;
+                if (!unique && signatureCandidatePixelsChanged[candidate]) {
+                    unique = true;
+                    ++softwareSignatureRescues;
+                }
+                clearNativeClassifiedObservation();
+                classifiedFrameReady = true;
+                classifiedUniqueTexture = signatureCandidateTextures[candidate];
+                classifiedUniqueTimestampNs = signatureCandidateTimestampNs[candidate];
+                classifiedUniqueSubmission = signatureCandidateSubmission[candidate];
+                classifiedPixelVerdictKnown = true;
+                if (nativeSourceImageObserver != null)
+                    nativeSourceImageObserver.classifyCandidate(candidate);
+                finishNativeClassifiedObservation(unique);
+                consumeClassifiedFrame(unique);
+                classifiedFrameReady = false;
+                classifiedUniqueTexture = 0;
+                classifiedUniqueTimestampNs = 0L;
+                classifiedUniqueSubmission = 0;
+                signatureCandidateSequence[candidate] = 0L;
+                signatureCandidateTimestampNs[candidate] = 0L;
+                signatureCandidateSubmission[candidate] = 0;
+                signatureCandidatePixelsChanged[candidate] = false;
+                if (nativeSourceImageObserver != null)
+                    nativeSourceImageObserver.releaseCandidate(candidate);
+                ++signatureVsyncCommits;
+            }
+        } catch (RuntimeException failure) {
+            ++denseSignatureUnavailable;
+            rejectDense("async-signature-vsync-failure", failure);
+            clearSignatureCandidates();
+            clearNativeClassifiedObservation();
+        } finally {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        }
+    }
 
     private int findSignatureCandidate(long sequence) {
         for (int slot = 0; slot < SIGNATURE_CANDIDATE_SLOTS; ++slot)
@@ -5812,7 +5891,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         (slotLatticeProducer ?
                                 Math.min(ENDPOINT_FIFO_CAPACITY,
                                         ENDPOINT_FIFO_PRIME_DEPTH + 3) :
-                                ENDPOINT_FIFO_PRIME_DEPTH)) : 2;
+                                // Low latency: with duplicate checks committed
+                                // on the next vsync, the look-ahead endpoint
+                                // that covered their one-interval delay is a
+                                // whole source frame of input lag.
+                                (TimelineSchedulerSwitch.lowLatency() ?
+                                        ENDPOINT_FIFO_PRIME_DEPTH - 1 :
+                                        ENDPOINT_FIFO_PRIME_DEPTH))) : 2;
     }
 
     private void copyBufferedEndpoints(boolean initialPair) {
@@ -7011,6 +7096,37 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // the timeline needs for the image after the shown one to be here in time.
     private final long[] endpointAdmissionLagBuckets = new long[5];
     private long endpointAdmissionLagMaxUs;
+    // Real-frame display lag (owner, 2026-10-14: about half a second from a
+    // button press to the response in Ocarina of Time with frame generation
+    // on): from the frame's arrival from the emulator to the scheduled display
+    // time of each real frame shown, keyed by submission ordinal.
+    private static final int ARRIVAL_RING = 64;
+    private final long[] arrivalNsRing = new long[ARRIVAL_RING];
+    private final int[] arrivalOrdinalRing = new int[ARRIVAL_RING];
+    // <=33, <=67, <=100, <=150, <=200, <=300 and >300 ms.
+    private final long[] realDisplayLagBuckets = new long[7];
+    private long realDisplayLagSamples, realDisplayLagSumUs, realDisplayLagMaxUs;
+
+    private void recordArrival(int submission) {
+        int slot = Math.floorMod(submission, ARRIVAL_RING);
+        arrivalOrdinalRing[slot] = submission;
+        arrivalNsRing[slot] = System.nanoTime();
+    }
+
+    private void recordRealDisplayLag(int submission, long targetNs) {
+        if (submission <= 0 || targetNs <= 0L) return;
+        int slot = Math.floorMod(submission, ARRIVAL_RING);
+        if (arrivalOrdinalRing[slot] != submission || arrivalNsRing[slot] <= 0L) return;
+        long lagUs = (targetNs - arrivalNsRing[slot]) / 1000L;
+        if (lagUs < 0L) return;
+        long ms = lagUs / 1000L;
+        int bucket = ms <= 33L ? 0 : ms <= 67L ? 1 : ms <= 100L ? 2 : ms <= 150L ? 3 :
+                ms <= 200L ? 4 : ms <= 300L ? 5 : 6;
+        ++realDisplayLagBuckets[bucket];
+        ++realDisplayLagSamples;
+        realDisplayLagSumUs += lagUs;
+        realDisplayLagMaxUs = Math.max(realDisplayLagMaxUs, lagUs);
+    }
 
     // The timeline's latency floor: the 95th percentile of the signed lag
     // (arrival - stamp) over the last 240 admitted images. The display/target
@@ -8582,6 +8698,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long sourcePeriodNs = sourceHz > 0.0 ? Math.round(1e9 / sourceHz) : 0L;
         timeline.configure(panelPeriodNs > 0L ? panelPeriodNs * scans : 0L, sourcePeriodNs);
         timeline.setRequiredLatencyNs(timelineRequiredLatencyNs);
+        // Low latency: trim as soon as one extra image stays queued.
+        timeline.setTrimExcessQueued(TimelineSchedulerSwitch.lowLatency() ?
+                1 : TimelineFrameScheduler.TRIM_EXCESS_QUEUED);
         // Clock the timeline by the vsync callback, not the predicted display
         // time: when the queue reserve deepens the pipeline by a scan, the
         // display target moves but the content timeline must not jump ahead
@@ -8947,7 +9066,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // After the visible swap, so verification never delays the frame.
         if (externalTransport == null) {
             if (renderedSynthetic) enqueueGeneratedVerification(proofPhase);
-            else if (realThisTick) countRealFrameShown(selectedPhase);
+            else if (realThisTick) {
+                countRealFrameShown(selectedPhase);
+                recordRealDisplayLag(activeRightSequence > 0L && selectedPhase >= 1f ?
+                        activeRightSubmission : activeLeftSubmission,
+                        deadline.contentPresentationTimeNs());
+            }
         }
         if (sampleCompositorTiming) {
             ++builtinCompositorTimingSamples;
@@ -11602,6 +11726,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     /** Re-evaluates the presented generated image at 128x72 and queues its comparison. */
     private void enqueueGeneratedVerification(float phase) {
         ++verifyPresented;
+        ++verifyWindowGenerated;
         if (!ensureVerifyResources()) return;
         pollGeneratedVerification();
         if (verifyPending == VERIFY_RING) {
@@ -11679,15 +11804,23 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         double shown = verifyWindowReal * 1e9 / elapsedNs;
         double real = (verifyWindowReal + verifyWindowPassed) * 1e9 / elapsedNs;
         double generated = verifyWindowVerified * 1e9 / elapsedNs;
+        // The corner shows every new image sent to the screen: real images plus
+        // every generated one swapped (owner, 2026-10-14: "61 -> 107" read as
+        // a random number; the screen was getting 120). Repeats and slots that
+        // fell back to a real image are not new images and are not counted.
+        // The motion-verified count stays in the log line below.
+        double presentedGenerated = verifyWindowGenerated * 1e9 / elapsedNs;
         verifyWindowStartNs = now;
         verifyWindowReal = 0L;
         verifyWindowPassed = 0L;
         verifyWindowVerified = 0L;
+        verifyWindowGenerated = 0L;
         FrameGenerationRenderer.StatsListener callback = statsListener;
-        if (callback != null) callback.onDisplayedFrameRate(real, shown + generated);
+        if (callback != null) callback.onDisplayedFrameRate(real, shown + presentedGenerated);
         Log.i(TAG, "Generated frame verification generator=" + generatorId +
-                String.format(java.util.Locale.US, " realFps=%.1f displayedFps=%.1f", real,
-                        shown + generated) +
+                String.format(java.util.Locale.US,
+                        " realFps=%.1f displayedFps=%.1f motionVerifiedFps=%.1f", real,
+                        shown + presentedGenerated, shown + generated) +
                 " presented=" + verifyPresented + " verified=" + verifyVerified +
                 " duplicate=" + verifyDuplicate + " blendLike=" + verifyBlendLike +
                 " static=" + verifyStatic + " skipped=" + verifySkipped +
@@ -13522,6 +13655,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         endpointAdmissionLagBuckets[1] + "/" + endpointAdmissionLagBuckets[2] + "/" +
                         endpointAdmissionLagBuckets[3] + "/" + endpointAdmissionLagBuckets[4] +
                 " endpointAdmissionLagMaxUs=" + endpointAdmissionLagMaxUs +
+                " realDisplayLagMs33/67/100/150/200/300/more=" + realDisplayLagBuckets[0] + "/" +
+                        realDisplayLagBuckets[1] + "/" + realDisplayLagBuckets[2] + "/" +
+                        realDisplayLagBuckets[3] + "/" + realDisplayLagBuckets[4] + "/" +
+                        realDisplayLagBuckets[5] + "/" + realDisplayLagBuckets[6] +
+                " realDisplayLagMeanUs=" + (realDisplayLagSamples == 0L ? 0L :
+                        realDisplayLagSumUs / realDisplayLagSamples) +
+                " realDisplayLagMaxUs=" + realDisplayLagMaxUs +
+                " lowLatency=" + TimelineSchedulerSwitch.lowLatency() +
+                " signatureVsyncCommits=" + signatureVsyncCommits +
                 " timelineRequiredLatencyUs=" + (timelineRequiredLatencyNs == Long.MIN_VALUE ?
                         "unknown" : String.valueOf(timelineRequiredLatencyNs / 1000L)) +
                 " schedulerUnavailable=" +

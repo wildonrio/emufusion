@@ -20,8 +20,9 @@ public interface FrameGenerationRenderer extends AutoCloseable {
 
         /**
          * Once a second while the built-in generator presents: real images
-         * shown per second, and that plus generated images that passed the
-         * per-frame motion verification (never duplicates or cross-fades).
+         * used per second, and the new images sent to the screen per second
+         * (real images shown plus every generated image swapped; repeats and
+         * slots that fell back to a real image are not counted).
          */
         default void onDisplayedFrameRate(double realFps, double displayedFps) {}
     }

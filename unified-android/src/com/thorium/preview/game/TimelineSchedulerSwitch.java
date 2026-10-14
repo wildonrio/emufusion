@@ -122,6 +122,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         disDefault = dis;
+        boolean low = true;
+        try {
+            if (context != null) low = Settings.Global.getInt(
+                    context.getContentResolver(), LOW_LATENCY_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        lowLatency = low;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -185,6 +193,17 @@ public final class TimelineSchedulerSwitch {
      * Link's Awakening. QA: 0 restores the block matcher and synthesis 15.
      */
     static final String DIS_GLOBAL = "emufusion_framegen_dis";
+
+    /**
+     * Low-latency presentation (default): duplicate checks committed on the
+     * next vsync, one fewer look-ahead endpoint, trimming at one extra queued
+     * image. QA: emufusion_framegen_low_latency=0 restores the previous
+     * pipeline for latency comparisons.
+     */
+    static final String LOW_LATENCY_GLOBAL = "emufusion_framegen_low_latency";
+    private static volatile boolean lowLatency = true;
+
+    static boolean lowLatency() { return lowLatency; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }
