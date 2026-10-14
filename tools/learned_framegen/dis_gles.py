@@ -131,7 +131,9 @@ GENERATE = (HEADER +
 # Synthesis 22: DIS motion for the hand-written synthesis. Each analysis cell
 # (the solver's grid) gets the 4x4-sample mean of the DIS flow over its
 # footprint, in source pixels, clamped to the solver's limit and packed like
-# the solver's raw output (signed Q8.8 per component in two bytes).
+# the solver's raw output (signed Q8.8 per component in two bytes). (Their
+# vector median scored identically on the Thor: at half the analysis
+# resolution the field is already smooth across a cell.)
 TO_RAW = (HEADER +
     "uniform sampler2D uFlow;uniform vec2 uScale;uniform float uLimit;uniform ivec2 uOut;\n"
     "layout(location=0) out vec4 o0;\n"
@@ -141,10 +143,68 @@ TO_RAW = (HEADER +
     " vec2 v=clamp(s/16.0*uScale,-uLimit,uLimit);o0=vec4(p16(v.x),p16(v.y));}\n")
 
 
+def phase_search_shader():
+    """Per-phase symmetric refinement (the REA-studied method: motion estimated at
+    the output time). For each 8x8 patch of the output grid at time t, Gauss-
+    Newton on A(x - t*v) = C(x + (1-t)*v) (mean-normalised), starting from the
+    better of the two DIS proposals at the patch centre; keeps the start when
+    the match got worse. Output: v (A->C motion through x at time t, pixels of
+    the flow level) and the final SSD."""
+    return (HEADER +
+    f"#define P {PATCH}\n#define S {STRIDE}\n#define ITERS {ITERATIONS}\n"
+    "uniform sampler2D uGradA,uGradC,uFlowAC,uFlowCA;uniform ivec2 uSize;uniform float uT;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "vec3 ga(vec2 p){return texture(uGradA,p/vec2(uSize)).xyz;}\n"
+    "vec3 gc(vec2 p){return texture(uGradC,p/vec2(uSize)).xyz;}\n"
+    "vec2 fac(vec2 p){return texture(uFlowAC,p/vec2(uSize)).xy;}\n"
+    "vec2 fca(vec2 p){return texture(uFlowCA,p/vec2(uSize)).xy;}\n"
+    "float ssd(vec2 o,vec2 v){float sa=0.0,sc=0.0,saa=0.0,scc=0.0,sac=0.0;\n"
+    " for(int y=0;y<P;++y)for(int x=0;x<P;++x){vec2 q=o+vec2(float(x),float(y))+0.5;float a=ga(q-uT*v).x,c=gc(q+(1.0-uT)*v).x;\n"
+    "  sa+=a;sc+=c;saa+=a*a;scc+=c*c;sac+=a*c;}\n"
+    " const float N=float(P*P);return (saa-sa*sa/N)+(scc-sc*sc/N)-2.0*(sac-sa*sc/N);}\n"
+    "void main(){vec2 o=vec2(ivec2(gl_FragCoord.xy)*S);vec2 x=o+0.5*float(P);\n"
+    # Proposals: A's flow at its fixed-point source, and C's (negated) at its own.
+    " vec2 p=x-uT*fac(x);p=x-uT*fac(p);p=x-uT*fac(p);vec2 q=x-(1.0-uT)*fca(x);q=x-(1.0-uT)*fca(q);q=x-(1.0-uT)*fca(q);\n"
+    " vec2 v1=fac(p),v2=-fca(q);float e1=ssd(o,v1),e2=ssd(o,v2);vec2 v0=e2<e1?v2:v1;float e0=min(e1,e2);\n"
+    " vec2 v=v0;const float N=float(P*P);\n"
+    " for(int k=0;k<ITERS;++k){float sa=0.0,sc=0.0;vec2 sj=vec2(0.0);mat2 h=mat2(0.0);vec2 b=vec2(0.0);vec2 jsa=vec2(0.0),jsc=vec2(0.0);\n"
+    "  for(int y=0;y<P;++y)for(int xx=0;xx<P;++xx){vec2 q2=o+vec2(float(xx),float(y))+0.5;vec3 A=ga(q2-uT*v),C=gc(q2+(1.0-uT)*v);\n"
+    "   vec2 j=(1.0-uT)*C.yz+uT*A.yz;float r=C.x-A.x;sa+=A.x;sc+=C.x;sj+=j;h+=mat2(j.x*j.x,j.x*j.y,j.x*j.y,j.y*j.y);b+=j*r;}\n"
+    # Mean-normalised residual: r_i - mean(r); its Jacobian j_i - mean(j).
+    "  float mr=(sc-sa)/N;mat2 hn=h-mat2(sj.x*sj.x,sj.x*sj.y,sj.x*sj.y,sj.y*sj.y)/N+mat2(1e-4,0.0,0.0,1e-4);\n"
+    "  vec2 bn=b-sj*mr;v-=inverse(hn)*bn;}\n"
+    " float e=ssd(o,v);if(e>e0||any(isnan(v))){v=v0;e=e0;}\n"
+    " o0=vec4(v,e,1.0);}\n")
+
+
+def phase_densify_shader():
+    return (HEADER +
+    f"#define P {PATCH}\n#define S {STRIDE}\n"
+    "uniform sampler2D uGrayA,uGrayC,uPatches;uniform ivec2 uSize,uGrid;uniform float uT;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec2 x=vec2(p)+0.5;\n"
+    " ivec2 hi=min(p/S,uGrid-1);ivec2 lo=max((p-P+S)/S,ivec2(0));lo=min(lo,hi);\n"
+    " vec2 acc=vec2(0.0);float wsum=0.0;\n"
+    " for(int gy=lo.y;gy<=hi.y;++gy)for(int gx=lo.x;gx<=hi.x;++gx){\n"
+    "  vec2 v=texelFetch(uPatches,ivec2(gx,gy),0).xy;\n"
+    "  float d=abs(texture(uGrayC,(x+(1.0-uT)*v)/vec2(uSize)).r-texture(uGrayA,(x-uT*v)/vec2(uSize)).r)*255.0;\n"
+    "  float w=1.0/max(1.0,d);acc+=w*v;wsum+=w;}\n"
+    " o0=vec4(acc/max(wsum,1e-6),0.0,1.0);}\n")
+
+
+# Output from the per-phase field: A at x - t*v, C at x + (1-t)*v.
+GENERATE_PHASE = (HEADER +
+    "uniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\n"
+    "in vec2 vTexCoord;layout(location=0) out vec4 o0;\n"
+    "void main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n"
+    " o0=vec4((1.0-uT)*texture(uFrameA,u-uT*v).rgb+uT*texture(uFrameC,u+(1.0-uT)*v).rgb,1.0);}\n")
+
+
 def shaders():
     return {'VERTEX': VERTEX, 'VERTEX_QUAD': VERTEX_QUAD, 'GRAY': GRAY, 'DOWN': DOWN, 'GRAD': GRAD,
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
-            'TO_RAW': TO_RAW}
+            'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(),
+            'GENERATE_PHASE': GENERATE_PHASE}
 
 
 def levels_for(width, height, finest):

@@ -159,8 +159,8 @@ class PhaseSynthesisTest(unittest.TestCase):
         # 5 (QA): level 4 matched on the quarter-resolution pyramid images.
         # 6/7 (QA): level 5 with per-pixel neighbour selection, soft and sharp.
         # 21 (QA): GPU dense inverse search (test_dis_framegen).
-        self.assertIn("synthesisLevel = level == DIS_SYNTHESIS_LEVEL || level == DIS_MOTION_SYNTHESIS_LEVEL ? level :\n"
-                      "                Math.max(0, Math.min(15, level));", SWITCH)
+        self.assertIn("synthesisLevel = level == DIS_SYNTHESIS_LEVEL || level == DIS_MOTION_SYNTHESIS_LEVEL ||\n"
+                      "                level == DIS_PHASE_SYNTHESIS_LEVEL ? level : Math.max(0, Math.min(15, level));", SWITCH)
         # Hold-out variants are a QA setting; 100+ adds the prepared warp.
         self.assertIn("static final int[] DEFAULT_HOLDOUT_LEVELS = {14, 15, 115};", SWITCH)
         self.assertIn("holdoutPreparedOverride = holdoutLevelIds[level] >= 100;", GENERATOR)

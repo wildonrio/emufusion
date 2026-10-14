@@ -11967,6 +11967,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return false;
     }
 
+
     private boolean disMotionUsable() {
         boolean wanted = holdoutRendering ? disMotionActive : disMotionForPlay();
         return wanted && disFlow != null && disMotionPromotion == densePromotions &&
@@ -11993,22 +11994,28 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             disEstimateKeyB = keyB;
         }
         float limit = Math.min(denseMaxFlowPixels(), flowLimitPixels(historyWidth, historyHeight));
-        disFlow.writeRaw(historyWidth, historyHeight, limit);
-        validateDenseField(disFlow.motionRaw, disFlow.motionValidated, 0,
-                historyTextures[previousIndex], historyTextures[currentIndex]);
-        validateDenseField(disFlow.motionRaw, disFlow.motionValidated, 1,
-                historyTextures[currentIndex], historyTextures[previousIndex]);
-        fillDenseField(disFlow.motionValidated, disFlow.motionFill, 0);
-        fillDenseField(disFlow.motionValidated, disFlow.motionFill, 1);
+        convertDisMotion(disFlow.motionRaw, disFlow.motionValidated, disFlow.motionFill, limit);
         disMotionPromotion = densePromotions + 1;
         return true;
     }
+
+    private void convertDisMotion(int[] raw, int[] validated, int[] fill, float limit) {
+        disFlow.writeRaw(raw, historyWidth, historyHeight, limit);
+        validateDenseField(raw, validated, 0, historyTextures[previousIndex], historyTextures[currentIndex]);
+        validateDenseField(raw, validated, 1, historyTextures[currentIndex], historyTextures[previousIndex]);
+        fillDenseField(validated, fill, 0);
+        fillDenseField(validated, fill, 1);
+    }
+
 
     private long historyFrameKey(int index) {
         return ((long) (index + 1) << 40) | historyWrites[index];
     }
 
-    private boolean drawDisFrame(float phase) {
+    private long disPhaseKeyA, disPhaseKeyB;
+    private float disPhaseValue = -1f;
+
+    private boolean drawDisFrame(float phase, boolean perPhase) {
         if (disFlow == null) disFlow = new DenseInverseSearchFlow();
         if (historyWidth <= 0 || historyHeight <= 0 ||
                 !disFlow.ensure(historyWidth, historyHeight)) return false;
@@ -12022,8 +12029,19 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             disEstimateKeyA = keyA;
             disEstimateKeyB = keyB;
         }
-        disFlow.bindGenerate(historyTextures[previousIndex], historyTextures[currentIndex], phase);
-        bindQuad(disFlow.generateProgram());
+        if (perPhase) {
+            if (keyA != disPhaseKeyA || keyB != disPhaseKeyB || phase != disPhaseValue) {
+                disFlow.estimatePhase(phase);
+                disPhaseKeyA = keyA;
+                disPhaseKeyB = keyB;
+                disPhaseValue = phase;
+            }
+            disFlow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase);
+            bindQuad(disFlow.generatePhaseProgram());
+        } else {
+            disFlow.bindGenerate(historyTextures[previousIndex], historyTextures[currentIndex], phase);
+            bindQuad(disFlow.generateProgram());
+        }
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         return true;
     }
@@ -12035,9 +12053,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void drawMotionFrame(float phase) {
-        boolean dis = synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL ||
+        // Small (2-D) sources default to 24: on paired Thor hold-outs it beat 21
+        // on every 2-D game (NES 0.547 -> 0.457, SNES 0.463 -> 0.435).
+        boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||
                 (disDefault && !holdoutRendering && disSmallSource());
-        if (dis && drawDisFrame(phase)) return;
+        boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;
+        if (dis && drawDisFrame(phase, disPhase)) return;
         boolean phaseField = renderPhaseField(phase);
         if (maxFragmentTextureUnits == 0) {
             int[] units = new int[1];

@@ -109,6 +109,15 @@ public final class GpuWorkAdaptationPolicy {
     private int pairsAtLevel = Integer.MAX_VALUE / 2;
     /** Completed pairs at a new level before another visible miss sheds again (0.2-0.4 s). */
     public static final int REDUCTION_SETTLE_PAIRS = 12;
+    /**
+     * A deadline miss with no other in this many completed pairs (about 10 s
+     * at 60) sheds nothing; the next one within the window does. Recovery
+     * needs 1200 pairs under 80% of the budget, which a GPU-bound engine
+     * never shows, so single misses minutes apart used to ratchet Cemu's
+     * SM3DW from level 2 to 4 over a ten-minute soak (Thor, 2026-10-14).
+     */
+    public static final int ISOLATED_MISS_PAIRS = 600;
+    private int pairsSinceDeadlineMiss = Integer.MAX_VALUE / 2;
     // Observations (completed or failed) since the current burst's first failure.
     private int burstObservations;
     private final long[] failuresByReason = new long[Failure.values().length];
@@ -195,6 +204,7 @@ public final class GpuWorkAdaptationPolicy {
         if (totalGpuUs <= 0L) return onFailure(Failure.TIMER_MISSING);
         // Completed at this level, over budget or not: the level is working.
         if (pairsAtLevel < Integer.MAX_VALUE / 2) ++pairsAtLevel;
+        if (pairsSinceDeadlineMiss < Integer.MAX_VALUE / 2) ++pairsSinceDeadlineMiss;
         if (totalGpuUs > shaderBudgetUs) return onFailure(Failure.GPU_OVER_BUDGET);
         if (disabled) return Decision.DISABLE_GENERATION;
         if (failuresAtMinimum > 0) ++burstObservations;
@@ -249,6 +259,9 @@ public final class GpuWorkAdaptationPolicy {
         ++failures;
         ++failuresByReason[reason.ordinal()];
         consecutiveHealthyPairs = 0;
+        boolean isolatedMiss = reason == Failure.PHYSICAL_DEADLINE_MISS &&
+                pairsSinceDeadlineMiss >= ISOLATED_MISS_PAIRS;
+        if (reason == Failure.PHYSICAL_DEADLINE_MISS) pairsSinceDeadlineMiss = 0;
         if (disabled) return Decision.DISABLE_GENERATION;
         if (workLevel < maxWorkLevel && workLevel == maxWorkLevel - 1 && lastStepNeedsBlock()) {
             // The last level costs motion reach; take it only for misses that
@@ -276,6 +289,10 @@ public final class GpuWorkAdaptationPolicy {
             // (The last level keeps its own sustained-block gate above.)
             if (stepsNeedBlocks() && reason != Failure.GPU_OVER_BUDGET &&
                     workLevel < maxWorkLevel - 1 && pairsAtLevel < REDUCTION_SETTLE_PAIRS)
+                return Decision.UNCHANGED;
+            // A lone deadline miss is not pressure; a second within the
+            // window (a burst's next miss arrives within milliseconds) is.
+            if (stepsNeedBlocks() && isolatedMiss && workLevel < maxWorkLevel - 1)
                 return Decision.UNCHANGED;
             return reduce();
         }

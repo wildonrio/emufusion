@@ -43,7 +43,9 @@ class DisShaderTest(unittest.TestCase):
         shaders = dis_gles.shaders()
         runtime = RUNTIME.read_text()
         program_of = {"gray": "GRAY", "down": "DOWN", "grad": "GRAD", "patchSearch": "PATCH_SEARCH",
-                      "densify": "DENSIFY", "generate": "GENERATE", "toRaw": "TO_RAW"}
+                      "densify": "DENSIFY", "generate": "GENERATE", "toRaw": "TO_RAW",
+                      "phaseSearch": "PHASE_SEARCH", "phaseDensify": "PHASE_DENSIFY",
+                      "generatePhase": "GENERATE_PHASE"}
         used = set(re.findall(r'(?:bind|location)\((\w+), "(\w+)"', runtime))
         self.assertTrue(used)
         for program, name in used:
@@ -66,14 +68,30 @@ class DisShaderTest(unittest.TestCase):
         self.assertIn("float w=1.0/max(1.0,d);", dis_gles.shaders()["DENSIFY"])
 
 
+class WorkAdaptationTest(unittest.TestCase):
+    def test_lone_deadline_misses_do_not_shed_work(self):
+        policy = (ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "video" /
+                  "GpuWorkAdaptationPolicy.java").read_text()
+        self.assertIn("public static final int ISOLATED_MISS_PAIRS = 600;", policy)
+        self.assertIn("if (stepsNeedBlocks() && isolatedMiss && workLevel < maxWorkLevel - 1)\n"
+                      "                return Decision.UNCHANGED;", policy)
+        test = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "video" /
+                "GpuWorkAdaptationPolicyTest.java").read_text()
+        self.assertIn("loneDeadlineMissesDoNotRatchetWork();", test)
+
+
 class DisSelectionTest(unittest.TestCase):
     def test_synthesis_twenty_one_selects_dis(self):
         switch = SWITCH.read_text()
         generator = GENERATOR.read_text()
         self.assertIn("static final int DIS_SYNTHESIS_LEVEL = 21;", switch)
-        self.assertIn("if (ids[i] == DIS_SYNTHESIS_LEVEL || ids[i] == DIS_MOTION_SYNTHESIS_LEVEL) continue;", switch)
-        self.assertIn("boolean dis = synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL ||", generator)
-        self.assertIn("if (dis && drawDisFrame(phase)) return;", generator)
+        self.assertIn("if (ids[i] == DIS_SYNTHESIS_LEVEL || ids[i] == DIS_MOTION_SYNTHESIS_LEVEL ||\n"
+                      "                        ids[i] == DIS_PHASE_SYNTHESIS_LEVEL) continue;", switch)
+        self.assertIn("boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;", generator)
+        self.assertIn("if (dis && drawDisFrame(phase, disPhase)) return;", generator)
+        # QA 24: motion refined per output phase (symmetric matching at t).
+        self.assertIn("static final int DIS_PHASE_SYNTHESIS_LEVEL = 24;", switch)
+        self.assertIn("disFlow.estimatePhase(phase);", generator)
         self.assertIn("if (disFlow != null) disFlow.release();", generator)
         # 2-D at full analysis resolution, larger sources at a half (averaged
         # onto the solver's grid anyway); one level coarser from work level 3.
@@ -88,8 +106,11 @@ class DisSelectionTest(unittest.TestCase):
         runtime = RUNTIME.read_text()
         self.assertIn("static final int DIS_MOTION_SYNTHESIS_LEVEL = 22;", SWITCH.read_text())
         # DIS flows go through the solver's own validation and fill.
-        self.assertIn("validateDenseField(disFlow.motionRaw, disFlow.motionValidated, 0,", generator)
-        self.assertIn("fillDenseField(disFlow.motionValidated, disFlow.motionFill, 1);", generator)
+        self.assertIn("convertDisMotion(disFlow.motionRaw, disFlow.motionValidated, disFlow.motionFill, limit);",
+                      generator)
+        self.assertIn("validateDenseField(raw, validated, 0, historyTextures[previousIndex], historyTextures[currentIndex]);",
+                      generator)
+        self.assertIn("fillDenseField(validated, fill, 1);", generator)
         self.assertIn("if (densePyramidEnabled && disMotionUsable()) return disFlow.motionValidated[0];", generator)
         # Valid only for the pair it was computed on (densePromotions advances after).
         self.assertIn("disMotionPromotion = densePromotions + 1;", generator)
@@ -101,8 +122,9 @@ class DisSelectionTest(unittest.TestCase):
         switch = SWITCH.read_text()
         generator = GENERATOR.read_text()
         self.assertIn('DIS_GLOBAL = "emufusion_framegen_dis"', switch)
-        # Small (2-D) sources render synthesis 21, larger ones 15 with DIS motion.
-        self.assertIn("(disDefault && !holdoutRendering && disSmallSource());", generator)
+        # Small (2-D) sources render synthesis 24, larger ones 15 with DIS motion.
+        self.assertIn("boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||\n"
+                      "                (disDefault && !holdoutRendering && disSmallSource());", generator)
         self.assertIn("return disMotionNormal || (disDefault && !disSmallSource());", generator)
         self.assertIn("private boolean disSmallSource() { return historyWidth <= 400 && historyHeight <= 300; }",
                       generator)

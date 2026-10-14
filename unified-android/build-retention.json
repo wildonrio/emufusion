@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "cca84a6db1cb8772f486b19657e22b5a52e5a35b69e34158edb6299c4868e217": "Rollback 3.2.72 (146) until 3.2.73 settles.",
-    "56b3ca23e820da2997ada724149599fb158ff33244a34bbc2c28c81905e123a6": "Current release 3.2.73 (147). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "56b3ca23e820da2997ada724149599fb158ff33244a34bbc2c28c81905e123a6": "Rollback 3.2.73 (147) until 3.2.74 settles.",
+    "ad5ccba2d18a57da866d8d9edf11374ab7c1e0b8f638a12f4dccf5eb975c1028": "Current release 3.2.74 (148). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -489,6 +489,14 @@
     "unified-android/build/emufusion-3.2.73-phase2-phase3-qualification-37315087a65f44ac3c9d05c203e13ab4d7e9977cb836d09deeec07099a47f267.apk": {
       "sha256": "37315087a65f44ac3c9d05c203e13ab4d7e9977cb836d09deeec07099a47f267",
       "reason": "Closed 2026-10-14 candidate 192 (3.2.73 version): DIS stopped at half resolution only from work level 3; SM3DW/WWHD still at level 5. Superseded by 193 (half resolution for 3-D always)."
+    },
+    "unified-android/build/emufusion-3.2.73-phase2-phase3-qualification-8178d3910dd828cecd5b09cf3475fd977c5878d478391d0d84f4213feca633bd.apk": {
+      "sha256": "8178d3910dd828cecd5b09cf3475fd977c5878d478391d0d84f4213feca633bd",
+      "reason": "Closed 2026-10-14 build 194: hold-out level 23 (vector-median DIS motion) only; never installed. Superseded by 195, which adds level 24 (per-phase refinement)."
+    },
+    "unified-android/build/emufusion-3.2.73-phase2-phase3-qualification-45406353320df1f5f8f9a0122fb24b36884283511039fc986e8f2222c2c4c5c4.apk": {
+      "sha256": "45406353320df1f5f8f9a0122fb24b36884283511039fc986e8f2222c2c4c5c4",
+      "reason": "Closed 2026-10-14 trial 195: hold-out levels 23 (vector-median DIS motion: identical to 22, removed) and 24 (per-phase refinement: better than 21 on every 2-D game, shipped as the 2-D default in 3.2.74). Thor on 3.2.74 with identity preserved."
     }
   }
 }

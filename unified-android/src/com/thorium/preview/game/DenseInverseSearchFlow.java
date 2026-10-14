@@ -40,6 +40,9 @@ final class DenseInverseSearchFlow {
     private int[][] sizes = new int[0][];
     private int[][] grids = new int[0][];
     private int gray, down, grad, patchSearch, densify, generate, toRaw;
+    // QA synthesis 24: per-phase symmetric refinement of the DIS motion.
+    private int phaseSearch, phaseDensify, generatePhase;
+    private int phasePatches, phaseFlow, phaseLevel = -1;
     // Synthesis 22: DIS motion in the solver's raw format at its analysis grid,
     // then validated and filled by the generator's own passes ([0] current->
     // previous, [1] previous->current, like the solver's directions).
@@ -202,14 +205,14 @@ final class DenseInverseSearchFlow {
         return true;
     }
 
-    /** Writes both flows into motionRaw in source pixels (sourceWidth x sourceHeight). */
-    void writeRaw(int sourceWidth, int sourceHeight, float limit) {
+    /** Writes both flows into raw in source pixels (sourceWidth x sourceHeight). */
+    void writeRaw(int[] raw, int sourceWidth, int sourceHeight, float limit) {
         saveState();
         try {
             for (int d = 0; d < 2; ++d) {
                 // Raw [0] is current->previous: DIS direction 1 (reference C).
                 int flow = flows[d == 0 ? 1 : 0][used];
-                begin(toRaw, motionWidth, motionHeight, motionRaw[d]);
+                begin(toRaw, motionWidth, motionHeight, raw[d]);
                 bind(toRaw, "uFlow", flow, 0);
                 GLES20.glUniform2f(location(toRaw, "uScale"), (float) sourceWidth / sizes[used][0],
                         (float) sourceHeight / sizes[used][1]);
@@ -235,6 +238,59 @@ final class DenseInverseSearchFlow {
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
         owned.add(id[0]);
         return id[0];
+    }
+
+    /**
+     * Per-phase work (synthesis 24): refines the motion through each output
+     * pixel at time t by symmetric matching, A(x - t*v) = C(x + (1-t)*v),
+     * starting from the better DIS proposal (the method of the REA-studied
+     * design, implemented with DIS's patch alignment).
+     */
+    void estimatePhase(float t) {
+        saveState();
+        try {
+            if (phaseLevel != used) {
+                if (phasePatches != 0) {
+                    GLES20.glDeleteTextures(2, new int[] {phasePatches, phaseFlow}, 0);
+                    owned.remove(Integer.valueOf(phasePatches));
+                    owned.remove(Integer.valueOf(phaseFlow));
+                    verifiedTargets.remove(phasePatches);
+                    verifiedTargets.remove(phaseFlow);
+                }
+                phasePatches = texture(grids[used][0], grids[used][1], true);
+                phaseFlow = texture(sizes[used][0], sizes[used][1], true);
+                phaseLevel = used;
+            }
+            begin(phaseSearch, grids[used][0], grids[used][1], phasePatches);
+            bind(phaseSearch, "uGradA", gradients[0][used], 0);
+            bind(phaseSearch, "uGradC", gradients[1][used], 1);
+            bind(phaseSearch, "uFlowAC", flows[0][used], 2);
+            bind(phaseSearch, "uFlowCA", flows[1][used], 3);
+            GLES30.glUniform2i(location(phaseSearch, "uSize"), sizes[used][0], sizes[used][1]);
+            GLES20.glUniform1f(location(phaseSearch, "uT"), t);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            begin(phaseDensify, sizes[used][0], sizes[used][1], phaseFlow);
+            bind(phaseDensify, "uGrayA", pyramid[0][used], 0);
+            bind(phaseDensify, "uGrayC", pyramid[1][used], 1);
+            bind(phaseDensify, "uPatches", phasePatches, 2);
+            GLES30.glUniform2i(location(phaseDensify, "uSize"), sizes[used][0], sizes[used][1]);
+            GLES30.glUniform2i(location(phaseDensify, "uGrid"), grids[used][0], grids[used][1]);
+            GLES20.glUniform1f(location(phaseDensify, "uT"), t);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+        } finally {
+            restoreState();
+        }
+    }
+
+    int generatePhaseProgram() { return generatePhase; }
+
+    void bindGeneratePhase(int frameA, int frameC, float t) {
+        GLES20.glUseProgram(generatePhase);
+        bind(generatePhase, "uFrameA", frameA, 0);
+        bind(generatePhase, "uFrameC", frameC, 1);
+        bind(generatePhase, "uPhaseFlow", phaseFlow, 2);
+        GLES20.glUniform1f(location(generatePhase, "uT"), t);
+        GLES20.glUniform2f(location(generatePhase, "uFlowSize"), sizes[used][0], sizes[used][1]);
     }
 
     int generateProgram() { return generate; }
@@ -296,6 +352,9 @@ final class DenseInverseSearchFlow {
         densify = link(v, DenseInverseSearchShaders.DENSIFY);
         generate = link(DenseInverseSearchShaders.VERTEX_QUAD, DenseInverseSearchShaders.GENERATE);
         toRaw = link(v, DenseInverseSearchShaders.TO_RAW);
+        phaseSearch = link(v, DenseInverseSearchShaders.PHASE_SEARCH);
+        phaseDensify = link(v, DenseInverseSearchShaders.PHASE_DENSIFY);
+        generatePhase = link(DenseInverseSearchShaders.VERTEX_QUAD, DenseInverseSearchShaders.GENERATE_PHASE);
         int[] ids = new int[1];
         GLES20.glGenFramebuffers(1, ids, 0);
         framebuffer = ids[0];
@@ -366,14 +425,18 @@ final class DenseInverseSearchFlow {
         java.util.Arrays.fill(motionValidated, 0);
         java.util.Arrays.fill(motionFill, 0);
         motionWidth = motionHeight = 0;
+        phasePatches = phaseFlow = 0;
+        phaseLevel = -1;
         ready = false;
     }
 
     void release() {
         releaseTextures();
-        for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw})
+        for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
+                phaseSearch, phaseDensify, generatePhase})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
+        phaseSearch = phaseDensify = generatePhase = 0;
         uniforms.clear();
         if (framebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {framebuffer}, 0);
         framebuffer = 0;

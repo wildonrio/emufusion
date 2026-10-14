@@ -15,6 +15,9 @@ from PIL import Image
 
 from . import dis_gles as D
 
+PHASE = False
+PHASE_PASSES = 1
+
 
 def load(path):
     return np.asarray(Image.open(path).convert('RGB')).astype(np.float32) / 255.0
@@ -87,6 +90,31 @@ def pipeline(s, tag, a, c, t, finest):
                     ('i2', 'uGrid', gw, gh)])
             coarse = f'{tag}{ref}f{k}'
     s.tex(f'{tag}out', w, h)
+    if PHASE:
+        fw, fh = sizes[finest]
+        gw, gh = D.grid(sizes[finest])
+        s.tex(f'{tag}pp', gw, gh, half=True)
+        s.tex(f'{tag}pf', fw, fh, half=True)
+        prior = f'{tag}zero'
+        for rep in range(PHASE_PASSES):
+            dst = f'{tag}pf' if rep == PHASE_PASSES - 1 else f'{tag}pf{rep}'
+            if dst != f'{tag}pf':
+                s.tex(dst, fw, fh, half=True)
+            s.draw('PHASE_SEARCH', gw, gh, [f'{tag}pp'],
+                   [('sampler', 'uGradA', f'{tag}Ad{finest}'), ('sampler', 'uGradC', f'{tag}Cd{finest}'),
+                    ('sampler', 'uFlowAC', f'{tag}Af{finest}'), ('sampler', 'uFlowCA', f'{tag}Cf{finest}'),
+                    ('sampler', 'uPrior', prior), ('i2', 'uSize', fw, fh), ('f1', 'uT', t),
+                    ('f1', 'uHasPrior', 0.0 if rep == 0 else 1.0)])
+            s.draw('PHASE_DENSIFY', fw, fh, [dst],
+                   [('sampler', 'uGrayA', f'{tag}Ag{finest}'), ('sampler', 'uGrayC', f'{tag}Cg{finest}'),
+                    ('sampler', 'uPatches', f'{tag}pp'), ('i2', 'uSize', fw, fh), ('i2', 'uGrid', gw, gh), ('f1', 'uT', t)])
+            prior = dst
+        s.draw('GENERATE_PHASE', w, h, [f'{tag}out'],
+               [('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
+                ('sampler', 'uPhaseFlow', f'{tag}pf'), ('f1', 'uT', t), ('f2', 'uFlowSize', fw, fh)])
+        out = s.folder / f'{tag}.out'
+        s.lines.append(f'read {tag}out {out}')
+        return out, (w, h)
     s.draw('GENERATE', w, h, [f'{tag}out'],
            [('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
             ('sampler', 'uFlowAC', f'{tag}Af{finest}'), ('sampler', 'uFlowCA', f'{tag}Cf{finest}'),
@@ -105,8 +133,13 @@ def main():
     parser.add_argument('--harness', default='/private/tmp/claude-501/gl_harness')
     parser.add_argument('--iterations', type=int, default=D.ITERATIONS)
     parser.add_argument('--stride', type=int, default=D.STRIDE)
+    parser.add_argument('--phase', action='store_true', help='per-phase symmetric refinement')
+    parser.add_argument('--phase-passes', type=int, default=1)
     args = parser.parse_args()
     D.ITERATIONS, D.STRIDE = args.iterations, args.stride
+    global PHASE, PHASE_PASSES
+    PHASE = args.phase
+    PHASE_PASSES = args.phase_passes
     by_case = defaultdict(list)
     for meta in sorted(Path(args.root).glob('*/*/meta.json')):
         by_case[json.loads(meta.read_text())['case']].append(meta.parent)
@@ -119,9 +152,10 @@ def main():
                 "#version 300 es\nout vec2 vTexCoord;\nvoid main(){vec2 p=vec2(gl_VertexID==1?3.0:-1.0,"
                 "gl_VertexID==2?3.0:-1.0);gl_Position=vec4(p,0.0,1.0);vTexCoord=0.5*(p+1.0);}\n")
             s = Script(tmp)
-            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY'):
+            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY'):
                 s.lines.append(f'prog {name} {tmp}/VERTEX.vert {tmp}/{name}.frag')
             s.lines.append(f'prog GENERATE {tmp}/VERTEX_TRI_UV.vert {tmp}/GENERATE.frag')
+            s.lines.append(f'prog GENERATE_PHASE {tmp}/VERTEX_TRI_UV.vert {tmp}/GENERATE_PHASE.frag')
             jobs = []
             for folder in folders:
                 if len(jobs) >= args.per_case:

@@ -15,6 +15,7 @@ public final class GpuWorkAdaptationPolicyTest {
         lastLevelNeedsSteadyMisses();
         steadyPresentBackpressureEarnsTheLastLevelOnly();
         isolatedPhysicalMissesDoNotAccumulate();
+        loneDeadlineMissesDoNotRatchetWork();
         everyFailureInvalidatesRecoveryAtMinimumWork();
         restorationRequiresConsecutiveEvidenceAndHeadroom();
         freshPairsAndFullTimingAreRequired();
@@ -141,6 +142,23 @@ public final class GpuWorkAdaptationPolicyTest {
         for (int i = 0; i < 4 * value.recoveryWindowPairs() && value.workLevel() > 0; ++i)
             value.onCompletedPair(++pair, 3000L, 7333L, false);
         eq(0, value.workLevel(), "recovery restores full work after the hitch");
+    }
+
+    /** SM3DW soak 2026-10-14: single misses minutes apart ratcheted level 2 to 4 for good. */
+    private static void loneDeadlineMissesDoNotRatchetWork() {
+        GpuWorkAdaptationPolicy value = new GpuWorkAdaptationPolicy();
+        long pair = 0;
+        for (int miss = 0; miss < 6; ++miss) {
+            for (int good = 0; good < GpuWorkAdaptationPolicy.ISOLATED_MISS_PAIRS; ++good)
+                value.onCompletedPair(++pair, 6800L, 7333L, false);
+            value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        }
+        eq(0, value.workLevel(), "lone misses ten seconds apart shed nothing");
+        eq(6, value.failureCount(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS), "each is still counted");
+        // A second miss inside the window is pressure.
+        for (int good = 0; good < 100; ++good) value.onCompletedPair(++pair, 6800L, 7333L, false);
+        value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
+        eq(1, value.workLevel(), "a repeated miss sheds a level");
     }
 
     /** 3DS 2026-10-13: three misses in 230 ms (seven pairs) took level 0 to 3 for the session. */
