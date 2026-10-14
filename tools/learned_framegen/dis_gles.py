@@ -227,7 +227,8 @@ def phase_densify_shader():
 
 
 # Output from the per-phase field: A at x - t*v, C at x + (1-t)*v.
-GENERATE_PHASE = (HEADER +
+def generate_phase_shader():
+    return (HEADER +
     "uniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\n"
     "in vec2 vTexCoord;layout(location=0) out vec4 o0;\n"
     # Synthesis 15's static-structure mask (fixed text whose colours change
@@ -248,6 +249,11 @@ GENERATE_PHASE = (HEADER +
     " vec3 aw=texture(uFrameA,u-uT*v).rgb,cw=texture(uFrameC,u+(1.0-uT)*v).rgb;\n"
     " vec3 a0=texture(uFrameA,u).rgb,c0=texture(uFrameC,u).rgb;\n"
     " vec3 w=(1.0-uT)*aw+uT*cw;\n"
+    # Motion under one source pixel is taken as zero: a sub-pixel warp only
+    # blurs sharp content (DS, NSMBU Deluxe, 3DS); offline over 28 games 1.7%
+    # better on average (NSMBU Deluxe -15%, 3DS -8%, Star Fox 64 -6%); two
+    # pixels breaks real 1-2 px scrolling (Game Boy, NES).
+    " if(length(v*uHistorySize)<1.0)w=(1.0-uT)*a0+uT*c0;else\n"
     " {float eM=md(abs(aw-cw)),e0=md(abs(a0-c0));\n"
     "  {vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n"
     "   eM+=md(abs(texture(uFrameA,u-uT*v+dx).rgb-texture(uFrameC,u+(1.0-uT)*v+dx).rgb))"
@@ -261,7 +267,7 @@ GENERATE_PHASE = (HEADER +
     " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
     "  w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);}\n"
     " vec4 ct=texture(uCut,vec2(0.5));\n"
-    " w=mix(mix(w,a0,uCutEnabled*step(0.25,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));\n"
+    f" w=mix(mix(w,a0,uCutEnabled*step({CUT_THRESHOLD},ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));\n"
     " o0=vec4(w,1.0);}\n")
 
 
@@ -272,18 +278,36 @@ GENERATE_PHASE = (HEADER +
 # or flight forward, and Star Fox 64 / Sonic Adventure turns held the left
 # frame as a "cut". The fade is the global pass's zero-motion fit
 # current = gain * previous + offset.
-CUT = (HEADER +
+# Offline experiments: a fade's fitted gain range and the share of samples a
+# fade must change (both off: a step to or from black is a cut or a fade's
+# last step, and bounding it won Dread but lost Wind Waker HD and Barbie).
+FADE_GAIN = None        # (min, max)
+FADE_COVERAGE = None    # fraction of samples with |C - A| > 1 grey level
+# A cut is half the 12x8 grid unexplained along DIS (0.25 held animated sea in
+# Link's Awakening and a Mario Kart Wii turn; offline 0.8% better on average,
+# Link's Awakening 1.302 -> 1.182, Mario Kart Wii 0.752 -> 0.692, no loss).
+CUT_THRESHOLD = 0.5
+
+
+def cut_shader():
+    extra = ""
+    if FADE_GAIN is not None:
+        extra += f"*step({FADE_GAIN[0]},g)*step(g,{FADE_GAIN[1]})"
+    if FADE_COVERAGE is not None:
+        extra += f"*step({FADE_COVERAGE * 96.0:.1f},nc)"
+    return (HEADER +
     "uniform sampler2D uGrayA,uGrayC,uFlowAC;uniform vec2 uFlowSize;\n"
     "layout(location=0) out vec4 o0;\n"
-    "void main(){float n0=0.0,n1=0.0,sa=0.0,sb=0.0,saa=0.0,sab=0.0,sbb=0.0,d=0.0;const float n=96.0;\n"
+    "void main(){float n0=0.0,n1=0.0," + ("nc=0.0," if FADE_COVERAGE is not None else "") + "sa=0.0,sb=0.0,saa=0.0,sab=0.0,sbb=0.0,d=0.0;const float n=96.0;\n"
     " for(int y=0;y<8;++y)for(int x=0;x<12;++x){vec2 uv=vec2((float(x)+0.5)/12.0,(float(y)+0.5)/8.0);\n"
-    "  float a=texture(uGrayA,uv).r,b=texture(uGrayC,uv).r;n0+=step(0.12,abs(b-a));\n"
+    "  float a=texture(uGrayA,uv).r,b=texture(uGrayC,uv).r;n0+=step(0.12,abs(b-a));" +
+    ("nc+=step(1.0/255.0,abs(b-a));" if FADE_COVERAGE is not None else "") + "\n"
     "  vec2 q=uv+texture(uFlowAC,uv).xy/uFlowSize;\n"
     "  if(all(greaterThanEqual(q,vec2(0.0)))&&all(lessThanEqual(q,vec2(1.0))))n1+=step(0.12,abs(texture(uGrayC,q).r-a));\n"
     "  sa+=a;sb+=b;saa+=a*a;sab+=a*b;sbb+=b*b;d+=abs(b-a);}\n"
     " float fade=0.0,va=n*saa-sa*sa;\n"
     " if(va>=n*n*0.0009){float g=(n*sab-sa*sb)/va,o=(sb-g*sa)/n,rms=sqrt(max(0.0,(sbb-g*sab-o*sb)/n)),change=d/n;\n"
-    "  fade=step(0.015,change)*step(rms,0.25*change)*step(rms,0.02);}\n"
+    "  fade=step(0.015,change)*step(rms,0.25*change)*step(rms,0.02)" + extra + ";}\n"
     " o0=vec4(min(n0,n1)/n,fade,0.0,1.0);}\n")
 
 
@@ -291,7 +315,7 @@ def shaders():
     return {'VERTEX': VERTEX, 'VERTEX_QUAD': VERTEX_QUAD, 'GRAY': GRAY, 'DOWN': DOWN, 'GRAD': GRAD,
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(),
-            'GENERATE_PHASE': GENERATE_PHASE, 'CUT': CUT,
+            'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(),
             'DENSIFY_SHARP': sharp_densify_shader()}
 
 

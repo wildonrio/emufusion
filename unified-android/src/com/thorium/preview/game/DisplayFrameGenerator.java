@@ -3020,12 +3020,6 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         });
     }
 
-    @Override public void setPerPhaseMotionPreferred(boolean preferred) {
-        perPhaseMotionPreferred = preferred;
-        Log.i(TAG, "Frame generator motion route generator=" + generatorId +
-                " perPhaseMotionPreferred=" + preferred);
-    }
-
     /** AUTO's lock-to-30 tier protocol; Built-in (Alpha)/LSFG stay adaptive. */
     @Override public void setLockToThirtyTierPolicy(boolean enabled) {
         if (closed.get()) return;
@@ -11974,18 +11968,19 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private boolean disMotionActive;
     private long disMotionPromotion = -1L;
 
-    /** Normal play: synthesis 15 takes DIS motion (explicit 22, or the default for larger sources). */
+    /** Normal play: synthesis 15 takes DIS motion (QA synthesis 22 only). */
     private boolean disMotionForPlay() {
-        return disMotionNormal || (disDefault && !disSmallSource() && !perPhaseMotionPreferred);
+        return disMotionNormal;
     }
 
-    // Per system (InWindowGameHost.perPhaseMotionPreferred): larger sources
-    // that render synthesis 24 instead of 22.
-    private volatile boolean perPhaseMotionPreferred;
-
-    /** Normal play renders synthesis 24 and DIS can run on this device. */
+    /**
+     * Normal play renders synthesis 24 and DIS can run on this device. One
+     * route for every source, chosen by nothing but the image (3.2.80): the
+     * per-system split (Wii U and PS2 on 22) is gone; 24 with motion under a
+     * pixel taken as zero ties or beats it there offline.
+     */
     private boolean disPhaseForPlayReady() {
-        if (!disDefault || !(disSmallSource() || perPhaseMotionPreferred)) return false;
+        if (!disDefault) return false;
         if (disPhaseFlow == null) disPhaseFlow = new DenseInverseSearchFlow(true);
         return disPhaseFlow.ensure(historyWidth, historyHeight);
     }
@@ -12095,7 +12090,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // Small (2-D) sources default to 24: on paired Thor hold-outs it beat 21
         // on every 2-D game (NES 0.547 -> 0.457, SNES 0.463 -> 0.435).
         boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||
-                (disDefault && !holdoutRendering && (disSmallSource() || perPhaseMotionPreferred));
+                (disDefault && !holdoutRendering);
         boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;
         if (dis && drawDisFrame(phase, disPhase)) return;
         boolean phaseField = renderPhaseField(phase);

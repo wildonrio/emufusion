@@ -242,14 +242,6 @@ public final class GameSurfaceView extends SurfaceView
         if (frameGenerator != null) frameGenerator.setAuthoritativeSourceHz(value);
     }
 
-    private boolean perPhaseMotionPreferred;
-
-    /** Set from the launch request's system before the surface exists. */
-    public void setPerPhaseMotionPreferred(boolean value) {
-        perPhaseMotionPreferred = value;
-        if (frameGenerator != null) frameGenerator.setPerPhaseMotionPreferred(value);
-    }
-
     /**
      * @param value the source clock to repeat on the panel's scan lattice,
      *        or the requested panel mode itself when no clock divides it
@@ -600,7 +592,6 @@ public final class GameSurfaceView extends SurfaceView
             frameGenerator.setLockToThirtyTierPolicy(
                     launchMode.usesLockToThirtyTierPolicy());
             frameGenerator.setAuthoritativeSourceHz(authoritativeSourceHz);
-            frameGenerator.setPerPhaseMotionPreferred(perPhaseMotionPreferred);
             frameGenerator.setProducerTimelineHz(producerTimelineHz);
             frameGenerator.setStatsListener(frameRateListener);
             frameGenerator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);

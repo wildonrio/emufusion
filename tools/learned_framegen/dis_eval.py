@@ -5,6 +5,7 @@ usage: python3 -m tools.learned_framegen.dis_eval EVAL_ROOT [--per-case N] [--fi
 """
 import argparse
 import json
+import os
 import subprocess
 import tempfile
 from collections import defaultdict
@@ -109,12 +110,18 @@ def pipeline(s, tag, a, c, t, finest):
                    [('sampler', 'uGrayA', f'{tag}Ag{finest}'), ('sampler', 'uGrayC', f'{tag}Cg{finest}'),
                     ('sampler', 'uPatches', f'{tag}pp'), ('i2', 'uSize', fw, fh), ('i2', 'uGrid', gw, gh), ('f1', 'uT', t)])
             prior = dst
+        # The cut/fade verdict after DIS, as the device computes and reads it.
+        s.tex(f'{tag}cut', 1, 1)
+        s.draw('CUT', 1, 1, [f'{tag}cut'],
+               [('sampler', 'uGrayA', f'{tag}Ag0'), ('sampler', 'uGrayC', f'{tag}Cg0'),
+                ('sampler', 'uFlowAC', f'{tag}Af{finest}'), ('f2', 'uFlowSize', fw, fh)])
         s.draw('GENERATE_PHASE', w, h, [f'{tag}out'],
                [('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
                 ('sampler', 'uPhaseFlow', f'{tag}pf'), ('f1', 'uT', t), ('f2', 'uFlowSize', fw, fh),
-                ('f2', 'uHistorySize', w, h)])
+                ('f2', 'uHistorySize', w, h), ('sampler', 'uCut', f'{tag}cut'), ('f1', 'uCutEnabled', 1.0)])
         out = s.folder / f'{tag}.out'
         s.lines.append(f'read {tag}out {out}')
+        s.lines.append(f'read {tag}cut {s.folder}/{tag}.cut')
         return out, (w, h)
     s.draw('GENERATE', w, h, [f'{tag}out'],
            [('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
@@ -138,13 +145,20 @@ def main():
     parser.add_argument('--phase-passes', type=int, default=1)
     parser.add_argument('--densify-power', type=float, help='per-phase densification weight exponent (experiment)')
     parser.add_argument('--no-densify-cross', action='store_true', help='per-phase densification at one pixel')
+    parser.add_argument('--fade-gain', type=float, nargs=2)
+    parser.add_argument('--fade-coverage', type=float)
+    parser.add_argument('--cut-threshold', type=float)
     parser.add_argument('--save', default='', help='write each generated frame (uint8, top row first) here')
     args = parser.parse_args()
-    global SAVE
+    global SAVE, VERDICTS
     SAVE = args.save
+    VERDICTS = {} if os.environ.get('DIS_VERDICTS') else None
     D.ITERATIONS, D.STRIDE = args.iterations, args.stride
     if args.densify_power is not None:
         D.PHASE_DENSIFY_POWER = int(args.densify_power) if args.densify_power == int(args.densify_power) else args.densify_power
+    if args.fade_gain: D.FADE_GAIN = tuple(args.fade_gain)
+    if args.fade_coverage is not None: D.FADE_COVERAGE = args.fade_coverage
+    if args.cut_threshold is not None: D.CUT_THRESHOLD = args.cut_threshold
     if args.no_densify_cross:
         D.PHASE_DENSIFY_CROSS = False
     global PHASE, PHASE_PASSES
@@ -162,7 +176,7 @@ def main():
                 "#version 300 es\nout vec2 vTexCoord;\nvoid main(){vec2 p=vec2(gl_VertexID==1?3.0:-1.0,"
                 "gl_VertexID==2?3.0:-1.0);gl_Position=vec4(p,0.0,1.0);vTexCoord=0.5*(p+1.0);}\n")
             s = Script(tmp)
-            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY'):
+            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY', 'CUT'):
                 # The per-phase route's instance densifies its endpoint flows sharply.
                 frag = 'DENSIFY_SHARP' if name == 'DENSIFY' and PHASE else name
                 s.lines.append(f'prog {name} {tmp}/VERTEX.vert {tmp}/{frag}.frag')
@@ -190,11 +204,19 @@ def main():
                     np.save(dest / f"{index:03d}.npy", np.clip(g * 255 + 0.5, 0, 255).astype(np.uint8))
                     (dest / f'{index:03d}.txt').write_text(str(folder))
                 n1, c1 = sums(g, a, c, b); tot[0] += n1; tot[1] += c1
+                cutf = out.with_suffix('.cut')
+                if VERDICTS is not None and cutf.exists():
+                    cv = np.fromfile(cutf, np.float32)[:2]
+                    VERDICTS.setdefault(case, []).append((float(cv[0]), float(cv[1]), n1 / max(c1, 1e-9), folder.name))
                 d15p = folder / 'generated15.png'
                 if d15p.exists():
                     d15 = load(d15p); hh, ww = d15.shape[:2]
                     rs = (lambda x: area(x, ww, hh)) if (hh, ww) != (h, w) else (lambda x: x)
                     p1, q1 = sums(d15, rs(a), rs(c), rs(b)); tot[2] += p1; tot[3] += q1
+            if VERDICTS is not None and case in VERDICTS:
+                v = VERDICTS[case]
+                print(f'  {case}: cut {sum(1 for x in v if x[0] >= 0.25)}/{len(v)} fade {sum(1 for x in v if x[1] >= 0.5)}/{len(v)} ' +
+                      ' '.join(f'{x[3]}:{x[0]:.2f}/{x[1]:.0f}/{x[2]:.2f}' for x in v if x[0] >= 0.25 or x[1] >= 0.5)[:900])
             print(f'{case:10s} n={len(jobs):3d} gpu-dis={tot[0] / max(tot[1], 1e-9):.3f} '
                   f'device15={tot[2] / max(tot[3], 1e-9):.3f}', flush=True)
 

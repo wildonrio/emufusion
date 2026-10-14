@@ -68,22 +68,19 @@ class DisShaderTest(unittest.TestCase):
         self.assertIn("float w=1.0/max(1.0,d);", dis_gles.shaders()["DENSIFY"])
 
 
-class PerSystemRoutingTest(unittest.TestCase):
-    def test_n64_renders_per_phase_dis(self):
+class SingleRouteTest(unittest.TestCase):
+    def test_every_source_renders_the_same_route(self):
+        # Like LSFG, nothing about the system picks the motion route (3.2.80).
         host = (GAME / "InWindowGameHost.java").read_text()
         surface = (GAME / "GameSurfaceView.java").read_text()
         generator = GENERATOR.read_text()
-        routed = host[host.index("PER_PHASE_MOTION_SYSTEMS = "):]
-        routed = routed[:routed.index(";")]
-        for system in ("n64", "gamecube", "gc", "wii", "dreamcast", "ps3", "switch", "psp"):
-            self.assertIn(f'"{system}"', routed)
-        for system in ("wiiu", "ps2"):
-            self.assertNotIn(f'"{system}"', routed)
-        self.assertIn("layer.setPerPhaseMotionPreferred(perPhaseMotionPreferred(request.systemId));", host)
-        self.assertIn("frameGenerator.setPerPhaseMotionPreferred(perPhaseMotionPreferred);", surface)
-        self.assertIn("(disDefault && !holdoutRendering && (disSmallSource() || perPhaseMotionPreferred));", generator)
-        self.assertIn("return disMotionNormal || (disDefault && !disSmallSource() && !perPhaseMotionPreferred);",
-                      generator)
+        for text in (host, surface, generator, (GAME / "FrameGenerationRenderer.java").read_text()):
+            self.assertNotIn("PerPhaseMotionPreferred", text)
+            self.assertNotIn("PER_PHASE_MOTION_SYSTEMS", text)
+        self.assertIn("(disDefault && !holdoutRendering);", generator)
+        self.assertIn("        return disMotionNormal;\n", generator)
+        # Motion under one source pixel is taken as zero.
+        self.assertIn(" if(length(v*uHistorySize)<1.0)w=(1.0-uT)*a0+uT*c0;else\n", dis_gles.shaders()["GENERATE_PHASE"])
 
 
 class WorkAdaptationTest(unittest.TestCase):
@@ -117,12 +114,12 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn("if (dis && drawDisFrame(phase, disPhase)) return;", generator)
         # Synthesis 24 applies synthesis 15's static-structure mask.
         self.assertIn("boolean structure = structureMaskProgram != 0 && renderStructureMask();", generator)
-        self.assertIn("w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);", dis_gles.GENERATE_PHASE)
+        self.assertIn("w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);", dis_gles.shaders()["GENERATE_PHASE"])
         # 3.2.78: the cut/fade verdict taken after DIS (a camera turn is not a
         # cut), per-pixel zero-motion selection and the sharper densifications.
-        self.assertIn("w=mix(mix(w,a0,uCutEnabled*step(0.25,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));",
-                      dis_gles.GENERATE_PHASE)
-        self.assertIn("if(e0+8.0/255.0<eM)w=(1.0-uT)*a0+uT*c0;", dis_gles.GENERATE_PHASE)
+        self.assertIn("w=mix(mix(w,a0,uCutEnabled*step(0.5,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));",
+                      dis_gles.shaders()["GENERATE_PHASE"])
+        self.assertIn("if(e0+8.0/255.0<eM)w=(1.0-uT)*a0+uT*c0;", dis_gles.shaders()["GENERATE_PHASE"])
         self.assertIn("structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());", generator)
         self.assertIn("if (perPhase && disPhaseFlow == null) disPhaseFlow = new DenseInverseSearchFlow(true);", generator)
         self.assertIn("boolean disCut = maxFragmentTextureUnits >= 9 && disMotionUsable();", generator)
@@ -170,18 +167,15 @@ class DisSelectionTest(unittest.TestCase):
         switch = SWITCH.read_text()
         generator = GENERATOR.read_text()
         self.assertIn('DIS_GLOBAL = "emufusion_framegen_dis"', switch)
-        # Small (2-D) sources render synthesis 24, larger ones 15 with DIS motion.
+        # Every source renders synthesis 24; 22 is QA only.
         self.assertIn("boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||\n"
-                      "                (disDefault && !holdoutRendering && (disSmallSource() || perPhaseMotionPreferred));",
-                      generator)
-        self.assertIn("return disMotionNormal || (disDefault && !disSmallSource() && !perPhaseMotionPreferred);",
-                      generator)
+                      "                (disDefault && !holdoutRendering);", generator)
         self.assertIn("private boolean disSmallSource() { return historyWidth <= 400 && historyHeight <= 300; }",
                       generator)
         # In normal play DIS replaces the block matcher's search; the hold-out keeps both.
         self.assertIn("boolean disOnly = !holdoutMode &&\n"
                       "                    (disMotionForPlay() ? estimateDisMotion() : disPhaseForPlayReady());", generator)
-        self.assertIn("if (!disDefault || !(disSmallSource() || perPhaseMotionPreferred)) return false;", generator)
+        self.assertIn("if (!disDefault) return false;", generator)
         self.assertIn("if (!disOnly && disMotionWanted()) estimateDisMotion();", generator)
         self.assertIn("holdoutRendering = true;", generator)
         self.assertEqual(generator.count("holdoutRendering = false;"), 2)
