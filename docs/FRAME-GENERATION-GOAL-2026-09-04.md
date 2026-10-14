@@ -16,6 +16,8 @@ Against LSFG on the same triplets (flow scale 0.25): ours better by more than 2%
 
 Thor (short, thermally gated check on the candidate without the cut threshold): paired hold-out 22 vs the single route, God of War II 0.522 vs 0.522, SM3DW 0.478 vs 0.517 (Wii U pays 8% for the single route; the remaining gap is now inside the one pipeline). Normal play: God of War II 59.6 -> 118.0 displayed, GPU 3.6 ms per pair, work level 0; SM3DW 52.5 -> 108.8, 3.0 ms, level 1; 2-3 late callbacks each.
 
+Smoke run of the release build: Link's Awakening 38.4 -> 65.9 displayed, 5 late callbacks, PASS; it still sheds to minimum work during its startup stalls (3.2.79 restores it, more slowly than a 40 s run shows).
+
 **Thor (3.2.80, `f93c1775`):** installed with identity preserved (UID 10206, first-install time unchanged).
 
 October 14 **— 3.2.79 (153): reduced work now recovers; one engine stall's late frames are one event.**
