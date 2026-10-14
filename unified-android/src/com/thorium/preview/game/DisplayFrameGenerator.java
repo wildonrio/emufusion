@@ -363,6 +363,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // letting QA join this exact monotonic window to the exact gameplay layer.
     private static final int HEALTH_INTERVAL = 120;
     private static final long DENSE_ARM_RETRY_NS = 500_000_000L;
+    // Pair whose midpoint phase field work level 4 reuses for every phase.
+    private long phaseFieldReusePromotion = -1L;
     private long lastDenseArmAttemptNs;
     private static final AtomicInteger NEXT_GENERATOR_ID = new AtomicInteger(1);
 
@@ -11557,7 +11559,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // God of War II 0.79 -> 0.55), and it used to go at level 2, where
         // every Cemu/Eden/PS3 session sat (2026-10-13). Only steady misses
         // after the solver has been halved remove it now.
-        if (denseWorkLevel >= 4 && !holdoutMode) return false;
+        if (denseWorkLevel >= 5 && !holdoutMode) return false;
+        // Level 4 (before dropping it): one field per pair, matched at the
+        // midpoint and reused for every output phase. At 4x a pair renders
+        // three phases, and Cemu's Wind Waker HD sat at the old no-field level
+        // for whole sessions, the plain endpoint-field warp.
+        boolean reuseField = denseWorkLevel == 4 && !holdoutMode;
+        if (reuseField && phaseFieldReusePromotion == densePromotions &&
+                densePhaseBoundTexture != 0) return true;
+        float fieldPhase = reuseField ? 0.5f : phase;
         if (maxFragmentTextureUnits == 0) {
             int[] units = new int[1];
             GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_IMAGE_UNITS, units, 0);
@@ -11597,7 +11607,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 1f / Math.max(1f, historyWidth), 1f / Math.max(1f, historyHeight));
         uniform2(densePhaseProgram, "uSeedSourceSize",
                 Math.max(1f, historyWidth), Math.max(1f, historyHeight));
-        GLES20.glUniform1f(uniformLocation(densePhaseProgram, "uPhase"), phase);
+        GLES20.glUniform1f(uniformLocation(densePhaseProgram, "uPhase"), fieldPhase);
         // Search around the winner: level 3 (4, 2, 1 px), and the QA
         // hold-out levels 8 (16, 8, 4, 2 px: small sprites moving against the
         // camera are off every candidate by more than 7 px) and 9 (4, 2, 1),
@@ -11637,6 +11647,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, state[0]);
         GLES20.glViewport(state[1], state[2], state[3], state[4]);
+        phaseFieldReusePromotion = reuseField ? densePromotions : -1L;
         return true;
     }
 

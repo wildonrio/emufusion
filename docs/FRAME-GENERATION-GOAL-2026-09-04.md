@@ -6,6 +6,16 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+October 14 **— 3.2.71 (145): heavy games keep a motion field under load.**
+
+The per-phase motion field is the largest quality contributor (20–30% less hold-out error) and the last work shed: at work level 4 it was dropped, leaving the plain endpoint-field warp. SM3DW sat at that level in normal play, and Wind Waker HD at 4× (three phases a pair, each re-estimating the field) for whole sessions. A new level 4 matches the field once per pair, at the midpoint, and reuses it for every output phase; dropping the field moves to level 5 (`GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL` 5, the last level still needing sustained visible misses). Hold-out QA keeps rendering the field per phase.
+
+**Thor (3.2.71, `f4662c3b`):**
+- SM3DW settles at level 4 with the field, in normal play (55 → 115, peak 121) and at 4× (54 → 113, peak 122).
+- Wind Waker HD at 4× spends about a third of a run at level 4 before Cemu's saturated GPU takes it to 5 (29 → 106–107, peak 122).
+- Sonic Superstars at 4× 25 → 67 (peak 113) and Link's Awakening at 4× 43 → 70 stay at levels 1–2; God of War II 59 → 118, Mario Kart Wii 59 → 112, SNES 59 → 102.
+- All passed with no rejections or engine errors.
+
 October 13 (latest) **— 3.2.70 (144): generation starts within a second; software-rendered images never drop a real change as a repeat.**
 
 Images that repeat their predecessor are not new endpoints. The repeat test compared a 16×9 signature, 144 sampled points (a bilinear draw on the GPU path, point samples on the CPU path), so a change that touched no sample (a small sprite, a menu cursor, a letter of dialogue) was dropped. The earlier measurement found DS's intro changing about 15 times a second with none of the changes caught on the CPU path, and the GPU path took over after a few seconds with the same blind spot. Software-rendered images keep their CPU pixels, and each arrives as a fresh snapshot, so every such image is now also compared pixel by pixel with the previous one (the signature's own ≥ 3-level rule, kept by reference, no copy). On the asynchronous GPU path the verdict travels with the retained candidate and is OR'd in when the GPU result for that candidate arrives. Fixed-clock cores, which count every image, skip the comparison. Diagnostic: `softwareSignatureRescues` in the source admission line. Tests: `test_software_images_back_the_signature_with_an_exact_comparison`; the renderer wiring fixture caught a first version that read the candidate's flag before the candidate was found.

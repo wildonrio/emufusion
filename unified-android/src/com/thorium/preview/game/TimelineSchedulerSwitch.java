@@ -41,7 +41,7 @@ public final class TimelineSchedulerSwitch {
     // searching only poorly matched cells, 13 is 12 with a consensus blend
     // (no gain: within 0.006 on five games), 14 is 12 with neighbour selection.
     static final String SYNTH_GLOBAL = "emufusion_framegen_synth";
-    // QA only: emufusion_framegen_work_floor 0..4 holds the dense work level
+    // QA only: emufusion_framegen_work_floor 0..5 holds the dense work level
     // at least there, so hold-out and timing runs can measure each level
     // (delete after tests; the product never sets it).
     static final String WORK_FLOOR_GLOBAL = "emufusion_framegen_work_floor";

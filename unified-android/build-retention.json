@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "6cc4dc84354fee0e11b483eb3fc364f00fd786061898b87c8fa2a64c98f27c34": "Rollback 3.2.69 (143) until 3.2.70 settles.",
-    "a69c1b03c180660d882190033be1eefa3b55af225cfb5327b4d642a28969f8bf": "Current release 3.2.70 (144). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "a69c1b03c180660d882190033be1eefa3b55af225cfb5327b4d642a28969f8bf": "Rollback 3.2.70 (144) until 3.2.71 settles.",
+    "f4662c3bd5a0cd1b46b88a86d5518fdd7e5d88db97791dce47e54f3d4c49965b": "Current release 3.2.71 (145). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -449,6 +449,10 @@
     "unified-android/build/emufusion-3.2.70-phase2-phase3-qualification-b2bdadabe80a5564687bd8e79936bfb67dabaf1c87647f48f4229c7f51638907.apk": {
       "sha256": "b2bdadabe80a5564687bd8e79936bfb67dabaf1c87647f48f4229c7f51638907",
       "reason": "Closed 2026-10-13 3.2.70 candidate 179 (software-signature backstop only); superseded by 180, which also arms dense interpolation within a second. Never installed."
+    },
+    "unified-android/build/emufusion-3.2.70-phase2-phase3-qualification-e3995da719f42827340809bdbfc75a239ff30a2e4d0f8b4137f106496ad5ddee.apk": {
+      "sha256": "e3995da719f42827340809bdbfc75a239ff30a2e4d0f8b4137f106496ad5ddee",
+      "reason": "Closed 2026-10-14 trial 181: phase-field reuse work level (3.2.70 version); shipped as 3.2.71 build 182 (version bump only). Thor on 3.2.71 with identity preserved."
     }
   }
 }

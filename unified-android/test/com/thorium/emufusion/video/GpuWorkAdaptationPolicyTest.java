@@ -160,13 +160,13 @@ public final class GpuWorkAdaptationPolicyTest {
         eq(0, value.consecutiveHealthyPairs(), "and clears recovery");
         // Cemu at startup: about one pair in three missed for seconds.
         int rounds = 0;
-        while (value.workLevel() < GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1 && rounds < 200) {
+        while (value.workLevel() < 3 && rounds < 200) {
             value.onFailure(GpuWorkAdaptationPolicy.Failure.PHYSICAL_DEADLINE_MISS);
             value.onCompletedPair(++pair, 3000L, 7333L, false);
             value.onCompletedPair(++pair, 3000L, 7333L, false);
             ++rounds;
         }
-        eq(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL - 1, value.workLevel(), "steady misses still reach level 3");
+        eq(3, value.workLevel(), "steady misses still reach level 3");
         check(rounds <= 2 * GpuWorkAdaptationPolicy.REDUCTION_SETTLE_PAIRS / 2 + 2,
                 "within about two settle windows of pairs: " + rounds);
     }
