@@ -557,6 +557,10 @@
     "unified-android/build/emufusion-3.2.77-phase2-phase3-qualification-c95ac83ba30fa018af8692fd1cef6c5a2659df7c635b01d7f4a156d1e804e700.apk": {
       "sha256": "c95ac83ba30fa018af8692fd1cef6c5a2659df7c635b01d7f4a156d1e804e700",
       "reason": "Closed 2026-10-14 trial 208: QA 29 (22 + cut after DIS) and 30 (24 + selection + cut after DIS + sharper densification) folded into 3.2.78; Switch and PSP moved to the per-phase route."
+    },
+    "unified-android/build/emufusion-3.2.77-phase2-phase3-qualification.apk": {
+      "sha256": "c95ac83ba30fa018af8692fd1cef6c5a2659df7c635b01d7f4a156d1e804e700",
+      "reason": "Superseded mutable convenience copy of the last 3.2.77 build (trial 208, retired); current is 3.2.78."
     }
   }
 }
