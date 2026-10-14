@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "a3364b0a683e5cb2d2d22d913dfcd8f6a02a867b765e93e23e5f00217479580a": "Rollback 3.2.75 (149) until 3.2.76 settles.",
-    "abcc5668427deaed19e41446c10ac825ad59ec21bbe8b2787617f686e94e9a7d": "Current release 3.2.76 (150). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "abcc5668427deaed19e41446c10ac825ad59ec21bbe8b2787617f686e94e9a7d": "Rollback 3.2.76 (150) until 3.2.77 settles.",
+    "1001c4663a888a3072abb5c16da34e627436a5a9806774dc492cc7ef629d3e14": "Current release 3.2.77 (151). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -517,6 +517,14 @@
     "unified-android/build/emufusion-3.2.76-phase2-phase3-qualification-66c28819ce55066e733118a15a12b04e68323c69b095060732d435da0b357527.apk": {
       "sha256": "66c28819ce55066e733118a15a12b04e68323c69b095060732d435da0b357527",
       "reason": "Closed 2026-10-14 trial 203: QA level 26 (previous pair flow as a finest-level DIS candidate) within 0-1.6% of 24 on seven games; reverted. Thor restored to 3.2.76 with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.76-phase2-phase3-qualification-032c20efec88ff1e8c36156f48ae79f247fe84dab32615f63dbea34961a9909f.apk": {
+      "sha256": "032c20efec88ff1e8c36156f48ae79f247fe84dab32615f63dbea34961a9909f",
+      "reason": "Closed 2026-10-14 trial 204: QA level 27 as a pixel-identity static hold (no effect: God of War II 0.758 -> 0.757); replaced by the structure-mask variant in 205."
+    },
+    "unified-android/build/emufusion-3.2.76-phase2-phase3-qualification-53eb2c5a1d6b7616bea3243ab843f7915698e904495d223baca6dc592d3bfc9a.apk": {
+      "sha256": "53eb2c5a1d6b7616bea3243ab843f7915698e904495d223baca6dc592d3bfc9a",
+      "reason": "Closed 2026-10-14 trial 205: QA level 27 (synthesis 24 with the static-structure mask): God of War II -3%, Sonic Adventure -2%, 2-D within 0.001; folded into synthesis 24 in 3.2.77."
     }
   }
 }

@@ -51,8 +51,8 @@ final class DenseInverseSearchShaders {
             .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n#define P 8\n#define S 3\nuniform sampler2D uGrayA,uGrayC,uPatches;uniform ivec2 uSize,uGrid;uniform float uT;\nlayout(location=0) out vec4 o0;\nvoid main(){ivec2 p=ivec2(gl_FragCoord.xy);vec2 x=vec2(p)+0.5;\n ivec2 hi=min(p/S,uGrid-1);ivec2 lo=max((p-P+S)/S,ivec2(0));lo=min(lo,hi);\n vec2 acc=vec2(0.0);float wsum=0.0;\n for(int gy=lo.y;gy<=hi.y;++gy)for(int gx=lo.x;gx<=hi.x;++gx){\n  vec2 v=texelFetch(uPatches,ivec2(gx,gy),0).xy;\n  float d=abs(texture(uGrayC,(x+(1.0-uT)*v)/vec2(uSize)).r-texture(uGrayA,(x-uT*v)/vec2(uSize)).r)*255.0;\n  float w=1.0/max(1.0,d);acc+=w*v;wsum+=w;}\n o0=vec4(acc/max(wsum,1e-6),0.0,1.0);}\n")
             .toString();
 
-    static final String GENERATE_PHASE = new StringBuilder(385)
-            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\nin vec2 vTexCoord;layout(location=0) out vec4 o0;\nvoid main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n o0=vec4((1.0-uT)*texture(uFrameA,u-uT*v).rgb+uT*texture(uFrameC,u+(1.0-uT)*v).rgb,1.0);}\n")
+    static final String GENERATE_PHASE = new StringBuilder(670)
+            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\nin vec2 vTexCoord;layout(location=0) out vec4 o0;\nuniform sampler2D uStructureMask;uniform float uStructure,uStructureMinMotionPx;uniform vec2 uHistorySize;\nvoid main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n vec3 w=(1.0-uT)*texture(uFrameA,u-uT*v).rgb+uT*texture(uFrameC,u+(1.0-uT)*v).rgb;\n if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n  w=mix(w,(1.0-uT)*texture(uFrameA,u).rgb+uT*texture(uFrameC,u).rgb,texture(uStructureMask,u).r);}\n o0=vec4(w,1.0);}\n")
             .toString();
 
 }

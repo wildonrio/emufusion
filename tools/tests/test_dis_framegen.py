@@ -107,6 +107,10 @@ class DisSelectionTest(unittest.TestCase):
                       "                        ids[i] == DIS_PHASE_SYNTHESIS_LEVEL) continue;", switch)
         self.assertIn("boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;", generator)
         self.assertIn("if (dis && drawDisFrame(phase, disPhase)) return;", generator)
+        # Synthesis 24 applies synthesis 15's static-structure mask.
+        self.assertIn("boolean structure = structureMaskProgram != 0 && renderStructureMask();", generator)
+        self.assertIn("w=mix(w,(1.0-uT)*texture(uFrameA,u).rgb+uT*texture(uFrameC,u).rgb,texture(uStructureMask,u).r);",
+                      dis_gles.GENERATE_PHASE)
         # QA 24: motion refined per output phase (symmetric matching at t).
         self.assertIn("static final int DIS_PHASE_SYNTHESIS_LEVEL = 24;", switch)
         self.assertIn("disFlow.estimatePhase(phase);", generator)

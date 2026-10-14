@@ -196,8 +196,16 @@ def phase_densify_shader():
 GENERATE_PHASE = (HEADER +
     "uniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\n"
     "in vec2 vTexCoord;layout(location=0) out vec4 o0;\n"
+    # Synthesis 15's static-structure mask (fixed text whose colours change
+    # with what is behind it keeps its local rank pattern at zero motion):
+    # where a warp of two sampling steps or more covers a marked pixel, the
+    # zero-motion blend replaces it.
+    "uniform sampler2D uStructureMask;uniform float uStructure,uStructureMinMotionPx;uniform vec2 uHistorySize;\n"
     "void main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n"
-    " o0=vec4((1.0-uT)*texture(uFrameA,u-uT*v).rgb+uT*texture(uFrameC,u+(1.0-uT)*v).rgb,1.0);}\n")
+    " vec3 w=(1.0-uT)*texture(uFrameA,u-uT*v).rgb+uT*texture(uFrameC,u+(1.0-uT)*v).rgb;\n"
+    " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
+    "  w=mix(w,(1.0-uT)*texture(uFrameA,u).rgb+uT*texture(uFrameC,u).rgb,texture(uStructureMask,u).r);}\n"
+    " o0=vec4(w,1.0);}\n")
 
 
 def shaders():

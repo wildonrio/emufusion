@@ -284,8 +284,16 @@ final class DenseInverseSearchFlow {
 
     int generatePhaseProgram() { return generatePhase; }
 
-    void bindGeneratePhase(int frameA, int frameC, float t) {
+    /**
+     * structureMask 0: none. Otherwise synthesis 15's static-structure mask,
+     * applied under warps of minMotionPx or more.
+     */
+    void bindGeneratePhase(int frameA, int frameC, float t, int structureMask, float minMotionPx) {
         GLES20.glUseProgram(generatePhase);
+        GLES20.glUniform1f(location(generatePhase, "uStructure"), structureMask != 0 ? 1f : 0f);
+        bind(generatePhase, "uStructureMask", structureMask != 0 ? structureMask : zeroField, 3);
+        GLES20.glUniform1f(location(generatePhase, "uStructureMinMotionPx"), minMotionPx);
+        GLES20.glUniform2f(location(generatePhase, "uHistorySize"), historyWidth, historyHeight);
         bind(generatePhase, "uFrameA", frameA, 0);
         bind(generatePhase, "uFrameC", frameC, 1);
         bind(generatePhase, "uPhaseFlow", phaseFlow, 2);

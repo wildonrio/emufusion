@@ -12057,7 +12057,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 disPhaseKeyB = keyB;
                 disPhaseValue = phase;
             }
-            disFlow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase);
+            // Synthesis 15's static-structure mask (menu text over a switched
+            // highlight keeps its rank pattern): paired hold-out 24 -> 24 with
+            // it, God of War II 0.653 -> 0.635, Sonic Adventure 0.516 -> 0.506,
+            // 2-D games within 0.001.
+            boolean structure = structureMaskProgram != 0 && renderStructureMask();
+            disFlow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
+                    structure ? structureMaskTexture : 0, 2f * structureStepPixels());
             bindQuad(disFlow.generatePhaseProgram());
         } else {
             disFlow.bindGenerate(historyTextures[previousIndex], historyTextures[currentIndex], phase);
