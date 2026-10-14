@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "ad5ccba2d18a57da866d8d9edf11374ab7c1e0b8f638a12f4dccf5eb975c1028": "Rollback 3.2.74 (148) until 3.2.75 settles.",
-    "a3364b0a683e5cb2d2d22d913dfcd8f6a02a867b765e93e23e5f00217479580a": "Current release 3.2.75 (149). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "a3364b0a683e5cb2d2d22d913dfcd8f6a02a867b765e93e23e5f00217479580a": "Rollback 3.2.75 (149) until 3.2.76 settles.",
+    "abcc5668427deaed19e41446c10ac825ad59ec21bbe8b2787617f686e94e9a7d": "Current release 3.2.76 (150). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -509,6 +509,10 @@
     "unified-android/build/emufusion-3.2.75-phase2-phase3-qualification-c3aa0c6f1724d489edac9210d3fe46917f3cdd917cac0ffdd2efcd1054b77b23.apk": {
       "sha256": "c3aa0c6f1724d489edac9210d3fe46917f3cdd917cac0ffdd2efcd1054b77b23",
       "reason": "Closed 2026-10-14 trial 199: N64 routed to synthesis 24 (route log verified on all three N64 games); superseded by 200, which also skips the block matcher on the synthesis-24 path."
+    },
+    "unified-android/build/emufusion-3.2.76-phase2-phase3-qualification-9a03d32f8845e5001f2dd5a4d5b984325ba3f4dff9b3005030492b402dd778f6.apk": {
+      "sha256": "9a03d32f8845e5001f2dd5a4d5b984325ba3f4dff9b3005030492b402dd778f6",
+      "reason": "Build 201 (3.2.76 version): per-system routing written as a switch, which a fixed-clock test reads as adaptive systems; rebuilt as 202 with a set (same behaviour)."
     }
   }
 }

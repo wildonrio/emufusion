@@ -1286,14 +1286,22 @@ public final class InWindowGameHost
     }
 
     /**
-     * N64 games: on paired Thor hold-outs DIS with per-phase refinement (24)
-     * beat synthesis 15 with DIS motion (22) by 7.6% over ten runs of three
-     * games (1080 Snowboarding about 20%); on every other 3-D system tested
-     * 22 was better by 14-27%.
+     * Systems whose 3-D games render DIS with per-phase refinement (24)
+     * rather than synthesis 15 with DIS motion (22), from paired Thor
+     * hold-outs (22 -> 24, error vs a cross-fade): N64 7.6% better over ten
+     * runs of three games; GameCube MKDD 0.765 -> 0.709 and 0.531 -> 0.424
+     * (Sunshine equal); Mario Kart Wii 0.748 -> 0.645 and 0.823 -> 0.697;
+     * Dreamcast Sonic Adventure 0.859 -> 0.761 and 0.840 -> 0.716; PS3 ICO
+     * 0.779 -> 0.702. Wii U, Switch, PS2 and PSP stay on 22 (SM3DW, Wind
+     * Waker HD, Link's Awakening and both God of War games 14-27% better
+     * there). 3DS and 2-D sources reach 24 by their image size.
      */
     static boolean perPhaseMotionPreferred(String systemId) {
-        return systemId != null && "n64".equals(systemId.trim().toLowerCase(Locale.US));
+        return systemId != null && PER_PHASE_MOTION_SYSTEMS.contains(systemId.trim().toLowerCase(Locale.US));
     }
+
+    private static final java.util.Set<String> PER_PHASE_MOTION_SYSTEMS = new java.util.HashSet<>(
+            java.util.Arrays.asList("n64", "gamecube", "gc", "wii", "dreamcast", "ps3"));
 
     /**
      * Fixed-clock legacy consoles advance one scan frame per core callback.

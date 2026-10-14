@@ -6,7 +6,13 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 14 (latest) **— 3.2.75 (149): N64 renders per-phase DIS; the block matcher no longer runs where nothing uses it.**
+October 14 (latest) **— 3.2.76 (150): GameCube, Wii, Dreamcast and PS3 render per-phase DIS.**
+
+Paired Thor hold-outs of 22 against 24 on the remaining systems (two passes, one with d-pad input): GameCube Mario Kart: Double Dash 0.765 → 0.709 and 0.531 → 0.424 (Sunshine 0.770 → 0.767), Mario Kart Wii 0.748 → 0.645 and 0.823 → 0.697, Dreamcast Sonic Adventure 0.859 → 0.761 and 0.840 → 0.716, PS3 ICO 0.779 → 0.702 (its second pass sat on the near-static menu, where 24 also added far less false motion: 5.54 → 2.32), 3DS 0.504 → 0.457 (already 24 by its 400×240 image). 22 stays better on Wii U (SM3DW, Wind Waker HD), Switch (Link's Awakening 0.965 vs 1.132; Sonic Superstars 0.852 vs 0.869, New Super Mario Bros. U Deluxe 0.462 vs 0.449), PS2 (God of War II 0.500 vs 0.636) and PSP (God of War 0.862 vs 0.985). `InWindowGameHost.perPhaseMotionPreferred` now covers N64, GameCube, Wii, Dreamcast and PS3 (a set, not a switch: a fixed-clock test rejects 3-D systems as `case` labels in that file). Normal play, every route logged as expected: Mario Kart: Double Dash 46.4 → 66.0, Mario Kart Wii 28.2 → 52.1, PS3 55.1 → 97.7, GPU 2.2–2.5 ms per pair (block matcher skipped). One run of Double Dash had Dolphin's known `VK_ERROR_DEVICE_LOST`; in an A/B of two runs each, 3.2.76 ran clean twice and 3.2.75 (the old path) lost the device once, so it is not the routing.
+
+**Thor (3.2.76, `abcc5668`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 14 **— 3.2.75 (149): N64 renders per-phase DIS; the block matcher no longer runs where nothing uses it.**
 
 **N64 on synthesis 24.** Ten paired Thor hold-out runs over three N64 games (22 → 24): 1080° Snowboarding 0.698 → 0.566 and 0.499 → 0.401, Star Fox 64 0.580 → 0.588, 0.724 → 0.582, 0.460 → 0.438, 0.854 → 0.715, Ocarina of Time 0.446 → 0.437, 0.628 → 0.689, 0.390 → 0.460, 0.822 → 0.764: 7.6% better summed, while on SM3DW, Link's Awakening, God of War II and Wind Waker HD 22 stayed 14–27% better. The generator does not know its system, so the in-window host passes a per-system flag (`InWindowGameHost.perPhaseMotionPreferred`: N64) through `GameSurfaceView` to the renderer (`setPerPhaseMotionPreferred`, logged as `Frame generator motion route`); flagged sources render synthesis 24 instead of 22.
 

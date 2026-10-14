@@ -73,7 +73,12 @@ class PerSystemRoutingTest(unittest.TestCase):
         host = (GAME / "InWindowGameHost.java").read_text()
         surface = (GAME / "GameSurfaceView.java").read_text()
         generator = GENERATOR.read_text()
-        self.assertIn('return systemId != null && "n64".equals(systemId.trim().toLowerCase(Locale.US));', host)
+        routed = host[host.index("PER_PHASE_MOTION_SYSTEMS = "):]
+        routed = routed[:routed.index(";")]
+        for system in ("n64", "gamecube", "gc", "wii", "dreamcast", "ps3"):
+            self.assertIn(f'"{system}"', routed)
+        for system in ("wiiu", "switch", "ps2", "psp"):
+            self.assertNotIn(f'"{system}"', routed)
         self.assertIn("layer.setPerPhaseMotionPreferred(perPhaseMotionPreferred(request.systemId));", host)
         self.assertIn("frameGenerator.setPerPhaseMotionPreferred(perPhaseMotionPreferred);", surface)
         self.assertIn("(disDefault && !holdoutRendering && (disSmallSource() || perPhaseMotionPreferred));", generator)
