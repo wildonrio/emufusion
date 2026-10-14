@@ -45,6 +45,10 @@ public final class TimelineSchedulerSwitch {
     // at least there, so hold-out and timing runs can measure each level
     // (delete after tests; the product never sets it).
     static final String WORK_FLOOR_GLOBAL = "emufusion_framegen_work_floor";
+    // QA only: emufusion_framegen_fence_timing=1 times dense stages with native
+    // fences even where EXT_disjoint_timer_query exists, to compare the two.
+    static final String FENCE_TIMING_GLOBAL = "emufusion_framegen_fence_timing";
+    private static volatile boolean fenceTiming;
     private static volatile int workFloor;
     // The finest motion solve runs on the pyramid's quarter-resolution images
     // instead of the full history (default since 2026-10-13: same hold-out
@@ -63,7 +67,7 @@ public final class TimelineSchedulerSwitch {
     // QA only: emufusion_framegen_holdout_levels "a,b,c" picks the three
     // synthesis variants the hold-out compares (100+ = with the prepared warp).
     static final String HOLDOUT_LEVELS_GLOBAL = "emufusion_framegen_holdout_levels";
-    static final int[] DEFAULT_HOLDOUT_LEVELS = {12, 14, 114};
+    static final int[] DEFAULT_HOLDOUT_LEVELS = {14, 15, 115};
     private static volatile int[] holdoutLevels = DEFAULT_HOLDOUT_LEVELS.clone();
     // 12 (3.2.65): the phase winner is searched (16, 8, 4, 2 px) where it
     // matches poorly. Hold-out vs 5: SM3DW 0.601 -> 0.530 of a cross-fade,
@@ -71,7 +75,11 @@ public final class TimelineSchedulerSwitch {
     // GPU time per pair. 14 (3.2.66) adds per-pixel selection among the four
     // nearest cell vectors: vs 12 SM3DW 0.521 -> 0.510, Wind Waker HD 0.415
     // -> 0.404, Sunshine 0.737 -> 0.708, God of War II equal; same GPU time.
-    static final int DEFAULT_SYNTHESIS_LEVEL = 14;
+    // 15 (3.2.69) adds the static-structure fallback: fixed text whose
+    // highlight changed takes the zero-motion blend instead of a warp that
+    // erased it. DS file menu 1.211 -> 1.008 of a cross-fade; SM3DW, Wind
+    // Waker HD, God of War II and Star Fox 64 within 0.4%; same GPU time.
+    static final int DEFAULT_SYNTHESIS_LEVEL = 15;
     private static volatile int synthesisLevel = DEFAULT_SYNTHESIS_LEVEL;
 
     private TimelineSchedulerSwitch() {}
@@ -104,7 +112,7 @@ public final class TimelineSchedulerSwitch {
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default synthesis.
         }
-        synthesisLevel = Math.max(0, Math.min(14, level));
+        synthesisLevel = Math.max(0, Math.min(15, level));
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -113,6 +121,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings never raise the work level.
         }
         workFloor = Math.max(0, Math.min(GpuWorkAdaptationPolicy.DEFAULT_MAX_WORK_LEVEL, floor));
+        boolean fences = false;
+        try {
+            if (context != null) fences = Settings.Global.getInt(
+                    context.getContentResolver(), FENCE_TIMING_GLOBAL, 0) == 1;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the driver's own timing source.
+        }
+        fenceTiming = fences;
         boolean quarter = true;
         try {
             if (context != null) quarter = Settings.Global.getInt(
@@ -139,7 +155,7 @@ public final class TimelineSchedulerSwitch {
         holdoutLevels = parseHoldoutLevels(levels);
     }
 
-    /** Three ids in 0..14 or 100..114; anything else falls back to the default. */
+    /** Three ids in 0..15 or 100..115; anything else falls back to the default. */
     static int[] parseHoldoutLevels(String value) {
         if (value == null) return DEFAULT_HOLDOUT_LEVELS.clone();
         String[] parts = value.split(",");
@@ -149,7 +165,7 @@ public final class TimelineSchedulerSwitch {
             for (int i = 0; i < 3; ++i) {
                 ids[i] = Integer.parseInt(parts[i].trim());
                 int level = ids[i] % 100;
-                if (ids[i] < 0 || ids[i] > 114 || (ids[i] > 14 && ids[i] < 100) || level > 14)
+                if (ids[i] < 0 || ids[i] > 115 || (ids[i] > 15 && ids[i] < 100) || level > 15)
                     return DEFAULT_HOLDOUT_LEVELS.clone();
             }
         } catch (NumberFormatException invalid) {
@@ -170,6 +186,8 @@ public final class TimelineSchedulerSwitch {
     static int synthesisLevel() { return synthesisLevel; }
 
     static int workFloor() { return workFloor; }
+
+    static boolean fenceTiming() { return fenceTiming; }
 
     static boolean solveQuarter() { return solveQuarter; }
 

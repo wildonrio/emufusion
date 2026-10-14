@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "60304512af0fd4f6754349336ff6b54b420cffa431ea53f41a9c06be728a2a7a": "Rollback 3.2.67 (141) until 3.2.68 settles.",
-    "bfa225a39b2ba3e8698c4f4a6fe1cb7ae9027fcb605157fe2789f357d1652078": "Current release 3.2.68 (142). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "bfa225a39b2ba3e8698c4f4a6fe1cb7ae9027fcb605157fe2789f357d1652078": "Rollback 3.2.68 (142) until 3.2.69 settles.",
+    "6cc4dc84354fee0e11b483eb3fc364f00fd786061898b87c8fa2a64c98f27c34": "Current release 3.2.69 (143). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -397,6 +397,54 @@
     "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-1abd5137f6c5eac0382e9bca580aa391996887fdd3268a59aa664b0e393995c7.apk": {
       "sha256": "1abd5137f6c5eac0382e9bca580aa391996887fdd3268a59aa664b0e393995c7",
       "reason": "Closed 2026-10-13 A/B: QA emufusion_framegen_exhaustive_held (per-pixel held-frame check for software images). Only melonDS and SwanStation use the software signature; DS intro: signature caught 0 of ~15 changes/s on the CPU path, then the GPU signature path (not covered) took over and held frames on the 20 Hz slots were shown anyway; PlayStation 0 misses. Not shipped; Thor restored to 3.2.68 (142) with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-ac1a58c645e44d093dcf089990e99cb43e44b26c08b095189b79d8caea59038d.apk": {
+      "sha256": "ac1a58c645e44d093dcf089990e99cb43e44b26c08b095189b79d8caea59038d",
+      "reason": "Closed 2026-10-13 fallback trial 166: fence timing + vsync clock; dense still refused on the emulator (reserved word smooth). Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-c4cb36177c9761e66f1ab03a64bc6f12f85cf40598163ace72f1ab2ad01f996a.apk": {
+      "sha256": "c4cb36177c9761e66f1ab03a64bc6f12f85cf40598163ace72f1ab2ad01f996a",
+      "reason": "Closed 2026-10-13 fallback trial 167: shader renames; fence rows status 8 on the emulator. Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-e8e6956ba2ce1ca9b922177d78d778c77ca30e58236ee6b02f8d2df146a2fd33.apk": {
+      "sha256": "e8e6956ba2ce1ca9b922177d78d778c77ca30e58236ee6b02f8d2df146a2fd33",
+      "reason": "Closed 2026-10-13 fallback trial 168: split fence statuses; emulator signalled an unflushed begin fence after the end fence. Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-c9d12b5c47c2bf166bd42bcc1b98370a4620e952ba0918d263e2a4e724e4274d.apk": {
+      "sha256": "c9d12b5c47c2bf166bd42bcc1b98370a4620e952ba0918d263e2a4e724e4274d",
+      "reason": "Closed 2026-10-13 fallback trial 169: flush per fence; emulator stalled in glGetUniformLocation. Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-e92e090e55650dbd36e936223e651fa5ed2953b81400307b750d5dbf83a784c8.apk": {
+      "sha256": "e92e090e55650dbd36e936223e651fa5ed2953b81400307b750d5dbf83a784c8",
+      "reason": "Closed 2026-10-13 trial 170: uniform-location cache; emulator generated at 144 Hz, Thor sweep passed. Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-441528d6ba15696f02109411fbbf0565de6f95449d314df584943a9509fda99b.apk": {
+      "sha256": "441528d6ba15696f02109411fbbf0565de6f95449d314df584943a9509fda99b",
+      "reason": "Closed 2026-10-13 trial 171: QA fence-timing switch; Thor fence vs query comparison done. Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-21bd14eed7818e3697b664a73c57e86b79ad1dd835dea25311350a21d3f86fe4.apk": {
+      "sha256": "21bd14eed7818e3697b664a73c57e86b79ad1dd835dea25311350a21d3f86fe4",
+      "reason": "Closed 2026-10-13 trial 172: hold-out floor halved for QA; DS menu measured at 1.26x a cross-fade. Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-1f3a14ad7576d8bb5884bf235365db8937a018b8692468828f0ae041b77daa5e.apk": {
+      "sha256": "1f3a14ad7576d8bb5884bf235365db8937a018b8692468828f0ae041b77daa5e",
+      "reason": "Closed 2026-10-13 trial 173: static structure (one ring, 1.5 px); DS menu 1.195 -> 0.991, SM3DW/WWHD -1 to -2%. Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-00bd4bd10e278e556e3c7fe54771daeacd2c2006d97a860dd4b780e2826a494c.apk": {
+      "sha256": "00bd4bd10e278e556e3c7fe54771daeacd2c2006d97a860dd4b780e2826a494c",
+      "reason": "Closed 2026-10-13 trial 174: static structure with a 2-step threshold; SM3DW/WWHD still -1%. Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.68-phase2-phase3-qualification-d1d234a56da519e74512359fc1c614482404fce31a68a43f42d55c03e20af44f.apk": {
+      "sha256": "d1d234a56da519e74512359fc1c614482404fce31a68a43f42d55c03e20af44f",
+      "reason": "Closed 2026-10-13 trial 175: two-ring static structure; DS menu 1.211 -> 1.008, others within 0.4% (shipped as 3.2.69 default). Thor on 3.2.69 candidate with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.69-phase2-phase3-qualification-7e73aeeadf5c4d5bd6213a683aa5c6274745cd95beb616de940fcbcf317ba70d.apk": {
+      "sha256": "7e73aeeadf5c4d5bd6213a683aa5c6274745cd95beb616de940fcbcf317ba70d",
+      "reason": "Closed 2026-10-13 first 3.2.69 candidate 176: static structure inlined in the warp shader doubled Sonic Superstars warp time (register pressure). Thor on 3.2.69 (6cc4dc84) with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.69-phase2-phase3-qualification-c0a5ed002eefff3cef7ad02d3e3c0ede8a570bba4f2f8fc9a14117f2e4c44499.apk": {
+      "sha256": "c0a5ed002eefff3cef7ad02d3e3c0ede8a570bba4f2f8fc9a14117f2e4c44499",
+      "reason": "Closed 2026-10-13 3.2.69 candidate 177: early-exit census, still inlined; superseded by the per-pair mask pass (178). Thor on 3.2.69 (6cc4dc84) with identity preserved."
     }
   }
 }

@@ -64,6 +64,30 @@ static EGLBoolean fake_compositor_query(EGLDisplay d, EGLSurface s, EGLint count
     egl_error_value = compositor_error;
     return compositor_ok;
 }
+/* Native-fence timing (GPUs without EXT_disjoint_timer_query). Fake fds start
+ * high so the code's close() never touches a real descriptor. */
+static int next_fence_fd = 40000;
+static int syncs_created, syncs_destroyed, fence_dup_fail;
+static int64_t fence_signal_ns[64];
+static int fence_state[64];
+static void *fake_create_sync(EGLDisplay d, unsigned type, const EGLint *attrib) {
+    (void)d; (void)attrib; assert(type == 0x3144);
+    return (void *)(uintptr_t)(0x7000 + ++syncs_created);
+}
+static EGLBoolean fake_destroy_sync(EGLDisplay d, void *sync) {
+    (void)d; assert(sync); ++syncs_destroyed; return EGL_TRUE;
+}
+static EGLint fake_dup_fence(EGLDisplay d, void *sync) {
+    (void)d; assert(sync);
+    return fence_dup_fail ? -1 : next_fence_fd++;
+}
+static int fake_fence_reader(int fd, int64_t *ns) {
+    int index = fd - 40000;
+    if (index < 0 || index >= 64) return -1;
+    if (fence_state[index] > 0) *ns = fence_signal_ns[index];
+    return fence_state[index];
+}
+void emufusion_framegen_timer_set_fence_reader_for_test(int (*reader)(int, int64_t *));
 EGLDisplay eglGetCurrentDisplay(void) { return (EGLDisplay)(uintptr_t)0x5678; }
 EGLSurface eglGetCurrentSurface(EGLint which) {
     (void)which; return current_surface;
@@ -226,6 +250,12 @@ __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *name) {
     if (!strcmp(name, "glDeleteSync")) return (__eglMustCastToProperFunctionPointerType)fake_delete_sync;
     if (!strcmp(name, "glMapBufferRange")) return (__eglMustCastToProperFunctionPointerType)fake_map_buffer;
     if (!strcmp(name, "glUnmapBuffer")) return (__eglMustCastToProperFunctionPointerType)fake_unmap_buffer;
+    if (!strcmp(name, "eglCreateSyncKHR"))
+        return (__eglMustCastToProperFunctionPointerType)fake_create_sync;
+    if (!strcmp(name, "eglDestroySyncKHR"))
+        return (__eglMustCastToProperFunctionPointerType)fake_destroy_sync;
+    if (!strcmp(name, "eglDupNativeFenceFDANDROID"))
+        return (__eglMustCastToProperFunctionPointerType)fake_dup_fence;
     if (!strcmp(name, "eglGetNextFrameIdANDROID"))
         return (__eglMustCastToProperFunctionPointerType)fake_next_frame_id;
     if (!strcmp(name, "eglGetFrameTimestampSupportedANDROID"))
@@ -235,7 +265,8 @@ __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *name) {
     return NULL;
 }
 
-jlong Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(JNIEnv *, jclass);
+jlong Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(JNIEnv *, jclass, jboolean);
+jint Java_com_thorium_preview_game_DenseGpuTimer_nativeTimingSource(JNIEnv *, jclass, jlong);
 jboolean Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(JNIEnv *, jclass,
                                                                  jlong, jint, jlong);
 jboolean Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(JNIEnv *, jclass, jlong);
@@ -531,14 +562,14 @@ int main(void) {
     ready_timestamp_supported_mask = 0;
 
     extensions = "GL_EXT_other";
-    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL) == 0);
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL, 0) == 0);
     extensions = "GL_EXT_disjoint_timer_query GL_EXT_occlusion_query_boolean";
     omit_symbol = 1;
-    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL) == 0);
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL, 0) == 0);
     omit_symbol = 0;
     /* ES3 core occlusion queries do not require the ES2 extension string. */
     extensions = "GL_EXT_disjoint_timer_query";
-    jlong timer = Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL);
+    jlong timer = Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL, 0);
     assert(timer != 0);
     assert(emufusion_framegen_signature_poll_raw(timer, 0, rows, CAPACITY) == 0);
     assert(emufusion_framegen_signature_begin_raw(timer, 1));
@@ -656,7 +687,7 @@ int main(void) {
      * replacement starts with an empty ring and a caller-owned fresh sequence. */
     assert(deleted >= 96);
     jlong replacement = Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(
-            NULL, NULL);
+            NULL, NULL, 0);
     assert(replacement != 0);
     assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeConfigureProofAtlas(
             NULL, NULL, replacement, 192, 64, 49152, 4) == 15);
@@ -763,5 +794,83 @@ int main(void) {
     assert(rows[0] == 0 && rows[3] == 1 && rows[4] == 1);
     Java_com_thorium_preview_game_DenseGpuTimer_nativeDestroy(NULL, NULL,
             replacement);
+
+    /* QA may force fence timing even where timer queries exist. */
+    emufusion_framegen_timer_set_fence_reader_for_test(fake_fence_reader);
+    egl_extensions = "EGL_KHR_fence_sync EGL_ANDROID_native_fence_sync";
+    jlong forced = Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL, 1);
+    assert(forced && Java_com_thorium_preview_game_DenseGpuTimer_nativeTimingSource(NULL, NULL,
+            forced) == 2);
+    Java_com_thorium_preview_game_DenseGpuTimer_nativeDestroy(NULL, NULL, forced);
+
+    /* Without EXT_disjoint_timer_query the timer brackets each stage with two
+     * native fences and reports their kernel signal-time difference. */
+    emufusion_framegen_timer_set_fence_reader_for_test(fake_fence_reader);
+    extensions = "GL_EXT_occlusion_query_boolean";
+    egl_extensions = "EGL_KHR_fence_sync";
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL, 0) == 0);
+    egl_extensions = "EGL_KHR_fence_sync EGL_ANDROID_native_fence_sync";
+    fence_dup_fail = 1;   /* self-test: no fence fd -> unavailable */
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL, 0) == 0);
+    fence_dup_fail = 0;
+    fence_state[next_fence_fd - 40000] = 0;   /* self-test fence still pending: fine */
+    jlong fenced = Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(NULL, NULL, 0);
+    assert(fenced);
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeTimingSource(NULL, NULL,
+            fenced) == 2);
+    int begin_fd = next_fence_fd, end_fd = next_fence_fd + 1;
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL, fenced, 2, 7));
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, fenced));
+    assert(next_fence_fd == end_fd + 1);   /* one flushed fence at each end */
+    fence_state[end_fd - 40000] = 0;       /* GPU not there yet: no row */
+    assert(emufusion_framegen_timer_poll_raw(fenced, 7, 0, rows, CAPACITY) == 0);
+    fence_state[begin_fd - 40000] = 1; fence_signal_ns[begin_fd - 40000] = 5000000;
+    fence_state[end_fd - 40000] = 1; fence_signal_ns[end_fd - 40000] = 5500000;
+    assert(emufusion_framegen_timer_poll_raw(fenced, 7, 0, rows, CAPACITY) == FIELDS);
+    assert(rows[0] == 0 && rows[3] == 2 && rows[4] == 7 && rows[7] == 1 &&
+           rows[8] == 500000 && rows[11] == 0);
+    assert(emufusion_framegen_timer_poll_raw(fenced, 7, 0, rows, CAPACITY) == 0);
+    /* Same-interrupt signals still report a positive stage time. */
+    begin_fd = next_fence_fd; end_fd = next_fence_fd + 1;
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL, fenced, 6, 3));
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, fenced));
+    fence_state[begin_fd - 40000] = 1; fence_signal_ns[begin_fd - 40000] = 9000000;
+    fence_state[end_fd - 40000] = 1; fence_signal_ns[end_fd - 40000] = 9000000;
+    assert(emufusion_framegen_timer_poll_raw(fenced, 3, 3, rows, CAPACITY) == FIELDS);
+    assert(rows[0] == 0 && rows[3] == 6 && rows[8] == 1000);
+    /* An unreadable earlier fence fails closed with the fence status. */
+    begin_fd = next_fence_fd; end_fd = next_fence_fd + 1;
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL, fenced, 3, 8));
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, fenced));
+    fence_state[begin_fd - 40000] = -1;
+    fence_state[end_fd - 40000] = 1; fence_signal_ns[end_fd - 40000] = 12000000;
+    assert(emufusion_framegen_timer_poll_raw(fenced, 8, 3, rows, CAPACITY) == FIELDS);
+    assert(rows[0] == 8);
+    /* A begin fence not yet reported is polled again, not failed. */
+    begin_fd = next_fence_fd; end_fd = next_fence_fd + 1;
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL, fenced, 5, 10));
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, fenced));
+    fence_state[begin_fd - 40000] = 0;
+    fence_state[end_fd - 40000] = 1; fence_signal_ns[end_fd - 40000] = 20000000;
+    assert(emufusion_framegen_timer_poll_raw(fenced, 10, 3, rows, CAPACITY) == 0);
+    fence_state[begin_fd - 40000] = 1; fence_signal_ns[begin_fd - 40000] = 19700000;
+    assert(emufusion_framegen_timer_poll_raw(fenced, 10, 3, rows, CAPACITY) == FIELDS);
+    assert(rows[0] == 0 && rows[8] == 300000);
+    /* A reported inversion still yields a positive stage time. */
+    begin_fd = next_fence_fd; end_fd = next_fence_fd + 1;
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL, fenced, 5, 11));
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(NULL, NULL, fenced));
+    fence_state[begin_fd - 40000] = 1; fence_signal_ns[begin_fd - 40000] = 30000000;
+    fence_state[end_fd - 40000] = 1; fence_signal_ns[end_fd - 40000] = 29000000;
+    assert(emufusion_framegen_timer_poll_raw(fenced, 11, 3, rows, CAPACITY) == FIELDS);
+    assert(rows[0] == 0 && rows[8] == 1000);
+    /* A begin without an end is discarded, its sync released. */
+    int destroyed_before = syncs_destroyed;
+    assert(Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(NULL, NULL, fenced, 4, 9));
+    Java_com_thorium_preview_game_DenseGpuTimer_nativeDiscard(NULL, NULL, fenced);
+    assert(syncs_destroyed == destroyed_before + 1);
+    assert(syncs_created == syncs_destroyed);
+    Java_com_thorium_preview_game_DenseGpuTimer_nativeDestroy(NULL, NULL, fenced);
+    emufusion_framegen_timer_set_fence_reader_for_test(NULL);
     return 0;
 }

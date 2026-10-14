@@ -6,6 +6,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#if defined(__ANDROID__) || defined(__linux__)
+#include <linux/sync_file.h>
+#include <sys/ioctl.h>
+#endif
 
 typedef unsigned int GLbitfield;
 typedef unsigned char GLboolean;
@@ -46,6 +51,12 @@ typedef unsigned char GLboolean;
 #ifndef EGL_BAD_ACCESS
 #define EGL_BAD_ACCESS 0x3002
 #endif
+#ifndef EGL_SYNC_NATIVE_FENCE_ANDROID
+#define EGL_SYNC_NATIVE_FENCE_ANDROID 0x3144
+#endif
+#ifndef EGL_NO_NATIVE_FENCE_FD_ANDROID
+#define EGL_NO_NATIVE_FENCE_FD_ANDROID -1
+#endif
 #define EGL_TIMESTAMP_PENDING_ANDROID ((int64_t)-2)
 #define EGL_TIMESTAMP_INVALID_ANDROID ((int64_t)-1)
 extern EGLDisplay eglGetCurrentDisplay(void);
@@ -70,6 +81,13 @@ extern void glPixelStorei(GLenum, GLint);
 #define STATUS_ELAPSED_OVERFLOW 5
 #define STATUS_ZERO_ELAPSED 6
 #define STATUS_DISJOINT_GL_ERROR 7
+#define STATUS_FENCE_ERROR 8          /* a fence's sync-file state is unreadable */
+/* Timing sources: EXT_disjoint_timer_query, or (where that extension is
+ * missing) native fences whose kernel signal timestamps bracket each stage. */
+#define TIMING_SOURCE_QUERIES 1
+#define TIMING_SOURCE_FENCES 2
+/* A fence pair can signal in the same interrupt; a stage still took time. */
+#define FENCE_MIN_ELAPSED_NS 1000
 #define GL_ANY_SAMPLES_PASSED_EXT 0x8C2F
 #define SIGNATURE_RING_SIZE 4
 #define SIGNATURE_RESULT_FIELDS 8
@@ -152,6 +170,9 @@ typedef EGLBoolean (*get_frame_timestamp_supported_fn)(EGLDisplay, EGLSurface,
         EGLint);
 typedef EGLBoolean (*get_frame_timestamps_fn)(EGLDisplay, EGLSurface, uint64_t,
         EGLint, const EGLint *, int64_t *);
+typedef void *(*egl_create_sync_fn)(EGLDisplay, unsigned int, const EGLint *);
+typedef EGLBoolean (*egl_destroy_sync_fn)(EGLDisplay, void *);
+typedef EGLint (*egl_dup_native_fence_fd_fn)(EGLDisplay, void *);
 typedef struct signature_slot {
     GLuint query;
     int active;
@@ -165,6 +186,8 @@ typedef struct timer_slot {
     int active;
     int pending;
     int64_t sequence;
+    int begin_fd;
+    int end_fd;
 } timer_slot;
 
 typedef struct proof_atlas_slot {
@@ -214,6 +237,10 @@ typedef struct framegen_timer {
     int proof_atlas_height;
     int proof_atlas_bytes;
     int proof_atlas_capability;
+    int timing_source;
+    egl_create_sync_fn create_sync;
+    egl_destroy_sync_fn destroy_sync;
+    egl_dup_native_fence_fd_fn dup_fence_fd;
 } framegen_timer;
 
 typedef struct physical_present_slot {
@@ -281,6 +308,75 @@ static int has_extension(const char *list, const char *wanted) {
     return 0;
 }
 
+static int drain_egl_errors(void);
+
+/* Reads a native fence's kernel signal time: 1 = signalled (*signal_ns set),
+ * 0 = still pending, -1 = unsupported or failed. Tests may replace it. */
+static int read_fence_signal_ns_default(int fd, int64_t *signal_ns) {
+#if defined(__ANDROID__) || defined(__linux__)
+    struct sync_fence_info fences[4];
+    struct sync_file_info info;
+    memset(fences, 0, sizeof(fences));
+    memset(&info, 0, sizeof(info));
+    info.num_fences = 4;
+    info.sync_fence_info = (uint64_t)(uintptr_t)fences;
+    if (fd < 0 || ioctl(fd, SYNC_IOC_FILE_INFO, &info) < 0) return -1;
+    if (info.status < 0) return -1;
+    if (info.status == 0) return 0;
+    int64_t latest = 0;
+    uint32_t count = info.num_fences < 4 ? info.num_fences : 4;
+    for (uint32_t i = 0; i < count; ++i)
+        if ((int64_t)fences[i].timestamp_ns > latest)
+            latest = (int64_t)fences[i].timestamp_ns;
+    if (latest <= 0) return -1;
+    *signal_ns = latest;
+    return 1;
+#else
+    (void)fd; (void)signal_ns;
+    return -1;
+#endif
+}
+
+static int (*read_fence_signal_ns)(int, int64_t *) = read_fence_signal_ns_default;
+
+void emufusion_framegen_timer_set_fence_reader_for_test(int (*reader)(int, int64_t *)) {
+    read_fence_signal_ns = reader ? reader : read_fence_signal_ns_default;
+}
+
+static void close_fence(int *fd) {
+    if (*fd >= 0) close(*fd);
+    *fd = -1;
+}
+
+/* Inserts a native fence at this point of the GL stream and returns its fd
+ * (EGL_ANDROID_native_fence_sync: the fd exists once the fence is flushed). */
+static int insert_fence(framegen_timer *timer) {
+    void *sync = timer->create_sync(timer->display, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+    if (!sync) return -1;
+    glFlush();
+    int fd = timer->dup_fence_fd(timer->display, sync);
+    timer->destroy_sync(timer->display, sync);
+    return fd == EGL_NO_NATIVE_FENCE_FD_ANDROID ? -1 : fd;
+}
+
+static int enable_fence_timing(framegen_timer *timer) {
+    const char *egl = eglQueryString(timer->display, EGL_EXTENSIONS);
+    if (!has_extension(egl, "EGL_ANDROID_native_fence_sync") ||
+            !has_extension(egl, "EGL_KHR_fence_sync")) return 0;
+    timer->create_sync = (egl_create_sync_fn)resolve_egl_symbol("eglCreateSyncKHR");
+    timer->destroy_sync = (egl_destroy_sync_fn)resolve_egl_symbol("eglDestroySyncKHR");
+    timer->dup_fence_fd = (egl_dup_native_fence_fd_fn)
+            resolve_egl_symbol("eglDupNativeFenceFDANDROID");
+    if (!timer->create_sync || !timer->destroy_sync || !timer->dup_fence_fd) return 0;
+    /* Self-test: a fence fd must exist and its sync-file state must be readable. */
+    int fd = insert_fence(timer);
+    int64_t ignored = 0;
+    int state = fd >= 0 ? read_fence_signal_ns(fd, &ignored) : -1;
+    close_fence(&fd);
+    drain_egl_errors();
+    return state >= 0;
+}
+
 static framegen_timer *from(jlong value) {
     return (framegen_timer *)(intptr_t)value;
 }
@@ -338,37 +434,7 @@ static int write_result(jlong *rows, int capacity, int count, int status,
     return count;
 }
 
-JNIEXPORT jlong JNICALL
-Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(JNIEnv *env, jclass type) {
-    (void)env; (void)type;
-    EGLContext context = eglGetCurrentContext();
-    if (context == EGL_NO_CONTEXT) return 0;
-    const char *extensions = (const char *)glGetString(GL_EXTENSIONS);
-    if (!has_extension(extensions, "GL_EXT_disjoint_timer_query")) return 0;
-    framegen_timer *timer = calloc(1, sizeof(*timer));
-    if (!timer) return 0;
-    timer->context = context;
-    timer->display = eglGetCurrentDisplay();
-    timer->active_slot = -1;
-    timer->active_signature_slot = -1;
-    timer->gen = (gen_queries_fn)eglGetProcAddress("glGenQueriesEXT");
-    timer->del = (delete_queries_fn)eglGetProcAddress("glDeleteQueriesEXT");
-    timer->begin = (begin_query_fn)eglGetProcAddress("glBeginQueryEXT");
-    timer->end = (end_query_fn)eglGetProcAddress("glEndQueryEXT");
-    timer->get = (get_query_fn)eglGetProcAddress("glGetQueryObjectuivEXT");
-    timer->get64 = (get_query64_fn)eglGetProcAddress("glGetQueryObjectui64vEXT");
-    if (!timer->gen || !timer->del || !timer->begin || !timer->end || !timer->get ||
-            !timer->get64) {
-        free(timer); return 0;
-    }
-    GLuint queries[RING_SIZE] = {0};
-    timer->gen(RING_SIZE, queries);
-    for (int i = 0; i < RING_SIZE; ++i) {
-        if (!queries[i]) {
-            timer->del(RING_SIZE, queries); free(timer); return 0;
-        }
-        timer->slots[i].query = queries[i];
-    }
+static void enable_signature_queries(framegen_timer *timer, const char *extensions) {
     timer->signature_capability = SIGNATURE_CAP_CONTEXT;
     if (gles_major_version() >= 3) {
         timer->signature_gen = (gen_queries_fn)resolve_gl_symbol("glGenQueries");
@@ -420,6 +486,53 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(JNIEnv *env, jclass typ
             timer->signature_del(SIGNATURE_RING_SIZE, signature_queries);
         }
     }
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_thorium_preview_game_DenseGpuTimer_nativeCreate(JNIEnv *env, jclass type,
+        jboolean force_fences) {
+    (void)env; (void)type;
+    EGLContext context = eglGetCurrentContext();
+    if (context == EGL_NO_CONTEXT) return 0;
+    const char *extensions = (const char *)glGetString(GL_EXTENSIONS);
+    framegen_timer *timer = calloc(1, sizeof(*timer));
+    if (!timer) return 0;
+    timer->context = context;
+    timer->display = eglGetCurrentDisplay();
+    timer->active_slot = -1;
+    timer->active_signature_slot = -1;
+    for (int i = 0; i < RING_SIZE; ++i) {
+        timer->slots[i].begin_fd = -1;
+        timer->slots[i].end_fd = -1;
+    }
+    /* QA can force fences where timer queries exist, to compare the two. */
+    if (force_fences || !has_extension(extensions, "GL_EXT_disjoint_timer_query")) {
+        /* Many GPUs lack the timer extension; time stages with fences. */
+        if (!enable_fence_timing(timer)) { free(timer); return 0; }
+        timer->timing_source = TIMING_SOURCE_FENCES;
+        enable_signature_queries(timer, extensions);
+        return (jlong)(intptr_t)timer;
+    }
+    timer->timing_source = TIMING_SOURCE_QUERIES;
+    timer->gen = (gen_queries_fn)eglGetProcAddress("glGenQueriesEXT");
+    timer->del = (delete_queries_fn)eglGetProcAddress("glDeleteQueriesEXT");
+    timer->begin = (begin_query_fn)eglGetProcAddress("glBeginQueryEXT");
+    timer->end = (end_query_fn)eglGetProcAddress("glEndQueryEXT");
+    timer->get = (get_query_fn)eglGetProcAddress("glGetQueryObjectuivEXT");
+    timer->get64 = (get_query64_fn)eglGetProcAddress("glGetQueryObjectui64vEXT");
+    if (!timer->gen || !timer->del || !timer->begin || !timer->end || !timer->get ||
+            !timer->get64) {
+        free(timer); return 0;
+    }
+    GLuint queries[RING_SIZE] = {0};
+    timer->gen(RING_SIZE, queries);
+    for (int i = 0; i < RING_SIZE; ++i) {
+        if (!queries[i]) {
+            timer->del(RING_SIZE, queries); free(timer); return 0;
+        }
+        timer->slots[i].query = queries[i];
+    }
+    enable_signature_queries(timer, extensions);
     return (jlong)(intptr_t)timer;
 }
 
@@ -881,6 +994,18 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativeBegin(JNIEnv *env, jclass type
             stage < 1 || stage > 6) return JNI_FALSE;
     timer_slot *slot = &timer->slots[timer->cursor];
     if (slot->pending || slot->active) return JNI_FALSE;
+    if (timer->timing_source == TIMING_SOURCE_FENCES) {
+        /* Each fence is flushed where it stands: an unflushed fence did not
+         * keep its stream position on every driver (the Android emulator
+         * signalled it after the stage's end fence). The interval then also
+         * covers recording the stage, a slight, conservative overestimate. */
+        slot->begin_fd = insert_fence(timer);
+        if (slot->begin_fd < 0) { drain_egl_errors(); return JNI_FALSE; }
+        slot->stage = stage; slot->sequence = sequence; slot->active = 1;
+        timer->active_slot = timer->cursor;
+        timer->cursor = (timer->cursor + 1) % RING_SIZE;
+        return JNI_TRUE;
+    }
     /* A stale error must not be attributed to this query.  Conversely, once
      * glBeginQueryEXT succeeds far enough to make the query active, every
      * error path must explicitly end it before releasing the slot. */
@@ -906,6 +1031,20 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativeEnd(JNIEnv *env, jclass type,
     if (!timer || eglGetCurrentContext() != timer->context || timer->active_slot < 0)
         return JNI_FALSE;
     int index = timer->active_slot;
+    if (timer->timing_source == TIMING_SOURCE_FENCES) {
+        timer_slot *slot = &timer->slots[index];
+        timer->active_slot = -1;
+        slot->active = 0;
+        slot->end_fd = insert_fence(timer);
+        if (slot->begin_fd < 0 || slot->end_fd < 0) {
+            close_fence(&slot->begin_fd);
+            close_fence(&slot->end_fd);
+            drain_egl_errors();
+            return JNI_FALSE;
+        }
+        slot->pending = 1;
+        return JNI_TRUE;
+    }
     timer->end(GL_TIME_ELAPSED_EXT);
     timer->active_slot = -1;
     timer->slots[index].active = 0;
@@ -936,6 +1075,36 @@ int emufusion_framegen_timer_poll_raw(jlong handle, jlong current_pair_sequence,
     if (eglGetCurrentContext() != timer->context)
         return write_result(rows, capacity, 0, STATUS_CONTEXT, -1, NULL,
                 current_pair_sequence, current_warp_sequence, 0, 0, 0, 0, 0);
+    if (timer->timing_source == TIMING_SOURCE_FENCES) {
+        for (int i = 0; i < RING_SIZE; ++i) {
+            timer_slot *slot = &timer->slots[i];
+            if (!slot->pending) continue;
+            int64_t end_ns = 0, begin_ns = 0;
+            int end_state = read_fence_signal_ns(slot->end_fd, &end_ns);
+            if (end_state == 0) continue;
+            int begin_state = end_state > 0 ?
+                    read_fence_signal_ns(slot->begin_fd, &begin_ns) : -1;
+            /* Signals can be delivered a moment apart; poll again later. */
+            if (begin_state == 0) continue;
+            jlong current = slot->stage == 6 ? current_warp_sequence :
+                    current_pair_sequence;
+            jlong queue_age = current >= slot->sequence ? current - slot->sequence : 0;
+            slot->pending = 0;
+            close_fence(&slot->begin_fd);
+            close_fence(&slot->end_fd);
+            if (end_state < 0 || begin_state < 0)
+                return write_result(rows, capacity, count, STATUS_FENCE_ERROR, i, slot,
+                        current_pair_sequence, current_warp_sequence, 1, 0,
+                        queue_age, 1, 0);
+            uint64_t elapsed = end_ns > begin_ns ? (uint64_t)(end_ns - begin_ns) : 0;
+            if (elapsed < FENCE_MIN_ELAPSED_NS) elapsed = FENCE_MIN_ELAPSED_NS;
+            count = write_result(rows, capacity, count, STATUS_OK, i, slot,
+                    current_pair_sequence, current_warp_sequence, 1, elapsed,
+                    queue_age, 1, 0);
+            if (count < 0) return count;
+        }
+        return count;
+    }
     GLint disjoint = 0;
     if (!drain_gl_errors())
         return write_result(rows, capacity, 0, STATUS_DISJOINT_GL_ERROR, -1, NULL,
@@ -997,6 +1166,14 @@ int emufusion_framegen_timer_poll_raw(jlong handle, jlong current_pair_sequence,
 }
 
 JNIEXPORT jint JNICALL
+Java_com_thorium_preview_game_DenseGpuTimer_nativeTimingSource(JNIEnv *env,
+        jclass type, jlong handle) {
+    (void)env; (void)type;
+    framegen_timer *timer = from(handle);
+    return timer ? timer->timing_source : 0;
+}
+
+JNIEXPORT jint JNICALL
 Java_com_thorium_preview_game_DenseGpuTimer_nativeTakeDisjointCount(JNIEnv *env,
         jclass type, jlong handle) {
     (void)env; (void)type;
@@ -1020,9 +1197,14 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativeDiscard(JNIEnv *env, jclass ty
     (void)env; (void)type;
     framegen_timer *timer = from(handle);
     if (!timer) return;
-    if (timer->active_slot >= 0 && eglGetCurrentContext() == timer->context)
+    if (timer->active_slot >= 0 && eglGetCurrentContext() == timer->context &&
+            timer->timing_source == TIMING_SOURCE_QUERIES)
         timer->end(GL_TIME_ELAPSED_EXT);
     timer->active_slot = -1;
+    for (int i = 0; i < RING_SIZE; ++i) {
+        close_fence(&timer->slots[i].begin_fd);
+        close_fence(&timer->slots[i].end_fd);
+    }
     if (timer->active_signature_slot >= 0 &&
             eglGetCurrentContext() == timer->context)
         timer->signature_end(GL_ANY_SAMPLES_PASSED_EXT);
@@ -1055,7 +1237,12 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativeDestroy(JNIEnv *env, jclass ty
                 signature_queries[i] = timer->signatures[i].query;
             timer->signature_del(SIGNATURE_RING_SIZE, signature_queries);
         }
-        timer->del(RING_SIZE, queries);
+        if (timer->timing_source == TIMING_SOURCE_QUERIES)
+            timer->del(RING_SIZE, queries);
+    }
+    for (int i = 0; i < RING_SIZE; ++i) {
+        close_fence(&timer->slots[i].begin_fd);
+        close_fence(&timer->slots[i].end_fd);
     }
     free(timer);
 }

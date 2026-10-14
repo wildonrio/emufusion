@@ -2470,8 +2470,8 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         for shader in (coarse_lattice, fine_lattice):
             self.assertIn("cost/16.0", shader)
             self.assertIn("support/16.0", shader)
-        self.assertIn("float coherent=step(9.5/16.0,candidate.a)", winner)
-        self.assertIn("coherent>bestCoherent", winner)
+        self.assertIn("float isCoherent=step(9.5/16.0,candidate.a)", winner)
+        self.assertIn("isCoherent>bestCoherent", winner)
         self.assertIn("bestCost/=16.0; zeroMotionCost/=16.0", reduction)
         self.assertIn("step(9.5/16.0,left.a)", reduction)
         self.assertIn("support/16.0", reduction)
@@ -2511,8 +2511,8 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertNotIn("texture2D(uFlow,vTexCoord)", reduction)
         binder = generator[generator.index("private void bindQuad(int program)"):
                            generator.index("private void releaseGl()")]
-        self.assertIn('glGetAttribLocation(program, "aPosition")', binder)
-        self.assertIn('glGetAttribLocation(program, "aTexCoord")', binder)
+        self.assertIn('attribLocation(program, "aPosition")', binder)
+        self.assertIn('attribLocation(program, "aTexCoord")', binder)
         self.assertIn("if (position < 0)", binder)
         self.assertIn("if (texture >= 0)", binder)
         optional = binder[binder.index("if (texture >= 0)"):]
@@ -3355,11 +3355,11 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         refresh = generator.split(
             "private void refreshQualificationProofState()", 1)[1].split(
             "private String activeProofContract", 1)[0]
-        self.assertLess(refresh.index("DenseGpuTimer.create()"),
+        self.assertLess(refresh.index("DenseGpuTimer.create("),
                         refresh.index("ensureDenseResources()"))
         self.assertIn("boolean wasDense = densePyramidEnabled", refresh)
         self.assertIn("teardownDenseEpoch(\"settings-disabled\")", refresh)
-        self.assertIn("denseGpuTimer = DenseGpuTimer.create()", refresh)
+        self.assertIn("denseGpuTimer = DenseGpuTimer.create(TimelineSchedulerSwitch.fenceTiming())", refresh)
         atlas_epoch = generator.split(
             "private void ensureProofAtlasTimerConfigured()", 1)[1].split(
             "private void ensureDenseResources()", 1)[0]

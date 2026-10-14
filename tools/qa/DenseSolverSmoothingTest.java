@@ -107,8 +107,8 @@ final class DenseSolverSmoothingTest {
     }
     static void run(String path) throws Exception {
         String base=new String(Files.readAllBytes(Paths.get(path)),java.nio.charset.StandardCharsets.UTF_8);
-        String old="b=mix(b,smooth,w);gl_FragColor=enc(b);";
-        String guard="vec2 proposed=floor(mix(b,smooth,w)*256.0+.5)/256.0;if(objective(proposed)+.000001<objective(b))b=proposed;gl_FragColor=enc(b);";
+        String old="b=mix(b,smoothed,w);gl_FragColor=enc(b);";
+        String guard="vec2 proposed=floor(mix(b,smoothed,w)*256.0+.5)/256.0;if(objective(proposed)+.000001<objective(b))b=proposed;gl_FragColor=enc(b);";
         // Accept current production source too, reconstructing only the prior
         // unconditional assignment for the negative control.
         if(base.contains(guard))base=base.replace(guard,old);
@@ -122,9 +122,9 @@ final class DenseSolverSmoothingTest {
     static void benchmark(String path) throws Exception {
         run(path); // Require the known-defect regression before timing.
         String current=new String(Files.readAllBytes(Paths.get(path)),java.nio.charset.StandardCharsets.UTF_8);
-        String guard="vec2 proposed=floor(mix(b,smooth,w)*256.0+.5)/256.0;if(objective(proposed)+.000001<objective(b))b=proposed;gl_FragColor=enc(b);";
+        String guard="vec2 proposed=floor(mix(b,smoothed,w)*256.0+.5)/256.0;if(objective(proposed)+.000001<objective(b))b=proposed;gl_FragColor=enc(b);";
         if(!current.contains(guard))throw new AssertionError("current guarded source required");
-        String baseline=current.replace(guard,"b=mix(b,smooth,w);gl_FragColor=enc(b);");
+        String baseline=current.replace(guard,"b=mix(b,smoothed,w);gl_FragColor=enc(b);");
         timing=true;
         try {
             for(int[] size:new int[][]{{128,72},{192,144},{256,192}}) {

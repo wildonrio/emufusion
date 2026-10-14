@@ -35,7 +35,7 @@ class VariableSourceGenerationTest(unittest.TestCase):
 public class VariableProbe {
   static final double VARIABLE_SOURCE_MIN_HZ = 19.5;
   static final double VARIABLE_SOURCE_MIN_GAIN = 1.25;
-  boolean timelineMode = true; int timelineScansPerOutput;
+  boolean timelineMode = true; boolean holdoutMode = false; int timelineScansPerOutput;
   static final long TIMELINE_LATTICE_RETAIN_NS = 10_000_000_000L;
   int timelineReleasedScans; long timelineReleasedAtNs;
   static int multiplier = 2;

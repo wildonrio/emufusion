@@ -122,6 +122,9 @@ public class EglBindingFixture {
             timestamp=value;trace.add("pts:"+value);return !EGL14.failAt.equals("timestamp");
         }
     }
+    // Production deletes programs through this helper (it clears the
+    // uniform-location caches); the fixture only traces the deletion.
+    static void deleteProgram(int program){GLES20.glDeleteProgram(program);}
     static class GLES20 {
         static final int GL_FRAMEBUFFER=1,GL_COLOR_BUFFER_BIT=2;
         static void glBindFramebuffer(int target,int name){trace.add("fbo:"+name);}

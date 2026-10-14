@@ -841,7 +841,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // on 576 texels per direction.
             "if(uExhaustiveRadius>.5){for(int y=-4;y<=4;y++){for(int x=-4;x<=4;x++){if(abs(float(x))>uExhaustiveRadius||abs(float(y))>uExhaustiveRadius)continue;vec2 f=c+vec2(float(x),float(y))*uUpdateStep;float z=objective(f)+reg(f,m);if(z<bc){bc=z;b=f;}}}c=b;}\n" +
             "for(int y=-1;y<=1;y++){for(int x=-1;x<=1;x++){if(x!=0||y!=0){vec2 f=c+vec2(float(x),float(y))*uUpdateStep;float z=objective(f)+reg(f,m);if(z<bc){bc=z;b=f;}}}}\n" +
-            "float w=.18*edge;vec2 smooth=(l+r+d+u)*.25;\n" +
+            "float w=.18*edge;vec2 smoothed=(l+r+d+u)*.25;\n" +
             // On the final 128x72 iteration, replace an isolated vector
             // with the robust median of three or more mutually agreeing
             // neighbours. Each direction remains independent and the
@@ -850,7 +850,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // image match. Thor regression: exact4px became3.445/2.004px with
             // neighboring wrong basins. Test the packed candidate's objective;
             // preserve the selected motion on ties and failed comparisons.
-            "if(uFinalConsensus>.5){float g=step(2.5,support)*edge;smooth=m;w=max(w,.65*g);}vec2 proposed=floor(mix(b,smooth,w)*256.0+.5)/256.0;if(objective(proposed)+.000001<objective(b))b=proposed;gl_FragColor=enc(b);}\n";
+            "if(uFinalConsensus>.5){float g=step(2.5,support)*edge;smoothed=m;w=max(w,.65*g);}vec2 proposed=floor(mix(b,smoothed,w)*256.0+.5)/256.0;if(objective(proposed)+.000001<objective(b))b=proposed;gl_FragColor=enc(b);}\n";
 
     private static final String DENSE_CYCLE_SHADER =
             "precision highp float; uniform sampler2D uFlow,uReverseFlow,uReference,uTarget;\n" +
@@ -1241,8 +1241,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             " vec4 best=candidateAt(region,0.0,0.0); float bestCoherent=step(9.5/16.0,best.a);\n" +
             " for(int y=0;y<5;y++){for(int x=0;x<5;x++){\n" +
             "  vec4 candidate=candidateAt(region,float(x),float(y));\n" +
-            "  float coherent=step(9.5/16.0,candidate.a);\n" +
-            "  if(coherent>bestCoherent||(coherent==bestCoherent&&candidate.b<best.b)){best=candidate;bestCoherent=coherent;}\n" +
+            "  float isCoherent=step(9.5/16.0,candidate.a);\n" +
+            "  if(isCoherent>bestCoherent||(isCoherent==bestCoherent&&candidate.b<best.b)){best=candidate;bestCoherent=isCoherent;}\n" +
             " }} gl_FragColor=best;\n" +
             "}\n";
 
@@ -1328,7 +1328,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "vec2 seedDec(vec4 f){return vec2(seedUnp(f.rg),seedUnp(f.ba))/256.0;}\n" +
             "uniform float uPhase;\n" +
             "uniform float uDenseEncoding;\n" +
-            "uniform sampler2D uPhaseFlow;uniform float uPhaseFieldEnabled;uniform vec2 uPhaseSize;uniform float uConsensus;\n" +
+            "uniform sampler2D uPhaseFlow;uniform float uPhaseFieldEnabled;uniform vec2 uPhaseSize;uniform float uConsensus;uniform float uStructure;uniform float uStructureMinMotionPx;uniform sampler2D uStructureMask;\n" +
             "#ifdef PREPARED_WARP\n" +
             "uniform sampler2D uWarp0,uWarp1,uWarp2;\n" +
             "#endif\n" +
@@ -1338,6 +1338,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "varying vec2 vTexCoord;\n" +
             "vec2 decodeFlow(vec4 field){vec2 legacy=field.rg*2.0-1.0;vec2 dc=(field.rg*255.0-128.0)/127.0;vec2 dense=sign(dc)*dc*dc;return mix(legacy,dense,uDenseEncoding)*uFlowRange;}\n" +
             "float maxDiff(vec3 x,vec3 y){vec3 e=abs(x-y);return max(max(e.r,e.g),e.b);}\n" +
+            // Static structure (synthesis 15): STRUCTURE_MASK_SHADER marks, once
+            // per pair, where both endpoints keep the same local rank pattern
+            // at zero motion although colours changed (fixed text over a
+            // switched highlight). A warp of two sampling steps or more there
+            // takes the zero-motion blend instead. The census lives in its
+            // own pass: inlined here it doubled the warp's time on Sonic
+            // Superstars (register pressure), even when switched off.
+            "float staticStructure(float motionPx){\n" +
+            " if(uStructure<0.5||motionPx<uStructureMinMotionPx)return 0.0;\n" +
+            " return texture2D(uStructureMask,vTexCoord).r;\n" +
+            "}\n" +
             "void main(){\n" +
             // Phase-synthesis programs (levels 1+): where the phase field's
             // two samples agree, the pixel is the phase blend of them and the
@@ -1354,7 +1365,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             "  vec3 qp=mix(qa,qb,uPhase);\n" +
             "  vec3 qra=texture2D(uPrevious,vTexCoord).rgb;vec3 qrb=texture2D(uCurrent,vTexCoord).rgb;\n" +
             "  float qKeep=max(step(20.0/255.0,maxDiff(qra,qrb)),1.0-step(6.0/255.0,maxDiff(qp,mix(qra,qrb,step(0.5,uPhase)))));\n" +
-            "  if(qCut<0.5&&qf.b>0.4&&maxDiff(qa,qb)<0.03&&qKeep>0.5){gl_FragColor=vec4(qp,1.0);return;}\n" +
+            "  if(qCut<0.5&&qf.b>0.4&&maxDiff(qa,qb)<0.03&&qKeep>0.5){\n" +
+            "   gl_FragColor=vec4(mix(qp,mix(qra,qrb,uPhase),staticStructure(length(qv*uDenseSeedSourceSize))),1.0);return;}\n" +
             " }\n" +
             "#endif\n" +
             // Backward maps current -> previous; forward maps previous ->
@@ -1553,10 +1565,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // both regions blend aligned samples; at an occlusion the side
             // whose motion is reliable takes over smoothly, never by a hard
             // switch at t=0.5. Original weights; nothing learned or copied.
+            " float synthMotionPx=0.0;\n" +
             "#ifdef PHASE_SYNTHESIS\n" +
             " if(uPhaseFieldEnabled*uDenseEncoding>0.5){\n" +
             "  vec4 pf=texture2D(uPhaseFlow,vTexCoord);\n" +
             "  vec2 pv=decodeFlow(pf);\n" +
+            "  synthMotionPx=length(pv*uDenseSeedSourceSize);\n" +
             "  vec3 a1=texture2D(uPrevious,clamp(vTexCoord-uPhase*pv,vec2(0.0),vec2(1.0))).rgb;\n" +
             "  vec3 b1=texture2D(uCurrent,clamp(vTexCoord+(1.0-uPhase)*pv,vec2(0.0),vec2(1.0))).rgb;\n" +
             "  float c1=clamp(pf.b,0.0,1.0);\n" +
@@ -1672,6 +1686,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             " predictionAdmission*=1.0-popIn*weakOnly;\n" +
             " vec3 finalColor=mix(exactEndpoint,selectedPrediction," +
                     "predictionAdmission*(1.0-staticHud));\n" +
+            " float structureMotionPx=max(synthMotionPx,max(length(warpForward*uDenseSeedSourceSize)," +
+                    "length(warpBackward*uDenseSeedSourceSize)));\n" +
+            " finalColor=mix(finalColor,mix(rawPrevious,rawCurrent,uPhase)," +
+                    "staticStructure(structureMotionPx));\n" +
             // A hard cut has no intermediate: hold the exact left endpoint
             // for the whole synthetic (the documented contract), never a
             // warp of whatever photometric matches survived across the cut.
@@ -1682,6 +1700,35 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // below either threshold.
             " float hardCut=uDenseCutEnabled*step(0.25,cutFraction);\n" +
             " gl_FragColor=vec4(mix(finalColor,rawPrevious,hardCut),1.0);\n" +
+            "}\n";
+
+    // Static-structure mask (synthesis 15), one texel per sampling step:
+    // 1 where A and B changed colour but keep the same local rank pattern at
+    // zero motion in two rings (one and two steps out), i.e. structure that
+    // did not move. Flat or moving content returns 0 within a few samples.
+    private static final String STRUCTURE_MASK_SHADER =
+            "precision highp float;\n" +
+            "uniform sampler2D uPrevious,uCurrent;uniform vec2 uStructureStep;varying vec2 vTexCoord;\n" +
+            "float maxDiff(vec3 x,vec3 y){vec3 e=abs(x-y);return max(max(e.r,e.g),e.b);}\n" +
+            "float structureMatch(vec3 ra,vec3 rb){\n" +
+            " if(maxDiff(ra,rb)<6.0/255.0)return 0.0;\n" +
+            " vec3 L=vec3(.299,.587,.114);float ca=dot(ra,L),cb=dot(rb,L);\n" +
+            " for(int r=1;r<=2;r++){float disagree=0.0,textured=0.0;\n" +
+            "  for(int i=0;i<9;i++){if(i==4)continue;\n" +
+            "   vec2 o=vec2(mod(float(i),3.0)-1.0,floor(float(i)/3.0)-1.0)*uStructureStep*float(r);\n" +
+            "   float na=dot(texture2D(uPrevious,vTexCoord+o).rgb,L)-ca;\n" +
+            "   float nb=dot(texture2D(uCurrent,vTexCoord+o).rgb,L)-cb;\n" +
+            "   float sa=step(4.0/255.0,na)-step(4.0/255.0,-na);float sb=step(4.0/255.0,nb)-step(4.0/255.0,-nb);\n" +
+            "   disagree+=step(0.5,abs(sa-sb));textured+=max(abs(sa),abs(sb));\n" +
+            "   if(disagree>1.5)return 0.0;\n" +
+            "  }\n" +
+            "  if(textured<2.5)return 0.0;\n" +
+            " }\n" +
+            " return 1.0;\n" +
+            "}\n" +
+            "void main(){\n" +
+            " float m=structureMatch(texture2D(uPrevious,vTexCoord).rgb,texture2D(uCurrent,vTexCoord).rgb);\n" +
+            " gl_FragColor=vec4(m,m,m,1.0);\n" +
             "}\n";
 
     // Independent qualification reference. This intentionally does not call
@@ -2141,6 +2188,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // which follows motion boundaries and perspective more closely.
     private int densePhaseWidth, densePhaseHeight;
     private int densePhaseMedianTexture, densePhaseMedianFramebuffer, densePhaseMedianProgram;
+    // Static-structure mask (synthesis 15), recomputed once per pair.
+    private int structureMaskProgram, structureMaskTexture, structureMaskFramebuffer;
+    private int structureMaskWidth, structureMaskHeight;
+    private long structureMaskPromotion = -1L;
+    private final int[] structureMaskState = new int[5];
     // The phase texture drawMotionFrame samples: the raw field, or its median.
     private int densePhaseBoundTexture;
     private boolean synthesisEnabled;
@@ -4127,7 +4179,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (physicalPresentationTracker == null &&
                     appOwnsVisiblePresentation()) {
                 physicalPresentationUnavailableLogged = true;
-                Log.w(TAG, "Physical scanout timestamps unavailable" +
+                Log.w(TAG, "Physical scanout timestamps unavailable; panel clock from vsync callbacks" +
                         " generator=" + generatorId +
                         " extension=EGL_ANDROID_get_frame_timestamps");
             } else {
@@ -4420,6 +4472,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 "#define PHASE_SYNTHESIS\n#define PHASE_NEIGHBORS\n" + MOTION_INTERPOLATE_SHADER);
         densePhaseProgram = createProgram(VERTEX_SHADER, DENSE_PHASE_SHADER);
         densePhaseMedianProgram = createProgram(VERTEX_SHADER, PHASE_MEDIAN_SHADER);
+        structureMaskProgram = createProgram(VERTEX_SHADER, STRUCTURE_MASK_SHADER);
         synthesisLevel = TimelineSchedulerSwitch.synthesisLevel();
         qaWorkFloor = TimelineSchedulerSwitch.workFloor();
         solveMatchesQuarterImages = TimelineSchedulerSwitch.solveQuarter();
@@ -7253,7 +7306,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         bindTexture(densePyramidProgram, "uTexture", source, 0);
         uniform2(densePyramidProgram, "uInputTexel",
                 1f / Math.max(1, sourceWidth), 1f / Math.max(1, sourceHeight));
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePyramidProgram, "uTapScale"), tapScale);
+        GLES20.glUniform1f(uniformLocation(densePyramidProgram, "uTapScale"), tapScale);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
@@ -7304,7 +7357,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         uniform2(denseGlobalCostProgram, "uGridSize", gridSize, gridSize);
         uniform2(denseGlobalCostProgram, "uStep", step, step);
         uniform2(denseGlobalCostProgram, "uFlowLimit", limit, limit);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseGlobalCostProgram,
+        GLES20.glUniform1f(uniformLocation(denseGlobalCostProgram,
                 "uUseCenter"), useCenter ? 1f : 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
@@ -7321,7 +7374,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         uniform2(denseGlobalReduceProgram, "uGridSize", gridSize, gridSize);
         uniform2(denseGlobalReduceProgram, "uStep", step, step);
         uniform2(denseGlobalReduceProgram, "uFlowLimit", limit, limit);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseGlobalReduceProgram,
+        GLES20.glUniform1f(uniformLocation(denseGlobalReduceProgram,
                 "uUseCenter"), useCenter ? 1f : 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
@@ -7372,28 +7425,28 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         reciprocalTexture, 4);
                 bindTexture(denseSolveProgram, "uGlobalSeed",
                         denseGlobalSeedTextures[direction], 5);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uHasPrior"), prior == 0 ? 0f : 1f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uUseTemporalGuide"), temporalGuide ? 1f : 0f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uUseReciprocalGuide"), reciprocalGuide ? 1f : 0f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uUseGlobalSeed"),
                         denseV28ReducedAnalysisRequested && coarsestFirst ? 1f : 0f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uUseNeighborProposal"), 0f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uReciprocalMargin"), 0.002f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uNeighborMargin"), 0.002f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uCycleObjectiveWeight"), 0f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uTemporalLimit"), denseMaxFlowPixels());
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uUseWidePatch"), level == DENSE_LEVELS - 1 ? 1f : 0f);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uFinalConsensus"), level == 0 &&
                         iteration == iterations - 1 ? 1f : 0f);
                 // The first fine pass is the required 64x36 -> 128x72 field
@@ -7401,7 +7454,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // a redundant nine-candidate search until the full-resolution
                 // field exists. Three later 1px searches preserve the former
                 // 3px fine-level reach with substantially less shared-GPU ALU.
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uBypassSearch"), level == 0 && iteration == 0 ? 1f : 0f);
                 uniform2(denseSolveProgram, "uAnalysisTexel",
                         1f / width, 1f / height);
@@ -7435,7 +7488,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 float step = level == 2 ? coarsestStep :
                         level == 1 ? 2f : 1f;
                 uniform2(denseSolveProgram, "uUpdateStep", step, step);
-                GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+                GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                         "uExhaustiveRadius"), coarsestFirst ? 4f : 0f);
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
                 prior = output;
@@ -7469,29 +7522,29 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 denseFinalTextures[1 - direction], 4);
         bindTexture(denseSolveProgram, "uGlobalSeed",
                 denseGlobalSeedTextures[direction], 5);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uHasPrior"), 1f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uUseTemporalGuide"), 0f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uUseReciprocalGuide"), 1f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uUseGlobalSeed"), 0f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uUseNeighborProposal"), 1f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uReciprocalMargin"), 0.006f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uNeighborMargin"), 0.002f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uCycleObjectiveWeight"), 0.006f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uTemporalLimit"), denseMaxFlowPixels());
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uUseWidePatch"), 0f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uFinalConsensus"), 0f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uBypassSearch"), 0f);
         uniform2(denseSolveProgram, "uAnalysisTexel",
                 1f / denseAnalysisWidth, 1f / denseAnalysisHeight);
@@ -7501,7 +7554,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 1f / denseAnalysisWidth, 1f / denseAnalysisHeight);
         uniform2(denseSolveProgram, "uSourceSize", historyWidth, historyHeight);
         uniform2(denseSolveProgram, "uUpdateStep", 1f, 1f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseSolveProgram,
+        GLES20.glUniform1f(uniformLocation(denseSolveProgram,
                 "uExhaustiveRadius"), 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         denseFinalTextures[direction] = output;
@@ -7527,7 +7580,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             bindQuad(denseFillProgram);
             bindTexture(denseFillProgram, "uField", input, 0);
             uniform2(denseFillProgram, "uTexel", 1f / denseAnalysisWidth, 1f / denseAnalysisHeight);
-            GLES20.glUniform1f(GLES20.glGetUniformLocation(denseFillProgram, "uRelaxed"),
+            GLES20.glUniform1f(uniformLocation(denseFillProgram, "uRelaxed"),
                     pass >= 4 ? 2f : pass >= 2 ? 1f : 0f);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         }
@@ -7548,13 +7601,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         uniform2(denseCycleProgram, "uReverseTexel", 1f / denseAnalysisWidth,
                 1f / denseAnalysisHeight);
         float[] rect = denseActiveRect();
-        GLES20.glUniform4f(GLES20.glGetUniformLocation(denseCycleProgram, "uActiveRect"),
+        GLES20.glUniform4f(uniformLocation(denseCycleProgram, "uActiveRect"),
                 rect[0], rect[1], rect[2], rect[3]);
         float limit = Math.min(denseMaxFlowPixels(),
                 flowLimitPixels(historyWidth, historyHeight));
         uniform2(denseCycleProgram, "uFlowRange", limit / historyWidth,
                 limit / historyHeight);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(denseCycleProgram,
+        GLES20.glUniform1f(uniformLocation(denseCycleProgram,
                 "uValidityBase"),
                 2f * Math.max(1f, activeFlowLimitPixels() / DENSE_MAX_FLOW_PIXELS));
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
@@ -8086,8 +8139,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         bindQuad(copyProgram);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, externalTexture);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(copyProgram, "uTexture"), 0);
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(copyProgram, "uTransform"),
+        GLES20.glUniform1i(uniformLocation(copyProgram, "uTexture"), 0);
+        GLES20.glUniformMatrix4fv(uniformLocation(copyProgram, "uTransform"),
                 1, false, textureTransform, 0);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
@@ -8266,7 +8319,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // 2026-10-12). This was half the panel (0.53), which on a 90 Hz mode
         // left 55-60 FPS games ungenerated and on 144 Hz capped sources at 76.
         // The controller's own plan still takes precedence when it has one.
-        if (!(panelHz > 0.0) || !(sourceHz >= VARIABLE_SOURCE_MIN_HZ) ||
+        // Hold-out QA withholds every other real image, so each scored pair
+        // spans two source frames: halve the floor, or a 20 fps source (a DS
+        // menu transition) could never be scored.
+        double minSourceHz = holdoutMode ? VARIABLE_SOURCE_MIN_HZ / 2.0 : VARIABLE_SOURCE_MIN_HZ;
+        if (!(panelHz > 0.0) || !(sourceHz >= minSourceHz) ||
                 sourceHz * VARIABLE_SOURCE_MIN_GAIN > panelHz) return 0;
         int multiplier = TimelineSchedulerSwitch.maxMultiplier();
         int fresh = freshVariableSourceScans(panelHz, sourceHz, multiplier);
@@ -10636,7 +10693,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         boolean nextDense = false;
         if (denseRequested && !densePyramidUnavailable && !denseOverloadSuspended()) {
             try {
-                if (denseGpuTimer == null) denseGpuTimer = DenseGpuTimer.create();
+                if (denseGpuTimer == null) {
+                    denseGpuTimer = DenseGpuTimer.create(TimelineSchedulerSwitch.fenceTiming());
+                    Log.i(TAG, "Dense GPU timing generator=" + generatorId + " source=" +
+                            (denseGpuTimer.timingSource() == DenseGpuTimer.TIMING_SOURCE_FENCES ?
+                                    "native-fences" : "timer-queries"));
+                }
                 ensureDenseResources();
                 if (denseCalibrationRuns == 0) runDenseIntrusiveCalibration();
                 nextDense = true;
@@ -11260,7 +11322,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glDeleteFramebuffers(1, new int[] {holdoutResultFramebuffer}, 0);
         GLES20.glDeleteTextures(1, new int[] {holdoutResultTexture}, 0);
         GLES20.glDeleteTextures(HOLDOUT_REFERENCES, holdoutReferenceTextures, 0);
-        if (holdoutProgram != 0) GLES20.glDeleteProgram(holdoutProgram);
+        if (holdoutProgram != 0) deleteProgram(holdoutProgram);
         holdoutProgram = 0;
     }
 
@@ -11341,7 +11403,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // The cross-fade a fallback would show at this phase, not always
             // 50/50: at 0.375 a fade differs from the midpoint blend and was
             // counted as generated.
-            GLES20.glUniform1f(GLES20.glGetUniformLocation(verifyProgram, "uPhase"), phase);
+            GLES20.glUniform1f(uniformLocation(verifyProgram, "uPhase"), phase);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
             int slot = verifyHead;
             GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, verifyPbos[slot]);
@@ -11456,7 +11518,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 seedsReady ? denseGlobalSeedTextures[1] : historyTextures[currentIndex], 4);
         bindTexture(densePhaseProgram, "uSeedBackward",
                 seedsReady ? denseGlobalSeedTextures[0] : historyTextures[currentIndex], 5);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uSeedEnabled"),
+        GLES20.glUniform1f(uniformLocation(densePhaseProgram, "uSeedEnabled"),
                 seedsReady ? 1f : 0f);
         float flowLimit = activeFlowLimitPixels();
         uniform2(densePhaseProgram, "uFlowRange",
@@ -11466,7 +11528,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 1f / Math.max(1f, historyWidth), 1f / Math.max(1f, historyHeight));
         uniform2(densePhaseProgram, "uSeedSourceSize",
                 Math.max(1f, historyWidth), Math.max(1f, historyHeight));
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhase"), phase);
+        GLES20.glUniform1f(uniformLocation(densePhaseProgram, "uPhase"), phase);
         // Search around the winner: level 3 (4, 2, 1 px), and the QA
         // hold-out levels 8 (16, 8, 4, 2 px: small sprites moving against the
         // camera are off every candidate by more than 7 px) and 9 (4, 2, 1),
@@ -11482,15 +11544,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // small sprites and occlusion edges are; well-matched background skips it.
         // (13 is 12 with the consensus blend; its field is 12's.)
         boolean thresholdedSearch = synthesisLevel == 12 || synthesisLevel == 13 ||
-                synthesisLevel == 14;
+                synthesisLevel == 14 || synthesisLevel == 15;
         if (thresholdedSearch) { searchStart = 16f; searchRounds = 4f; }
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearchAbove"),
+        GLES20.glUniform1f(uniformLocation(densePhaseProgram, "uPhaseSearchAbove"),
                 thresholdedSearch ? 0.15f : -1f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearch"),
+        GLES20.glUniform1f(uniformLocation(densePhaseProgram, "uPhaseSearch"),
                 search ? 1f : 0f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearchStart"),
+        GLES20.glUniform1f(uniformLocation(densePhaseProgram, "uPhaseSearchStart"),
                 searchStart);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(densePhaseProgram, "uPhaseSearchRounds"),
+        GLES20.glUniform1f(uniformLocation(densePhaseProgram, "uPhaseSearchRounds"),
                 searchRounds);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         densePhaseBoundTexture = densePhaseTexture;
@@ -11538,6 +11600,74 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private boolean preparedWarpActive() { return preparedWarpDefault || holdoutPreparedOverride; }
 
+    /** Source pixels between static-structure samples: 1 at DS/SNES size, 3 at 1080p. */
+    private int structureStepPixels() {
+        return Math.max(1, Math.round(historyHeight / 360f));
+    }
+
+    /**
+     * Renders the static-structure mask for the current pair once (keyed by
+     * densePromotions). Restores the caller's framebuffer and viewport.
+     */
+    private boolean renderStructureMask() {
+        if (structureMaskProgram == 0 || !densePyramidEnabled || historyWidth <= 0 ||
+                historyHeight <= 0) return false;
+        int step = structureStepPixels();
+        int width = Math.max(1, historyWidth / step);
+        int height = Math.max(1, historyHeight / step);
+        if (structureMaskTexture != 0 && structureMaskPromotion == densePromotions &&
+                width == structureMaskWidth && height == structureMaskHeight) return true;
+        GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, structureMaskState, 0);
+        GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, structureMaskState, 1);
+        if (structureMaskTexture == 0 || width != structureMaskWidth ||
+                height != structureMaskHeight) {
+            int[] names = new int[1];
+            if (structureMaskTexture == 0) {
+                GLES20.glGenTextures(1, names, 0);
+                structureMaskTexture = names[0];
+                GLES20.glGenFramebuffers(1, names, 0);
+                structureMaskFramebuffer = names[0];
+            }
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, structureMaskTexture);
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height, 0,
+                    GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, null);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER,
+                    GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER,
+                    GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S,
+                    GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T,
+                    GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, structureMaskFramebuffer);
+            GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                    GLES20.GL_TEXTURE_2D, structureMaskTexture, 0);
+            if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                    GLES20.GL_FRAMEBUFFER_COMPLETE) {
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, structureMaskState[0]);
+                GLES20.glViewport(structureMaskState[1], structureMaskState[2],
+                        structureMaskState[3], structureMaskState[4]);
+                return false;
+            }
+            structureMaskWidth = width;
+            structureMaskHeight = height;
+        }
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, structureMaskFramebuffer);
+        GLES20.glViewport(0, 0, width, height);
+        GLES20.glUseProgram(structureMaskProgram);
+        bindQuad(structureMaskProgram);
+        bindTexture(structureMaskProgram, "uPrevious", historyTextures[previousIndex], 0);
+        bindTexture(structureMaskProgram, "uCurrent", historyTextures[currentIndex], 1);
+        uniform2(structureMaskProgram, "uStructureStep",
+                (float) step / historyWidth, (float) step / historyHeight);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, structureMaskState[0]);
+        GLES20.glViewport(structureMaskState[1], structureMaskState[2],
+                structureMaskState[3], structureMaskState[4]);
+        structureMaskPromotion = densePromotions;
+        return true;
+    }
+
     /**
      * Fills the prepared-warp targets for this pair and phase (once; repeated
      * draws of the same phase -- the visible frame, its verification, the
@@ -11565,13 +11695,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         float flowLimit = activeFlowLimitPixels();
         uniform2(warpPrepProgram, "uFlowRange",
                 flowLimit / Math.max(1f, historyWidth), flowLimit / Math.max(1f, historyHeight));
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(warpPrepProgram, "uPhase"), phase);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(warpPrepProgram, "uDenseEncoding"), 1f);
+        GLES20.glUniform1f(uniformLocation(warpPrepProgram, "uPhase"), phase);
+        GLES20.glUniform1f(uniformLocation(warpPrepProgram, "uDenseEncoding"), 1f);
         uniform2(warpPrepProgram, "uDenseSeedSourceSize",
                 Math.max(1f, historyWidth), Math.max(1f, historyHeight));
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(warpPrepProgram, "uDenseSeedEnabled"),
+        GLES20.glUniform1f(uniformLocation(warpPrepProgram, "uDenseSeedEnabled"),
                 seedsReady ? 1f : 0f);
-        int output = GLES20.glGetUniformLocation(warpPrepProgram, "uPrepOutput");
+        int output = uniformLocation(warpPrepProgram, "uPrepOutput");
         for (int i = 0; i < 3; ++i) {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, warpPrepFramebuffers[i]);
             GLES20.glViewport(0, 0, densePhaseWidth, densePhaseHeight);
@@ -11608,20 +11738,24 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // QA 14: the default searched field (12) with soft per-pixel
         // selection among the four nearest cell vectors (as 6).
         boolean neighbours = synthesisLevel == 2 || synthesisLevel == 3 ||
-                synthesisLevel == 6 || synthesisLevel == 7 || synthesisLevel == 14;
+                synthesisLevel == 6 || synthesisLevel == 7 || synthesisLevel == 14 ||
+                synthesisLevel == 15;
         // The sharp variant (7) has no prepared program; the soft ones do.
         boolean preparedNeighbours = neighbours && synthesisLevel != 7 &&
                 preparedNeighborsProgram != 0;
         boolean prepared = preparedWarpActive() &&
                 !(phaseField && neighbours && !preparedNeighbours) &&
                 maxFragmentTextureUnits >= 13 && renderWarpPrep(phase, prepSeeds);
+        // Unit 13 after the prepared warp's 10-12; GLES 3 guarantees 16.
+        boolean structure = synthesisLevel == 15 && maxFragmentTextureUnits >= 14 &&
+                renderStructureMask();
         final int interpolateProgram = prepared ?
                 (phaseField ? (neighbours ? preparedNeighborsProgram : preparedSynthProgram) :
                         preparedProgram) :
                 !phaseField ? this.interpolateProgram :
                 synthesisLevel == 7 ? interpolateSharpNeighborsProgram :
                 synthesisLevel == 2 || synthesisLevel == 3 || synthesisLevel == 6 ||
-                        synthesisLevel == 14 ? interpolateNeighborsProgram :
+                        synthesisLevel == 14 || synthesisLevel == 15 ? interpolateNeighborsProgram :
                 interpolateSynthProgram;
         GLES20.glUseProgram(interpolateProgram);
         bindQuad(interpolateProgram);
@@ -11635,9 +11769,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         uniform2(interpolateProgram, "uFlowRange",
                 flowLimit / Math.max(1f, historyWidth),
                 flowLimit / Math.max(1f, historyHeight));
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(
+        GLES20.glUniform1f(uniformLocation(
                 interpolateProgram, "uPhase"), phase);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(
+        GLES20.glUniform1f(uniformLocation(
                 interpolateProgram, "uDenseEncoding"), densePyramidEnabled ? 1f : 0f);
         // The dense global seeds are 1x1 Q8.8 textures; sampling them keeps
         // the presentation free of readbacks (a per-pair glReadPixels is a
@@ -11650,7 +11784,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 seedsReady ? denseGlobalSeedTextures[1] : historyTextures[currentIndex], 7);
         uniform2(interpolateProgram, "uDenseSeedSourceSize",
                 Math.max(1f, historyWidth), Math.max(1f, historyHeight));
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
+        GLES20.glUniform1f(uniformLocation(interpolateProgram,
                 "uDenseSeedEnabled"), seedsReady ? 1f : 0f);
         // The cut texture needs a ninth sampler unit; GLES2 only guarantees
         // eight, so the hold is disabled (never mis-bound) on smaller GPUs.
@@ -11664,14 +11798,25 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         bindTexture(interpolateProgram, "uDenseCutTex",
                 cutReady ? denseGlobalCutTextures[0] : historyTextures[currentIndex],
                 cutReady ? 8 : 7);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
+        GLES20.glUniform1f(uniformLocation(interpolateProgram,
                 "uDenseCutEnabled"), cutReady ? 1f : 0f);
         bindTexture(interpolateProgram, "uPhaseFlow",
                 phaseField ? densePhaseBoundTexture : historyTextures[previousIndex], phaseField ? 9 : 0);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(interpolateProgram,
+        GLES20.glUniform1f(uniformLocation(interpolateProgram,
                 "uPhaseFieldEnabled"), phaseField ? 1f : 0f);
-        int consensus = GLES20.glGetUniformLocation(interpolateProgram, "uConsensus");
+        int consensus = uniformLocation(interpolateProgram, "uConsensus");
         if (consensus >= 0) GLES20.glUniform1f(consensus, synthesisLevel == 13 ? 1f : 0f);
+        int structureFlag = uniformLocation(interpolateProgram, "uStructure");
+        if (structureFlag >= 0) {
+            GLES20.glUniform1f(structureFlag, structure ? 1f : 0f);
+            if (structure) {
+                bindTexture(interpolateProgram, "uStructureMask", structureMaskTexture, 13);
+                // Warps under two sampling steps keep their motion: a slowly
+                // moving logo keeps its rank pattern too.
+                GLES20.glUniform1f(uniformLocation(interpolateProgram, "uStructureMinMotionPx"),
+                        2f * structureStepPixels());
+            }
+        }
         uniform2(interpolateProgram, "uPhaseSize",
                 Math.max(1f, densePhaseWidth), Math.max(1f, densePhaseHeight));
         if (prepared) {
@@ -12433,7 +12578,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             GLES20.glViewport(PROOF_ATLAS_HEADER_X, PROOF_ATLAS_HEADER_Y, 26, 1);
             GLES20.glUseProgram(proofAtlasHeaderProgram);
             bindQuad(proofAtlasHeaderProgram);
-            int words = GLES20.glGetUniformLocation(proofAtlasHeaderProgram,
+            int words = uniformLocation(proofAtlasHeaderProgram,
                     "uWords[0]");
             if (words < 0)
                 throw new IllegalStateException("proof atlas header uniform unavailable");
@@ -12769,11 +12914,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         uniform2(predictionProofProgram, "uFlowRange",
                 flowLimit / Math.max(1f, historyWidth),
                 flowLimit / Math.max(1f, historyHeight));
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(
+        GLES20.glUniform1f(uniformLocation(
                 predictionProofProgram, "uPhase"), phase);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(
+        GLES20.glUniform1f(uniformLocation(
                 predictionProofProgram, "uInvert"), invertVector ? -1f : 1f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(
+        GLES20.glUniform1f(uniformLocation(
                 predictionProofProgram, "uDenseEncoding"), densePyramidEnabled ? 1f : 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
@@ -12789,7 +12934,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         uniform2(flowProofProgram, "uFlowRange",
                 flowLimit / Math.max(1f, historyWidth),
                 flowLimit / Math.max(1f, historyHeight));
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(
+        GLES20.glUniform1f(uniformLocation(
                 flowProofProgram, "uDenseEncoding"), densePyramidEnabled ? 1f : 0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
@@ -13391,6 +13536,51 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             PanelClockMemory.remember(displayId, refreshHz, hz);
     }
 
+    /** Admits the built-in physical clock's rate once it agrees with the selected mode. */
+    private void qualifyBuiltInPhysicalClock() {
+        double physicalHz = builtInPhysicalClock.sustainedFrequencyHz(System.nanoTime());
+        if (!(physicalHz > 0.0) ||
+                Math.abs(physicalHz / frameRate.declaredPanelHz() - 1.0) > 0.0075) return;
+        if (qualifiedPhysicalPanelHz == 0.0) {
+            qualifiedPhysicalPanelHz = physicalHz;
+            frameRate.setPhysicalDisplayRefreshHz(physicalHz);
+            qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
+        } else if (builtInPhysicalClock.lastActualNs() -
+                qualifiedPhysicalPanelRefinedNs >= 5_000_000_000L &&
+                // Same 100-ppm re-pace threshold as the external clock.
+                Math.abs(physicalHz / qualifiedPhysicalPanelHz - 1.0) >= 0.0001 &&
+                frameRate.refinePhysicalDisplayRefreshHz(physicalHz)) {
+            // Publish only an accepted transition. The guest owner
+            // applies the same rate to pacing and audio; the controller
+            // independently verifies the ensuing source intervals.
+            qualifiedPhysicalPanelHz = physicalHz;
+            qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
+        }
+        qualifiedPhysicalPanelObservedNs = builtInPhysicalClock.lastActualNs();
+        if (builtInPhysicalClock.hasSustainedBaseline())
+            PanelClockMemory.remember(displayId, refreshHz, physicalHz);
+    }
+
+    // Without EGL_ANDROID_get_frame_timestamps no scanout time exists, and
+    // generation admission needs a measured panel clock. Each Choreographer
+    // callback carries the display's vsync time, one per scan, so it stands in
+    // for the scanout clock there (same model, same 0.75% agreement with the
+    // selected mode). Present-deadline evidence stays unavailable; GPU time
+    // and swap backpressure still drive work adaptation.
+    private long vsyncPanelClockLastFrameNs;
+    private long vsyncPanelClockSamples;
+
+    private void recordVsyncPanelClock() {
+        if (!appOwnsVisiblePresentation()) return;
+        long frameNs = lastCallbackFrameTimeNs;
+        if (frameNs <= 0L || frameNs <= vsyncPanelClockLastFrameNs) return;
+        vsyncPanelClockLastFrameNs = frameNs;
+        ++vsyncPanelClockSamples;
+        builtInPhysicalClock.record(frameNs,
+                Math.max(1L, Math.round(1e9 / frameRate.declaredPanelHz())));
+        qualifyBuiltInPhysicalClock();
+    }
+
     private void pollPhysicalPresentations() {
         ExternalFrameGenerationTransport transport = externalTransport;
         if (transport != null && transport.usesAppOwnedPresentation()) {
@@ -13738,7 +13928,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             return;
         }
         PhysicalPresentationTracker tracker = physicalPresentationTracker;
-        if (tracker == null || !tracker.available()) return;
+        if (tracker == null) {
+            recordVsyncPanelClock();
+            return;
+        }
+        if (!tracker.available()) return;
         tracker.poll();
         // Built-in recovery consumes the exact committed EGL frame owner.
         // Untracked Direct/old-epoch events are never borrowed for headroom.
@@ -13749,27 +13943,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (denseEvent.kind == PhysicalPresentationTracker.Event.Kind.PRESENTED)
                 builtInPhysicalClock.record(denseEvent.actualPresentTimeNs,
                         Math.max(1L, Math.round(1e9 / frameRate.declaredPanelHz())));
-            double physicalHz = builtInPhysicalClock.sustainedFrequencyHz(System.nanoTime());
-            if (physicalHz > 0.0 && Math.abs(physicalHz / frameRate.declaredPanelHz() - 1.0) <= 0.0075) {
-                if (qualifiedPhysicalPanelHz == 0.0) {
-                    qualifiedPhysicalPanelHz = physicalHz;
-                    frameRate.setPhysicalDisplayRefreshHz(physicalHz);
-                    qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
-                } else if (builtInPhysicalClock.lastActualNs() -
-                        qualifiedPhysicalPanelRefinedNs >= 5_000_000_000L &&
-                        // Same 100-ppm re-pace threshold as the external clock.
-                        Math.abs(physicalHz / qualifiedPhysicalPanelHz - 1.0) >= 0.0001 &&
-                        frameRate.refinePhysicalDisplayRefreshHz(physicalHz)) {
-                    // Publish only an accepted transition. The guest owner
-                    // applies the same rate to pacing and audio; the controller
-                    // independently verifies the ensuing source intervals.
-                    qualifiedPhysicalPanelHz = physicalHz;
-                    qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
-                }
-                qualifiedPhysicalPanelObservedNs = builtInPhysicalClock.lastActualNs();
-                if (builtInPhysicalClock.hasSustainedBaseline())
-                    PanelClockMemory.remember(displayId, refreshHz, physicalHz);
-            }
+            qualifyBuiltInPhysicalClock();
             if (!densePyramidEnabled) continue;
             if (!denseGpuHeadroom.ownsFrame(denseEvent.frameId)) {
                 ++denseGpuPhysicalUnboundEvents;
@@ -14334,8 +14508,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void bindQuad(int program) {
-        int position = GLES20.glGetAttribLocation(program, "aPosition");
-        int texture = GLES20.glGetAttribLocation(program, "aTexCoord");
+        int position = attribLocation(program, "aPosition");
+        int texture = attribLocation(program, "aTexCoord");
         // aPosition feeds gl_Position and is required for every quad program.
         // aTexCoord is optional: fixed-grid reducers sample gl_FragCoord, so
         // production Adreno correctly optimizes that attribute out
@@ -14398,7 +14572,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glDeleteFramebuffers(2,
                 new int[] {verifyGeneratedFramebuffer, verifyResultFramebuffer}, 0);
         GLES20.glDeleteTextures(2, new int[] {verifyGeneratedTexture, verifyResultTexture}, 0);
-        if (verifyProgram != 0) GLES20.glDeleteProgram(verifyProgram);
+        if (verifyProgram != 0) deleteProgram(verifyProgram);
         verifyProgram = 0;
     }
 
@@ -14493,28 +14667,30 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (externalTexture != 0) GLES20.glDeleteTextures(1, new int[]{externalTexture}, 0);
         if (externalGeneratedTexture != 0)
             GLES20.glDeleteTextures(1, new int[]{externalGeneratedTexture}, 0);
-        if (copyProgram != 0) GLES20.glDeleteProgram(copyProgram);
-        if (textureCopyProgram != 0) GLES20.glDeleteProgram(textureCopyProgram);
+        if (copyProgram != 0) deleteProgram(copyProgram);
+        if (textureCopyProgram != 0) deleteProgram(textureCopyProgram);
         if (externalGeneratedTextureCopyProgram != 0)
-            GLES20.glDeleteProgram(externalGeneratedTextureCopyProgram);
-        if (signatureCompareProgram != 0) GLES20.glDeleteProgram(signatureCompareProgram);
-        if (coarseMotionProgram != 0) GLES20.glDeleteProgram(coarseMotionProgram);
-        if (refineMotionProgram != 0) GLES20.glDeleteProgram(refineMotionProgram);
-        if (regularizeMotionProgram != 0) GLES20.glDeleteProgram(regularizeMotionProgram);
+            deleteProgram(externalGeneratedTextureCopyProgram);
+        if (signatureCompareProgram != 0) deleteProgram(signatureCompareProgram);
+        if (coarseMotionProgram != 0) deleteProgram(coarseMotionProgram);
+        if (refineMotionProgram != 0) deleteProgram(refineMotionProgram);
+        if (regularizeMotionProgram != 0) deleteProgram(regularizeMotionProgram);
         if (regionalCoarseCandidateProgram != 0)
-            GLES20.glDeleteProgram(regionalCoarseCandidateProgram);
+            deleteProgram(regionalCoarseCandidateProgram);
         if (regionalFineCandidateProgram != 0)
-            GLES20.glDeleteProgram(regionalFineCandidateProgram);
+            deleteProgram(regionalFineCandidateProgram);
         if (regionalCandidateWinnerProgram != 0)
-            GLES20.glDeleteProgram(regionalCandidateWinnerProgram);
-        if (globalMotionProgram != 0) GLES20.glDeleteProgram(globalMotionProgram);
-        if (interpolateProgram != 0) GLES20.glDeleteProgram(interpolateProgram);
-        if (interpolateSynthProgram != 0) GLES20.glDeleteProgram(interpolateSynthProgram);
-        if (interpolateNeighborsProgram != 0) GLES20.glDeleteProgram(interpolateNeighborsProgram);
-        if (interpolateSharpNeighborsProgram != 0) GLES20.glDeleteProgram(interpolateSharpNeighborsProgram);
+            deleteProgram(regionalCandidateWinnerProgram);
+        if (globalMotionProgram != 0) deleteProgram(globalMotionProgram);
+        if (interpolateProgram != 0) deleteProgram(interpolateProgram);
+        if (interpolateSynthProgram != 0) deleteProgram(interpolateSynthProgram);
+        if (interpolateNeighborsProgram != 0) deleteProgram(interpolateNeighborsProgram);
+        if (interpolateSharpNeighborsProgram != 0) deleteProgram(interpolateSharpNeighborsProgram);
         interpolateSynthProgram = interpolateNeighborsProgram = interpolateSharpNeighborsProgram = 0;
-        if (predictionProofProgram != 0) GLES20.glDeleteProgram(predictionProofProgram);
-        if (flowProofProgram != 0) GLES20.glDeleteProgram(flowProofProgram);
+        if (structureMaskProgram != 0) deleteProgram(structureMaskProgram);
+        structureMaskProgram = 0;
+        if (predictionProofProgram != 0) deleteProgram(predictionProofProgram);
+        if (flowProofProgram != 0) deleteProgram(flowProofProgram);
         for (int direction = 0; direction < 2; ++direction) {
             for (int level = 0; level < DENSE_LEVELS; ++level)
                 if (denseFlowTextures[direction][level][0] != 0)
@@ -14542,9 +14718,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         warpPrepKeyPromotion = -1L;
         for (int program : new int[] {warpPrepProgram, preparedProgram, preparedSynthProgram,
                 preparedNeighborsProgram})
-            if (program != 0) GLES20.glDeleteProgram(program);
+            if (program != 0) deleteProgram(program);
         warpPrepProgram = preparedProgram = preparedSynthProgram = preparedNeighborsProgram = 0;
         densePhaseMedianTexture = densePhaseMedianFramebuffer = densePhaseBoundTexture = 0;
+        if (structureMaskTexture != 0)
+            GLES20.glDeleteTextures(1, new int[] {structureMaskTexture}, 0);
+        if (structureMaskFramebuffer != 0)
+            GLES20.glDeleteFramebuffers(1, new int[] {structureMaskFramebuffer}, 0);
+        structureMaskTexture = structureMaskFramebuffer = 0;
+        structureMaskWidth = structureMaskHeight = 0;
+        structureMaskPromotion = -1L;
             GLES20.glDeleteTextures(2, denseFillTextures, 0);
         if (denseGlobalCoarseCostTextures[0] != 0)
             GLES20.glDeleteTextures(2, denseGlobalCoarseCostTextures, 0);
@@ -14555,21 +14738,21 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (denseGlobalSeedTextures[0] != 0)
             GLES20.glDeleteTextures(2, denseGlobalSeedTextures, 0);
             GLES20.glDeleteTextures(2, denseGlobalCutTextures, 0);
-        if (densePyramidProgram != 0) GLES20.glDeleteProgram(densePyramidProgram);
+        if (densePyramidProgram != 0) deleteProgram(densePyramidProgram);
         if (denseGlobalCostProgram != 0)
-            GLES20.glDeleteProgram(denseGlobalCostProgram);
+            deleteProgram(denseGlobalCostProgram);
         if (denseGlobalReduceProgram != 0)
-            GLES20.glDeleteProgram(denseGlobalReduceProgram);
+            deleteProgram(denseGlobalReduceProgram);
         if (denseGlobalCutProgram != 0)
-            GLES20.glDeleteProgram(denseGlobalCutProgram);
-        if (denseSolveProgram != 0) GLES20.glDeleteProgram(denseSolveProgram);
-        if (denseCycleProgram != 0) GLES20.glDeleteProgram(denseCycleProgram);
-        if (denseFillProgram != 0) GLES20.glDeleteProgram(denseFillProgram);
-        if (denseQ8ProbeProgram != 0) GLES20.glDeleteProgram(denseQ8ProbeProgram);
+            deleteProgram(denseGlobalCutProgram);
+        if (denseSolveProgram != 0) deleteProgram(denseSolveProgram);
+        if (denseCycleProgram != 0) deleteProgram(denseCycleProgram);
+        if (denseFillProgram != 0) deleteProgram(denseFillProgram);
+        if (denseQ8ProbeProgram != 0) deleteProgram(denseQ8ProbeProgram);
         if (proofAtlasHeaderProgram != 0)
-            GLES20.glDeleteProgram(proofAtlasHeaderProgram);
+            deleteProgram(proofAtlasHeaderProgram);
         if (denseDiagnosticPackProgram != 0)
-            GLES20.glDeleteProgram(denseDiagnosticPackProgram);
+            deleteProgram(denseDiagnosticPackProgram);
         if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
             EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE,
                     EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT);
@@ -14603,14 +14786,62 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (transportCloseFailure != null) throw transportCloseFailure;
     }
 
-    private static void bindTexture(int program, String uniform, int texture, int unit) {
+    private void bindTexture(int program, String uniform, int texture, int unit) {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + unit);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(program, uniform), unit);
+        GLES20.glUniform1i(uniformLocation(program, uniform), unit);
     }
 
-    private static void uniform2(int program, String name, float x, float y) {
-        GLES20.glUniform2f(GLES20.glGetUniformLocation(program, name), x, y);
+    private void uniform2(int program, String name, float x, float y) {
+        GLES20.glUniform2f(uniformLocation(program, name), x, y);
+    }
+
+    // Uniform and attribute locations are fixed once a program links, but the
+    // dense pipeline asked for them by name on every pass (about a thousand
+    // lookups per pair): a string lookup in every driver and a synchronous
+    // host round trip on some GL stacks (the Android emulator spent ~200 ms a
+    // frame here). They are cached per program. Program ids are reused after
+    // deletion, so any program created or deleted anywhere clears every cache.
+    private static final java.util.concurrent.atomic.AtomicLong PROGRAM_EPOCH =
+            new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.HashMap<Integer, java.util.HashMap<String, Integer>> uniformLocations =
+            new java.util.HashMap<>();
+    private final java.util.HashMap<Integer, java.util.HashMap<String, Integer>> attribLocations =
+            new java.util.HashMap<>();
+    private long locationCacheEpoch = -1L;
+
+    private int uniformLocation(int program, String name) {
+        return cachedLocation(uniformLocations, program, name, false);
+    }
+
+    private int attribLocation(int program, String name) {
+        return cachedLocation(attribLocations, program, name, true);
+    }
+
+    private int cachedLocation(java.util.HashMap<Integer, java.util.HashMap<String, Integer>> cache,
+                               int program, String name, boolean attribute) {
+        long epoch = PROGRAM_EPOCH.get();
+        if (epoch != locationCacheEpoch) {
+            uniformLocations.clear();
+            attribLocations.clear();
+            locationCacheEpoch = epoch;
+        }
+        java.util.HashMap<String, Integer> locations = cache.get(program);
+        if (locations == null) {
+            locations = new java.util.HashMap<>();
+            cache.put(program, locations);
+        }
+        Integer cached = locations.get(name);
+        if (cached != null) return cached;
+        int location = attribute ? GLES20.glGetAttribLocation(program, name) :
+                GLES20.glGetUniformLocation(program, name);
+        locations.put(name, location);
+        return location;
+    }
+
+    private static void deleteProgram(int program) {
+        GLES20.glDeleteProgram(program);
+        PROGRAM_EPOCH.incrementAndGet();
     }
 
     private static int createProgram(String vertex, String fragment) {
@@ -14626,9 +14857,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glDeleteShader(vertexShader);
         GLES20.glDeleteShader(fragmentShader);
         if (status[0] == 0) {
-            GLES20.glDeleteProgram(program);
+            deleteProgram(program);
             throw new IllegalStateException("shader link failed: " + log);
         }
+        PROGRAM_EPOCH.incrementAndGet();
         return program;
     }
 

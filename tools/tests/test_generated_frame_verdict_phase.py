@@ -18,7 +18,7 @@ class GeneratedFrameVerdictPhaseTest(unittest.TestCase):
         body = SOURCE.split("private void enqueueGeneratedVerification(float phase) {", 1)[1]
         body = body.split("\n    }\n", 1)[0]
         draw = body.index("drawMotionFrame(phase);")
-        uniform = re.search(r'glGetUniformLocation\(verifyProgram, "uPhase"\), phase\)', body)
+        uniform = re.search(r'uniformLocation\(verifyProgram, "uPhase"\), phase\)', body)
         self.assertIsNotNone(uniform)
         self.assertLess(draw, uniform.start())
         self.assertLess(uniform.start(), body.index("glDrawArrays"))

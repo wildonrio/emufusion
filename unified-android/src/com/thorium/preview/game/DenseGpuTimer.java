@@ -1,6 +1,11 @@
 package com.thorium.preview.game;
 
-/** Lazy, qualification-only bridge to EXT_disjoint_timer_query. */
+/**
+ * Lazy bridge to GPU stage timing: EXT_disjoint_timer_query where the driver
+ * has it, otherwise native fences whose kernel signal timestamps bracket each
+ * stage (EGL_ANDROID_native_fence_sync), so GPUs without the timer extension
+ * still generate. The rows are identical either way.
+ */
 final class DenseGpuTimer implements AutoCloseable {
     static final int ENDPOINT_COPY = 1;
     static final int PYRAMID = 2;
@@ -20,6 +25,8 @@ final class DenseGpuTimer implements AutoCloseable {
     // they cannot be classified without reading the native contract.
     static final int STATUS_DISJOINT = 2;
     static final int STATUS_ELAPSED_OVERFLOW = 5;
+    static final int TIMING_SOURCE_QUERIES = 1;
+    static final int TIMING_SOURCE_FENCES = 2;
 
     static long nanosecondsToMicroseconds(long nanoseconds) {
         if (nanoseconds <= 0L) return 0L;
@@ -30,12 +37,18 @@ final class DenseGpuTimer implements AutoCloseable {
     private long handle;
 
     static synchronized DenseGpuTimer create() {
+        return create(false);
+    }
+
+    /** forceFences: QA comparison of fence timing on a GPU that has timer queries. */
+    static synchronized DenseGpuTimer create(boolean forceFences) {
         if (!libraryLoaded) {
             System.loadLibrary("emufusion_framegen_timer");
             libraryLoaded = true;
         }
-        long value = nativeCreate();
-        if (value == 0L) throw new IllegalStateException("EXT_disjoint_timer_query unavailable");
+        long value = nativeCreate(forceFences);
+        if (value == 0L) throw new IllegalStateException(
+                "GPU stage timing unavailable (no EXT_disjoint_timer_query or native fences)");
         return new DenseGpuTimer(value);
     }
 
@@ -57,6 +70,9 @@ final class DenseGpuTimer implements AutoCloseable {
         return handle == 0L ? new long[0] :
                 nativePoll(handle, currentPairSequence, currentWarpSequence);
     }
+
+    /** TIMING_SOURCE_QUERIES or TIMING_SOURCE_FENCES. */
+    int timingSource() { return handle == 0L ? 0 : nativeTimingSource(handle); }
 
     int takeDisjointCount() {
         return handle == 0L ? 0 : nativeTakeDisjointCount(handle);
@@ -124,11 +140,12 @@ final class DenseGpuTimer implements AutoCloseable {
         if (value != 0L) nativeDestroy(value);
     }
 
-    private static native long nativeCreate();
+    private static native long nativeCreate(boolean forceFences);
     private static native boolean nativeBegin(long handle, int stage, long sequence);
     private static native boolean nativeEnd(long handle);
     private static native long[] nativePoll(long handle, long currentPairSequence,
             long currentWarpSequence);
+    private static native int nativeTimingSource(long handle);
     private static native int nativeTakeDisjointCount(long handle);
     private static native int nativePendingCount(long handle);
     private static native boolean nativeSignatureSupported(long handle);

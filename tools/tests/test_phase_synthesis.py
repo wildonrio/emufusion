@@ -81,6 +81,33 @@ class PhaseSynthesisTest(unittest.TestCase):
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, name + "\n" + result.stdout + result.stderr)
 
+    def test_static_structure_takes_the_zero_motion_blend(self):
+        # Fixed menu text whose highlight changed was erased by a warp that
+        # sampled background from elsewhere; where both endpoints keep the
+        # same two-ring rank pattern at zero motion, a warp of two sampling
+        # steps or more takes the unwarped blend (synthesis 15). The census
+        # runs once per pair in its own pass (inlined, register pressure
+        # doubled Sonic Superstars' warp time even when off).
+        mask = shader_constant("STRUCTURE_MASK_SHADER")
+        self.assertIn("for(int r=1;r<=2;r++){", mask)
+        self.assertIn("if(disagree>1.5)return 0.0;", mask)
+        self.assertIn("if(textured<2.5)return 0.0;", mask)
+        self.assertIn("if(maxDiff(ra,rb)<6.0/255.0)return 0.0;", mask)
+        interpolate = shader("MOTION_INTERPOLATE_SHADER")
+        self.assertIn("float staticStructure(float motionPx){", interpolate)
+        self.assertIn("return texture2D(uStructureMask,vTexCoord).r;", interpolate)
+        self.assertNotIn("for(int r=1;r<=2;r++){", interpolate)
+        self.assertIn("finalColor=mix(finalColor,mix(rawPrevious,rawCurrent,uPhase),"
+                      "staticStructure(structureMotionPx));", interpolate)
+        draw = method("private void drawMotionFrame(float phase)")
+        self.assertIn("boolean structure = synthesisLevel == 15 && maxFragmentTextureUnits >= 14 &&", draw)
+        self.assertLess(draw.index("renderStructureMask()"),
+                        draw.index("GLES20.glUseProgram(interpolateProgram);"))
+        self.assertIn('bindTexture(interpolateProgram, "uStructureMask", structureMaskTexture, 13);', draw)
+        render = method("private boolean renderStructureMask()")
+        self.assertIn("structureMaskPromotion == densePromotions", render)
+        self.assertIn("GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, structureMaskState[0]);", render)
+
     def test_phase_shader_matches_symmetrically_around_the_generated_time(self):
         phase = shader("DENSE_PHASE_SHADER")
         self.assertIn("vec2 pa=vTexCoord-uPhase*v;vec2 pb=vTexCoord+(1.0-uPhase)*v;", phase)
@@ -97,7 +124,8 @@ class PhaseSynthesisTest(unittest.TestCase):
         # four-candidate blend exist only in the PHASE_SYNTHESIS programs.
         self.assertEqual(interpolate.count("#ifdef PHASE_SYNTHESIS"), 2)
         self.assertEqual(interpolate.count("#ifdef PHASE_NEIGHBORS"), 1)
-        self.assertIn("{gl_FragColor=vec4(qp,1.0);return;}", interpolate)
+        # The early phase-blend exit still yields to static structure.
+        self.assertIn("gl_FragColor=vec4(mix(qp,mix(qra,qrb,uPhase),staticStructure(length(qv*uDenseSeedSourceSize))),1.0);return;}", interpolate)
         draw = method("private void drawMotionFrame(float phase)")
         self.assertLess(draw.index("boolean phaseField = renderPhaseField(phase);"),
                         draw.index("GLES20.glUseProgram(interpolateProgram);"))
@@ -107,7 +135,7 @@ class PhaseSynthesisTest(unittest.TestCase):
                       "                !phaseField ? this.interpolateProgram :\n"
                       "                synthesisLevel == 7 ? interpolateSharpNeighborsProgram :\n"
                       "                synthesisLevel == 2 || synthesisLevel == 3 || synthesisLevel == 6 ||\n"
-                      "                        synthesisLevel == 14 ? interpolateNeighborsProgram :\n"
+                      "                        synthesisLevel == 14 || synthesisLevel == 15 ? interpolateNeighborsProgram :\n"
                       "                interpolateSynthProgram;", draw)
         self.assertIn('"uPhaseFlow",\n                phaseField ? densePhaseBoundTexture : '
                       "historyTextures[previousIndex], phaseField ? 9 : 0);", draw)
@@ -127,12 +155,12 @@ class PhaseSynthesisTest(unittest.TestCase):
 
     def test_synthesis_defaults_on_with_a_qa_only_override(self):
         self.assertIn('SYNTH_GLOBAL = "emufusion_framegen_synth"', SWITCH)
-        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 14;", SWITCH)
+        self.assertIn("DEFAULT_SYNTHESIS_LEVEL = 15;", SWITCH)
         # 5 (QA): level 4 matched on the quarter-resolution pyramid images.
         # 6/7 (QA): level 5 with per-pixel neighbour selection, soft and sharp.
-        self.assertIn("synthesisLevel = Math.max(0, Math.min(14, level));", SWITCH)
+        self.assertIn("synthesisLevel = Math.max(0, Math.min(15, level));", SWITCH)
         # Hold-out variants are a QA setting; 100+ adds the prepared warp.
-        self.assertIn("static final int[] DEFAULT_HOLDOUT_LEVELS = {12, 14, 114};", SWITCH)
+        self.assertIn("static final int[] DEFAULT_HOLDOUT_LEVELS = {14, 15, 115};", SWITCH)
         self.assertIn("holdoutPreparedOverride = holdoutLevelIds[level] >= 100;", GENERATOR)
         self.assertIn("synthesisLevel = holdoutLevelIds[level] % 100;", GENERATOR)
         self.assertIn("private boolean phaseMatchesQuarterImages() { return synthesisLevel >= 5; }", GENERATOR)
