@@ -6,7 +6,17 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 14 (latest) **— Measured: DIS's per-phase motion adds nothing as a phase-field candidate.** A QA level (25) offered 24's per-phase vector to synthesis 15's phase field (in 22) as one more candidate before its neighbour and sub-pixel refinement. Paired Thor hold-out, 22 → 25: SM3DW 0.476 → 0.477, Ocarina of Time 0.822 → 0.815, Star Fox 64 0.854 → 0.852, Link's Awakening 0.965 → 0.970, God of War II 0.500 → 0.500, Wind Waker HD 0.400 → 0.397: its own candidates and search already find what it offers. Reverted (patch kept outside the repo). In the same run 24 alone again beat 22 on Star Fox 64 (0.715) and this time on Ocarina of Time (0.764), but lost on the other four; per-system routing of N64 needs more runs.
+October 14 (latest) **— 3.2.75 (149): N64 renders per-phase DIS; the block matcher no longer runs where nothing uses it.**
+
+**N64 on synthesis 24.** Ten paired Thor hold-out runs over three N64 games (22 → 24): 1080° Snowboarding 0.698 → 0.566 and 0.499 → 0.401, Star Fox 64 0.580 → 0.588, 0.724 → 0.582, 0.460 → 0.438, 0.854 → 0.715, Ocarina of Time 0.446 → 0.437, 0.628 → 0.689, 0.390 → 0.460, 0.822 → 0.764: 7.6% better summed, while on SM3DW, Link's Awakening, God of War II and Wind Waker HD 22 stayed 14–27% better. The generator does not know its system, so the in-window host passes a per-system flag (`InWindowGameHost.perPhaseMotionPreferred`: N64) through `GameSurfaceView` to the renderer (`setPerPhaseMotionPreferred`, logged as `Frame generator motion route`); flagged sources render synthesis 24 instead of 22.
+
+**Block matcher skipped on synthesis 24.** Synthesis 24 (2-D sources and N64) renders from DIS alone, but the block matcher kept searching both directions every pair. It is now skipped once DIS is available on the device (its fields remain the fallback otherwise), as synthesis 22 already did. GPU per pair (199 → 200): 1080° Snowboarding 6.7 → 2.6 ms, Star Fox 64 6.2 → 2.5, SNES 4.7 → 2.8, NES 4.3 → 2.9, DS 4.3 → 2.6, Ocarina of Time 2.9 → 1.7 (work level 4 → 3).
+
+**Normal play (3.2.75 candidate):** 1080° Snowboarding 29.1 → 58.2 (100% verified), Star Fox 64 29.4 → 56.7, Ocarina of Time 19.6 → 50.9, Mega Drive 60.0 → 105.1, NES 59.1 → 96.9, SNES 58.4 → 100.0, DS 25.5 → 35.9, SM3DW 55.1 → 114.2; every run PASS. A 3.2.74 sweep of the systems not yet run on DIS (GameCube, Wii, 3DS, PSP, Dreamcast, PS1, Game Gear, GBC, Switch) passed with no device loss; Super Mario Sunshine's exit timed out in Dolphin's own render thread (`ExperimentalGlesRenderLoop`), as in an older run before DIS, and the frontend restarted cleanly.
+
+**Thor (3.2.75, `a3364b0a`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 14 **— Measured: DIS's per-phase motion adds nothing as a phase-field candidate.** A QA level (25) offered 24's per-phase vector to synthesis 15's phase field (in 22) as one more candidate before its neighbour and sub-pixel refinement. Paired Thor hold-out, 22 → 25: SM3DW 0.476 → 0.477, Ocarina of Time 0.822 → 0.815, Star Fox 64 0.854 → 0.852, Link's Awakening 0.965 → 0.970, God of War II 0.500 → 0.500, Wind Waker HD 0.400 → 0.397: its own candidates and search already find what it offers. Reverted (patch kept outside the repo). In the same run 24 alone again beat 22 on Star Fox 64 (0.715) and this time on Ocarina of Time (0.764), but lost on the other four; per-system routing of N64 needs more runs.
 
 October 14 **— 3.2.74 (148): 2-D motion re-estimated at each output phase; lone deadline misses no longer cost quality for the session.**
 

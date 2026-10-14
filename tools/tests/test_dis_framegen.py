@@ -68,6 +68,19 @@ class DisShaderTest(unittest.TestCase):
         self.assertIn("float w=1.0/max(1.0,d);", dis_gles.shaders()["DENSIFY"])
 
 
+class PerSystemRoutingTest(unittest.TestCase):
+    def test_n64_renders_per_phase_dis(self):
+        host = (GAME / "InWindowGameHost.java").read_text()
+        surface = (GAME / "GameSurfaceView.java").read_text()
+        generator = GENERATOR.read_text()
+        self.assertIn('return systemId != null && "n64".equals(systemId.trim().toLowerCase(Locale.US));', host)
+        self.assertIn("layer.setPerPhaseMotionPreferred(perPhaseMotionPreferred(request.systemId));", host)
+        self.assertIn("frameGenerator.setPerPhaseMotionPreferred(perPhaseMotionPreferred);", surface)
+        self.assertIn("(disDefault && !holdoutRendering && (disSmallSource() || perPhaseMotionPreferred));", generator)
+        self.assertIn("return disMotionNormal || (disDefault && !disSmallSource() && !perPhaseMotionPreferred);",
+                      generator)
+
+
 class WorkAdaptationTest(unittest.TestCase):
     def test_lone_deadline_misses_do_not_shed_work(self):
         policy = (ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "video" /
@@ -124,12 +137,16 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn('DIS_GLOBAL = "emufusion_framegen_dis"', switch)
         # Small (2-D) sources render synthesis 24, larger ones 15 with DIS motion.
         self.assertIn("boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||\n"
-                      "                (disDefault && !holdoutRendering && disSmallSource());", generator)
-        self.assertIn("return disMotionNormal || (disDefault && !disSmallSource());", generator)
+                      "                (disDefault && !holdoutRendering && (disSmallSource() || perPhaseMotionPreferred));",
+                      generator)
+        self.assertIn("return disMotionNormal || (disDefault && !disSmallSource() && !perPhaseMotionPreferred);",
+                      generator)
         self.assertIn("private boolean disSmallSource() { return historyWidth <= 400 && historyHeight <= 300; }",
                       generator)
         # In normal play DIS replaces the block matcher's search; the hold-out keeps both.
-        self.assertIn("boolean disOnly = !holdoutMode && disMotionForPlay() && estimateDisMotion();", generator)
+        self.assertIn("boolean disOnly = !holdoutMode &&\n"
+                      "                    (disMotionForPlay() ? estimateDisMotion() : disPhaseForPlayReady());", generator)
+        self.assertIn("if (!disDefault || !(disSmallSource() || perPhaseMotionPreferred)) return false;", generator)
         self.assertIn("if (!disOnly && disMotionWanted()) estimateDisMotion();", generator)
         self.assertIn("holdoutRendering = true;", generator)
         self.assertEqual(generator.count("holdoutRendering = false;"), 2)

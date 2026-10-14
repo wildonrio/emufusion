@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "56b3ca23e820da2997ada724149599fb158ff33244a34bbc2c28c81905e123a6": "Rollback 3.2.73 (147) until 3.2.74 settles.",
-    "ad5ccba2d18a57da866d8d9edf11374ab7c1e0b8f638a12f4dccf5eb975c1028": "Current release 3.2.74 (148). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "ad5ccba2d18a57da866d8d9edf11374ab7c1e0b8f638a12f4dccf5eb975c1028": "Rollback 3.2.74 (148) until 3.2.75 settles.",
+    "a3364b0a683e5cb2d2d22d913dfcd8f6a02a867b765e93e23e5f00217479580a": "Current release 3.2.75 (149). Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -501,6 +501,14 @@
     "unified-android/build/emufusion-3.2.74-phase2-phase3-qualification-6986a2ecabbba0c01f669f8b323ca3c3e16092cccda0e79ea6b95028df97b228.apk": {
       "sha256": "6986a2ecabbba0c01f669f8b323ca3c3e16092cccda0e79ea6b95028df97b228",
       "reason": "Closed 2026-10-14 trial 197: hold-out level 25 (DIS per-phase motion as a candidate in synthesis 15 phase field) scored identically to 22 on six 3-D games; reverted. Thor restored to 3.2.74 with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.75-phase2-phase3-qualification-b425b895d1136401e7db5439340554700c9c4d3f278e255a1a5d4076c41f88f1.apk": {
+      "sha256": "b425b895d1136401e7db5439340554700c9c4d3f278e255a1a5d4076c41f88f1",
+      "reason": "Build 198 (3.2.75 version): N64 routing without the route log line; never installed, rebuilt as 199."
+    },
+    "unified-android/build/emufusion-3.2.75-phase2-phase3-qualification-c3aa0c6f1724d489edac9210d3fe46917f3cdd917cac0ffdd2efcd1054b77b23.apk": {
+      "sha256": "c3aa0c6f1724d489edac9210d3fe46917f3cdd917cac0ffdd2efcd1054b77b23",
+      "reason": "Closed 2026-10-14 trial 199: N64 routed to synthesis 24 (route log verified on all three N64 games); superseded by 200, which also skips the block matcher on the synthesis-24 path."
     }
   }
 }

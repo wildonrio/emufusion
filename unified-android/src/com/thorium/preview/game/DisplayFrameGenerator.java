@@ -3020,6 +3020,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         });
     }
 
+    @Override public void setPerPhaseMotionPreferred(boolean preferred) {
+        perPhaseMotionPreferred = preferred;
+        Log.i(TAG, "Frame generator motion route generator=" + generatorId +
+                " perPhaseMotionPreferred=" + preferred);
+    }
+
     /** AUTO's lock-to-30 tier protocol; Built-in (Alpha)/LSFG stay adaptive. */
     @Override public void setLockToThirtyTierPolicy(boolean enabled) {
         if (closed.get()) return;
@@ -6500,7 +6506,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // forward stage and the reverse stage stays bracketed (empty), so
             // the timer's stage pairs stay complete.
             beginDenseStage(DenseGpuTimer.FORWARD_SOLVE);
-            boolean disOnly = !holdoutMode && disMotionForPlay() && estimateDisMotion();
+            // Synthesis 24 (2-D sources, N64) renders from DIS alone, which runs
+            // at draw time; the block matcher is skipped once DIS is available
+            // (otherwise its fields are the fallback).
+            boolean disOnly = !holdoutMode &&
+                    (disMotionForPlay() ? estimateDisMotion() : disPhaseForPlayReady());
             if (!disOnly)
                 solveDenseDirection(0, historyTextures[previousIndex],
                         historyTextures[currentIndex], temporalGuide);
@@ -11957,7 +11967,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     /** Normal play: synthesis 15 takes DIS motion (explicit 22, or the default for larger sources). */
     private boolean disMotionForPlay() {
-        return disMotionNormal || (disDefault && !disSmallSource());
+        return disMotionNormal || (disDefault && !disSmallSource() && !perPhaseMotionPreferred);
+    }
+
+    // Per system (InWindowGameHost.perPhaseMotionPreferred): larger sources
+    // that render synthesis 24 instead of 22.
+    private volatile boolean perPhaseMotionPreferred;
+
+    /** Normal play renders synthesis 24 and DIS can run on this device. */
+    private boolean disPhaseForPlayReady() {
+        if (!disDefault || !(disSmallSource() || perPhaseMotionPreferred)) return false;
+        if (disFlow == null) disFlow = new DenseInverseSearchFlow();
+        return disFlow.ensure(historyWidth, historyHeight);
     }
 
     private boolean disMotionWanted() {
@@ -12056,7 +12077,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // Small (2-D) sources default to 24: on paired Thor hold-outs it beat 21
         // on every 2-D game (NES 0.547 -> 0.457, SNES 0.463 -> 0.435).
         boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||
-                (disDefault && !holdoutRendering && disSmallSource());
+                (disDefault && !holdoutRendering && (disSmallSource() || perPhaseMotionPreferred));
         boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;
         if (dis && drawDisFrame(phase, disPhase)) return;
         boolean phaseField = renderPhaseField(phase);

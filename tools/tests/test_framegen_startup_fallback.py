@@ -70,6 +70,7 @@ public class StartupFallbackTest {
         void setAuthoritativeSourceHz(double h){} void setProducerTimelineHz(double h){}
         void setSlotLatticeProducer(boolean enabled){}
         void setLockToThirtyTierPolicy(boolean enabled){}
+        void setPerPhaseMotionPreferred(boolean preferred){}
         void setStatsListener(Object o){} void setFirstSubmittedFrameListener(Runnable r){}
         Surface inputSurface(){return input;}
         void resize(int a,int b,int c,int d,float h){}
@@ -110,6 +111,7 @@ public class StartupFallbackTest {
         FrameGenerationSettings.Mode launchMode;
         Handler mainHandler=new Handler(); Listener listener=new Listener();
         Object frameRateListener; Runnable firstSubmittedFrameListener; double authoritativeSourceHz,producerTimelineHz;
+        boolean perPhaseMotionPreferred;
         Primary(FrameGenerationSettings.Mode mode){launchMode=mode;}
         Object getContext(){return this;} int displayId(){return 0;}
         float refreshRate(){return 120f;}

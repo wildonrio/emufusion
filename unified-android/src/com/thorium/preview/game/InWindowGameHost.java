@@ -980,6 +980,7 @@ public final class InWindowGameHost
             layer.setAuthoritativeSourceHz(authoritativeHz);
             layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz),
                     directSurfaceVotesSourceClock(authoritativeHz));
+            layer.setPerPhaseMotionPreferred(perPhaseMotionPreferred(request.systemId));
             gameSurface = layer;
         }
         FrameLayout.LayoutParams videoParams = match();
@@ -1282,6 +1283,16 @@ public final class InWindowGameHost
     private FrameLayout.LayoutParams match() {
         return new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
+    }
+
+    /**
+     * N64 games: on paired Thor hold-outs DIS with per-phase refinement (24)
+     * beat synthesis 15 with DIS motion (22) by 7.6% over ten runs of three
+     * games (1080 Snowboarding about 20%); on every other 3-D system tested
+     * 22 was better by 14-27%.
+     */
+    static boolean perPhaseMotionPreferred(String systemId) {
+        return systemId != null && "n64".equals(systemId.trim().toLowerCase(Locale.US));
     }
 
     /**

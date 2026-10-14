@@ -105,6 +105,12 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default void setLockToThirtyTierPolicy(boolean enabled) {}
 
+    /**
+     * The source's motion is better served by DIS with per-phase refinement
+     * (synthesis 24) than by synthesis 15 with DIS motion (22), as on N64.
+     */
+    default void setPerPhaseMotionPreferred(boolean preferred) {}
+
     void setStatsListener(StatsListener value);
 
     /** Once-only runtime failure; owners must marshal to UI and validate Surface identity.
