@@ -178,6 +178,7 @@ def main():
     parser.add_argument('--cut-skip-black', action='store_true')
     parser.add_argument('--content-bounds', action='store_true')
     parser.add_argument('--border-margin', type=float, default=0.0)
+    parser.add_argument('--edge-extrapolate', type=float, default=0.0)
     parser.add_argument('--save', default='', help='write each generated frame (uint8, top row first) here')
     parser.add_argument('--divisor', type=int, default=1, help="the device's history-to-analysis divisor (1080p: 4)")
     parser.add_argument('--upscale', type=int, default=1,
@@ -202,6 +203,7 @@ def main():
     if args.cut_skip_black: D.CUT_SKIP_BLACK = True
     if args.content_bounds: D.CONTENT_BOUNDS = True
     D.BORDER_MARGIN_PX = args.border_margin
+    D.EDGE_EXTRAPOLATE_PX = args.edge_extrapolate
     if args.no_densify_cross:
         D.PHASE_DENSIFY_CROSS = False
     global PHASE, PHASE_PASSES, CHOICE_SPREAD

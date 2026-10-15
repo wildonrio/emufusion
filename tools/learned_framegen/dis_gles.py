@@ -300,6 +300,9 @@ def generate_phase_shader():
     "  for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)\n"
     "   us=max(us,length((texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize-v)*uHistorySize));\n"
     + field_choice_glsl() +
+    ("" if not (CONTENT_BOUNDS and EDGE_EXTRAPOLATE_PX > 0) else
+     " {vec4 eb=texture(uBounds,vec2(0.5));" + f"vec2 em={float(EDGE_EXTRAPOLATE_PX)}/uHistorySize;\n"
+     "  vec2 ui=clamp(u,eb.xz+em,eb.yw-em);if(ui!=u)v=texture(uPhaseFlow,ui).xy/uFlowSize;}\n") +
     " vec3 aw=texture(uFrameA,u-uT*v).rgb,cw=texture(uFrameC,u+(1.0-uT)*v).rgb;\n"
     " vec3 a0=texture(uFrameA,u).rgb,c0=texture(uFrameC,u).rgb;\n"
     " vec3 w=(1.0-uT)*aw+uT*cw;\n"
@@ -376,6 +379,10 @@ CUT_SKIP_BLACK = False
 # takes one side where the other side's warp source lies in the bars.
 CONTENT_BOUNDS = False
 BORDER_MARGIN_PX = 0.0
+# With CONTENT_BOUNDS: within EDGE_EXTRAPOLATE_PX history pixels of the
+# picture's edge the field is read that far inside (content arriving at an
+# edge has no match in one frame; a pan moves the edge like its neighbours).
+EDGE_EXTRAPOLATE_PX = 0.0
 
 BOUNDS = (HEADER +
     "uniform sampler2D uGrayA,uGrayC;uniform ivec2 uSize;\n"
