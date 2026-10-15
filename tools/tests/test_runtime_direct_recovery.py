@@ -349,6 +349,7 @@ class RuntimeDirectRecoveryTest(unittest.TestCase):
         long verifiedRatesAtMs;
         Queue RETIREMENT_RELEASES=new Queue();TextView frameRateBadge=new TextView();
         Request request=new Request();Object gameSurface=new GameSurfaceView();
+        String panelHeldNotice(double real){return "";}
 ''' + bodies + r'''
     }
     public static void main(String[] args) {

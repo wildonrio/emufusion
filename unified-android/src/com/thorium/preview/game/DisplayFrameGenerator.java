@@ -11461,6 +11461,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private static final java.io.File TRAIN_CAPTURE_MARKER =
             new java.io.File("/data/local/tmp/emufusion-train-capture");
     private static final int TRAIN_CAPTURE_LIMIT = 400;
+    // With this second marker too, the capture keeps the history's own size
+    // (the generation pass runs there: a 1080p source's DIS field is 1/8 of
+    // it, which quarter-size captures cannot show). About 25 MB a triplet at
+    // 1080p, so at most TRAIN_CAPTURE_FULL_LIMIT, 1.5 s apart.
+    private static final java.io.File TRAIN_CAPTURE_FULL_MARKER =
+            new java.io.File("/data/local/tmp/emufusion-train-capture-full");
+    private static final int TRAIN_CAPTURE_FULL_LIMIT = 48;
+    private static final long TRAIN_CAPTURE_FULL_INTERVAL_NS = 1_500_000_000L;
     private int trainCaptureCount;
     private long trainCaptureLastNs;
     private int trainCaptureTexture;
@@ -11471,9 +11479,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long now = System.nanoTime();
         if (trainCaptureCount < TRAIN_CAPTURE_LIMIT && now - trainCaptureLastNs >= 150_000_000L &&
                 TRAIN_CAPTURE_MARKER.exists()) {
-            trainCaptureLastNs = now;
-            captureTrainingTriplet(slot, phase);
-            return;
+            boolean full = TRAIN_CAPTURE_FULL_MARKER.exists();
+            if (!full || (trainCaptureCount < TRAIN_CAPTURE_FULL_LIMIT &&
+                    now - trainCaptureLastNs >= TRAIN_CAPTURE_FULL_INTERVAL_NS)) {
+                trainCaptureLastNs = now;
+                captureTrainingTriplet(slot, phase, full);
+                return;
+            }
+            if (full) return;
         }
         if (holdoutDumpCount >= 8 || now - holdoutDumpLastNs < 700_000_000L ||
                 !HOLDOUT_DUMP_MARKER.exists()) return;
@@ -11515,8 +11528,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
     }
 
-    private void captureTrainingTriplet(int slot, float phase) {
-        int divisor = densePyramidProgram == 0 ? 1 :
+    private void captureTrainingTriplet(int slot, float phase, boolean full) {
+        int divisor = densePyramidProgram == 0 || full ? 1 :
                 historyWidth > 1280 ? 4 : historyWidth > 640 ? 2 : 1;
         int width = Math.max(1, historyWidth / divisor);
         int height = Math.max(1, historyHeight / divisor);
@@ -12101,6 +12114,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * fell to work level 5); a quarter from work level 3.
      */
     private int disStopLevel() {
+        // A large source's field stays at 1/8 of a 1080p history. Its own
+        // analysis level (1/4) gained 0.1-4% on full-size 1080p captures
+        // (NSMBU Deluxe 0.419 -> 0.401, Ocarina 0.716 -> 0.711) but tripled
+        // the DIS cost on the Thor (Ocarina 2.5 -> 7.5 ms a pair; SM3DW fell
+        // to work level 1 within seconds): not adopted (2026-10-14).
         int base = disSmallSource() ? 0 : 1;
         return denseWorkLevel >= 3 ? base + 1 : base;
     }

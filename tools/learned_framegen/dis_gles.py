@@ -253,6 +253,18 @@ def phase_densify_shader():
     " o0=vec4(acc/max(wsum,1e-6),0.0,1.0);}\n")
 
 
+# The field choice. Measured on full-size 1080p captures and not adopted:
+# requiring the chosen neighbour to explain the pixel (within 8 or 16 grey
+# levels) and a soft choice weighting the candidates by exp(-(e - min)/sigma)
+# (sigma 2 or 4 grey levels) were within 0.3% of the hard choice.
+def field_choice_glsl():
+    return ("  if(us>=uChoiceSpread){vec2 bv=v;float be=wc(u,v)-2.0/255.0;\n"
+            "   for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x){\n"
+            "    vec2 k=texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize;float e=wc(u,k);\n"
+            "    if(e<be){be=e;bv=k;}}\n"
+            "   v=bv;}}\n")
+
+
 # Output from the per-phase field: A at x - t*v, C at x + (1-t)*v.
 def generate_phase_shader():
     return (HEADER +
@@ -271,8 +283,22 @@ def generate_phase_shader():
     # The global pass's cut/fade verdict (1x1, as synthesis 15 reads it): a
     # hard cut holds the left endpoint, a fitted fade is the temporal blend.
     "uniform sampler2D uCut;uniform float uCutEnabled;\n"
+    # The phase field is coarser than the image (a 1080p source's is 1/8 of
+    # it), so its bilinear lookup smears motion across object outlines.
+    # Where the 3x3 neighbouring field vectors differ from it by
+    # uChoiceSpread history pixels or more, the pixel takes the neighbour
+    # whose two warp samples agree best; the bilinear vector keeps ties
+    # within 2 grey levels. On full-size 1080p captures: NSMBU Deluxe 0.391
+    # -> 0.376, Double Dash 0.600 -> 0.594, Ocarina 0.715 -> 0.712 of a
+    # cross-fade, Link's Awakening within 0.2%. Zero disables it (QA).
+    "uniform float uChoiceSpread;\n"
     "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
+    "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
     "void main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n"
+    " if(uChoiceSpread>0.0){ivec2 um=ivec2(uFlowSize)-1,ub=ivec2(floor(u*uFlowSize));float us=0.0;\n"
+    "  for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)\n"
+    "   us=max(us,length((texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize-v)*uHistorySize));\n"
+    + field_choice_glsl() +
     " vec3 aw=texture(uFrameA,u-uT*v).rgb,cw=texture(uFrameC,u+(1.0-uT)*v).rgb;\n"
     " vec3 a0=texture(uFrameA,u).rgb,c0=texture(uFrameC,u).rgb;\n"
     " vec3 w=(1.0-uT)*aw+uT*cw;\n"

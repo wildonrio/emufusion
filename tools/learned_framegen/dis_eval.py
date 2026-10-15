@@ -2,6 +2,11 @@
 and score them like the device hold-out, beside the device's synthesis 15.
 
 usage: python3 -m tools.learned_framegen.dis_eval EVAL_ROOT [--per-case N] [--finest-small 0] [--finest-large 1]
+
+The Thor's 3-D cores present 1080p histories and the captures are a quarter of
+that; --upscale 4 --divisor 4 stands the captures in for the history at the
+device's own geometry (DIS on the box-filtered quarter, generation at full
+size), and full-size captures run with --divisor alone.
 """
 import argparse
 import json
@@ -18,6 +23,7 @@ from . import dis_gles as D
 
 PHASE = False
 PHASE_PASSES = 1
+CHOICE_SPREAD = 2.0
 
 
 def load(path):
@@ -28,6 +34,12 @@ def sums(g, a, c, b):
     d = lambda x, y: np.abs(x - y).max(2)
     changing = np.maximum(d(a, b), d(c, b)) > 2 / 255
     return float(d(g, b)[changing].sum()), float(d(0.5 * (a + c), b)[changing].sum())
+
+
+def enlarge(img, factor):
+    h, w = img.shape[:2]
+    return np.asarray(Image.fromarray((img * 255 + 0.5).clip(0, 255).astype(np.uint8)).resize(
+        (w * factor, h * factor), Image.BICUBIC)).astype(np.float32) / 255.0
 
 
 def area(img, w, h):
@@ -58,14 +70,16 @@ class Script:
         self.lines.append(f"draw {w} {h} {','.join(targets)}")
 
 
-def pipeline(s, tag, a, c, t, finest):
+def pipeline(s, tag, a, c, t, finest, divisor=1):
     h, w = a.shape[:2]
-    sizes, _ = D.levels_for(w, h, finest)
+    # The device's analysis image: the history box-filtered by its divisor.
+    aw, ah = max(1, w // divisor), max(1, h // divisor)
+    sizes, _ = D.levels_for(aw, ah, finest)
     for side, img in (('A', a), ('C', c)):
         s.upload(f'{tag}{side}rgb', img)
-        s.tex(f'{tag}{side}g0', w, h)
-        s.draw('GRAY', w, h, [f'{tag}{side}g0'], [('sampler', 'uIn0', f'{tag}{side}rgb'),
-               ('f2', 'uTexel', 1.0 / w, 1.0 / h), ('i1', 'uDivisor', 1)])
+        s.tex(f'{tag}{side}g0', aw, ah)
+        s.draw('GRAY', aw, ah, [f'{tag}{side}g0'], [('sampler', 'uIn0', f'{tag}{side}rgb'),
+               ('f2', 'uTexel', 1.0 / w, 1.0 / h), ('i1', 'uDivisor', divisor)])
         for k in range(1, len(sizes)):
             s.tex(f'{tag}{side}g{k}', *sizes[k])
             s.draw('DOWN', *sizes[k], [f'{tag}{side}g{k}'], [('sampler', 'uIn0', f'{tag}{side}g{k - 1}'),
@@ -118,7 +132,8 @@ def pipeline(s, tag, a, c, t, finest):
         s.draw('GENERATE_PHASE', w, h, [f'{tag}out'],
                [('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
                 ('sampler', 'uPhaseFlow', f'{tag}pf'), ('f1', 'uT', t), ('f2', 'uFlowSize', fw, fh),
-                ('f2', 'uHistorySize', w, h), ('sampler', 'uCut', f'{tag}cut'), ('f1', 'uCutEnabled', 1.0)])
+                ('f2', 'uHistorySize', w, h), ('f1', 'uChoiceSpread', CHOICE_SPREAD),
+                ('sampler', 'uCut', f'{tag}cut'), ('f1', 'uCutEnabled', 1.0)])
         out = s.folder / f'{tag}.out'
         s.lines.append(f'read {tag}out {out}')
         s.lines.append(f'read {tag}cut {s.folder}/{tag}.cut')
@@ -153,6 +168,11 @@ def main():
     parser.add_argument('--fade-coverage', type=float)
     parser.add_argument('--cut-threshold', type=float)
     parser.add_argument('--save', default='', help='write each generated frame (uint8, top row first) here')
+    parser.add_argument('--divisor', type=int, default=1, help="the device's history-to-analysis divisor (1080p: 4)")
+    parser.add_argument('--upscale', type=int, default=1,
+                        help='enlarge the captures (bicubic) to stand in for the full-size history')
+    parser.add_argument('--choice-spread', type=float, default=2.0,
+                        help='field-choice spread in history pixels; 0 disables (before 3.2.86)')
     args = parser.parse_args()
     global SAVE, VERDICTS
     SAVE = args.save
@@ -169,7 +189,8 @@ def main():
     if args.cut_threshold is not None: D.CUT_THRESHOLD = args.cut_threshold
     if args.no_densify_cross:
         D.PHASE_DENSIFY_CROSS = False
-    global PHASE, PHASE_PASSES
+    global PHASE, PHASE_PASSES, CHOICE_SPREAD
+    CHOICE_SPREAD = args.choice_spread
     PHASE = args.phase
     PHASE_PASSES = args.phase_passes
     by_case = defaultdict(list)
@@ -197,9 +218,11 @@ def main():
                 a, b, c = (load(folder / f'{k}.png') for k in 'ABC')
                 if np.abs(a - b).mean() < 1e-4 or np.abs(b - c).mean() < 1e-4:
                     continue
+                if args.upscale > 1:
+                    a, b, c = (enlarge(x, args.upscale) for x in (a, b, c))
                 t = float(json.loads((folder / 'meta.json').read_text()).get('phase', 0.5))
                 finest = args.finest_small if max(a.shape[:2]) <= 400 else args.finest_large
-                out, size = pipeline(s, f'j{len(jobs)}', a, c, t, finest)
+                out, size = pipeline(s, f'j{len(jobs)}', a, c, t, finest, args.divisor)
                 jobs.append((folder, a, b, c, out, size))
             run = subprocess.run([args.harness], input='\n'.join(s.lines) + '\n', text=True, capture_output=True)
             if run.returncode:

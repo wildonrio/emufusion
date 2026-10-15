@@ -130,6 +130,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         lowLatency = low;
+        boolean detail = true;
+        try {
+            if (context != null) detail = Settings.Global.getInt(
+                    context.getContentResolver(), FIELD_DETAIL_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        fieldDetail = detail;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -204,6 +212,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean lowLatency = true;
 
     static boolean lowLatency() { return lowLatency; }
+
+    /**
+     * Full-size field detail (default, 3.2.86): each generated pixel picks
+     * among the 3x3 neighbouring field vectors where they disagree (a 1080p
+     * history's field is 1/8 of it). QA: emufusion_framegen_field_detail=0
+     * restores 3.2.85's bilinear field for comparisons and GPU cost.
+     */
+    static final String FIELD_DETAIL_GLOBAL = "emufusion_framegen_field_detail";
+    private static volatile boolean fieldDetail = true;
+
+    static boolean fieldDetail() { return fieldDetail; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

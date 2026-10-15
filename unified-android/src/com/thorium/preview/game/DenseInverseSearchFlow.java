@@ -33,6 +33,9 @@ final class DenseInverseSearchFlow {
     private static final String TAG = "EmuFusionDisFlow";
     static final int PATCH = 8;
     static final int STRIDE = 3;
+    // Field-choice spread in history pixels (3.2.86): on full-size 1080p
+    // captures 2 beat 8 on every game (NSMBU Deluxe 0.405 vs 0.408).
+    static final float FIELD_CHOICE_SPREAD = 2f;
 
     private int historyWidth, historyHeight, divisor, finest, levels;
     // Finest level the last estimate reached.
@@ -316,6 +319,10 @@ final class DenseInverseSearchFlow {
         bind(generatePhase, "uStructureMask", structureMask != 0 ? structureMask : zeroField, 3);
         GLES20.glUniform1f(location(generatePhase, "uStructureMinMotionPx"), minMotionPx);
         GLES20.glUniform2f(location(generatePhase, "uHistorySize"), historyWidth, historyHeight);
+        // 3.2.86: the per-pixel 3x3 field choice (the per-phase field is 1/8
+        // of a 1080p history); QA restores 3.2.85's bilinear field.
+        GLES20.glUniform1f(location(generatePhase, "uChoiceSpread"),
+                TimelineSchedulerSwitch.fieldDetail() ? FIELD_CHOICE_SPREAD : 0f);
         bind(generatePhase, "uFrameA", frameA, 0);
         bind(generatePhase, "uFrameC", frameC, 1);
         bind(generatePhase, "uPhaseFlow", phaseFlow, 2);

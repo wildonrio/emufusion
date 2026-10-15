@@ -1730,18 +1730,49 @@ public final class InWindowGameHost
             return;
         // While the generator reports verified counts they own the badge.
         if (System.nanoTime() / 1_000_000L - verifiedRatesAtMs < 2500L) return;
-        badge.setText(String.format(Locale.US, "%.0f fps", source));
+        badge.setText(String.format(Locale.US, "%.0f fps", source) + panelHeldNotice(source));
         badge.setVisibility(source > 0.0 ? View.VISIBLE : View.GONE);
+    }
+
+    private boolean panelHeldReported;
+
+    /**
+     * A phone may keep a slower mode than the one this launch asked for (a
+     * 60 Hz refresh-rate setting, battery saver, an app allowlist). A 60 fps
+     * game then has no refreshes left for generated frames and the corner
+     * showed only the game's rate, which looked like generation silently
+     * failing (owner's phone, NES, 2026-10-14). Returns the corner's
+     * explanation, or "" while the panel runs the planned mode or still has
+     * room above the game's rate.
+     */
+    private String panelHeldNotice(double real) {
+        if (!(plannedPanelHz > 0f) || !(real > 0.0)) return "";
+        Display display = activity.getDisplay();
+        Display.Mode mode = display == null ? null : display.getMode();
+        if (mode == null) return "";
+        float actualHz = mode.getRefreshRate();
+        if (actualHz >= plannedPanelHz - 1f || actualHz >= real * 1.5) return "";
+        if (!panelHeldReported) {
+            panelHeldReported = true;
+            Log.w(TAG, "Panel mode held system=" + request.systemId + " planned=" +
+                    plannedPanelHz + " actual=" + actualHz + " sourceFps=" +
+                    String.format(Locale.US, "%.1f", real));
+            Toast.makeText(activity.getApplicationContext(), String.format(Locale.US,
+                    "Frame generation needs a faster screen mode, but the screen stayed at " +
+                    "%.0f Hz. Turn on the high refresh rate (%.0f Hz) in the phone's " +
+                    "display settings.", actualHz, plannedPanelHz), Toast.LENGTH_LONG).show();
+        }
+        return String.format(Locale.US, " · screen at %.0f Hz", actualHz);
     }
 
     private long verifiedRatesAtMs;
 
     /**
      * The corner shows two numbers, like LSFG: the game's real frame rate and
-     * the rate actually displayed with generated frames -- counting only
-     * generated images that passed the per-frame motion check, never a
-     * duplicate or a cross-fade (owner, 2026-10-11). One number when nothing
-     * is being generated.
+     * the rate of new images sent to the screen (real images shown plus every
+     * generated image; repeats are not counted, 3.2.85). One number when
+     * nothing is being generated, with the reason when the screen kept a
+     * slower mode than requested.
      */
     private void showVerifiedFrameRates(double real, double displayed) {
         TextView badge = frameRateBadge;
@@ -1752,7 +1783,7 @@ public final class InWindowGameHost
         verifiedRatesAtMs = System.nanoTime() / 1_000_000L;
         badge.setText(displayed >= real + 1.0 ?
                 String.format(Locale.US, "%.0f → %.0f fps", real, displayed) :
-                String.format(Locale.US, "%.0f fps", real));
+                String.format(Locale.US, "%.0f fps", real) + panelHeldNotice(real));
         badge.setVisibility(real > 0.0 ? View.VISIBLE : View.GONE);
     }
 

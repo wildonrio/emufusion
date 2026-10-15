@@ -4300,10 +4300,14 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         badge = host.split("private void updateFrameRateBadge(", 1)[1].split(
             "private void observeReportedOutput(", 1)[0]
         self.assertIn("request.frameGenerationMode == FrameGenerationSettings.Mode.OFF", badge)
-        # Two honest numbers (owner, 2026-10-11): real fps and the displayed
-        # rate counting only verified generated frames; never a backend name.
+        # Two honest numbers (owner, 2026-10-11): real fps and the new images
+        # the screen gets (3.2.85); never a backend name.
         self.assertNotIn("activeFrameGenerationBackend()", badge)
         self.assertIn('"%.0f → %.0f fps", real, displayed', badge)
+        # A phone that kept a slower mode than planned says so (3.2.86).
+        self.assertIn('String.format(Locale.US, "%.0f fps", real) + panelHeldNotice(real));', badge)
+        self.assertIn("if (actualHz >= plannedPanelHz - 1f || actualHz >= real * 1.5) return \"\";", badge)
+        self.assertIn('return String.format(Locale.US, " · screen at %.0f Hz", actualHz);', badge)
         self.assertIn("showVerifiedFrameRates(real, displayed)", host)
         self.assertNotIn('"S-- T-- A-- Backend="', host)
         self.assertIn("setFrameRateListener", host)
@@ -4548,6 +4552,10 @@ class TrainingCaptureTest(unittest.TestCase):
         self.assertIn("if (trainCaptureCount < TRAIN_CAPTURE_LIMIT && now - trainCaptureLastNs >= 150_000_000L &&\n"
                       "                TRAIN_CAPTURE_MARKER.exists()) {", source)
         self.assertIn("historyWidth > 1280 ? 4 : historyWidth > 640 ? 2 : 1;", source)
+        # QA full-size capture: the generation pass's own resolution, capped.
+        self.assertIn('new java.io.File("/data/local/tmp/emufusion-train-capture-full")', source)
+        self.assertIn("private static final int TRAIN_CAPTURE_FULL_LIMIT = 48;", source)
+        self.assertIn("int divisor = densePyramidProgram == 0 || full ? 1 :", source)
         self.assertEqual(source.count("captureTrainingTriplet("), 2)
 
 

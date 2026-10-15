@@ -86,6 +86,24 @@ class SingleRouteTest(unittest.TestCase):
         self.assertIn(" if(length(v*uHistorySize)<1.0)w=(1.0-uT)*a0+uT*c0;else\n", dis_gles.shaders()["GENERATE_PHASE"])
 
 
+class FullSizeGenerationTest(unittest.TestCase):
+    """A 1080p history's DIS field is 1/8 of it (3.2.86): each generated pixel
+    picks among the 3x3 field neighbours where they disagree."""
+
+    def test_field_choice_is_bounded_and_thresholds_stay_in_history_pixels(self):
+        shader = dis_gles.shaders()["GENERATE_PHASE"]
+        self.assertNotIn("uUnitSize", shader)
+        self.assertIn("vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);", shader)
+        self.assertIn(" if(uChoiceSpread>0.0){", shader)
+        self.assertIn("-v)*uHistorySize));", shader)
+        self.assertIn("  if(us>=uChoiceSpread){vec2 bv=v;float be=wc(u,v)-2.0/255.0;", shader)
+        flow = (GAME / "DenseInverseSearchFlow.java").read_text()
+        self.assertIn("static final float FIELD_CHOICE_SPREAD = 2f;", flow)
+        self.assertIn("TimelineSchedulerSwitch.fieldDetail() ? FIELD_CHOICE_SPREAD : 0f);", flow)
+        switch = (GAME / "TimelineSchedulerSwitch.java").read_text()
+        self.assertIn('FIELD_DETAIL_GLOBAL = "emufusion_framegen_field_detail";', switch)
+        self.assertIn("private static volatile boolean fieldDetail = true;", switch)
+
 class WorkAdaptationTest(unittest.TestCase):
     def test_lone_deadline_misses_do_not_shed_work(self):
         policy = (ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "video" /
