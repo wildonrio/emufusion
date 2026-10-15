@@ -302,7 +302,8 @@ def generate_phase_shader():
     + field_choice_glsl() +
     ("" if not (CONTENT_BOUNDS and EDGE_EXTRAPOLATE_PX > 0) else
      " {vec4 eb=texture(uBounds,vec2(0.5));" + f"vec2 em={float(EDGE_EXTRAPOLATE_PX)}/uHistorySize;\n"
-     "  vec2 ui=clamp(u,eb.xz+em,eb.yw-em);if(ui!=u)v=texture(uPhaseFlow,ui).xy/uFlowSize;}\n") +
+     "  vec2 ui=clamp(u,eb.xz+em,eb.yw-em);if(ui!=u){vec2 ke=texture(uPhaseFlow,ui).xy/uFlowSize;\n" +
+     ("   if(wc(u,ke)<wc(u,v)-2.0/255.0)v=ke;}}\n" if EDGE_CANDIDATE else "   v=ke;}}\n")) +
     " vec3 aw=texture(uFrameA,u-uT*v).rgb,cw=texture(uFrameC,u+(1.0-uT)*v).rgb;\n"
     " vec3 a0=texture(uFrameA,u).rgb,c0=texture(uFrameC,u).rgb;\n"
     " vec3 w=(1.0-uT)*aw+uT*cw;\n"
@@ -383,6 +384,9 @@ BORDER_MARGIN_PX = 0.0
 # picture's edge the field is read that far inside (content arriving at an
 # edge has no match in one frame; a pan moves the edge like its neighbours).
 EDGE_EXTRAPOLATE_PX = 0.0
+# Instead, offer that inside vector as one more field-choice candidate
+# (taken only where its two warp samples agree better by 2 grey levels).
+EDGE_CANDIDATE = False
 
 BOUNDS = (HEADER +
     "uniform sampler2D uGrayA,uGrayC;uniform ivec2 uSize;\n"
