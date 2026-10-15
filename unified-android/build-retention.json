@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "578cab64bf7ad9037586d00897935c9b596e4e31304ef1e266fbf093e11631af": "Rollback 3.2.85 (159) until 3.2.86 settles.",
-    "99e375f01fc1688a447cc5d9e32ce76f8249bb24248f1c0c486492b4e610281f": "Current 3.2.86 (160) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "99e375f01fc1688a447cc5d9e32ce76f8249bb24248f1c0c486492b4e610281f": "Rollback 3.2.86 (160) until 3.2.87 settles.",
+    "d5d43bcb194584c67dd86d387d0bd847ee6d0cde31103addf3aa9b087dcdcf6a": "Current 3.2.87 (161) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -605,6 +605,14 @@
     "unified-android/build/emufusion-3.2.86-phase2-phase3-qualification-739a898503120514ddfb0271cc0f853c9b7981726ca92c8cdc20e1bdd8fc740c.apk": {
       "sha256": "739a898503120514ddfb0271cc0f853c9b7981726ca92c8cdc20e1bdd8fc740c",
       "reason": "Second 3.2.86 candidate (finest DIS level with headroom, GPU-cost trial on the Thor); finer field not adopted, superseded by 99e375f0."
+    },
+    "unified-android/build/emufusion-3.2.87-phase2-phase3-qualification-77003f77983dfbad67adf261981feb9efb2ce986e9836bd797fa7b1e9b1565f6.apk": {
+      "sha256": "77003f77983dfbad67adf261981feb9efb2ce986e9836bd797fa7b1e9b1565f6",
+      "reason": "First 3.2.87 candidate (readiness trims without lateness accounting): Ocarina lost most generated outputs on the Thor; superseded by 855d8d51."
+    },
+    "unified-android/build/emufusion-3.2.87-phase2-phase3-qualification-855d8d51f206c12441f25fe3a65cce67b645106c8c13312a3eb1e7a2d2d35634.apk": {
+      "sha256": "855d8d51f206c12441f25fe3a65cce67b645106c8c13312a3eb1e7a2d2d35634",
+      "reason": "Second 3.2.87 candidate (readiness trims, no late tolerance); measured on the Thor, superseded by the tolerant build."
     }
   }
 }

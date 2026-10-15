@@ -113,6 +113,36 @@ public final class TimelineFrameScheduler {
     private long pendingSpanNs;
 
     private long reanchors;
+    // Pair readiness (3.2.87; owner 2026-10-15: latency is the biggest
+    // problem). For each pair the timeline notes the first callback that
+    // wanted its right image (a generated output, or a hold because the image
+    // was not there) and compares it with when the renderer admitted that
+    // image: positive, the image waited; negative, the pair was late. When
+    // every one of the last READY_WINDOW pairs waited, that wait is latency
+    // the source does not need and comes off; a late pair puts back what it
+    // lacked. Pairs spanning whole outputs move by whole output periods (one
+    // generated step skipped once, phases stay k/n; gradual steps held a slot
+    // in each pair while trimming); others by small steps. LSFG-Android shows
+    // a pair's first generated image as soon as it is computed; this reaches
+    // the same and keeps the even steps. Before, slack added for a late or
+    // long pair came off only while frames queued up, which a 20 fps game
+    // never does: Ocarina of Time showed real frames 74 ms after arrival.
+    public static final int READY_WINDOW = 16;
+    // Late pairs the window tolerates before it keeps (or puts back) slack:
+    // one in sixteen holds a generated step rather than every pair paying
+    // the longest span's latency (QA: setReadyToleratedLate).
+    public static final int READY_TOLERATED_LATE = 1;
+    private int readyToleratedLate = READY_TOLERATED_LATE;
+    public static final long READY_TRIM_DIVISOR = 8L;
+    private final long[] readySlackNs = new long[READY_WINDOW];
+    private int readySlackCount, readySlackNext;
+    private boolean readyTrimEnabled = true;
+    private long readyTrims, readySlackAdds;
+    private long rightReadyNs;
+    private long needLeftSequence;
+    private long needNs;
+    private boolean needReported;
+    private long lastReadyWaitNs;
     // Consecutive successor-late callbacks before the image arrived, bucketed
     // 1 / 2 / 3+ callbacks: how late successors are, in output slots.
     private int lateStreak;
@@ -174,7 +204,85 @@ public final class TimelineFrameScheduler {
         lateStreak = 0;
         shownSequence = 0L;
         shownTargetNs = Long.MIN_VALUE;
+        readySlackCount = 0;
+        readySlackNext = 0;
+        lastReadyWaitNs = 0L;
+        needLeftSequence = 0L;
+        needNs = 0L;
+        needReported = false;
         clearPending();
+    }
+
+    /** QA: false keeps added latency until frames queue up (before 3.2.87). */
+    public void setReadyTrimEnabled(boolean value) { readyTrimEnabled = value; }
+
+    /** When the renderer admitted the current right image (zero when unknown). */
+    public void setRightReadyNs(long admittedNs) { rightReadyNs = admittedNs; }
+
+    private void observeReadySlack(long slackNs) {
+        readySlackNs[readySlackNext] = slackNs;
+        readySlackNext = (readySlackNext + 1) % READY_WINDOW;
+        readySlackCount = Math.min(READY_WINDOW, readySlackCount + 1);
+        lastReadyWaitNs = slackNs;
+    }
+
+    /** Once per pair, when its right image is known: how long it waited. */
+    private void reportPairReadiness() {
+        if (needReported || needNs == 0L || rightReadyNs <= 0L) return;
+        needReported = true;
+        observeReadySlack(needNs - rightReadyNs);
+    }
+
+    /** QA: late pairs per window tolerated (0: the longest span sets the latency). */
+    public void setReadyToleratedLate(int pairs) {
+        readyToleratedLate = Math.max(0, Math.min(READY_WINDOW / 4, pairs));
+    }
+
+    /** The recent waits' (tolerated+1)-th smallest: every pair but the tolerated ones waited this long. */
+    private long readyQuantileNs() {
+        long[] sorted = java.util.Arrays.copyOf(readySlackNs, readySlackCount);
+        java.util.Arrays.sort(sorted);
+        return sorted[Math.min(readyToleratedLate, readySlackCount - 1)];
+    }
+
+    /** The wait recent pairs could do without, or zero while unknown or disabled. */
+    private long readyExcessNs() {
+        if (!readyTrimEnabled || readySlackCount < READY_WINDOW || outputPeriodNs <= 0L) return 0L;
+        return Math.max(0L, readyQuantileNs());
+    }
+
+    /** This slot's readiness trim: a whole output, a small step, or none. */
+    private long readyTrimStepNs(long leftTimestampNs, long rightTimestampNs) {
+        long wait = readyExcessNs();
+        if (wait <= 0L) return 0L;
+        // The renderer admits images before it selects, so an image admitted at
+        // a callback can be that callback's output: a whole period of wait
+        // (less the admission's own time in the callback) is removable.
+        if (wholeOutputs(rightTimestampNs - leftTimestampNs))
+            return wait >= outputPeriodNs - outputPeriodNs / READY_TRIM_DIVISOR ? outputPeriodNs : 0L;
+        return Math.min(Math.max(0L, wait - outputPeriodNs / 2L),
+                Math.max(1L, outputPeriodNs / READY_TRIM_DIVISOR));
+    }
+
+    /** The slack late pairs lacked beyond the tolerated ones (whole outputs where pairs span them). */
+    private long readySlackToAddNs(long leftTimestampNs, long rightTimestampNs) {
+        if (!readyTrimEnabled || outputPeriodNs <= 0L || lastReadyWaitNs >= 0L || readySlackCount == 0)
+            return 0L;
+        // Recorded waits shift with every latency change, so a late pair that
+        // was already put back no longer counts as late.
+        long late = -readyQuantileNs();
+        if (late <= outputPeriodNs / READY_TRIM_DIVISOR) return 0L;
+        if (wholeOutputs(rightTimestampNs - leftTimestampNs))
+            return (late + outputPeriodNs - 1L) / outputPeriodNs * outputPeriodNs;
+        return late + outputPeriodNs / READY_TRIM_DIVISOR;
+    }
+
+    /** The recorded waits after the timeline's latency changes by deltaNs. */
+    private void shiftReadySlack(long deltaNs) {
+        for (int i = 0; i < readySlackCount; ++i) readySlackNs[i] += deltaNs;
+        lastReadyWaitNs += deltaNs;
+        // A pair still waiting for its image needs it that much later too.
+        if (needNs != 0L && !needReported) needNs += deltaNs;
     }
 
     /** Whether two retained images may form one pair for this timeline. */
@@ -244,6 +352,20 @@ public final class TimelineFrameScheduler {
         // callback jitter); rounding would show multi-scan outputs a scan early.
         long slot = Math.floorDiv(displayNs - anchorDisplayNs + outputPeriodNs / 4L, outputPeriodNs);
         if (slot <= lastSlot) return NONE;  // this output slot is already shown
+        if (leftSequence != needLeftSequence) {
+            needLeftSequence = leftSequence;
+            needNs = 0L;
+            needReported = false;
+        }
+        if (hasRight) {
+            reportPairReadiness();
+            long add = readySlackToAddNs(leftTimestampNs, rightTimestampNs);
+            if (add > 0L) {
+                anchorSourceNs -= add;
+                shiftReadySlack(add);
+                ++readySlackAdds;
+            }
+        }
         if (hasRight && lateStreak > 0) {
             ++lateStreaks[Math.min(lateStreak, 3) - 1];
             lateStreak = 0;
@@ -257,11 +379,20 @@ public final class TimelineFrameScheduler {
             long latencyNs = displayNs - (anchorSourceNs + slot * outputPeriodNs);
             if (requiredLatencyNs == Long.MIN_VALUE ||
                     latencyNs - outputPeriodNs > requiredLatencyNs) {
-                anchorSourceNs += Math.max(1L, outputPeriodNs / TRIM_DIVISOR);
+                long step = Math.max(1L, outputPeriodNs / TRIM_DIVISOR);
+                anchorSourceNs += step;
+                shiftReadySlack(-step);
                 ++trims;
             } else {
                 ++trimsHeld;
             }
+        }
+        long readyStep = hasRight ? readyTrimStepNs(leftTimestampNs, rightTimestampNs) : 0L;
+        if (readyStep > 0L) {
+            long step = readyStep;
+            anchorSourceNs += step;
+            shiftReadySlack(-step);
+            ++readyTrims;
         }
         long target = anchorSourceNs + slot * outputPeriodNs;
         long tolerance = outputPeriodNs / 2L;
@@ -289,6 +420,7 @@ public final class TimelineFrameScheduler {
             return propose(REAL_LEFT, 0f, leftTimestampNs, slot, leftSequence, false, 0L, 0L);
         }
         if (!hasRight) {
+            if (needNs == 0L) needNs = displayNs;
             ++lateStreak;
             // The next image is not here yet: hold the left one. Once the
             // timeline reaches the point where it would be due, stop just
@@ -304,7 +436,9 @@ public final class TimelineFrameScheduler {
                 // under load) otherwise arrives exactly on time for its real
                 // slot every pair, never in time for the midpoint, and
                 // generation stops (2026-10-11). Queued frames trim it back.
-                anchorSourceNs -= target - dueNs + 1L + outputPeriodNs;
+                long added = target - dueNs + 1L + outputPeriodNs;
+                anchorSourceNs -= added;
+                shiftReadySlack(added);
                 ++reanchors;
             }
             lastSlot = slot;
@@ -335,6 +469,10 @@ public final class TimelineFrameScheduler {
             if (k >= 1L && k <= n - 1L) fraction = (double) k / (double) n;
         }
         if (!(fraction > 0.0 && fraction < 1.0)) return NONE;
+        if (needNs == 0L) {
+            needNs = displayNs;
+            reportPairReadiness();
+        }
         long selected = leftTimestampNs + Math.round(fraction * span);
         ++generated;
         int kind = propose(GENERATED, (float) fraction, selected, slot, leftSequence, false, 0L, 0L);
@@ -405,21 +543,23 @@ public final class TimelineFrameScheduler {
             midpointLostThisPair = false;
             consecutivePassBlockedPairs = passBlockedThisPair ? consecutivePassBlockedPairs + 1 : 0;
             passBlockedThisPair = false;
-            if (consecutivePassBlockedPairs >= 2 && primed) {
+            if (consecutivePassBlockedPairs >= 2 && primed && !readyTrimEnabled) {
                 // Two pairs in a row could not pass a real image that no
                 // output lands near because its successor was not queued yet:
                 // one more output period of slack (trimmed later if frames
                 // queue up) so the successor is there in time.
                 anchorSourceNs -= outputPeriodNs;
+                shiftReadySlack(outputPeriodNs);
                 consecutivePassBlockedPairs = 0;
                 ++slackSteps;
             }
             if (pairsSinceGenerated < Integer.MAX_VALUE / 2) ++pairsSinceGenerated;
-            if (consecutiveLatePairs >= 2 && pairsSinceGenerated <= 4 && primed) {
+            if (consecutiveLatePairs >= 2 && pairsSinceGenerated <= 4 && primed && !readyTrimEnabled) {
                 // Generation was running and two pairs in a row lost their
                 // midpoint to a late successor: give the timeline one more
                 // output period of slack (trimmed later if frames queue up).
                 anchorSourceNs -= outputPeriodNs;
+                shiftReadySlack(outputPeriodNs);
                 consecutiveLatePairs = 0;
                 ++slackSteps;
             }
@@ -479,6 +619,10 @@ public final class TimelineFrameScheduler {
                 " timelinePauseHolds=" + pauseHolds +
                 " timelineTrims=" + trims +
                 " timelineTrimsHeld=" + trimsHeld +
+                " timelineReadyTrims=" + readyTrims +
+                " timelineReadyAdds=" + readySlackAdds +
+                " timelineReadyExcessUs=" + readyExcessNs() / 1000L +
+                " timelineLastReadyWaitUs=" + lastReadyWaitNs / 1000L +
                 " timelineSlackSteps=" + slackSteps +
                 " timelineExpectedSpanUs=" + expectedSpanNs / 1000L +
                 " timelinePassedReals=" + passedReals +

@@ -27,6 +27,9 @@ public final class TimelineFrameSchedulerTest {
         passingNeedsAQueuedSuccessor();
         burstsAreNotTrimmed();
         trimsKeepTheLatencyTheSourceNeeds();
+        readinessTrimsLatencyNoPairNeeds();
+        readinessFollowsIrregularSpans();
+        readinessUndoesHeldLatency();
         System.out.println("TimelineFrameSchedulerTest passed");
     }
 
@@ -39,10 +42,25 @@ public final class TimelineFrameSchedulerTest {
         boolean passing;
         int steadyQueued = 100;  // no trimming unless a test sets its steady depth
         final List<String> shown = new ArrayList<>();
+        // Readiness reporting (renderer model): admission time per sequence,
+        // the wait of each pair's first generated output, display lags.
+        boolean reportReady;
+        long now;
+        final java.util.Map<Long, Long> admitted = new java.util.HashMap<>();
+        long readyReportedRight;
+        final List<Long> realLagNs = new ArrayList<>();
+        final List<Long> firstGeneratedLagNs = new ArrayList<>();
 
-        Rig(long outputPeriod, long sourcePeriod) { scheduler.configure(outputPeriod, sourcePeriod); }
+        Rig(long outputPeriod, long sourcePeriod) {
+            scheduler.configure(outputPeriod, sourcePeriod);
+            scheduler.setReadyTrimEnabled(false);  // a renderer that does not report readiness
+        }
 
-        void produce(long sequence, long timestamp) { fifo.add(new long[] {sequence, timestamp}); fill(); }
+        void produce(long sequence, long timestamp) {
+            admitted.put(sequence, now);
+            fifo.add(new long[] {sequence, timestamp});
+            fill();
+        }
 
         void fill() {
             if (leftSeq == 0 && !fifo.isEmpty()) {
@@ -55,6 +73,8 @@ public final class TimelineFrameSchedulerTest {
         }
 
         void vsync(long displayNs) {
+            Long ready = admitted.get(rightSeq);
+            scheduler.setRightReadyNs(reportReady && rightSeq != 0 && ready != null ? ready : 0L);
             int kind = passing ?
                     scheduler.select(displayNs, leftSeq, leftTs, rightSeq, rightTs, motionReady,
                             fifo.size() - steadyQueued, rightSeq != 0 && !fifo.isEmpty()) :
@@ -65,6 +85,13 @@ public final class TimelineFrameSchedulerTest {
                 shown.add(String.format(java.util.Locale.ROOT, "g%.2f", scheduler.pendingPhase()));
             else shown.add(kind == TimelineFrameScheduler.REAL_RIGHT ? "R" + rightSeq : "L" + leftSeq);
             int advance = scheduler.pendingAdvance();
+            if (kind == TimelineFrameScheduler.GENERATED && rightSeq != readyReportedRight &&
+                    admitted.containsKey(rightSeq)) {
+                readyReportedRight = rightSeq;
+                firstGeneratedLagNs.add(displayNs - admitted.get(rightSeq));
+            }
+            if (kind == TimelineFrameScheduler.REAL_RIGHT && admitted.containsKey(rightSeq))
+                realLagNs.add(displayNs - admitted.get(rightSeq));
             scheduler.commit(true);
             if (advance == 1) {
                 leftSeq = rightSeq; leftTs = rightTs; rightSeq = 0; rightTs = 0; fill();
@@ -363,6 +390,99 @@ public final class TimelineFrameSchedulerTest {
         }
         // 480 vsyncs = 4 s = ~118 real frames; nearly every pair keeps its midpoint.
         check(generated >= 100, "generation survives a drifting source: " + generated);
+    }
+
+    /** 20 fps on 120 Hz, three outputs per pair; frames are admitted 1 ms after their stamps. */
+    private static Rig twentyFps(boolean reportReady, long[] spans, long jitterNs, int vsyncs) {
+        return twentyFps(reportReady, spans, jitterNs, vsyncs, TimelineFrameScheduler.READY_TOLERATED_LATE);
+    }
+
+    private static Rig twentyFps(boolean reportReady, long[] spans, long jitterNs, int vsyncs, int tolerated) {
+        Rig rig = new Rig(2 * PANEL, 6 * PANEL);
+        rig.reportReady = reportReady;
+        rig.scheduler.setReadyTrimEnabled(reportReady);
+        rig.scheduler.setReadyToleratedLate(tolerated);
+        long t0 = 1_000_000_000L;
+        long stamp = t0;
+        int produced = 0;
+        long nextStamp = stamp;
+        java.util.Random random = new java.util.Random(7);
+        long due = nextStamp + 1_000_000L;
+        for (int v = 0; v < vsyncs; ++v) {
+            rig.now = t0 + v * PANEL;
+            while (rig.now >= due) {
+                rig.produce(++produced, nextStamp);
+                nextStamp += spans[produced % spans.length];
+                due = nextStamp + 1_000_000L + (jitterNs > 0 ? (long) (random.nextDouble() * jitterNs) : 0L);
+            }
+            rig.vsync(rig.now);
+        }
+        return rig;
+    }
+
+    private static double meanMs(List<Long> values, int skip) {
+        double sum = 0;
+        int n = 0;
+        for (int i = skip; i < values.size(); ++i) { sum += values.get(i); ++n; }
+        return n == 0 ? 0 : sum / n / 1e6;
+    }
+
+    private static void readinessTrimsLatencyNoPairNeeds() {
+        long[] steady = {6 * PANEL};
+        Rig before = twentyFps(false, steady, 0L, 480);
+        Rig after = twentyFps(true, steady, 0L, 480);
+        double realBefore = meanMs(before.realLagNs, 20), realAfter = meanMs(after.realLagNs, 20);
+        double firstBefore = meanMs(before.firstGeneratedLagNs, 20);
+        double firstAfter = meanMs(after.firstGeneratedLagNs, 20);
+        // Like LSFG-Android: the first generated image follows the real one
+        // within an output period, and the real image two outputs later.
+        check(firstAfter < 2 * PANEL / 1e6 + 0.5,
+                "first generated output within an output period of arrival: " + firstAfter + " ms");
+        check(realAfter < realBefore - 10.0,
+                "real images shown sooner: " + realBefore + " -> " + realAfter + " ms");
+        check(realAfter > 4 * PANEL / 1e6 - 0.5,
+                "a real image still follows its two generated outputs: " + realAfter + " ms");
+        int holds = 0;
+        for (int i = 60; i < after.shown.size(); ++i) if (after.shown.get(i).equals("-")) ++holds;
+        int slots = 0;
+        for (int i = 60; i < after.shown.size(); ++i) if (!after.shown.get(i).equals("-")) ++slots;
+        check(slots * 2 >= after.shown.size() - 60 - 2,
+                "every output slot shows an image once settled (holds " + holds + ")");
+    }
+
+    private static void readinessFollowsIrregularSpans() {
+        // Ocarina of Time: 20 fps inside a 60 Hz VI stream, so spans of
+        // 33/50/67 ms, admitted with up to 4 ms of jitter.
+        long[] spans = {6 * PANEL, 4 * PANEL, 6 * PANEL, 8 * PANEL, 6 * PANEL, 6 * PANEL, 8 * PANEL, 4 * PANEL};
+        Rig before = twentyFps(false, spans, 4_000_000L, 960);
+        Rig after = twentyFps(true, spans, 4_000_000L, 960);
+        // Primed on a short span, the old timeline kept that latency and lost
+        // a generated output in most long pairs; readiness finds the least
+        // latency at which no pair is late (the longest span's).
+        double realAfter = meanMs(after.realLagNs, 20);
+        check(realAfter < 8 * PANEL / 1e6 - 0.5,
+                "irregular spans: latency stays under the longest span " + realAfter + " ms");
+        int reals = 0, generated = 0, realsBefore = 0, generatedBefore = 0;
+        for (String shown : after.shown) { if (shown.startsWith("R")) ++reals; if (shown.startsWith("g")) ++generated; }
+        for (String shown : before.shown) {
+            if (shown.startsWith("R")) ++realsBefore;
+            if (shown.startsWith("g")) ++generatedBefore;
+        }
+        check(reals >= realsBefore - 2, "every real image is still shown: " + realsBefore + " vs " + reals);
+        check(generated >= generatedBefore + 20,
+                "late pairs put their slack back instead of losing outputs: " + generatedBefore + " vs " + generated);
+    }
+
+    private static void readinessUndoesHeldLatency() {
+        // The same irregular 20 fps stream, primed on a long span (the latency
+        // a late successor or slack step adds): the readiness trims bring it
+        // back to what the short spans allow.
+        long[] spans = {8 * PANEL, 8 * PANEL, 6 * PANEL, 4 * PANEL, 6 * PANEL, 8 * PANEL, 6 * PANEL, 4 * PANEL};
+        Rig before = twentyFps(false, spans, 2_000_000L, 960);
+        Rig after = twentyFps(true, spans, 2_000_000L, 960);
+        double realBefore = meanMs(before.realLagNs, 40), realAfter = meanMs(after.realLagNs, 40);
+        check(realAfter <= realBefore - 8.0,
+                "latency held from a long first span is trimmed: " + realBefore + " -> " + realAfter);
     }
 
     private static void check(boolean condition, String message) {

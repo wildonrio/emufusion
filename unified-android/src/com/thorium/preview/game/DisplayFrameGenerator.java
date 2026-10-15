@@ -5473,6 +5473,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         endpointFifoSequence[slot] = endpointSequence;
         endpointFifoTimestampNs[slot] = timestampNs;
         recordEndpointAdmissionLag(timestampNs);
+        recordAdmission(endpointSequence);
         // This provenance is the accepted source-slot ordinal, not the count
         // of pixel-distinct images. A positively classified repeated callback
         // can occupy one exact proven source slot; using its accepted ordinal
@@ -7107,6 +7108,48 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final long[] realDisplayLagBuckets = new long[7];
     private long realDisplayLagSamples, realDisplayLagSumUs, realDisplayLagMaxUs;
 
+    // Admission time of each endpoint image, keyed by endpoint sequence: the
+    // timeline compares it with the first callback of the pair that wanted
+    // the image (3.2.87 readiness trims).
+    private final long[] admissionNsRing = new long[ARRIVAL_RING];
+    private final long[] admissionSequenceRing = new long[ARRIVAL_RING];
+    private long firstGeneratedReportedRight;
+    // First generated output of each pair: from the right image's arrival to
+    // its scheduled display, the first sight of the new frame's motion.
+    // <=8, <=17, <=33, <=50, <=67, <=100 and >100 ms.
+    private final long[] firstGeneratedLagBuckets = new long[7];
+    private long firstGeneratedLagSamples, firstGeneratedLagSumUs, firstGeneratedLagMaxUs;
+
+    private void recordAdmission(long sequence) {
+        int slot = (int) Math.floorMod(sequence, (long) ARRIVAL_RING);
+        admissionSequenceRing[slot] = sequence;
+        admissionNsRing[slot] = System.nanoTime();
+    }
+
+    private long admissionNs(long sequence) {
+        int slot = (int) Math.floorMod(sequence, (long) ARRIVAL_RING);
+        return sequence > 0L && admissionSequenceRing[slot] == sequence ? admissionNsRing[slot] : 0L;
+    }
+
+    /** After a generated swap: the pair's first-sight lag, once per pair. */
+    private void observeFirstGeneratedOutput(long targetNs) {
+        if (!timelineActive || activeRightSequence <= 0L ||
+                activeRightSequence == firstGeneratedReportedRight) return;
+        firstGeneratedReportedRight = activeRightSequence;
+        int slot = Math.floorMod(activeRightSubmission, ARRIVAL_RING);
+        if (activeRightSubmission <= 0 || arrivalOrdinalRing[slot] != activeRightSubmission ||
+                arrivalNsRing[slot] <= 0L || targetNs <= 0L) return;
+        long lagUs = (targetNs - arrivalNsRing[slot]) / 1000L;
+        if (lagUs < 0L) return;
+        long ms = lagUs / 1000L;
+        int bucket = ms <= 8L ? 0 : ms <= 17L ? 1 : ms <= 33L ? 2 : ms <= 50L ? 3 :
+                ms <= 67L ? 4 : ms <= 100L ? 5 : 6;
+        ++firstGeneratedLagBuckets[bucket];
+        ++firstGeneratedLagSamples;
+        firstGeneratedLagSumUs += lagUs;
+        firstGeneratedLagMaxUs = Math.max(firstGeneratedLagMaxUs, lagUs);
+    }
+
     private void recordArrival(int submission) {
         int slot = Math.floorMod(submission, ARRIVAL_RING);
         arrivalOrdinalRing[slot] = submission;
@@ -8698,6 +8741,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long sourcePeriodNs = sourceHz > 0.0 ? Math.round(1e9 / sourceHz) : 0L;
         timeline.configure(panelPeriodNs > 0L ? panelPeriodNs * scans : 0L, sourcePeriodNs);
         timeline.setRequiredLatencyNs(timelineRequiredLatencyNs);
+        // Trim latency no recent pair needed (3.2.87); QA low_latency=0 keeps it.
+        timeline.setReadyTrimEnabled(TimelineSchedulerSwitch.lowLatency());
+        timeline.setRightReadyNs(admissionNs(activeRightSequence));
         // Low latency: trim as soon as one extra image stays queued.
         timeline.setTrimExcessQueued(TimelineSchedulerSwitch.lowLatency() ?
                 1 : TimelineFrameScheduler.TRIM_EXCESS_QUEUED);
@@ -9065,8 +9111,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         finishFullImageCapture(densePhysicalFrameCommitted);
         // After the visible swap, so verification never delays the frame.
         if (externalTransport == null) {
-            if (renderedSynthetic) enqueueGeneratedVerification(proofPhase);
-            else if (realThisTick) {
+            if (renderedSynthetic) {
+                enqueueGeneratedVerification(proofPhase);
+                observeFirstGeneratedOutput(deadline.contentPresentationTimeNs());
+            } else if (realThisTick) {
                 countRealFrameShown(selectedPhase);
                 recordRealDisplayLag(activeRightSequence > 0L && selectedPhase >= 1f ?
                         activeRightSubmission : activeLeftSubmission,
@@ -13680,6 +13728,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " realDisplayLagMeanUs=" + (realDisplayLagSamples == 0L ? 0L :
                         realDisplayLagSumUs / realDisplayLagSamples) +
                 " realDisplayLagMaxUs=" + realDisplayLagMaxUs +
+                " firstGeneratedLagMs8/17/33/50/67/100/more=" + firstGeneratedLagBuckets[0] + "/" +
+                        firstGeneratedLagBuckets[1] + "/" + firstGeneratedLagBuckets[2] + "/" +
+                        firstGeneratedLagBuckets[3] + "/" + firstGeneratedLagBuckets[4] + "/" +
+                        firstGeneratedLagBuckets[5] + "/" + firstGeneratedLagBuckets[6] +
+                " firstGeneratedLagMeanUs=" + (firstGeneratedLagSamples == 0L ? 0L :
+                        firstGeneratedLagSumUs / firstGeneratedLagSamples) +
+                " firstGeneratedLagMaxUs=" + firstGeneratedLagMaxUs +
                 " lowLatency=" + TimelineSchedulerSwitch.lowLatency() +
                 " signatureVsyncCommits=" + signatureVsyncCommits +
                 " timelineRequiredLatencyUs=" + (timelineRequiredLatencyNs == Long.MIN_VALUE ?

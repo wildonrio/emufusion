@@ -128,6 +128,7 @@ public class ProvenanceTest {
     void resetHealthWindowAfterStreamChange(){}void refreshProofEvidencePresentationEpoch(){}
     boolean observeUniqueFrame(long p,int s){return observeUnique;}
     void copyTexture(int s,int d){if(copyFailure)throw new IllegalStateException("copy failed");textureContent[d]=textureContent[s];}
+    void recordAdmission(long sequence){}
     void drawTexture2d(int t){check(textureContent[t]==classifiedUniqueTimestampNs);}
     void fail(String m){throw new IllegalStateException(m);}void checkGl(String m){}
     void recordPromotedEndpoint(long s){}void prepareBufferedPairIfPossible(){}

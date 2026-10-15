@@ -36,6 +36,36 @@ class LowLatencyPresentationTest(unittest.TestCase):
         self.assertIn("excessQueued >= trimExcessQueued", scheduler)
         self.assertIn("public void setTrimExcessQueued(int images)", scheduler)
 
+    def test_latency_no_recent_pair_needed_is_trimmed(self):
+        # 3.2.87 (owner, 2026-10-15: latency is the biggest problem): each
+        # pair's first generated output reports how long its right image had
+        # been ready; latency every recent pair could do without comes off.
+        generator = GENERATOR.read_text()
+        self.assertIn("recordAdmission(endpointSequence);", generator)
+        self.assertIn("timeline.setRightReadyNs(admissionNs(activeRightSequence));", generator)
+        self.assertIn("timeline.setReadyTrimEnabled(TimelineSchedulerSwitch.lowLatency());", generator)
+        self.assertIn("observeFirstGeneratedOutput(deadline.contentPresentationTimeNs());", generator)
+        self.assertIn('" firstGeneratedLagMeanUs="', generator)
+        scheduler = SCHEDULER.read_text()
+        self.assertIn("public static final int READY_WINDOW = 16;", scheduler)
+        self.assertIn("public static final int READY_TOLERATED_LATE = 1;", scheduler)
+        # A late pair puts back what it lacked; the old fixed slack steps
+        # stay for renderers without readiness (QA low_latency=0).
+        self.assertIn("long add = readySlackToAddNs(leftTimestampNs, rightTimestampNs);", scheduler)
+        self.assertIn("if (consecutiveLatePairs >= 2 && pairsSinceGenerated <= 4 && primed && !readyTrimEnabled) {",
+                      scheduler)
+        self.assertIn("return wait >= outputPeriodNs - outputPeriodNs / READY_TRIM_DIVISOR ? outputPeriodNs : 0L;",
+                      scheduler)
+        # Latency added for a late or long pair is recorded, so it is not
+        # trimmed straight back off by older waits.
+        self.assertIn("shiftReadySlack(added);", scheduler)
+        self.assertIn("shiftReadySlack(add);", scheduler)
+        test = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "video" /
+                "TimelineFrameSchedulerTest.java").read_text()
+        for name in ("readinessTrimsLatencyNoPairNeeds();", "readinessFollowsIrregularSpans();",
+                     "readinessUndoesHeldLatency();"):
+            self.assertIn(name, test)
+
     def test_display_lag_is_measured(self):
         generator = GENERATOR.read_text()
         self.assertEqual(generator.count("recordArrival(submittedFrameCount);"), 2)
