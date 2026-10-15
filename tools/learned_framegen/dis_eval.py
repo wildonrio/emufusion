@@ -124,16 +124,23 @@ def pipeline(s, tag, a, c, t, finest, divisor=1):
                    [('sampler', 'uGrayA', f'{tag}Ag{finest}'), ('sampler', 'uGrayC', f'{tag}Cg{finest}'),
                     ('sampler', 'uPatches', f'{tag}pp'), ('i2', 'uSize', fw, fh), ('i2', 'uGrid', gw, gh), ('f1', 'uT', t)])
             prior = dst
+        if D.CONTENT_BOUNDS:
+            s.tex(f'{tag}bounds', 1, 1)
+            s.draw('BOUNDS', 1, 1, [f'{tag}bounds'],
+                   [('sampler', 'uGrayA', f'{tag}Ag0'), ('sampler', 'uGrayC', f'{tag}Cg0'), ('i2', 'uSize', aw, ah)])
         # The cut/fade verdict after DIS, as the device computes and reads it.
         s.tex(f'{tag}cut', 1, 1)
         s.draw('CUT', 1, 1, [f'{tag}cut'],
                [('sampler', 'uGrayA', f'{tag}Ag0'), ('sampler', 'uGrayC', f'{tag}Cg0'),
-                ('sampler', 'uFlowAC', f'{tag}Af{finest}'), ('f2', 'uFlowSize', fw, fh)])
+                ('sampler', 'uFlowAC', f'{tag}Af{finest}'), ('f2', 'uFlowSize', fw, fh)] +
+               ([('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
+                 ('f2', 'uTexel', 1.0 / w, 1.0 / h)] if D.COLOUR_CUT else []))
         s.draw('GENERATE_PHASE', w, h, [f'{tag}out'],
                [('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
                 ('sampler', 'uPhaseFlow', f'{tag}pf'), ('f1', 'uT', t), ('f2', 'uFlowSize', fw, fh),
                 ('f2', 'uHistorySize', w, h), ('f1', 'uChoiceSpread', CHOICE_SPREAD),
-                ('sampler', 'uCut', f'{tag}cut'), ('f1', 'uCutEnabled', 1.0)])
+                ('sampler', 'uCut', f'{tag}cut'), ('f1', 'uCutEnabled', 1.0)] +
+               ([('sampler', 'uBounds', f'{tag}bounds')] if D.CONTENT_BOUNDS else []))
         out = s.folder / f'{tag}.out'
         s.lines.append(f'read {tag}out {out}')
         s.lines.append(f'read {tag}cut {s.folder}/{tag}.cut')
@@ -167,6 +174,10 @@ def main():
     parser.add_argument('--fade-gain', type=float, nargs=2)
     parser.add_argument('--fade-coverage', type=float)
     parser.add_argument('--cut-threshold', type=float)
+    parser.add_argument('--colour-cut', action='store_true')
+    parser.add_argument('--cut-skip-black', action='store_true')
+    parser.add_argument('--content-bounds', action='store_true')
+    parser.add_argument('--border-margin', type=float, default=0.0)
     parser.add_argument('--save', default='', help='write each generated frame (uint8, top row first) here')
     parser.add_argument('--divisor', type=int, default=1, help="the device's history-to-analysis divisor (1080p: 4)")
     parser.add_argument('--upscale', type=int, default=1,
@@ -187,6 +198,10 @@ def main():
     if args.fade_gain: D.FADE_GAIN = tuple(args.fade_gain)
     if args.fade_coverage is not None: D.FADE_COVERAGE = args.fade_coverage
     if args.cut_threshold is not None: D.CUT_THRESHOLD = args.cut_threshold
+    if args.colour_cut: D.COLOUR_CUT = True
+    if args.cut_skip_black: D.CUT_SKIP_BLACK = True
+    if args.content_bounds: D.CONTENT_BOUNDS = True
+    D.BORDER_MARGIN_PX = args.border_margin
     if args.no_densify_cross:
         D.PHASE_DENSIFY_CROSS = False
     global PHASE, PHASE_PASSES, CHOICE_SPREAD
@@ -205,7 +220,8 @@ def main():
                 "#version 300 es\nout vec2 vTexCoord;\nvoid main(){vec2 p=vec2(gl_VertexID==1?3.0:-1.0,"
                 "gl_VertexID==2?3.0:-1.0);gl_Position=vec4(p,0.0,1.0);vTexCoord=0.5*(p+1.0);}\n")
             s = Script(tmp)
-            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY', 'CUT'):
+            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY', 'CUT') + \
+                    (('BOUNDS',) if D.CONTENT_BOUNDS else ()):
                 # The per-phase route's instance densifies its endpoint flows sharply.
                 frag = 'DENSIFY_SHARP' if name == 'DENSIFY' and PHASE else name
                 s.lines.append(f'prog {name} {tmp}/VERTEX.vert {tmp}/{frag}.frag')

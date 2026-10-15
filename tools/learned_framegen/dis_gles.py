@@ -282,7 +282,8 @@ def generate_phase_shader():
     # 0.505; offline over 28 captured games 0.8% better on average.
     # The global pass's cut/fade verdict (1x1, as synthesis 15 reads it): a
     # hard cut holds the left endpoint, a fitted fade is the temporal blend.
-    "uniform sampler2D uCut;uniform float uCutEnabled;\n"
+    "uniform sampler2D uCut;uniform float uCutEnabled;\n" +
+    ("uniform sampler2D uBounds;\n" if CONTENT_BOUNDS else "") +
     # The phase field is coarser than the image (a 1080p source's is 1/8 of
     # it), so its bilinear lookup smears motion across object outlines.
     # Where the 3x3 neighbouring field vectors differ from it by
@@ -319,6 +320,14 @@ def generate_phase_shader():
     "  if(e0+8.0/255.0<eM)w=(1.0-uT)*a0+uT*c0;}\n"
     " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
     "  w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);}\n"
+    + ("" if not CONTENT_BOUNDS else
+       " {vec4 bb=texture(uBounds,vec2(0.5));vec2 lo=bb.xz,hi=bb.yw;\n"
+       "  if(any(lessThan(u,lo))||any(greaterThan(u,hi)))w=(1.0-uT)*a0+uT*c0;\n"
+       "  else{vec2 pa=u-uT*v,pc=u+(1.0-uT)*v;\n"
+       f"   vec2 mg={float(BORDER_MARGIN_PX)}/uHistorySize;\n"
+       "   bool oa=any(lessThan(pa,lo-mg))||any(greaterThan(pa,hi+mg));\n"
+       "   bool oc=any(lessThan(pc,lo-mg))||any(greaterThan(pc,hi+mg));\n"
+       "   if(oa&&!oc)w=cw;else if(oc&&!oa)w=aw;}}\n") +
     " vec4 ct=texture(uCut,vec2(0.5));\n"
     f" w=mix(mix(w,a0,uCutEnabled*step({CUT_THRESHOLD},ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));\n"
     " o0=vec4(w,1.0);}\n")
@@ -353,7 +362,41 @@ FLAT_FADE = True
 CUT_THRESHOLD = 0.6
 
 
+# Offline experiment: the cut counts use colour (largest channel change of a
+# 4-tap box on the history images) instead of analysis luma, so a cut
+# between two scenes of similar brightness is not missed.
+COLOUR_CUT = False
+# Offline experiment: grid samples black in both frames (letter/pillarbox
+# bars) leave the cut share's count and its denominator.
+CUT_SKIP_BLACK = False
+# Offline experiment (re-measured on full-size captures): the picture
+# rectangle inside letter/pillarbox bars (rows and columns black in both
+# frames, scanned from each side on the analysis luma) as normalised (left,
+# right, bottom, top); outside it the zero-motion blend, inside it a pixel
+# takes one side where the other side's warp source lies in the bars.
+CONTENT_BOUNDS = False
+BORDER_MARGIN_PX = 0.0
+
+BOUNDS = (HEADER +
+    "uniform sampler2D uGrayA,uGrayC;uniform ivec2 uSize;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "float colMax(int x){float m=0.0;for(int k=0;k<24;++k){vec2 q=(vec2(float(x),float(k)*float(uSize.y)/24.0)+0.5)/vec2(uSize);\n"
+    " m=max(m,max(texture(uGrayA,q).r,texture(uGrayC,q).r));}return m;}\n"
+    "float rowMax(int y){float m=0.0;for(int k=0;k<32;++k){vec2 q=(vec2(float(k)*float(uSize.x)/32.0,float(y))+0.5)/vec2(uSize);\n"
+    " m=max(m,max(texture(uGrayA,q).r,texture(uGrayC,q).r));}return m;}\n"
+    "void main(){const float T=6.0/255.0;int l=0,r=uSize.x-1,b=0,t=uSize.y-1;\n"
+    " for(int x=0;x<uSize.x/2;++x){if(colMax(x)>T)break;l=x+1;}\n"
+    " for(int x=uSize.x-1;x>=uSize.x/2;--x){if(colMax(x)>T)break;r=x-1;}\n"
+    " for(int y=0;y<uSize.y/2;++y){if(rowMax(y)>T)break;b=y+1;}\n"
+    " for(int y=uSize.y-1;y>=uSize.y/2;--y){if(rowMax(y)>T)break;t=y-1;}\n"
+    " o0=vec4(float(l)/float(uSize.x),float(r+1)/float(uSize.x),float(b)/float(uSize.y),float(t+1)/float(uSize.y));}\n")
+
+
 def cut_shader():
+    if COLOUR_CUT:
+        return colour_cut_shader()
+    if CUT_SKIP_BLACK:
+        return skip_black_cut_shader()
     extra = ""
     if FADE_GAIN is not None:
         extra += f"*step({FADE_GAIN[0]},g)*step(g,{FADE_GAIN[1]})"
@@ -376,12 +419,57 @@ def cut_shader():
     " o0=vec4(min(n0,n1)/n,fade,0.0,1.0);}\n")
 
 
+def colour_cut_shader():
+    """cut_shader with colour counts; the fade fit stays on luma."""
+    text = cut_shader_luma()
+    text = text.replace("uniform sampler2D uGrayA,uGrayC,uFlowAC;uniform vec2 uFlowSize;\n",
+                        "uniform sampler2D uGrayA,uGrayC,uFlowAC,uFrameA,uFrameC;uniform vec2 uFlowSize,uTexel;\n"
+                        "vec3 bx(sampler2D t,vec2 p){return 0.25*(texture(t,p+uTexel*vec2(-1.0,-1.0)).rgb+"
+                        "texture(t,p+uTexel*vec2(1.0,-1.0)).rgb+texture(t,p+uTexel*vec2(-1.0,1.0)).rgb+"
+                        "texture(t,p+uTexel*vec2(1.0,1.0)).rgb);}\n"
+                        "float cd(vec3 x){return max(max(x.r,x.g),x.b);}\n")
+    old0 = "n0+=step(0.12,abs(b-a));"
+    old1 = "n1+=step(0.12,abs(texture(uGrayC,q).r-a));"
+    assert old0 in text and old1 in text
+    text = text.replace(old0, "vec3 ca=bx(uFrameA,uv);n0+=step(0.12,cd(abs(bx(uFrameC,uv)-ca)));")
+    text = text.replace(old1, "n1+=step(0.12,cd(abs(bx(uFrameC,q)-ca)));")
+    return text
+
+
+def skip_black_cut_shader():
+    global CUT_SKIP_BLACK
+    saved = CUT_SKIP_BLACK
+    CUT_SKIP_BLACK = False
+    try:
+        text = cut_shader()
+    finally:
+        CUT_SKIP_BLACK = saved
+    pairs = [("float n0=0.0,n1=0.0,", "float n0=0.0,n1=0.0,nk=0.0,"),
+             ("n0+=step(0.12,abs(b-a));", "float k=step(4.0/255.0,max(a,b));nk+=k;n0+=k*step(0.12,abs(b-a));"),
+             ("n1+=step(0.12,abs(texture(uGrayC,q).r-a));", "n1+=k*step(0.12,abs(texture(uGrayC,q).r-a));"),
+             (" o0=vec4(min(n0,n1)/n,fade,0.0,1.0);}", " o0=vec4(min(n0,n1)/max(nk,1.0),fade,0.0,1.0);}")]
+    for old, new in pairs:
+        assert old in text, old
+        text = text.replace(old, new)
+    return text
+
+
+def cut_shader_luma():
+    global COLOUR_CUT
+    saved = COLOUR_CUT
+    COLOUR_CUT = False
+    try:
+        return cut_shader()
+    finally:
+        COLOUR_CUT = saved
+
+
 def shaders():
     return {'VERTEX': VERTEX, 'VERTEX_QUAD': VERTEX_QUAD, 'GRAY': GRAY, 'DOWN': DOWN, 'GRAD': GRAD,
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(),
             'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(),
-            'DENSIFY_SHARP': sharp_densify_shader()}
+            'DENSIFY_SHARP': sharp_densify_shader(), **({'BOUNDS': BOUNDS} if CONTENT_BOUNDS else {})}
 
 
 def sharp_densify_shader():
