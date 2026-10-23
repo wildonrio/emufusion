@@ -42,6 +42,23 @@ GRAY = (HEADER +
         "l(c+vec2(-uTexel.x,uTexel.y))+l(c+vec2(uTexel.x,uTexel.y)));\n"
         " o0=vec4(y,0.0,0.0,1.0);}\n")
 
+# Offline experiment (2026-10-23): GRAY with every sample clamped inside the
+# picture rectangle (BOUNDS), so letter/pillarbox bars become the picture's own
+# edge pixels. The bars' static, high-contrast edge otherwise pulls patches
+# near the picture's edge to zero motion (Ocarina gameplay: error 1.0 of a
+# cross-fade at the edge falling to 0.4 128 px inside).
+CLAMP_TO_CONTENT = False
+GRAY_CLAMP = (HEADER +
+        "uniform sampler2D uIn0,uBounds;uniform vec2 uTexel;uniform int uDivisor;\n"
+        "layout(location=0) out vec4 o0;\n"
+        "vec4 bb;\n"
+        "float l(vec2 c){c=clamp(c,bb.xz+2.0*uTexel,bb.yw-2.0*uTexel);return dot(texture(uIn0,c).rgb,vec3(0.299,0.587,0.114));}\n"
+        "void main(){bb=texture(uBounds,vec2(0.5));vec2 c=gl_FragCoord.xy*float(uDivisor)*uTexel;float y;\n"
+        " if(uDivisor<=2)y=l(c);\n"
+        " else y=0.25*(l(c+vec2(-uTexel.x,-uTexel.y))+l(c+vec2(uTexel.x,-uTexel.y))+"
+        "l(c+vec2(-uTexel.x,uTexel.y))+l(c+vec2(uTexel.x,uTexel.y)));\n"
+        " o0=vec4(y,0.0,0.0,1.0);}\n")
+
 # 2x2 mean (edge-clamped) for the next pyramid level.
 DOWN = (HEADER +
         "uniform sampler2D uIn0;uniform ivec2 uIn;\n"
@@ -253,6 +270,39 @@ def phase_densify_shader():
     " o0=vec4(acc/max(wsum,1e-6),0.0,1.0);}\n")
 
 
+# Offline experiment (2026-10-23): edge-aware smoothing of the per-phase
+# field, the role of DIS's variational refinement (Kroeger et al. step 3, not
+# implemented here before). Each iteration replaces a vector by the weighted
+# mean of itself and its four neighbours: its own (data) weight falls with its
+# five-tap warp error, each neighbour's weight with the difference of the
+# phase-warped guide image (edge-aware). Off when PHASE_SMOOTH_ITERS is 0.
+PHASE_SMOOTH_ITERS = 0
+# The zero-motion selection margin in grey levels (shipped 8; offline experiment).
+ZERO_MOTION_MARGIN = 8.0
+PHASE_SMOOTH_LAMBDA = 4.0
+PHASE_SMOOTH_SIGMA = 6.0
+
+
+def phase_smooth_shader():
+    return (HEADER +
+    "uniform sampler2D uField,uData,uGrayA,uGrayC;uniform ivec2 uSize;uniform float uT,uLambda,uSigma;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "float gA(vec2 q){return texture(uGrayA,q/vec2(uSize)).r;}\n"
+    "float gC(vec2 q){return texture(uGrayC,q/vec2(uSize)).r;}\n"
+    "float guide(ivec2 q){vec2 x=vec2(q)+0.5;vec2 v=texelFetch(uData,clamp(q,ivec2(0),uSize-1),0).xy;\n"
+    " return 0.5*(gA(x-uT*v)+gC(x+(1.0-uT)*v));}\n"
+    "void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec2 x=vec2(p)+0.5;\n"
+    " vec2 vd=texelFetch(uData,p,0).xy;float e=0.0;\n"
+    " for(int k=0;k<5;++k){vec2 o=k==0?vec2(0.0):k==1?vec2(1.0,0.0):k==2?vec2(-1.0,0.0):k==3?vec2(0.0,1.0):vec2(0.0,-1.0);\n"
+    "  e+=abs(gC(x+o+(1.0-uT)*vd)-gA(x+o-uT*vd));}\n"
+    " e*=255.0/5.0;float wd=uLambda/(1.0+e);float g0=guide(p);\n"
+    " vec2 acc=wd*vd;float ws=wd;\n"
+    " for(int k=0;k<4;++k){ivec2 o=k==0?ivec2(1,0):k==1?ivec2(-1,0):k==2?ivec2(0,1):ivec2(0,-1);ivec2 q=p+o;\n"
+    "  if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,uSize)))continue;\n"
+    "  float w=exp(-abs(guide(q)-g0)*255.0/uSigma);acc+=w*texelFetch(uField,q,0).xy;ws+=w;}\n"
+    " o0=vec4(acc/ws,0.0,1.0);}\n")
+
+
 # The field choice. Measured on full-size 1080p captures and not adopted:
 # requiring the chosen neighbour to explain the pixel (within 8 or 16 grey
 # levels) and a soft choice weighting the candidates by exp(-(e - min)/sigma)
@@ -321,7 +371,7 @@ def generate_phase_shader():
     "   e0+=md(abs(texture(uFrameA,u+dx).rgb-texture(uFrameC,u+dx).rgb))+md(abs(texture(uFrameA,u-dx).rgb-texture(uFrameC,u-dx).rgb))"
     "+md(abs(texture(uFrameA,u+dy).rgb-texture(uFrameC,u+dy).rgb))+md(abs(texture(uFrameA,u-dy).rgb-texture(uFrameC,u-dy).rgb));\n"
     "   eM*=0.2;e0*=0.2;}\n"
-    "  if(e0+8.0/255.0<eM)w=(1.0-uT)*a0+uT*c0;}\n"
+    f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM)w=(1.0-uT)*a0+uT*c0;}}\n"
     " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
     "  w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);}\n"
     + ("" if not CONTENT_BOUNDS else
@@ -478,7 +528,7 @@ def cut_shader_luma():
 def shaders():
     return {'VERTEX': VERTEX, 'VERTEX_QUAD': VERTEX_QUAD, 'GRAY': GRAY, 'DOWN': DOWN, 'GRAD': GRAD,
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
-            'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(),
+            'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': BOUNDS,
             'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(),
             'DENSIFY_SHARP': sharp_densify_shader(), **({'BOUNDS': BOUNDS} if CONTENT_BOUNDS else {})}
 
@@ -512,12 +562,18 @@ def java_string(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
 
 
+# Offline experiments the device does not compile (measured, not adopted).
+OFFLINE_ONLY_SHADERS = ('PHASE_SMOOTH', 'GRAY_CLAMP', 'BOUNDS_ANY')
+
+
 def java_source():
     lines = ["package com.thorium.preview.game;", "", "/**",
              " * Generated by tools/learned_framegen/dis_gles.py; do not edit, change the generator.",
              " * GPU dense inverse search (Kroeger et al., ECCV 2016), our own implementation.", " */",
              "final class DenseInverseSearchShaders {", "    private DenseInverseSearchShaders() {}", ""]
     for name, text in shaders().items():
+        if name in OFFLINE_ONLY_SHADERS:
+            continue
         lines.append(f"    static final String {name} = new StringBuilder({len(text)})")
         for i in range(0, len(text), 2000):
             lines.append("            .append(" + java_string(text[i:i + 2000]) + ")")

@@ -80,6 +80,14 @@ def pipeline(s, tag, a, c, t, finest, divisor=1):
         s.tex(f'{tag}{side}g0', aw, ah)
         s.draw('GRAY', aw, ah, [f'{tag}{side}g0'], [('sampler', 'uIn0', f'{tag}{side}rgb'),
                ('f2', 'uTexel', 1.0 / w, 1.0 / h), ('i1', 'uDivisor', divisor)])
+    if D.CLAMP_TO_CONTENT:
+        s.tex(f'{tag}cb', 1, 1, half=True)
+        s.draw('BOUNDS_ANY', 1, 1, [f'{tag}cb'],
+               [('sampler', 'uGrayA', f'{tag}Ag0'), ('sampler', 'uGrayC', f'{tag}Cg0'), ('i2', 'uSize', aw, ah)])
+        for side in 'AC':
+            s.draw('GRAY_CLAMP', aw, ah, [f'{tag}{side}g0'], [('sampler', 'uIn0', f'{tag}{side}rgb'),
+                   ('sampler', 'uBounds', f'{tag}cb'), ('f2', 'uTexel', 1.0 / w, 1.0 / h), ('i1', 'uDivisor', divisor)])
+    for side in 'AC':
         for k in range(1, len(sizes)):
             s.tex(f'{tag}{side}g{k}', *sizes[k])
             s.draw('DOWN', *sizes[k], [f'{tag}{side}g{k}'], [('sampler', 'uIn0', f'{tag}{side}g{k - 1}'),
@@ -124,6 +132,28 @@ def pipeline(s, tag, a, c, t, finest, divisor=1):
                    [('sampler', 'uGrayA', f'{tag}Ag{finest}'), ('sampler', 'uGrayC', f'{tag}Cg{finest}'),
                     ('sampler', 'uPatches', f'{tag}pp'), ('i2', 'uSize', fw, fh), ('i2', 'uGrid', gw, gh), ('f1', 'uT', t)])
             prior = dst
+        if D.PHASE_SMOOTH_ITERS > 0:
+            s.tex(f'{tag}pdata', fw, fh, half=True)
+            s.tex(f'{tag}ps0', fw, fh, half=True)
+            s.tex(f'{tag}ps1', fw, fh, half=True)
+            # Keep the densified field as the data term; iterate into ping-pong targets.
+            s.draw('PHASE_SMOOTH', fw, fh, [f'{tag}pdata'],
+                   [('sampler', 'uField', f'{tag}pf'), ('sampler', 'uData', f'{tag}pf'),
+                    ('sampler', 'uGrayA', f'{tag}Ag{finest}'), ('sampler', 'uGrayC', f'{tag}Cg{finest}'),
+                    ('i2', 'uSize', fw, fh), ('f1', 'uT', t), ('f1', 'uLambda', 1e9), ('f1', 'uSigma', 1.0)])
+            src = f'{tag}pdata'
+            for it in range(D.PHASE_SMOOTH_ITERS):
+                dst = f'{tag}ps{it % 2}'
+                s.draw('PHASE_SMOOTH', fw, fh, [dst],
+                       [('sampler', 'uField', src), ('sampler', 'uData', f'{tag}pdata'),
+                        ('sampler', 'uGrayA', f'{tag}Ag{finest}'), ('sampler', 'uGrayC', f'{tag}Cg{finest}'),
+                        ('i2', 'uSize', fw, fh), ('f1', 'uT', t), ('f1', 'uLambda', D.PHASE_SMOOTH_LAMBDA),
+                        ('f1', 'uSigma', D.PHASE_SMOOTH_SIGMA)])
+                src = dst
+            s.draw('PHASE_SMOOTH', fw, fh, [f'{tag}pf'],
+                   [('sampler', 'uField', src), ('sampler', 'uData', src),
+                    ('sampler', 'uGrayA', f'{tag}Ag{finest}'), ('sampler', 'uGrayC', f'{tag}Cg{finest}'),
+                    ('i2', 'uSize', fw, fh), ('f1', 'uT', t), ('f1', 'uLambda', 1e9), ('f1', 'uSigma', 1.0)])
         if D.CONTENT_BOUNDS:
             s.tex(f'{tag}bounds', 1, 1)
             s.draw('BOUNDS', 1, 1, [f'{tag}bounds'],
@@ -144,6 +174,8 @@ def pipeline(s, tag, a, c, t, finest, divisor=1):
         out = s.folder / f'{tag}.out'
         s.lines.append(f'read {tag}out {out}')
         s.lines.append(f'read {tag}cut {s.folder}/{tag}.cut')
+        if SAVE:
+            s.lines.append(f'read {tag}pf {s.folder}/{tag}.pf')
         return out, (w, h)
     s.draw('GENERATE', w, h, [f'{tag}out'],
            [('sampler', 'uFrameA', f'{tag}Argb'), ('sampler', 'uFrameC', f'{tag}Crgb'),
@@ -180,6 +212,11 @@ def main():
     parser.add_argument('--border-margin', type=float, default=0.0)
     parser.add_argument('--edge-extrapolate', type=float, default=0.0)
     parser.add_argument('--edge-candidate', action='store_true')
+    parser.add_argument('--smooth-iters', type=int, default=0)
+    parser.add_argument('--zero-margin', type=float, default=8.0)
+    parser.add_argument('--clamp-to-content', action='store_true')
+    parser.add_argument('--smooth-lambda', type=float, default=4.0)
+    parser.add_argument('--smooth-sigma', type=float, default=6.0)
     parser.add_argument('--save', default='', help='write each generated frame (uint8, top row first) here')
     parser.add_argument('--divisor', type=int, default=1, help="the device's history-to-analysis divisor (1080p: 4)")
     parser.add_argument('--upscale', type=int, default=1,
@@ -206,6 +243,11 @@ def main():
     D.BORDER_MARGIN_PX = args.border_margin
     D.EDGE_EXTRAPOLATE_PX = args.edge_extrapolate
     D.EDGE_CANDIDATE = args.edge_candidate
+    D.PHASE_SMOOTH_ITERS = args.smooth_iters
+    D.ZERO_MOTION_MARGIN = args.zero_margin
+    D.CLAMP_TO_CONTENT = args.clamp_to_content
+    D.PHASE_SMOOTH_LAMBDA = args.smooth_lambda
+    D.PHASE_SMOOTH_SIGMA = args.smooth_sigma
     if args.no_densify_cross:
         D.PHASE_DENSIFY_CROSS = False
     global PHASE, PHASE_PASSES, CHOICE_SPREAD
@@ -224,7 +266,7 @@ def main():
                 "#version 300 es\nout vec2 vTexCoord;\nvoid main(){vec2 p=vec2(gl_VertexID==1?3.0:-1.0,"
                 "gl_VertexID==2?3.0:-1.0);gl_Position=vec4(p,0.0,1.0);vTexCoord=0.5*(p+1.0);}\n")
             s = Script(tmp)
-            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY', 'CUT') + \
+            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY', 'PHASE_SMOOTH', 'GRAY_CLAMP', 'BOUNDS_ANY', 'CUT') + \
                     (('BOUNDS',) if D.CONTENT_BOUNDS else ()):
                 # The per-phase route's instance densifies its endpoint flows sharply.
                 frag = 'DENSIFY_SHARP' if name == 'DENSIFY' and PHASE else name
@@ -253,6 +295,10 @@ def main():
                 if SAVE:
                     dest = Path(SAVE) / case; dest.mkdir(parents=True, exist_ok=True)
                     np.save(dest / f"{index:03d}.npy", np.clip(g * 255 + 0.5, 0, 255).astype(np.uint8))
+                    pff = out.with_suffix('.pf')
+                    if pff.exists():
+                        fw_, fh_ = D.levels_for(w // args.divisor, h // args.divisor, args.finest_large)[0][args.finest_large]
+                        np.save(dest / f"{index:03d}.pf.npy", np.fromfile(pff, np.float32).reshape(fh_, fw_, 4)[::-1, :, :2])
                     (dest / f'{index:03d}.txt').write_text(str(folder))
                 n1, c1 = sums(g, a, c, b); tot[0] += n1; tot[1] += c1
                 cutf = out.with_suffix('.cut')
