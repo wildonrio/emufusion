@@ -5217,9 +5217,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final Runnable signatureEarlyPoll = this::pollSignatureEarly;
     private boolean signatureEarlyPollPosted;
     private int signatureEarlyPollTries;
-    private long signatureEarlyCommits, arrivalEarlyPairs;
+    private long signatureEarlyCommits, arrivalEarlyPairs, arrivalPassedReals;
     private final com.thorium.emufusion.video.CallbackReadyClock callbackReadyClock =
             new com.thorium.emufusion.video.CallbackReadyClock();
+    // QA: with this marker present at startup, the first ARRIVAL_TRACE_LIMIT
+    // pairs taken up by arrival pacing are logged with their spans and waits.
+    private static final java.io.File ARRIVAL_TRACE_MARKER =
+            new java.io.File("/data/local/tmp/emufusion-arrival-trace");
+    private static final int ARRIVAL_TRACE_LIMIT = 1500;
+    private final boolean arrivalTraceEnabled = ARRIVAL_TRACE_MARKER.exists();
+    private long arrivalTracedPair;
+    private int arrivalTraceLines;
     private long disPrecomputeHits, disPrecomputeMisses;
 
     private boolean signatureVsyncPollEnabled() {
@@ -5266,17 +5274,46 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      */
     private void prepareArrivalPairEarly() {
         if (externalTransport != null || !timelineActive || !timeline.arrivalPacing() ||
-                activeLeftSequence <= 0L || activeRightSequence != 0L ||
-                endpointFifoCount <= 0 ||
+                activeLeftSequence <= 0L || endpointFifoCount <= 0 ||
                 observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;
+        // A newer image while the active pair's real image is still waiting
+        // (its generated image is up): pass that real image (3.2.91). With
+        // variable spans (Link's Awakening's 17 and 33 ms) an image often
+        // arrives as its predecessor's real image is due; showing that image
+        // first took the new pair up a callback late and skipped its midpoint
+        // (content 0.5 of a frame in 17 ms, then a whole frame in 8 ms, and a
+        // scan of latency on the new image). Passing it shows the new pair's
+        // midpoint at that callback instead: even steps, the new image half
+        // shown a scan sooner. LSFG-Android's newer image likewise replaces
+        // a queued one. The lattice passes real images the same way.
+        boolean passing = activeRightSequence != 0L;
+        if (passing && (!activePairSyntheticCommitted ||
+                activeRightSequence != activeLeftSequence + 1L)) return;
+        long anchorSequence = passing ? activeRightSequence : activeLeftSequence;
         int head = endpointFifoHead;
-        if (endpointFifoSequence[head] != activeLeftSequence + 1L ||
-                !endpointPairContinuous(activeLeftTimestampNs, endpointFifoTimestampNs[head],
-                        activeLeftUniqueSequence, endpointFifoUniqueSequence[head],
-                        activeLeftSubmission, endpointFifoSubmission[head],
-                        activeLeftCandidateLoss, endpointFifoCandidateLoss[head])) return;
+        if (endpointFifoSequence[head] != anchorSequence + 1L ||
+                !(passing ?
+                        endpointPairContinuous(activeRightTimestampNs, endpointFifoTimestampNs[head],
+                                activeRightUniqueSequence, endpointFifoUniqueSequence[head],
+                                activeRightSubmission, endpointFifoSubmission[head],
+                                activeRightCandidateLoss, endpointFifoCandidateLoss[head]) :
+                        endpointPairContinuous(activeLeftTimestampNs, endpointFifoTimestampNs[head],
+                                activeLeftUniqueSequence, endpointFifoUniqueSequence[head],
+                                activeLeftSubmission, endpointFifoSubmission[head],
+                                activeLeftCandidateLoss, endpointFifoCandidateLoss[head]))) return;
         long epoch = schedulerPresentationEpoch();
-        prepareBufferedPairIfPossible();
+        if (passing) {
+            if (activeRightSequence != verifyLastRealSequence) {
+                verifyLastRealSequence = activeRightSequence;
+                ++verifyWindowPassed;
+            }
+            ++arrivalPassedReals;
+            // Rotates past the right image and forms the next pair (motion
+            // solved now, before the callback that shows its midpoint).
+            commitBufferedEndpointAdvance(AdaptiveFrameRateController.PRESENT_SYNTHETIC, 1);
+        } else {
+            prepareBufferedPairIfPossible();
+        }
         if (schedulerPresentationEpoch() != epoch) {
             // Not expected for a continuous pair; adopt the boundary exactly
             // as the callback's own preparation does.
@@ -8869,6 +8906,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 activeRightSequence > 0L ?
                         endpointFifoCount - (requiredEndpointPrimeDepth(true) - 2) : 0,
                 successorQueuedForPass());
+        if (arrivalTraceEnabled && timeline.arrivalPairs() != arrivalTracedPair &&
+                arrivalTraceLines < ARRIVAL_TRACE_LIMIT) {
+            arrivalTracedPair = timeline.arrivalPairs();
+            ++arrivalTraceLines;
+            long admitted = admissionNs(activeRightSequence);
+            Log.i(TAG, "Arrival trace generator=" + generatorId + " pair=" + arrivalTracedPair +
+                    " right=" + activeRightSequence + " kind=" + kind + " " + timeline.arrivalTrace() +
+                    " sinceAdmissionUs=" + (admitted > 0L ? (callbackNs - admitted) / 1000L : -1L) +
+                    " excessQueued=" + (activeRightSequence > 0L ?
+                            endpointFifoCount - (requiredEndpointPrimeDepth(true) - 2) : 0) +
+                    " fifo=" + endpointFifoCount);
+        }
         if (kind == TimelineFrameScheduler.GENERATED)
             return AdaptiveFrameRateController.PRESENT_SYNTHETIC;
         if (kind == TimelineFrameScheduler.REAL_LEFT || kind == TimelineFrameScheduler.REAL_RIGHT)
@@ -13879,6 +13928,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " signatureVsyncCommits=" + signatureVsyncCommits +
                 " signatureEarlyCommits=" + signatureEarlyCommits +
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
+                " arrivalPassedReals=" + arrivalPassedReals +
                 " disPrecomputeHits=" + disPrecomputeHits +
                 " disPrecomputeMisses=" + disPrecomputeMisses +
                 " timelineRequiredLatencyUs=" + (timelineRequiredLatencyNs == Long.MIN_VALUE ?

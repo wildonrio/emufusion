@@ -141,6 +141,22 @@ class LowLatencyPresentationTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertIn("BuiltinQueueReserveTest passed", run.stdout)
 
+    def test_stale_real_image_is_passed_for_a_newer_one(self):
+        # 3.2.91: a newer image while the active pair's real image still
+        # waits (its generated image is up) passes that real image, so the
+        # new pair's midpoint is shown at the next callback.
+        generator = GENERATOR.read_text()
+        early = generator[generator.index("    private void prepareArrivalPairEarly() {"):
+                          generator.index("    private void pollSignatureOnVsync() {")]
+        self.assertIn("boolean passing = activeRightSequence != 0L;", early)
+        self.assertIn("if (passing && (!activePairSyntheticCommitted ||", early)
+        self.assertIn("commitBufferedEndpointAdvance(AdaptiveFrameRateController.PRESENT_SYNTHETIC, 1);", early)
+        self.assertIn("++verifyWindowPassed;", early)
+        self.assertIn('" arrivalPassedReals="', generator)
+        # The arrival trace is QA-only (marker file read once per generator).
+        self.assertIn('new java.io.File("/data/local/tmp/emufusion-arrival-trace");', generator)
+        self.assertIn("private final boolean arrivalTraceEnabled = ARRIVAL_TRACE_MARKER.exists();", generator)
+
     def test_late_starts_are_counted_in_callbacks(self):
         # 3.2.90: GameCube skipped the generated image for 500 of 820 pairs
         # once images were admitted ~1 ms after arrival (the wait for the next

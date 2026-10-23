@@ -133,6 +133,8 @@ public final class TimelineFrameScheduler {
     private double arrivalSpanEmaNs;
     private int arrivalOutliers;
     private long arrivalPairs, arrivalCatchUps, arrivalNoMotion;
+    // QA trace of the latest pair taken up (DisplayFrameGenerator logs it on request).
+    private long arrivalTraceRawSpanNs, arrivalTraceSpanNs, arrivalTraceWaitedNs;
     // LSFG-Android's low-latency preset: EMA alpha 0.2, outlier ratio 3.
     public static final double ARRIVAL_SPAN_ALPHA = 0.2;
     public static final double ARRIVAL_OUTLIER_RATIO = 3.0;
@@ -307,6 +309,9 @@ public final class TimelineFrameScheduler {
             // skipping one generated image moves the pairs onto their arrivals.
             long waited = rightReadyNs > 0L ? displayNs - rightReadyNs : 0L;
             arrivalLateStart = waited > span / 2L - panel / 2L;
+            arrivalTraceRawSpanNs = rightTimestampNs - leftTimestampNs;
+            arrivalTraceSpanNs = span;
+            arrivalTraceWaitedNs = waited;
             if (arrivalLateStart) ++arrivalLateStarts;
             ++arrivalPairs;
         }
@@ -733,6 +738,14 @@ public final class TimelineFrameScheduler {
     /** One when the pending decision shows the right image and rotates the pair. */
     public int pendingAdvance() { return pendingKind == REAL_RIGHT || pendingPassRight ? 1 : 0; }
     public boolean primed() { return primed; }
+    public long arrivalPairs() { return arrivalPairs; }
+
+    /** The latest pair taken up: its stamp span, the span used, the wait and the verdict. */
+    public String arrivalTrace() {
+        return "rawSpanUs=" + arrivalTraceRawSpanNs / 1000L + " spanUs=" + arrivalTraceSpanNs / 1000L +
+                " emaUs=" + Math.round(arrivalSpanEmaNs / 1000.0) +
+                " waitedUs=" + arrivalTraceWaitedNs / 1000L + " lateStart=" + arrivalLateStart;
+    }
     public long expectedSpanNs() { return expectedSpanNs; }
     public long outputPeriodNs() { return outputPeriodNs; }
 
