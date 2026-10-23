@@ -219,6 +219,8 @@ public class WiringFixture {
     void copyTexture(int from,int to){trace.add("copyCandidate:"+to);textureImage.put(to,textureImage.get(from));}
     void notifyFirstSubmittedFrame(){notifications++;}
     void recordArrival(int submission){}
+    void prepareArrivalPairEarly(){}
+    void scheduleSignatureEarlyPoll(boolean retry){}
     void consumeClassifiedFrame(boolean unique){
         if(OBSERVER!=null)assert trace.get(trace.size()-1).equals("finish");consumes++;
         if(classifiedFrameReady){consumedPts=classifiedUniqueTimestampNs;

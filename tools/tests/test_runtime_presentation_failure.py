@@ -385,6 +385,8 @@ public class RuntimeFailureTest {
         void copyExternalTo(int texture){copies++;}
         void notifyFirstSubmittedFrame(){firstFrames++;}
         void recordArrival(long submission){}
+        void prepareArrivalPairEarly(){}
+        void scheduleSignatureEarlyPoll(boolean retry){}
         boolean latestImageIsUnique(long timestamp){return true;}
         void consumeClassifiedFrame(boolean unique){consumes++;
             if(failExport)throw new IllegalStateException("exact endpoint export");}

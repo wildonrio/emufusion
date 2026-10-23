@@ -110,6 +110,7 @@ public class BuiltInDeadlineTest {
     PhysicalPresentationClock builtInPhysicalClock=new PhysicalPresentationClock();
     long builtInLastCommittedTargetNs;
     long builtinQueueReserveNs=1000000L;
+    BuiltinQueueReserve builtinQueueReserve=new BuiltinQueueReserve();
     long builtinPlanCallbackNs,builtinPlanNowNs,builtinPlanCompositeDeadlineNs,
          builtinPlanIntervalNs,builtinPlanLatencyNs;
 ''' + body + '''

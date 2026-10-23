@@ -3316,6 +3316,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             }
             finishNativeClassifiedObservation(classifiedUnique);
             consumeClassifiedFrame(classifiedUnique);
+            prepareArrivalPairEarly();
+            scheduleSignatureEarlyPoll(false);
         } catch (RuntimeException failure) {
             clearNativeClassifiedObservation();
             failRuntimePresentation("Unable to consume emulator frame", failure);
@@ -4786,6 +4788,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         pendingSoftwarePixelsChanged = false;
         finishNativeClassifiedObservation(classifiedUnique);
         consumeClassifiedFrame(classifiedUnique);
+        prepareArrivalPairEarly();
+        scheduleSignatureEarlyPoll(false);
     }
 
     /**
@@ -5201,12 +5205,93 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // left a backlog that never drained (one result per arrival). Finished
     // results are now committed on the next vsync, all of them, oldest first.
     private long signatureVsyncCommits;
+    // Latency (3.2.89): the vsync commit still left every image waiting for
+    // the next callback to enter the queue, and the motion solve for the pair
+    // it completed then ran inside that callback (Ocarina of Time: 20 unique
+    // images a second, every one through this path; GPU work past the
+    // compositor's latch raised the queue reserve to 5.5 ms, a whole scan of
+    // pipeline). A finished check is now also polled ~1 ms after the image
+    // arrives, and the pair it completes forms right away.
+    private static final int SIGNATURE_EARLY_POLL_TRIES = 4;
+    private final Runnable signatureEarlyPoll = this::pollSignatureEarly;
+    private boolean signatureEarlyPollPosted;
+    private int signatureEarlyPollTries;
+    private long signatureEarlyCommits, arrivalEarlyPairs;
+    private long disPrecomputeHits, disPrecomputeMisses;
+
+    private boolean signatureVsyncPollEnabled() {
+        return TimelineSchedulerSwitch.lowLatency() && denseSignatureBaselineReady &&
+                externalSignatureTimer == null && signatureReadbackSafe &&
+                densePyramidEnabled && denseV28ReducedAnalysisRequested &&
+                denseGpuTimer != null;
+    }
+
+    private void scheduleSignatureEarlyPoll(boolean retry) {
+        if (externalTransport != null || !signatureVsyncPollEnabled() ||
+                denseGpuTimer.pendingSignatures() <= 0) return;
+        if (!retry) {
+            signatureEarlyPollTries = 0;
+            if (signatureEarlyPollPosted) return;
+        } else if (++signatureEarlyPollTries >= SIGNATURE_EARLY_POLL_TRIES) {
+            return;
+        }
+        signatureEarlyPollPosted = true;
+        handler.postDelayed(signatureEarlyPoll, 1L);
+    }
+
+    private void pollSignatureEarly() {
+        signatureEarlyPollPosted = false;
+        if (closed.get() || externalPresentationFailed || inputTexture == null) return;
+        try {
+            long before = signatureVsyncCommits;
+            pollSignatureOnVsync();
+            signatureEarlyCommits += signatureVsyncCommits - before;
+            prepareArrivalPairEarly();
+            scheduleSignatureEarlyPoll(true);
+        } catch (RuntimeException failure) {
+            failRuntimePresentation("Unable to commit emulator frame", failure);
+        }
+    }
+
+    /**
+     * Forms the next arrival-paced pair as soon as its right image is
+     * admitted instead of at the following vsync callback, so the pair's
+     * motion solve (estimateDenseMotion) runs before that callback shows its
+     * midpoint. Only the plain adjacent case: a discontinuity, a right image
+     * still on screen, a pending epoch change and the external transport stay
+     * with the callback, which handles them as before.
+     */
+    private void prepareArrivalPairEarly() {
+        if (externalTransport != null || !timelineActive || !timeline.arrivalPacing() ||
+                activeLeftSequence <= 0L || activeRightSequence != 0L ||
+                endpointFifoCount <= 0 ||
+                observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;
+        int head = endpointFifoHead;
+        if (endpointFifoSequence[head] != activeLeftSequence + 1L ||
+                !endpointPairContinuous(activeLeftTimestampNs, endpointFifoTimestampNs[head],
+                        activeLeftUniqueSequence, endpointFifoUniqueSequence[head],
+                        activeLeftSubmission, endpointFifoSubmission[head],
+                        activeLeftCandidateLoss, endpointFifoCandidateLoss[head])) return;
+        long epoch = schedulerPresentationEpoch();
+        prepareBufferedPairIfPossible();
+        if (schedulerPresentationEpoch() != epoch) {
+            // Not expected for a continuous pair; adopt the boundary exactly
+            // as the callback's own preparation does.
+            logBufferedEpochBoundary("pair-prepare-early", epoch);
+            observedBufferedPresentationEpoch = schedulerPresentationEpoch();
+            refreshProofEvidencePresentationEpoch();
+            resetHealthWindowAfterStreamChange();
+            return;
+        }
+        if (activeRightSequence != 0L) {
+            ++arrivalEarlyPairs;
+            // Start the solve now rather than at the callback's swap.
+            GLES20.glFlush();
+        }
+    }
 
     private void pollSignatureOnVsync() {
-        if (!TimelineSchedulerSwitch.lowLatency() || !denseSignatureBaselineReady ||
-                externalSignatureTimer != null || !signatureReadbackSafe ||
-                !(densePyramidEnabled && denseV28ReducedAnalysisRequested) ||
-                denseGpuTimer == null) return;
+        if (!signatureVsyncPollEnabled()) return;
         DenseGpuTimer signatureTimer = denseGpuTimer;
         try {
             for (int drained = 0; drained < SIGNATURE_CANDIDATE_SLOTS; ++drained) {
@@ -6618,6 +6703,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // (otherwise its fields are the fallback).
             boolean disOnly = !holdoutMode &&
                     (disMotionForPlay() ? estimateDisMotion() : disPhaseOnly);
+            // Latency (3.2.89): arrival pacing shows every pair's midpoint, so
+            // its motion is solved here, when the pair forms -- at the right
+            // image's admission (prepareArrivalPairEarly), before the vsync
+            // callback that shows it -- leaving that callback only the
+            // generate pass. The DIS route in drawDisFrame is unchanged.
+            if (disPhaseOnly && disDefault && timelineActive && timeline.arrivalPacing())
+                prepareDisFlow(TimelineFrameScheduler.ARRIVAL_PHASE, true);
             if (!disOnly)
                 solveDenseDirection(0, historyTextures[previousIndex],
                         historyTextures[currentIndex], temporalGuide);
@@ -6888,35 +6980,29 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int denseJoinedGapEvidenceCount;
     private final SubmissionTimingHistory denseSubmissionHistory = new SubmissionTimingHistory();
 
-    /** Raise the queue reserve after a frame rendered past the latch; decay it while on time. */
+    /** BuiltinQueueReserve: deepen after a burst of frames rendered past the latch; recover. */
     private void adaptBuiltinQueueReserve(GpuPhysicalHeadroomLedger.Result result) {
         if (externalTransport != null || result.panelPeriodNs <= 0L) return;
-        long maximumNs = Math.max(BUILTIN_QUEUE_RESERVE_MIN_NS,
-                result.panelPeriodNs + result.panelPeriodNs / 2L);
         boolean renderKnown = result.renderCompleteNs > 0L &&
                 (result.supportedMask & GpuPhysicalHeadroomLedger.RENDER_COMPLETE) != 0;
-        // Shown late, and rendering finished close enough to the slot that
-        // more lead would have made it: a frame rendered long before its slot
-        // and still late is the compositor's miss, not ours.
-        boolean lateFromRendering = renderKnown && result.actualNs > 0L &&
-                result.actualNs - result.desiredNs >= result.panelPeriodNs / 2L &&
-                result.renderCompleteNs > result.desiredNs - 2L * result.panelPeriodNs;
-        if (result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS && lateFromRendering) {
-            builtinQueueReserveOnTimeFrames = 0;
-            long previous = builtinQueueReserveNs;
-            builtinQueueReserveNs = Math.min(maximumNs,
-                    builtinQueueReserveNs + BUILTIN_QUEUE_RESERVE_STEP_NS);
-            if (builtinQueueReserveNs != previous && ++builtinQueueReserveRaises <= 16L)
-                Log.i(TAG, "Built-in queue reserve raised generator=" + generatorId +
-                        " reserveUs=" + builtinQueueReserveNs / 1000L +
-                        " renderBeforeSlotUs=" +
-                        (result.desiredNs - result.renderCompleteNs) / 1000L);
-        } else if (result.outcome != GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS &&
-                ++builtinQueueReserveOnTimeFrames >= BUILTIN_QUEUE_RESERVE_DECAY_FRAMES) {
-            builtinQueueReserveOnTimeFrames = 0;
-            builtinQueueReserveNs = Math.max(BUILTIN_QUEUE_RESERVE_MIN_NS,
-                    builtinQueueReserveNs - BUILTIN_QUEUE_RESERVE_DECAY_NS);
-        }
+        boolean latchKnown = result.latchNs > 0L &&
+                (result.supportedMask & GpuPhysicalHeadroomLedger.COMPOSITION_LATCH) != 0;
+        int previous = builtinQueueReserve.extraScans();
+        com.thorium.emufusion.video.BuiltinQueueReserve.Change change = builtinQueueReserve.observe(
+                result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS,
+                result.desiredNs, result.actualNs,
+                renderKnown ? result.renderCompleteNs : 0L,
+                latchKnown ? result.latchNs : 0L, result.panelPeriodNs);
+        if (change == com.thorium.emufusion.video.BuiltinQueueReserve.Change.NONE ||
+                ++builtinQueueReserveLogs > 32L) return;
+        Log.i(TAG, "Built-in queue depth " + change.name().toLowerCase(java.util.Locale.ROOT) +
+                " generator=" + generatorId +
+                " extraScans=" + previous + "->" + builtinQueueReserve.extraScans() +
+                " renderBeforeSlotUs=" + (renderKnown ?
+                        (result.desiredNs - result.renderCompleteNs) / 1000L : -1L) +
+                " renderBeforeEarlierLatchUs=" + (renderKnown && latchKnown ?
+                        (result.latchNs - result.panelPeriodNs - result.renderCompleteNs) / 1000L : -1L) +
+                " recoveryFrames=" + builtinQueueReserve.recoveryFrames());
     }
 
     private boolean consumeDensePhysicalGpuHeadroom() {
@@ -8355,22 +8441,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private long builtinQueueCutoffMisses;
     // Time kept between the planned queue cutoff and the compositor's
-    // reported deadline. On the Thor at 120 Hz the compositor really latches
-    // ~10 ms before a frame's display time while EGL reports ~2 ms, and the
-    // emulator shares the GPU: 3DS frames finished 3-6 ms before their slot
-    // still landed one scan late (2026-10-11). The reserve grows on each such
-    // late frame and decays slowly while frames are on time, so under load
-    // the built-in path targets one scan later instead of missing unevenly.
-    private static final long BUILTIN_QUEUE_RESERVE_MIN_NS = 1_000_000L;
-    private static final long BUILTIN_QUEUE_RESERVE_STEP_NS = 1_000_000L;
-    // Step back down only after ~10 s of on-time frames: each change of
-    // pipeline depth moves one output by a scan, so the depth must not
-    // flip-flop between a reserve that is just enough and one that is not.
-    private static final long BUILTIN_QUEUE_RESERVE_DECAY_NS = 500_000L;
-    private static final int BUILTIN_QUEUE_RESERVE_DECAY_FRAMES = 1200;
-    private long builtinQueueReserveNs = BUILTIN_QUEUE_RESERVE_MIN_NS;
-    private int builtinQueueReserveOnTimeFrames;
-    private long builtinQueueReserveRaises;
+    // reported deadline: whole extra scans learned from what reached the
+    // panel (BuiltinQueueReserve, 3.2.89), as planned for the last frame.
+    private final com.thorium.emufusion.video.BuiltinQueueReserve builtinQueueReserve =
+            new com.thorium.emufusion.video.BuiltinQueueReserve();
+    private long builtinQueueReserveNs = com.thorium.emufusion.video.BuiltinQueueReserve.MIN_NS;
+    private long builtinQueueReserveLogs;
     private long builtinPlanCallbackNs, builtinPlanNowNs;
     private long builtinPlanCompositeDeadlineNs, builtinPlanIntervalNs, builtinPlanLatencyNs;
     private int builtinPlanGapEvidenceCount;
@@ -8384,6 +8460,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // Keep 1ms for queue handoff; actual GPU completion remains checked
             // against this earlier cutoff by the physical evidence ledger.
             long planNowNs = System.nanoTime();
+            // Whole extra scans counted from the callback (BuiltinQueueReserve).
+            builtinQueueReserveNs = builtinQueueReserve.reserveNs(callbackNs, planNowNs,
+                    builtinCompositorTiming[1]);
             PhysicalPresentationDeadline egl = PhysicalPresentationDeadline.nextEgl(
                     builtinCompositorTiming[0], builtinCompositorTiming[1],
                     builtinCompositorTiming[2], planNowNs,
@@ -12274,12 +12353,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return ((long) (index + 1) << 40) | historyWrites[index];
     }
 
-    private boolean drawDisFrame(float phase, boolean perPhase) {
+    /**
+     * Encodes the active pair and solves its motion (and, per phase, the
+     * phase field). Cached by pair and phase, so a solve done when the pair
+     * formed (estimateDenseMotion) leaves the draw only the generate pass.
+     * Null when DIS cannot run at this size.
+     */
+    private DenseInverseSearchFlow prepareDisFlow(float phase, boolean perPhase) {
         if (perPhase && disPhaseFlow == null) disPhaseFlow = new DenseInverseSearchFlow(true);
         if (!perPhase && disFlow == null) disFlow = new DenseInverseSearchFlow();
         DenseInverseSearchFlow flow = perPhase ? disPhaseFlow : disFlow;
         if (historyWidth <= 0 || historyHeight <= 0 ||
-                !flow.ensure(historyWidth, historyHeight)) return false;
+                !flow.ensure(historyWidth, historyHeight)) return null;
         long keyA = historyFrameKey(previousIndex);
         long keyB = historyFrameKey(currentIndex);
         if (!flow.holds(0, keyA) && flow.holds(1, keyA)) flow.swapSlots();
@@ -12290,13 +12375,34 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             flow.estimateKeyA = keyA;
             flow.estimateKeyB = keyB;
         }
+        if (perPhase && (keyA != flow.phaseKeyA || keyB != flow.phaseKeyB || phase != flow.phaseValue)) {
+            flow.estimatePhase(phase);
+            flow.phaseKeyA = keyA;
+            flow.phaseKeyB = keyB;
+            flow.phaseValue = phase;
+        }
+        return flow;
+    }
+
+    /** Whether the active pair's motion for this phase is already solved. */
+    private boolean disFlowReady(float phase, boolean perPhase) {
+        DenseInverseSearchFlow flow = perPhase ? disPhaseFlow : disFlow;
+        if (flow == null) return false;
+        long keyA = historyFrameKey(previousIndex);
+        long keyB = historyFrameKey(currentIndex);
+        return keyA == flow.estimateKeyA && keyB == flow.estimateKeyB &&
+                (!perPhase || (keyA == flow.phaseKeyA && keyB == flow.phaseKeyB &&
+                        phase == flow.phaseValue));
+    }
+
+    private boolean drawDisFrame(float phase, boolean perPhase) {
+        if (timelineActive && timeline.arrivalPacing()) {
+            if (disFlowReady(phase, perPhase)) ++disPrecomputeHits;
+            else ++disPrecomputeMisses;
+        }
+        DenseInverseSearchFlow flow = prepareDisFlow(phase, perPhase);
+        if (flow == null) return false;
         if (perPhase) {
-            if (keyA != flow.phaseKeyA || keyB != flow.phaseKeyB || phase != flow.phaseValue) {
-                flow.estimatePhase(phase);
-                flow.phaseKeyA = keyA;
-                flow.phaseKeyB = keyB;
-                flow.phaseValue = phase;
-            }
             // Synthesis 15's static-structure mask (menu text over a switched
             // highlight keeps its rank pattern): paired hold-out 24 -> 24 with
             // it, God of War II 0.653 -> 0.635, Sonic Adventure 0.516 -> 0.506,
@@ -13736,6 +13842,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " schedulerDuplicateWaits=" + frameRate.bufferedDuplicateWaitCount() +
                 " schedulerPrimeWaits=" + frameRate.bufferedPrimeWaitCount() +
                 " builtinQueueReserveUs=" + builtinQueueReserveNs / 1000L +
+                " builtinQueueExtraScans=" + builtinQueueReserve.extraScans() +
+                " builtinQueueDeepenings=" + builtinQueueReserve.deepenings() +
+                " builtinQueueReserveRecoveries=" + builtinQueueReserve.recoveries() +
+                " builtinQueueReserveFailedRecoveries=" + builtinQueueReserve.failedRecoveries() +
                 (timelineMode ? " timelineMode=1 timelineActive=" + (timelineActive ? 1 : 0) +
                         " " + timeline.diagnostics() : "") +
                 " presentationResets=" + frameRate.presentationResetCallers() +
@@ -13759,6 +13869,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " firstGeneratedLagMaxUs=" + firstGeneratedLagMaxUs +
                 " lowLatency=" + TimelineSchedulerSwitch.lowLatency() +
                 " signatureVsyncCommits=" + signatureVsyncCommits +
+                " signatureEarlyCommits=" + signatureEarlyCommits +
+                " arrivalEarlyPairs=" + arrivalEarlyPairs +
+                " disPrecomputeHits=" + disPrecomputeHits +
+                " disPrecomputeMisses=" + disPrecomputeMisses +
                 " timelineRequiredLatencyUs=" + (timelineRequiredLatencyNs == Long.MIN_VALUE ?
                         "unknown" : String.valueOf(timelineRequiredLatencyNs / 1000L)) +
                 " schedulerUnavailable=" +

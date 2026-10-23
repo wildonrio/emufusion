@@ -137,6 +137,8 @@ public final class TimelineFrameScheduler {
     public static final double ARRIVAL_SPAN_ALPHA = 0.2;
     public static final double ARRIVAL_OUTLIER_RATIO = 3.0;
     public static final long ARRIVAL_MIN_SPAN_NS = 8_000_000L;
+    /** The one generated phase arrival pacing shows (a doubled pair's midpoint). */
+    public static final float ARRIVAL_PHASE = 0.5f;
     // Pair readiness (3.2.87; owner 2026-10-15: latency is the biggest
     // problem). For each pair the timeline notes the first callback that
     // wanted its right image (a generated output, or a hold because the image
@@ -323,7 +325,7 @@ public final class TimelineFrameScheduler {
         }
         if (!arrivalGeneratedShown) {
             ++generated;
-            int kind = propose(GENERATED, 0.5f, leftTimestampNs + span / 2L, 0L, leftSequence,
+            int kind = propose(GENERATED, ARRIVAL_PHASE, leftTimestampNs + span / 2L, 0L, leftSequence,
                     false, 0L, 0L);
             pendingIdealNs = pendingTargetNs;
             return kind;

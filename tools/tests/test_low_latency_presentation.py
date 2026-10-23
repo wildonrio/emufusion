@@ -1,7 +1,11 @@
 """Low-latency presentation (owner, 2026-10-14: about half a second of input
 lag in Ocarina of Time with frame generation on) and the corner readout."""
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+
+from tools.tests.test_framegen_startup_fallback import JAVA
 
 ROOT = Path(__file__).resolve().parents[2]
 GAME = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview" / "game"
@@ -76,7 +80,8 @@ class LowLatencyPresentationTest(unittest.TestCase):
         self.assertIn("if (excessQueued >= 1 || (!arrivalGeneratedShown && (arrivalLateStart || !motionReady))) {",
                       scheduler)
         self.assertIn("arrivalLateStart = waited > span / 2L - panel / 2L;", scheduler)
-        self.assertIn("int kind = propose(GENERATED, 0.5f, leftTimestampNs + span / 2L, 0L, leftSequence,", scheduler)
+        self.assertIn("int kind = propose(GENERATED, ARRIVAL_PHASE, leftTimestampNs + span / 2L, 0L, leftSequence,", scheduler)
+        self.assertIn("public static final float ARRIVAL_PHASE = 0.5f;", scheduler)
         self.assertIn("public static final double ARRIVAL_SPAN_ALPHA = 0.2;", scheduler)
         self.assertIn("public static final double ARRIVAL_OUTLIER_RATIO = 3.0;", scheduler)
         generator = GENERATOR.read_text()
@@ -92,6 +97,46 @@ class LowLatencyPresentationTest(unittest.TestCase):
         for name in ("arrivalPacingShowsEachImageAsItArrives();", "arrivalPacingKeepsLatencyAtHalfTheSpan();",
                      "arrivalPacingAtSixtyFps();", "arrivalPacingCatchesUpAtSixtyFps();"):
             self.assertIn(name, test)
+
+    def test_motion_is_solved_before_the_callback(self):
+        # 3.2.89: the pair forms when its right image is admitted and its
+        # motion is solved then, so the vsync callback that shows the
+        # midpoint only runs the generate pass; a finished duplicate check is
+        # polled ~1 ms after arrival instead of at the next vsync.
+        generator = GENERATOR.read_text()
+        self.assertIn("if (disPhaseOnly && disDefault && timelineActive && timeline.arrivalPacing())\n"
+                      "                prepareDisFlow(TimelineFrameScheduler.ARRIVAL_PHASE, true);", generator)
+        self.assertIn("DenseInverseSearchFlow flow = prepareDisFlow(phase, perPhase);", generator)
+        self.assertEqual(generator.count("prepareArrivalPairEarly();\n"), 3)
+        self.assertEqual(generator.count("scheduleSignatureEarlyPoll(false);"), 2)
+        self.assertIn("handler.postDelayed(signatureEarlyPoll, 1L);", generator)
+        self.assertIn("observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;", generator)
+        for field in ("signatureEarlyCommits=", "arrivalEarlyPairs=", "disPrecomputeHits=",
+                      "disPrecomputeMisses="):
+            self.assertIn('" ' + field + '"', generator)
+
+    def test_queue_reserve_recovers_from_short_disturbances(self):
+        # 3.2.89: whole extra scans counted from the callback, deepened on a
+        # burst of late frames and given back once frames show they would
+        # have met the earlier latch (Thor: the recorder's start had kept
+        # Ocarina a scan deeper, 20.3 -> 26-29 ms, for the rest of the run).
+        generator = GENERATOR.read_text()
+        self.assertIn("builtinQueueReserveNs = builtinQueueReserve.reserveNs(callbackNs, planNowNs,\n"
+                      "                    builtinCompositorTiming[1]);", generator)
+        self.assertIn("latchKnown ? result.latchNs : 0L, result.panelPeriodNs);", generator)
+        self.assertNotIn("BUILTIN_QUEUE_RESERVE_DECAY_FRAMES", generator)
+        video = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "video"
+        test = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "video" /
+                "BuiltinQueueReserveTest.java")
+        with tempfile.TemporaryDirectory() as out:
+            subprocess.run([str(JAVA / "javac"), "-d", out, "-sourcepath",
+                            str(ROOT / "unified-android" / "src"), str(video / "BuiltinQueueReserve.java"),
+                            str(test)], check=True)
+            run = subprocess.run([str(JAVA / "java"), "-cp", out,
+                                  "com.thorium.emufusion.video.BuiltinQueueReserveTest"],
+                                 capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("BuiltinQueueReserveTest passed", run.stdout)
 
     def test_display_lag_is_measured(self):
         generator = GENERATOR.read_text()
