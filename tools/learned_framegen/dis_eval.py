@@ -155,7 +155,7 @@ def pipeline(s, tag, a, c, t, finest, divisor=1):
                     ('sampler', 'uGrayA', f'{tag}Ag{finest}'), ('sampler', 'uGrayC', f'{tag}Cg{finest}'),
                     ('i2', 'uSize', fw, fh), ('f1', 'uT', t), ('f1', 'uLambda', 1e9), ('f1', 'uSigma', 1.0)])
         if D.CONTENT_BOUNDS:
-            s.tex(f'{tag}bounds', 1, 1)
+            s.tex(f'{tag}bounds', 1, 1, half=True)
             s.draw('BOUNDS', 1, 1, [f'{tag}bounds'],
                    [('sampler', 'uGrayA', f'{tag}Ag0'), ('sampler', 'uGrayC', f'{tag}Cg0'), ('i2', 'uSize', aw, ah)])
         # The cut/fade verdict after DIS, as the device computes and reads it.
@@ -215,6 +215,12 @@ def main():
     parser.add_argument('--smooth-iters', type=int, default=0)
     parser.add_argument('--zero-margin', type=float, default=8.0)
     parser.add_argument('--clamp-to-content', action='store_true')
+    parser.add_argument('--edge-one-sided', type=float, default=0.0)
+    parser.add_argument('--edge-hold', type=float, default=0.0)
+    parser.add_argument('--clamp-samples', action='store_true')
+    parser.add_argument('--bounds-t', type=float, default=6.0)
+    parser.add_argument('--edge-hold-t', type=float, default=32.0)
+    parser.add_argument('--edge-one-sided-t', type=float, default=24.0)
     parser.add_argument('--smooth-lambda', type=float, default=4.0)
     parser.add_argument('--smooth-sigma', type=float, default=6.0)
     parser.add_argument('--save', default='', help='write each generated frame (uint8, top row first) here')
@@ -246,6 +252,12 @@ def main():
     D.PHASE_SMOOTH_ITERS = args.smooth_iters
     D.ZERO_MOTION_MARGIN = args.zero_margin
     D.CLAMP_TO_CONTENT = args.clamp_to_content
+    D.EDGE_ONE_SIDED_PX = args.edge_one_sided
+    D.EDGE_HOLD_PX = args.edge_hold
+    D.CLAMP_WARP_SAMPLES = args.clamp_samples
+    D.BOUNDS_T = args.bounds_t
+    D.EDGE_HOLD_T = args.edge_hold_t
+    D.EDGE_ONE_SIDED_T = args.edge_one_sided_t
     D.PHASE_SMOOTH_LAMBDA = args.smooth_lambda
     D.PHASE_SMOOTH_SIGMA = args.smooth_sigma
     if args.no_densify_cross:

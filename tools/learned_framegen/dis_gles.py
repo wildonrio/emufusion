@@ -316,7 +316,7 @@ def field_choice_glsl():
 
 
 # Output from the per-phase field: A at x - t*v, C at x + (1-t)*v.
-def generate_phase_shader():
+def _generate_phase_shader_text():
     return (HEADER +
     "uniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\n"
     "in vec2 vTexCoord;layout(location=0) out vec4 o0;\n"
@@ -381,7 +381,20 @@ def generate_phase_shader():
        f"   vec2 mg={float(BORDER_MARGIN_PX)}/uHistorySize;\n"
        "   bool oa=any(lessThan(pa,lo-mg))||any(greaterThan(pa,hi+mg));\n"
        "   bool oc=any(lessThan(pc,lo-mg))||any(greaterThan(pc,hi+mg));\n"
-       "   if(oa&&!oc)w=cw;else if(oc&&!oa)w=aw;}}\n") +
+       "   if(oa&&!oc)w=cw;else if(oc&&!oa)w=aw;\n" +
+       ("" if EDGE_ONE_SIDED_PX <= 0 else
+        "   else if(!oa&&!oc){vec2 hs=uHistorySize;\n"
+        "    float de=min(min(u.x-lo.x,hi.x-u.x)*hs.x,min(u.y-lo.y,hi.y-u.y)*hs.y);\n"
+        f"    if(de<{float(EDGE_ONE_SIDED_PX)}&&md(abs(aw-cw))>{float(EDGE_ONE_SIDED_T)}/255.0){{\n"
+        "     float da=min(min(pa.x-lo.x,hi.x-pa.x)*hs.x,min(pa.y-lo.y,hi.y-pa.y)*hs.y);\n"
+        "     float dc=min(min(pc.x-lo.x,hi.x-pc.x)*hs.x,min(pc.y-lo.y,hi.y-pc.y)*hs.y);\n"
+        "     w=da>dc?aw:cw;}}\n") +
+       ("" if EDGE_HOLD_PX <= 0 else
+        "   {vec2 hs=uHistorySize;float de=min(min(u.x-lo.x,hi.x-u.x)*hs.x,min(u.y-lo.y,hi.y-u.y)*hs.y);\n"
+        f"    float k=(1.0-smoothstep({0.5*float(EDGE_HOLD_PX)},{float(EDGE_HOLD_PX)},de))*"
+        f"smoothstep({float(EDGE_HOLD_T)*0.5}/255.0,{float(EDGE_HOLD_T)}/255.0,md(abs(aw-cw)));\n"
+        "    w=mix(w,uT<=0.5?a0:c0,k);}\n") +
+       "  }}\n") +
     " vec4 ct=texture(uCut,vec2(0.5));\n"
     f" w=mix(mix(w,a0,uCutEnabled*step({CUT_THRESHOLD},ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));\n"
     " o0=vec4(w,1.0);}\n")
@@ -437,20 +450,56 @@ EDGE_EXTRAPOLATE_PX = 0.0
 # Instead, offer that inside vector as one more field-choice candidate
 # (taken only where its two warp samples agree better by 2 grey levels).
 EDGE_CANDIDATE = False
+# Offline experiment (2026-10-23): within EDGE_ONE_SIDED_PX history pixels of
+# the picture's edge, where the two warp samples disagree by more than
+# EDGE_ONE_SIDED_T grey levels (no correspondence: content entering or leaving
+# view), take the sample whose source lies deeper inside the picture instead of
+# blending both (sharp instead of a blurred/blotched mix). Needs CONTENT_BOUNDS.
+# Offline experiment (2026-10-23): instead, fade toward the nearer real frame
+# (unwarped) within EDGE_HOLD_PX of the edge where the warp samples disagree:
+# the band then updates at the source rate but stays crisp and stable.
+# Offline experiment (2026-10-23): clamp the generation pass's frame samples to
+# the picture rectangle (needs CONTENT_BOUNDS).
+CLAMP_WARP_SAMPLES = False
+EDGE_HOLD_PX = 0.0
+EDGE_HOLD_T = 32.0
+EDGE_ONE_SIDED_PX = 0.0
+EDGE_ONE_SIDED_T = 24.0
 
-BOUNDS = (HEADER +
+# Bar threshold (grey levels) for BOUNDS; bars are pure black.
+BOUNDS_T = 6.0
+def bounds_shader():
+    return (HEADER +
     "uniform sampler2D uGrayA,uGrayC;uniform ivec2 uSize;\n"
     "layout(location=0) out vec4 o0;\n"
     "float colMax(int x){float m=0.0;for(int k=0;k<24;++k){vec2 q=(vec2(float(x),float(k)*float(uSize.y)/24.0)+0.5)/vec2(uSize);\n"
     " m=max(m,max(texture(uGrayA,q).r,texture(uGrayC,q).r));}return m;}\n"
     "float rowMax(int y){float m=0.0;for(int k=0;k<32;++k){vec2 q=(vec2(float(k)*float(uSize.x)/32.0,float(y))+0.5)/vec2(uSize);\n"
     " m=max(m,max(texture(uGrayA,q).r,texture(uGrayC,q).r));}return m;}\n"
-    "void main(){const float T=6.0/255.0;int l=0,r=uSize.x-1,b=0,t=uSize.y-1;\n"
+    f"void main(){{const float T={float(BOUNDS_T)}/255.0;int l=0,r=uSize.x-1,b=0,t=uSize.y-1;\n"
     " for(int x=0;x<uSize.x/2;++x){if(colMax(x)>T)break;l=x+1;}\n"
     " for(int x=uSize.x-1;x>=uSize.x/2;--x){if(colMax(x)>T)break;r=x-1;}\n"
     " for(int y=0;y<uSize.y/2;++y){if(rowMax(y)>T)break;b=y+1;}\n"
     " for(int y=uSize.y-1;y>=uSize.y/2;--y){if(rowMax(y)>T)break;t=y-1;}\n"
     " o0=vec4(float(l)/float(uSize.x),float(r+1)/float(uSize.x),float(b)/float(uSize.y),float(t+1)/float(uSize.y));}\n")
+
+
+def generate_phase_shader():
+    text = _generate_phase_shader_text()
+    if not (CONTENT_BOUNDS and CLAMP_WARP_SAMPLES):
+        return text
+    # Every frame sample is clamped to the picture's outermost pixel centres,
+    # so a warp landing within a pixel of a letter/pillarbox bar never blends
+    # in its black (Ocarina: the first picture column 17% too dark).
+    text = text.replace("texture(uFrameA,", "tA(").replace("texture(uFrameC,", "tC(")
+    helpers = ("vec2 gLo,gHi;\n"
+               "vec4 tA(vec2 p){return texture(uFrameA,clamp(p,gLo,gHi));}\n"
+               "vec4 tC(vec2 p){return texture(uFrameC,clamp(p,gLo,gHi));}\n")
+    text = text.replace("float md(vec3 x)", helpers + "float md(vec3 x)", 1)
+    text = text.replace("void main(){vec2 u=vTexCoord;",
+                        "void main(){{vec4 gb=texture(uBounds,vec2(0.5));gLo=gb.xz+0.5/uHistorySize;"
+                        "gHi=gb.yw-0.5/uHistorySize;}vec2 u=vTexCoord;", 1)
+    return text
 
 
 def cut_shader():
@@ -528,9 +577,9 @@ def cut_shader_luma():
 def shaders():
     return {'VERTEX': VERTEX, 'VERTEX_QUAD': VERTEX_QUAD, 'GRAY': GRAY, 'DOWN': DOWN, 'GRAD': GRAD,
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
-            'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': BOUNDS,
+            'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': bounds_shader(),
             'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(),
-            'DENSIFY_SHARP': sharp_densify_shader(), **({'BOUNDS': BOUNDS} if CONTENT_BOUNDS else {})}
+            'DENSIFY_SHARP': sharp_densify_shader(), **({'BOUNDS': bounds_shader()} if CONTENT_BOUNDS else {})}
 
 
 def sharp_densify_shader():
