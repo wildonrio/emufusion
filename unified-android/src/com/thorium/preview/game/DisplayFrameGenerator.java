@@ -1869,6 +1869,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int outputWidth;
     private int outputHeight;
     private float refreshHz;
+    // Render-thread state: intent must not follow observations. Otherwise a
+    // generator created during a 60 -> 120 switch votes 60 back to Android.
+    // Zero preserves the observed-rate vote for callers without a mode plan.
+    private float requestedPanelRefreshHz;
 
     // GL-thread only below.
     private EGLDisplay eglDisplay = EGL14.EGL_NO_DISPLAY;
@@ -3175,6 +3179,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     " rememberedHz=" + remembered);
     }
 
+    @Override public void setRequestedPanelRefreshHz(float hz) {
+        if (closed.get() || !Float.isFinite(hz) || hz < 20f || hz > 1000f) return;
+        handler.post(() -> {
+            if (closed.get() || Math.abs(hz - requestedPanelRefreshHz) < 0.5f) return;
+            requestedPanelRefreshHz = hz;
+            requestOutputFrameRate("host-mode-request");
+        });
+    }
+
     @Override public void setPanelRefreshHz(float newRefreshHz) {
         if (closed.get()) return;
         final float hz = sanitizeRefresh(newRefreshHz);
@@ -4284,7 +4297,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     /**
-     * Votes for the physical callback cadence of this game compositor.
+     * Votes for the host-selected mode, independently of the observed rate
+     * used for timing. A delayed/denied switch must not downgrade this vote.
      *
      * <p>FIXED_SOURCE is a video/pulldown hint.  It is incorrect here because
      * this renderer adapts its output to the selected display cadence.  The
@@ -4295,22 +4309,25 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      */
     private void requestOutputFrameRate(String reason) {
         if (Build.VERSION.SDK_INT < 30) return;
+        final float requestedHz = requestedPanelRefreshHz > 0f
+                ? requestedPanelRefreshHz : refreshHz;
         try {
             if (Build.VERSION.SDK_INT >= 31) {
-                outputSurface.setFrameRate(refreshHz,
+                outputSurface.setFrameRate(requestedHz,
                         Surface.FRAME_RATE_COMPATIBILITY_DEFAULT,
                         Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);
             } else {
-                outputSurface.setFrameRate(refreshHz,
+                outputSurface.setFrameRate(requestedHz,
                         Surface.FRAME_RATE_COMPATIBILITY_DEFAULT);
             }
             Log.i(TAG, "Requested game display cadence generator=" + generatorId +
-                    " reason=" + reason + " frameRate=" + refreshHz +
+                    " reason=" + reason + " frameRate=" + requestedHz +
+                    " observedPanelHz=" + refreshHz +
                     " compatibility=default strategy=seamless");
         } catch (RuntimeException failure) {
             Log.e(TAG, "Unable to request game display cadence generator=" +
                     generatorId + " reason=" + reason +
-                    " frameRate=" + refreshHz, failure);
+                    " frameRate=" + requestedHz + " observedPanelHz=" + refreshHz, failure);
         }
     }
 
@@ -8713,6 +8730,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         int scans = presentationScansPerOutput();
         long panelPeriodNs = frameRate.panelPeriodNs();
         long previousNs = builtInLastCommittedTargetNs;
+        // Arrival pacing shows each image at the first scan it is due; it has
+        // no output lattice to hold it to.
+        if (timeline.arrivalPacing()) return deadline;
         if (scans <= 1 || panelPeriodNs <= 0L || previousNs <= 0L ||
                 externalTransport != null || !deadline.valid())
             return deadline;
@@ -8740,6 +8760,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         double sourceHz = frameRate.presentationSourceHz();
         long sourcePeriodNs = sourceHz > 0.0 ? Math.round(1e9 / sourceHz) : 0L;
         timeline.configure(panelPeriodNs > 0L ? panelPeriodNs * scans : 0L, sourcePeriodNs);
+        // LSFG-Android's arrival pacing (3.2.88); QA arrival_pacing=0 keeps the lattice.
+        timeline.setArrivalPacing(TimelineSchedulerSwitch.arrivalPacing(), panelPeriodNs);
         timeline.setRequiredLatencyNs(timelineRequiredLatencyNs);
         // Trim latency no recent pair needed (3.2.87); QA low_latency=0 keeps it.
         timeline.setReadyTrimEnabled(TimelineSchedulerSwitch.lowLatency());

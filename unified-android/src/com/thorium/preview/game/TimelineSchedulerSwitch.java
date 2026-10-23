@@ -138,6 +138,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         fieldDetail = detail;
+        boolean arrival = true;
+        try {
+            if (context != null) arrival = Settings.Global.getInt(
+                    context.getContentResolver(), ARRIVAL_PACING_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        arrivalPacing = arrival;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -223,6 +231,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean fieldDetail = true;
 
     static boolean fieldDetail() { return fieldDetail; }
+
+    /**
+     * Arrival pacing (default, 3.2.88): LSFG-Android's order of work -- each
+     * new image's generated image as soon as it is computed, the real image
+     * half the pair's span later -- instead of the content-time lattice. QA:
+     * emufusion_framegen_arrival_pacing=0 restores 3.2.87's lattice.
+     */
+    static final String ARRIVAL_PACING_GLOBAL = "emufusion_framegen_arrival_pacing";
+    private static volatile boolean arrivalPacing = true;
+
+    static boolean arrivalPacing() { return arrivalPacing; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

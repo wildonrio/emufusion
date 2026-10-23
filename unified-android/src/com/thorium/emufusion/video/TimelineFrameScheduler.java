@@ -113,6 +113,30 @@ public final class TimelineFrameScheduler {
     private long pendingSpanNs;
 
     private long reanchors;
+    // Arrival pacing (3.2.88; owner 2026-10-22: use what Lossless Scaling does
+    // to fix the latency completely, doubling only). Recovered from the
+    // shipped LSFG-Android worker loop: each new unique image is taken up the
+    // moment it arrives, its generated image is posted as soon as it is
+    // computed, and the real image follows after the pair's own measured span
+    // split evenly (span / (n + 1)), clamped to twice a smoothed span with
+    // outlier rejection; phases are fixed at k / (n + 1). No content-time
+    // lattice, no re-anchoring, nothing held back for later pairs: a late
+    // image only lengthens how long the last real image stays up.
+    private boolean arrivalPacing;
+    private long arrivalPanelPeriodNs;
+    private long arrivalRightSequence;
+    private long arrivalStartNs;
+    private long arrivalRealDueNs;
+    private boolean arrivalGeneratedShown;
+    private boolean arrivalLateStart;
+    private long arrivalLateStarts;
+    private double arrivalSpanEmaNs;
+    private int arrivalOutliers;
+    private long arrivalPairs, arrivalCatchUps, arrivalNoMotion;
+    // LSFG-Android's low-latency preset: EMA alpha 0.2, outlier ratio 3.
+    public static final double ARRIVAL_SPAN_ALPHA = 0.2;
+    public static final double ARRIVAL_OUTLIER_RATIO = 3.0;
+    public static final long ARRIVAL_MIN_SPAN_NS = 8_000_000L;
     // Pair readiness (3.2.87; owner 2026-10-15: latency is the biggest
     // problem). For each pair the timeline notes the first callback that
     // wanted its right image (a generated output, or a hold because the image
@@ -207,10 +231,110 @@ public final class TimelineFrameScheduler {
         readySlackCount = 0;
         readySlackNext = 0;
         lastReadyWaitNs = 0L;
+        arrivalRightSequence = 0L;
+        arrivalGeneratedShown = false;
+        arrivalLateStart = false;
+        arrivalStartNs = 0L;
+        arrivalRealDueNs = 0L;
         needLeftSequence = 0L;
         needNs = 0L;
         needReported = false;
         clearPending();
+    }
+
+    /**
+     * Arrival pacing (default since 3.2.88): LSFG-Android's order of work
+     * instead of the content-time lattice. QA: false restores the lattice.
+     */
+    public void setArrivalPacing(boolean enabled, long panelPeriodNs) {
+        if (enabled != arrivalPacing) reset();
+        arrivalPacing = enabled;
+        arrivalPanelPeriodNs = Math.max(0L, panelPeriodNs);
+    }
+
+    public boolean arrivalPacing() { return arrivalPacing; }
+
+    /** The pair span used for spacing: clamped to twice the smoothed span. */
+    private long arrivalSpanNs(long rawNs) {
+        double raw = Math.max((double) ARRIVAL_MIN_SPAN_NS, (double) rawNs);
+        if (arrivalSpanEmaNs <= 0.0) {
+            arrivalSpanEmaNs = raw;
+            arrivalOutliers = 0;
+        } else if (raw > ARRIVAL_OUTLIER_RATIO * arrivalSpanEmaNs ||
+                raw * ARRIVAL_OUTLIER_RATIO < arrivalSpanEmaNs) {
+            // A spike is capped below, not learned; three in a row are a new rate.
+            if (++arrivalOutliers >= 3) {
+                arrivalSpanEmaNs = raw;
+                arrivalOutliers = 0;
+            }
+        } else {
+            arrivalSpanEmaNs = ARRIVAL_SPAN_ALPHA * raw + (1.0 - ARRIVAL_SPAN_ALPHA) * arrivalSpanEmaNs;
+            arrivalOutliers = 0;
+        }
+        return (long) Math.min(raw, 2.0 * arrivalSpanEmaNs);
+    }
+
+    private int decideArrival(long displayNs, long leftSequence, long leftTimestampNs,
+                              long rightSequence, long rightTimestampNs, boolean motionReady,
+                              int excessQueued) {
+        boolean hasRight = rightSequence > 0L && rightTimestampNs > leftTimestampNs;
+        if (!primed) {
+            if (!hasRight && shownSequence == leftSequence && shownTargetNs == leftTimestampNs)
+                return NONE;
+            return propose(REAL_LEFT, 0f, leftTimestampNs, 0L, leftSequence,
+                    hasRight, displayNs, leftTimestampNs);
+        }
+        if (!hasRight) {
+            // The next image is not here: the last real image stays up.
+            ++successorLateHolds;
+            lastHoldReason = "successor-late";
+            return NONE;
+        }
+        long panel = Math.max(1L, arrivalPanelPeriodNs > 0L ? arrivalPanelPeriodNs : outputPeriodNs);
+        if (rightSequence != arrivalRightSequence) {
+            // The worker takes the pair up now.
+            arrivalRightSequence = rightSequence;
+            arrivalStartNs = displayNs;
+            arrivalGeneratedShown = false;
+            long span = arrivalSpanNs(rightTimestampNs - leftTimestampNs);
+            arrivalRealDueNs = displayNs + span / 2L;
+            // Taken up so late that generated + real would run into the next
+            // image's arrival: show the real image now. At 60 -> 120 an image
+            // arriving as its predecessor's real image is due otherwise starts
+            // every later pair one scan late (NSMBU Deluxe 44 ms from arrival);
+            // skipping one generated image moves the pairs onto their arrivals.
+            long waited = rightReadyNs > 0L ? displayNs - rightReadyNs : 0L;
+            arrivalLateStart = waited > span / 2L - panel / 2L;
+            if (arrivalLateStart) ++arrivalLateStarts;
+            ++arrivalPairs;
+        }
+        long span = rightTimestampNs - leftTimestampNs;
+        if (excessQueued >= 1 || (!arrivalGeneratedShown && (arrivalLateStart || !motionReady))) {
+            // A newer image is already waiting (behind: LSFG's budget is spent
+            // and its queue drops the oldest) or there is nothing to generate:
+            // the real image now. At 60 -> 120 every scan is taken, so one
+            // late callback otherwise left every later image a frame behind
+            // (NSMBU Deluxe 51 ms from arrival with a two-image threshold).
+            if (excessQueued >= 1 || arrivalLateStart) ++arrivalCatchUps; else ++arrivalNoMotion;
+            ++real;
+            int kind = propose(REAL_RIGHT, 1f, rightTimestampNs, 0L, rightSequence, false, 0L, 0L);
+            pendingSpanNs = span;
+            return kind;
+        }
+        if (!arrivalGeneratedShown) {
+            ++generated;
+            int kind = propose(GENERATED, 0.5f, leftTimestampNs + span / 2L, 0L, leftSequence,
+                    false, 0L, 0L);
+            pendingIdealNs = pendingTargetNs;
+            return kind;
+        }
+        if (displayNs + panel / 4L >= arrivalRealDueNs) {
+            ++real;
+            int kind = propose(REAL_RIGHT, 1f, rightTimestampNs, 0L, rightSequence, false, 0L, 0L);
+            pendingSpanNs = span;
+            return kind;
+        }
+        return NONE;  // the generated image stays up until the real one is due
     }
 
     /** QA: false keeps added latency until frames queue up (before 3.2.87). */
@@ -337,6 +461,9 @@ public final class TimelineFrameScheduler {
                        int excessQueued, boolean passing, boolean successorQueued) {
         clearPending();
         if (outputPeriodNs <= 0L || leftSequence <= 0L || leftTimestampNs <= 0L) return NONE;
+        if (arrivalPacing)
+            return decideArrival(displayNs, leftSequence, leftTimestampNs, rightSequence,
+                    rightTimestampNs, motionReady, excessQueued);
         boolean hasRight = rightSequence > 0L && rightTimestampNs > leftTimestampNs;
         if (!primed) {
             // Show the real left image now. The timeline starts from it once a
@@ -537,7 +664,10 @@ public final class TimelineFrameScheduler {
             }
             if (pendingPassRight) ++passedReals;
         }
-        if (swapSucceeded && pendingKind == GENERATED) pairsSinceGenerated = 0;
+        if (swapSucceeded && pendingKind == GENERATED) {
+            pairsSinceGenerated = 0;
+            if (arrivalPacing) arrivalGeneratedShown = true;
+        }
         if (swapSucceeded && (pendingKind == REAL_RIGHT || pendingPassRight)) {
             consecutiveLatePairs = midpointLostThisPair ? consecutiveLatePairs + 1 : 0;
             midpointLostThisPair = false;
@@ -619,6 +749,12 @@ public final class TimelineFrameScheduler {
                 " timelinePauseHolds=" + pauseHolds +
                 " timelineTrims=" + trims +
                 " timelineTrimsHeld=" + trimsHeld +
+                " timelineArrivalPacing=" + arrivalPacing +
+                " timelineArrivalPairs=" + arrivalPairs +
+                " timelineArrivalCatchUps=" + arrivalCatchUps +
+                " timelineArrivalLateStarts=" + arrivalLateStarts +
+                " timelineArrivalNoMotion=" + arrivalNoMotion +
+                " timelineArrivalSpanEmaUs=" + Math.round(arrivalSpanEmaNs / 1000.0) +
                 " timelineReadyTrims=" + readyTrims +
                 " timelineReadyAdds=" + readySlackAdds +
                 " timelineReadyExcessUs=" + readyExcessNs() / 1000L +

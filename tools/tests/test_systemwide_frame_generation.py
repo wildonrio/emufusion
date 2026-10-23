@@ -1431,13 +1431,12 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         # the forced-OFF mode version is unchanged.
         self.assertIn('AUTO("auto")', setting)
         self.assertGreaterEqual(setting.count('return this == AUTO || this == AUTO_TRIPLE;'), 2)
-        # On fills the panel up to 3x; "Allow 4x" (stored as auto-triple, so
-        # earlier choices carry over) raises it to 4x (owner, 2026-10-12).
-        # Both exceed the one-midpoint lattice, so both need the timeline.
+        # Frame generation only doubles (owner, 2026-10-22: "no triple
+        # anything, just double it"); a stored "auto-triple" (the retired
+        # "Allow 4x") parses and means the same as On.
         self.assertIn('AUTO_TRIPLE("auto-triple")', setting)
-        self.assertIn('public static final int MAX_MULTIPLIER = 3;', setting)
-        self.assertIn('public static final int FOUR_X_MULTIPLIER = 4;', setting)
-        self.assertIn('return this == AUTO_TRIPLE ? FOUR_X_MULTIPLIER : MAX_MULTIPLIER;', setting)
+        self.assertIn('public static final int MAX_MULTIPLIER = 2;', setting)
+        self.assertIn('        public int maxMultiplier() {\n            return MAX_MULTIPLIER;\n        }', setting)
         self.assertIn('public boolean requiresTimelineScheduler() { return maxMultiplier() > 2; }', setting)
         self.assertIn('if (selected.usesBuiltInBackend())', setting)
         self.assertIn('private static final int CURRENT_MODE_VERSION = 3;', setting)
@@ -1499,11 +1498,13 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         theme = self.read("theme/theme.qml")
         self.assertIn('property string frameGenerationMode: "off"', theme)
         self.assertIn('"FRAME GENERATION"', theme)
-        # On/Off plus "Allow 4x" (owner, 2026-10-11; 4x since 2026-10-12).
+        # On/Off only (owner, 2026-10-22): the "Allow 4x" row is out of the
+        # settings list and On always asks for doubling.
         self.assertIn('return frameGenerationMode === "off" ? "OFF" : "ON"', theme)
-        self.assertIn('"ALLOW 4X FRAME RATE"', theme)
+        self.assertIn('readonly property var settingsTailSlots: [17, 21, 22, 23, 20, 19, 24, 18]', theme)
         self.assertNotIn('ALLOW TRIPLE', theme)
-        self.assertIn('return frameGenerationAllowTriple ? "auto-triple" : "auto"', theme)
+        self.assertIn('    function frameGenerationOnMode() {\n        return "auto"\n    }', theme)
+        self.assertIn('return value === "auto" || value === "auto-triple" ? "auto" : "off"', theme)
         self.assertNotIn('"built-in-alpha"', theme)
         self.assertNotIn('"lsfg"', theme)
         self.assertIn('emufusionFrameGenerationThreeModeV3', theme)

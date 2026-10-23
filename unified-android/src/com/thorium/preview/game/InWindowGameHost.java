@@ -617,6 +617,10 @@ public final class InWindowGameHost
         // root. INVISIBLE destroys/recreates Qt's Android SurfaceView on this
         // Thor firmware and exposes the progress splash on return.
         active.enterImmersiveMode();
+        // A background/sleep transition can replace the window's vote. Keep
+        // the existing plan (including a measured re-plan), not a new guess.
+        if (!active.exitStarted.get() && !active.fatalErrorVisible && active.plannedPanelHz > 0f)
+            active.requestNativePanelMode(active.plannedPanelHz);
         // We deliberately hid only the gameplay layer on background entry.
         // SurfaceView creates a fresh queue asynchronously after visibility is
         // restored. TextureView is different: on this Thor it can retain the
@@ -984,6 +988,8 @@ public final class InWindowGameHost
         }
         FrameLayout.LayoutParams videoParams = match();
         videoParams.gravity = Gravity.CENTER;
+        if (gameSurface instanceof GameSurfaceView)
+            ((GameSurfaceView) gameSurface).setRequestedPanelRefreshHz(plannedPanelHz);
         root.addView(gameSurface, videoParams);
         // Cover the still-attached library until the exact gameplay surface has
         // posted a frame. This is deliberately created for both TextureView and
@@ -1245,6 +1251,8 @@ public final class InWindowGameHost
         attributes.preferredDisplayModeId = selectedModeId;
         attributes.preferredRefreshRate = refreshHz;
         activity.getWindow().setAttributes(attributes);
+        if (gameSurface instanceof GameSurfaceView)
+            ((GameSurfaceView) gameSurface).setRequestedPanelRefreshHz(refreshHz);
         Log.i(TAG, "Requested native gameplay panel mode display=" +
                 display.getDisplayId() + " modeId=" + selectedModeId +
                 " refreshHz=" + refreshHz);
@@ -1758,9 +1766,10 @@ public final class InWindowGameHost
                     plannedPanelHz + " actual=" + actualHz + " sourceFps=" +
                     String.format(Locale.US, "%.1f", real));
             Toast.makeText(activity.getApplicationContext(), String.format(Locale.US,
-                    "Frame generation needs a faster screen mode, but the screen stayed at " +
-                    "%.0f Hz. Turn on the high refresh rate (%.0f Hz) in the phone's " +
-                    "display settings.", actualHz, plannedPanelHz), Toast.LENGTH_LONG).show();
+                    "EmuFusion requested %.0f Hz; Android currently reports %.0f Hz. " +
+                    "High refresh may be limited by display settings, power saving, " +
+                    "temperature, or device policy.", plannedPanelHz, actualHz),
+                    Toast.LENGTH_LONG).show();
         }
         return String.format(Locale.US, " · screen at %.0f Hz", actualHz);
     }

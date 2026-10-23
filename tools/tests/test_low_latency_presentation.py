@@ -66,6 +66,33 @@ class LowLatencyPresentationTest(unittest.TestCase):
                      "readinessUndoesHeldLatency();"):
             self.assertIn(name, test)
 
+    def test_arrival_pacing_and_doubling_only(self):
+        # 3.2.88 (owner, 2026-10-22): Lossless Scaling's order of work and
+        # doubling only. Each new image's generated midpoint is shown as soon
+        # as its pair is complete, the real image half the pair's span later.
+        scheduler = SCHEDULER.read_text()
+        self.assertIn("if (arrivalPacing)\n            return decideArrival(", scheduler)
+        self.assertIn("arrivalRealDueNs = displayNs + span / 2L;", scheduler)
+        self.assertIn("if (excessQueued >= 1 || (!arrivalGeneratedShown && (arrivalLateStart || !motionReady))) {",
+                      scheduler)
+        self.assertIn("arrivalLateStart = waited > span / 2L - panel / 2L;", scheduler)
+        self.assertIn("int kind = propose(GENERATED, 0.5f, leftTimestampNs + span / 2L, 0L, leftSequence,", scheduler)
+        self.assertIn("public static final double ARRIVAL_SPAN_ALPHA = 0.2;", scheduler)
+        self.assertIn("public static final double ARRIVAL_OUTLIER_RATIO = 3.0;", scheduler)
+        generator = GENERATOR.read_text()
+        self.assertIn("timeline.setArrivalPacing(TimelineSchedulerSwitch.arrivalPacing(), panelPeriodNs);", generator)
+        self.assertIn("if (timeline.arrivalPacing()) return deadline;", generator)
+        switch = SWITCH.read_text()
+        self.assertIn('ARRIVAL_PACING_GLOBAL = "emufusion_framegen_arrival_pacing";', switch)
+        self.assertIn("private static volatile boolean arrivalPacing = true;", switch)
+        settings = (GAME / "FrameGenerationSettings.java").read_text()
+        self.assertIn("public static final int MAX_MULTIPLIER = 2;", settings)
+        test = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "video" /
+                "TimelineFrameSchedulerTest.java").read_text()
+        for name in ("arrivalPacingShowsEachImageAsItArrives();", "arrivalPacingKeepsLatencyAtHalfTheSpan();",
+                     "arrivalPacingAtSixtyFps();", "arrivalPacingCatchesUpAtSixtyFps();"):
+            self.assertIn(name, test)
+
     def test_display_lag_is_measured(self):
         generator = GENERATOR.read_text()
         self.assertEqual(generator.count("recordArrival(submittedFrameCount);"), 2)

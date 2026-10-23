@@ -15,7 +15,7 @@ package com.thorium.emufusion.timing;
  * a mode that is a multiple of twice the natural rate also holds 2x of every
  * integer division of it (60 -> 30 -> 20), so the frame-rate controller can
  * change tiers without a mid-game mode switch. The multiplier is capped by the
- * owner's setting (up to 3x with On, 4x with "Allow 4x"). A source with no
+ * owner's setting (2x since 3.2.88: frame generation only doubles). A source with no
  * fixed clock is planned on the fastest mode instead ({@link #variable}).</p>
  *
  * <p>Pure Java: the caller supplies the display's mode list.</p>

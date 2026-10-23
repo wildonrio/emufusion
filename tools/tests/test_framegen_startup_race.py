@@ -76,6 +76,7 @@ public class StartupRace {
         void setStatsListener(Object v){} void setFirstSubmittedFrameListener(Runnable v){}
         void setSlotLatticeProducer(boolean v){}
         void setLockToThirtyTierPolicy(boolean v){}
+        void setRequestedPanelRefreshHz(float hz){}
         void resize(int w,int h,int a,int b,float hz){resizes++;}
     }
     static class FrameGenerationRenderer extends Renderer {}
@@ -109,7 +110,7 @@ public class StartupRace {
         boolean surfaceLive,runtimePresentationFailed,generatorStartupPending;
         boolean startupFellBackToDirect,runtimeRecoveryPending,slotLatticeProducer,ownerRequestedDirect;
         int surfaceGeneration,quarantinedSurfaceGeneration=-1,pendingWidth,pendingHeight;
-        float lastReportedPanelHz;double authoritativeSourceHz,producerTimelineHz;
+        float lastReportedPanelHz,requestedPanelRefreshHz;double authoritativeSourceHz,producerTimelineHz;
         Object frameRateListener;Runnable firstSubmittedFrameListener;
         GameSurface.Listener listener=new GameSurface.Listener();
         Surface outputSurface,engineSurface;FrameGenerationRenderer frameGenerator;

@@ -135,7 +135,7 @@ class CompanionAndThemeTest(unittest.TestCase):
         theme = read("theme/theme.qml")
         self.assertIn("property bool widescreenHackEnabled: false", theme)
         self.assertIn("property bool widescreenHackPending: false", theme)
-        self.assertIn("settingsTailSlots: [17, 21, 25, 22, 23, 20, 19, 24, 18]", theme)
+        self.assertIn("settingsTailSlots: [17, 21, 22, 23, 20, 19, 24, 18]", theme)
         titles = re.search(r"function settingTitle\(index\).*?\n    \}", theme,
                            re.DOTALL).group(0)
         entries = re.findall(r'"([A-Z][^"]*)"', titles)

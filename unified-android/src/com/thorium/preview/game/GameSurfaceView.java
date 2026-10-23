@@ -98,6 +98,7 @@ public final class GameSurfaceView extends SurfaceView
     private int pendingWidth, pendingHeight;
     private FrameGenerationRenderer.StatsListener frameRateListener;
     private float lastReportedPanelHz;
+    private volatile float requestedPanelRefreshHz;
     private DisplayManager panelDisplayManager;
     private final DisplayManager.DisplayListener panelModeListener =
             new DisplayManager.DisplayListener() {
@@ -328,11 +329,18 @@ public final class GameSurfaceView extends SurfaceView
         super.onDetachedFromWindow();
     }
 
+    /** Window-selected mode; retained across asynchronous Surface startup. */
+    public void setRequestedPanelRefreshHz(float hz) {
+        if (!Float.isFinite(hz) || hz < 20f || hz > 1000f) return;
+        requestedPanelRefreshHz = hz;
+        FrameGenerationRenderer generator = frameGenerator;
+        if (generator != null) generator.setRequestedPanelRefreshHz(hz);
+    }
+
     /**
      * Pushes the panel's current refresh rate to the renderer when it moves
-     * by a whole mode (60 <-> 120).  The window's 120-Hz request lands after
-     * the Surface exists on the Thor, so the generator must follow the real
-     * panel rather than the rate it happened to read at creation.
+     * by a whole mode (60 <-> 120). The renderer follows the observed mode
+     * for timing without turning that observation into a new mode request.
      */
     private void propagatePanelRefresh(String reason) {
         FrameGenerationRenderer generator = frameGenerator;
@@ -451,6 +459,7 @@ public final class GameSurfaceView extends SurfaceView
         FrameGenerationRenderer generator = frameGenerator;
         if (generator != null) {
             // Setters that arrived while the generator did not exist yet.
+            generator.setRequestedPanelRefreshHz(requestedPanelRefreshHz);
             bindRuntimeErrorListener(generation);
             generator.setLockToThirtyTierPolicy(
                     launchMode.usesLockToThirtyTierPolicy());
@@ -589,6 +598,7 @@ public final class GameSurfaceView extends SurfaceView
                     this::qualificationProofEnabled, this::densePyramidEnabled,
                     this::denseV27ReducedAnalysisEnabled,
                     this::denseV28ReducedAnalysisEnabled);
+            frameGenerator.setRequestedPanelRefreshHz(requestedPanelRefreshHz);
             frameGenerator.setLockToThirtyTierPolicy(
                     launchMode.usesLockToThirtyTierPolicy());
             frameGenerator.setAuthoritativeSourceHz(authoritativeSourceHz);
@@ -645,6 +655,9 @@ public final class GameSurfaceView extends SurfaceView
 
     private float refreshRate() {
         Display display = getDisplay();
+        // Keep Android's effective app rate for pacing (it may be throttled
+        // below the physical mode). The independent host request asks for
+        // more; an observation alone never proves that request was granted.
         return display == null ? 60f : display.getRefreshRate();
     }
 

@@ -170,6 +170,7 @@ public class InWindowGameHost {
     boolean sameRequest(GameLaunchRequest r) { return request.gameId.equals(r.gameId); }
     void replaceWith(GameLaunchRequest r) { request=r; attach(); }
     void enterImmersiveMode() {}
+    float plannedPanelHz; void requestNativePanelMode(float hz) {}
     void attachSurfaceListener() {}
     // View-scoped idle policy has its own executed fixture; this suite tests recreation.
     void updateGameplayScreenOn() {}

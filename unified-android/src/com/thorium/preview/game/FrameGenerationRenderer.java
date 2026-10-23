@@ -91,6 +91,13 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default void setPanelRefreshHz(float hz) {}
 
+    /**
+     * The host's selected display mode, not a measurement of the active mode.
+     * Keep this Surface vote when Android temporarily supplies a slower mode;
+     * setPanelRefreshHz still owns the renderer's observed presentation clock.
+     */
+    default void setRequestedPanelRefreshHz(float hz) {}
+
     /** True while the timing authority is still gathering evidence for a
      *  canonical source clock (a higher lattice may fund shortly). */
     default boolean clockAcquisitionInProgress() { return false; }

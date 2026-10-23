@@ -17,14 +17,12 @@ public final class FrameGenerationSettings {
     private static final String MODE = "mode";
 
     /**
-     * Output frames per real frame the generator may produce. On fills the
-     * panel up to 3x, so 40-55 fps games reach 120 Hz (owner, 2026-10-12: the
-     * high-end systems matter most and mostly run 30-55 fps; the 2x ceiling
-     * left Link's Awakening at 60). The "Allow 4x" option (stored as
-     * AUTO_TRIPLE) raises it to {@link #FOUR_X_MULTIPLIER} so 30 fps games
-     * reach 120 too.
+     * Output frames per real frame the generator may produce: double, never
+     * more (owner, 2026-10-22: "no triple anything, just double it. That
+     * should be the standard"; 20 -> 60 added too much latency). The former
+     * "Allow 4x" choice (stored as AUTO_TRIPLE) now means the same as On.
      */
-    public static final int MAX_MULTIPLIER = 3;
+    public static final int MAX_MULTIPLIER = 2;
     public static final int FOUR_X_MULTIPLIER = 4;
 
     private FrameGenerationSettings() {}
@@ -63,7 +61,7 @@ public final class FrameGenerationSettings {
 
         /** Output frames per real frame this mode may generate. */
         public int maxMultiplier() {
-            return this == AUTO_TRIPLE ? FOUR_X_MULTIPLIER : MAX_MULTIPLIER;
+            return MAX_MULTIPLIER;
         }
 
         /** Beyond 2x needs the timeline scheduler; the one-midpoint lattice cannot. */

@@ -30,6 +30,10 @@ public final class TimelineFrameSchedulerTest {
         readinessTrimsLatencyNoPairNeeds();
         readinessFollowsIrregularSpans();
         readinessUndoesHeldLatency();
+        arrivalPacingShowsEachImageAsItArrives();
+        arrivalPacingKeepsLatencyAtHalfTheSpan();
+        arrivalPacingAtSixtyFps();
+        arrivalPacingCatchesUpAtSixtyFps();
         System.out.println("TimelineFrameSchedulerTest passed");
     }
 
@@ -74,7 +78,8 @@ public final class TimelineFrameSchedulerTest {
 
         void vsync(long displayNs) {
             Long ready = admitted.get(rightSeq);
-            scheduler.setRightReadyNs(reportReady && rightSeq != 0 && ready != null ? ready : 0L);
+            scheduler.setRightReadyNs((reportReady || scheduler.arrivalPacing()) && rightSeq != 0 &&
+                    ready != null ? ready : 0L);
             int kind = passing ?
                     scheduler.select(displayNs, leftSeq, leftTs, rightSeq, rightTs, motionReady,
                             fifo.size() - steadyQueued, rightSeq != 0 && !fifo.isEmpty()) :
@@ -398,7 +403,14 @@ public final class TimelineFrameSchedulerTest {
     }
 
     private static Rig twentyFps(boolean reportReady, long[] spans, long jitterNs, int vsyncs, int tolerated) {
-        Rig rig = new Rig(2 * PANEL, 6 * PANEL);
+        return source(reportReady, false, spans, jitterNs, vsyncs, tolerated, 2 * PANEL, 6 * PANEL);
+    }
+
+    /** A source on 120 Hz admitted 1 ms after its stamps; arrival=true selects LSFG-style pacing. */
+    private static Rig source(boolean reportReady, boolean arrival, long[] spans, long jitterNs,
+                              int vsyncs, int tolerated, long outputPeriod, long sourcePeriod) {
+        Rig rig = new Rig(outputPeriod, sourcePeriod);
+        if (arrival) rig.scheduler.setArrivalPacing(true, PANEL);
         rig.reportReady = reportReady;
         rig.scheduler.setReadyTrimEnabled(reportReady);
         rig.scheduler.setReadyToleratedLate(tolerated);
@@ -418,6 +430,69 @@ public final class TimelineFrameSchedulerTest {
             rig.vsync(rig.now);
         }
         return rig;
+    }
+
+    private static void arrivalPacingShowsEachImageAsItArrives() {
+        // LSFG-Android's order of work at 2x: the generated image the moment
+        // its pair is complete, the real image half the pair's span later.
+        Rig rig = source(false, true, new long[] {6 * PANEL}, 0L, 240, 0, PANEL, 6 * PANEL);
+        double first = meanMs(rig.firstGeneratedLagNs, 4), real = meanMs(rig.realLagNs, 4);
+        check(first < PANEL / 1e6 + 0.5, "arrival: generated image within a scan of arrival " + first);
+        check(Math.abs(real - 3 * PANEL / 1e6) < PANEL / 1e6,
+                "arrival: real image half a 50 ms span after arrival " + real);
+        int generated = 0, reals = 0;
+        for (String shown : rig.shown) {
+            if (shown.startsWith("g")) {
+                ++generated;
+                check(shown.equals("g0.50"), "arrival: doubling uses the midpoint only: " + shown);
+            }
+            if (shown.startsWith("R")) ++reals;
+        }
+        check(Math.abs(generated - reals) <= 1, "arrival: one generated image per real image " +
+                generated + "/" + reals);
+    }
+
+    private static void arrivalPacingKeepsLatencyAtHalfTheSpan() {
+        // Ocarina's 33/50/67 ms spans: no lattice to re-anchor, so a long
+        // pair cannot add latency to the pairs after it.
+        long[] spans = {6 * PANEL, 4 * PANEL, 6 * PANEL, 8 * PANEL, 6 * PANEL, 6 * PANEL, 8 * PANEL, 4 * PANEL};
+        Rig arrival = source(false, true, spans, 2_000_000L, 960, 0, PANEL, 6 * PANEL);
+        Rig lattice = twentyFps(true, spans, 2_000_000L, 960);
+        double arrivalReal = meanMs(arrival.realLagNs, 20), latticeReal = meanMs(lattice.realLagNs, 20);
+        double arrivalFirst = meanMs(arrival.firstGeneratedLagNs, 20);
+        check(arrivalReal < latticeReal - 15.0,
+                "arrival: real images sooner than the lattice " + latticeReal + " -> " + arrivalReal);
+        check(arrivalReal < 4 * PANEL / 1e6, "arrival: real images within half the longest span " + arrivalReal);
+        check(arrivalFirst < PANEL / 1e6 + 0.5, "arrival: generated image within a scan " + arrivalFirst);
+        check(arrival.fifo.size() <= 1, "arrival: nothing queues up " + arrival.fifo.size());
+    }
+
+    private static void arrivalPacingAtSixtyFps() {
+        // 60 -> 120 fills every scan. An image arriving as its predecessor's
+        // real image is due would start every later pair a scan late; one
+        // skipped generated image moves the pairs onto their arrivals.
+        Rig rig = source(false, true, new long[] {2 * PANEL}, 0L, 240, 0, PANEL, 2 * PANEL);
+        double real = meanMs(rig.realLagNs, 8);
+        check(real < 1.5 * PANEL / 1e6, "arrival 60 fps: real image a scan after arrival " + real);
+        int generated = 0;
+        for (String shown : rig.shown) if (shown.startsWith("g")) ++generated;
+        check(generated >= 100, "arrival 60 fps: every pair generates " + generated);
+    }
+
+    private static void arrivalPacingCatchesUpAtSixtyFps() {
+        // 60 -> 120 with 4 ms of arrival jitter and a renderer that reports
+        // images waiting behind the pair: a late image must not leave the
+        // ones after it a frame behind.
+        Rig rig = source(false, true, new long[] {2 * PANEL}, 4_000_000L, 960, 0, PANEL, 2 * PANEL);
+        rig.steadyQueued = 0;
+        Rig noJitter = source(false, true, new long[] {2 * PANEL}, 0L, 960, 0, PANEL, 2 * PANEL);
+        double real = meanMs(rig.realLagNs, 20);
+        check(real < 2.5 * PANEL / 1e6, "arrival 60 fps jitter: real image within two scans " + real);
+        int generated = 0, reals = 0;
+        for (String shown : rig.shown) { if (shown.startsWith("g")) ++generated; if (shown.startsWith("R")) ++reals; }
+        check(generated >= reals * 3 / 4, "arrival 60 fps jitter: most pairs still generate " + generated + "/" + reals);
+        check(rig.fifo.size() <= 1, "arrival 60 fps jitter: no backlog " + rig.fifo.size());
+        check(meanMs(noJitter.realLagNs, 20) < 2.5 * PANEL / 1e6, "arrival 60 fps steady");
     }
 
     private static double meanMs(List<Long> values, int skip) {

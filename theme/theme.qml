@@ -275,7 +275,9 @@ FocusScope {
     // thing as a slot -- settingSlot() is the one place that difference is
     // resolved, and the tail order is written down here rather than implied by
     // the slot numbers so a new row can be inserted without renumbering.
-    readonly property var settingsTailSlots: [17, 21, 25, 22, 23, 20, 19, 24, 18]
+    // Slot 25 ("Allow 4x") is retired: frame generation only doubles
+    // (owner, 2026-10-22).
+    readonly property var settingsTailSlots: [17, 21, 22, 23, 20, 19, 24, 18]
     readonly property int settingsTailCount: settingsTailSlots.length
     readonly property int settingsOptionCount:
             baseSettingsOptionCount + settingsTailCount
@@ -2317,17 +2319,18 @@ FocusScope {
 
     function normalizedFrameGenerationMode(value) {
         value = String(value || "").toLowerCase()
-        return value === "auto" || value === "auto-triple" ? value : "off"
+        // A stored "auto-triple" (retired "Allow 4x") is On.
+        return value === "auto" || value === "auto-triple" ? "auto" : "off"
     }
 
     function frameGenerationModeLabel() {
         return frameGenerationMode === "off" ? "OFF" : "ON"
     }
 
-    // On is one mode on the service side: "auto", or "auto-triple" when the
-    // owner allows 4x.
+    // On is one mode on the service side: "auto", which only doubles
+    // (owner, 2026-10-22: "no triple anything, just double it").
     function frameGenerationOnMode() {
-        return frameGenerationAllowTriple ? "auto-triple" : "auto"
+        return "auto"
     }
 
     function toggleFrameGeneration() {

@@ -66,10 +66,12 @@ public class StartupFallbackTest {
     }
     static class FrameGenerationRenderer {
         int closes; boolean failClose; Surface input=new Surface();
+        float requestedPanelHz;
         void close(){closes++;if(failClose)throw new IllegalStateException("close unresolved");if(input!=null)input.release();}
         void setAuthoritativeSourceHz(double h){} void setProducerTimelineHz(double h){}
         void setSlotLatticeProducer(boolean enabled){}
         void setLockToThirtyTierPolicy(boolean enabled){}
+        void setRequestedPanelRefreshHz(float hz){requestedPanelHz=hz;}
         void setStatsListener(Object o){} void setFirstSubmittedFrameListener(Runnable r){}
         Surface inputSurface(){return input;}
         void resize(int a,int b,int c,int d,float h){}
@@ -104,7 +106,7 @@ public class StartupFallbackTest {
         static final String TAG="fixture";
         boolean startupFellBackToDirect,runtimePresentationFailed,surfaceLive,generatorStartupPending,runtimeRecoveryPending;
         int quarantinedSurfaceGeneration=-1,surfaceGeneration,pendingWidth,pendingHeight,asyncStarts;
-        boolean slotLatticeProducer; float lastReportedPanelHz;
+        boolean slotLatticeProducer; float lastReportedPanelHz,requestedPanelRefreshHz=120f;
         Surface outputSurface,engineSurface; FrameGenerationRenderer frameGenerator;
         FrameGenerationBackendPolicy.Backend activeBackend=FrameGenerationBackendPolicy.Backend.DIRECT;
         FrameGenerationSettings.Mode launchMode;
@@ -188,6 +190,7 @@ public class StartupFallbackTest {
         Primary success=new Primary(FrameGenerationSettings.Mode.AUTO);
         success.createGenerator(new Surface(),1920,1080);FrameGenerationRenderer renderer=success.frameGenerator;
         assert renderer!=null && !success.startupFellBackToDirect;
+        assert renderer.requestedPanelHz==120f : "host-selected refresh was not forwarded";
         success.releaseGenerator();assert renderer.closes==1;
         success.createGenerator(new Surface(),1920,1080);assert success.frameGenerator!=null;
         reset();FrameGenerationRendererFactory.unsafe=true;
