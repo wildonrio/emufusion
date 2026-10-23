@@ -877,7 +877,7 @@
       "build": {
         "recipe": "engines/build_core.sh dolphin",
         "proofArtifactPath": "engines/build/arm64-v8a/dolphin_libretro.so",
-        "proofArtifactSha256": "093db3423313ed0b9413d218c0694df2dd784f726f6672099539fa5ab1c43555",
+        "proofArtifactSha256": "96871332be655a77d8dbbc08f59a9628c4d02ca632320303559a94b114b20953",
         "reproducible": false,
         "notes": "The checksum-locked callback, signal-stack and descriptor-allocation error patches are included. The October5 incremental build first reproduced the previous normalized artifact exactly, then built the descriptor correction. Independent fresh rebuild and corrected-core gameplay qualification remain pending; release qualification stays false."
       },

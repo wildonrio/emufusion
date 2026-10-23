@@ -88,13 +88,15 @@ DOLPHIN_REPOSITORY = "https://github.com/libretro/dolphin"
 DOLPHIN_COMMIT = "0ff12a5a2835762e0665afe6a161a648b433f996"
 DOLPHIN_ARCHIVE_SHA = "3c6698d6da772065194be118871ce24620f0fdc76894bc568e34d48f93de7494"
 DOLPHIN_DEPENDENCY_LOCK = "engines/dolphin-source-lock.json"
-DOLPHIN_ARTIFACT_SHA = "093db3423313ed0b9413d218c0694df2dd784f726f6672099539fa5ab1c43555"
+DOLPHIN_ARTIFACT_SHA = "96871332be655a77d8dbbc08f59a9628c4d02ca632320303559a94b114b20953"
 DOLPHIN_PATCH = "engines/patches/dolphin-libretro-submit-rendered-duplicate-xfb.patch"
 DOLPHIN_PATCH_SHA = "5dd844b8546eea62706a4dd84304077cddaf83c68987459a532f6055f2f5919b"
 DOLPHIN_STACK_PATCH = "engines/patches/dolphin-libretro-own-signal-stack.patch"
 DOLPHIN_STACK_PATCH_SHA = "68c853fa395b8c87c41729355c2149dbb83f024b9cb851123b21cfc575ac074b"
 DOLPHIN_DESCRIPTOR_PATCH = "engines/patches/dolphin-libretro-descriptor-errors.patch"
 DOLPHIN_DESCRIPTOR_PATCH_SHA = "d508e5c96869b925a8a1c01139c76ee2ae13abcd74a0475c4f5281aded85cbcd"
+DOLPHIN_PRIORITY_PATCH = "engines/patches/dolphin-libretro-low-queue-priority.patch"
+DOLPHIN_PRIORITY_PATCH_SHA = "bb52313363b569cf87ad57eb8673d76bc7a8290b68b75eb94f3b41292c593624"
 SCUMMVM_COMMIT = "6aa8fa9b6f9e5a7ae670cc355af1b727ff75c995"
 SCUMMVM_ARCHIVE_SHA = "8e2080a442b4e78c045795714ac4b699023f631e2045fb133d496cd29419fa67"
 SCUMMVM_DEPENDENCY_LOCK = "engines/scummvm-source-lock.json"
@@ -614,7 +616,7 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                         "normalizedByRemovingSection": ".note.gnu.build-id",
                         "normalizedArtifactSha256": DOLPHIN_ARTIFACT_SHA,
                         "rawBuildIds": [
-                            "e48dde89c6c5a1a07bcfa11ee1252c669ed420db",
+                            "c4d6d4b8f59d7b0da24455612c1299b07dec195b",
                         ],
                     }
                     if lock.get("cmakeOptions") != expected_options:
@@ -642,6 +644,15 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                             "Reject non-null output handles on failed Vulkan descriptor allocation, "
                             "retry exhausted pools and bound fresh-pool failure without recursion."
                         ),
+                    }, {
+                        "path": DOLPHIN_PRIORITY_PATCH,
+                        "sha256": DOLPHIN_PRIORITY_PATCH_SHA,
+                        "purpose": (
+                            "Request low Vulkan queue global priority (VK_KHR/EXT_global_priority; "
+                            "default on refusal or with setprop debug.emufusion.engine_queue_priority "
+                            "default) so the in-process frame generator presents first on the shared "
+                            "GPU. Local patch, host GPU scheduling only; never submitted upstream."
+                        ),
                     }]
                     if lock.get("patches") != expected_patches:
                         errors.append("dolphin: compiler proof patch identity is inconsistent")
@@ -654,6 +665,9 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                     descriptor_patch = ROOT / DOLPHIN_DESCRIPTOR_PATCH
                     if not descriptor_patch.is_file() or _sha256(descriptor_patch) != DOLPHIN_DESCRIPTOR_PATCH_SHA:
                         errors.append("dolphin: locked descriptor-allocation patch is missing or changed")
+                    priority_patch = ROOT / DOLPHIN_PRIORITY_PATCH
+                    if not priority_patch.is_file() or _sha256(priority_patch) != DOLPHIN_PRIORITY_PATCH_SHA:
+                        errors.append("dolphin: locked queue-priority patch is missing or changed")
             if build.get("recipe") != "engines/build_core.sh dolphin":
                 errors.append("dolphin: build recipe must name the pinned source recipe")
             if proof_path is None or proof_sha != DOLPHIN_ARTIFACT_SHA:

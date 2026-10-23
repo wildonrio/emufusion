@@ -1,0 +1,97 @@
+EmuFusion local patch (2026-10-23), never submitted upstream: host GPU
+scheduling only, no change to emulated console behaviour. Dolphin asks for
+low Vulkan queue global priority so the in-process frame generator presents
+first on the shared GPU; default priority on refusal or with
+setprop debug.emufusion.engine_queue_priority default.
+
+--- a/Source/Core/VideoBackends/Vulkan/VulkanContext.cpp	2026-10-23 05:57:54
++++ b/Source/Core/VideoBackends/Vulkan/VulkanContext.cpp	2026-10-23 05:58:32
+@@ -15,8 +15,38 @@
+ #include "VideoCommon/DriverDetails.h"
+ #include "VideoCommon/VideoCommon.h"
+ 
++#ifdef __ANDROID__
++#include <android/log.h>
++#include <sys/system_properties.h>
++#endif
++
+ namespace Vulkan
+ {
++// EmuFusion (2026-10-23, local patch, host GPU scheduling only): the
++// in-process frame generator presents from a high-priority GLES context on
++// the same GPU. Ask for low queue global priority (no privilege needed) so its
++// short per-output work runs ahead of the emulator's rendering; with nothing
++// else on the GPU the priority changes nothing. A driver refusal falls back to
++// the default. QA: setprop debug.emufusion.engine_queue_priority default.
++static bool EmuFusionLowQueuePriorityRequested()
++{
++#ifdef __ANDROID__
++  char value[PROP_VALUE_MAX] = {};
++  if (__system_property_get("debug.emufusion.engine_queue_priority", value) > 0 &&
++      std::strcmp(value, "default") == 0)
++    return false;
++#endif
++  return true;
++}
++
++static void EmuFusionLogQueuePriority(const char* text)
++{
++#ifdef __ANDROID__
++  __android_log_print(ANDROID_LOG_INFO, "EmuFusionDolphin", "Vulkan queue global priority %s",
++                      text);
++#endif
++}
++
+ static constexpr const char* VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
+ 
+ std::unique_ptr<VulkanContext> g_vulkan_context;
+@@ -660,6 +690,9 @@
+ 
+   AddExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, false);
+   AddExtension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME, false);
++  // EmuFusion: low queue global priority (EmuFusionLowQueuePriorityRequested).
++  if (!AddExtension(VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME, false))
++    AddExtension(VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME, false);
+   AddExtension("VK_KHR_portability_subset", false);
+ 
+   if (!DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DEPTH_CLAMP_CONTROL))
+@@ -789,6 +822,19 @@
+   if (!SelectDeviceExtensions(surface != VK_NULL_HANDLE))
+     return false;
+ 
++  const bool global_priority =
++      Common::Contains(m_device_extensions, std::string(VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME)) ||
++      Common::Contains(m_device_extensions, std::string(VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME));
++  const bool low_queue_priority = global_priority && EmuFusionLowQueuePriorityRequested();
++  VkDeviceQueueGlobalPriorityCreateInfoKHR low_priority_info = {};
++  if (low_queue_priority)
++  {
++    low_priority_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR;
++    low_priority_info.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR;
++    for (VkDeviceQueueCreateInfo& queue_info : queue_infos)
++      queue_info.pNext = &low_priority_info;
++  }
++
+   // convert std::string list to a char pointer list which we can feed in
+   std::vector<const char*> extension_name_pointers;
+   for (const std::string& name : m_device_extensions)
+@@ -812,6 +858,19 @@
+   }
+ 
+   VkResult res = vkCreateDevice(m_physical_device, &device_info, nullptr, &m_device);
++  if (res != VK_SUCCESS && low_queue_priority)
++  {
++    EmuFusionLogQueuePriority("low refused; default");
++    for (VkDeviceQueueCreateInfo& queue_info : queue_infos)
++      queue_info.pNext = nullptr;
++    res = vkCreateDevice(m_physical_device, &device_info, nullptr, &m_device);
++  }
++  else if (res == VK_SUCCESS)
++  {
++    EmuFusionLogQueuePriority(low_queue_priority ? "low" :
++                              global_priority    ? "default (QA)" :
++                                                   "default (unsupported)");
++  }
+   if (res != VK_SUCCESS)
+   {
+     LOG_VULKAN_ERROR(res, "vkCreateDevice failed: ");

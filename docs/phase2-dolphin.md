@@ -83,6 +83,16 @@ Actual GC/Wii gameplay with the corrected core still needs acceptance; this
 probe does not prove that every prior stripe, crash or slowdown shares this cause.
 Evidence: `qa/android-portability-2026-10-05-dolphin-gpu-probe/`.
 
+2026-10-23: `dolphin-libretro-low-queue-priority.patch` (owner approved trying it
+for Cemu and Dolphin) asks for low Vulkan queue global priority through
+VK_KHR/EXT_global_priority, so the in-process frame generator's high-priority
+GLES presentation runs ahead of the core's rendering on the shared GPU. A driver
+refusal falls back to the default; `setprop debug.emufusion.engine_queue_priority
+default` keeps the default for A/B tests, and logcat tag `EmuFusionDolphin` reports
+which was granted. Local patch, host GPU scheduling only, never submitted
+upstream (Dolphin's contribution rules). Two independent fresh builds produced the
+same normalized core, 96871332be655a77d8dbbc08f59a9628c4d02ca632320303559a94b114b20953.
+
 The subsequent exact e66 full-APK runtime test FAILS performance/rendering
 acceptance. Normal internal GC cold menus reach Luigi Circuit, but severe stalls
 and magenta/cyan track patches persist. Independent driving remains unverified.

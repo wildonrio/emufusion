@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-10-05",
+  "verifiedAt": "2026-10-23",
   "buildProfile": "android-arm64-libretro-in-process-gles-vulkan",
   "closureScope": "exact-staged-source-and-gitlink-closure-for-this-build-profile",
   "sourceDateEpoch": 1785987178,
@@ -26,9 +26,9 @@
     "ENABLE_QT": false,
     "androidMaxPageSize": 16384,
     "normalizedByRemovingSection": ".note.gnu.build-id",
-    "normalizedArtifactSha256": "093db3423313ed0b9413d218c0694df2dd784f726f6672099539fa5ab1c43555",
+    "normalizedArtifactSha256": "96871332be655a77d8dbbc08f59a9628c4d02ca632320303559a94b114b20953",
     "rawBuildIds": [
-      "e48dde89c6c5a1a07bcfa11ee1252c669ed420db"
+      "c4d6d4b8f59d7b0da24455612c1299b07dec195b"
     ]
   },
   "patches": [
@@ -46,6 +46,11 @@
       "path": "engines/patches/dolphin-libretro-descriptor-errors.patch",
       "sha256": "d508e5c96869b925a8a1c01139c76ee2ae13abcd74a0475c4f5281aded85cbcd",
       "purpose": "Reject non-null output handles on failed Vulkan descriptor allocation, retry exhausted pools and bound fresh-pool failure without recursion."
+    },
+    {
+      "path": "engines/patches/dolphin-libretro-low-queue-priority.patch",
+      "sha256": "bb52313363b569cf87ad57eb8673d76bc7a8290b68b75eb94f3b41292c593624",
+      "purpose": "Request low Vulkan queue global priority (VK_KHR/EXT_global_priority; default on refusal or with setprop debug.emufusion.engine_queue_priority default) so the in-process frame generator presents first on the shared GPU. Local patch, host GPU scheduling only; never submitted upstream."
     }
   ],
   "dependencies": [

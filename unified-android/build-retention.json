@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "c4795d6ca08fae4d9487f87d04fd92efa212c74169cd0605184167483ae7ea71": "Rollback 3.2.90 (164) until 3.2.91 settles.",
-    "d3920f88229c50d8892374f9c4b36d680781e206b624d2b9b0d212931849b259": "Current 3.2.91 (165) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "d3920f88229c50d8892374f9c4b36d680781e206b624d2b9b0d212931849b259": "Rollback 3.2.91 (165) until 3.2.92 settles.",
+    "35e81972794fcde842dbb9d7fb282b19e4d027c200e92f458124b8261e2f2e77": "Current 3.2.92 (166) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -673,6 +673,14 @@
     "unified-android/build/emufusion-3.2.90-phase2-phase3-qualification.apk": {
       "sha256": "4e1465aed00e583c03853ecf7a77761f7772866408f28e601bec9142cd6d760e",
       "reason": "Unhashed build output left behind by build.sh; the release is on GitHub Releases."
+    },
+    "unified-android/build/emufusion-3.2.90-phase2-phase3-qualification-c4795d6ca08fae4d9487f87d04fd92efa212c74169cd0605184167483ae7ea71.apk": {
+      "sha256": "c4795d6ca08fae4d9487f87d04fd92efa212c74169cd0605184167483ae7ea71",
+      "reason": "Released 3.2.90 (164), two releases old; on GitHub Releases."
+    },
+    "unified-android/build/emufusion-3.2.92-phase2-phase3-qualification-f587a133061e847ec7448fde757d42cba1d613285d2e17c23c59df8345dba19e.apk": {
+      "sha256": "f587a133061e847ec7448fde757d42cba1d613285d2e17c23c59df8345dba19e",
+      "reason": "First 3.2.92 candidate (Cemu low queue priority only), closed after the Cemu A/B; superseded by the Cemu+Dolphin build."
     }
   }
 }

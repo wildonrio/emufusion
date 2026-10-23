@@ -160,7 +160,7 @@ class DolphinCompilerProofTests(unittest.TestCase):
         self.assertTrue((ROOT / path).is_file())
         self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), expected_sha)
         self.assertIn('PATH="$dolphin_git_path:$PATH"', dolphin_recipe)
-        self.assertEqual(len(self.lock["patches"]), 3)
+        self.assertEqual(len(self.lock["patches"]), 4)
         for row in self.lock["patches"]:
             self.assertEqual(hashlib.sha256((ROOT / row["path"]).read_bytes()).hexdigest(), row["sha256"])
             self.assertIn(row["path"], dolphin_recipe)
@@ -174,6 +174,18 @@ class DolphinCompilerProofTests(unittest.TestCase):
         self.assertEqual(locked_patch["sha256"], patch_sha)
         self.assertIn(locked_patch["path"], dolphin_recipe)
         self.assertIn(patch_sha, dolphin_recipe)
+
+    def test_low_queue_priority_patch_is_local_and_host_only(self):
+        # 2026-10-23 (owner approved for Cemu and Dolphin): the core asks for
+        # low Vulkan queue global priority so the frame generator presents
+        # first; default on refusal or with the QA property.
+        row = self.lock["patches"][3]
+        self.assertEqual(row["path"], "engines/patches/dolphin-libretro-low-queue-priority.patch")
+        patch = (ROOT / row["path"]).read_text(encoding="utf-8")
+        self.assertIn("never submitted upstream", patch)
+        self.assertIn("+    low_priority_info.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR;", patch)
+        self.assertIn('debug.emufusion.engine_queue_priority', patch)
+        self.assertIn('+    EmuFusionLogQueuePriority("low refused; default");', patch)
 
     def test_rendered_duplicate_xfb_is_submitted_to_lucent(self):
         patch = RENDERED_DUPLICATE_PATCH.read_text(encoding="utf-8")

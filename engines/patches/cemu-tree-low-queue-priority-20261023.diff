@@ -1,0 +1,98 @@
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
+@@ -476,6 +476,8 @@
+ 			bool depth_clip_enable = false; // VK_EXT_depth_clip_enable
+ 			bool pipeline_robustness = false; // VK_EXT_pipeline_robustness
+ 			bool display_timing = false; // VK_GOOGLE_display_timing (EmuFusion: immutable Android buffer stamps)
++			bool global_priority = false; // VK_KHR_global_priority or VK_EXT_global_priority (EmuFusion: low queue priority)
++			bool global_priority_khr = false; // the KHR name is available
+ 		}deviceExtensions;
+ 
+ 		struct
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+@@ -48,7 +48,27 @@
+ {
+ 	s_emufusionFgPresentation.Configure(enabled);
+ }
++#include <sys/system_properties.h>
++#endif
++
++// EmuFusion (2026-10-23): the in-process frame generator presents from a
++// high-priority GLES context on the same GPU. Cemu saturates the Thor's GPU,
++// and the generator's short per-output work queued behind it, finishing after
++// the compositor's latch, so its queue ran a scan deeper (Super Mario 3D World
++// 26.5 ms to the first generated image against ~20 ms in lighter engines).
++// Cemu's queue asks for low global priority (no privilege needed) so that work
++// runs first; with nothing else on the GPU the priority changes nothing.
++// QA: setprop debug.emufusion.engine_queue_priority default keeps the default.
++static bool EmuFusionLowQueuePriorityRequested()
++{
++#if BOOST_PLAT_ANDROID
++	char value[PROP_VALUE_MAX] = {};
++	if (__system_property_get("debug.emufusion.engine_queue_priority", value) > 0 &&
++		strcmp(value, "default") == 0)
++		return false;
+ #endif
++	return true;
++}
+ 
+ const  std::vector<const char*> kOptionalDeviceExtensions =
+ {
+@@ -637,6 +657,16 @@
+ 	m_indices = FindQueueFamilies(surface, m_physicalDevice);
+ 	std::set<int> uniqueQueueFamilies = { m_indices.graphicsFamily, m_indices.presentFamily };
+ 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos = CreateQueueCreateInfos(uniqueQueueFamilies);
++	VkDeviceQueueGlobalPriorityCreateInfoKHR lowQueuePriority{};
++	const bool lowQueuePriorityWanted = m_featureControl.deviceExtensions.global_priority &&
++		EmuFusionLowQueuePriorityRequested();
++	if (lowQueuePriorityWanted)
++	{
++		lowQueuePriority.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR;
++		lowQueuePriority.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR;
++		for (auto& queueCreateInfo : queueCreateInfos)
++			queueCreateInfo.pNext = &lowQueuePriority;
++	}
+ 	VkPhysicalDeviceFeatures deviceFeatures = {};
+ 	VkPhysicalDeviceFeatures2 deviceFeatures2 = {};
+ 	deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+@@ -719,6 +749,19 @@
+ 	VkDeviceCreateInfo createInfo = CreateDeviceCreateInfo(queueCreateInfos, deviceFeatures, deviceExtensionFeatures, used_extensions);
+ 
+ 	VkResult result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_logicalDevice);
++	if (result != VK_SUCCESS && lowQueuePriorityWanted)
++	{
++		// A driver may refuse a global priority; never lose the device over it.
++		cemuLog_log(LogType::Force, "EmuFusion: low Vulkan queue priority refused (error {}); default priority", (sint32)result);
++		for (auto& queueCreateInfo : queueCreateInfos)
++			queueCreateInfo.pNext = nullptr;
++		result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_logicalDevice);
++	}
++	else if (result == VK_SUCCESS)
++	{
++		cemuLog_log(LogType::Force, "EmuFusion: Vulkan queue global priority {}",
++			lowQueuePriorityWanted ? "low" : (m_featureControl.deviceExtensions.global_priority ? "default (QA)" : "default (unsupported)"));
++	}
+ 	if (result != VK_SUCCESS)
+ 	{
+ 		cemuLog_log(LogType::Force, "Vulkan: Unable to create a logical device. Error {}", (sint32)result);
+@@ -1389,6 +1432,9 @@
+ 		used_extensions.emplace_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
+ 	if (m_featureControl.deviceExtensions.pipeline_robustness)
+ 		used_extensions.emplace_back(VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME);
++	if (m_featureControl.deviceExtensions.global_priority)
++		used_extensions.emplace_back(m_featureControl.deviceExtensions.global_priority_khr ?
++			VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME : VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME);
+ 
+ 	VkDeviceCreateInfo createInfo{};
+ 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+@@ -1493,6 +1539,9 @@
+ #if BOOST_PLAT_ANDROID
+ 	info.deviceExtensions.display_timing = isExtensionAvailable(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
+ #endif
++	info.deviceExtensions.global_priority_khr = isExtensionAvailable(VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME);
++	info.deviceExtensions.global_priority = info.deviceExtensions.global_priority_khr ||
++		isExtensionAvailable(VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME);
+ 
+ 	// check for validation layers and frame debuggers
+ 	info.usingDebugMarkerTool = false;
