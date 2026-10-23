@@ -3407,6 +3407,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // that just occurred and deterministically halves a 120-Hz generated
         // stream even though the GPU work itself is within budget.
         postNextFrameCallback();
+        callbackReadyClock.callback(frameTimeNanos, System.nanoTime());
         try {
             if (lastCallbackFrameTimeNs != 0L) {
                 long deltaUs = Math.max(1L,
@@ -5217,6 +5218,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private boolean signatureEarlyPollPosted;
     private int signatureEarlyPollTries;
     private long signatureEarlyCommits, arrivalEarlyPairs;
+    private final com.thorium.emufusion.video.CallbackReadyClock callbackReadyClock =
+            new com.thorium.emufusion.video.CallbackReadyClock();
     private long disPrecomputeHits, disPrecomputeMisses;
 
     private boolean signatureVsyncPollEnabled() {
@@ -8844,7 +8847,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         timeline.setRequiredLatencyNs(timelineRequiredLatencyNs);
         // Trim latency no recent pair needed (3.2.87); QA low_latency=0 keeps it.
         timeline.setReadyTrimEnabled(TimelineSchedulerSwitch.lowLatency());
-        timeline.setRightReadyNs(admissionNs(activeRightSequence));
+        // Arrival pacing judges a late start in callbacks, not in time since
+        // admission (CallbackReadyClock: images are admitted ~1 ms after they
+        // arrive, so the wait for the next callback is not lateness).
+        timeline.setRightReadyNs(timeline.arrivalPacing() ?
+                callbackReadyClock.readyNs(admissionNs(activeRightSequence), callbackNs) :
+                admissionNs(activeRightSequence));
         // Low latency: trim as soon as one extra image stays queued.
         timeline.setTrimExcessQueued(TimelineSchedulerSwitch.lowLatency() ?
                 1 : TimelineFrameScheduler.TRIM_EXCESS_QUEUED);

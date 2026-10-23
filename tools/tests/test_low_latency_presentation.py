@@ -46,7 +46,10 @@ class LowLatencyPresentationTest(unittest.TestCase):
         # been ready; latency every recent pair could do without comes off.
         generator = GENERATOR.read_text()
         self.assertIn("recordAdmission(endpointSequence);", generator)
-        self.assertIn("timeline.setRightReadyNs(admissionNs(activeRightSequence));", generator)
+        self.assertIn("timeline.setRightReadyNs(timeline.arrivalPacing() ?\n"
+                      "                callbackReadyClock.readyNs(admissionNs(activeRightSequence), callbackNs) :\n"
+                      "                admissionNs(activeRightSequence));", generator)
+        self.assertIn("callbackReadyClock.callback(frameTimeNanos, System.nanoTime());", generator)
         self.assertIn("timeline.setReadyTrimEnabled(TimelineSchedulerSwitch.lowLatency());", generator)
         self.assertIn("observeFirstGeneratedOutput(deadline.contentPresentationTimeNs());", generator)
         self.assertIn('" firstGeneratedLagMeanUs="', generator)
@@ -137,6 +140,23 @@ class LowLatencyPresentationTest(unittest.TestCase):
                                  capture_output=True, text=True)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertIn("BuiltinQueueReserveTest passed", run.stdout)
+
+    def test_late_starts_are_counted_in_callbacks(self):
+        # 3.2.90: GameCube skipped the generated image for 500 of 820 pairs
+        # once images were admitted ~1 ms after arrival (the wait for the next
+        # callback passed the 60 -> 120 late-start threshold).
+        video = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "video"
+        test = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "video" /
+                "CallbackReadyClockTest.java")
+        with tempfile.TemporaryDirectory() as out:
+            subprocess.run([str(JAVA / "javac"), "-d", out, "-sourcepath", str(ROOT / "unified-android" / "src"),
+                            str(test)], check=True)
+            run = subprocess.run([str(JAVA / "java"), "-cp", out,
+                                  "com.thorium.emufusion.video.CallbackReadyClockTest"],
+                                 capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("CallbackReadyClockTest passed", run.stdout)
+        self.assertTrue((video / "CallbackReadyClock.java").exists())
 
     def test_display_lag_is_measured(self):
         generator = GENERATOR.read_text()

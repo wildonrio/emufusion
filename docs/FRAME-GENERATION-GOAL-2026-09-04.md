@@ -6,7 +6,15 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 23 (latest) **— 3.2.89 (163): the generated frame is ready before its scan; the queue goes back to the earliest scan after a disturbance. Ocarina of Time's first generated image ~28 -> 19.5 ms after arrival, its real images ~53 -> 44.5 ms.**
+October 23 (latest) **— 3.2.90 (164): late starts are counted in callbacks; GameCube, Link's Awakening and DS generate again.**
+
+A six-system sweep after 3.2.89's release (DS, PS1, GameCube, 3DS, God of War II, Link's Awakening) found a regression it caused. Arrival pacing calls a pair late, and shows its real image at once instead of the generated midpoint, when more than half its span less half a scan has passed since its right image was ready (4.2 ms at 60 -> 120). 3.2.89 admits images about 1 ms after they arrive instead of at the next callback, so the time since admission also counted the unavoidable wait for that callback, uniform over a scan: whether a pair was "late" came down to the game's frame phase. GameCube skipped the generated image for 500 of 820 pairs (80-92 fps instead of 120) and then switched generation off for the session (cadence 86.7 of 120); Link's Awakening generated for only 35% of pairs, DS 64%; NSMBU Deluxe's phase happened to be lucky. The ready time is now the vsync time of the first callback that ran after the admission (`CallbackReadyClock`, ring of the last 16 callbacks' vsync and start times): a pair taken up at the first callback that could see it has waited nothing, one that sat through a callback has waited a scan, which still catches NSMBU Deluxe's one-scan offset that the rule was made for. Only arrival pacing uses it; the lattice's readiness trims keep the admission time.
+
+Thor (same gated sweep): GameCube 60 -> 120, a generated image for 2110 of 2200 pairs (54 late starts), no rejections, 19.6 ms to the first generated image and 27.9 ms to the real one before the recorder started; Link's Awakening 73% of pairs (late starts 1338 -> 511 of ~2000, its rate varies around 47-49 fps); DS 68%; NSMBU Deluxe 19.5 / ~29 ms, Ocarina 19.3 / 44.5 ms as in 3.2.89. Two GameCube Vulkan device losses came 4.8 s after the screen recorder started, the known recorder artifact (also with frame generation off).
+
+**Thor (3.2.90, `c4795d6c`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 23 **— 3.2.89 (163): the generated frame is ready before its scan; the queue goes back to the earliest scan after a disturbance. Ocarina of Time's first generated image ~28 -> 19.5 ms after arrival, its real images ~53 -> 44.5 ms.**
 
 Owner, October 23: keep improving latency first, then artifacts, beyond Lossless Scaling where possible. 3.2.88's runtime logs showed where Ocarina's time went: its compositor deadline was 4.3 ms after the vsync callback and the display 10.3 ms after that, but every target was one scan later (22.9 ms instead of 14.6 ms after the callback) because the built-in queue reserve had grown to 5-5.5 ms. It grew because the first generated frame of each pair ran the whole DIS solve (encode, estimate, phase field) inside the callback that showed it, and those frames finished after the compositor's latch (Thor: rendering ended 0.05-0.45 ms after the display time, within 10 s of launch).
 
