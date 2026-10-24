@@ -2987,7 +2987,15 @@ FocusScope {
                 "  •  A  PLAY  •  B  BACK TO SYSTEM LIST"
     }
 
+    // Marks whose official color nearly disappears on the dark header (3DO's
+    // gray and Sinclair's black read as empty black boxes; Commodore's navy
+    // barely shows: contrast 1.3-2.8 against #14171c). They are drawn white.
+    function brandLogoIsDark(slug) {
+        return slug === "3do" || slug === "sinclair" || slug === "commodore"
+    }
+
     function useWhiteBrandLogo(index) {
+        if (brandLogoIsDark(brandSlugForSystem(index))) return true
         if (brandSlugForSystem(index) !== "nintendo") return false
         // The red wordmark only needs replacing when it would actually vanish,
         // so measure the distance to it rather than testing a hand-tuned box.
@@ -6632,13 +6640,20 @@ FocusScope {
                 Repeater {
                     model: root.availableBrandSlugs
 
+                    // Each mark takes exactly its own width at the row height
+                    // (capped for long wordmarks), so a square mark leaves no
+                    // empty slot beside it; a mark that fails to load takes no
+                    // space at all instead of leaving a blank (owner, October 24).
                     Item {
-                        width: modelData === "arcade" ? 122 :
-                               (modelData === "sony" ? 130 :
-                               (modelData === "microsoft" ? 58 : 160))
+                        readonly property bool loaded: brandMark.status === Image.Ready &&
+                                brandMark.implicitHeight > 0
+                        visible: loaded
+                        width: loaded ? Math.min(160, Math.round(height *
+                                brandMark.implicitWidth / brandMark.implicitHeight)) : 0
                         height: 58
 
                         Image {
+                            id: brandMark
                             anchors.fill: parent
                             anchors.margins: 0
                             source: modelData === "arcade" ?
@@ -6650,6 +6665,14 @@ FocusScope {
                             cache: true
                             smooth: true
                             mipmap: true
+                        }
+
+                        ColorOverlay {
+                            anchors.fill: brandMark
+                            source: brandMark
+                            color: "white"
+                            visible: root.brandLogoIsDark(modelData)
+                            cached: true
                         }
                     }
                 }

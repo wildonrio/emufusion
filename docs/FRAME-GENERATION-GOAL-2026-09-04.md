@@ -6,7 +6,17 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 24 (latest) **— 3.2.96 (170): the library stops drawing behind in-window games (Qt's render thread was using ~13% of a core during play).**
+October 24 (latest) **— 3.2.97 (171): the library's company logos: no blank slots, and only companies with a system that has a game.**
+
+Owner, October 24: black areas in the logo row as if a logo were missing, Bandai and NEC questioned; only real companies with an actual system that has a game should show, and a missing logo must not leave a slot. Not frame generation; recorded here because it changes the installed Thor build. The row already lists only systems whose collection has games, but:
+- Each logo sat in a fixed-width slot. Square marks (Bandai, Microsoft) and NEC's mark (an 80 px wordmark in a 300 px transparent square) left empty space that read as black boxes. Each mark now takes its own width at the row height (at most 160 px), brand images are cropped to their content, and a mark that fails to load takes no space.
+- 3DO's gray, Sinclair's black and Commodore's navy official marks nearly vanish on the dark header (contrast 1.3-2.8). They are drawn white, in the row and in the selected system's header.
+- The Microsoft logo came from the importer filing the lone PC Engine CD title (Castlevania: Rondo of Blood) under "Microsoft Windows", a grouping from August when Windows still had games of its own. Every game is now filed under its own system, so it appears as NEC PC Engine CD.
+- On the Thor, Bandai and one PC Engine entry come from QA test files left in Download/lucent-phase1a-activity-qa on August 24 (bug-witch.wsc, lucent-pce-qa.pce and 19 other test ROMs); they are real files the library finds, so they stay until removed.
+
+Thor (`d5083b91`): the row reads Nintendo, SEGA, NEC, SONY, BANDAI with no gaps and no Microsoft logo.
+
+October 24 **— 3.2.96 (170): the library stops drawing behind in-window games (Qt's render thread was using ~13% of a core during play).**
 
 Follow-up to the 3.2.95 measurement below. A profile of Qt's GUI thread (simpleperf; the app is debuggable) showed the redraw is driven by a running animation: the frontend splash's progress-bar stripe (SplashLayer.qml: `loops: Animation.Infinite`, no running guard), whose splash is only hidden (`visible: focus`) once the library loads; any running animation makes Qt Quick render every vsync. It persisted with the theme replaced by a single black rectangle. The frontend compiles its QML in (`CONFIG += qtquickcompiler` in src/frontend/frontend.pro; `QmlCacheGeneratedCode::_frontend_SplashLayer_qml` in the library), so an earlier in-place edit of the retained QML text had no effect and was withdrawn unreleased (09c6f11). The fix is a source patch, `unified-android/tools/pegasus-splash-idle.patch` (`running: root.visible` on the stripe), applied by `build_pegasus_source_android.sh`; the library was rebuilt incrementally (.rodata +564 bytes, .text unchanged in size), rebranded with `patch_emufusion_branding.py` and pinned in `source-frontend-artifact-lock.json` (`postBuildSplashIdle`, previous sha256 cd17524a).
 

@@ -79,11 +79,14 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # value only, it does not alter the in-window return flow.
         # The "Allow triple" option became "Allow 4X" when On began tripling
         # (owner, 2026-10-12); Settings text only.
+        # The all-systems brand row sizes each mark to its own width, hides a
+        # mark that fails to load and draws low-contrast marks white
+        # (owner, 2026-10-24); library chrome only.
         # The pin exists so unrelated runtime-return work cannot alter the theme
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "20a5f2903f16a559ac0ab47932be6670a5488cdf134d1e67c8ba71bb2fd6af2e",
+            "b5bbd1f8b7e9ce2a02211bb18703ad93c35b486f95b3fe5c36118a0af5bf199e",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):

@@ -3822,11 +3822,12 @@ final class ImportManager {
                     String.CASE_INSENSITIVE_ORDER));
             StringBuilder out = new StringBuilder(
                     "# Generated atomically by EmuFusion Library Importer.\n");
-            // The owner's library intentionally groups the lone PC Engine CD
-            // title with Windows instead of exposing a one-game platform card.
-            String displayCollection = "pcenginecd".equals(system.folder) ?
-                    "Microsoft Windows" : system.collection;
-            out.append("\ncollection: ").append(displayCollection).append('\n');
+            // Every game is filed under its own system. The lone PC Engine CD
+            // title used to be grouped with Windows (August 2026, when Windows
+            // had games of its own); with none left, that put a Microsoft card
+            // and logo on a library with no Microsoft game (owner, October 24:
+            // only real companies with a system that has a game).
+            out.append("\ncollection: ").append(system.collection).append('\n');
             out.append("shortname: ").append(system.folder).append('\n');
             String launch = launchCommand(system.folder);
             if (!launch.isEmpty()) out.append("launch: ").append(launch).append('\n');
