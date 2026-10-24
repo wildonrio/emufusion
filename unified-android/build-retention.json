@@ -3,7 +3,8 @@
   "minimum_age_days": 1,
   "pinned_sha256": {
     "35e81972794fcde842dbb9d7fb282b19e4d027c200e92f458124b8261e2f2e77": "Rollback 3.2.92 (166) until 3.2.93 settles.",
-    "21f9d36664da3343db1bb50d3186ca0c7c259ab03c9ed5bad5763288894af7c7": "Current 3.2.93 (167) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "21f9d36664da3343db1bb50d3186ca0c7c259ab03c9ed5bad5763288894af7c7": "Current 3.2.93 (167) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
+    "9f2dfb886312cffd437ce49216b2ff118d84df53839b32296f4237fa56492e7b": "Candidate 3.2.94 (168): stick and touch input unbuffered; to be installed on the Thor."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -697,6 +698,10 @@
     "unified-android/build/emufusion-3.2.93-phase2-phase3-qualification-84ca6be8e94912669c4874e7a5569834a37e7dfc73ded2db3bae69bf709f4c71.apk": {
       "sha256": "84ca6be8e94912669c4874e7a5569834a37e7dfc73ded2db3bae69bf709f4c71",
       "reason": "First 3.2.93 candidate (checksum artwork, update on open); superseded the same day by the build that also resumes cut-off downloads; never released."
+    },
+    "unified-android/build/emufusion-3.2.94-phase2-phase3-qualification-883a2135932668167873e1273654a0e559c9a7672e5ed20b324d5382f408c15f.apk": {
+      "sha256": "883a2135932668167873e1273654a0e559c9a7672e5ed20b324d5382f408c15f",
+      "reason": "First 3.2.94 candidate (stick input only); its Thor/emulator A/B is recorded and it was superseded the same day by the build that also unbatches touch; never released."
     }
   }
 }

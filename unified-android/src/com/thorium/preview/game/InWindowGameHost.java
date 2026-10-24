@@ -371,6 +371,8 @@ public final class InWindowGameHost
     private final CheatPanelModel cheatModel = new CheatPanelModel();
     private EngineSession session;
     private FrameLayout root;
+    /** Stick events reach the core as they arrive while this game is attached. */
+    private UnbufferedJoystickInput stickInput;
     /** Real SurfaceFlinger gameplay layer; see {@link #buildUi()}. */
     private View gameSurface;
     /**
@@ -843,6 +845,7 @@ public final class InWindowGameHost
                 ViewGroup.LayoutParams.MATCH_PARENT));
         root.bringToFront();
         enterImmersiveMode();
+        stickInput = UnbufferedJoystickInput.install(content);
         attachSurfaceListener();
         session.prepare(request, this);
         Log.i(TAG, "In-window route accepted engine=" + request.engineId +
@@ -939,6 +942,7 @@ public final class InWindowGameHost
         // which was navigating the library ("tapping skips to a new game").
         root.setClickable(true);
         root.setOnTouchListener((view, event) -> {
+            if (stickInput != null) stickInput.record(event);
             if (prepared && !menuVisible && !fatalErrorVisible && !exitStarted.get() &&
                     session != null)
                 session.onPrimaryTouch(event, view.getWidth(), view.getHeight());
@@ -1671,6 +1675,7 @@ public final class InWindowGameHost
 
     private boolean handleMotionEvent(MotionEvent event) {
         clearOledGuard();
+        if (stickInput != null) stickInput.record(event);
         return !menuVisible && session != null &&
                 session.dispatchGenericMotionEvent(event);
     }
@@ -2589,6 +2594,10 @@ public final class InWindowGameHost
 
     private void detachViews() {
         mainHandler.removeCallbacks(revealLaunchSpinner);
+        if (stickInput != null) {
+            stickInput.release();
+            stickInput = null;
+        }
         if (root != null) root.setKeepScreenOn(false);
         if (multiplayerOverlay != null) {
             multiplayerOverlay.destroy();

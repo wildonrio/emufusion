@@ -6,7 +6,20 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 24 (latest) **— 3.2.93 (167): updates are checked whenever the library opens; artwork is found by ROM checksum, and what truly cannot be found is logged instead of retried.**
+October 24 (latest) **— 3.2.94 (168): stick, D-pad and touch moves reach the game as they happen instead of at a later screen refresh (about 14 ms sooner on stock Android).**
+
+Owner, October 2026: latency first, beyond what Lossless Scaling can reach from outside the emulator. Stock Android batches MotionEvent moves (analog sticks, hat-axis D-pads like the Thor's, finger drags on on-screen pads and DS/3DS touch screens) and hands them to the window at a later vsync input callback; buttons are key events and never wait. `UnbufferedJoystickInput` asks the window for unbatched joystick and pointer delivery (`View.requestUnbufferedDispatch`, Android 11+) while a game is attached. The window recomputes that value from the focused view's chain on every focus change, so the request follows focus and is withdrawn on every view it touched when the game ends, giving the library UI its normal batching back.
+
+Measured as the time from an event's own timestamp to the game's input handler, 200-event batches with QA markers (`/data/local/tmp/emufusion-input-trace` logs the delays, `/data/local/tmp/emufusion-buffered-input` keeps Android's batching for A/B):
+
+- Stock phone emulator (Android 16, 60 Hz, Game Boy Advance in the library window): stick 15.2-15.8 ms batched, 1.5 ms now; touch drags 16.1-16.5 ms batched, 1.1 ms now.
+- Thor (Android 13, Super Mario World, injected on the Odin pad and the top touch screen): its system image already delivers both at once (stick 1.3 ms, touch 1.0 ms either way), so nothing changes on the Thor. Both runs passed the automated pause/exit/checkpoint check.
+
+Measured and not pursued: showing the generated frame as soon as it is ready instead of at the next vsync callback. Arrival traces from the 3.2.91 sweep put the wait from admission to the callback's vsync at 3.2 ms (Ocarina), 2.2 ms (NSMBU Deluxe), 3.7 ms (Double Dash) and 0.4 ms (Link's Awakening) on average; the motion solve and generate pass need most of that before the compositor's latch, so an earlier latch would be reached by only 5-10% of pairs, under 1 ms on average.
+
+**Thor (3.2.94, `9f2dfb88`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+October 24 **— 3.2.93 (167): updates are checked whenever the library opens; artwork is found by ROM checksum, and what truly cannot be found is logged instead of retried.**
 
 Owner, October 24: the phone never offered an update, and it listed about 1500 library items to download on every launch of a library unchanged for a month; find the artwork, and stop retrying only what really cannot be found. (Not frame generation, recorded here because it changes the installed Thor build.)
 

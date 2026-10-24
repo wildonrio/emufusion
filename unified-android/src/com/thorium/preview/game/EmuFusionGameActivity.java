@@ -42,6 +42,7 @@ public final class EmuFusionGameActivity extends Activity
     private GameLaunchRequest request;
     private EngineSession session;
     private GameSurface gameSurface;
+    private UnbufferedJoystickInput stickInput;
     private TouchControlsView touchControls;
     private FrameLayout pauseOverlay;
     private TextView status;
@@ -75,6 +76,7 @@ public final class EmuFusionGameActivity extends Activity
         }
         SessionReturnRouter.remember(this, request.returnState);
         buildUi();
+        stickInput = UnbufferedJoystickInput.install(getWindow().getDecorView());
         session = EngineSessionRegistry.create(this, request);
         gameSurface.setListener(this);
         session.prepare(request, this);
@@ -131,6 +133,7 @@ public final class EmuFusionGameActivity extends Activity
     }
 
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (stickInput != null) stickInput.record(event);
         if (!menuVisible && session != null && session.dispatchGenericMotionEvent(event))
             return true;
         return super.dispatchGenericMotionEvent(event);
