@@ -1,0 +1,15 @@
+--- a/src/frontend/SplashLayer.qml
++++ b/src/frontend/SplashLayer.qml
+@@ -72,7 +72,12 @@
+             anchors.right: parent.right
+             anchors.rightMargin: parent.width * (1.0 - root.progress)
+ 
++            // EmuFusion: the splash is only hidden (visible: focus), and a
++            // running animation makes Qt Quick redraw every frame; stop the
++            // stripe once the splash is hidden (the library and every game
++            // behind it were redrawn at the panel rate).
+             SequentialAnimation on animatedWidth {
++                running: root.visible
+                 loops: Animation.Infinite
+                 PropertyAnimation { duration: 500; to: vpx(68) }
+                 PropertyAnimation { duration: 0; to: 0 }

@@ -28,7 +28,7 @@ if [ ! -d "$SOURCE/.git" ]; then
     git -C "$SOURCE" read-tree HEAD
 fi
 test "$(git -C "$SOURCE" rev-parse HEAD)" = "$REVISION"
-for patch_name in pegasus-in-window-source.patch pegasus-ndk27-headers.patch pegasus-apng-link.patch pegasus-android-storage-startup.patch; do
+for patch_name in pegasus-in-window-source.patch pegasus-ndk27-headers.patch pegasus-apng-link.patch pegasus-android-storage-startup.patch pegasus-splash-idle.patch; do
     PATCH=$PROJECT/tools/$patch_name
     if ! patch -f -d "$SOURCE" -p1 --dry-run -R < "$PATCH" >/dev/null 2>&1; then
         patch -f -d "$SOURCE" -p1 --dry-run < "$PATCH"
