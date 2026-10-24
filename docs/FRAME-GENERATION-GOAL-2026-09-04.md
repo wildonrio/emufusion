@@ -6,7 +6,17 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 24 (latest) **— 3.2.95 (169): run-ahead: on NES, SNES, Game Boy (Color), GBA, Game Gear and Mega Drive a press shows one frame (16.7 ms) sooner than on the console itself.**
+October 24 (latest) **— 3.2.96 (170): frontend updates take effect (stale compiled QML is dropped once per install); the hidden Pegasus splash no longer animates.**
+
+While measuring why the library keeps drawing behind in-window games (3.2.95 note below), Qt's compiled-QML cache on the Thor turned out to hold Pegasus's own QML compiled on September 13. Qt trusts a cached compilation of embedded (qrc) QML while the resource's stored timestamp matches, and in-place frontend edits never change it, so the Thor kept running the September frontend QML through every update since (the October 12 branding edits included). `QmlCacheReset` now clears `cache/qmlcache` before Qt starts, once per installed build (keyed on the package's last-update time, so a same-version QA reinstall counts); the theme recompiles once on the first launch after an update.
+
+The frontend's splash progress bar ran an infinite stripe animation with no running guard; the splash is only hidden (`visible: focus`), and any running animation makes Qt Quick redraw every vsync. `tools/patch_pegasus_splash_idle.py` edits that one block of the embedded QML in place (equal length; recorded in `source-frontend-artifact-lock.json` as `postBuildSplashIdle`) so the stripe never starts; the bar still shows progress. A visibility guard and a finite loop count did not stop it on the Thor; `running: false` did: in a profile of Qt's GUI thread in the idle library, the animation driver fell from 15-18% of its samples to 0.3%, and the splash's width animation is gone.
+
+Not solved: the library still redraws at the panel rate behind in-window games (two SurfaceViews at ~120 per second during SNES play; idle library ~60 per second, GPU 5.4% at 615 MHz against 0.7% on the launcher). During gameplay the GUI-thread profile still shows a sequential animation writing an image's width through a QML property binding, also with the theme replaced by a single black rectangle, so it is inside Pegasus; the splash, now stopped, and AutoScroll (which animates contentY) are its only sequential animations in source, so the source remains unidentified. Hiding Qt's SurfaceView during play is not an option: on this firmware it recreates the surface and shows the splash on return (InWindowGameHost).
+
+**Thor (3.2.96, `b462860b`):** installed with identity preserved (UID 10206, first-install time unchanged); SNES in-window run passed the automated pause/exit/checkpoint check; library renders normally after the cache reset.
+
+October 24 **— 3.2.95 (169): run-ahead: on NES, SNES, Game Boy (Color), GBA, Game Gear and Mega Drive a press shows one frame (16.7 ms) sooner than on the console itself.**
 
 Owner, October 2026: latency first, beyond what Lossless Scaling can reach from outside the emulator. Frame generation cannot shorten the time a game itself takes to show a press: most games read input during one frame and draw its result in the next. Run-ahead (RetroArch's single-instance method) removes one of those frames. Each step runs the true frame with its sound and no image, saves that state, runs the next frame silently for its image, and restores the true state before the next input. With frame generation on, the images it interpolates between are already a frame ahead, which more than repays interpolation's half-frame wait at 60 fps (net 8.3 ms sooner than with neither).
 

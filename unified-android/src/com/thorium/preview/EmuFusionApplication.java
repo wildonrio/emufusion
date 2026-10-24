@@ -67,6 +67,8 @@ public final class EmuFusionApplication
             Log.i(TAG, "Frontend restart bridge process initialized without app services");
             return;
         }
+        // Before Qt starts: an updated frontend must not run stale compiled QML.
+        QmlCacheReset.discardIfUpdated(this);
         // Settings, engine markers and theme state saved under the
         // pre-rename names move before anything reads them (one-time
         // renames; see LegacyNames).

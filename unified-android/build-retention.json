@@ -5,7 +5,8 @@
     "35e81972794fcde842dbb9d7fb282b19e4d027c200e92f458124b8261e2f2e77": "Rollback 3.2.92 (166) until 3.2.93 settles.",
     "21f9d36664da3343db1bb50d3186ca0c7c259ab03c9ed5bad5763288894af7c7": "Current 3.2.93 (167) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
     "9f2dfb886312cffd437ce49216b2ff118d84df53839b32296f4237fa56492e7b": "Candidate 3.2.94 (168): stick and touch input unbuffered; to be installed on the Thor.",
-    "189186791b8d2c3599794e9b46094ec1034001d411b95cbf4d3c461878947d14": "Candidate 3.2.95 (169): run-ahead with state-or-image replay check and sampled divergence checks; on the Thor."
+    "189186791b8d2c3599794e9b46094ec1034001d411b95cbf4d3c461878947d14": "Candidate 3.2.95 (169): run-ahead with state-or-image replay check and sampled divergence checks; on the Thor.",
+    "b462860b6e611e4b9b59f7c874a438affec46c7064ec14e0aba9c7811baafe0d": "Candidate 3.2.96 (170): Pegasus splash stripe animation disabled, per-install compiled-QML reset; on the Thor."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -711,6 +712,18 @@
     "unified-android/build/emufusion-3.2.95-phase2-phase3-qualification-df82bb9437130f8ce54d7e077df94c7277c3f28b87148f5b2b4b3c8b476cbc2b.apk": {
       "sha256": "df82bb9437130f8ce54d7e077df94c7277c3f28b87148f5b2b4b3c8b476cbc2b",
       "reason": "Second 3.2.95 run-ahead candidate (state comparison, no image fallback or stale-prediction reset); its Thor results are recorded and it was superseded the same day; never released."
+    },
+    "unified-android/build/emufusion-3.2.96-phase2-phase3-qualification-4c332c78d3d9eb5b6361286fac66ee5bdfdfe4b25e3d156a2c43738f79bf0c2d.apk": {
+      "sha256": "4c332c78d3d9eb5b6361286fac66ee5bdfdfe4b25e3d156a2c43738f79bf0c2d",
+      "reason": "First 3.2.96 candidate (splash patch only); on the Thor it kept running the September compiled QML, so the patch never ran; superseded the same day by the build that clears that cache; never released."
+    },
+    "unified-android/build/emufusion-3.2.96-phase2-phase3-qualification-46e557f7bdfa743102a9beca7b8891d2e4e7407ec3371953d66cf1b6414fc496.apk": {
+      "sha256": "46e557f7bdfa743102a9beca7b8891d2e4e7407ec3371953d66cf1b6414fc496",
+      "reason": "Second 3.2.96 candidate (guard-only splash patch with the QML cache reset); the profile showed the splash animation still running behind games; superseded the same day by the finite-loop patch; never released."
+    },
+    "unified-android/build/emufusion-3.2.96-phase2-phase3-qualification-7e62217310417075b61829ba1d253dfc5ec4db874493d87dcd9918a14d69b574.apk": {
+      "sha256": "7e62217310417075b61829ba1d253dfc5ec4db874493d87dcd9918a14d69b574",
+      "reason": "Third 3.2.96 candidate (finite-loop splash patch); the profile still showed the splash animation after its loop budget; superseded the same day; never released."
     }
   }
 }
