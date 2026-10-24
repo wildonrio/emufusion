@@ -103,6 +103,8 @@ public final class UpdateCheckFlowTest {
         if (!SHA.equals(digest)) throw new IOException("fixture checksum mismatch");
     }
     File updateFile() { return apk; }
+    // Deleting already-installed downloads is file housekeeping, not flow.
+    void discardStaleDownloads() {}
     void validateDownloadedApk(Context ignored, File file) throws IOException {
         operations.add("validate");
         if (!validApk) throw new IOException("fixture identity rejected");

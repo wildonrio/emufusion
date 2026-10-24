@@ -27,8 +27,44 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 public final class TransferProbe {
+  static byte[] content(int seed) {
+    byte[] data=new byte[4096];
+    for(int i=0;i<data.length;i++) data[i]=(byte)((i*7+seed)%251);
+    return data;
+  }
+  // A download cut off by its time limit, then asked for again.
+  static void resumeCase(String mode, String base, File target) throws Exception {
+    String first=base+"/video", second=mode.equals("other-url") ? base+"/other" : first;
+    try (LibraryHttp.Scope cut=LibraryHttp.begin(400,0,null)) {
+      try { LibraryHttp.download(first,target,1<<20); throw new AssertionError("Not cut off"); }
+      catch(IOException expected) {}
+    }
+    File part=new File(target+".part");
+    boolean kept=part.isFile() && part.length()>0;
+    if(mode.equals("no-version")) {
+      if(kept) throw new AssertionError("A partial without a file version cannot be resumed safely");
+      return;
+    }
+    if(!kept) throw new AssertionError("Cut-off download was not kept");
+    int before=LibraryHttp.resumedDownloads();
+    try (LibraryHttp.Scope rest=LibraryHttp.begin(5000,0,null)) {
+      LibraryHttp.download(second,target,1<<20);
+    }
+    int seed=mode.equals("resume") ? 1 : mode.equals("resume-changed") ? 2 : 3;
+    if(!Arrays.equals(content(seed),Files.readAllBytes(target.toPath())))
+      throw new AssertionError("Wrong bytes after "+mode);
+    boolean resumed=LibraryHttp.resumedDownloads()!=before;
+    if(mode.equals("resume")!=resumed) throw new AssertionError("Resume counted wrongly: "+resumed);
+    if(part.exists() || new File(target+".part.origin").exists())
+      throw new AssertionError("Partial files left behind");
+  }
   public static void main(String[] args) throws Exception {
     String mode=args[0], base=args[1]; File target=new File(args[2]);
+    if(mode.startsWith("resume") || mode.equals("other-url") || mode.equals("no-version")) {
+      resumeCase(mode,base,target);
+      System.out.println("PASS "+mode);
+      return;
+    }
     int[] progress={0}; long started=System.nanoTime();
     try (LibraryHttp.Scope scope=LibraryHttp.begin(
           mode.equals("deadline") ? 250 : 5000,
@@ -71,14 +107,55 @@ public final class TransferProbe {
 
     def run_case(self, mode):
         requests = []
+        ranged = []
+        state = {'video': 0}
+
+        def content(seed):
+            return bytes((i * 7 + seed) % 251 for i in range(4096))
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass
 
+            def resumable(self):
+                # /video: version v1, changed to v2 after the first request in
+                # the resume-changed case; /other is another file entirely.
+                state['video'] += 1
+                version = 'v2' if mode == 'resume-changed' and state['video'] > 1 else 'v1'
+                seed = 3 if self.path == '/other' else (2 if version == 'v2' else 1)
+                data = content(seed)
+                tag = '"%s"' % version
+                asked = self.headers.get('Range')
+                ranged.append((self.path, asked, self.headers.get('If-Range')))
+                if asked and self.headers.get('If-Range') == tag:
+                    start = int(asked.split('=')[1].rstrip('-'))
+                    self.send_response(206)
+                    self.send_header('Content-Range', 'bytes %d-%d/%d' % (start, len(data) - 1, len(data)))
+                    self.send_header('Content-Length', str(len(data) - start))
+                    self.send_header('Content-Type', 'video/mp4')
+                    self.send_header('ETag', tag)
+                    self.end_headers()
+                    self.wfile.write(data[start:])
+                    return
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(data)))
+                self.send_header('Content-Type', 'video/mp4')
+                if mode != 'no-version':
+                    self.send_header('ETag', tag)
+                self.end_headers()
+                if state['video'] == 1:
+                    self.wfile.write(data[:1500])
+                    self.wfile.flush()
+                    time.sleep(1.5)
+                    return
+                self.wfile.write(data)
+
             def do_GET(self):
                 requests.append(self.path)
                 try:
+                    if self.path in ('/video', '/other'):
+                        self.resumable()
+                        return
                     self.send_response(503 if self.path == '/unavailable' else 200)
                     self.send_header('Content-Type', 'application/octet-stream')
                     self.send_header('Content-Length', '2048')
@@ -112,6 +189,10 @@ public final class TransferProbe {
                 if mode == 'cooldown':
                     self.assertEqual(requests.count('/unavailable'), 1)
                     self.assertIn('/ok', requests)
+                if mode in ('resume', 'resume-changed'):
+                    self.assertEqual(ranged[1], ('/video', 'bytes=1500-', '"v1"'))
+                if mode == 'other-url':
+                    self.assertEqual(ranged[1], ('/other', None, None))
         finally:
             server.shutdown()
             server.server_close()
@@ -121,6 +202,11 @@ public final class TransferProbe {
     def test_failed_replacement_preserves_existing_media(self): self.run_case('truncated')
     def test_manual_refresh_really_downloads_again(self): self.run_case('refresh')
     def test_unavailable_provider_backs_off_without_blocking_other_provider(self): self.run_case('cooldown')
+    # Owner, 2026-10-24: a slow link never finished a preview video in one pass.
+    def test_cut_off_download_resumes_where_it_stopped(self): self.run_case('resume')
+    def test_changed_file_is_downloaded_whole_again(self): self.run_case('resume-changed')
+    def test_partial_of_another_url_is_discarded(self): self.run_case('other-url')
+    def test_partial_without_file_version_is_not_kept(self): self.run_case('no-version')
 
 
 class VideoCandidateTest(unittest.TestCase):

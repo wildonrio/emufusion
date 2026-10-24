@@ -33,6 +33,8 @@ public final class LegacyNames {
     static final String METADATA_ID_FIELD = "x-" + OLD + "-id";
     /** Provisioning markers (".OLD-firmware-source", ...) in each engine root. */
     private static final String ENGINE_MARKER_PREFIX = "." + OLD + "-";
+    /** The downloaded update APK before the rename; only ever deleted. */
+    static final String UPDATE_DOWNLOAD = "pegasus-" + OLD + "-update.apk";
     /** Launch-time core-option file each launch regenerates under its new name. */
     private static final String CORE_OPTION_OVERRIDES = OLD + "-core-overrides.txt";
 

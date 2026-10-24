@@ -488,7 +488,8 @@ public final class TitleMatcher {
     private static String decode(String value) {
         if (value == null) return "";
         try {
-            return URLDecoder.decode(value, "UTF-8");
+            // Catalog hrefs are URL paths: a '+' is literal, not a space.
+            return URLDecoder.decode(value.replace("+", "%2B"), "UTF-8");
         } catch (Exception ignored) {
             return value;
         }

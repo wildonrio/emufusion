@@ -119,6 +119,8 @@ public final class PreviewService extends Service {
     private boolean importReloadWaitLogged;
     private ImportManager importManager;
     static final String ACTION_INITIAL_LIBRARY_SCAN = "com.thorium.preview.INITIAL_LIBRARY_SCAN";
+    /** The library came to the front: check for an app update now. */
+    static final String ACTION_APP_OPENED = "com.thorium.preview.APP_OPENED";
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Runnable pegasusWatchdog = new Runnable() {
         @Override
@@ -359,6 +361,8 @@ public final class PreviewService extends Service {
         ensureForeground();
         if (intent != null && ACTION_INITIAL_LIBRARY_SCAN.equals(intent.getAction()))
             importManager.startInitialScan();
+        if (intent != null && ACTION_APP_OPENED.equals(intent.getAction()))
+            updateManager.onAppOpened();
         if (intent != null && ACTION_GAMEPLAY.equals(intent.getAction())) {
             PrivateDiagnostics.gameplay(this, true);
             boolean alreadyActive = gameplayActive;

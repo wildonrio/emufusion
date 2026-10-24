@@ -20,12 +20,17 @@ class MissingMediaRecoveryTest(unittest.TestCase):
             'private static boolean mediaComplete(',
             'private static boolean hasMedia(',
             'private static boolean definitiveMiss(',
+            'static String sourceSet(',
+            'private static void settleUnanswered(',
+            'private static boolean settleExhaustedMedia(',
             'private static boolean readableMedia('))
         # The real declarations, each up to its terminating semicolon.
         constants = '\n'.join(
             source[source.index(name):].split(';', 1)[0] + ';' for name in (
                 'static final String MEDIA_SOURCE_SET =',
-                'private static final long DEFINITIVE_MISS_MS =',
+                'static final String ARTWORK_SOURCE_SET =',
+                'private static final int MEDIA_ATTEMPTS =',
+                'private static final String MEDIA_NOT_FOUND_LOG =',
                 'private static final String[] MEDIA_KINDS ='))
         harness = folder / 'MediaRecoveryProbe.java'
         harness.write_text(r'''
@@ -48,8 +53,18 @@ class JSONObject {
   JSONObject optJSONObject(String key) {
     Object value=values.get(key); return value instanceof JSONObject ? (JSONObject)value : null;
   }
+  boolean optBoolean(String key, boolean fallback) {
+    Object value=values.get(key); return value instanceof Boolean ? (Boolean)value : fallback;
+  }
 }
+class JSONArray {
+  final List<JSONObject> rows = new ArrayList<>();
+  int length() { return rows.size(); }
+  JSONObject optJSONObject(int index) { return rows.get(index); }
+}
+class Log { static void i(String tag, String message) {} }
 public class MediaRecoveryProbe {
+  static final String TAG = "probe";
   static void check(boolean condition, String message) {
     if (!condition) throw new AssertionError(message);
   }
@@ -119,12 +134,69 @@ public class MediaRecoveryProbe {
          .put("sources", "2025-01-01:libretro").put("at", System.currentTimeMillis())));
       check(!mediaComplete(row), "A miss against an older source set is asked of the new sources");
       check(mediaPending(row, 0), "New sources must be consulted");
-    } else if (mode.equals("expired-miss")) {
+    } else if (mode.equals("old-miss-stays-settled")) {
+      // Owner, 2026-10-24: what cannot be found is logged, not retried on a
+      // timer. Only a new source set or a Settings rescan asks again.
       Files.delete(Paths.get(row.optString("background")));
       row.put("mediaCompletedAt", System.currentTimeMillis()-1000)
          .put("mediaMisses", new JSONObject().put("background", new JSONObject()
-         .put("sources", MEDIA_SOURCE_SET).put("at", System.currentTimeMillis()-DEFINITIVE_MISS_MS-1)));
-      check(mediaPending(row, 0), "An expired miss is asked again: catalogs grow");
+         .put("sources", sourceSet("background")).put("at", System.currentTimeMillis()-400L*86400000L)));
+      check(mediaComplete(row), "A year-old miss is still settled");
+      check(!mediaPending(row, 0), "A settled miss is not searched again on a timer");
+      check(mediaPending(row, System.currentTimeMillis()), "A Settings rescan still asks again");
+    } else if (mode.equals("artwork-misses-reasked")) {
+      // 2026-10-24: box art and wallpaper gained the checksum (No-Intro)
+      // lookup, so their old misses are asked once more; video's are not.
+      Files.delete(Paths.get(row.optString("boxArt")));
+      Files.delete(Paths.get(row.optString("video")));
+      row.put("mediaCompletedAt", System.currentTimeMillis()-1000)
+         .put("mediaMisses", new JSONObject()
+           .put("boxArt", new JSONObject().put("sources", MEDIA_SOURCE_SET).put("at", 1L))
+           .put("video", new JSONObject().put("sources", MEDIA_SOURCE_SET).put("at", 1L)));
+      check(!definitiveMiss(row, "boxArt"), "A box-art miss from before the checksum lookup is re-asked");
+      check(definitiveMiss(row, "video"), "A video miss against unchanged sources stays settled");
+      check(mediaPending(row, 0), "The game is queued once for the new lookup");
+    } else if (mode.equals("unreachable-settles")) {
+      // A source that never answers (timeouts, 403, backoff) can no longer
+      // keep a game queued forever: the MEDIA_ATTEMPTS-th pass settles it.
+      Files.delete(Paths.get(row.optString("video")));
+      row.put("critic", 0).put("mediaLastError", "archive.org HTTP 403");
+      settleUnanswered(row, MEDIA_ATTEMPTS);
+      check(mediaComplete(row), "Unanswered kinds settle after the last attempt");
+      JSONObject video=row.optJSONObject("mediaMisses").optJSONObject("video");
+      check(video.optBoolean("unanswered", false) && video.optInt("attempts", 0) == MEDIA_ATTEMPTS,
+            "The settled miss records that no source answered and how often it was tried");
+      check("archive.org HTTP 403".equals(video.optString("error")), "The last error is kept for the log");
+      check(row.optJSONObject("mediaMisses").optJSONObject("boxArt") == null,
+            "Media the game has is never recorded as missing");
+      check(mediaPending(row, System.currentTimeMillis()), "A Settings rescan still asks again");
+    } else if (mode.equals("exhausted-backlog")) {
+      // Phone, 2026-10-24: rows tried many times before the cap existed are
+      // settled at the next scan without another round of downloads.
+      Files.delete(Paths.get(row.optString("boxArt")));
+      row.put("mediaCompletedAt", 0L).put("mediaRetryCount", MEDIA_ATTEMPTS + 2)
+         .put("mediaNextRetryAt", System.currentTimeMillis()-1);
+      JSONArray registry=new JSONArray(); registry.rows.add(row);
+      check(mediaPending(row, 0), "Precondition: the exhausted row is due");
+      check(settleExhaustedMedia(registry, 0), "An exhausted row is settled");
+      check(!mediaPending(row, 0) && mediaComplete(row), "A settled row leaves the queue");
+      check(row.optInt("mediaRetryCount", -1) == 0, "A later lost file gets the full ladder again");
+      check(!settleExhaustedMedia(registry, 0), "Settling is done once");
+    } else if (mode.equals("short-of-attempts")) {
+      Files.delete(Paths.get(row.optString("boxArt")));
+      row.put("mediaCompletedAt", 0L).put("mediaRetryCount", MEDIA_ATTEMPTS - 1)
+         .put("mediaNextRetryAt", System.currentTimeMillis()-1);
+      JSONArray registry=new JSONArray(); registry.rows.add(row);
+      check(!settleExhaustedMedia(registry, 0), "A row with tries left is not settled");
+      check(mediaPending(row, 0), "It is retried when due");
+    } else if (mode.equals("rescan-not-settled")) {
+      long rescan=System.currentTimeMillis();
+      Files.delete(Paths.get(row.optString("boxArt")));
+      row.put("mediaCompletedAt", 0L).put("mediaRetryCount", MEDIA_ATTEMPTS + 2)
+         .put("mediaRefreshCompletedAt", rescan-1000);
+      JSONArray registry=new JSONArray(); registry.rows.add(row);
+      check(!settleExhaustedMedia(registry, rescan), "A pending Settings rescan runs first");
+      check(mediaPending(row, rescan), "The rescan asks every source again");
     } else if (mode.equals("missing-ratings")) {
       row.put("critic", 0).put("mediaCompletedAt", System.currentTimeMillis()-1000);
       check(!mediaComplete(row), "Missing ratings keep the game incomplete");
@@ -164,7 +236,12 @@ public class MediaRecoveryProbe {
     def test_completed_then_lost_reopens(self): self.run_case('completed-then-lost')
     def test_definitive_miss_is_not_searched_again(self): self.run_case('definitive-miss')
     def test_miss_against_old_sources_is_retried(self): self.run_case('stale-sources-miss')
-    def test_expired_miss_is_retried(self): self.run_case('expired-miss')
+    def test_old_miss_stays_settled(self): self.run_case('old-miss-stays-settled')
+    def test_artwork_misses_are_reasked_for_checksum_lookup(self): self.run_case('artwork-misses-reasked')
+    def test_unreachable_sources_settle_after_last_attempt(self): self.run_case('unreachable-settles')
+    def test_exhausted_backlog_settles_without_another_pass(self): self.run_case('exhausted-backlog')
+    def test_rows_with_tries_left_stay_queued(self): self.run_case('short-of-attempts')
+    def test_pending_rescan_is_not_settled(self): self.run_case('rescan-not-settled')
     def test_missing_ratings_settle_on_definitive_miss(self): self.run_case('missing-ratings')
 
     def test_only_answered_lookups_record_a_miss(self):
@@ -179,7 +256,26 @@ public class MediaRecoveryProbe {
         queue = source[source.index('private boolean enrichMediaQueue('):][:9000]
         self.assertIn('int indefiniteBefore = LibraryHttp.indefiniteFailures();', queue)
         self.assertIn('if (kind != null) recordMediaOutcome(row, kind, indefiniteBefore);', queue)
-        self.assertIn('if (row.optLong("mediaRefreshEpoch", 0) < refresh) row.remove("mediaMisses");', queue)
+        self.assertIn('if (row.optLong("mediaRefreshEpoch", 0) < refresh) {\n'
+                      '                row.remove("mediaMisses");\n'
+                      '                row.put("mediaRetryCount", 0);', queue)
+
+    def test_queue_settles_and_logs_what_cannot_be_found(self):
+        source = IMPORTER.read_text()
+        queue = source[source.index('private boolean enrichMediaQueue('):][:9000]
+        self.assertIn('if (!resuming && attempts >= MEDIA_ATTEMPTS) settleUnanswered(row, attempts);', queue)
+        self.assertLess(queue.index('settleUnanswered(row, attempts);'),
+                        queue.index('boolean complete = mediaComplete(row);'))
+        # A pass that resumed a long download is progress, not a failed try.
+        self.assertIn('int resumedBefore = LibraryHttp.resumedDownloads();', queue)
+        self.assertIn('int attempts = row.optInt("mediaRetryCount", 0) + (resuming ? 0 : 1);', queue)
+        self.assertIn('long delay = resuming ? 900_000L :', queue)
+        scan = source[source.index('private void runScan('):]
+        self.assertIn('if (settleExhaustedMedia(registry, mediaRefreshAfter())) '
+                      'writeJsonAtomic(REGISTRY, registry);', scan)
+        self.assertLess(scan.index('settleExhaustedMedia('), scan.index('registeredSources(registry)'))
+        self.assertIn('writeMediaNotFoundLog(readRegistry(), mediaRoot);', scan)
+        self.assertNotIn('DEFINITIVE_MISS_MS', source)
 
     def test_failing_providers_back_off_and_retries_are_quiet(self):
         source = IMPORTER.read_text()

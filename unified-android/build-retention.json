@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "d3920f88229c50d8892374f9c4b36d680781e206b624d2b9b0d212931849b259": "Rollback 3.2.91 (165) until 3.2.92 settles.",
-    "35e81972794fcde842dbb9d7fb282b19e4d027c200e92f458124b8261e2f2e77": "Current 3.2.92 (166) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
+    "35e81972794fcde842dbb9d7fb282b19e4d027c200e92f458124b8261e2f2e77": "Rollback 3.2.92 (166) until 3.2.93 settles.",
+    "21f9d36664da3343db1bb50d3186ca0c7c259ab03c9ed5bad5763288894af7c7": "Current 3.2.93 (167) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -681,6 +681,22 @@
     "unified-android/build/emufusion-3.2.92-phase2-phase3-qualification-f587a133061e847ec7448fde757d42cba1d613285d2e17c23c59df8345dba19e.apk": {
       "sha256": "f587a133061e847ec7448fde757d42cba1d613285d2e17c23c59df8345dba19e",
       "reason": "First 3.2.92 candidate (Cemu low queue priority only), closed after the Cemu A/B; superseded by the Cemu+Dolphin build."
+    },
+    "unified-android/build/emufusion-3.2.91-phase2-phase3-qualification-d3920f88229c50d8892374f9c4b36d680781e206b624d2b9b0d212931849b259.apk": {
+      "sha256": "d3920f88229c50d8892374f9c4b36d680781e206b624d2b9b0d212931849b259",
+      "reason": "Released 3.2.91 (165), two releases old; on GitHub Releases."
+    },
+    "unified-android/build/emufusion-3.2.91-phase2-phase3-qualification.apk": {
+      "sha256": "d3920f88229c50d8892374f9c4b36d680781e206b624d2b9b0d212931849b259",
+      "reason": "Superseded mutable convenience copy of the last 3.2.91 build (released); current is 3.2.93."
+    },
+    "unified-android/build/emufusion-3.2.92-phase2-phase3-qualification.apk": {
+      "sha256": "35e81972794fcde842dbb9d7fb282b19e4d027c200e92f458124b8261e2f2e77",
+      "reason": "Superseded mutable convenience copy of the last 3.2.92 build (pinned under its hashed name as rollback); current is 3.2.93."
+    },
+    "unified-android/build/emufusion-3.2.93-phase2-phase3-qualification-84ca6be8e94912669c4874e7a5569834a37e7dfc73ded2db3bae69bf709f4c71.apk": {
+      "sha256": "84ca6be8e94912669c4874e7a5569834a37e7dfc73ded2db3bae69bf709f4c71",
+      "reason": "First 3.2.93 candidate (checksum artwork, update on open); superseded the same day by the build that also resumes cut-off downloads; never released."
     }
   }
 }

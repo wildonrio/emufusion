@@ -114,8 +114,33 @@ final class ImportManager {
      */
     static final String MEDIA_SOURCE_SET =
             "2026-10-11:nintendo,libretro,launchbox-box,launchbox-fanart,archive,metacritic";
-    /** Even a definitive miss is asked again after this long: catalogs grow. */
-    private static final long DEFINITIVE_MISS_MS = 90L * 24L * 60L * 60L * 1000L;
+    /**
+     * Box art and wallpaper also look the ROM up by checksum (No-Intro) and
+     * no longer lose a '+' in catalog names, so every miss recorded for them
+     * before is asked once more.
+     */
+    static final String ARTWORK_SOURCE_SET =
+            "2026-10-24:no-intro,nintendo,libretro,launchbox-box,launchbox-fanart,archive";
+
+    /** The source set a miss of this kind was established against. */
+    static String sourceSet(String kind) {
+        return "boxArt".equals(kind) || "background".equals(kind) ?
+                ARTWORK_SOURCE_SET : MEDIA_SOURCE_SET;
+    }
+    /**
+     * Passes a game gets before what no source supplied is settled although
+     * some source never answered (timeout, 403/429, a host in backoff). The
+     * retries are 15 min, 1 h, 4 h, 16 h and 64 h apart, so only a source
+     * that stays unreachable for days settles anything; it no longer keeps the
+     * library queued on every launch (owner, 2026-10-24: about 1500 items
+     * listed every time for a library unchanged in a month; find the artwork,
+     * stop only when it really cannot be found). Settled items are listed in
+     * MEDIA_NOT_FOUND_LOG and asked again when the source set changes or the
+     * owner rescans the library in Settings.
+     */
+    private static final int MEDIA_ATTEMPTS = 6;
+    /** Every game and media kind no source could supply, beside the media. */
+    private static final String MEDIA_NOT_FOUND_LOG = "media-not-found.json";
     /** What each media-queue stage produces (the cheats stage has no media kind). */
     private static final String[] MEDIA_KINDS = {"ratings", "boxArt", "background", "video", null};
     /** Where every artwork-driven library removal is written down. */
@@ -688,6 +713,7 @@ final class ImportManager {
         }
 
         JSONArray registry = readRegistry();
+        if (settleExhaustedMedia(registry, mediaRefreshAfter())) writeJsonAtomic(REGISTRY, registry);
         Set<String> registeredSources = registeredSources(registry);
         List<ImportedGame> imported = new ArrayList<>();
         int newGames = 0;
@@ -803,6 +829,7 @@ final class ImportManager {
         // Keep provenance current for the games processed in this scan. This
         // is a local manifest write; it does not search or download old media.
         writeBackgroundProvenanceManifest(readRegistry(), mediaRoot);
+        writeMediaNotFoundLog(readRegistry(), mediaRoot);
 
         // Searching every catalog is slow, so it belongs to the user-requested
         // maintenance pass. It only ever builds a list; nothing is removed
@@ -876,12 +903,102 @@ final class ImportManager {
         return readableMedia(row.optString(kind));
     }
 
-    /** Every source answered "none" for this kind, recently and against today's source set. */
+    /**
+     * Settled against today's source set: every source answered "none" for
+     * this kind, or none supplied it in MEDIA_ATTEMPTS passes. Not timed: it
+     * is asked again only when the sources change or the owner rescans.
+     */
     private static boolean definitiveMiss(JSONObject row, String kind) {
         JSONObject misses = row.optJSONObject("mediaMisses");
         JSONObject miss = misses == null ? null : misses.optJSONObject(kind);
-        return miss != null && MEDIA_SOURCE_SET.equals(miss.optString("sources")) &&
-                System.currentTimeMillis() - miss.optLong("at", 0L) < DEFINITIVE_MISS_MS;
+        return miss != null && sourceSet(kind).equals(miss.optString("sources"));
+    }
+
+    /**
+     * After MEDIA_ATTEMPTS passes, settles every kind still missing although
+     * some source never answered, keeping the last error for the log.
+     */
+    private static void settleUnanswered(JSONObject row, int attempts) throws Exception {
+        JSONObject misses = row.optJSONObject("mediaMisses");
+        StringBuilder settled = new StringBuilder();
+        for (String kind : MEDIA_KINDS) {
+            if (kind == null || hasMedia(row, kind) || definitiveMiss(row, kind)) continue;
+            if (misses == null) {
+                misses = new JSONObject();
+                row.put("mediaMisses", misses);
+            }
+            misses.put(kind, new JSONObject().put("sources", sourceSet(kind))
+                    .put("at", System.currentTimeMillis()).put("unanswered", true)
+                    .put("attempts", attempts).put("error", row.optString("mediaLastError")));
+            settled.append(settled.length() == 0 ? "" : ", ").append(kind);
+        }
+        if (settled.length() > 0)
+            Log.i(TAG, "No source supplied " + settled + " for " + row.optString("title") +
+                    " in " + attempts + " tries; logged in " + MEDIA_NOT_FOUND_LOG +
+                    ", not searched again until the sources change");
+    }
+
+    /**
+     * Rows that had MEDIA_ATTEMPTS passes before the cap existed are settled
+     * without another pass. A pending owner rescan is left to run.
+     */
+    private static boolean settleExhaustedMedia(JSONArray registry, long refresh)
+            throws Exception {
+        boolean changed = false;
+        for (int i = 0; i < registry.length(); i++) {
+            JSONObject row = registry.optJSONObject(i);
+            if (row == null || row.optInt("mediaVersion", 0) < 1 ||
+                    row.optLong("mediaRefreshCompletedAt", 0L) < refresh ||
+                    row.optInt("mediaRetryCount", 0) < MEDIA_ATTEMPTS || mediaComplete(row))
+                continue;
+            settleUnanswered(row, row.optInt("mediaRetryCount", 0));
+            if (!mediaComplete(row)) continue;
+            long now = System.currentTimeMillis();
+            // mediaUpdatedAt: an older per-game checkpoint must not undo this.
+            row.put("mediaRetryCount", 0).put("enrichmentVersion", 2)
+                    .put("mediaCompletedAt", now).put("mediaUpdatedAt", now)
+                    .put("mediaNextRetryAt", Long.MAX_VALUE);
+            changed = true;
+        }
+        return changed;
+    }
+
+    /**
+     * The owner-readable list of what no source could supply, rebuilt from
+     * the registry: per game, each missing kind and whether every source
+     * answered "not found" or none could be reached in MEDIA_ATTEMPTS tries.
+     */
+    private static void writeMediaNotFoundLog(JSONArray registry, File mediaRoot) {
+        JSONArray games = new JSONArray();
+        try {
+            for (int i = 0; i < registry.length(); i++) {
+                JSONObject row = registry.optJSONObject(i);
+                JSONObject misses = row == null ? null : row.optJSONObject("mediaMisses");
+                if (misses == null || !new File(row.optString("file")).isFile()) continue;
+                JSONObject missing = new JSONObject();
+                for (String kind : MEDIA_KINDS) {
+                    if (kind == null || hasMedia(row, kind) || !definitiveMiss(row, kind)) continue;
+                    JSONObject miss = misses.optJSONObject(kind);
+                    String result = miss.optBoolean("unanswered", false) ?
+                            "no answer in " + miss.optInt("attempts", MEDIA_ATTEMPTS) + " tries" +
+                                    (miss.optString("error").isEmpty() ? "" :
+                                            " (last: " + miss.optString("error") + ")") :
+                            "not found in any source";
+                    missing.put(kind, result);
+                }
+                if (missing.length() == 0) continue;
+                games.put(new JSONObject().put("system", row.optString("system"))
+                        .put("title", row.optString("title"))
+                        .put("file", row.optString("file")).put("missing", missing));
+            }
+            File log = new File(mediaRoot, MEDIA_NOT_FOUND_LOG);
+            String text = games.toString(2) + "\n";
+            if (log.isFile() && text.equals(readText(log))) return;
+            writeTextAtomic(log, text);
+            Log.i(TAG, games.length() + " games lack media no source has; listed in " + log);
+        } catch (Exception error) {
+            Log.w(TAG, "Unable to write the media not-found log", error);
+        }
     }
 
     /**
@@ -901,7 +1018,7 @@ final class ImportManager {
             misses = new JSONObject();
             row.put("mediaMisses", misses);
         }
-        misses.put(kind, new JSONObject().put("sources", MEDIA_SOURCE_SET)
+        misses.put(kind, new JSONObject().put("sources", sourceSet(kind))
                 .put("at", System.currentTimeMillis()));
         Log.i(TAG, "No source has " + kind + " for " + row.optString("title") +
                 "; not searched again until the sources change");
@@ -945,12 +1062,16 @@ final class ImportManager {
             if (game == null) continue;
             // An owner-requested media refresh asks every source again,
             // including about kinds earlier passes found nowhere.
-            if (row.optLong("mediaRefreshEpoch", 0) < refresh) row.remove("mediaMisses");
+            if (row.optLong("mediaRefreshEpoch", 0) < refresh) {
+                row.remove("mediaMisses");
+                row.put("mediaRetryCount", 0);
+            }
             if (row.optLong("mediaRefreshEpoch", 0) < refresh ||
                     row.optInt("mediaVersion", 0) >= 1 && mediaPending(row, refresh)) {
                 row.put("mediaStage", 0).put("mediaVersion", 0).put("mediaLastError", "");
             }
             row.put("mediaRefreshEpoch", refresh);
+            int resumedBefore = LibraryHttp.resumedDownloads();
             final int current = index + 1;
             for (int stage = row.optInt("mediaStage", 0); stage < stages.length; stage++) {
                 String kind = MEDIA_KINDS[stage];
@@ -1015,13 +1136,19 @@ final class ImportManager {
                 Log.i(TAG, "Media checkpoint " + current + "/" + games.size() + " " + title +
                         " stage=" + label + " error=" + transfer.error);
             }
+            // A pass that only got further through a long download (kept and
+            // resumed, see LibraryHttp.download) has not failed to find it: it
+            // is not counted, and the rest is asked for 15 minutes later.
+            boolean resuming = LibraryHttp.resumedDownloads() != resumedBefore;
+            int attempts = row.optInt("mediaRetryCount", 0) + (resuming ? 0 : 1);
+            if (!resuming && attempts >= MEDIA_ATTEMPTS) settleUnanswered(row, attempts);
             boolean complete = mediaComplete(row);
             // A provider that keeps failing is asked less and less often
-            // (15 min, 1 h, 4 h, 16 h, then weekly) instead of every 15 min
-            // forever; a definitive miss waits a day, then the same ladder.
-            int misses = complete ? 0 : row.optInt("mediaRetryCount", 0) + 1;
+            // (15 min, 1 h, 4 h, 16 h, 64 h) until MEDIA_ATTEMPTS settles what
+            // it never supplied; a pass with no error starts the ladder at a day.
+            int misses = complete ? 0 : attempts;
             long firstDelay = row.optString("mediaLastError").isEmpty() ? 86_400_000L : 900_000L;
-            long delay = Math.min(7L * 86_400_000L,
+            long delay = resuming ? 900_000L : Math.min(7L * 86_400_000L,
                     firstDelay << (2 * Math.max(0, Math.min(misses - 1, 8))));
             row.put("mediaVersion", 1).put("enrichmentVersion", complete ? 2 : 0)
                     .put("mediaRefreshCompletedAt", refresh)
@@ -1496,12 +1623,14 @@ final class ImportManager {
             NintendoMedia official = nintendoMedia(game.system, game.title, cacheRoot);
             if (official != null && !official.cover.isEmpty())
                 match = new CatalogMatch(official.cover, game.title);
+            if (match == null) match = noIntroMatch(game, cacheRoot, "Named_Boxarts");
             if (match == null) match = boxArtMatch(game.system, game.title, cacheRoot);
-            if (match == null) {
-                try { match = launchBoxBoxFrontMatch(game.system, game.title, cacheRoot); }
+            for (String title : lookupTitles(game)) {
+                if (match != null) break;
+                try { match = launchBoxBoxFrontMatch(game.system, title, cacheRoot); }
                 catch (Exception unavailable) {
                     noteUnanswered(unavailable);
-                    Log.w(TAG, "LaunchBox box art unavailable for " + game.title);
+                    Log.w(TAG, "LaunchBox box art unavailable for " + title);
                 }
             }
             if (match == null) return;
@@ -1601,10 +1730,16 @@ final class ImportManager {
             // only the dedicated fanart class is accepted (never box fronts,
             // banners, or a fuzzy title result).
             CatalogMatch launchBox = null;
-            try { launchBox = launchBoxFanartMatch(game.system, game.title, cacheRoot); }
-            catch (Exception unavailable) {
-                noteUnanswered(unavailable);
-                Log.w(TAG, "Fanart source unavailable; trying fallback");
+            // The official name is also LaunchBox's, when the box art stage
+            // (which looks it up first) was skipped because the box was there.
+            ensureNoIntroName(game, cacheRoot);
+            for (String title : lookupTitles(game)) {
+                if (launchBox != null) break;
+                try { launchBox = launchBoxFanartMatch(game.system, title, cacheRoot); }
+                catch (Exception unavailable) {
+                    noteUnanswered(unavailable);
+                    Log.w(TAG, "Fanart source unavailable; trying fallback");
+                }
             }
             if (launchBox != null) {
                 File folder = new File(mediaRoot,
@@ -1643,8 +1778,9 @@ final class ImportManager {
             // metadata, so it can always be audited or replaced separately
             // from real wallpaper. catalogMatch rejects fuzzy/cross-platform
             // matches and chooses region variants deterministically.
-            CatalogMatch screenshot = catalogMatch(game.system, game.title, cacheRoot,
-                    "Named_Snaps");
+            CatalogMatch screenshot = noIntroMatch(game, cacheRoot, "Named_Snaps");
+            if (screenshot == null)
+                screenshot = catalogMatch(game.system, game.title, cacheRoot, "Named_Snaps");
             if (screenshot != null) {
                 File folder = new File(mediaRoot,
                         "game-wallpapers-screenshot-fallback/" + game.system.folder);
@@ -2729,6 +2865,91 @@ final class ImportManager {
                 "/" + category + "/";
         return new CatalogMatch(base + encodeHref(match.name),
                 cleanTitle(stem(decode(match.name))));
+    }
+
+    /**
+     * The catalog entry filed under the game's No-Intro name (see
+     * RomCatalogName): that exact file when the catalog has it, otherwise its
+     * best entry for the official title (another region or revision). Null
+     * when the system has no DAT, the dump is not in it or neither is listed.
+     * An unreachable DAT is an unanswered lookup, never a reason to skip the
+     * title matching that follows.
+     */
+    private CatalogMatch noIntroMatch(ImportedGame game, File cacheRoot, String category) {
+        String name = ensureNoIntroName(game, cacheRoot);
+        if (name.isEmpty()) return null;
+        try {
+            String exact = RomCatalogName.thumbnailName(name);
+            for (String href : catalogEntries(game.system, cacheRoot, category)) {
+                if (!exact.equals(decode(href))) continue;
+                return new CatalogMatch("https://thumbnails.libretro.com/" +
+                        encodePath(game.system.libretro) + "/" + category + "/" + encodeHref(href),
+                        cleanTitle(RomCatalogName.baseTitle(name)));
+            }
+            CatalogMatch titled = catalogMatch(game.system, RomCatalogName.baseTitle(name),
+                    cacheRoot, category);
+            if (titled != null)
+                Log.i(TAG, "Artwork by checksum " + game.system.folder + " • \"" + game.title +
+                        "\" is " + name + " [" + category + "]");
+            return titled;
+        } catch (Exception unavailable) {
+            noteUnanswered(unavailable);
+            Log.w(TAG, "Artwork catalog unavailable for " + game.title + ": " + unavailable);
+            return null;
+        }
+    }
+
+    /** The game's own title, then its No-Intro title when that differs. */
+    private static List<String> lookupTitles(ImportedGame game) {
+        List<String> titles = new ArrayList<>();
+        titles.add(game.title);
+        String official = game.noIntroName.isEmpty() ? "" :
+                cleanTitle(RomCatalogName.baseTitle(game.noIntroName));
+        if (!official.isEmpty() && !normalize(official).equals(normalize(game.title)))
+            titles.add(official);
+        return titles;
+    }
+
+    /** noIntroName, with an unreachable DAT counted as an unanswered lookup. */
+    private String ensureNoIntroName(ImportedGame game, File cacheRoot) {
+        try {
+            return noIntroName(game, cacheRoot);
+        } catch (Exception unavailable) {
+            noteUnanswered(unavailable);
+            Log.w(TAG, "No-Intro DAT unavailable for " + game.title + ": " + unavailable);
+            return "";
+        }
+    }
+
+    /** The No-Intro name for the game's dump; "" when none. Hashes each ROM once. */
+    private String noIntroName(ImportedGame game, File cacheRoot) throws Exception {
+        if (!RomCatalogName.supported(game.system.folder) || game.system.libretro.isEmpty())
+            return "";
+        if (game.romCrc32.isEmpty()) game.romCrc32 = RomCatalogName.crc32(game.rom, game.system.folder);
+        if (game.romCrc32.isEmpty()) return "";
+        String name = noIntroTable(game.system, cacheRoot).get(game.romCrc32);
+        game.noIntroName = name == null ? "" : name;
+        return game.noIntroName;
+    }
+
+    /** Parsed DATs by system and cache file version; a DAT is megabytes of text. */
+    private final Map<String, Map<String, String>> noIntroTables = new ConcurrentHashMap<>();
+
+    private Map<String, String> noIntroTable(GameSystems.SystemDef system, File cacheRoot)
+            throws Exception {
+        File cache = new File(cacheRoot, "no-intro-" + system.folder + ".dat");
+        long maxAge = 30L * 24L * 60L * 60L * 1000L;
+        if (!(LibraryHttp.reusable(cache) && System.currentTimeMillis() - cache.lastModified() < maxAge)) {
+            noIntroTables.keySet().removeIf(key -> key.startsWith(system.folder + ":"));
+            cachedText(cache, RomCatalogName.datUrl(system.libretro), maxAge, 32L * 1024L * 1024L);
+        }
+        String key = system.folder + ":" + cache.lastModified() + ":" + cache.length();
+        Map<String, String> table = noIntroTables.get(key);
+        if (table == null) {
+            table = RomCatalogName.parseDat(readText(cache));
+            noIntroTables.put(key, table);
+        }
+        return table;
     }
 
     /** Every thumbnail file name one catalog publishes, in listing order. */
@@ -4327,6 +4548,9 @@ final class ImportManager {
         String accentSource = "";
         String video = "";
         String release = "";
+        // CRC32 of the dump as No-Intro catalogs it, and the name it has there.
+        String romCrc32 = "";
+        String noIntroName = "";
         String metacriticSlug = "";
         String scoreSource = "";
         String gamerankingsUrl = "";
@@ -4385,6 +4609,8 @@ final class ImportManager {
             game.gamerankingsUrl = value.optString("gamerankingsUrl");
             game.mobygamesUrl = value.optString("mobygamesUrl");
             game.gamefaqsUrl = value.optString("gamefaqsUrl");
+            game.romCrc32 = value.optString("romCrc32");
+            game.noIntroName = value.optString("noIntroName");
             game.userSources = value.optString("userSources");
             game.criticSources = value.optString("criticSources");
             game.user = value.optDouble("user", 0);
@@ -4443,6 +4669,8 @@ final class ImportManager {
                 value.put("mobygamesScore", mobygamesScore);
                 value.put("mobygamesUrl", mobygamesUrl);
                 value.put("gamefaqsUrl", gamefaqsUrl);
+                value.put("romCrc32", romCrc32);
+                value.put("noIntroName", noIntroName);
                 value.put("enrichmentVersion", enriched ? 2 : 0);
                 value.put("archived", archived);
                 value.put("archiveReason", archived ? "missing-box-art" : "");
@@ -4685,7 +4913,9 @@ final class ImportManager {
     }
     private static String metadataSafe(String value) { return value.replace('\n', ' ').replace('\r', ' ').trim(); }
     private static String canonical(String path) { try { return new File(path).getCanonicalPath(); } catch (Exception e) { return path; } }
-    private static String decode(String value) { try { return URLDecoder.decode(value, "UTF-8"); } catch (Exception e) { return value; } }
+    // Catalog hrefs are URL paths, where '+' is literal: "Dr. Mario + Puzzle
+    // League" used to decode to spaces and download as a 404.
+    private static String decode(String value) { try { return URLDecoder.decode(value.replace("+", "%2B"), "UTF-8"); } catch (Exception e) { return value; } }
     private static String encodePath(String value) { try { return URLEncoder.encode(value, "UTF-8").replace("+", "%20"); } catch (Exception e) { return value; } }
     private static String encodeHref(String value) {
         String[] parts = value.split("/", -1); StringBuilder out = new StringBuilder();
@@ -4869,8 +5099,7 @@ final class ImportManager {
                                               GameSystems.SystemDef system, String title) {
         File f = missFile(cacheRoot, kind, system, title);
         try {
-            return f.isFile() && System.currentTimeMillis() - f.lastModified() < DEFINITIVE_MISS_MS &&
-                    MEDIA_SOURCE_SET.equals(readText(f).trim());
+            return f.isFile() && sourceSet(kind).equals(readText(f).trim());
         } catch (Exception unreadable) {
             return false;
         }
@@ -4881,7 +5110,7 @@ final class ImportManager {
         try {
             File f = missFile(cacheRoot, kind, system, title);
             f.getParentFile().mkdirs();
-            writeTextAtomic(f, MEDIA_SOURCE_SET);
+            writeTextAtomic(f, sourceSet(kind));
         } catch (Exception ignored) {}
     }
 }

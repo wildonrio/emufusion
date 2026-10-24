@@ -59,6 +59,9 @@ final class UpdateManager {
     // A failed automatic check (offline, DNS, GitHub unreachable) must not use
     // up the six-hour window: the next library visit after this retries.
     private static final long RETRY_AFTER_FAILURE_MS = 10L * 60L * 1000L;
+    // Opening EmuFusion checks right away (owner, 2026-10-24) unless an
+    // automatic check already ran this recently.
+    private static final long APP_OPEN_RECHECK_MS = 15L * 60L * 1000L;
     // The installed APK's versionName, reported with every status so the theme
     // labels show the real app version rather than its own bundled constant.
     private static volatile String installedAppVersion = "";
@@ -141,6 +144,25 @@ final class UpdateManager {
         }
         long last = saved.getLong(LAST_AUTOMATIC_CHECK, 0L);
         if (System.currentTimeMillis() - last >= RECHECK_INTERVAL_MS) checkAsync(false);
+    }
+
+    /**
+     * Called when the owner opens EmuFusion's library. The service usually
+     * starts at boot and stays running, so its startup check is often hours
+     * old and ran with no window to show Android's installer from (owner,
+     * 2026-10-24: the phone never offered an update). Check again now, ahead
+     * of and independent of the artwork queue.
+     */
+    void onAppOpened() {
+        if (gameplayActive()) return;
+        SharedPreferences saved = context.getSharedPreferences(UPDATE_PREFERENCES, 0);
+        if (saved.getBoolean(DEFERRED_INSTALL, false)) {
+            saved.edit().remove(DEFERRED_INSTALL).apply();
+            installDownloadedApk(true);
+            return;
+        }
+        long last = saved.getLong(LAST_AUTOMATIC_CHECK, 0L);
+        if (System.currentTimeMillis() - last >= APP_OPEN_RECHECK_MS) checkAsync(false);
     }
 
     void checkAsync(boolean userInitiated) {
@@ -256,6 +278,15 @@ final class UpdateManager {
                         false, false);
                 return;
             }
+            // Android silently refuses to open the installer (or its
+            // permission screen) for an app with no visible window, which is
+            // where a check at boot ends up. Offer it in the library instead.
+            if (automatic && !windowVisible(context)) {
+                setStatus("available", 1,
+                        "Update downloaded — install it from the EmuFusion library",
+                        true, true);
+                return;
+            }
             // Keep this flag while Android shows its one-time source permission.
             // The application lifecycle callback consumes it on return.
             context.getSharedPreferences(UPDATE_PREFERENCES, 0).edit()
@@ -287,6 +318,7 @@ final class UpdateManager {
     }
 
     private void check(boolean userInitiated) throws Exception {
+        discardStaleDownloads();
         // Prefer the latest GitHub release itself. GitHub supplies a SHA-256
         // digest for each release asset, so a newly uploaded version becomes
         // discoverable even if the legacy theme manifest is unavailable. Do
@@ -457,6 +489,38 @@ final class UpdateManager {
     private boolean gameplayActive() {
         GameplayGate gate = gameplayGate;
         return gate != null && gate.gameplayActive();
+    }
+
+    /** An EmuFusion window is on a lit screen, so Android lets us open the installer. */
+    private static boolean windowVisible(Context context) {
+        android.app.ActivityManager.RunningAppProcessInfo process =
+                new android.app.ActivityManager.RunningAppProcessInfo();
+        android.app.ActivityManager.getMyMemoryState(process);
+        // A foreground service alone ranks between these two (125).
+        boolean visible = process.importance ==
+                android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND ||
+                process.importance ==
+                        android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE;
+        return visible && PrimaryDisplayFocusGuard.isInteractive(context);
+    }
+
+    /**
+     * A verified download stays for a declined install; once that version (or
+     * a newer one) is installed it is only ~400 MB of dead weight, as is a
+     * download under the pre-rename name or one interrupted part-way.
+     */
+    private void discardStaleDownloads() {
+        File apk = updateFile();
+        File folder = apk.getParentFile();
+        if (folder != null) new File(folder, LegacyNames.UPDATE_DOWNLOAD).delete();
+        new File(apk.getAbsolutePath() + ".partial").delete();
+        if (!apk.isFile()) return;
+        PackageInfo candidate = context.getPackageManager()
+                .getPackageArchiveInfo(apk.getAbsolutePath(), 0);
+        long candidateCode = candidate == null ? 0 : Build.VERSION.SDK_INT >= 28 ?
+                candidate.getLongVersionCode() : candidate.versionCode;
+        if (candidateCode <= currentVersionCode() && apk.delete())
+            Log.i(TAG, "Removed a downloaded update that is already installed");
     }
 
     private void deferInstallUntilLibrary() {

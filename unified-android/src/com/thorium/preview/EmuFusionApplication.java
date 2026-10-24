@@ -106,6 +106,10 @@ public final class EmuFusionApplication
                 if (FRONTEND_ACTIVITY.equals(activity.getClass().getName())) {
                     resumedFrontend = new WeakReference<>(activity);
                     firstSetupFocusAttempts = 0;
+                    // Updates come first and need no library permission
+                    // (owner, 2026-10-24: check right away on opening).
+                    startService(new Intent(EmuFusionApplication.this, PreviewService.class)
+                            .setAction(PreviewService.ACTION_APP_OPENED));
                     // Also retries after Android's storage permission screen;
                     // the empty-library fallback never runs our QML heartbeat.
                     if (ThemeInstaller.hasStorageAccess(EmuFusionApplication.this))
