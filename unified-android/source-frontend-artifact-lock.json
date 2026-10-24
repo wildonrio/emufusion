@@ -51,7 +51,7 @@
     "lib/arm64-v8a/libc++_shared.so": "46b51d661454b9cfaf42c1dc90893b5ad601b7a7ffc2e09d44bb3cc9d20e7ae2",
     "lib/arm64-v8a/libcrypto.so": "c5148d1d6be3df14e33d3fe96aa6464ec3cafbaafc67c5b859700b24dafdce5e",
     "lib/arm64-v8a/libssl.so": "63777d74db2f4211a41499b1145b7a4cc798e2a13f719209144860df48ed3720",
-    "lib/arm64-v8a/libpegasus-fe_arm64-v8a.so": "a39946226598936ca0621fecec9b2e1d2511ce8ec475c1b0be401875733da7fc"
+    "lib/arm64-v8a/libpegasus-fe_arm64-v8a.so": "cd17524aca9f2405cdcc2fbc9848ad0ecdb30ddfd6a7957a4601f430a41a80b8"
   },
   "sourceLockSha256": "dabf6f1044d5da8f632f1e9e97eb8eaeed95e491929ca1e7ae82a8ef9fee5cbd",
   "patches": {
@@ -67,6 +67,5 @@
     "qtbase-android-emulator-texture-upload.patch": "31fc49b3201ad509cd28147613ee3ae77fc3c852985f3ba425f10e0ba7a934a7"
   },
   "runtimeQualified": false,
-  "postBuildBranding": "2026-10-12: libpegasus-fe was rebranded in place from the earlier Lucent phrases to the equal-length EmuFusion phrases in tools/patch_emufusion_branding.py (all encodings; no other bytes changed). Previous sha256 c37245d3d2bb5e6738763a1a4256333f2e21e4d34f75df485de444fed6d5f969.",
-  "postBuildSplashIdle": "2026-10-24: libpegasus-fe's embedded SplashLayer.qml stripe animation no longer starts ('running: false', 'loops: 1') in place (tools/patch_pegasus_splash_idle.py: one equal-length block, re-indented; no other bytes changed); its infinite loop kept Qt redrawing the library every refresh. Original sha256 cd17524aca9f2405cdcc2fbc9848ad0ecdb30ddfd6a7957a4601f430a41a80b8."
+  "postBuildBranding": "2026-10-12: libpegasus-fe was rebranded in place from the earlier Lucent phrases to the equal-length EmuFusion phrases in tools/patch_emufusion_branding.py (all encodings; no other bytes changed). Previous sha256 c37245d3d2bb5e6738763a1a4256333f2e21e4d34f75df485de444fed6d5f969."
 }

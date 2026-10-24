@@ -6,7 +6,7 @@
     "21f9d36664da3343db1bb50d3186ca0c7c259ab03c9ed5bad5763288894af7c7": "Current 3.2.93 (167) on the Thor. Older builds are on GitHub Releases; do not keep local copies (owner request 2026-10-10: disk space).",
     "9f2dfb886312cffd437ce49216b2ff118d84df53839b32296f4237fa56492e7b": "Candidate 3.2.94 (168): stick and touch input unbuffered; to be installed on the Thor.",
     "189186791b8d2c3599794e9b46094ec1034001d411b95cbf4d3c461878947d14": "Candidate 3.2.95 (169): run-ahead with state-or-image replay check and sampled divergence checks; on the Thor.",
-    "b462860b6e611e4b9b59f7c874a438affec46c7064ec14e0aba9c7811baafe0d": "Candidate 3.2.96 (170): Pegasus splash stripe animation disabled, per-install compiled-QML reset; on the Thor."
+    "b462860b6e611e4b9b59f7c874a438affec46c7064ec14e0aba9c7811baafe0d": "Installed on the Thor (3.2.96 code 170, never released): its frontend text edit and QML cache clear were inert and are withdrawn. Keep until the next build replaces it on the Thor; the next release reuses 3.2.96 (170)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
