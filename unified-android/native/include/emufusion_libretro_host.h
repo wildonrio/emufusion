@@ -186,6 +186,9 @@ bool emufusion_retro_run_frame(emufusion_retro_host *host, char *error,
  * Only render-driven hosts explicitly opting into audio pacing use this. */
 uint64_t emufusion_retro_last_run_audio_duration_ns(emufusion_retro_host *host);
 void emufusion_retro_set_paused(emufusion_retro_host *host, bool paused);
+/* Frames of run-ahead, 0 (off) to 2. A software-rendered game still has to
+ * pass a savestate replay check first; see emufusion_libretro_host.c. */
+void emufusion_retro_set_runahead(emufusion_retro_host *host, unsigned frames);
 bool emufusion_retro_set_joypad_button(emufusion_retro_host *host, unsigned port,
                                     unsigned button, bool pressed);
 bool emufusion_retro_set_analog_axis(emufusion_retro_host *host, unsigned port,

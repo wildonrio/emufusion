@@ -14,6 +14,14 @@ static retro_audio_sample_batch_t audio_batch;
 static retro_input_poll_t input_poll;
 static retro_input_state_t input_state;
 static uint32_t counter;
+/* Advanced every frame and never saved, yet it changes the saved counter:
+ * a core whose savestates are incomplete. */
+static bool hidden_state_enabled;
+static uint32_t hidden_state;
+/* States carry a nonce that changes on every save, like a timestamp: their
+ * bytes are never stable although emulation is deterministic. */
+static bool noisy_state;
+static uint32_t state_nonce;
 static uint8_t save_ram[8];
 static bool oversized_state;
 static bool changing_state_size;
@@ -72,6 +80,15 @@ void emufusion_mock_set_changing_state_size(bool value) {
     last_advertised_state_size = 0;
 }
 void emufusion_mock_set_oversized_save_ram(bool value) { oversized_save_ram = value; }
+void emufusion_mock_set_noisy_state(bool value) { noisy_state = value; }
+void emufusion_mock_set_hidden_state(bool value) {
+    hidden_state_enabled = value;
+    hidden_state = 0;
+}
+/* RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS, as a core announces them. */
+bool emufusion_mock_report_serialization_quirks(uint64_t quirks) {
+    return environment && environment(44, &quirks);
+}
 void emufusion_mock_set_sample_rate(double value) { reported_sample_rate = value; }
 bool emufusion_mock_change_runtime_sample_rate(double value) {
     struct retro_system_av_info info;
@@ -199,6 +216,7 @@ void retro_run(void) {
     if (input_state &&
             input_state(1, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT,
                         RETRO_DEVICE_ID_ANALOG_X) == -32768) counter += 1000;
+    if (hidden_state_enabled) counter += ++hidden_state;
     pixel = (uint16_t)counter;
     samples[0] = (int16_t)counter;
     samples[1] = (int16_t)-((int16_t)counter);
@@ -208,11 +226,19 @@ void retro_run(void) {
 }
 size_t retro_serialize_size(void) {
     if (oversized_state) return (512u * 1024u * 1024u) + 1u;
+    if (noisy_state) return sizeof(counter) + sizeof(state_nonce);
     last_advertised_state_size = changing_state_size && (state_size_queries++ & 1u)
             ? sizeof(counter) + 4u : sizeof(counter);
     return last_advertised_state_size;
 }
 bool retro_serialize(void *data, size_t size) {
+    if (noisy_state) {
+        if (size != sizeof(counter) + sizeof(state_nonce)) return false;
+        ++state_nonce;
+        memcpy(data, &counter, sizeof(counter));
+        memcpy((uint8_t *)data + sizeof(counter), &state_nonce, sizeof(state_nonce));
+        return true;
+    }
     size_t required = changing_state_size ? last_advertised_state_size : sizeof(counter);
     if (size != required || size < sizeof(counter)) return false;
     memcpy(data, &counter, sizeof(counter));
@@ -221,6 +247,7 @@ bool retro_serialize(void *data, size_t size) {
     return true;
 }
 bool retro_unserialize(const void *data, size_t size) {
+    if (noisy_state && size == sizeof(counter) + sizeof(state_nonce)) size = sizeof(counter);
     if (size != sizeof(counter)) return false;
     memcpy(&counter, data, size);
     return true;

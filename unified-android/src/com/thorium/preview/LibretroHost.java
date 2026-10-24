@@ -77,6 +77,9 @@ public final class LibretroHost implements Closeable {
     // Volatile: checkOpen() is also read by the unsynchronized input setters.
     private volatile long handle;
     private final PendingHostInput pendingInput = new PendingHostInput();
+    // Set from the session's threads; read only by runFrame on the frame thread.
+    private volatile int requestedRunAheadFrames;
+    private int appliedRunAheadFrames;
     private final PendingHostInput.Sink nativeInput = new PendingHostInput.Sink() {
         @Override public void joypadButton(int port, int button, boolean pressed) {
             nativeSetJoypadButton(handle, port, button, pressed);
@@ -196,9 +199,23 @@ public final class LibretroHost implements Closeable {
         nativeUnloadGame(handle);
     }
 
+    /**
+     * Frames of run-ahead (0 off, up to 2), applied before the next frame. The
+     * native host still requires a software-rendered core that passes its
+     * savestate replay check; see emufusion_libretro_host.c.
+     */
+    public void setRunAheadFrames(int frames) {
+        requestedRunAheadFrames = Math.max(0, Math.min(2, frames));
+    }
+
     public synchronized void runFrame() {
         checkOpen();
         pendingInput.applyTo(nativeInput);
+        int runAhead = requestedRunAheadFrames;
+        if (runAhead != appliedRunAheadFrames) {
+            nativeSetRunAhead(handle, runAhead);
+            appliedRunAheadFrames = runAhead;
+        }
         synchronized (frameBoundary) { frameRunning = true; }
         try {
             nativeRunFrame(handle);
@@ -414,6 +431,7 @@ public final class LibretroHost implements Closeable {
                                               String code);
     private static native void nativeUnloadGame(long handle);
     private static native void nativeRunFrame(long handle);
+    private static native void nativeSetRunAhead(long handle, int frames);
     private static native void nativeSetPaused(long handle, boolean paused);
     private static native void nativeSetJoypadButton(long handle, int port, int button,
                                                      boolean pressed);

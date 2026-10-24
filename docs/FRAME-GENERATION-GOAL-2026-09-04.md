@@ -6,7 +6,24 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 24 (latest) **— 3.2.94 (168): stick, D-pad and touch moves reach the game as they happen instead of at a later screen refresh (about 14 ms sooner on stock Android).**
+October 24 (latest) **— 3.2.95 (169): run-ahead: on NES, SNES, Game Boy (Color), GBA, Game Gear and Mega Drive a press shows one frame (16.7 ms) sooner than on the console itself.**
+
+Owner, October 2026: latency first, beyond what Lossless Scaling can reach from outside the emulator. Frame generation cannot shorten the time a game itself takes to show a press: most games read input during one frame and draw its result in the next. Run-ahead (RetroArch's single-instance method) removes one of those frames. Each step runs the true frame with its sound and no image, saves that state, runs the next frame silently for its image, and restores the true state before the next input. With frame generation on, the images it interpolates between are already a frame ahead, which more than repays interpolation's half-frame wait at 60 fps (net 8.3 ms sooner than with neither).
+
+Safety (`emufusion_libretro_host.c`: `runahead_run`, `runahead_check`):
+- Software-rendered cores only; a hardware core's GPU state is not in its savestate.
+- About two seconds in, the same two frames are replayed twice from one savestate. Run-ahead starts only if both replays end in the same state or, for a core whose state bytes are not stable (mGBA), show the same images. Sound alone may differ: an output resampler or filter outside the savestate (SameBoy, BlastEm).
+- While it runs, every 120 frames the predicted frame is compared with the true frame when the input did not change (state hash, or image for cores without stable state bytes); a mismatch turns it off for that game, with no further replay pauses. A savestate load, reset or setting change drops a pending prediction.
+- Never when a core reports incomplete or single-session savestates; off when its cost exceeds 60% of the frame period; off in netplay. The savestate size is asked once (Mesen-S builds a whole state just to report its size).
+- QA: `/data/local/tmp/emufusion-no-runahead` turns it off. Logs: `Run-ahead on core=... sameState= sameImages= sameSound=` and `Run-ahead off core=... reason=...`. Mock-core test `unified-android/native/tests/runahead_host_test.c` (also under ASan/UBSan) covers the frame shown, the sound heard, failed checks, later divergence, a load after a sample and declared quirks.
+
+Thor (`18918679`, one 40-second run per system, no input): on for Mesen (NES), Mesen-S (SNES), SameBoy (GB, GBC), mGBA (GBA, by images), Gearsystem (Game Gear) and BlastEm (Mega Drive); none turned off during the runs. Off for SwanStation (PS1, 11.5 MB states) and melonDS DS (19 MB) as too slow. App CPU with/without: SNES 75 / 53% of a core (emulation thread 38 / 17.5%), GBA 45 / 39%. Two earlier candidates the same day: comparing replays by images and sound refused Mesen, SameBoy GBC, BlastEm and melonDS; comparing by state alone still refused Mesen once, and its sampled check turned BlastEm off once mid-run. Both passed in the final run, so for these two cores the outcome can vary between runs; the sampled check is the backstop. Phone emulator (mGBA): on, image-checked.
+
+**Thor (3.2.95, `18918679`):** installed with identity preserved (UID 10206, first-install time unchanged).
+
+Measured, not yet changed: the library keeps drawing behind in-window games. During SNES play the Qt SurfaceView, fully covered by the game's (empty visible region), still received buffers at about 120 per second, and its QtThread used about 12% of a core. Idle in the library the GPU is 11% busy against 1.4% on the launcher. Replacing the theme with a single black rectangle still redraws at about 71 per second (GPU 2.1% against 6.1% with the real theme), so the redraw is driven by the prebuilt Pegasus frontend, not by the theme, whose videos and spinner already stop during gameplay. Stopping it touches the Qt lifecycle the in-window host deliberately keeps warm (pausing Qt rebuilt QML and showed the splash on return).
+
+October 24 **— 3.2.94 (168): stick, D-pad and touch moves reach the game as they happen instead of at a later screen refresh (about 14 ms sooner on stock Android).**
 
 Owner, October 2026: latency first, beyond what Lossless Scaling can reach from outside the emulator. Stock Android batches MotionEvent moves (analog sticks, hat-axis D-pads like the Thor's, finger drags on on-screen pads and DS/3DS touch screens) and hands them to the window at a later vsync input callback; buttons are key events and never wait. `UnbufferedJoystickInput` asks the window for unbatched joystick and pointer delivery (`View.requestUnbufferedDispatch`, Android 11+) while a game is attached. The window recomputes that value from the focused view's chain on every focus change, so the request follows focus and is withdrawn on every view it touched when the game ends, giving the library UI its normal batching back.
 

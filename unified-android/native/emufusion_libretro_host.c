@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #if defined(__ANDROID__)
 #include <android/dlext.h>
 #include <android/log.h>
@@ -38,6 +39,17 @@
 #define MAX_CORE_OVERRIDES 64u
 #define MAX_CORE_OVERRIDE_FILE_BYTES (64u * 1024u)
 #define MAX_CORE_OVERRIDE_LINE_BYTES 1536u
+/* Run-ahead; see runahead_run(). */
+#define RUNAHEAD_UNCHECKED 0
+#define RUNAHEAD_ACTIVE 1
+#define RUNAHEAD_REFUSED 2
+#define RUNAHEAD_FIRST_CHECK_RUN 120u
+#define RUNAHEAD_CHECK_FRAMES 2u
+#define RUNAHEAD_SAMPLE_RUNS 120u
+#define RUNAHEAD_VARIABLE_SIZE_QUIRK (1ull << 2) /* CORE_VARIABLE_SIZE */
+#define RUNAHEAD_COST_WINDOW 300u
+#define RUNAHEAD_MAX_COST_SHARE 0.6
+#define RUNAHEAD_UNSAFE_QUIRKS ((1ull << 0) | (1ull << 4)) /* INCOMPLETE, SINGLE_SESSION */
 
 typedef struct emufusion_core_variable {
     char *key;
@@ -129,6 +141,32 @@ struct emufusion_retro_host {
     int16_t audio_upsample_previous_right;
     double audio_upsample_phase;
     uint32_t joypad_mask[MAX_PORTS];
+    /* Run-ahead; see runahead_run(). */
+    unsigned runahead_requested;
+    int runahead_status;
+    uint64_t serialization_quirks;
+    void *runahead_state;
+    size_t runahead_state_capacity;
+    size_t runahead_saved_size;
+    /* Last size the core reported; asked again only when a serialize fails. */
+    size_t runahead_state_size;
+    void *runahead_scratch;
+    size_t runahead_scratch_capacity;
+    uint64_t runahead_expected_state;
+    uint64_t runahead_expected_input;
+    /* The check's replays ended in byte-identical states. */
+    bool runahead_state_stable;
+    bool suppress_video;
+    bool suppress_audio;
+    /* Hash instead of show/play: the replay check and sampled comparisons. */
+    bool hash_video;
+    bool hash_audio;
+    uint64_t video_hash;
+    uint64_t audio_hash;
+    uint64_t runahead_expected_video;
+    uint64_t runahead_runs;
+    uint64_t runahead_cost_ns;
+    unsigned runahead_cost_frames;
 #if defined(__ANDROID__)
     /* Bounded per-host input evidence, retained across context recreation.
      * Separate release/transition budget prevents a held button from using
@@ -1082,9 +1120,37 @@ static bool environment_callback(unsigned command, void *data) {
             return true;
         case RETRO_ENVIRONMENT_GET_VFS_INTERFACE:
             return false;
+        case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
+            /* Read for run-ahead only. Answering false, as before, keeps
+             * every core's own savestate behaviour unchanged. */
+            active_host->serialization_quirks = *(const uint64_t *)data;
+            return false;
         default:
             return false;
     }
+}
+
+static void hash_bytes(uint64_t *hash, const void *data, size_t size) {
+    const uint8_t *bytes = (const uint8_t *)data;
+    size_t index;
+    for (index = 0; index < size; index++) {
+        *hash ^= bytes[index];
+        *hash *= 1099511628211ull;
+    }
+}
+
+/* The visible pixels of one frame, for run-ahead's replay check. */
+static void hash_video_frame(emufusion_retro_host *host, const void *data,
+                             unsigned width, unsigned height, size_t pitch) {
+    size_t bytes_per_pixel = host->pixel_format == RETRO_PIXEL_FORMAT_XRGB8888 ? 4u : 2u;
+    unsigned row;
+    uint32_t header[3] = {width, height, data ? 1u : 0u};
+    hash_bytes(&host->video_hash, header, sizeof(header));
+    if (!data || data == RETRO_HW_FRAME_BUFFER_VALID || width > MAX_VIDEO_DIMENSION ||
+            height > MAX_VIDEO_DIMENSION || pitch < width * bytes_per_pixel) return;
+    for (row = 0; row < height; row++)
+        hash_bytes(&host->video_hash, (const uint8_t *)data + (size_t)row * pitch,
+                   width * bytes_per_pixel);
 }
 
 static void video_callback(const void *data, unsigned width, unsigned height,
@@ -1092,6 +1158,11 @@ static void video_callback(const void *data, unsigned width, unsigned height,
     size_t size;
     size_t bytes_per_pixel;
     uint8_t *replacement;
+    if (active_host && active_host->hash_video) {
+        hash_video_frame(active_host, data, width, height, pitch);
+        return;
+    }
+    if (active_host && active_host->suppress_video) return;
     if (!active_host || !data || !width || !height)
         return;
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
@@ -1212,12 +1283,23 @@ static void push_audio_frame(int16_t left, int16_t right) {
 }
 
 static void audio_sample_callback(int16_t left, int16_t right) {
+    if (active_host && (active_host->hash_audio || active_host->suppress_audio)) {
+        int16_t frame[2] = {left, right};
+        if (active_host->hash_audio)
+            hash_bytes(&active_host->audio_hash, frame, sizeof(frame));
+        return;
+    }
     push_audio_frame(left, right);
 }
 
 static size_t audio_batch_callback(const int16_t *data, size_t frames) {
     size_t index;
     if (!data || frames > SIZE_MAX / 2) return 0;
+    if (active_host && (active_host->hash_audio || active_host->suppress_audio)) {
+        if (active_host->hash_audio)
+            hash_bytes(&active_host->audio_hash, data, frames * 2 * sizeof(int16_t));
+        return frames;
+    }
     for (index = 0; index < frames; index++)
         push_audio_frame(data[index * 2], data[index * 2 + 1]);
     return frames;
@@ -1716,6 +1798,14 @@ bool emufusion_retro_load_game(emufusion_retro_host *host, const char *game_path
 #endif
     host->game_loaded = true;
     host->completed_game_load = true;
+    /* Every game earns run-ahead on its own replay check. */
+    host->runahead_status = RUNAHEAD_UNCHECKED;
+    host->runahead_runs = 0;
+    host->runahead_state_size = 0;
+    host->runahead_expected_state = 0;
+    host->runahead_expected_video = 0;
+    host->runahead_cost_ns = 0;
+    host->runahead_cost_frames = 0;
     host->set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
     memset(&host->current_av_info, 0, sizeof(host->current_av_info));
     host->get_system_av_info(&host->current_av_info);
@@ -1798,6 +1888,8 @@ bool emufusion_retro_reset(emufusion_retro_host *host, char *error,
      */
     active_host = host;
     host->reset();
+    host->runahead_expected_state = 0;
+    host->runahead_expected_video = 0;
 #if defined(__ANDROID__)
     __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "retro_reset complete");
@@ -1834,6 +1926,260 @@ bool emufusion_retro_game_loaded(const emufusion_retro_host *host) {
     RETURN_UNLOCKED(loaded);
 }
 
+/*
+ * Run-ahead (RetroArch's single-instance method): every image shown is the game
+ * one frame further on with the input already held, so a press is answered one
+ * frame (16.7 ms at 60 Hz) sooner than the console itself could. Games read
+ * input during one frame and draw its result in a later one, so the image
+ * shown is the one the console would have shown next. Each step runs the true
+ * frame with its sound and no image, saves that state, runs the next frame
+ * silently for its image, then restores the true state before the next input.
+ *
+ * Only software-rendered cores qualify: a hardware core's GPU state is not in
+ * its savestate. A game is run ahead only after replaying the same frames
+ * twice from one savestate ends in the same state (or, for a core whose state
+ * bytes are not stable, gives the same images and sound), never when the core
+ * declares its savestates incomplete, and only while the extra work stays
+ * within 60% of the frame period. While it runs, the predicted frame's state
+ * is compared with the true frame's whenever the input did not change, so a
+ * core that diverges later turns it off without another replay pause.
+ * Netplay turns it off (LibretroEngineSession).
+ */
+
+static uint64_t monotonic_ns(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * 1000000000ull + (uint64_t)now.tv_nsec;
+}
+
+#if defined(__ANDROID__)
+static const char *core_name(const emufusion_retro_host *host) {
+    return host->system_info.library_name ? host->system_info.library_name : "core";
+}
+#endif
+
+static void runahead_refuse(emufusion_retro_host *host, const char *reason) {
+    host->runahead_status = RUNAHEAD_REFUSED;
+#if defined(__ANDROID__)
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
+            "Run-ahead off core=%s reason=%s", core_name(host), reason);
+#else
+    (void)reason;
+#endif
+}
+
+/* FNV-1a over 64-bit words, for comparing savestates. */
+static uint64_t hash_state(const void *data, size_t size) {
+    const uint8_t *bytes = (const uint8_t *)data;
+    uint64_t hash = 1469598103934665603ull, word;
+    size_t index = 0;
+    for (; index + sizeof(word) <= size; index += sizeof(word)) {
+        memcpy(&word, bytes + index, sizeof(word));
+        hash = (hash ^ word) * 1099511628211ull;
+    }
+    for (; index < size; index++) hash = (hash ^ bytes[index]) * 1099511628211ull;
+    return hash;
+}
+
+static uint64_t input_signature(const emufusion_retro_host *host) {
+    uint64_t hash = 1469598103934665603ull;
+    hash_bytes(&hash, host->joypad_mask, sizeof(host->joypad_mask));
+    hash_bytes(&hash, host->analog_state, sizeof(host->analog_state));
+    hash_bytes(&hash, host->pointer_x, sizeof(host->pointer_x));
+    hash_bytes(&hash, host->pointer_y, sizeof(host->pointer_y));
+    hash_bytes(&hash, host->pointer_pressed, sizeof(host->pointer_pressed));
+    return hash;
+}
+
+/* Serializes into *buffer (grown as needed). The size is asked once: some
+ * cores (Mesen-S) produce a whole state just to report its size. */
+static bool runahead_serialize_into(emufusion_retro_host *host, void **buffer,
+                                    size_t *capacity, size_t *size) {
+    int attempt;
+    for (attempt = 0; attempt < 2; attempt++) {
+        if (attempt || !host->runahead_state_size ||
+                (host->serialization_quirks & RUNAHEAD_VARIABLE_SIZE_QUIRK)) {
+            size_t required = host->serialize_size();
+            if (!required || required > MAX_STATE_BYTES) return false;
+            host->runahead_state_size = required;
+        }
+        if (host->runahead_state_size > *capacity) {
+            void *grown = realloc(*buffer, host->runahead_state_size);
+            if (!grown) return false;
+            *buffer = grown;
+            *capacity = host->runahead_state_size;
+        }
+        *size = host->runahead_state_size;
+        if (host->serialize(*buffer, *size)) return true;
+    }
+    return false;
+}
+
+static bool runahead_save(emufusion_retro_host *host) {
+    return runahead_serialize_into(host, &host->runahead_state,
+                                   &host->runahead_state_capacity,
+                                   &host->runahead_saved_size);
+}
+
+static bool runahead_restore(emufusion_retro_host *host) {
+    return host->unserialize(host->runahead_state, host->runahead_saved_size);
+}
+
+typedef struct runahead_replay_result {
+    uint64_t video;
+    uint64_t audio;
+    uint64_t state;
+} runahead_replay_result;
+
+/* Replays RUNAHEAD_CHECK_FRAMES frames unseen and unheard, hashing their
+ * images, their sound and the state they end in. */
+static bool runahead_replay(emufusion_retro_host *host, runahead_replay_result *result) {
+    unsigned frame;
+    size_t size = 0;
+    host->hash_video = host->hash_audio = true;
+    host->video_hash = host->audio_hash = 1469598103934665603ull;
+    for (frame = 0; frame < RUNAHEAD_CHECK_FRAMES; frame++) host->run();
+    host->hash_video = host->hash_audio = false;
+    result->video = host->video_hash;
+    result->audio = host->audio_hash;
+    if (!runahead_serialize_into(host, &host->runahead_scratch,
+                                 &host->runahead_scratch_capacity, &size)) return false;
+    result->state = hash_state(host->runahead_scratch, size);
+    return true;
+}
+
+/* Replays the same frames twice from one savestate and leaves the state as
+ * it was. They must end in the same state or, for a core whose state bytes
+ * are not stable, show the same images; sound alone may differ (an output
+ * resampler outside the savestate). False refuses run-ahead for this game. */
+static bool runahead_check(emufusion_retro_host *host) {
+    uint64_t start = monotonic_ns();
+    runahead_replay_result first, second;
+    if (host->serialization_quirks & RUNAHEAD_UNSAFE_QUIRKS) {
+        runahead_refuse(host, "core reports incomplete savestates");
+        return false;
+    }
+    if (!runahead_save(host)) {
+        runahead_refuse(host, "no usable savestate");
+        return false;
+    }
+    if (!runahead_replay(host, &first) || !runahead_restore(host) ||
+            !runahead_replay(host, &second) || !runahead_restore(host)) {
+        runahead_refuse(host, "savestate could not be saved or restored");
+        return false;
+    }
+    if (first.state != second.state && first.video != second.video) {
+        runahead_refuse(host, "replay from a savestate differs");
+        return false;
+    }
+    host->runahead_status = RUNAHEAD_ACTIVE;
+    host->runahead_state_stable = first.state == second.state;
+#if defined(__ANDROID__)
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
+            "Run-ahead on core=%s frames=%u stateBytes=%zu checkMs=%.2f "
+            "sameState=%d sameImages=%d sameSound=%d",
+            core_name(host), host->runahead_requested, host->runahead_saved_size,
+            (double)(monotonic_ns() - start) / 1e6, first.state == second.state,
+            first.video == second.video, first.audio == second.audio);
+#else
+    (void)start;
+#endif
+    return true;
+}
+
+/* Runs one frame with run-ahead; false when it does not apply this step
+ * (the caller runs the frame normally). */
+static bool runahead_run(emufusion_retro_host *host) {
+    unsigned frame;
+    uint64_t start, input;
+    bool sample, compare_image;
+    if (!host->runahead_requested || host->runahead_status == RUNAHEAD_REFUSED ||
+            host->hw_negotiated || !host->serialize_size || !host->serialize ||
+            !host->unserialize) return false;
+    host->runahead_runs++;
+    if (host->runahead_status == RUNAHEAD_UNCHECKED &&
+            (host->runahead_runs < RUNAHEAD_FIRST_CHECK_RUN || !runahead_check(host)))
+        return false;
+    start = monotonic_ns();
+    input = input_signature(host);
+    compare_image = host->runahead_expected_video && input == host->runahead_expected_input;
+    host->suppress_video = true;
+    if (compare_image) {
+        host->hash_video = true;
+        host->video_hash = 1469598103934665603ull;
+    }
+    host->run();
+    host->hash_video = false;
+    host->suppress_video = false;
+    if (compare_image && host->video_hash != host->runahead_expected_video) {
+        host->runahead_expected_video = 0;
+        runahead_refuse(host, "predicted image differs from the true image");
+        return true;
+    }
+    host->runahead_expected_video = 0;
+    if (!runahead_save(host)) {
+        /* This step's image was not kept; the next one is shown normally. */
+        runahead_refuse(host, "savestate failed");
+        return true;
+    }
+    if (host->runahead_expected_state && input == host->runahead_expected_input &&
+            hash_state(host->runahead_state, host->runahead_saved_size) !=
+                    host->runahead_expected_state) {
+        host->runahead_expected_state = 0;
+        runahead_refuse(host, "predicted frame differs from the true frame");
+        return true;
+    }
+    host->runahead_expected_state = 0;
+    sample = host->runahead_runs % RUNAHEAD_SAMPLE_RUNS == 0;
+    host->suppress_audio = true;
+    for (frame = 1; frame <= host->runahead_requested; frame++) {
+        uint64_t images = host->video_sequence;
+        host->suppress_video = frame < host->runahead_requested;
+        host->run();
+        if (frame != 1 || !sample) continue;
+        host->runahead_expected_input = input;
+        if (host->runahead_state_stable) {
+            size_t size = 0;
+            if (runahead_serialize_into(host, &host->runahead_scratch,
+                                        &host->runahead_scratch_capacity, &size))
+                host->runahead_expected_state = hash_state(host->runahead_scratch, size);
+        } else if (host->runahead_requested == 1 && host->video_sequence != images) {
+            /* The image just kept, hashed as the true frame's will be. */
+            host->video_hash = 1469598103934665603ull;
+            hash_video_frame(host, host->video_bytes, host->video_width,
+                             host->video_height, host->video_pitch);
+            host->runahead_expected_video = host->video_hash;
+        }
+    }
+    host->suppress_video = false;
+    host->suppress_audio = false;
+    if (!runahead_restore(host)) {
+        runahead_refuse(host, "savestate could not be restored");
+        return true;
+    }
+    host->runahead_cost_ns += monotonic_ns() - start;
+    if (++host->runahead_cost_frames >= RUNAHEAD_COST_WINDOW) {
+        double fps = host->has_av_info ? host->current_av_info.timing.fps : 60.0;
+        double mean_ms = (double)host->runahead_cost_ns / host->runahead_cost_frames / 1e6;
+        double period_ms = 1000.0 / (fps > 1.0 ? fps : 60.0);
+        host->runahead_cost_ns = 0;
+        host->runahead_cost_frames = 0;
+        if (mean_ms > RUNAHEAD_MAX_COST_SHARE * period_ms)
+            runahead_refuse(host, "too slow for the frame period");
+    }
+    return true;
+}
+
+void emufusion_retro_set_runahead(emufusion_retro_host *host, unsigned frames) {
+    lock_host();
+    if (host) {
+        host->runahead_requested = frames > 2u ? 2u : frames;
+        host->runahead_expected_state = 0;
+        host->runahead_expected_video = 0;
+    }
+    unlock_host();
+}
+
 bool emufusion_retro_run_frame(emufusion_retro_host *host, char *error,
                             size_t error_size) {
     lock_host();
@@ -1849,7 +2195,7 @@ bool emufusion_retro_run_frame(emufusion_retro_host *host, char *error,
     active_host = host;
     if (host->run_sequence != UINT64_MAX) ++host->run_sequence;
     host->run_audio_output_samples = 0;
-    host->run();
+    if (!runahead_run(host)) host->run();
     RETURN_UNLOCKED(true);
 }
 
@@ -2249,6 +2595,9 @@ bool emufusion_retro_unserialize(emufusion_retro_host *host, const void *buffer,
         set_error(error, error_size, "core rejected serialized state");
         RETURN_UNLOCKED(false);
     }
+    /* A prediction made before the load says nothing about the next frame. */
+    host->runahead_expected_state = 0;
+    host->runahead_expected_video = 0;
     RETURN_UNLOCKED(true);
 }
 
@@ -2349,6 +2698,8 @@ void emufusion_retro_destroy(emufusion_retro_host *host) {
     free(host->game_bytes);
     free(host->video_bytes);
     free(host->audio_ring);
+    free(host->runahead_state);
+    free(host->runahead_scratch);
     free(host->core_path);
     free(host->system_directory);
     free(host->save_directory);

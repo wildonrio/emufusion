@@ -147,10 +147,29 @@ public final class LibretroEngineSession implements EngineSession,
 
     public void attachNetplayRelay(com.thorium.emufusion.netplay.NetplayInputRelay relay) {
         this.netplayRelay = relay;
+        // Speculative frames show the remote player's input as still held.
+        LibretroHost active = host;
+        if (active != null) active.setRunAheadFrames(0);
     }
 
     public void detachNetplayRelay() {
         this.netplayRelay = null;
+        LibretroHost active = host;
+        if (active != null) active.setRunAheadFrames(runAheadFrames());
+    }
+
+    // QA: present when a game starts, turns run-ahead off (A/B).
+    private static final java.io.File NO_RUN_AHEAD_MARKER =
+            new java.io.File("/data/local/tmp/emufusion-no-runahead");
+
+    /**
+     * One frame of run-ahead: each image shown is the game a frame further on
+     * with the input already held, so a press shows one frame (16.7 ms) sooner
+     * than on the console. The native host applies it only to software cores
+     * whose savestates replay identically (see emufusion_libretro_host.c).
+     */
+    private int runAheadFrames() {
+        return netplayRelay == null && !NO_RUN_AHEAD_MARKER.exists() ? 1 : 0;
     }
 
     /**
@@ -398,6 +417,7 @@ public final class LibretroEngineSession implements EngineSession,
                         " enabled=" + widescreenEnhancements);
                 try {
                     opened.loadGame(game);
+                    opened.setRunAheadFrames(runAheadFrames());
                     // Loading resets port 0 to a plain RetroPad. Systems whose
                     // controller is something else must say so now: Dolphin
                     // only attaches the Wii Nunchuk for RETRO_DEVICE_WIIMOTE_NC,

@@ -140,6 +140,7 @@ public class HostProbe {
     }
   }
   static void nativeSetPaused(long h, boolean v) { calls.add("paused " + v); }
+  static void nativeSetRunAhead(long h, int frames) { calls.add("runahead " + frames); }
   static void nativeSetJoypadButton(long h, int p, int b, boolean v) { calls.add("joy " + p + " " + b + " " + v); }
   static void nativeSetAnalogAxis(long h, int p, int i, int id, int v) { calls.add("axis " + p + " " + i + " " + id + " " + v); }
   static void nativeSetPointer(long h, int p, int x, int y, boolean v) { calls.add("ptr " + p + " " + x + " " + y + " " + v); }

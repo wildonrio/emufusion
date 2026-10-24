@@ -90,6 +90,9 @@ mkdir -p "$TEST_DIR/dolphin-completed" "$TEST_DIR/dolphin-rejected"
     "$NATIVE_DIR/emufusion_libretro_host.c" "$NATIVE_DIR/tests/host_test.c" \
     -ldl $LDFLAGS -o "$TEST_DIR/host_test"
 "$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
+    "$NATIVE_DIR/emufusion_libretro_host.c" "$NATIVE_DIR/tests/runahead_host_test.c" \
+    -ldl $LDFLAGS -o "$TEST_DIR/runahead_host_test"
+"$CC" -std=c11 -O1 -pthread -Wall -Wextra -Werror $CFLAGS \
     "$NATIVE_DIR/emufusion_libretro_host.c" \
     "$NATIVE_DIR/tests/dolphin_quarantine_test.c" \
     -ldl $LDFLAGS -o "$TEST_DIR/dolphin_quarantine_test"
@@ -140,6 +143,8 @@ printf '\007' > "$TEST_DIR/game.mock"
 "$TEST_DIR/host_test" "$TEST_DIR/mock_core.so" "$TEST_DIR" \
     "$TEST_DIR/system" "$TEST_DIR/save" "$TEST_DIR/game.mock"
 "$TEST_DIR/host_test" "$TEST_DIR/libemufusion_core_puae.so" "$TEST_DIR" \
+    "$TEST_DIR/system" "$TEST_DIR/save" "$TEST_DIR/game.mock"
+"$TEST_DIR/runahead_host_test" "$TEST_DIR/mock_core.so" "$TEST_DIR" \
     "$TEST_DIR/system" "$TEST_DIR/save" "$TEST_DIR/game.mock"
 "$TEST_DIR/dolphin_quarantine_test" \
     "$TEST_DIR/dolphin-completed/libemufusion_core_dolphin.so" "$TEST_DIR" \
@@ -231,6 +236,10 @@ cp "$SANITIZED/mock_core.so" "$SANITIZED/libemufusion_core_puae.so"
     -o "$SANITIZED/host_test"
 "$CC" -std=c11 -O1 -g -pthread -Wall -Wextra -Werror $CFLAGS \
     $SANITIZER_FLAGS "$NATIVE_DIR/emufusion_libretro_host.c" \
+    "$NATIVE_DIR/tests/runahead_host_test.c" -ldl $LDFLAGS \
+    -o "$SANITIZED/runahead_host_test"
+"$CC" -std=c11 -O1 -g -pthread -Wall -Wextra -Werror $CFLAGS \
+    $SANITIZER_FLAGS "$NATIVE_DIR/emufusion_libretro_host.c" \
     "$NATIVE_DIR/tests/hw_host_test.c" -ldl $LDFLAGS \
     -o "$SANITIZED/hw_host_test"
 "$CC" -std=c11 -O1 -g -pthread -Wall -Wextra -Werror $CFLAGS \
@@ -266,6 +275,9 @@ ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
     "$SANITIZED/system" "$SANITIZED/save" "$SANITIZED/game.mock"
 ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
     "$SANITIZED/host_test" "$SANITIZED/libemufusion_core_puae.so" "$SANITIZED" \
+    "$SANITIZED/system" "$SANITIZED/save" "$SANITIZED/game.mock"
+ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
+    "$SANITIZED/runahead_host_test" "$SANITIZED/mock_core.so" "$SANITIZED" \
     "$SANITIZED/system" "$SANITIZED/save" "$SANITIZED/game.mock"
 ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
     "$SANITIZED/hw_host_test" "$SANITIZED/hw_gles_core.so" \
