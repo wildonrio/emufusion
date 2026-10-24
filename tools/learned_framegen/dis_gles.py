@@ -279,6 +279,10 @@ def phase_densify_shader():
 PHASE_SMOOTH_ITERS = 0
 # The zero-motion selection margin in grey levels (shipped 8; offline experiment).
 ZERO_MOTION_MARGIN = 8.0
+# Offline experiment: zero motion must also fit within this many grey levels (0: no cap).
+ZERO_MOTION_MAX = 0.0
+# Offline experiment: the five-tap comparison's offset in history pixels (shipped 1).
+ZERO_MOTION_SPREAD = 1.0
 PHASE_SMOOTH_LAMBDA = 4.0
 PHASE_SMOOTH_SIGMA = 6.0
 
@@ -307,8 +311,12 @@ def phase_smooth_shader():
 # requiring the chosen neighbour to explain the pixel (within 8 or 16 grey
 # levels) and a soft choice weighting the candidates by exp(-(e - min)/sigma)
 # (sigma 2 or 4 grey levels) were within 0.3% of the hard choice.
+# Grey levels a neighbour must beat the bilinear vector by (shipped 2).
+FIELD_CHOICE_MARGIN = 2.0
+
+
 def field_choice_glsl():
-    return ("  if(us>=uChoiceSpread){vec2 bv=v;float be=wc(u,v)-2.0/255.0;\n"
+    return (f"  if(us>=uChoiceSpread){{vec2 bv=v;float be=wc(u,v)-{float(FIELD_CHOICE_MARGIN)}/255.0;\n"
             "   for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x){\n"
             "    vec2 k=texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize;float e=wc(u,k);\n"
             "    if(e<be){be=e;bv=k;}}\n"
@@ -363,7 +371,7 @@ def _generate_phase_shader_text():
     # pixels breaks real 1-2 px scrolling (Game Boy, NES).
     " if(length(v*uHistorySize)<1.0)w=(1.0-uT)*a0+uT*c0;else\n"
     " {float eM=md(abs(aw-cw)),e0=md(abs(a0-c0));\n"
-    + ("  {vec2 dx" if not SKIP_FLAT_CROSS else "  if(max(eM,e0)>2.0/255.0){vec2 dx") + "=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n"
+    + ("  {vec2 dx" if not SKIP_FLAT_CROSS else "  if(max(eM,e0)>2.0/255.0){vec2 dx") + f"=vec2({float(ZERO_MOTION_SPREAD)}/uHistorySize.x,0.0),dy=vec2(0.0,{float(ZERO_MOTION_SPREAD)}/uHistorySize.y);\n"
     "   eM+=md(abs(texture(uFrameA,u-uT*v+dx).rgb-texture(uFrameC,u+(1.0-uT)*v+dx).rgb))"
     "+md(abs(texture(uFrameA,u-uT*v-dx).rgb-texture(uFrameC,u+(1.0-uT)*v-dx).rgb))"
     "+md(abs(texture(uFrameA,u-uT*v+dy).rgb-texture(uFrameC,u+(1.0-uT)*v+dy).rgb))"
@@ -371,7 +379,13 @@ def _generate_phase_shader_text():
     "   e0+=md(abs(texture(uFrameA,u+dx).rgb-texture(uFrameC,u+dx).rgb))+md(abs(texture(uFrameA,u-dx).rgb-texture(uFrameC,u-dx).rgb))"
     "+md(abs(texture(uFrameA,u+dy).rgb-texture(uFrameC,u+dy).rgb))+md(abs(texture(uFrameA,u-dy).rgb-texture(uFrameC,u-dy).rgb));\n"
     "   eM*=0.2;e0*=0.2;}\n"
-    f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM)w=(1.0-uT)*a0+uT*c0;}}\n"
+    + (f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM)w=(1.0-uT)*a0+uT*c0;" if ZERO_MOTION_MAX <= 0 else
+     f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM&&e0<{float(ZERO_MOTION_MAX)}/255.0)w=(1.0-uT)*a0+uT*c0;")
+    + ("" if GHOST_SIDE_T <= 0 else
+       f"\n  {{float gk=smoothstep({0.5*float(GHOST_SIDE_T)}/255.0,{float(GHOST_SIDE_T)}/255.0,min(eM,e0))*"
+       f"smoothstep({0.5*float(GHOST_MIN_MOTION_PX)},{float(GHOST_MIN_MOTION_PX)}+0.001,length(v*uHistorySize));\n"
+       "   vec3 side=uT>=0.5?(eM<=e0?cw:c0):(eM<=e0?aw:a0);w=mix(w,side,gk);}")
+    + "}\n"
     " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
     "  w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);}\n"
     + ("" if not CONTENT_BOUNDS else
@@ -461,6 +475,13 @@ EDGE_CANDIDATE = False
 # Offline experiment (2026-10-23): clamp the generation pass's frame samples to
 # the picture rectangle (needs CONTENT_BOUNDS).
 CLAMP_WARP_SAMPLES = False
+# Offline experiment (2026-10-23): where neither the warp nor zero motion
+# explains a pixel (both five-tap mismatches over GHOST_SIDE_T grey levels:
+# a sprite changing pose, a flash), fade toward one side -- the nearer frame,
+# the newer one at the midpoint -- instead of a translucent 50/50 ghost.
+GHOST_SIDE_T = 0.0
+# ... only where the warp moves at least this many history pixels (a moving sprite).
+GHOST_MIN_MOTION_PX = 0.0
 EDGE_HOLD_PX = 0.0
 EDGE_HOLD_T = 32.0
 EDGE_ONE_SIDED_PX = 0.0

@@ -214,11 +214,16 @@ def main():
     parser.add_argument('--edge-candidate', action='store_true')
     parser.add_argument('--smooth-iters', type=int, default=0)
     parser.add_argument('--zero-margin', type=float, default=8.0)
+    parser.add_argument('--zero-max', type=float, default=0.0)
+    parser.add_argument('--zero-spread', type=float, default=1.0)
     parser.add_argument('--clamp-to-content', action='store_true')
     parser.add_argument('--edge-one-sided', type=float, default=0.0)
     parser.add_argument('--edge-hold', type=float, default=0.0)
     parser.add_argument('--clamp-samples', action='store_true')
     parser.add_argument('--bounds-t', type=float, default=6.0)
+    parser.add_argument('--ghost-side', type=float, default=0.0)
+    parser.add_argument('--choice-margin', type=float, default=2.0)
+    parser.add_argument('--ghost-min-motion', type=float, default=0.0)
     parser.add_argument('--edge-hold-t', type=float, default=32.0)
     parser.add_argument('--edge-one-sided-t', type=float, default=24.0)
     parser.add_argument('--smooth-lambda', type=float, default=4.0)
@@ -251,11 +256,16 @@ def main():
     D.EDGE_CANDIDATE = args.edge_candidate
     D.PHASE_SMOOTH_ITERS = args.smooth_iters
     D.ZERO_MOTION_MARGIN = args.zero_margin
+    D.ZERO_MOTION_MAX = args.zero_max
+    D.ZERO_MOTION_SPREAD = args.zero_spread
     D.CLAMP_TO_CONTENT = args.clamp_to_content
     D.EDGE_ONE_SIDED_PX = args.edge_one_sided
     D.EDGE_HOLD_PX = args.edge_hold
     D.CLAMP_WARP_SAMPLES = args.clamp_samples
     D.BOUNDS_T = args.bounds_t
+    D.GHOST_SIDE_T = args.ghost_side
+    D.FIELD_CHOICE_MARGIN = args.choice_margin
+    D.GHOST_MIN_MOTION_PX = args.ghost_min_motion
     D.EDGE_HOLD_T = args.edge_hold_t
     D.EDGE_ONE_SIDED_T = args.edge_one_sided_t
     D.PHASE_SMOOTH_LAMBDA = args.smooth_lambda
@@ -309,8 +319,11 @@ def main():
                     np.save(dest / f"{index:03d}.npy", np.clip(g * 255 + 0.5, 0, 255).astype(np.uint8))
                     pff = out.with_suffix('.pf')
                     if pff.exists():
-                        fw_, fh_ = D.levels_for(w // args.divisor, h // args.divisor, args.finest_large)[0][args.finest_large]
-                        np.save(dest / f"{index:03d}.pf.npy", np.fromfile(pff, np.float32).reshape(fh_, fw_, 4)[::-1, :, :2])
+                        finest_ = args.finest_small if max(h, w) <= 400 else args.finest_large
+                        fw_, fh_ = D.levels_for(w // args.divisor, h // args.divisor, finest_)[0][finest_]
+                        raw = np.fromfile(pff, np.float32)
+                        if raw.size == fw_ * fh_ * 4:
+                            np.save(dest / f"{index:03d}.pf.npy", raw.reshape(fh_, fw_, 4)[::-1, :, :2])
                     (dest / f'{index:03d}.txt').write_text(str(folder))
                 n1, c1 = sums(g, a, c, b); tot[0] += n1; tot[1] += c1
                 cutf = out.with_suffix('.cut')
