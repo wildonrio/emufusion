@@ -26,7 +26,18 @@ RADIUS, T, MIN_AREA = 12, 24.0, 0.1
 
 
 def fit(img, w, h):
-    return img if img.shape[:2] == (h, w) else np.asarray(Image.fromarray(img).resize((w, h), Image.BILINEAR))
+    """The history image at the generated plane's size, sampled as the GPU's
+    hold-out pass samples it (bilinear at each output texel centre, no
+    antialiasing): a filtered resize differs at every edge and reads as
+    invented content (NSMBU Deluxe's static menu, 1080p -> 320x180)."""
+    if img.shape[:2] == (h, w):
+        return img
+    src = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)[None]
+    ys = (torch.arange(h, dtype=torch.float32) + 0.5) / h * 2 - 1
+    xs = (torch.arange(w, dtype=torch.float32) + 0.5) / w * 2 - 1
+    grid = torch.stack(torch.meshgrid(ys, xs, indexing='ij')[::-1], -1)[None]
+    out = F.grid_sample(src, grid, mode='bilinear', padding_mode='border', align_corners=False)
+    return out[0].permute(1, 2, 0).round().clamp(0, 255).byte().numpy()
 
 
 def t(img):
