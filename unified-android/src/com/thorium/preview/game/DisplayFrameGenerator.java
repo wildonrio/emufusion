@@ -2316,6 +2316,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int[] holdoutLevelIds = TimelineSchedulerSwitch.DEFAULT_HOLDOUT_LEVELS.clone();
     private boolean holdoutMode;
     private boolean holdoutWithholdNext;
+    // QA replay (HoldoutReplay): each triplet's middle frame time -> its two
+    // endpoint times. Only those frames are withheld, and one is scored only
+    // against the pair of exactly its own endpoints, so a dropped or coalesced
+    // frame can never pair two different triplets.
+    static final java.util.Map<Long, long[]> replayReferences =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    // QA replay: output goes to an offscreen reader with no physical present
+    // times, so generation admission takes the declared panel rate.
+    static volatile boolean replayOffscreen;
+    // QA replay: when set, every scored triplet's hold-out planes are written
+    // here as pair-<referenceNs>.bin (HOD1, as the marker-gated dumps).
+    static volatile java.io.File replayDumpDirectory;
     private final int[] holdoutReferenceTextures = new int[HOLDOUT_REFERENCES];
     private final long[] holdoutReferenceRightSequence = new long[HOLDOUT_REFERENCES];
     private final long[] holdoutReferenceTimestampNs = new long[HOLDOUT_REFERENCES];
@@ -2325,6 +2337,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int holdoutResultTexture, holdoutResultFramebuffer;
     private final int[] holdoutPbos = new int[HOLDOUT_RING];
     private final long[] holdoutFences = new long[HOLDOUT_RING];
+    private final long[] holdoutRingReferenceNs = new long[HOLDOUT_RING];
     private int holdoutHead, holdoutPending;
     private boolean holdoutResourcesReady, holdoutUnavailable;
     private long holdoutWindowSamples, holdoutWindowChanging, holdoutWindowPixels;
@@ -2943,6 +2956,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * still reads physicalPanelHz(), which stays on the confirmed rate.
      */
     private double admissionPanelHz() {
+        if (replayOffscreen) return refreshHz;
         double live = physicalPanelHz();
         if (live > 0.0 || closed.get()) return live;
         long last = builtInPhysicalClock.lastActualNs();
@@ -11596,7 +11610,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * when this frame was withheld.
      */
     private boolean withholdForHoldout(int sourceTexture, long timestampNs) {
-        boolean withhold = holdoutWithholdNext;
+        boolean withhold = replayOffscreen ? replayReferences.containsKey(timestampNs) :
+                holdoutWithholdNext;
         holdoutWithholdNext = !holdoutWithholdNext;
         if (!withhold) return false;
         if (!ensureHoldoutResources()) return false;
@@ -11671,6 +11686,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (holdoutReferenceRightSequence[slot] != activeRightSequence ||
                 referenceNs <= activeLeftTimestampNs || referenceNs >= activeRightTimestampNs)
             return;
+        if (replayOffscreen) {
+            long[] ends = replayReferences.get(referenceNs);
+            if (ends == null || ends[0] != activeLeftTimestampNs ||
+                    ends[1] != activeRightTimestampNs) return;
+        }
         pollHoldout();
         if (holdoutPending == HOLDOUT_RING) return;
         float phase = (float) ((double) (referenceNs - activeLeftTimestampNs) /
@@ -11707,6 +11727,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             bindTexture(holdoutProgram, "uReference", holdoutReferenceTextures[slot], 5);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
             int ring = holdoutHead;
+            holdoutRingReferenceNs[ring] = referenceNs;
             GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, holdoutPbos[ring]);
             GLES30.glReadPixels(0, 0, holdoutWidth, holdoutHeight,
                     GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, 0);
@@ -11760,6 +11781,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private void maybeDumpHoldout(int slot, float phase) {
         long now = System.nanoTime();
+        java.io.File replayDumps = replayOffscreen ? replayDumpDirectory : null;
+        if (replayDumps != null) {
+            writeHoldoutDump(new java.io.File(replayDumps,
+                    "pair-" + holdoutReferenceTimestampNs[slot] + ".bin"), slot, phase);
+            return;
+        }
         if (trainCaptureCount < TRAIN_CAPTURE_LIMIT && now - trainCaptureLastNs >= 150_000_000L &&
                 TRAIN_CAPTURE_MARKER.exists()) {
             boolean full = TRAIN_CAPTURE_FULL_MARKER.exists();
@@ -11775,11 +11802,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 !HOLDOUT_DUMP_MARKER.exists()) return;
         holdoutDumpLastNs = now;
         ++holdoutDumpCount;
-        java.io.File directory = new java.io.File(DENSE_FLOW_DUMP_DIR.getParentFile(), "holdout");
+        writeHoldoutDump(new java.io.File(new java.io.File(DENSE_FLOW_DUMP_DIR.getParentFile(),
+                "holdout"), "holdout-" + generatorId + "-" + holdoutDumpCount + ".bin"), slot, phase);
+    }
+
+    private void writeHoldoutDump(java.io.File file, int slot, float phase) {
         try {
-            directory.mkdirs();
-            java.io.File file = new java.io.File(directory,
-                    "holdout-" + generatorId + "-" + holdoutDumpCount + ".bin");
+            file.getParentFile().mkdirs();
             try (java.io.DataOutputStream out = new java.io.DataOutputStream(
                     new java.io.BufferedOutputStream(new java.io.FileOutputStream(file), 1 << 16))) {
                 out.writeInt(0x484f4431); // 'HOD1'
@@ -11881,13 +11910,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             java.nio.Buffer mapped = GLES30.glMapBufferRange(GLES30.GL_PIXEL_PACK_BUFFER, 0,
                     holdoutWidth * holdoutHeight * 4, GLES30.GL_MAP_READ_BIT);
             if (mapped instanceof java.nio.ByteBuffer)
-                accumulateHoldout((java.nio.ByteBuffer) mapped);
+                accumulateHoldout((java.nio.ByteBuffer) mapped, holdoutRingReferenceNs[ring]);
             if (mapped != null) GLES30.glUnmapBuffer(GLES30.GL_PIXEL_PACK_BUFFER);
             GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0);
         }
     }
 
-    private void accumulateHoldout(java.nio.ByteBuffer cells) {
+    private void accumulateHoldout(java.nio.ByteBuffer cells, long referenceNs) {
         int count = holdoutWidth * holdoutHeight;
         long changing = 0L;
         double crossfade = 0.0;
@@ -11903,6 +11932,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         if (changing == 0L) return;
         // Values are 2 x error x 255: halve back to 0-255 per-channel error.
+        if (replayOffscreen) {
+            // QA replay scores each triplet; the bench joins it by reference time.
+            StringBuilder pair = new StringBuilder("Hold-out pair referenceNs=").append(referenceNs)
+                    .append(String.format(java.util.Locale.US, " changing=%.1f%%",
+                            100.0 * changing / count));
+            for (int level = 0; level < HOLDOUT_LEVELS; ++level)
+                pair.append(String.format(java.util.Locale.US, " mae%d=%.2f", holdoutLevelIds[level],
+                        generated[level] / 2.0 / changing));
+            Log.i(TAG, pair.append(String.format(java.util.Locale.US, " crossfadeMae=%.2f",
+                    crossfade / 2.0 / changing)).toString());
+        }
         ++holdoutWindowSamples;
         holdoutWindowChanging += changing;
         holdoutWindowPixels += count;

@@ -276,6 +276,16 @@ public final class TimelineSchedulerSwitch {
 
     static boolean holdout() { return holdout; }
 
+    /**
+     * QA replay (HoldoutReplay, its own process): production defaults, read
+     * without settings, with hold-out scoring on the given three levels.
+     */
+    static void configureForReplay(int[] levels) {
+        refresh(null, FrameGenerationSettings.Mode.AUTO);
+        holdout = true;
+        holdoutLevels = levels.clone();
+    }
+
     static int synthesisLevel() { return synthesisLevel; }
 
     static int workFloor() { return workFloor; }

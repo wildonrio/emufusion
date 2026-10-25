@@ -6,7 +6,27 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 24 (latest) **— 3.2.98 (172): GPU-heavy Wii U and Switch games keep full-quality frame generation; the queue gives back a scan it is not using; the Thor no longer runs hot asleep.**
+October 24 (latest) **— The 10/10 plan; a replay bench scores the real generator without an emulator.**
+
+Owner, October 24: frame generation rated 6/10; plan and implement 10/10. Pass marks, measured rather than judged:
+- **Quality:** replay hold-out error far below today's on every game (generated frame vs the real frame it replaces, as a fraction of a cross-fade's error), and no visible artifact class in contact-sheet review.
+- **Smoothness:** at least 98% of output frames on their intended refresh on every emulator, Cemu included.
+- **Latency:** generation adds at most one source frame.
+- **Stability:** work level 0 (full-quality motion) for whole sessions.
+
+Phases: (0) measurement, (1) artifacts worst-first by the bench, (2) Cemu pacing (closed loop on actual present times), (3) every emulator passes the scorecard, including NES on the owner's phone.
+
+**Phase 0, the replay bench** (`tools/qa/replay_bench.py`, `tools/qa/build_replay_dex.sh`, `tools/qa/replay_sheet.py`). `HoldoutReplay.main` runs from adb as its own process (`app_process`, the installed APK on CLASSPATH, optionally a working-tree dex ahead of it, so a change is scored with no install). It streams saved triplets (A, real B, C) at 30 Hz into a real display-0 dense `DisplayFrameGenerator` with hold-out scoring; each triplet's times are registered, so only B is withheld and it is scored only against exactly its own pair (a dropped frame can never pair two triplets). Panels stay off; vsync callbacks continue; admission takes the declared rate because an offscreen reader has no present times. Hooks are inert in the product (`test_replay_bench`); the product manifest is unchanged. Per-triplet dumps render to contact sheets.
+
+The production synthesis is 24 (DIS refined per phase), which the default hold-out levels {14, 15, 115} never scored; the bench scores 24, 21 and 115. Held triplets (B nearly A or C: animation drawn on twos, 30 Hz objects in 60 Hz games) have no in-between to recover, so moving triplets are the primary score: Link's Awakening's capture is its opening anime cutscene (150 of 261 triplets held), and GBA's capture is almost all static.
+
+Baseline (3.2.98 generator, moving triplets, synthesis 24 / 21 / 115, fraction of a cross-fade; `tools/qa/replay_baseline.json`):
+- 480x270 captures, 60 per game: Wind Waker HD 0.315, SNES 0.355, Mega Drive 0.522, NES 0.564, Ocarina 0.577, Mario 3D World 0.591, Star Fox 64 0.627, Link's Awakening cutscene 0.744, GBA 0.991 (5 pairs); mean 0.587 (21: 0.663, 115: 0.735).
+- 1080p captures, 30 per game: Link's Awakening 0.351, NSMBU 0.410 (5 pairs), GameCube 0.477, Ocarina 0.575; mean 0.453.
+
+First failure classes from the sheets: fast 2-D scrolls over repeating tiles (Sonic 2 Casino Night: blocky ghosting where the search locks onto the wrong repeat); camera moving unevenly between frames (no method beats a cross-fade); sub-pixel pans (Wind Waker HD's title tapestry: every warp leaves faint outline errors where a cross-fade is nearly exact, the edge softness the owner reported).
+
+October 24 **— 3.2.98 (172): GPU-heavy Wii U and Switch games keep full-quality frame generation; the queue gives back a scan it is not using; the Thor no longer runs hot asleep.**
 
 **Asleep and hot.** With both panels off for hours the Thor sat at 75-82 C: EmuFusion used ~185% CPU and `mediaserver` decoded video continuously. Not frame generation; recorded here because it changes the installed build and heats the device that frame generation runs on.
 - The library media pass spent 4-5 s of CPU per game (~75 MB/s of garbage). Every title lookup re-derived all of a system's thumbnail listing (5,961 GBA entries) with a dozen regular expressions per entry, several lookups per game: 127 ms per lookup on the Mac. `TitleMatcher.Catalog` derives each listing once into indexes, cached per listing file version (six at a time). Over all 74 of the Thor's listings, library titles and adversarial variants, the old and new matcher agreed on 194,404 of 194,404 answers; lookup time 6,429 s -> 4 s. Profiled on the Thor afterwards, two thirds of the remainder was the periodic metadata publish: `field()` used `split("\\n")`, which compiles a pattern per call (2,055,878 of 2,055,878 answers identical on the Thor's 38,069 stanzas, 20x faster). Games now finish in 0.03-2 s instead of 9-10 s.

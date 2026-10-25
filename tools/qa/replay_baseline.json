@@ -1,0 +1,112 @@
+{
+ "build": "3.2.98 (41c27281) generator; replay bench 2026-10-24",
+ "metric": "generated MAE over changing pixels / cross-fade MAE (lower is better)",
+ "levels": {
+  "24": "production (DIS refined per phase)",
+  "21": "DIS",
+  "115": "block matcher, prepared warp"
+ },
+ "sets": {
+  "eval-moving-480x270": {
+   "perCase": 60,
+   "cases": {
+    "gba": {
+     "scored": 5,
+     "chosen": 9,
+     "24": 0.991,
+     "21": 1.114,
+     "115": 1.305
+    },
+    "megadrive": {
+     "scored": 55,
+     "chosen": 60,
+     "24": 0.522,
+     "21": 0.585,
+     "115": 0.622
+    },
+    "n64sf": {
+     "scored": 56,
+     "chosen": 60,
+     "24": 0.627,
+     "21": 0.713,
+     "115": 0.749
+    },
+    "nes": {
+     "scored": 55,
+     "chosen": 60,
+     "24": 0.564,
+     "21": 0.67,
+     "115": 0.717
+    },
+    "oot": {
+     "scored": 56,
+     "chosen": 60,
+     "24": 0.577,
+     "21": 0.657,
+     "115": 0.713
+    },
+    "sm3dw": {
+     "scored": 54,
+     "chosen": 60,
+     "24": 0.591,
+     "21": 0.667,
+     "115": 0.764
+    },
+    "snes": {
+     "scored": 56,
+     "chosen": 60,
+     "24": 0.355,
+     "21": 0.41,
+     "115": 0.487
+    },
+    "wwhd": {
+     "scored": 54,
+     "chosen": 60,
+     "24": 0.315,
+     "21": 0.415,
+     "115": 0.461
+    },
+    "zla": {
+     "scored": 53,
+     "chosen": 60,
+     "24": 0.744,
+     "21": 0.74,
+     "115": 0.795
+    }
+   }
+  },
+  "full-moving-1080p": {
+   "perCase": 30,
+   "cases": {
+    "gc": {
+     "scored": 27,
+     "chosen": 30,
+     "24": 0.477,
+     "21": 0.522,
+     "115": 0.629
+    },
+    "nsmbud": {
+     "scored": 5,
+     "chosen": 9,
+     "24": 0.41,
+     "21": 0.469,
+     "115": 0.841
+    },
+    "oot": {
+     "scored": 26,
+     "chosen": 30,
+     "24": 0.575,
+     "21": 0.667,
+     "115": 0.671
+    },
+    "zla": {
+     "scored": 18,
+     "chosen": 22,
+     "24": 0.351,
+     "21": 0.391,
+     "115": 0.466
+    }
+   }
+  }
+ }
+}

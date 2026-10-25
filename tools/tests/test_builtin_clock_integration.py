@@ -44,10 +44,15 @@ public class RememberedAdmissionTest {
     final Closed closed=new Closed();
     final PhysicalPresentationClock builtInPhysicalClock=new PhysicalPresentationClock();
     int displayId; float refreshHz=120f; double live;
+    static boolean replayOffscreen;
     double physicalPanelHz(){return live;}
 ''' + body + r'''
     public static void main(String[] args){
         RememberedAdmissionTest t=new RememberedAdmissionTest();
+        // QA replay renders offscreen (no presents): the declared rate admits.
+        replayOffscreen=true;
+        assert t.admissionPanelHz()==120.0 : "offscreen replay uses the declared rate";
+        replayOffscreen=false;
         PanelClockMemory.value=119.93;
         assert t.admissionPanelHz()==0.0 : "no presents observed yet";
         t.builtInPhysicalClock.last=System.nanoTime();
