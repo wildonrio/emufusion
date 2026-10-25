@@ -48,6 +48,15 @@ final class DenseInverseSearchFlow {
     private int phasePatches, phaseFlow, phaseLevel = -1;
     // Cut/fade verdict of the last estimate (1x1 RGBA8: r cut evidence, g fade).
     private int cutProgram, cut;
+    // QA synthesis 25: the learned visibility selector over synthesis 24's field
+    // (LearnedSelectorShaders): features, three hidden layers and four logits on
+    // the field's grid, then a softmax blend at full size. Compiled on first use.
+    private int selectFeatures, selectC1, selectC2, selectC3, selectOut, selectGenerate;
+    private int selectFramebuffer, selectLogits, selectLevel = -1;
+    private final int[] selectFeature = new int[2], selectHiddenA = new int[4],
+            selectHiddenB = new int[4];
+    private static final int[] DRAW_BUFFERS = {GLES30.GL_COLOR_ATTACHMENT0,
+            GLES30.GL_COLOR_ATTACHMENT1, GLES30.GL_COLOR_ATTACHMENT2, GLES30.GL_COLOR_ATTACHMENT3};
     // Synthesis 22: DIS motion in the solver's raw format at its analysis grid,
     // then validated and filled by the generator's own passes ([0] current->
     // previous, [1] previous->current, like the solver's directions).
@@ -136,6 +145,11 @@ final class DenseInverseSearchFlow {
     }
 
     boolean holds(int slot, long key) { return key != 0L && slotKey[slot] == key; }
+
+    /** QA replay dumps: the last per-phase field (pixels of its level), or 0. */
+    int phaseFlowTexture() { return phaseFlow; }
+    int phaseFlowWidth() { return phaseLevel < 0 ? 0 : sizes[phaseLevel][0]; }
+    int phaseFlowHeight() { return phaseLevel < 0 ? 0 : sizes[phaseLevel][1]; }
 
     void swapSlots() {
         int[] t = pyramid[0]; pyramid[0] = pyramid[1]; pyramid[1] = t;
@@ -326,8 +340,97 @@ final class DenseInverseSearchFlow {
         bind(generatePhase, "uFrameA", frameA, 0);
         bind(generatePhase, "uFrameC", frameC, 1);
         bind(generatePhase, "uPhaseFlow", phaseFlow, 2);
+        // Endpoint flows for the occlusion side choice (unused unless generated in).
+        bind(generatePhase, "uFlowAC", flows[0][used], 5);
+        bind(generatePhase, "uFlowCA", flows[1][used], 6);
         GLES20.glUniform1f(location(generatePhase, "uT"), t);
         GLES20.glUniform2f(location(generatePhase, "uFlowSize"), sizes[used][0], sizes[used][1]);
+    }
+
+    /** Synthesis 25: the selector's logits for the last per-phase field (after estimatePhase). */
+    void estimateSelection() {
+        saveState();
+        try {
+            if (selectGenerate == 0) compileSelector();
+            int w = sizes[used][0], h = sizes[used][1];
+            if (selectLevel != used) {
+                selectFeature[0] = texture(w, h, true);
+                selectFeature[1] = texture(w, h, true);
+                for (int k = 0; k < 4; ++k) {
+                    selectHiddenA[k] = rgba8(w, h, true);
+                    selectHiddenB[k] = rgba8(w, h, true);
+                }
+                selectLogits = texture(w, h, true);
+                selectLevel = used;
+            }
+            targets(selectFeatures, w, h, selectFeature);
+            bind(selectFeatures, "uGrayA", pyramid[0][used], 0);
+            bind(selectFeatures, "uGrayC", pyramid[1][used], 1);
+            bind(selectFeatures, "uPhaseFlow", phaseFlow, 2);
+            GLES30.glUniform2i(location(selectFeatures, "uSize"), w, h);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            convolve(selectC1, selectFeature, selectHiddenA, w, h);
+            convolve(selectC2, selectHiddenA, selectHiddenB, w, h);
+            convolve(selectC3, selectHiddenB, selectHiddenA, w, h);
+            convolve(selectOut, selectHiddenA, new int[] {selectLogits}, w, h);
+        } finally {
+            restoreState();
+        }
+    }
+
+    int generateSelectProgram() { return selectGenerate; }
+
+    /** As bindGeneratePhase, blending by the selector's logits instead of 50/50. */
+    void bindGenerateSelect(int frameA, int frameC, float t, int structureMask, float minMotionPx,
+                            int cutVerdict) {
+        GLES20.glUseProgram(selectGenerate);
+        GLES20.glUniform1f(location(selectGenerate, "uCutEnabled"), cutVerdict != 0 ? 1f : 0f);
+        bind(selectGenerate, "uCut", cutVerdict != 0 ? cutVerdict : zeroField, 4);
+        GLES20.glUniform1f(location(selectGenerate, "uStructure"), structureMask != 0 ? 1f : 0f);
+        bind(selectGenerate, "uStructureMask", structureMask != 0 ? structureMask : zeroField, 3);
+        GLES20.glUniform1f(location(selectGenerate, "uStructureMinMotionPx"), minMotionPx);
+        GLES20.glUniform2f(location(selectGenerate, "uHistorySize"), historyWidth, historyHeight);
+        bind(selectGenerate, "uFrameA", frameA, 0);
+        bind(selectGenerate, "uFrameC", frameC, 1);
+        bind(selectGenerate, "uPhaseFlow", phaseFlow, 2);
+        bind(selectGenerate, "uLogits", selectLogits, 5);
+        GLES20.glUniform1f(location(selectGenerate, "uT"), t);
+        GLES20.glUniform2f(location(selectGenerate, "uFlowSize"), sizes[used][0], sizes[used][1]);
+    }
+
+    private void convolve(int program, int[] inputs, int[] outputs, int width, int height) {
+        targets(program, width, height, outputs);
+        for (int i = 0; i < inputs.length; ++i) bind(program, "uIn" + i, inputs[i], i);
+        GLES30.glUniform2i(location(program, "uIn"), width, height);
+        GLES30.glUniform2i(location(program, "uOut"), width, height);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+    }
+
+    /** Binds up to four render targets on the selector's own framebuffer. */
+    private void targets(int program, int width, int height, int[] outputs) {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, selectFramebuffer);
+        for (int k = 0; k < 4; ++k)
+            GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, DRAW_BUFFERS[k],
+                    GLES20.GL_TEXTURE_2D, k < outputs.length ? outputs[k] : 0, 0);
+        GLES30.glDrawBuffers(outputs.length, DRAW_BUFFERS, 0);
+        if (verifiedTargets.add(outputs[0]) && GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                GLES20.GL_FRAMEBUFFER_COMPLETE)
+            throw new IllegalStateException("selector framebuffer incomplete");
+        GLES20.glViewport(0, 0, width, height);
+        GLES20.glUseProgram(program);
+    }
+
+    private void compileSelector() {
+        String v = DenseInverseSearchShaders.VERTEX;
+        selectFeatures = link(v, LearnedSelectorShaders.SELECT_FEATURES);
+        selectC1 = link(v, LearnedSelectorShaders.SELECT_C1);
+        selectC2 = link(v, LearnedSelectorShaders.SELECT_C2);
+        selectC3 = link(v, LearnedSelectorShaders.SELECT_C3);
+        selectOut = link(v, LearnedSelectorShaders.SELECT_OUT);
+        selectGenerate = link(DenseInverseSearchShaders.VERTEX_QUAD, LearnedSelectorShaders.SELECT_GENERATE);
+        int[] ids = new int[1];
+        GLES20.glGenFramebuffers(1, ids, 0);
+        selectFramebuffer = ids[0];
     }
 
     /** The last estimate's cut/fade verdict, read like the generator's global cut texture. */
@@ -468,6 +571,11 @@ final class DenseInverseSearchFlow {
         motionWidth = motionHeight = 0;
         phasePatches = phaseFlow = cut = 0;
         phaseLevel = -1;
+        java.util.Arrays.fill(selectFeature, 0);
+        java.util.Arrays.fill(selectHiddenA, 0);
+        java.util.Arrays.fill(selectHiddenB, 0);
+        selectLogits = 0;
+        selectLevel = -1;
         estimateKeyA = estimateKeyB = phaseKeyA = phaseKeyB = 0L;
         phaseValue = -1f;
         ready = false;
@@ -476,12 +584,15 @@ final class DenseInverseSearchFlow {
     void release() {
         releaseTextures();
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
-                phaseSearch, phaseDensify, generatePhase, cutProgram})
+                phaseSearch, phaseDensify, generatePhase, cutProgram, selectFeatures, selectC1,
+                selectC2, selectC3, selectOut, selectGenerate})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
         phaseSearch = phaseDensify = generatePhase = cutProgram = 0;
+        selectFeatures = selectC1 = selectC2 = selectC3 = selectOut = selectGenerate = 0;
         uniforms.clear();
         if (framebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {framebuffer}, 0);
-        framebuffer = 0;
+        if (selectFramebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {selectFramebuffer}, 0);
+        framebuffer = selectFramebuffer = 0;
     }
 }

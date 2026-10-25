@@ -233,6 +233,10 @@ def phase_search_shader():
     " vec2 v1=fac(p),v2=-fca(q);float e1=ssd(o,v1),e2=ssd(o,v2);vec2 v0=e2<e1?v2:v1;float e0=min(e1,e2);\n"
     + "".join(f" {{vec2 c=fac(x+vec2({dx:.1f},{dy:.1f}));float ec=ssd(o,c);if(ec<e0){{e0=ec;v0=c;}}}}\n"
               for d in PHASE_PROPAGATE for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))) +
+    "".join(f" {{vec2 c=fac(vec2(uSize)*vec2({(i + 0.5) / PHASE_GLOBAL_GRID[0]:.4f},{(j + 0.5) / PHASE_GLOBAL_GRID[1]:.4f}));"
+            f"float ec=ssd(o,c);if(ec<e0*{1.0 + PHASE_GLOBAL_TIE:.3f}+1e-6){{e0=min(e0,ec);v0=c;}}}}\n"
+            for j in range(PHASE_GLOBAL_GRID[1] if PHASE_GLOBAL_GRID else 0)
+            for i in range(PHASE_GLOBAL_GRID[0] if PHASE_GLOBAL_GRID else 0)) +
     " vec2 v=v0;const float N=float(P*P);\n"
     " for(int k=0;k<ITERS;++k){float sa=0.0,sc=0.0;vec2 sj=vec2(0.0);mat2 h=mat2(0.0);vec2 b=vec2(0.0);vec2 jsa=vec2(0.0),jsc=vec2(0.0);\n"
     "  for(int y=0;y<P;++y)for(int xx=0;xx<P;++xx){vec2 q2=o+vec2(float(xx),float(y))+0.5;vec3 A=ga(q2-uT*v),C=gc(q2+(1.0-uT)*v);\n"
@@ -248,7 +252,15 @@ def phase_search_shader():
 # A's flow this many analysis pixels away in each axis direction when that
 # matches the patch better (PatchMatch-style propagation: motion found where
 # the image is distinctive reaches repeating tiles and fast scrolls).
-PHASE_PROPAGATE = ()
+# Default since 3.2.99 (8 and 16 px): replay bench over nine games, paired,
+# 0.590 -> 0.588 of a cross-fade (SNES 0.349, Link's Awakening -0.007); with
+# whole-pixel warps, 0.592 -> 0.577.
+PHASE_PROPAGATE = (8, 16)
+# ... and from A's flow at a fixed grid of points across the frame (scene-wide
+# motions: a camera scroll found anywhere reaches every patch), taken on ties
+# within PHASE_GLOBAL_TIE (a repeating tile matches its aliases equally well).
+PHASE_GLOBAL_GRID = ()
+PHASE_GLOBAL_TIE = 0.0
 
 
 # The per-phase densification weighs each patch by 1/max(1, e)^2 of its
@@ -359,7 +371,8 @@ def _generate_phase_shader_text():
     # within 2 grey levels. On full-size 1080p captures: NSMBU Deluxe 0.391
     # -> 0.376, Double Dash 0.600 -> 0.594, Ocarina 0.715 -> 0.712 of a
     # cross-fade, Link's Awakening within 0.2%. Zero disables it (QA).
-    "uniform float uChoiceSpread;\n"
+    "uniform float uChoiceSpread;\n" +
+    ("uniform sampler2D uFlowAC,uFlowCA;\n" if OCCLUSION_SIDE_T > 0 else "") +
     "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
     "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
     "void main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n"
@@ -371,7 +384,14 @@ def _generate_phase_shader_text():
      " {vec4 eb=texture(uBounds,vec2(0.5));" + f"vec2 em={float(EDGE_EXTRAPOLATE_PX)}/uHistorySize;\n"
      "  vec2 ui=clamp(u,eb.xz+em,eb.yw-em);if(ui!=u){vec2 ke=texture(uPhaseFlow,ui).xy/uFlowSize;\n" +
      ("   if(wc(u,ke)<wc(u,v)-2.0/255.0)v=ke;}}\n" if EDGE_CANDIDATE else "   v=ke;}}\n")) +
-    " vec3 aw=texture(uFrameA,u-uT*v).rgb,cw=texture(uFrameC,u+(1.0-uT)*v).rgb;\n"
+    " vec3 aw=texture(uFrameA,u-uT*v).rgb,cw=texture(uFrameC,u+(1.0-uT)*v).rgb;\n" +
+    ("" if not PIXEL_SNAP else
+     # Pixel art moves in whole pixels: sample both frames at texel centres
+     # along the motion rounded to whole pixels (the real middle frame is on
+     # the grid; a half-pixel bilinear sample blurs every edge).
+     f" if(uHistorySize.x<={PIXEL_SNAP[0]:.1f}&&uHistorySize.y<={PIXEL_SNAP[1]:.1f}){{\n"
+     "  vec2 vp=floor(v*uHistorySize+0.5),ap=floor(uT*vp+0.5),q=floor(u*uHistorySize)+0.5;\n"
+     "  aw=texture(uFrameA,(q-ap)/uHistorySize).rgb;cw=texture(uFrameC,(q+vp-ap)/uHistorySize).rgb;}\n") +
     " vec3 a0=texture(uFrameA,u).rgb,c0=texture(uFrameC,u).rgb;\n"
     " vec3 w=(1.0-uT)*aw+uT*cw;\n"
     # Motion under one source pixel is taken as zero: a sub-pixel warp only
@@ -394,6 +414,13 @@ def _generate_phase_shader_text():
        f"\n  {{float gk=smoothstep({0.5*float(GHOST_SIDE_T)}/255.0,{float(GHOST_SIDE_T)}/255.0,min(eM,e0))*"
        f"smoothstep({0.5*float(GHOST_MIN_MOTION_PX)},{float(GHOST_MIN_MOTION_PX)}+0.001,length(v*uHistorySize));\n"
        "   vec3 side=uT>=0.5?(eM<=e0?cw:c0):(eM<=e0?aw:a0);w=mix(w,side,gk);}")
+    + ("" if OCCLUSION_SIDE_T <= 0 else
+       # Where the two warp samples disagree, each is checked against its own
+       # frame's DIS flow at the point it samples: a sample whose frame moves
+       # differently there lies on another layer (occluded at this phase).
+       f"\n  if(eM>{float(OCCLUSION_SIDE_T)}/255.0){{vec2 vp=v*uFlowSize;\n"
+       "   float da=length(texture(uFlowAC,u-uT*v).xy-vp),dc=length(-texture(uFlowCA,u+(1.0-uT)*v).xy-vp);\n"
+       f"   if(abs(da-dc)>{float(OCCLUSION_SIDE_MARGIN)})w=da<dc?aw:cw;}}")
     + ("" if NEITHER_BLEND_T <= 0 else
        f"\n  w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(NEITHER_BLEND_T)}/255.0,"
        f"{float(NEITHER_BLEND_T)}/255.0,min(eM,e0)));")
@@ -505,6 +532,18 @@ EDGE_HOLD_T = 32.0
 # a flash), fade to the zero-motion blend instead of keeping the warp; or fade
 # to it wherever the warp's own samples disagree by DISAGREE_BLEND_T.
 SUBPIXEL_ZERO_PX = 1.0
+# Small (pixel-art) histories, up to (width, height), the generator's small
+# sources: whole-pixel warps (default since 3.2.99). Replay bench, paired:
+# Mega Drive 0.520 -> 0.453 of a cross-fade, SNES 0.353 -> 0.322, NES 0.563
+# -> 0.548; 3-D sources unaffected. Generated frames stay as crisp as the real
+# ones instead of blurring every edge by half a pixel; with whole-pixel
+# placement forgiven, solid artifacts are unchanged or fewer.
+PIXEL_SNAP = (400, 300)
+# Where the warp's five-tap mismatch exceeds OCCLUSION_SIDE_T grey levels, take
+# the sample whose own frame's DIS flow at its source agrees with the output
+# vector by OCCLUSION_SIDE_MARGIN field pixels more than the other's does.
+OCCLUSION_SIDE_T = 0.0
+OCCLUSION_SIDE_MARGIN = 1.0
 NEITHER_BLEND_T = 0.0
 DISAGREE_BLEND_T = 0.0
 EDGE_ONE_SIDED_PX = 0.0

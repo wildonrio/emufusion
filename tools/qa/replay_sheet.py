@@ -20,6 +20,11 @@ def planes(path):
         (n,) = struct.unpack('>i', data[off:off + 4]); off += 4
         name = data[off:off + n].decode(); off += n
         w, h = struct.unpack('>ii', data[off:off + 8]); off += 8
+        if name.endswith('F32'):
+            # Float plane (replay dumps: synthesis 24's DIS field, pixels of its level).
+            out[name] = np.frombuffer(data[off:off + w * h * 16], '>f4').reshape(h, w, 4)[::-1].copy()
+            off += w * h * 16
+            continue
         out[name] = np.frombuffer(data[off:off + w * h * 4], np.uint8).reshape(h, w, 4)[::-1, :, :3]
         off += w * h * 4
     return phase, out

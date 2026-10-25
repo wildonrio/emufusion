@@ -46,11 +46,25 @@ class DisShaderTest(unittest.TestCase):
                       "densify": "DENSIFY", "generate": "GENERATE", "toRaw": "TO_RAW",
                       "phaseSearch": "PHASE_SEARCH", "phaseDensify": "PHASE_DENSIFY",
                       "generatePhase": "GENERATE_PHASE", "cutProgram": "CUT"}
+        # QA synthesis 25 (the learned selector): its generated class; the
+        # shared conv helper binds through "program".
+        selector = (RUNTIME.parent / "LearnedSelectorShaders.java").read_text()
+        selector_programs = {"selectFeatures", "selectC1", "selectC2", "selectC3", "selectOut",
+                             "selectGenerate", "program"}
+        # Bound for the occlusion side-choice experiment; present only in its variant.
+        dis_gles.OCCLUSION_SIDE_T = 16.0
+        try:
+            variant = dis_gles.shaders()["GENERATE_PHASE"]
+        finally:
+            dis_gles.OCCLUSION_SIDE_T = 0.0
+        optional = {("generatePhase", "uFlowAC"), ("generatePhase", "uFlowCA")}
         used = set(re.findall(r'(?:bind|location)\((\w+), "(\w+)"', runtime))
         self.assertTrue(used)
         for program, name in used:
             with self.subTest(program=program, uniform=name):
-                self.assertRegex(shaders[program_of[program]], r"uniform [^;]*\b" + name + r"\b")
+                source = selector if program in selector_programs else \
+                    variant if (program, name) in optional else shaders[program_of[program]]
+                self.assertRegex(source, r"uniform [^;]*\b" + name + r"\b")
 
     def test_method_shape(self):
         search = dis_gles.shaders()["PATCH_SEARCH"]
@@ -134,9 +148,10 @@ class DisSelectionTest(unittest.TestCase):
         generator = GENERATOR.read_text()
         self.assertIn("static final int DIS_SYNTHESIS_LEVEL = 21;", switch)
         self.assertIn("if (ids[i] == DIS_SYNTHESIS_LEVEL || ids[i] == DIS_MOTION_SYNTHESIS_LEVEL ||\n"
-                      "                        ids[i] == DIS_PHASE_SYNTHESIS_LEVEL) continue;", switch)
+                      "                        ids[i] == DIS_PHASE_SYNTHESIS_LEVEL ||\n"
+                      "                        ids[i] == LEARNED_SELECTOR_SYNTHESIS_LEVEL) continue;", switch)
         self.assertIn("boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;", generator)
-        self.assertIn("if (dis && drawDisFrame(phase, disPhase)) return;", generator)
+        self.assertIn("if (dis && drawDisFrame(phase, disPhase, selector)) return;", generator)
         # Synthesis 24 applies synthesis 15's static-structure mask.
         self.assertIn("boolean structure = structureMaskProgram != 0 && renderStructureMask();", generator)
         self.assertIn("w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);", dis_gles.shaders()["GENERATE_PHASE"])
@@ -196,7 +211,7 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn('DIS_GLOBAL = "emufusion_framegen_dis"', switch)
         # Every source renders synthesis 24; 22 is QA only.
         self.assertIn("boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||\n"
-                      "                (disDefault && !holdoutRendering);", generator)
+                      "                selector || (disDefault && !holdoutRendering);", generator)
         self.assertIn("private boolean disSmallSource() { return historyWidth <= 400 && historyHeight <= 300; }",
                       generator)
         # In normal play DIS replaces the block matcher's search; the hold-out keeps both.

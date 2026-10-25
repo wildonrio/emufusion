@@ -75,7 +75,7 @@ final class HoldoutReplay {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("usage: HoldoutReplay CASE_DIR [REFRESH_HZ] [LEVELS a,b,c] [DUMP_DIR]");
+            System.err.println("usage: HoldoutReplay CASE_DIR [REFRESH_HZ] [LEVELS a,b,c] [DUMP_DIR [field]]");
             System.exit(2);
         }
         float refreshHz = args.length > 1 ? Float.parseFloat(args[1]) : 120f;
@@ -83,6 +83,8 @@ final class HoldoutReplay {
                 TimelineSchedulerSwitch.parseHoldoutLevels(args[2]) : DEFAULT_LEVELS;
         // Optional: every scored triplet's generated, reference and motion planes.
         if (args.length > 3) DisplayFrameGenerator.replayDumpDirectory = new File(args[3]);
+        // "field": only synthesis 24's DIS field per triplet (training data).
+        DisplayFrameGenerator.replayDumpFieldOnly = args.length > 4 && "field".equals(args[4]);
         try {
             run(new File(args[0]), refreshHz, levels);
         } catch (Throwable failure) {

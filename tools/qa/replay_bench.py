@@ -46,6 +46,7 @@ QUALITY = re.compile(r'Hold-out quality generator=\S+ .*')
 TRIPLET = re.compile(r'Replay triplet name=(\S+) referenceNs=(\d+)')
 PAIR = re.compile(r'Hold-out pair referenceNs=(\d+) (.*)')
 WARMUP_TRIPLETS = 15
+FIELD_ONLY = False
 
 
 def shell(command, timeout=120):
@@ -123,7 +124,8 @@ def run_case(case, per_case, levels, classpath, libs, kind, only=None, dumps=Non
     started = time.time()
     command = (f'CLASSPATH={classpath} app_process -Djava.library.path={libs} /system/bin '
                f'com.thorium.preview.game.HoldoutReplay {DEVICE_ROOT}/{case} 120 '
-               f'{",".join(map(str, levels))}' + (f' {DEVICE_DUMPS}/{case}' if dumps else ''))
+               f'{",".join(map(str, levels))}' + (f' {DEVICE_DUMPS}/{case}' if dumps else '') +
+               (' field' if dumps and FIELD_ONLY else ''))
     run = subprocess.run(ADB + ['shell', command], capture_output=True, text=True,
                          timeout=60 + 2 * len(folders))
     log = subprocess.run(ADB + ['logcat', '-d', '-s', 'EmuFusionFrameGen:*', 'EmuFusionReplay:*'],
@@ -152,6 +154,8 @@ def run_case(case, per_case, levels, classpath, libs, kind, only=None, dumps=Non
                  'crossfadeMae': crossfade}
         for level in levels:
             entry[f'mae{level}'] = values.get(f'mae{level}', 0.0)
+            entry[f'severe{level}'] = values.get(f'severe{level}', 0.0)
+            entry[f'solid{level}'] = values.get(f'solid{level}', 0.0)
             entry[f'vsCrossfade{level}'] = round(values.get(f'mae{level}', 0.0) / crossfade, 3) \
                 if crossfade > 0 else None
         pairs.append(entry)
@@ -161,6 +165,17 @@ def run_case(case, per_case, levels, classpath, libs, kind, only=None, dumps=Non
     weight = sum(p['changing'] for p in pairs)
     crossfade = sum(p['crossfadeMae'] * p['changing'] for p in pairs)
     result['samples'] = len(pairs)
+    for level in levels:
+        # Share of frame area with severe artifacts (mean over pairs) and the
+        # share of pairs with any visible patch (0.5% of the frame or more).
+        result[f'severe{level}'] = round(sum(p[f'severe{level}'] for p in pairs) / max(1, len(pairs)), 3)
+        result[f'artifactPairs{level}'] = round(
+            sum(p[f'severe{level}'] >= 0.5 for p in pairs) / max(1, len(pairs)), 3)
+        # Solid severe patches only (blocks, tears; not pixel art's one-pixel
+        # edge lines): the visible-artifact measure. A frame counts at 0.1%.
+        result[f'solid{level}'] = round(sum(p[f'solid{level}'] for p in pairs) / max(1, len(pairs)), 3)
+        result[f'blobPairs{level}'] = round(
+            sum(p[f'solid{level}'] >= 0.1 for p in pairs) / max(1, len(pairs)), 3)
     for level in levels:
         total = sum(p[f'mae{level}'] * p['changing'] for p in pairs)
         result[f'vsCrossfade{level}'] = round(total / crossfade, 4) if crossfade else 0.0
@@ -180,14 +195,17 @@ def main():
     parser.add_argument('--kind', default='moving', choices=('moving', 'held', 'static', 'all'))
     parser.add_argument('--triplets', help='comma-separated triplet names (one case)')
     parser.add_argument('--dump-dir', help='pull every scored triplet\'s HOD1 planes here')
+    parser.add_argument('--field-only', action='store_true',
+                        help='dumps carry only synthesis 24\'s DIS field (training data)')
     parser.add_argument('--compare', help='earlier --json run to compare against, paired')
     parser.add_argument('--dex')
     parser.add_argument('--worst', type=int, default=0, help='list the N worst triplets per case')
     parser.add_argument('--json')
     args = parser.parse_args()
     levels = [int(x) for x in args.levels.split(',')]
-    global EVAL
+    global EVAL, FIELD_ONLY
     EVAL = DATA / args.set
+    FIELD_ONLY = args.field_only
     cases = args.cases or sorted(p.name for p in EVAL.iterdir() if p.is_dir() and not p.name.startswith('_'))
     apk, libs = installed_paths()
     classpath = apk
@@ -204,7 +222,9 @@ def main():
             if 'error' in result:
                 print(f'{case:10s} ERROR {result["error"]}\n{result["tail"]}', flush=True)
                 continue
-            scores = '  '.join(f'{level}: {result[f"vsCrossfade{level}"]:.3f}' for level in levels)
+            scores = '  '.join(f'{level}: {result[f"vsCrossfade{level}"]:.3f} '
+                               f'solid {result[f"solid{level}"]:.2f}% art {100 * result[f"blobPairs{level}"]:.0f}%'
+                               for level in levels)
             print(f'{case:10s} pairs {result["samples"]:4d}/{result["triplets"]:<4d} {scores}', flush=True)
             # Worst triplets for the first (production) level, by error added
             # over the cross-fade's, so large-motion failures surface first.

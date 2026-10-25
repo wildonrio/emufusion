@@ -2328,6 +2328,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // QA replay: when set, every scored triplet's hold-out planes are written
     // here as pair-<referenceNs>.bin (HOD1, as the marker-gated dumps).
     static volatile java.io.File replayDumpDirectory;
+    // ... and with this set, only synthesis 24's DIS field (training data).
+    static volatile boolean replayDumpFieldOnly;
     private final int[] holdoutReferenceTextures = new int[HOLDOUT_REFERENCES];
     private final long[] holdoutReferenceRightSequence = new long[HOLDOUT_REFERENCES];
     private final long[] holdoutReferenceTimestampNs = new long[HOLDOUT_REFERENCES];
@@ -8311,6 +8313,23 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         out.write(copy);
     }
 
+    /** As dumpDensePlane, for a float target: 16 bytes per pixel, big-endian RGBA. */
+    private void dumpFloatPlane(java.io.DataOutputStream out, String name, int texture,
+                                int width, int height) throws java.io.IOException {
+        byte[] label = name.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        out.writeInt(label.length);
+        out.write(label);
+        out.writeInt(width);
+        out.writeInt(height);
+        java.nio.ByteBuffer pixels = java.nio.ByteBuffer.allocateDirect(width * height * 16)
+                .order(java.nio.ByteOrder.nativeOrder());
+        attachDenseTarget(texture, width, height);
+        GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_FLOAT, pixels);
+        pixels.rewind();
+        java.nio.FloatBuffer values = pixels.asFloatBuffer();
+        for (int i = 0; i < width * height * 4; ++i) out.writeFloat(values.get(i));
+    }
+
     private void attachDenseTarget(int texture, int width, int height) {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer);
         GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
@@ -11783,8 +11802,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long now = System.nanoTime();
         java.io.File replayDumps = replayOffscreen ? replayDumpDirectory : null;
         if (replayDumps != null) {
-            writeHoldoutDump(new java.io.File(replayDumps,
-                    "pair-" + holdoutReferenceTimestampNs[slot] + ".bin"), slot, phase);
+            java.io.File file = new java.io.File(replayDumps,
+                    "pair-" + holdoutReferenceTimestampNs[slot] + ".bin");
+            if (replayDumpFieldOnly) writeReplayField(file, phase);
+            else writeHoldoutDump(file, slot, phase);
             return;
         }
         if (trainCaptureCount < TRAIN_CAPTURE_LIMIT && now - trainCaptureLastNs >= 150_000_000L &&
@@ -11806,6 +11827,26 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 "holdout"), "holdout-" + generatorId + "-" + holdoutDumpCount + ".bin"), slot, phase);
     }
 
+    private void writeReplayField(java.io.File file, float phase) {
+        DenseInverseSearchFlow disField = disPhaseFlow;
+        if (disField == null || disField.phaseFlowTexture() == 0) return;
+        try {
+            file.getParentFile().mkdirs();
+            try (java.io.DataOutputStream out = new java.io.DataOutputStream(
+                    new java.io.BufferedOutputStream(new java.io.FileOutputStream(file), 1 << 16))) {
+                out.writeInt(0x484f4431); // 'HOD1'
+                out.writeFloat(phase);
+                out.writeFloat(activeFlowLimitPixels());
+                out.writeInt(synthesisLevel);
+                out.writeInt(1);
+                dumpFloatPlane(out, "disPhaseF32", disField.phaseFlowTexture(),
+                        disField.phaseFlowWidth(), disField.phaseFlowHeight());
+            }
+        } catch (java.io.IOException | RuntimeException failure) {
+            Log.w(TAG, "Replay field dump failed generator=" + generatorId, failure);
+        }
+    }
+
     private void writeHoldoutDump(java.io.File file, int slot, float phase) {
         try {
             file.getParentFile().mkdirs();
@@ -11816,7 +11857,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 out.writeFloat(activeFlowLimitPixels());
                 out.writeInt(synthesisLevel);
                 boolean dense = densePyramidEnabled && denseAnalysisWidth > 0;
-                out.writeInt(HOLDOUT_LEVELS + (dense ? 6 : 3));
+                // Replay dumps also carry synthesis 24's DIS field as floats.
+                DenseInverseSearchFlow disField = replayOffscreen ? disPhaseFlow : null;
+                boolean disPlane = disField != null && disField.phaseFlowTexture() != 0;
+                out.writeInt(HOLDOUT_LEVELS + (dense ? 6 : 3) + (disPlane ? 1 : 0));
                 for (int level = 0; level < HOLDOUT_LEVELS; ++level)
                     dumpDensePlane(out, "generated" + holdoutLevelIds[level], holdoutGeneratedTextures[level],
                             holdoutWidth, holdoutHeight);
@@ -11832,6 +11876,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     dumpDensePlane(out, "phase", densePhaseBoundTexture != 0 ? densePhaseBoundTexture : densePhaseTexture,
                             densePhaseWidth, densePhaseHeight);
                 }
+                if (disPlane)
+                    dumpFloatPlane(out, "disPhaseF32", disField.phaseFlowTexture(),
+                            disField.phaseFlowWidth(), disField.phaseFlowHeight());
             }
             Log.i(TAG, "Hold-out dump generator=" + generatorId + " file=" + file.getName() +
                     " phase=" + phase + " synthesis=" + synthesisLevel);
@@ -11921,16 +11968,44 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long changing = 0L;
         double crossfade = 0.0;
         double[] generated = new double[HOLDOUT_LEVELS];
+        // Severe pixels: off by 48+ grey levels and by 24 more than a cross-fade
+        // (blocks, tears, a wrong repeat); in cell units, which are 2 x error.
+        // Solid ones also have 3 of their 4 neighbours severe: a patch, not the
+        // one-pixel edge line of pixel art placed a pixel off.
+        long[] severe = new long[HOLDOUT_LEVELS];
+        long[] solid = new long[HOLDOUT_LEVELS];
+        boolean[][] severeAt = replayOffscreen ? new boolean[HOLDOUT_LEVELS][count] : null;
         for (int i = 0; i < count; ++i) {
             int base = i * 4;
             int flag = cells.get(base + 3) & 0xff;
             if (flag < 128) continue;
             ++changing;
-            for (int level = 0; level < HOLDOUT_LEVELS; ++level)
-                generated[level] += cells.get(base + level) & 0xff;
-            crossfade += (flag - 128) * (255.0 / 127.0);
+            double fade = (flag - 128) * (255.0 / 127.0);
+            for (int level = 0; level < HOLDOUT_LEVELS; ++level) {
+                int cell = cells.get(base + level) & 0xff;
+                generated[level] += cell;
+                if (cell >= 96 && cell >= fade + 48.0) {
+                    ++severe[level];
+                    if (severeAt != null) severeAt[level][i] = true;
+                }
+            }
+            crossfade += fade;
         }
         if (changing == 0L) return;
+        if (severeAt != null) {
+            int w = holdoutWidth, h = holdoutHeight;
+            for (int level = 0; level < HOLDOUT_LEVELS; ++level) {
+                boolean[] at = severeAt[level];
+                for (int y = 1; y < h - 1; ++y)
+                    for (int x = 1; x < w - 1; ++x) {
+                        int i = y * w + x;
+                        if (!at[i]) continue;
+                        int n = (at[i - 1] ? 1 : 0) + (at[i + 1] ? 1 : 0) + (at[i - w] ? 1 : 0) +
+                                (at[i + w] ? 1 : 0);
+                        if (n >= 3) ++solid[level];
+                    }
+            }
+        }
         // Values are 2 x error x 255: halve back to 0-255 per-channel error.
         if (replayOffscreen) {
             // QA replay scores each triplet; the bench joins it by reference time.
@@ -11938,8 +12013,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     .append(String.format(java.util.Locale.US, " changing=%.1f%%",
                             100.0 * changing / count));
             for (int level = 0; level < HOLDOUT_LEVELS; ++level)
-                pair.append(String.format(java.util.Locale.US, " mae%d=%.2f", holdoutLevelIds[level],
-                        generated[level] / 2.0 / changing));
+                pair.append(String.format(java.util.Locale.US, " mae%d=%.2f severe%d=%.3f solid%d=%.3f",
+                        holdoutLevelIds[level], generated[level] / 2.0 / changing,
+                        holdoutLevelIds[level], 100.0 * severe[level] / count,
+                        holdoutLevelIds[level], 100.0 * solid[level] / count));
             Log.i(TAG, pair.append(String.format(java.util.Locale.US, " crossfadeMae=%.2f",
                     crossfade / 2.0 / changing)).toString());
         }
@@ -12570,6 +12647,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private boolean drawDisFrame(float phase, boolean perPhase) {
+        return drawDisFrame(phase, perPhase, false);
+    }
+
+    private boolean drawDisFrame(float phase, boolean perPhase, boolean selector) {
         if (timelineActive && timeline.arrivalPacing()) {
             if (disFlowReady(phase, perPhase)) ++disPrecomputeHits;
             else ++disPrecomputeMisses;
@@ -12586,9 +12667,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // cut) and per-pixel zero-motion selection (fixed text over moving
             // content): paired hold-out vs 3.2.77's 24, Star Fox 64 0.598 ->
             // 0.557, Sunshine 0.628 -> 0.597, GameCube 0.640 -> 0.622.
-            flow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
-                    structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());
-            bindQuad(flow.generatePhaseProgram());
+            if (selector) {
+                flow.estimateSelection();
+                flow.bindGenerateSelect(historyTextures[previousIndex], historyTextures[currentIndex],
+                        phase, structure ? structureMaskTexture : 0, 2f * structureStepPixels(),
+                        flow.cutTexture());
+                bindQuad(flow.generateSelectProgram());
+            } else {
+                flow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
+                        structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());
+                bindQuad(flow.generatePhaseProgram());
+            }
         } else {
             flow.bindGenerate(historyTextures[previousIndex], historyTextures[currentIndex], phase);
             bindQuad(flow.generateProgram());
@@ -12606,10 +12695,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private void drawMotionFrame(float phase) {
         // Small (2-D) sources default to 24: on paired Thor hold-outs it beat 21
         // on every 2-D game (NES 0.547 -> 0.457, SNES 0.463 -> 0.435).
+        boolean selector = synthesisLevel == TimelineSchedulerSwitch.LEARNED_SELECTOR_SYNTHESIS_LEVEL;
         boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||
-                (disDefault && !holdoutRendering);
+                selector || (disDefault && !holdoutRendering);
         boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;
-        if (dis && drawDisFrame(phase, disPhase)) return;
+        if (dis && drawDisFrame(phase, disPhase, selector)) return;
         boolean phaseField = renderPhaseField(phase);
         if (maxFragmentTextureUnits == 0) {
             int[] units = new int[1];

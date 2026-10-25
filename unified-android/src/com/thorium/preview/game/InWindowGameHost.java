@@ -1164,6 +1164,13 @@ public final class InWindowGameHost
         // fastest mode; a fixed one needs the exact listed mode.
         float panelHz = (float) (plan.variableRefresh && rates.length > 0
                 ? rates[rates.length - 1] : plan.panelHz);
+        // QA only (emufusion_framegen_panel_hz): a listed mode forced for pacing
+        // trials, e.g. 60 Hz for a 30 -> 60 Cemu game (one scan per output frame).
+        float forced = qaPanelHz(rates);
+        if (forced > 0.0f) {
+            Log.i(TAG, "Panel plan QA override " + panelHz + " -> " + forced + " Hz");
+            panelHz = forced;
+        }
         if (panelHz >= 20.0f && panelHz <= 1000.0f) plannedPanelHz = panelHz;
         // A variable source launched on the fastest mode is re-planned once
         // its rate is known (a 30 fps game at 4x serves 120 Hz better than
@@ -1192,6 +1199,19 @@ public final class InWindowGameHost
     // The mode this launch asked for; the direct Surface's vote must agree
     // with it (a fixed 120 vote fought a 144 Hz mode request).
     private float plannedPanelHz;
+
+    /** The QA panel override when it names a listed mode, else 0. */
+    private float qaPanelHz(double[] rates) {
+        float hz;
+        try {
+            hz = android.provider.Settings.Global.getFloat(activity.getContentResolver(),
+                    "emufusion_framegen_panel_hz", 0f);
+        } catch (RuntimeException unreadable) {
+            return 0f;
+        }
+        for (double rate : rates) if (Math.abs(rate - hz) < 0.5) return (float) rate;
+        return 0f;
+    }
 
     /** Distinct refresh rates offered at the current resolution, ascending. */
     private static double[] supportedRefreshRates(Display display) {

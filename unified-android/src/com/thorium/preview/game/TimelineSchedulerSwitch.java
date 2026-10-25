@@ -113,7 +113,8 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default synthesis.
         }
         synthesisLevel = level == DIS_SYNTHESIS_LEVEL || level == DIS_MOTION_SYNTHESIS_LEVEL ||
-                level == DIS_PHASE_SYNTHESIS_LEVEL ? level : Math.max(0, Math.min(15, level));
+                level == DIS_PHASE_SYNTHESIS_LEVEL || level == LEARNED_SELECTOR_SYNTHESIS_LEVEL ?
+                level : Math.max(0, Math.min(15, level));
         boolean dis = true;
         try {
             if (context != null) dis = Settings.Global.getInt(
@@ -200,6 +201,9 @@ public final class TimelineSchedulerSwitch {
     /** Synthesis 24 (QA): 21 with the motion refined per output phase by symmetric matching. */
     static final int DIS_PHASE_SYNTHESIS_LEVEL = 24;
 
+    /** Synthesis 25 (QA): 24 blended by the learned visibility selector (LearnedSelectorShaders). */
+    static final int LEARNED_SELECTOR_SYNTHESIS_LEVEL = 25;
+
     /**
      * DIS by default. Small (2-D) sources render synthesis 24 (21 with the
      * motion refined per output phase) and larger ones synthesis 15 with DIS
@@ -257,7 +261,8 @@ public final class TimelineSchedulerSwitch {
                 ids[i] = Integer.parseInt(parts[i].trim());
                 int level = ids[i] % 100;
                 if (ids[i] == DIS_SYNTHESIS_LEVEL || ids[i] == DIS_MOTION_SYNTHESIS_LEVEL ||
-                        ids[i] == DIS_PHASE_SYNTHESIS_LEVEL) continue;
+                        ids[i] == DIS_PHASE_SYNTHESIS_LEVEL ||
+                        ids[i] == LEARNED_SELECTOR_SYNTHESIS_LEVEL) continue;
                 if (ids[i] < 0 || ids[i] > 115 || (ids[i] > 15 && ids[i] < 100) || level > 15)
                     return DEFAULT_HOLDOUT_LEVELS.clone();
             }
