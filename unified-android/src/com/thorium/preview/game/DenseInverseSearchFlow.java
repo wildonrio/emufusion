@@ -227,6 +227,9 @@ final class DenseInverseSearchFlow {
             GLES20.glUniform2f(location(cutProgram, "uFlowSize"), sizes[used][0], sizes[used][1]);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
             if (location(generatePhase, "uBounds") >= 0) {
+                // Linked on first use: only content-bounds builds need it.
+                if (boundsProgram == 0)
+                    boundsProgram = link(DenseInverseSearchShaders.VERTEX, DenseInverseSearchShaders.BOUNDS);
                 begin(boundsProgram, 1, 1, bounds);
                 bind(boundsProgram, "uGrayA", pyramid[0][0], 0);
                 bind(boundsProgram, "uGrayC", pyramid[1][0], 1);
@@ -513,7 +516,6 @@ final class DenseInverseSearchFlow {
         phaseDensify = link(v, DenseInverseSearchShaders.PHASE_DENSIFY);
         generatePhase = link(DenseInverseSearchShaders.VERTEX_QUAD, DenseInverseSearchShaders.GENERATE_PHASE);
         cutProgram = link(v, DenseInverseSearchShaders.CUT);
-        boundsProgram = link(v, DenseInverseSearchShaders.BOUNDS);
         int[] ids = new int[1];
         GLES20.glGenFramebuffers(1, ids, 0);
         framebuffer = ids[0];
