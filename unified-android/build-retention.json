@@ -765,6 +765,10 @@
     "unified-android/build/emufusion-3.2.102-phase2-phase3-qualification-0f3489378f436517fcc77d778390d7243abbc56ee775e1167899d9519cee2ab4.apk": {
       "sha256": "0f3489378f436517fcc77d778390d7243abbc56ee775e1167899d9519cee2ab4",
       "reason": "First 3.2.102 (176) candidate (keep-alive); Thor A/B Ocarina 92.8/95.7% vs 84.9/85.0% on intended; its keep-alive copies fed the early guard and queue reserve (Wind Waker HD 34/50 ms); superseded by the build that excludes them."
+    },
+    "unified-android/build/emufusion-3.2.103-phase2-phase3-qualification-bf8ddfbd01bd7411c7f9a42d9878d22692b0151229ffcbbf54b8458fc85d0bfa.apk": {
+      "sha256": "bf8ddfbd01bd7411c7f9a42d9878d22692b0151229ffcbbf54b8458fc85d0bfa",
+      "reason": "3.2.103 (177) trial, not adopted: early guard skipped for frames right after an adjacent-scan frame; Thor Wind Waker HD 77.5% on intended vs 89.5% on 3.2.102 (more early frames). The released 3.2.102 was restored."
     }
   }
 }
