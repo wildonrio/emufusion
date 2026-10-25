@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+import re
 import unittest
 
 from tools.tests.test_first_install_startup import method, JAVA, ROOT
@@ -209,11 +210,15 @@ public final class SharedPreferences {
             'private static List<String> splitStanzas(',
             'private static String readText(',
             'private static GameSystems.SystemDef systemFromRomPath('))
+        # splitStanzas' precompiled boundary pattern.
+        methods += '\n' + re.search(r'^ *private static final Pattern STANZA_BREAK = .*;$',
+                                     source, re.M).group(0)
         harness = r'''
 package com.thorium.preview;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.regex.Pattern;
 public final class DiscoveryProbe {
   static File PEGASUS, PEGASUS_CONFIG, APP_CONFIG;
   static String canonical(String s) { try { return new File(s).getCanonicalPath(); }

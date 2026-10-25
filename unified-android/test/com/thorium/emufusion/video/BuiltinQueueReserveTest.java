@@ -15,6 +15,8 @@ public final class BuiltinQueueReserveTest {
         recoveryThatHoldsResetsTheBackoff();
         sustainedLoadReachesTwoScansAndStepsBackOneAtATime();
         withoutTimestampsRecoveryIsSlow();
+        framesShownEarlyGiveTheScanBack();
+        occasionalEarlyFramesKeepTheDepth();
         System.out.println("BuiltinQueueReserveTest passed");
     }
 
@@ -234,6 +236,56 @@ public final class BuiltinQueueReserveTest {
         }
         check(frames >= BuiltinQueueReserve.BLIND_RECOVERY_FRAMES, "blind recovery waits ~20 s: " + frames);
         eq(0L, r.extraScans(), "recovered");
+    }
+
+    /** A frame the compositor showed a whole scan before its requested slot
+     *  (reported as a wrong-slot miss), rendered 12 ms before that slot. */
+    private static BuiltinQueueReserve.Change early(BuiltinQueueReserve r, long[] clock) {
+        clock[0] += PERIOD;
+        long desired = clock[0], actual = desired - PERIOD;
+        return r.observe(true, desired, actual, desired - 12_000_000L, actual - LATENCY, PERIOD);
+    }
+
+    /** Wind Waker HD, 2026-10-24: after a startup burst, 74% of frames landed a
+     *  scan early and the rest in their slot -- a 1/3-scan judder. */
+    private static void framesShownEarlyGiveTheScanBack() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long[] clock = {30_000_000_000L};
+        burst(r, clock);
+        eq(1L, r.extraScans(), "a startup burst deepens");
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        int frames = 0;
+        BuiltinQueueReserve.Change change = BuiltinQueueReserve.Change.NONE;
+        while (change != BuiltinQueueReserve.Change.RECOVERED && frames < 1_000) {
+            // Three of every four shown early; the fourth in its slot, rendered
+            // too late to prove the earlier latch.
+            change = frames % 4 == 3 ? onTime(r, clock, 1_000_000L) : early(r, clock);
+            ++frames;
+        }
+        check(change == BuiltinQueueReserve.Change.RECOVERED,
+                "frames shown early give the scan back");
+        check(frames <= BuiltinQueueReserve.EARLY_WINDOW, "within one window: " + frames);
+        eq(0L, r.extraScans(), "back at the earliest scan");
+        eq(1L, r.earlyRecoveries(), "counted as an early recovery");
+        // Not a trial recovery: one late frame does not restore the depth.
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        check(late(r, clock) == BuiltinQueueReserve.Change.NONE, "one late frame changes nothing");
+        eq(0L, r.extraScans(), "still at the earliest scan");
+        // It still counts toward a burst: two more within the window deepen.
+        check(late(r, clock) == BuiltinQueueReserve.Change.NONE, "two late frames are not a burst");
+        check(late(r, clock) == BuiltinQueueReserve.Change.DEEPENED, "a third deepens again");
+    }
+
+    private static void occasionalEarlyFramesKeepTheDepth() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long[] clock = {40_000_000_000L};
+        burst(r, clock);
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        for (int i = 0; i < 4 * BuiltinQueueReserve.EARLY_WINDOW; ++i) {
+            BuiltinQueueReserve.Change change = i % 3 == 0 ? early(r, clock) : onTime(r, clock, 0L);
+            check(change == BuiltinQueueReserve.Change.NONE, "a third shown early is not enough");
+        }
+        eq(1L, r.extraScans(), "depth kept");
     }
 
     private static void check(boolean condition, String message) {

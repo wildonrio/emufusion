@@ -7045,9 +7045,68 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " recoveryFrames=" + builtinQueueReserve.recoveryFrames());
     }
 
+    /** Recent presents per kind: was each shown at least half a scan late? */
+    private static final int PHYSICAL_LATENESS_WINDOW = 120;
+    /** Generated frames must be this much more often late than real ones. */
+    private static final double GENERATED_LATE_EXCESS = 0.04;
+    private final boolean[] generatedLate = new boolean[PHYSICAL_LATENESS_WINDOW];
+    private final boolean[] realLate = new boolean[PHYSICAL_LATENESS_WINDOW];
+    private int generatedLateNext, generatedLateFilled, generatedLateCount;
+    private int realLateNext, realLateFilled, realLateCount;
+    private long denseGpuSharedTimingMisses;
+
+    private void recordPhysicalLateness(boolean generated, boolean late) {
+        if (generated) {
+            if (generatedLateFilled == PHYSICAL_LATENESS_WINDOW &&
+                    generatedLate[generatedLateNext]) --generatedLateCount;
+            generatedLate[generatedLateNext] = late;
+            if (late) ++generatedLateCount;
+            generatedLateNext = (generatedLateNext + 1) % PHYSICAL_LATENESS_WINDOW;
+            generatedLateFilled = Math.min(PHYSICAL_LATENESS_WINDOW, generatedLateFilled + 1);
+        } else {
+            if (realLateFilled == PHYSICAL_LATENESS_WINDOW && realLate[realLateNext]) --realLateCount;
+            realLate[realLateNext] = late;
+            if (late) ++realLateCount;
+            realLateNext = (realLateNext + 1) % PHYSICAL_LATENESS_WINDOW;
+            realLateFilled = Math.min(PHYSICAL_LATENESS_WINDOW, realLateFilled + 1);
+        }
+    }
+
+    /** Half a window of each kind first: startup stalls hit both. */
+    private boolean generatedLateBeyondReal() {
+        if (generatedLateFilled < PHYSICAL_LATENESS_WINDOW / 2 ||
+                realLateFilled < PHYSICAL_LATENESS_WINDOW / 2) return false;
+        return (double) generatedLateCount / generatedLateFilled -
+                (double) realLateCount / realLateFilled >= GENERATED_LATE_EXCESS;
+    }
+
+    // QA: with this marker present at startup, the first PHYSICAL_TRACE_LIMIT
+    // presents are logged with their requested and actual scan-out times, so
+    // early and late wrong-slot presents can be told apart per frame kind.
+    private static final java.io.File PHYSICAL_TRACE_MARKER =
+            new java.io.File("/data/local/tmp/emufusion-physical-trace");
+    private static final int PHYSICAL_TRACE_LIMIT = 2000;
+    private final boolean physicalTraceEnabled = PHYSICAL_TRACE_MARKER.exists();
+    private int physicalTraceLines;
+
     private boolean consumeDensePhysicalGpuHeadroom() {
         GpuPhysicalHeadroomLedger.Result result;
         while ((result = denseGpuHeadroom.takeCompleted()) != null) {
+            if (physicalTraceEnabled && physicalTraceLines < PHYSICAL_TRACE_LIMIT) {
+                ++physicalTraceLines;
+                Log.i(TAG, "Physical trace frame=" + result.frameId +
+                        " kind=" + (result.generated() ? "G" : "R") +
+                        " offUs=" + (result.actualNs > 0L ?
+                                (result.actualNs - result.desiredNs) / 1000L : 0L) +
+                        " renderBeforeSlotUs=" + (result.renderCompleteNs > 0L ?
+                                (result.desiredNs - result.renderCompleteNs) / 1000L : -1L) +
+                        " latchBeforeSlotUs=" + (result.latchNs > 0L ?
+                                (result.desiredNs - result.latchNs) / 1000L : -1L) +
+                        " desiredNs=" + result.desiredNs +
+                        " outcome=" + result.outcome + " reason=" + result.reason +
+                        " extraScans=" + builtinQueueReserve.extraScans() +
+                        " epoch=" + result.presentationEpoch);
+            }
             if (result.presentationEpoch != schedulerPresentationEpoch()) {
                 denseGpuAdaptation.invalidateRecoveryEvidence();
                 if (result.generated()) ++denseGpuPhysicalUnknownPairs;
@@ -7085,6 +7144,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             }
             boolean verified = result.outcome ==
                     GpuPhysicalHeadroomLedger.Outcome.VERIFIED_HEADROOM;
+            boolean missed = result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS;
+            boolean shownLate = missed && result.actualNs > 0L &&
+                    result.actualNs - result.desiredNs >= result.panelPeriodNs / 2L;
+            if (result.actualNs > 0L) recordPhysicalLateness(result.generated(), shownLate);
             adaptBuiltinQueueReserve(result);
             if (result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS) {
                 ++denseGpuPhysicalDeadlineMisses;
@@ -7110,10 +7173,21 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // in Eden's Link's Awakening (wrong-physical-slot, shader cost 0)
                 // shed four levels in four seconds this way. When our work is
                 // too heavy our own generated frames miss, and those still shed.
-                if (result.generated())
-                    failDenseGpuPairOnce(result.pairSequence, "physical-pair-deadline-miss");
-                else
+                // A generated frame sheds only when it was shown late and
+                // generated frames are late clearly more often than real ones,
+                // which carry none of our shader work. Shown early, or late no
+                // more often than real frames, it is the compositor's timing or
+                // the engine's GPU load: Wind Waker HD (2026-10-24) shed to
+                // work levels 4-5 while generated frames landed late 8% of the
+                // time, real frames 14%, and our work peaked at 4.8 of 12.3 ms.
+                if (result.generated()) {
+                    if (shownLate && generatedLateBeyondReal())
+                        failDenseGpuPairOnce(result.pairSequence, "physical-pair-deadline-miss");
+                    else
+                        ++denseGpuSharedTimingMisses;
+                } else {
                     ++denseGpuEndpointDeadlineMisses;
+                }
                 if (denseGpuTimer == null) return false;
                 continue;
             }
@@ -10994,6 +11068,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " physicalMarginMarginalPairs=" + denseGpuPhysicalMarginalPairs +
                 " physicalDeadlineMisses=" + denseGpuPhysicalDeadlineMisses +
                 " endpointDeadlineMisses=" + denseGpuEndpointDeadlineMisses +
+                " sharedTimingMisses=" + denseGpuSharedTimingMisses +
+                " lateGenerated/Real=" + generatedLateCount + "/" + generatedLateFilled + "," +
+                        realLateCount + "/" + realLateFilled +
                 " physicalUnboundEvents=" + denseGpuPhysicalUnboundEvents +
                 " physicalPending=" + denseGpuHeadroom.pendingCount() +
                 " readyTimestampSupportedMask=" + denseGpuReadyTimestampSupportedMask +
@@ -13903,6 +13980,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " builtinQueueDeepenings=" + builtinQueueReserve.deepenings() +
                 " builtinQueueReserveRecoveries=" + builtinQueueReserve.recoveries() +
                 " builtinQueueReserveFailedRecoveries=" + builtinQueueReserve.failedRecoveries() +
+                " builtinQueueEarlyRecoveries=" + builtinQueueReserve.earlyRecoveries() +
                 (timelineMode ? " timelineMode=1 timelineActive=" + (timelineActive ? 1 : 0) +
                         " " + timeline.diagnostics() : "") +
                 " presentationResets=" + frameRate.presentationResetCallers() +

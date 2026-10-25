@@ -2880,12 +2880,11 @@ final class ImportManager {
         if (name.isEmpty()) return null;
         try {
             String exact = RomCatalogName.thumbnailName(name);
-            for (String href : catalogEntries(game.system, cacheRoot, category)) {
-                if (!exact.equals(decode(href))) continue;
+            String href = catalogEntries(game.system, cacheRoot, category).withDecodedName(exact);
+            if (href != null)
                 return new CatalogMatch("https://thumbnails.libretro.com/" +
                         encodePath(game.system.libretro) + "/" + category + "/" + encodeHref(href),
                         cleanTitle(RomCatalogName.baseTitle(name)));
-            }
             CatalogMatch titled = catalogMatch(game.system, RomCatalogName.baseTitle(name),
                     cacheRoot, category);
             if (titled != null)
@@ -2952,18 +2951,46 @@ final class ImportManager {
         return table;
     }
 
-    /** Every thumbnail file name one catalog publishes, in listing order. */
-    private List<String> catalogEntries(GameSystems.SystemDef system, File cacheRoot,
-                                        String category) throws Exception {
-        List<String> hrefs = new ArrayList<>();
-        if (system == null || system.libretro.isEmpty()) return hrefs;
+    /**
+     * Prepared listings by cache file version, least recently used first. The
+     * media pass asks one system's one or two listings about each of its
+     * games in turn, so a few cover it without holding every platform's.
+     */
+    private static final int PREPARED_CATALOGS = 6;
+    private final Map<String, TitleMatcher.Catalog> preparedCatalogs = Collections.synchronizedMap(
+            new LinkedHashMap<String, TitleMatcher.Catalog>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, TitleMatcher.Catalog> eldest) {
+                    return size() > PREPARED_CATALOGS;
+                }
+            });
+
+    /**
+     * Every thumbnail file name one catalog publishes, in listing order,
+     * prepared once per cache file version: the listing is megabytes of text
+     * and thousands of entries, and the media pass asks it several questions
+     * per game (see TitleMatcher.Catalog).
+     */
+    private TitleMatcher.Catalog catalogEntries(GameSystems.SystemDef system, File cacheRoot,
+                                                String category) throws Exception {
+        if (system == null || system.libretro.isEmpty())
+            return new TitleMatcher.Catalog(Collections.<String>emptyList());
         File cache = new File(cacheRoot, "libretro-" + system.folder + "-" + category + ".html");
-        String html = cachedText(cache,
-                "https://thumbnails.libretro.com/" + encodePath(system.libretro) + "/" + category + "/",
-                7L * 24L * 60L * 60L * 1000L, 32L * 1024L * 1024L);
+        long maxAge = 7L * 24L * 60L * 60L * 1000L;
+        String html = null;
+        if (!(LibraryHttp.reusable(cache) && System.currentTimeMillis() - cache.lastModified() < maxAge))
+            html = cachedText(cache, "https://thumbnails.libretro.com/" + encodePath(system.libretro) +
+                    "/" + category + "/", maxAge, 32L * 1024L * 1024L);
+        String key = cache.getPath() + ":" + cache.lastModified() + ":" + cache.length();
+        TitleMatcher.Catalog prepared = preparedCatalogs.get(key);
+        if (prepared != null) return prepared;
+        if (html == null) html = readText(cache);
+        List<String> hrefs = new ArrayList<>();
         Matcher matcher = HREF.matcher(html);
         while (matcher.find()) hrefs.add(matcher.group(1));
-        return hrefs;
+        prepared = new TitleMatcher.Catalog(hrefs);
+        preparedCatalogs.put(key, prepared);
+        return prepared;
     }
 
     /**
@@ -5052,18 +5079,37 @@ final class ImportManager {
         }
     }
     private static void writeJsonAtomic(File target, JSONArray value) throws Exception { writeTextAtomic(target, value.toString(2)+"\n"); }
+    // Hand-authored and older generated Pegasus metadata commonly starts the
+    // next game immediately after the previous asset field, without a blank
+    // separator. Every column-zero `game:` is a record boundary in addition
+    // to conventional blank-line stanzas.
+    private static final Pattern STANZA_BREAK = Pattern.compile("(?m)(?=^game:)|\\n\\s*\\n");
+
     private static List<String> splitStanzas(String text) {
         List<String> values = new ArrayList<>();
-        // Hand-authored and older generated Pegasus metadata commonly starts
-        // the next game immediately after the previous asset field, without a
-        // blank separator. Treat every column-zero `game:` as a record boundary
-        // in addition to accepting conventional blank-line stanzas.
-        for (String item : text.split("(?m)(?=^game:)|\\n\\s*\\n"))
+        for (String item : STANZA_BREAK.split(text))
             if (!item.trim().isEmpty()) values.add(item.trim());
         return values;
     }
     private static String joinStanzas(List<String> values) { StringBuilder out=new StringBuilder(); for(String value:values){if(out.length()>0)out.append("\n\n");out.append(value.trim());}return out.append('\n').toString(); }
-    private static String field(String stanza, String key) { String prefix=key+":"; for(String line:stanza.split("\\n"))if(line.startsWith(prefix))return line.substring(prefix.length()).trim(); return ""; }
+    /**
+     * The first line's value for one key. Scans lines in place: a library
+     * publish reads every stanza of every metafile a dozen times over, and
+     * String.split("\\n") compiles a regular expression per call (two-character
+     * patterns ending in a letter miss its fast path); on the Thor that was
+     * two thirds of the media pass's CPU with the screens off (2026-10-24).
+     */
+    private static String field(String stanza, String key) {
+        String prefix = key + ":";
+        for (int start = 0; start < stanza.length(); ) {
+            int end = stanza.indexOf('\n', start);
+            if (end < 0) end = stanza.length();
+            if (stanza.startsWith(prefix, start) && start + prefix.length() <= end)
+                return stanza.substring(start + prefix.length(), end).trim();
+            start = end + 1;
+        }
+        return "";
+    }
     private static String removeField(String stanza, String key) { String prefix=key+":"; StringBuilder out=new StringBuilder(); for(String line:stanza.split("\\n")){if(line.startsWith(prefix))continue;if(out.length()>0)out.append('\n');out.append(line);}return out.toString(); }
     private static GameSystems.SystemDef systemFromRomPath(String path) {
         return GameSystems.byPath(new File(path));

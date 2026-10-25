@@ -446,13 +446,13 @@ class PreviewBreakTest(unittest.TestCase):
             volumes)
         self.assertIn("? appVolumeGain : 0f;", volumes)
         prepared = body(self.preview, "player.setOnPreparedListener(", "});")
-        self.assertIn("if (!playersPaused) mediaPlayer.start();", prepared)
+        self.assertIn("if (!playersPaused && !windowStopped) mediaPlayer.start();", prepared)
 
     def test_resume_starts_the_paused_decoders_again(self):
         resume = body(self.preview, "private void resumePlayers() {",
                       "private void applyPlayerVolumes() {")
         self.assertIn("playersPaused = false;", resume)
-        self.assertIn("for (PlayerSlot slot : slots) slot.resume();", resume)
+        self.assertIn("if (slots != null && !windowStopped)\n            for (PlayerSlot slot : slots) slot.resume();", resume)
         self.assertLess(resume.index("playersPaused = false;"),
                         resume.index("applyPlayerVolumes();"))
         slot_resume = body(self.preview, "void resume() {", "private void open() {")

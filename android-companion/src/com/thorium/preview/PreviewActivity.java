@@ -99,6 +99,11 @@ public final class PreviewActivity extends Activity
     // A "browser break": every decoder is held paused and silent while
     // EmuFusion's browser is open, then started again where it stopped.
     private boolean playersPaused;
+    // Stopped: the device asleep with both panels off, or this window covered.
+    // The current movie and its warm neighbours otherwise kept decoding: the
+    // Thor looped two previews through the hardware decoder for hours with
+    // both panels off (2026-10-24).
+    private boolean windowStopped;
     private long selectionGeneration;
     private long currentSequence;
     private boolean advanceOnCompletion;
@@ -655,7 +660,7 @@ public final class PreviewActivity extends Activity
     private void resumePlayers() {
         if (!playersPaused) return;
         playersPaused = false;
-        if (slots != null)
+        if (slots != null && !windowStopped)
             for (PlayerSlot slot : slots) slot.resume();
         applyPlayerVolumes();
     }
@@ -1208,12 +1213,27 @@ public final class PreviewActivity extends Activity
     protected void onStart() {
         super.onStart();
         if (ownsVisibilityFlags) windowState.started(this);
+        holdWhileStopped(false);
     }
 
     @Override
     protected void onStop() {
+        holdWhileStopped(true);
         if (ownsVisibilityFlags) windowState.stopped(this);
         super.onStop();
+    }
+
+    /** Pauses every decoder while nothing can see them, keeping their frames. */
+    private void holdWhileStopped(boolean stopped) {
+        if (windowStopped == stopped) return;
+        windowStopped = stopped;
+        // A browser break already holds them, and its end checks this flag.
+        if (slots == null || playersPaused) return;
+        if (stopped) renderedVideoAdvancing = false;
+        for (PlayerSlot slot : slots) {
+            if (stopped) slot.pause();
+            else slot.resume();
+        }
     }
 
     @Override
@@ -1413,9 +1433,9 @@ public final class PreviewActivity extends Activity
                             + " durationMs=" + mediaPlayer.getDuration());
                     applyFit(mediaPlayer.getVideoWidth(), mediaPlayer.getVideoHeight());
                     prepared = true;
-                    // A decoder that finishes preparing mid-break must not
-                    // undo the break; resumePlayers() starts it afterwards.
-                    if (!playersPaused) mediaPlayer.start();
+                    // A decoder that finishes preparing mid-break or while
+                    // stopped must not undo the hold; the resume starts it.
+                    if (!playersPaused && !windowStopped) mediaPlayer.start();
                 });
                 // Game selections hard-loop here even on vendor players that
                 // emit completion despite looping. System-level previews report
@@ -1430,7 +1450,7 @@ public final class PreviewActivity extends Activity
                     }
                     try {
                         mediaPlayer.seekTo(0);
-                        mediaPlayer.start();
+                        if (!playersPaused && !windowStopped) mediaPlayer.start();
                     } catch (Exception error) {
                         Log.w("ThorPreview", "Unable to restart looping preview " + path, error);
                     }

@@ -123,7 +123,8 @@ class WorkAdaptationTest(unittest.TestCase):
                       "                denseGpuAdaptation.invalidateRecoveryEvidence();", generator)
         self.assertNotIn("if (!verified) denseGpuAdaptation.invalidateRecoveryEvidence();", generator)
         # A real frame on the wrong slot is engine pacing: counted, never shed.
-        self.assertIn("                else\n                    ++denseGpuEndpointDeadlineMisses;", generator)
+        self.assertIn("                } else {\n                    ++denseGpuEndpointDeadlineMisses;\n                }",
+                      generator)
         self.assertNotIn('shedDenseWork("physical-pair-deadline-miss");', generator)
 
 

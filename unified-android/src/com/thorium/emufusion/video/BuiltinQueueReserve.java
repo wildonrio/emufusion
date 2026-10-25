@@ -32,6 +32,13 @@ package com.thorium.emufusion.video;
  * been shown a scan sooner. A late frame soon after that restores the depth at
  * once and doubles the evidence the next recovery needs, so the depth cannot
  * flip-flop under a lasting load.</li>
+ * <li>It also gives the scan back when most frames are already shown a whole
+ * scan before the slot they asked for: the compositor is not holding them, so
+ * the extra depth adds no lead, only frames that alternately land early and on
+ * time. Wind Waker HD (Cemu, 2026-10-24): a startup burst deepened it; then
+ * 74% of generated and real frames landed a scan early and the rest on time,
+ * a 1/3-scan judder for the rest of the run, against 92-95% in their slot
+ * before the deepening. A burst is needed to deepen again.</li>
  * </ul>
  */
 public final class BuiltinQueueReserve {
@@ -51,6 +58,10 @@ public final class BuiltinQueueReserve {
     public static final int BLIND_RECOVERY_FRAMES = 2400;
     /** A late frame within this time of a recovery means it did not hold. */
     public static final long RECOVERY_HOLD_NS = 10_000_000_000L;
+    /** At an extra depth, this many of {@link #EARLY_WINDOW} frames shown a
+     *  scan early give the depth back. */
+    public static final int EARLY_TO_RECOVER = 60;
+    public static final int EARLY_WINDOW = 120;
 
     public enum Change { NONE, DEEPENED, RECOVERED, RESTORED }
 
@@ -61,12 +72,14 @@ public final class BuiltinQueueReserve {
     private int earlierFrames;
     private int recoveryFrames = RECOVERY_FRAMES;
     private long recoveredAtNs;
-    private long deepenings, recoveries, failedRecoveries;
+    private int windowFrames, earlyFrames;
+    private long deepenings, recoveries, failedRecoveries, earlyRecoveries;
 
     public int extraScans() { return extraScans; }
     public long deepenings() { return deepenings; }
     public long recoveries() { return recoveries; }
     public long failedRecoveries() { return failedRecoveries; }
+    public long earlyRecoveries() { return earlyRecoveries; }
     public int recoveryFrames() { return recoveryFrames; }
 
     /**
@@ -91,6 +104,22 @@ public final class BuiltinQueueReserve {
                           long latchNs, long panelPeriodNs) {
         if (panelPeriodNs <= 0L) return Change.NONE;
         long nowNs = actualNs > 0L ? actualNs : desiredNs;
+        if (extraScans > 0 && !within(changedAtNs, nowNs)) {
+            if (++windowFrames > EARLY_WINDOW) {
+                windowFrames = 1;
+                earlyFrames = 0;
+            }
+            if (actualNs > 0L && desiredNs - actualNs >= panelPeriodNs / 2L &&
+                    ++earlyFrames >= EARLY_TO_RECOVER) {
+                ++recoveries;
+                ++earlyRecoveries;
+                // Not a trial: the depth was not holding frames back, so one
+                // late frame later is no reason to restore it.
+                recoveredAtNs = 0L;
+                change(nowNs, -1);
+                return Change.RECOVERED;
+            }
+        }
         if (late) {
             earlierFrames = 0;
             // Shown late, and rendering finished close enough to the slot that
@@ -159,5 +188,7 @@ public final class BuiltinQueueReserve {
         if (scans > 0) deepenedAtNs = nowNs;
         misses = 0;
         earlierFrames = 0;
+        windowFrames = 0;
+        earlyFrames = 0;
     }
 }

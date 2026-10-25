@@ -3,10 +3,18 @@ package com.thorium.emufusion.metadata;
 import java.io.File;
 import java.net.URLDecoder;
 import java.text.Normalizer;
+import java.util.AbstractList;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Decides which catalog asset belongs to a game title.
@@ -79,6 +87,22 @@ public final class TitleMatcher {
     private static final String[] BUILD_VARIANTS =
             new String[]{"demo", "kiosk", "prototype", "proto", "beta", "sample"};
 
+    // Compiled once: these run over every entry of listings thousands long.
+    private static final Pattern[] BUILD_VARIANT_PATTERNS = new Pattern[BUILD_VARIANTS.length];
+    static {
+        for (int i = 0; i < BUILD_VARIANTS.length; i++)
+            BUILD_VARIANT_PATTERNS[i] = Pattern.compile(".*\\b" + BUILD_VARIANTS[i] + "\\b.*");
+    }
+    private static final Pattern RELAXABLE_WORDS = Pattern.compile(RELAXABLE);
+    private static final Pattern DUMP_TAG = Pattern.compile("\\([^()]*\\)|\\[[^\\[\\]]*]");
+    private static final Pattern MARKS = Pattern.compile("\\p{M}+");
+    private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+");
+    private static final Pattern SPACES = Pattern.compile("\\s+");
+    private static final Pattern ARTICLES = Pattern.compile("\\b(?:the|a|an)\\b");
+    private static final Pattern AND = Pattern.compile("\\band\\b");
+    private static final Pattern LONE_NUMERAL = Pattern.compile("[ivx]");
+    private static final Pattern DIGITS = Pattern.compile("[0-9]+");
+
     /** A chosen candidate, carrying why it was chosen. */
     public static final class Match {
         public final String name;
@@ -104,6 +128,139 @@ public final class TitleMatcher {
     }
 
     /**
+     * One catalog listing, with the text every question derives from each
+     * entry worked out once.
+     *
+     * <p>The importer asks a listing about one title at a time, several times
+     * per game, and each question used to re-derive every entry: a dozen
+     * regular expressions over each of thousands of names. With the screens
+     * off, a library media pass on the Thor spent 4-5 s of CPU per game on it,
+     * about two cores for the whole pass (2026-10-24). The answers are the
+     * ones that per-question derivation gives; the indexes only find them
+     * without visiting every entry.
+     */
+    public static final class Catalog extends AbstractList<String> {
+        private static final int INELIGIBLE = -1;
+        private static final int UTILITY = 1 << 6;
+        private static final int REGION_SHIFT = 8;
+        private static final int DEPTH_SHIFT = 12;
+
+        private final String[] names;
+        /** Per entry: build-variant bits, utility flag, region rank, depth. */
+        private final int[] traits;
+        private final Map<String, int[]> byForm = new HashMap<>();
+        /** compact(form) + tab + sequelKey(form), for the numeral tier. */
+        private final Map<String, int[]> byCompact = new HashMap<>();
+        /** Every non-empty normalized stem, sorted for prefix questions. */
+        private final String[] stems;
+        private volatile Map<String, Integer> byDecodedName;
+
+        public Catalog(Collection<String> candidateNames) {
+            names = candidateNames.toArray(new String[0]);
+            traits = new int[names.length];
+            List<String> sorted = new ArrayList<>(names.length);
+            for (int i = 0; i < names.length; i++) {
+                String name = names[i];
+                if (name == null || name.isEmpty()) {
+                    traits[i] = INELIGIBLE;
+                    continue;
+                }
+                String decoded = decode(name);
+                int bits = variantBits(decode(decoded).toLowerCase(Locale.US));
+                if (isUtilityTitle(decoded)) bits |= UTILITY;
+                traits[i] = bits | regionRank(decoded) << REGION_SHIFT |
+                        variantDepth(decoded) << DEPTH_SHIFT;
+                for (String form : candidateForms(decoded)) {
+                    add(byForm, form, i);
+                    String compact = compact(form);
+                    if (!compact.isEmpty()) add(byCompact, compact + '\t' + sequelKey(form), i);
+                }
+                String stem = normalize(stem(decoded));
+                if (!stem.isEmpty()) sorted.add(stem);
+            }
+            stems = sorted.toArray(new String[0]);
+            Arrays.sort(stems);
+        }
+
+        /** This listing's prepared form, or one prepared for a single question. */
+        static Catalog of(Collection<String> candidateNames) {
+            return candidateNames instanceof Catalog ? (Catalog) candidateNames :
+                    new Catalog(candidateNames);
+        }
+
+        @Override
+        public String get(int index) {
+            return names[index];
+        }
+
+        @Override
+        public int size() {
+            return names.length;
+        }
+
+        /** The first entry whose decoded file name is exactly this, or null. */
+        public String withDecodedName(String decodedName) {
+            Map<String, Integer> index = byDecodedName;
+            if (index == null) {
+                index = new HashMap<>();
+                for (int i = names.length - 1; i >= 0; i--)
+                    if (names[i] != null) index.put(decode(names[i]), i);
+                byDecodedName = index;
+            }
+            Integer at = index.get(decodedName);
+            return at == null ? null : names[at];
+        }
+
+        private static void add(Map<String, int[]> index, String key, int entry) {
+            int[] entries = index.get(key);
+            if (entries == null) {
+                index.put(key, new int[]{entry});
+                return;
+            }
+            // Entries arrive in listing order, so only the last can repeat.
+            if (entries[entries.length - 1] == entry) return;
+            int[] grown = Arrays.copyOf(entries, entries.length + 1);
+            grown[entries.length] = entry;
+            index.put(key, grown);
+        }
+
+        private static void mark(Map<String, int[]> index, String key, BitSet into) {
+            int[] entries = index.get(key);
+            if (entries != null) for (int entry : entries) into.set(entry);
+        }
+
+        /** Whether one entry may answer this request; see isUnwantedVariant. */
+        private boolean eligible(int entry, int requestedVariants, boolean utilityRequest) {
+            int bits = traits[entry];
+            if (bits == INELIGIBLE) return false;
+            if ((bits & (UTILITY - 1) & ~requestedVariants) != 0) return false;
+            // A cheat cart never stands in for a game, and a game never stands
+            // in for a cheat cart.
+            return ((bits & UTILITY) != 0) == utilityRequest;
+        }
+
+        private Match match(int entry, int tier) {
+            int bits = traits[entry];
+            return new Match(names[entry], tier, (bits >> REGION_SHIFT) & 0xF,
+                    bits >>> DEPTH_SHIFT);
+        }
+
+        private boolean hasStem(String stem) {
+            return Arrays.binarySearch(stems, stem) >= 0;
+        }
+
+        /**
+         * Whether some stem starts with this prefix. Every prefix asked ends
+         * in a space and stems are trimmed, so a match is always longer.
+         */
+        private boolean hasStemStartingWith(String prefix) {
+            int at = Arrays.binarySearch(stems, prefix);
+            if (at < 0) at = -at - 1;
+            return at < stems.length && stems[at].startsWith(prefix);
+        }
+    }
+
+    /**
      * Chooses the catalog entry that belongs to {@code requestedTitle}, or
      * null when none does.
      *
@@ -114,18 +271,27 @@ public final class TitleMatcher {
     public static Match select(String requestedTitle, Collection<String> candidateNames,
                                Set<String> claimedTitles) {
         if (requestedTitle == null || candidateNames == null) return null;
+        Catalog catalog = Catalog.of(candidateNames);
         Set<String> full = fullTitleForms(requestedTitle);
         boolean utilityRequest = isUtilityTitle(requestedTitle);
-        String requestedLower = decode(requestedTitle).toLowerCase(Locale.US);
+        int requestedVariants = variantBits(decode(requestedTitle).toLowerCase(Locale.US));
 
+        // Resolving "II" to "2" is what lets a catalog spell a sequel
+        // differently from the ROM. It also resolves a standalone "X" to
+        // "10", so the instalment numbers must agree before it is trusted.
+        BitSet exact = new BitSet();
+        BitSet reached = new BitSet();
+        for (String form : full) {
+            Catalog.mark(catalog.byForm, form, exact);
+            String compact = compact(form);
+            if (!compact.isEmpty())
+                Catalog.mark(catalog.byCompact, compact + '\t' + sequelKey(form), reached);
+        }
+        reached.or(exact);
         Match best = null;
-        for (String name : candidateNames) {
-            String decoded = eligible(name, requestedLower, utilityRequest);
-            if (decoded == null) continue;
-            int tier = fullTier(full, candidateForms(decoded));
-            if (tier == TIER_NONE) continue;
-            best = better(best, new Match(name, tier, regionRank(decoded),
-                    variantDepth(decoded)));
+        for (int i = reached.nextSetBit(0); i >= 0; i = reached.nextSetBit(i + 1)) {
+            if (!catalog.eligible(i, requestedVariants, utilityRequest)) continue;
+            best = better(best, catalog.match(i, exact.get(i) ? TIER_EXACT : TIER_COMPACT));
         }
         if (best != null) return best;
 
@@ -137,21 +303,18 @@ public final class TitleMatcher {
         // The short name is a series root ("Phantasy Star", "Spider-Man"):
         // several distinct catalog entries extend it, so dropping the
         // subtitle names a family and not a game.
-        if (isSeriesPrefix(base, candidateNames)) return null;
+        if (isSeriesPrefix(base, catalog)) return null;
 
+        // The short name itself, or its numeral-resolved spelling naming the
+        // same instalment.
+        BitSet shortened = new BitSet();
+        Catalog.mark(catalog.byForm, base, shortened);
         String compactBase = compact(base);
-        String baseSequel = sequelKey(base);
-        for (String name : candidateNames) {
-            String decoded = eligible(name, requestedLower, utilityRequest);
-            if (decoded == null) continue;
-            for (String form : candidateForms(decoded)) {
-                boolean reached = base.equals(form) ||
-                        (!compactBase.isEmpty() && compactBase.equals(compact(form)));
-                if (!reached || !baseSequel.equals(sequelKey(form))) continue;
-                best = better(best, new Match(name, TIER_SUBTITLE, regionRank(decoded),
-                        variantDepth(decoded)));
-                break;
-            }
+        if (!compactBase.isEmpty())
+            Catalog.mark(catalog.byCompact, compactBase + '\t' + sequelKey(base), shortened);
+        for (int i = shortened.nextSetBit(0); i >= 0; i = shortened.nextSetBit(i + 1)) {
+            if (!catalog.eligible(i, requestedVariants, utilityRequest)) continue;
+            best = better(best, catalog.match(i, TIER_SUBTITLE));
         }
         return best;
     }
@@ -177,24 +340,25 @@ public final class TitleMatcher {
         if (requestedTitle == null || candidateNames == null) return false;
         Set<String> full = fullTitleForms(requestedTitle);
         if (full.isEmpty()) return false;
-        String base = subtitleBase(requestedTitle);
-        for (String name : candidateNames) {
-            if (name == null || name.isEmpty()) continue;
-            String candidate = normalize(stem(decode(name)));
-            if (candidate.isEmpty()) continue;
-            if (fullTier(full, candidateForms(decode(name))) != TIER_NONE) return true;
-            // A catalog that files the game under a longer name still has its
-            // box: "Phantasy Star IV" is what "Phantasy Star: The End of the
-            // Millenium" is called there, and "Romance of the Three Kingdoms
-            // III" gains a subtitle. Extra words on the catalog's side are
-            // evidence; extra words on the request's side are not, or
-            // "Aladdin" would vouch for "Aladdin II" and every ROM hack named
-            // "<somebody>'s Super Mario World" would vouch for itself.
-            if (!base.isEmpty() && (base.equals(candidate) ||
-                    candidate.startsWith(base + " "))) return true;
-            for (String form : full)
-                if (candidate.startsWith(form + " ")) return true;
+        Catalog catalog = Catalog.of(candidateNames);
+        for (String form : full) {
+            if (catalog.byForm.containsKey(form)) return true;
+            String compact = compact(form);
+            if (!compact.isEmpty() &&
+                    catalog.byCompact.containsKey(compact + '\t' + sequelKey(form))) return true;
         }
+        // A catalog that files the game under a longer name still has its
+        // box: "Phantasy Star IV" is what "Phantasy Star: The End of the
+        // Millenium" is called there, and "Romance of the Three Kingdoms
+        // III" gains a subtitle. Extra words on the catalog's side are
+        // evidence; extra words on the request's side are not, or
+        // "Aladdin" would vouch for "Aladdin II" and every ROM hack named
+        // "<somebody>'s Super Mario World" would vouch for itself.
+        String base = subtitleBase(requestedTitle);
+        if (!base.isEmpty() && (catalog.hasStem(base) || catalog.hasStemStartingWith(base + " ")))
+            return true;
+        for (String form : full)
+            if (catalog.hasStemStartingWith(form + " ")) return true;
         return false;
     }
 
@@ -231,49 +395,13 @@ public final class TitleMatcher {
         return depth;
     }
 
-    /** Returns the decoded candidate when it may answer this request. */
-    private static String eligible(String name, String requestedLower, boolean utilityRequest) {
-        if (name == null || name.isEmpty()) return null;
-        String decoded = decode(name);
-        if (isUnwantedVariant(decoded, requestedLower)) return null;
-        // A cheat cart never stands in for a game, and a game never stands in
-        // for a cheat cart.
-        if (isUtilityTitle(decoded) != utilityRequest) return null;
-        return decoded;
-    }
-
-    private static int fullTier(Set<String> full, Set<String> candidate) {
-        for (String form : full)
-            if (candidate.contains(form)) return TIER_EXACT;
-        // Resolving "II" to "2" is what lets a catalog spell a sequel
-        // differently from the ROM. It also resolves a standalone "X" to
-        // "10", so the instalment numbers must agree before it is trusted.
-        for (String form : full) {
-            String compact = compact(form);
-            if (compact.isEmpty()) continue;
-            for (String other : candidate) {
-                if (!compact.equals(compact(other))) continue;
-                if (sequelKey(form).equals(sequelKey(other))) return TIER_COMPACT;
-            }
-        }
-        return TIER_NONE;
-    }
-
     /**
      * True when several distinct catalog entries extend {@code base} with
      * further words, i.e. the short name is a series root rather than a game.
      */
     static boolean isSeriesPrefix(String base, Collection<String> candidateNames) {
         if (base == null || base.isEmpty()) return false;
-        String prefix = base + " ";
-        Set<String> extensions = new LinkedHashSet<>();
-        for (String name : candidateNames) {
-            if (name == null || name.isEmpty()) continue;
-            String candidate = normalize(stem(decode(name)));
-            if (candidate.startsWith(prefix) && candidate.length() > prefix.length())
-                extensions.add(candidate);
-        }
-        return !extensions.isEmpty();
+        return Catalog.of(candidateNames).hasStemStartingWith(base + " ");
     }
 
     /** Every spelling of the requested title that still names the whole game. */
@@ -282,7 +410,8 @@ public final class TitleMatcher {
         String key = normalize(title);
         if (key.isEmpty()) return values;
         addForms(values, key);
-        String relaxed = collapse(key.replaceAll(RELAXABLE, " ")).replace(" the the ", " the ");
+        String relaxed = collapse(RELAXABLE_WORDS.matcher(key).replaceAll(" "))
+                .replace(" the the ", " the ");
         addForms(values, relaxed);
         if (relaxed.startsWith("the ")) addForms(values, relaxed.substring(4));
         // One catalog files this under its Japanese name entirely.
@@ -349,11 +478,11 @@ public final class TitleMatcher {
         String previous;
         do {
             previous = title;
-            title = title.replaceAll("\\([^()]*\\)|\\[[^\\[\\]]*]", " ");
+            title = DUMP_TAG.matcher(title).replaceAll(" ");
         } while (!title.equals(previous));
-        title = Normalizer.normalize(title, Normalizer.Form.NFKD).replaceAll("\\p{M}+", "");
+        title = MARKS.matcher(Normalizer.normalize(title, Normalizer.Form.NFKD)).replaceAll("");
         title = title.toLowerCase(Locale.US).replace("&", " and ");
-        return collapse(title.replaceAll("[^a-z0-9]+", " "));
+        return collapse(NON_WORD.matcher(title).replaceAll(" "));
     }
 
     /** Roman numerals resolved and spacing removed, for sequel spelling drift. */
@@ -377,10 +506,10 @@ public final class TitleMatcher {
         if (normalized == null || normalized.isEmpty()) return "";
         String[] tokens = normalized.split(" ");
         String last = tokens[tokens.length - 1];
-        if (last.length() == 1 && last.matches("[ivx]")) return "?" + last;
+        if (last.length() == 1 && LONE_NUMERAL.matcher(last).matches()) return "?" + last;
         String resolved = arabic(last, "");
         if (!resolved.isEmpty()) return resolved;
-        return last.matches("[0-9]+") ? last : "";
+        return DIGITS.matcher(last).matches() ? last : "";
     }
 
     /**
@@ -429,11 +558,19 @@ public final class TitleMatcher {
      */
     public static boolean isUnwantedVariant(String candidate, String requestedLower) {
         String candidateLower = decode(candidate).toLowerCase(Locale.US);
-        for (int i = 0; i < BUILD_VARIANTS.length; i++) {
-            if (candidateLower.matches(".*\\b" + BUILD_VARIANTS[i] + "\\b.*") &&
-                    !requestedLower.matches(".*\\b" + BUILD_VARIANTS[i] + "\\b.*")) return true;
+        for (int i = 0; i < BUILD_VARIANT_PATTERNS.length; i++) {
+            if (BUILD_VARIANT_PATTERNS[i].matcher(candidateLower).matches() &&
+                    !BUILD_VARIANT_PATTERNS[i].matcher(requestedLower).matches()) return true;
         }
         return false;
+    }
+
+    /** One bit per build variant this lower-cased name declares. */
+    private static int variantBits(String lower) {
+        int bits = 0;
+        for (int i = 0; i < BUILD_VARIANT_PATTERNS.length; i++)
+            if (BUILD_VARIANT_PATTERNS[i].matcher(lower).matches()) bits |= 1 << i;
+        return bits;
     }
 
     /** Every normalized title in a collection, for the subtitle guard. */
@@ -461,15 +598,15 @@ public final class TitleMatcher {
     }
 
     private static String articleless(String normalized) {
-        return collapse(normalized.replaceAll("\\b(?:the|a|an)\\b", " "));
+        return collapse(ARTICLES.matcher(normalized).replaceAll(" "));
     }
 
     private static String andless(String normalized) {
-        return collapse(normalized.replaceAll("\\band\\b", " "));
+        return collapse(AND.matcher(normalized).replaceAll(" "));
     }
 
     private static String collapse(String value) {
-        return value.replaceAll("\\s+", " ").trim();
+        return SPACES.matcher(value).replaceAll(" ").trim();
     }
 
     private static String arabic(String token, String fallback) {

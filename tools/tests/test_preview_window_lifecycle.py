@@ -414,6 +414,9 @@ public class PreviewActivity extends android.app.Activity {
         ownsVisibilityFlags = valid;
         if (valid) windowState.created(this);
     }
+    // Decoder holds are covered by test_library_idle_cpu; this harness is
+    // about window visibility only.
+    void holdWhileStopped(boolean stopped) {}
 """ + callbacks + "\n}"
         service_fixture = """
 package com.thorium.preview;

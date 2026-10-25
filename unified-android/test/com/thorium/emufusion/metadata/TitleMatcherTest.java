@@ -42,6 +42,7 @@ public final class TitleMatcherTest {
         collapsedNumeralsRespectTheInstalment();
         specialBuildsStayOutOfRetailSlots();
         artlessProbeIgnoresEveryGuard();
+        aPreparedCatalogGivesTheSameAnswers();
         System.out.println("TitleMatcherTest passed");
     }
 
@@ -269,6 +270,51 @@ public final class TitleMatcherTest {
         TestSupport.truth(!TitleMatcher.hasAnyCandidate("Aladdin II",
                         Arrays.asList("Aladdin (USA).png", "Aladdin (Europe).png")),
                 "and neither does the pirate sequel");
+    }
+
+    /**
+     * The importer asks one prepared listing about every game. Preparing it
+     * changes how an answer is found, never which answer: order (the first
+     * of equal candidates wins), every tier and every guard are the same.
+     */
+    private static void aPreparedCatalogGivesTheSameAnswers() {
+        List<String> listing = Arrays.asList(
+                "Aladdin (USA).png", "Aladdin (Europe).png", "Aladdin%20(Japan).png",
+                "Action Replay (Europe) (Unl).png", "Action 52 (USA) (Unl).png",
+                "Mega Man X (USA).png", "Mega Man 10 (USA).png",
+                "Golden Axe II (World).png", "Gauntlet IV (USA).png",
+                "Bass Masters Classic (USA).png", "Bass Masters Classic - Pro Edition (USA).png",
+                "Phantasy Star II (USA).png", "Phantasy Star IV (USA).png",
+                "Sonic the Hedgehog 3 (USA).png", "Sonic the Hedgehog 3 (Prototype).png",
+                "Sonic _ Knuckles (World).png", "Uncharted Waters (USA).png",
+                "Addams Family, The (USA).png", "", "Judge Dredd (USA).png");
+        TitleMatcher.Catalog catalog = new TitleMatcher.Catalog(listing);
+        TestSupport.equal(listing.size(), catalog.size(), "the listing keeps every entry");
+        TestSupport.equal("Aladdin%20(Japan).png", catalog.withDecodedName("Aladdin (Japan).png"),
+                "an entry is found by its decoded file name");
+        TestSupport.equal(null, catalog.withDecodedName("Aladdin (Brazil).png"),
+                "and an absent one is not");
+        String[] titles = {"Aladdin", "Aladdin II", "Action Replay Max", "Mega Man X",
+                "Mega Man 10", "Golden Axe 2", "Gauntlet 4", "Bass Masters Classic: Pro Edition",
+                "Bass Masters Classic", "Phantasy Star: The End of the Millenium",
+                "Phantasy Star II", "Sonic the Hedgehog 3", "Sonic the Hedgehog 3 (Prototype)",
+                "Sonic & Knuckles", "Uncharted Waters: New Horizons", "The Addams Family",
+                "Judge Dredd: The Movie", ""};
+        for (Set<String> claimed : Arrays.asList(Collections.<String>emptySet(), claimed())) {
+            for (String title : titles) {
+                TitleMatcher.Match plain = TitleMatcher.select(title, new ArrayList<>(listing), claimed);
+                TitleMatcher.Match prepared = TitleMatcher.select(title, catalog, claimed);
+                TestSupport.equal(describe(plain), describe(prepared),
+                        "the prepared listing answers \"" + title + "\" the same way");
+                TestSupport.equal(TitleMatcher.hasAnyCandidate(title, new ArrayList<>(listing)),
+                        TitleMatcher.hasAnyCandidate(title, catalog),
+                        "and its artwork probe agrees for \"" + title + "\"");
+            }
+        }
+    }
+
+    private static String describe(TitleMatcher.Match match) {
+        return match == null ? "none" : match.name + " tier " + match.tier;
     }
 
     private static Set<String> claimed() {
