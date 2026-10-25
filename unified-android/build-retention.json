@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "5994a7c6a566acc32a3604b13cea688bfce0de14526da10fb131d2d018b5a0ed": "Rollback 3.2.104 (178), released; 3.2.92-3.2.102 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "547840976f0b0a21d9a2ca94ed962737ac43857474bf6970b249158bd00bda46": "Release 3.2.105 (179), installed on the Thor: a light flash shows the nearer real frame."
+    "547840976f0b0a21d9a2ca94ed962737ac43857474bf6970b249158bd00bda46": "Rollback 3.2.105 (179), released; 3.2.92-3.2.104 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
+    "045c9877c7a8f21c6a4d95ee55cf65c8ad400552975f419f4ea275a50ec47df8": "Release 3.2.106 (180), installed on the Thor: the local cut blends only smooth content (no translucent second copy at object outlines)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -793,6 +793,86 @@
     "unified-android/build/emufusion-3.2.105-phase2-phase3-qualification-8c12d11f5b3c623bb569e3bfd4b3ef8d40ab4ea46b4550fefdf1fa2991deafc6.apk": {
       "sha256": "8c12d11f5b3c623bb569e3bfd4b3ef8d40ab4ea46b4550fefdf1fa2991deafc6",
       "reason": "3.2.105 (179) trial, not adopted: arrival present (generated image from the early poll when the next callback would miss its scan) fired on 0-3% of pairs (GameCube 4, NSMBU 0, 3DS 22/818, God of War II 6): at 60->120 the previous real image holds the earlier scan, and standalone emulators' images arrive ~4 ms before the callback, just after the earlier scan's compositor deadline. 3.2.104 was restored."
+    },
+    "unified-android/build/emufusion-3.2.93-phase2-phase3-qualification.apk": {
+      "sha256": "21f9d36664da3343db1bb50d3186ca0c7c259ab03c9ed5bad5763288894af7c7",
+      "reason": "Released 3.2.93 (unhashed build output); identical to the GitHub release asset v3.2.93 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.94-phase2-phase3-qualification-9f2dfb886312cffd437ce49216b2ff118d84df53839b32296f4237fa56492e7b.apk": {
+      "sha256": "9f2dfb886312cffd437ce49216b2ff118d84df53839b32296f4237fa56492e7b",
+      "reason": "Released 3.2.94 (content-addressed copy); identical to the GitHub release asset v3.2.94 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.94-phase2-phase3-qualification.apk": {
+      "sha256": "9f2dfb886312cffd437ce49216b2ff118d84df53839b32296f4237fa56492e7b",
+      "reason": "Released 3.2.94 (unhashed build output); identical to the GitHub release asset v3.2.94 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.95-phase2-phase3-qualification-189186791b8d2c3599794e9b46094ec1034001d411b95cbf4d3c461878947d14.apk": {
+      "sha256": "189186791b8d2c3599794e9b46094ec1034001d411b95cbf4d3c461878947d14",
+      "reason": "Released 3.2.95 (content-addressed copy); identical to the GitHub release asset v3.2.95 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.95-phase2-phase3-qualification.apk": {
+      "sha256": "189186791b8d2c3599794e9b46094ec1034001d411b95cbf4d3c461878947d14",
+      "reason": "Released 3.2.95 (unhashed build output); identical to the GitHub release asset v3.2.95 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.96-phase2-phase3-qualification-9e2c655e6c43cf881232e7031938acf2b87f05a7ec4ee7c46a0180e0e8485b23.apk": {
+      "sha256": "9e2c655e6c43cf881232e7031938acf2b87f05a7ec4ee7c46a0180e0e8485b23",
+      "reason": "Released 3.2.96 (content-addressed copy); identical to the GitHub release asset v3.2.96 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.96-phase2-phase3-qualification.apk": {
+      "sha256": "9e2c655e6c43cf881232e7031938acf2b87f05a7ec4ee7c46a0180e0e8485b23",
+      "reason": "Released 3.2.96 (unhashed build output); identical to the GitHub release asset v3.2.96 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.97-phase2-phase3-qualification-d5083b9106e9e29bac9b221751e8df7407f306d9f68c7e1d98c4fe5f0b0bdaf5.apk": {
+      "sha256": "d5083b9106e9e29bac9b221751e8df7407f306d9f68c7e1d98c4fe5f0b0bdaf5",
+      "reason": "Released 3.2.97 (content-addressed copy); identical to the GitHub release asset v3.2.97 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.98-phase2-phase3-qualification-41c272813812c3c79e2f1432aaf17d8b48b076a765222f4fea4064c3cf6f38c1.apk": {
+      "sha256": "41c272813812c3c79e2f1432aaf17d8b48b076a765222f4fea4064c3cf6f38c1",
+      "reason": "Released 3.2.98 (content-addressed copy); identical to the GitHub release asset v3.2.98 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.98-phase2-phase3-qualification.apk": {
+      "sha256": "41c272813812c3c79e2f1432aaf17d8b48b076a765222f4fea4064c3cf6f38c1",
+      "reason": "Released 3.2.98 (unhashed build output); identical to the GitHub release asset v3.2.98 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.99-phase2-phase3-qualification-f8ccd78928f8f1b0fe75109d47530e7c1f9ff75c130cbf4104de4378ab960a5c.apk": {
+      "sha256": "f8ccd78928f8f1b0fe75109d47530e7c1f9ff75c130cbf4104de4378ab960a5c",
+      "reason": "Released 3.2.99 (content-addressed copy); identical to the GitHub release asset v3.2.99 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.99-phase2-phase3-qualification.apk": {
+      "sha256": "f8ccd78928f8f1b0fe75109d47530e7c1f9ff75c130cbf4104de4378ab960a5c",
+      "reason": "Released 3.2.99 (unhashed build output); identical to the GitHub release asset v3.2.99 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.100-phase2-phase3-qualification-cee2f7a447ad63ed2fd9d0c32f69451565a451b61f9e8a8ed5a019cf780a19a7.apk": {
+      "sha256": "cee2f7a447ad63ed2fd9d0c32f69451565a451b61f9e8a8ed5a019cf780a19a7",
+      "reason": "Released 3.2.100 (content-addressed copy); identical to the GitHub release asset v3.2.100 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.100-phase2-phase3-qualification.apk": {
+      "sha256": "cee2f7a447ad63ed2fd9d0c32f69451565a451b61f9e8a8ed5a019cf780a19a7",
+      "reason": "Released 3.2.100 (unhashed build output); identical to the GitHub release asset v3.2.100 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.101-phase2-phase3-qualification-36e823fc62eac3b6844d6f6e407a50d853b65ad7a40fa3666962e7db0c6d393b.apk": {
+      "sha256": "36e823fc62eac3b6844d6f6e407a50d853b65ad7a40fa3666962e7db0c6d393b",
+      "reason": "Released 3.2.101 (content-addressed copy); identical to the GitHub release asset v3.2.101 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.101-phase2-phase3-qualification.apk": {
+      "sha256": "36e823fc62eac3b6844d6f6e407a50d853b65ad7a40fa3666962e7db0c6d393b",
+      "reason": "Released 3.2.101 (unhashed build output); identical to the GitHub release asset v3.2.101 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.102-phase2-phase3-qualification-a536fe9964723f586c510f5d3d0085415754ee1803f50be76ec831dc79af5f61.apk": {
+      "sha256": "a536fe9964723f586c510f5d3d0085415754ee1803f50be76ec831dc79af5f61",
+      "reason": "Released 3.2.102 (content-addressed copy); identical to the GitHub release asset v3.2.102 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.102-phase2-phase3-qualification.apk": {
+      "sha256": "a536fe9964723f586c510f5d3d0085415754ee1803f50be76ec831dc79af5f61",
+      "reason": "Released 3.2.102 (unhashed build output); identical to the GitHub release asset v3.2.102 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.104-phase2-phase3-qualification-5994a7c6a566acc32a3604b13cea688bfce0de14526da10fb131d2d018b5a0ed.apk": {
+      "sha256": "5994a7c6a566acc32a3604b13cea688bfce0de14526da10fb131d2d018b5a0ed",
+      "reason": "Released 3.2.104 (content-addressed copy); identical to the GitHub release asset v3.2.104 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.104-phase2-phase3-qualification.apk": {
+      "sha256": "5994a7c6a566acc32a3604b13cea688bfce0de14526da10fb131d2d018b5a0ed",
+      "reason": "Released 3.2.104 (unhashed build output); identical to the GitHub release asset v3.2.104 (sha256 checked 2026-10-25); 3.2.106 is the release and 3.2.105 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
     }
   }
 }

@@ -114,7 +114,7 @@ class SingleRouteTest(unittest.TestCase):
         self.assertIn(" if(uDiscrete>0.5){\n  vec2 vp=floor(v*uHistorySize+0.5)", shader)
         self.assertIn(" if(uDiscrete>0.5) w=mix(w,uT>=0.5?pc:pa,smoothstep(12.0/255.0,24.0/255.0,md(abs(pa-pc))));",
                       shader)
-        self.assertIn("  if(uDiscrete<0.5)w=mix(w,(1.0-uT)*a0+uT*c0,", shader)
+        self.assertIn("  if(uDiscrete<0.5){float nk=", shader)
         flow = (GAME / "DenseInverseSearchFlow.java").read_text()
         self.assertIn('GLES20.glUniform1f(location(generatePhase, "uDiscrete"), discrete ? 1f : 0f);', flow)
         self.assertIn("flow.setDiscrete(discreteContent);", GENERATOR.read_text())
@@ -199,6 +199,14 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn(" float flash=step(0.1,abs(sb-sa)/n)*step(min(n0,n1)/n,0.599)*(1.0-fade);",
                       shaders["CUT"])
         self.assertIn(" w=mix(w,uT>=0.5?c0:a0,uCutEnabled*step(0.5,ct.b));", shaders["GENERATE_PHASE"])
+        # 3.2.106: the local cut blends only where both real frames are smooth
+        # (a glow); at an object's outline its blend is a translucent ghost.
+        self.assertIn("if(uDiscrete<0.5){float nk=smoothstep(16.0/255.0,32.0/255.0,min(eM,e0))*"
+                      "smoothstep(3.0,6.0,us);", shaders["GENERATE_PHASE"])
+        self.assertIn("w=mix(w,(1.0-uT)*a0+uT*c0,nk*(1.0-smoothstep(2.0/255.0,8.0/255.0,ng)));",
+                      shaders["GENERATE_PHASE"])
+        # Replay dumps carry the endpoint DIS flows beside the per-phase field.
+        self.assertIn('dumpFloatPlane(out, "disFlowACF32", disField.endpointFlowTexture(0),', generator)
         # Two flat frames that differ are a fade, not a cut.
         self.assertIn(" else fade=step(n*sbb-sb*sb,n*n*0.0009)*step(0.015,d/n);", shaders["CUT"])
         runtime = RUNTIME.read_text()

@@ -155,6 +155,10 @@ final class DenseInverseSearchFlow {
     int phaseFlowTexture() { return phaseFlow; }
     int phaseFlowWidth() { return phaseLevel < 0 ? 0 : sizes[phaseLevel][0]; }
     int phaseFlowHeight() { return phaseLevel < 0 ? 0 : sizes[phaseLevel][1]; }
+    /** QA replay dumps: the endpoint DIS flow (0: A to C, 1: C to A) at the field's level, or 0. */
+    int endpointFlowTexture(int direction) {
+        return phaseLevel < 0 || flows[direction] == null ? 0 : flows[direction][phaseLevel];
+    }
 
     void swapSlots() {
         int[] t = pyramid[0]; pyramid[0] = pyramid[1]; pyramid[1] = t;

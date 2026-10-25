@@ -11957,7 +11957,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // Replay dumps also carry synthesis 24's DIS field as floats.
                 DenseInverseSearchFlow disField = replayOffscreen ? disPhaseFlow : null;
                 boolean disPlane = disField != null && disField.phaseFlowTexture() != 0;
-                out.writeInt(HOLDOUT_LEVELS + (dense ? 6 : 3) + (disPlane ? 1 : 0));
+                // ... and its endpoint DIS flows (occlusion studies).
+                boolean endpointPlanes = disPlane && disField.endpointFlowTexture(0) != 0 &&
+                        disField.endpointFlowTexture(1) != 0;
+                out.writeInt(HOLDOUT_LEVELS + (dense ? 6 : 3) + (disPlane ? 1 : 0) + (endpointPlanes ? 2 : 0));
                 for (int level = 0; level < HOLDOUT_LEVELS; ++level)
                     dumpDensePlane(out, "generated" + holdoutLevelIds[level], holdoutGeneratedTextures[level],
                             holdoutWidth, holdoutHeight);
@@ -11976,6 +11979,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 if (disPlane)
                     dumpFloatPlane(out, "disPhaseF32", disField.phaseFlowTexture(),
                             disField.phaseFlowWidth(), disField.phaseFlowHeight());
+                if (endpointPlanes) {
+                    dumpFloatPlane(out, "disFlowACF32", disField.endpointFlowTexture(0),
+                            disField.phaseFlowWidth(), disField.phaseFlowHeight());
+                    dumpFloatPlane(out, "disFlowCAF32", disField.endpointFlowTexture(1),
+                            disField.phaseFlowWidth(), disField.phaseFlowHeight());
+                }
             }
             Log.i(TAG, "Hold-out dump generator=" + generatorId + " file=" + file.getName() +
                     " phase=" + phase + " synthesis=" + synthesisLevel);

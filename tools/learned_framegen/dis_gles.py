@@ -334,14 +334,33 @@ def phase_smooth_shader():
 # (sigma 2 or 4 grey levels) were within 0.3% of the hard choice.
 # Grey levels a neighbour must beat the bilinear vector by (shipped 2).
 FIELD_CHOICE_MARGIN = 2.0
+# Replay-bench experiment (2026-10-25): candidates from field cells up to
+# FIELD_CHOICE_RADIUS away (shipped 1: the 3x3 neighbours), each judged by its
+# two warp samples' mismatch over FIELD_CHOICE_TAPS taps (1, or 5: the pixel
+# and its four history-pixel neighbours). A thin occluder (a kart's frame
+# bars, 6-12 px at 1080p, under one 8-px field cell) takes its body's motion
+# from two cells away.
+FIELD_CHOICE_RADIUS = 1
+FIELD_CHOICE_TAPS = 1
 
 
 def field_choice_glsl():
-    return (f"  if(us>=uChoiceSpread){{vec2 bv=v;float be=wc(u,v)-{float(FIELD_CHOICE_MARGIN)}/255.0;\n"
-            "   for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x){\n"
-            "    vec2 k=texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize;float e=wc(u,k);\n"
+    r = int(FIELD_CHOICE_RADIUS)
+    cost = "wc(u,v)" if FIELD_CHOICE_TAPS == 1 else "wc5(u,v)"
+    each = "wc(u,k)" if FIELD_CHOICE_TAPS == 1 else "wc5(u,k)"
+    return (f"  if(us>=uChoiceSpread){{vec2 bv=v;float be={cost}-{float(FIELD_CHOICE_MARGIN)}/255.0;\n"
+            f"   for(int y=-{r};y<={r};++y)for(int x=-{r};x<={r};++x){{\n"
+            f"    vec2 k=texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize;float e={each};\n"
             "    if(e<be){be=e;bv=k;}}\n"
             "   v=bv;}}\n")
+
+
+def wc5_glsl():
+    """Five-tap warp mismatch of a candidate (FIELD_CHOICE_TAPS 5)."""
+    if FIELD_CHOICE_TAPS == 1:
+        return ""
+    return ("float wc5(vec2 u,vec2 k){vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n"
+            " return 0.2*(wc(u,k)+wc(u+dx,k)+wc(u-dx,k)+wc(u+dy,k)+wc(u-dy,k));}\n")
 
 
 # Output from the per-phase field: A at x - t*v, C at x + (1-t)*v.
@@ -376,6 +395,7 @@ def _generate_phase_shader_text():
     ("uniform sampler2D uFlowAC,uFlowCA;\n" if OCCLUSION_SIDE_T > 0 else "") +
     "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
     "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
+    + wc5_glsl() +
     "void main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n" +
     (" if(uChoiceSpread>0.0){ivec2 um=ivec2(uFlowSize)-1,ub=ivec2(floor(u*uFlowSize));float us=0.0;\n"
      if NEITHER_SPREAD_PX <= 0 else
@@ -444,10 +464,21 @@ def _generate_phase_shader_text():
     + ("" if NEITHER_BLEND_T <= 0 else
        (("\n  if(uDiscrete<0.5)" if DISCRETE_UNIFORM else "\n  if(uHistorySize.x>400.0||uHistorySize.y>300.0)")
         if NEITHER_LARGE_ONLY else "\n ") +
-       f"w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(NEITHER_BLEND_T)}/255.0,"
-       f"{float(NEITHER_BLEND_T)}/255.0,min(eM,e0))" +
-       ("" if NEITHER_SPREAD_PX <= 0 else
-        f"*smoothstep({0.5*float(NEITHER_SPREAD_PX)},{float(NEITHER_SPREAD_PX)},us)") + ");")
+       (f"w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(NEITHER_BLEND_T)}/255.0,"
+        f"{float(NEITHER_BLEND_T)}/255.0,min(eM,e0))" +
+        ("" if NEITHER_SPREAD_PX <= 0 else
+         f"*smoothstep({0.5*float(NEITHER_SPREAD_PX)},{float(NEITHER_SPREAD_PX)},us)") + ");"
+        if NEITHER_EDGE is None else
+        f"{{float nk=smoothstep({0.5*float(NEITHER_BLEND_T)}/255.0,{float(NEITHER_BLEND_T)}/255.0,min(eM,e0))" +
+        ("" if NEITHER_SPREAD_PX <= 0 else
+         f"*smoothstep({0.5*float(NEITHER_SPREAD_PX)},{float(NEITHER_SPREAD_PX)},us)") + ";\n"
+        "   if(nk>0.0){vec2 nx=vec2(1.0/uHistorySize.x,0.0),ny=vec2(0.0,1.0/uHistorySize.y);\n"
+        "    float ng=max(max(md(abs(texture(uFrameA,u+nx).rgb-texture(uFrameA,u-nx).rgb)),"
+        "md(abs(texture(uFrameA,u+ny).rgb-texture(uFrameA,u-ny).rgb))),"
+        "max(md(abs(texture(uFrameC,u+nx).rgb-texture(uFrameC,u-nx).rgb)),"
+        "md(abs(texture(uFrameC,u+ny).rgb-texture(uFrameC,u-ny).rgb))));\n"
+        f"    w=mix(w,(1.0-uT)*a0+uT*c0,nk*(1.0-smoothstep({float(NEITHER_EDGE[0])}/255.0,"
+        f"{float(NEITHER_EDGE[1])}/255.0,ng)));}}}}"))
     + ("" if DISAGREE_BLEND_T <= 0 else
        f"\n  w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(DISAGREE_BLEND_T)}/255.0,"
        f"{float(DISAGREE_BLEND_T)}/255.0,eM));")
@@ -639,6 +670,21 @@ NEITHER_BLEND_T = 32.0
 NEITHER_SPREAD_PX = 6.0
 # ... and only for histories larger than the small (pixel-art) sources.
 NEITHER_LARGE_ONLY = True
+# Since 3.2.106 the local cut blends only where both real frames are smooth
+# at the pixel: their largest neighbour difference (two history pixels
+# apart) fades it out between NEITHER_EDGE grey levels; None blends
+# everywhere. A blend of two smooth areas (a glow, a light ray, a lighting
+# change) is no ghost, but at an object's outline it is a second,
+# translucent copy -- content found in neither real frame. The
+# cross-fade-relative "solid artifact" score that adopted the blend counts
+# a pixel only where it is worse than the cross-fade, so it could not see
+# those ghosts. Replay bench, paired, frames with content found in neither
+# real frame: full-size captures (Double Dash, NSMBU Deluxe, Ocarina, Link's
+# Awakening) 30 -> 15% (blend removed entirely; area 0.151 -> 0.061% of the
+# frame); removing it entirely also turned smooth glows into faint blocks
+# (Double Dash error 0.704 -> 0.747 of a cross-fade), which the edge test
+# keeps blended.
+NEITHER_EDGE = (2.0, 8.0)
 DISAGREE_BLEND_T = 0.0
 EDGE_ONE_SIDED_PX = 0.0
 EDGE_ONE_SIDED_T = 24.0
