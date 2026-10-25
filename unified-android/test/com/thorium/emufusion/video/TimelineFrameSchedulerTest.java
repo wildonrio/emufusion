@@ -34,6 +34,7 @@ public final class TimelineFrameSchedulerTest {
         arrivalPacingKeepsLatencyAtHalfTheSpan();
         arrivalPacingAtSixtyFps();
         arrivalPacingCatchesUpAtSixtyFps();
+        keepAliveReshowsTheImageThroughAStall();
         System.out.println("TimelineFrameSchedulerTest passed");
     }
 
@@ -430,6 +431,49 @@ public final class TimelineFrameSchedulerTest {
             rig.vsync(rig.now);
         }
         return rig;
+    }
+
+    /** Ocarina on the Thor: 20 FPS with 75 ms lag-frame gaps. The image on
+     *  screen is shown again once 40 ms pass without a swap, never in the
+     *  normal rhythm, and not at all when turned off. */
+    private static void keepAliveReshowsTheImageThroughAStall() {
+        long[] spans = {6 * PANEL, 6 * PANEL, 6 * PANEL, 9 * PANEL};
+        Rig rig = source(false, true, spans, 0L, 480, 0, PANEL, 6 * PANEL);
+        long repeats = rig.scheduler.keepAlives();
+        long stalls = 480 * PANEL / (27 * PANEL);  // one 75 ms span per 225 ms
+        check(repeats >= stalls - 2 && repeats <= stalls + 2,
+                "one re-show per stall: " + repeats + " for ~" + stalls + " stalls");
+        // Left-image outputs besides priming are re-shows.
+        long lefts = rig.shown.stream().filter(x -> x.startsWith("L")).count();
+        check(lefts - repeats <= 2, "left outputs " + lefts + " vs re-shows " + repeats);
+        // Never 40 ms without a swap once running.
+        int quiet = 0, longest = 0;
+        for (int i = 60; i < rig.shown.size(); ++i) {
+            quiet = rig.shown.get(i).equals("-") ? quiet + 1 : 0;
+            longest = Math.max(longest, quiet);
+        }
+        check(longest * PANEL < TimelineFrameScheduler.KEEP_ALIVE_NS + PANEL,
+                "longest gap " + longest + " scans");
+        check(rig.realLagNs.size() > 20, "real images still shown");
+        // 50 ms spans only: no re-shows.
+        Rig steady = source(false, true, new long[] {6 * PANEL}, 0L, 480, 0, PANEL, 6 * PANEL);
+        check(steady.shown.stream().noneMatch(x -> x.startsWith("L") && steady.shown.indexOf(x) > 4),
+                "no re-show in the normal rhythm " + steady.shown.subList(0, 40));
+        // Off (QA): the image just stays up.
+        Rig off = new Rig(PANEL, 6 * PANEL);
+        off.scheduler.setArrivalPacing(true, PANEL);
+        off.scheduler.setKeepAliveNs(0L);
+        long t0 = 1_000_000_000L, next = t0;
+        int produced = 0, k = 0;
+        for (int v = 0; v < 480; ++v) {
+            off.now = t0 + v * PANEL;
+            while (off.now >= next + 1_000_000L) {
+                off.produce(++produced, next);
+                next += spans[k++ % spans.length];
+            }
+            off.vsync(off.now);
+        }
+        check(off.scheduler.keepAlives() == 0L, "off");
     }
 
     private static void arrivalPacingShowsEachImageAsItArrives() {

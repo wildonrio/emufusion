@@ -7038,10 +7038,22 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private final com.thorium.emufusion.video.CompositorEarlyGuard compositorEarlyGuard =
             new com.thorium.emufusion.video.CompositorEarlyGuard();
+    // Physical frame ids of recent keep-alive swaps (the image on screen
+    // shown again through a source stall): when they land changes nothing
+    // visible, so they are no evidence for queue depth or the early guard.
+    private final long[] keepAliveFrameIds = new long[16];
+    private int keepAliveFrameIdNext;
+
+    private boolean keepAliveFrame(long frameId) {
+        if (frameId <= 0L) return false;
+        for (long id : keepAliveFrameIds) if (id == frameId) return true;
+        return false;
+    }
 
     /** BuiltinQueueReserve: deepen after a burst of frames rendered past the latch; recover. */
     private void adaptBuiltinQueueReserve(GpuPhysicalHeadroomLedger.Result result) {
-        if (externalTransport != null || result.panelPeriodNs <= 0L) return;
+        if (externalTransport != null || result.panelPeriodNs <= 0L ||
+                keepAliveFrame(result.frameId)) return;
         if (TimelineSchedulerSwitch.earlyGuard() &&
                 compositorEarlyGuard.observe(result.desiredNs, result.actualNs, result.panelPeriodNs)) {
             // Deepened frames can no longer land early: trials decide again.
@@ -7123,7 +7135,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (physicalTraceEnabled && physicalTraceLines < PHYSICAL_TRACE_LIMIT) {
                 ++physicalTraceLines;
                 Log.i(TAG, "Physical trace frame=" + result.frameId +
-                        " kind=" + (result.generated() ? "G" : "R") +
+                        " kind=" + (result.generated() ? "G" : keepAliveFrame(result.frameId) ? "K" : "R") +
                         " offUs=" + (result.actualNs > 0L ?
                                 (result.actualNs - result.desiredNs) / 1000L : 0L) +
                         " renderBeforeSlotUs=" + (result.renderCompleteNs > 0L ?
@@ -9000,6 +9012,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         timeline.configure(panelPeriodNs > 0L ? panelPeriodNs * scans : 0L, sourcePeriodNs);
         // LSFG-Android's arrival pacing (3.2.88); QA arrival_pacing=0 keeps the lattice.
         timeline.setArrivalPacing(TimelineSchedulerSwitch.arrivalPacing(), panelPeriodNs);
+        // Re-show the image on screen through a source stall (3.2.102); QA keep_alive=0.
+        timeline.setKeepAliveNs(TimelineSchedulerSwitch.keepAlive() ?
+                TimelineFrameScheduler.KEEP_ALIVE_NS : 0L);
         timeline.setRequiredLatencyNs(timelineRequiredLatencyNs);
         // Trim latency no recent pair needed (3.2.87); QA low_latency=0 keeps it.
         timeline.setReadyTrimEnabled(TimelineSchedulerSwitch.lowLatency());
@@ -9387,6 +9402,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long denseSwapReturnedNs = densePyramidEnabled ? System.nanoTime() : 0L;
         boolean densePhysicalFrameCommitted = physicalFramePrepared && physicalTracker.commitPrepared(
                 presentationScansPerOutput(), frameRate.panelPeriodNs());
+        if (densePhysicalFrameCommitted && timelineActive && timeline.pendingKeepAlive())
+            keepAliveFrameIds[keepAliveFrameIdNext++ % keepAliveFrameIds.length] = densePhysicalFrameId;
         if (densePyramidEnabled && densePhysicalFrameCommitted && externalTransport == null)
             denseSubmissionHistory.record(schedulerPresentationEpoch(), densePhysicalFrameId,
                     deadline.contentPresentationTimeNs(), deadline.hardCompletionDeadlineNs(),
@@ -9397,7 +9414,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (renderedSynthetic) {
                 enqueueGeneratedVerification(proofPhase);
                 observeFirstGeneratedOutput(deadline.contentPresentationTimeNs());
-            } else if (realThisTick) {
+            } else if (realThisTick && !(timelineActive && timeline.pendingKeepAlive())) {
                 countRealFrameShown(selectedPhase);
                 recordRealDisplayLag(activeRightSequence > 0L && selectedPhase >= 1f ?
                         activeRightSubmission : activeLeftSubmission,

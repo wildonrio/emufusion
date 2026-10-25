@@ -3,7 +3,8 @@
   "minimum_age_days": 1,
   "pinned_sha256": {
     "cee2f7a447ad63ed2fd9d0c32f69451565a451b61f9e8a8ed5a019cf780a19a7": "Rollback 3.2.100 (174), released; 3.2.92-3.2.99 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "36e823fc62eac3b6844d6f6e407a50d853b65ad7a40fa3666962e7db0c6d393b": "Release 3.2.101 (175), installed on the Thor: compositor early guard + queue-reserve deepening trials."
+    "36e823fc62eac3b6844d6f6e407a50d853b65ad7a40fa3666962e7db0c6d393b": "Release 3.2.101 (175), installed on the Thor: compositor early guard + queue-reserve deepening trials.",
+    "a536fe9964723f586c510f5d3d0085415754ee1803f50be76ec831dc79af5f61": "Candidate 3.2.102 (176): keep-alive re-show through source stalls; keep-alive frames excluded from queue depth and early-guard evidence."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -761,6 +762,10 @@
     "unified-android/build/emufusion-3.2.101-phase2-phase3-qualification-e400bb4c589771a266f14608412f715d3a1ca7ddab1be58bb72e4db314d32c5a.apk": {
       "sha256": "e400bb4c589771a266f14608412f715d3a1ca7ddab1be58bb72e4db314d32c5a",
       "reason": "Fourth 3.2.101 (175) trial: early guard on any early share; Thor A/B (Wind Waker HD, matched temperature) 72-83% vs 51-59% of intervals on slot, but it would also delay SNES's consistent early runs; superseded by 36e823fc (guard only for alternating early frames)."
+    },
+    "unified-android/build/emufusion-3.2.102-phase2-phase3-qualification-0f3489378f436517fcc77d778390d7243abbc56ee775e1167899d9519cee2ab4.apk": {
+      "sha256": "0f3489378f436517fcc77d778390d7243abbc56ee775e1167899d9519cee2ab4",
+      "reason": "First 3.2.102 (176) candidate (keep-alive); Thor A/B Ocarina 92.8/95.7% vs 84.9/85.0% on intended; its keep-alive copies fed the early guard and queue reserve (Wind Waker HD 34/50 ms); superseded by the build that excludes them."
     }
   }
 }

@@ -155,6 +155,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         earlyGuard = guard;
+        boolean alive = true;
+        try {
+            if (context != null) alive = Settings.Global.getInt(
+                    context.getContentResolver(), KEEP_ALIVE_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        keepAlive = alive;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -265,6 +273,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean earlyGuard = true;
 
     static boolean earlyGuard() { return earlyGuard; }
+
+    /**
+     * Keep-alive (default, 3.2.102): arrival pacing re-shows the image on
+     * screen through a source stall so the compositor never idles
+     * (TimelineFrameScheduler.KEEP_ALIVE_NS). QA:
+     * emufusion_framegen_keep_alive=0 turns it off for comparisons.
+     */
+    static final String KEEP_ALIVE_GLOBAL = "emufusion_framegen_keep_alive";
+    private static volatile boolean keepAlive = true;
+
+    static boolean keepAlive() { return keepAlive; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

@@ -30,6 +30,18 @@ package com.thorium.emufusion.video;
  * decision after its swap. One decision is pending at a time.</p>
  */
 public final class TimelineFrameScheduler {
+    /**
+     * Arrival pacing re-shows the image on screen when no swap has happened
+     * for this long during a source stall, so the compositor never idles. On
+     * the Thor the first frame after a 60-80 ms gap without a swap lands a
+     * scan late even when rendered and latched in time (Ocarina's 75 ms
+     * lag-frame gaps: 32 of 37 such frames, then an early catch-up frame,
+     * four uneven intervals each), while frames after gaps under 50 ms are
+     * 0.3-2.4% late. 40 ms is above a 20 FPS source's normal 25-33 ms gaps
+     * and splits a 75 ms stall into two gaps under 50 ms.
+     */
+    public static final long KEEP_ALIVE_NS = 40_000_000L;
+
     public static final int NONE = 0;
     public static final int REAL_LEFT = 1;
     public static final int GENERATED = 2;
@@ -99,6 +111,9 @@ public final class TimelineFrameScheduler {
     private long shownTargetNs = Long.MIN_VALUE;
 
     private int pendingKind = NONE;
+    private boolean pendingKeepAlive;
+    private long keepAliveNs = KEEP_ALIVE_NS, keepAlives;
+    private long decideDisplayNs, lastSwapDisplayNs;
     // A generated output after which the pair advances without showing its
     // right image (no output lands near it; the successor is queued).
     private boolean pendingPassRight;
@@ -232,6 +247,7 @@ public final class TimelineFrameScheduler {
         lateStreak = 0;
         shownSequence = 0L;
         shownTargetNs = Long.MIN_VALUE;
+        lastSwapDisplayNs = 0L;
         readySlackCount = 0;
         readySlackNext = 0;
         lastReadyWaitNs = 0L;
@@ -289,9 +305,17 @@ public final class TimelineFrameScheduler {
                     hasRight, displayNs, leftTimestampNs);
         }
         if (!hasRight) {
-            // The next image is not here: the last real image stays up.
+            // The next image is not here: the last real image stays up, shown
+            // again (identical pixels) once the display would otherwise idle.
             ++successorLateHolds;
             lastHoldReason = "successor-late";
+            if (keepAliveNs > 0L && lastSwapDisplayNs > 0L && shownSequence == leftSequence &&
+                    shownTargetNs == leftTimestampNs && displayNs - lastSwapDisplayNs >= keepAliveNs) {
+                ++keepAlives;
+                int kind = propose(REAL_LEFT, 0f, leftTimestampNs, 0L, leftSequence, false, 0L, 0L);
+                pendingKeepAlive = true;
+                return kind;
+            }
             return NONE;
         }
         long panel = Math.max(1L, arrivalPanelPeriodNs > 0L ? arrivalPanelPeriodNs : outputPeriodNs);
@@ -467,6 +491,7 @@ public final class TimelineFrameScheduler {
                        long rightSequence, long rightTimestampNs, boolean motionReady,
                        int excessQueued, boolean passing, boolean successorQueued) {
         clearPending();
+        decideDisplayNs = displayNs;
         if (outputPeriodNs <= 0L || leftSequence <= 0L || leftTimestampNs <= 0L) return NONE;
         if (arrivalPacing)
             return decideArrival(displayNs, leftSequence, leftTimestampNs, rightSequence,
@@ -663,7 +688,8 @@ public final class TimelineFrameScheduler {
         if (swapSucceeded) {
             shownSequence = pendingKind == GENERATED ? 0L : pendingSequence;
             shownTargetNs = pendingTargetNs;
-            if (primed && !pendingPrime) {
+            lastSwapDisplayNs = decideDisplayNs;
+            if (primed && !pendingPrime && !pendingKeepAlive) {
                 long error = Math.abs(pendingTargetNs - pendingIdealNs);
                 ++timingSamples;
                 timingErrorSquares += (double) error * (double) error;
@@ -722,6 +748,7 @@ public final class TimelineFrameScheduler {
 
     private void clearPending() {
         pendingKind = NONE;
+        pendingKeepAlive = false;
         pendingPhase = 0f;
         pendingTargetNs = 0L;
         pendingSlot = 0L;
@@ -737,6 +764,11 @@ public final class TimelineFrameScheduler {
     public long pendingTargetNs() { return pendingTargetNs; }
     /** One when the pending decision shows the right image and rotates the pair. */
     public int pendingAdvance() { return pendingKind == REAL_RIGHT || pendingPassRight ? 1 : 0; }
+    /** The pending output re-shows the image on screen through a source stall. */
+    public boolean pendingKeepAlive() { return pendingKeepAlive; }
+    /** Zero turns keep-alive swaps off (QA). */
+    public void setKeepAliveNs(long ns) { keepAliveNs = Math.max(0L, ns); }
+    public long keepAlives() { return keepAlives; }
     public boolean primed() { return primed; }
     public long arrivalPairs() { return arrivalPairs; }
 
@@ -781,6 +813,7 @@ public final class TimelineFrameScheduler {
                         Math.round(Math.sqrt(timingErrorSquares / timingSamples) / 1000.0) : 0L) +
                 " timelineTimingErrMaxUs=" + timingErrorMaxNs / 1000L +
                 " timelineLateStreaks=" + lateStreaks[0] + "/" + lateStreaks[1] + "/" + lateStreaks[2] +
+                " timelineKeepAlives=" + keepAlives +
                 " timelineLastHold=" + lastHoldReason;
     }
 }
