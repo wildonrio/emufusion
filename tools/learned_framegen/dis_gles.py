@@ -375,8 +375,10 @@ def _generate_phase_shader_text():
     ("uniform sampler2D uFlowAC,uFlowCA;\n" if OCCLUSION_SIDE_T > 0 else "") +
     "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
     "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
-    "void main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n"
-    " if(uChoiceSpread>0.0){ivec2 um=ivec2(uFlowSize)-1,ub=ivec2(floor(u*uFlowSize));float us=0.0;\n"
+    "void main(){vec2 u=vTexCoord;vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n" +
+    (" if(uChoiceSpread>0.0){ivec2 um=ivec2(uFlowSize)-1,ub=ivec2(floor(u*uFlowSize));float us=0.0;\n"
+     if NEITHER_SPREAD_PX <= 0 else
+     " float us=0.0;if(uChoiceSpread>0.0){ivec2 um=ivec2(uFlowSize)-1,ub=ivec2(floor(u*uFlowSize));\n") +
     "  for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)\n"
     "   us=max(us,length((texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize-v)*uHistorySize));\n"
     + field_choice_glsl() +
@@ -434,8 +436,11 @@ def _generate_phase_shader_text():
        "   float da=length(texture(uFlowAC,u-uT*v).xy-vp),dc=length(-texture(uFlowCA,u+(1.0-uT)*v).xy-vp);\n"
        f"   if(abs(da-dc)>{float(OCCLUSION_SIDE_MARGIN)})w=da<dc?aw:cw;}}")
     + ("" if NEITHER_BLEND_T <= 0 else
-       f"\n  w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(NEITHER_BLEND_T)}/255.0,"
-       f"{float(NEITHER_BLEND_T)}/255.0,min(eM,e0)));")
+       ("\n  if(uHistorySize.x>400.0||uHistorySize.y>300.0)" if NEITHER_LARGE_ONLY else "\n ") +
+       f"w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(NEITHER_BLEND_T)}/255.0,"
+       f"{float(NEITHER_BLEND_T)}/255.0,min(eM,e0))" +
+       ("" if NEITHER_SPREAD_PX <= 0 else
+        f"*smoothstep({0.5*float(NEITHER_SPREAD_PX)},{float(NEITHER_SPREAD_PX)},us)") + ");")
     + ("" if DISAGREE_BLEND_T <= 0 else
        f"\n  w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(DISAGREE_BLEND_T)}/255.0,"
        f"{float(DISAGREE_BLEND_T)}/255.0,eM));")
@@ -559,7 +564,20 @@ PIXEL_SNAP = (400, 300)
 # vector by OCCLUSION_SIDE_MARGIN field pixels more than the other's does.
 OCCLUSION_SIDE_T = 0.0
 OCCLUSION_SIDE_MARGIN = 1.0
-NEITHER_BLEND_T = 0.0
+# Default since 3.2.100 with the two settings below: a local cut. Where
+# neither the warp nor zero motion explains a pixel and the field around it
+# is incoherent (no real correspondence: Star Fox 64's cast jumping to a new
+# pose, Ocarina's glows), the blend replaces a shredded warp. All 1,400 moving
+# triplets, larger sources: solid artifact area Star Fox 64 0.78 -> 0.49% of
+# the frame, Ocarina 0.16 -> 0.07%, Wind Waker HD 0.042 -> 0.031%; average
+# error +0.002 to +0.009 of a cross-fade. Pixel-art sources keep their
+# whole-pixel warps (NES +0.034 with it).
+NEITHER_BLEND_T = 32.0
+# ... only where the neighbouring field vectors also spread by this many
+# history pixels (the field is incoherent: no real correspondence there).
+NEITHER_SPREAD_PX = 6.0
+# ... and only for histories larger than the small (pixel-art) sources.
+NEITHER_LARGE_ONLY = True
 DISAGREE_BLEND_T = 0.0
 EDGE_ONE_SIDED_PX = 0.0
 EDGE_ONE_SIDED_T = 24.0

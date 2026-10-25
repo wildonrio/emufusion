@@ -108,7 +108,8 @@ class FullSizeGenerationTest(unittest.TestCase):
         shader = dis_gles.shaders()["GENERATE_PHASE"]
         self.assertNotIn("uUnitSize", shader)
         self.assertIn("vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);", shader)
-        self.assertIn(" if(uChoiceSpread>0.0){", shader)
+        # The spread is declared outside the block (the local cut reads it too).
+        self.assertIn(" float us=0.0;if(uChoiceSpread>0.0){", shader)
         self.assertIn("-v)*uHistorySize));", shader)
         self.assertIn("  if(us>=uChoiceSpread){vec2 bv=v;float be=wc(u,v)-2.0/255.0;", shader)
         flow = (GAME / "DenseInverseSearchFlow.java").read_text()

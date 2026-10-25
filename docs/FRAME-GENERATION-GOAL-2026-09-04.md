@@ -6,7 +6,11 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 24-25 (latest) **— 10/10 plan, phase 1: whole-pixel warps for 2-D; a measure of visible artifacts; what did not work.**
+October 25 (latest) **— 3.2.100 (174): a local cut for 3-D games — where a region has no real correspondence, a blend instead of a shredded warp.**
+
+The visible-artifact measure showed Star Fox 64's worst frames are not lighting changes but local cuts: between the first and middle frame a character jumps to a new pose and lighting while the rest of the scene moves on (its intro cast portraits), so there is no correspondence there, the DIS field over the character is chaotic, and the warp shredded the character into blotches. Ocarina's glows behave the same way. The existing "neither explains" blend (where neither the warp nor zero motion matches within 32 grey levels over the five-tap cross) cut the solid artifact area by 30-70% but cost 0.02-0.08 of a cross-fade on average, because it also blended correctly tracked regions whose shading changed. Requiring the field to be incoherent there too (the 3x3 neighbouring field vectors spread by 3-6 history pixels, the same spread the field choice measures) keeps most of the gain. All 1,400 moving triplets, paired: solid artifact area Star Fox 64 0.782 -> 0.491% of the frame, Ocarina 0.156 -> 0.072%, Wind Waker HD 0.042 -> 0.031%, Mario 3D World 0.005 -> 0.003%; frames with a visible artifact Ocarina 11.4 -> 9.8%, Wind Waker HD 9.2 -> 7.4%; average error +0.002 to +0.009. Pixel-art sources keep their whole-pixel warps unchanged (with the rule, NES lost 0.034). On the bench, 2-D output is bit-identical to 3.2.99 and 3-D output to the measured variant.
+
+October 24-25 **— 10/10 plan, phase 1: whole-pixel warps for 2-D; a measure of visible artifacts; what did not work.**
 
 All measured on the replay bench, paired over the same triplets (moving ones, 60 per game).
 - **Adopted (3.2.99):** small (pixel-art) sources take whole-pixel warps: both frames are sampled at texel centres along the motion rounded to whole pixels, since the real middle frame of a pixel-art game sits on the pixel grid and a half-pixel bilinear sample blurred every edge of every generated frame. Mega Drive 0.520 -> 0.453 of a cross-fade, SNES 0.353 -> 0.322, NES 0.563 -> 0.548; 3-D unchanged. The per-phase search also starts from the DIS flow 8 and 16 px away in each axis when that matches better (all nine games 0.592 -> 0.577 with both).
