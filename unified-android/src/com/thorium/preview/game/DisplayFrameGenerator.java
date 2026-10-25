@@ -3833,6 +3833,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         " panelPeriodNs=" + frameRate.panelPeriodNs());
                 return;
             }
+            // Every frame a scan behind its slot since one late render: present
+            // nothing at this callback so the compositor's queue empties
+            // (CompositorBacklogCatchUp; handled like a missed callback).
+            if (externalTransport == null && builtinBacklogCatchUp.takeSkip(deadlineNowNs)) {
+                if (builtinBacklogCatchUp.skips() <= 32L)
+                    Log.i(TAG, "Compositor backlog skip generator=" + generatorId +
+                            " skips=" + builtinBacklogCatchUp.skips() +
+                            " ineffective=" + builtinBacklogCatchUp.ineffective() +
+                            " reformed=" + builtinBacklogCatchUp.reformed() +
+                            " holdoffMs=" + builtinBacklogCatchUp.holdoffNs() / 1_000_000L);
+                return;
+            }
             // Startup may deliver queued source frames faster than real time.
             // Monotonic target selection alone turns that burst into permanent
             // future-slot debt. Keep the retained endpoint unconsumed until its
@@ -7081,6 +7093,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 (result.supportedMask & GpuPhysicalHeadroomLedger.RENDER_COMPLETE) != 0;
         boolean latchKnown = result.latchNs > 0L &&
                 (result.supportedMask & GpuPhysicalHeadroomLedger.COMPOSITION_LATCH) != 0;
+        if (TimelineSchedulerSwitch.earliestLatch() && builtinQueueReserve.extraScans() == 0)
+            builtinBacklogCatchUp.observe(result.desiredNs, result.actualNs, result.panelPeriodNs,
+                    result.actualNs);
         int previous = builtinQueueReserve.extraScans();
         com.thorium.emufusion.video.BuiltinQueueReserve.Change change = builtinQueueReserve.observe(
                 result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS,
@@ -8666,6 +8681,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final com.thorium.emufusion.video.BuiltinQueueReserve builtinQueueReserve =
             new com.thorium.emufusion.video.BuiltinQueueReserve();
     private long builtinQueueReserveNs = com.thorium.emufusion.video.BuiltinQueueReserve.MIN_NS;
+    // A backlog of frames each shown a scan late empties with one skipped
+    // present (3.2.108; only with earliest-latch planning).
+    private final com.thorium.emufusion.video.CompositorBacklogCatchUp builtinBacklogCatchUp =
+            new com.thorium.emufusion.video.CompositorBacklogCatchUp();
     private long builtinQueueReserveLogs;
     private long builtinPlanCallbackNs, builtinPlanNowNs;
     private long builtinPlanCompositeDeadlineNs, builtinPlanIntervalNs, builtinPlanLatencyNs;
@@ -8686,9 +8705,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     com.thorium.emufusion.video.BuiltinQueueReserve.MAX_EXTRA_SCANS : 0);
             builtinQueueReserveNs = builtinQueueReserve.reserveNs(callbackNs, planNowNs,
                     builtinCompositorTiming[1]);
+            // The earliest latency the compositor's report allows (3.2.108):
+            // depth beyond it is BuiltinQueueReserve's trial-checked decision.
+            long latencyNs = TimelineSchedulerSwitch.earliestLatch() ?
+                    PhysicalPresentationDeadline.earliestCompositeLatencyNs(
+                            builtinCompositorTiming[2], builtinCompositorTiming[1]) :
+                    builtinCompositorTiming[2];
             PhysicalPresentationDeadline egl = PhysicalPresentationDeadline.nextEgl(
                     builtinCompositorTiming[0], builtinCompositorTiming[1],
-                    builtinCompositorTiming[2], planNowNs,
+                    latencyNs, planNowNs,
                     builtInLastCommittedTargetNs, builtinQueueReserveNs);
             // Copy the planning query: the later submission probe reuses its
             // array. Emit only after swap, never inside this admission window.
@@ -8696,7 +8721,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             builtinPlanNowNs = planNowNs;
             builtinPlanCompositeDeadlineNs = builtinCompositorTiming[0];
             builtinPlanIntervalNs = builtinCompositorTiming[1];
-            builtinPlanLatencyNs = builtinCompositorTiming[2];
+            builtinPlanLatencyNs = latencyNs;
             // A stale/invalid returned timeline must not fall back to the old
             // two-ms assumption for this callback.
             return egl;

@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "045c9877c7a8f21c6a4d95ee55cf65c8ad400552975f419f4ea275a50ec47df8": "Rollback 3.2.106 (180), released; 3.2.92-3.2.105 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "5042d42acb6299530a5fcc31fe715ebe806042fc6d3286ea2486e2ce26d9d3ec": "Release 3.2.107 (181), installed on the Thor: paced cores lock to the panel within seconds when the remembered rate is stale or the panel is still settling."
+    "5042d42acb6299530a5fcc31fe715ebe806042fc6d3286ea2486e2ce26d9d3ec": "Rollback 3.2.107 (181), released; 3.2.92-3.2.106 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
+    "eebce00183f6553a80bed85ad9bbc2c520d29855262557ca3c48537b0fb801c7": "Release 3.2.108 (182), installed on the Thor: earliest-latch planning and the compositor backlog skip (backing off when backlogs return)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -882,10 +882,6 @@
       "sha256": "8a58d9e9ac1f8a892b844f6bfd693cefb89a48f60507efd47a95e1096da583dd",
       "reason": "3.2.108 (182) trial: field choice second stage; Thor Wind Waker HD GPU per pair 3.1 -> 4.4 ms, not adopted; 3.2.107 restored with identity preserved."
     },
-    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification.apk": {
-      "sha256": "8a58d9e9ac1f8a892b844f6bfd693cefb89a48f60507efd47a95e1096da583dd",
-      "reason": "Unhashed build output of the same 3.2.108 (182) trial (8a58d9e9), not adopted."
-    },
     "unified-android/build/emufusion-3.2.105-phase2-phase3-qualification-547840976f0b0a21d9a2ca94ed962737ac43857474bf6970b249158bd00bda46.apk": {
       "sha256": "547840976f0b0a21d9a2ca94ed962737ac43857474bf6970b249158bd00bda46",
       "reason": "Released 3.2.105 (identical to the GitHub release asset v3.2.105, sha256 checked 2026-10-25); 3.2.107 is the release and 3.2.106 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
@@ -893,6 +889,38 @@
     "unified-android/build/emufusion-3.2.105-phase2-phase3-qualification.apk": {
       "sha256": "547840976f0b0a21d9a2ca94ed962737ac43857474bf6970b249158bd00bda46",
       "reason": "Released 3.2.105 (identical to the GitHub release asset v3.2.105, sha256 checked 2026-10-25); 3.2.107 is the release and 3.2.106 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification-5a0d8b846b1acfd75fa7b44cba32929b620f5e2f2a338f1531d17da69380bf08.apk": {
+      "sha256": "5a0d8b846b1acfd75fa7b44cba32929b620f5e2f2a338f1531d17da69380bf08",
+      "reason": "Output of build 280, which failed the retention hook (stale unhashed-path retirement); superseded by b367a54e from build 281."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification-b367a54e91bd0ea5dc621b2f62f3da8e3d88ced8bfa57d94eee108fb45c2f372.apk": {
+      "sha256": "b367a54e91bd0ea5dc621b2f62f3da8e3d88ced8bfa57d94eee108fb45c2f372",
+      "reason": "3.2.108 trial with only the output-vote switch: skipping that vote left the per-app override and the 10-ms latch; superseded by ea944242 (window mode id switch)."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification-ea944242358523da83e553dda065d9166a87edbb476dbae0b66c89a47d497f34.apk": {
+      "sha256": "ea944242358523da83e553dda065d9166a87edbb476dbae0b66c89a47d497f34",
+      "reason": "3.2.108 trial with output-vote and window-mode-id QA switches: neither removed the per-app frame-rate override, and a fast-latch session had the override too (not causal); superseded by 0a90776d."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification-0a90776dea29295cd5702c7e5aebf48bea44f76622b4cd1a4747024feaff5c8a.apk": {
+      "sha256": "0a90776dea29295cd5702c7e5aebf48bea44f76622b4cd1a4747024feaff5c8a",
+      "reason": "3.2.108 trial with earliest-latch planning only: after one late render every frame stayed a scan behind (820 frames); superseded by f06f3392 (backlog skip)."
+    },
+    "unified-android/build/emufusion-3.2.106-phase2-phase3-qualification-045c9877c7a8f21c6a4d95ee55cf65c8ad400552975f419f4ea275a50ec47df8.apk": {
+      "sha256": "045c9877c7a8f21c6a4d95ee55cf65c8ad400552975f419f4ea275a50ec47df8",
+      "reason": "Released 3.2.106 (identical to the GitHub release asset v3.2.106, sha256 checked 2026-10-25); 3.2.108 is the release and 3.2.107 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.106-phase2-phase3-qualification.apk": {
+      "sha256": "045c9877c7a8f21c6a4d95ee55cf65c8ad400552975f419f4ea275a50ec47df8",
+      "reason": "Released 3.2.106 (identical to the GitHub release asset v3.2.106, sha256 checked 2026-10-25); 3.2.108 is the release and 3.2.107 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification-f06f339275959295aee5d420d0032a7bc1c1e46a6bd828063f821387c627597d.apk": {
+      "sha256": "f06f339275959295aee5d420d0032a7bc1c1e46a6bd828063f821387c627597d",
+      "reason": "3.2.108 candidate measured on the Thor; superseded by b8fdba9d (catch-up hold-off on present timestamps, not the wall clock)."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification-b8fdba9d5785da01b1e2e1696c14e23fddf58c3867f92e0b7ac94cb2527bf3f1.apk": {
+      "sha256": "b8fdba9d5785da01b1e2e1696c14e23fddf58c3867f92e0b7ac94cb2527bf3f1",
+      "reason": "3.2.108 candidate: a skip every 2 s in a session whose backlog kept returning (45% late); superseded by eebce001 (returning backlogs double the hold-off)."
     }
   }
 }

@@ -162,6 +162,8 @@ SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/GpuDriverTable.java"
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.emufusion.video.SourcePhaseAdvisorTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.emufusion.video.CompositorBacklogCatchUpTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.emufusion.video.GeneratedFrameVerdictTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.preview.cheats.sources.CheatParsersTest

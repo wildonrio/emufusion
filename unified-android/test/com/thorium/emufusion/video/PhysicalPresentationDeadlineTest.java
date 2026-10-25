@@ -2,6 +2,7 @@ package com.thorium.emufusion.video;
 
 public final class PhysicalPresentationDeadlineTest {
     public static void main(String[] ignored) {
+        earliestLatencyDropsWholeScans();
         appOwnedGeneratedRetainsPredecessorLead();
         delayedPlanMovesAllInstantsTogether();
         eglProspectiveQueueDeadlineOwnsAdmission();
@@ -25,6 +26,23 @@ public final class PhysicalPresentationDeadlineTest {
         delayedExternalFeedbackCannotReuseAPlannedScan();
         invalidAndOverflowingInputsFailClosed();
         System.out.println("PhysicalPresentationDeadlineTest passed");
+    }
+
+    /** Thor compositor, 2026-10-25: 2.0 ms when presenting at the first ready scan, 10.33 after late frames. */
+    private static void earliestLatencyDropsWholeScans() {
+        long scan = 8_333_333L;
+        check(PhysicalPresentationDeadline.earliestCompositeLatencyNs(10_333_333L, scan) == 2_000_000L,
+                "10.33 ms is the 2.0-ms timing a scan later");
+        check(PhysicalPresentationDeadline.earliestCompositeLatencyNs(2_000_000L, scan) == 2_000_000L,
+                "already the earliest");
+        check(PhysicalPresentationDeadline.earliestCompositeLatencyNs(10_344_085L, scan) == 2_010_752L,
+                "a measured report keeps its fraction");
+        check(PhysicalPresentationDeadline.earliestCompositeLatencyNs(18_666_666L, scan) == 2_000_000L,
+                "two scans deep");
+        check(PhysicalPresentationDeadline.earliestCompositeLatencyNs(9_000_000L, scan) == 9_000_000L,
+                "never below the driver lead");
+        check(PhysicalPresentationDeadline.earliestCompositeLatencyNs(10_333_333L, 16_666_667L) == 10_333_333L,
+                "60 Hz: 10.33 ms is within one scan");
     }
 
     private static void appOwnedGeneratedRetainsPredecessorLead() {

@@ -44,8 +44,9 @@ package com.thorium.emufusion.video;
  * {@link #TRIAL_GAIN} more of them than over as many before it. A trial that
  * fails, or ends in an early recovery, gives the scan back, and deepening
  * waits {@link #DEEPEN_HOLDOFF_NS}, doubling at each failure. The Thor's
- * compositor has two timings, and they change from run to run (per-present
- * trace, Wind Waker HD, 2026-10-25, no screen recorder): in one it takes a
+ * compositor shows two timings (per-present trace, Wind Waker HD,
+ * 2026-10-25, no screen recorder; since 3.2.108 known to follow the planner:
+ * PhysicalPresentationDeadline.earliestCompositeLatencyNs): in one it takes a
  * frame in the composition ~10 ms before its slot with the render fence still
  * pending and the panel waits for the fence, so at depth 0 98% landed in their
  * slot, while one scan deeper the frame is already done at that composition

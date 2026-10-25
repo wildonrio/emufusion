@@ -111,7 +111,8 @@ public class BuiltInDeadlineTest {
     long builtInLastCommittedTargetNs;
     long builtinQueueReserveNs=1000000L;
     BuiltinQueueReserve builtinQueueReserve=new BuiltinQueueReserve();
-    static class TimelineSchedulerSwitch {static boolean queueDeepen(){return true;}}
+    static class TimelineSchedulerSwitch {static boolean queueDeepen(){return true;}
+        static boolean earliestLatch(){return true;}}
     long builtinPlanCallbackNs,builtinPlanNowNs,builtinPlanCompositeDeadlineNs,
          builtinPlanIntervalNs,builtinPlanLatencyNs;
 ''' + body + '''
@@ -154,7 +155,10 @@ public class BuiltInDeadlineTest {
         };
         t.densePyramidEnabled=true;
         PhysicalPresentationDeadline egl=t.nextBuiltInDeadline(System.nanoTime(),System.nanoTime());
-        assert egl.contentPresentationTimeNs()==eglQueue+10333333L;
+        // 3.2.108: a reported 10.33-ms latency is the 2.0-ms timing a scan
+        // later; the planner targets the earliest (extra depth is the
+        // queue reserve's trial-checked decision).
+        assert egl.contentPresentationTimeNs()==eglQueue+2000000L;
         assert egl.hardCompletionDeadlineNs()==eglQueue-1000000L;
         t.externalTransport=new Object();
         PhysicalPresentationDeadline external=t.nextBuiltInDeadline(callback,now);

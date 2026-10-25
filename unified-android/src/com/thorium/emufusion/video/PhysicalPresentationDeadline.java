@@ -163,6 +163,25 @@ public final class PhysicalPresentationDeadline {
     /** EGL's prospective queue deadline and display latency are separate clocks.
      * Reserve is caller-owned preparation/queue margin, never a display offset.
      * Old or invalid query data cannot authorize a submission. */
+    /**
+     * The earliest composite-to-present latency consistent with the one the
+     * compositor reports: its value less whole scans, down to the driver
+     * lead. The Thor's compositor (10.33 ms of work per 8.33-ms scan) reports
+     * 2.0 ms while it shows frames at the first scan they are ready for, and
+     * 10.33 ms after a few were shown a scan late; a planner following the
+     * report then queues a scan earlier, every frame is latched by the
+     * composition ~10 ms before its slot, and the report stays at 10.33 --
+     * the mode lasts until a frame happens to be shown a scan early (Double
+     * Dash, 2026-10-25: 1,323 frames in a row; 8 ms more latency on every
+     * frame). Planning on the earliest latency leaves extra queue depth to
+     * BuiltinQueueReserve, which deepens only on bursts of late frames and
+     * keeps a scan only when a trial puts more frames in their slot.
+     */
+    public static long earliestCompositeLatencyNs(long latencyNs, long intervalNs) {
+        if (intervalNs <= 0L || latencyNs < THOR_DRIVER_LEAD_NS + intervalNs) return latencyNs;
+        return latencyNs - intervalNs * ((latencyNs - THOR_DRIVER_LEAD_NS) / intervalNs);
+    }
+
     public static PhysicalPresentationDeadline nextEgl(
             long compositeDeadlineNs, long intervalNs, long latencyNs,
             long nowNs, long minimumTargetExclusiveNs, long reserveNs) {

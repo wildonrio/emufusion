@@ -179,6 +179,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         queueDeepen = deepen;
+        boolean earliest = true;
+        try {
+            if (context != null) earliest = Settings.Global.getInt(
+                    context.getContentResolver(), EARLIEST_LATCH_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        earliestLatch = earliest;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -322,6 +330,18 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean queueDeepen = true;
 
     static boolean queueDeepen() { return queueDeepen; }
+
+    /**
+     * The built-in planner targets the earliest composite-to-present latency
+     * consistent with the compositor's report (default, 3.2.108;
+     * PhysicalPresentationDeadline.earliestCompositeLatencyNs), so a burst of
+     * late frames no longer locks every frame a scan later. QA:
+     * emufusion_framegen_earliest_latch=0 follows the report as before.
+     */
+    static final String EARLIEST_LATCH_GLOBAL = "emufusion_framegen_earliest_latch";
+    private static volatile boolean earliestLatch = true;
+
+    static boolean earliestLatch() { return earliestLatch; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }
