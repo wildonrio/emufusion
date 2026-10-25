@@ -147,6 +147,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         arrivalPacing = arrival;
+        boolean guard = true;
+        try {
+            if (context != null) guard = Settings.Global.getInt(
+                    context.getContentResolver(), EARLY_GUARD_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        earlyGuard = guard;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -246,6 +254,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean arrivalPacing = true;
 
     static boolean arrivalPacing() { return arrivalPacing; }
+
+    /**
+     * Early-present guard (default, 3.2.101): once frames shown a scan
+     * before their slot alternate with frames shown in it, built-in frames
+     * ask for half a scan after the slot (CompositorEarlyGuard). QA:
+     * emufusion_framegen_early_guard=0 keeps the lead-time request.
+     */
+    static final String EARLY_GUARD_GLOBAL = "emufusion_framegen_early_guard";
+    private static volatile boolean earlyGuard = true;
+
+    static boolean earlyGuard() { return earlyGuard; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

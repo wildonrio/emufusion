@@ -38,7 +38,21 @@ package com.thorium.emufusion.video;
  * time. Wind Waker HD (Cemu, 2026-10-24): a startup burst deepened it; then
  * 74% of generated and real frames landed a scan early and the rest on time,
  * a 1/3-scan judder for the rest of the run, against 92-95% in their slot
- * before the deepening. A burst is needed to deepen again.</li>
+ * before the deepening.</li>
+ * <li>A deepening is a trial, kept only if it puts more frames in their slot:
+ * over {@link #TRIAL_FRAMES} frames at the new depth, at least
+ * {@link #TRIAL_GAIN} more of them than over as many before it. A trial that
+ * fails, or ends in an early recovery, gives the scan back, and deepening
+ * waits {@link #DEEPEN_HOLDOFF_NS}, doubling at each failure. The Thor's
+ * compositor has two timings, and they change from run to run (per-present
+ * trace, Wind Waker HD, 2026-10-25, no screen recorder): in one it takes a
+ * frame in the composition ~10 ms before its slot with the render fence still
+ * pending and the panel waits for the fence, so at depth 0 98% landed in their
+ * slot, while one scan deeper the frame is already done at that composition
+ * and shows a scan early whenever the compositor makes the earlier scan:
+ * every other source frame early, 72.6% of intervals on their two scans. In
+ * the other it latches ~1.8 ms before the slot, so depth 0 left 12% late and a
+ * scan of lead is what helps. Burst rules alone cannot tell them apart.</li>
  * </ul>
  */
 public final class BuiltinQueueReserve {
@@ -60,8 +74,15 @@ public final class BuiltinQueueReserve {
     public static final long RECOVERY_HOLD_NS = 10_000_000_000L;
     /** At an extra depth, this many of {@link #EARLY_WINDOW} frames shown a
      *  scan early give the depth back. */
-    public static final int EARLY_TO_RECOVER = 60;
-    public static final int EARLY_WINDOW = 120;
+    public static final int EARLY_TO_RECOVER = 20;
+    public static final int EARLY_WINDOW = 48;
+    /** A deepening's trial: frames with a known display time at the new depth. */
+    public static final int TRIAL_FRAMES = 120;
+    /** The share of frames in their slot a deepening must add to be kept. */
+    public static final double TRIAL_GAIN = 0.05;
+    /** Deepening waits this long after a failed trial, doubling each time. */
+    public static final long DEEPEN_HOLDOFF_NS = 30_000_000_000L;
+    public static final long MAX_DEEPEN_HOLDOFF_NS = 480_000_000_000L;
 
     public enum Change { NONE, DEEPENED, RECOVERED, RESTORED }
 
@@ -73,13 +94,24 @@ public final class BuiltinQueueReserve {
     private int recoveryFrames = RECOVERY_FRAMES;
     private long recoveredAtNs;
     private int windowFrames, earlyFrames;
-    private long deepenings, recoveries, failedRecoveries, earlyRecoveries;
+    private long deepenHoldoffNs = DEEPEN_HOLDOFF_NS, deepenAllowedAtNs;
+    // Whether each of the last TRIAL_FRAMES frames at this depth was in its slot.
+    private final boolean[] slotRing = new boolean[TRIAL_FRAMES];
+    private int slotRingHead, slotRingCount, slotRingOnSlot;
+    private boolean trial;
+    private double trialBaseline;
+    private long deepenings, recoveries, failedRecoveries, earlyRecoveries, heldDeepenings,
+            rejectedTrials;
 
     public int extraScans() { return extraScans; }
     public long deepenings() { return deepenings; }
     public long recoveries() { return recoveries; }
     public long failedRecoveries() { return failedRecoveries; }
     public long earlyRecoveries() { return earlyRecoveries; }
+    /** Bursts that would have deepened during a hold-off. */
+    public long heldDeepenings() { return heldDeepenings; }
+    /** Deepenings given back because they did not put more frames in their slot. */
+    public long rejectedTrials() { return rejectedTrials; }
     public int recoveryFrames() { return recoveryFrames; }
 
     /**
@@ -104,6 +136,8 @@ public final class BuiltinQueueReserve {
                           long latchNs, long panelPeriodNs) {
         if (panelPeriodNs <= 0L) return Change.NONE;
         long nowNs = actualNs > 0L ? actualNs : desiredNs;
+        if (actualNs > 0L && !within(changedAtNs, nowNs))
+            recordSlot(Math.abs(actualNs - desiredNs) < panelPeriodNs / 2L);
         if (extraScans > 0 && !within(changedAtNs, nowNs)) {
             if (++windowFrames > EARLY_WINDOW) {
                 windowFrames = 1;
@@ -113,12 +147,25 @@ public final class BuiltinQueueReserve {
                     ++earlyFrames >= EARLY_TO_RECOVER) {
                 ++recoveries;
                 ++earlyRecoveries;
-                // Not a trial: the depth was not holding frames back, so one
-                // late frame later is no reason to restore it.
+                // Not a recovery trial: the depth was not holding frames
+                // back, so one late frame later is no reason to restore it.
                 recoveredAtNs = 0L;
+                holdOffDeepening(nowNs);
                 change(nowNs, -1);
                 return Change.RECOVERED;
             }
+        }
+        if (trial && slotRingCount == TRIAL_FRAMES) {
+            trial = false;
+            if ((double) slotRingOnSlot / TRIAL_FRAMES < trialBaseline + TRIAL_GAIN) {
+                ++recoveries;
+                ++rejectedTrials;
+                recoveredAtNs = 0L;
+                holdOffDeepening(nowNs);
+                change(nowNs, -1);
+                return Change.RECOVERED;
+            }
+            deepenHoldoffNs = DEEPEN_HOLDOFF_NS;
         }
         if (late) {
             earlierFrames = 0;
@@ -150,8 +197,14 @@ public final class BuiltinQueueReserve {
             }
             missNs[misses++] = nowNs;
             if (misses < MISSES_TO_DEEPEN || extraScans >= MAX_EXTRA_SCANS) return Change.NONE;
+            if (nowNs < deepenAllowedAtNs) {
+                ++heldDeepenings;
+                return Change.NONE;
+            }
             ++deepenings;
+            trialBaseline = slotRingCount > 0 ? (double) slotRingOnSlot / slotRingCount : 0.0;
             change(nowNs, 1);
+            trial = true;
             return Change.DEEPENED;
         }
         if (recoveredAtNs != 0L && nowNs - recoveredAtNs >= RECOVERY_HOLD_NS) {
@@ -178,6 +231,32 @@ public final class BuiltinQueueReserve {
         return Change.RECOVERED;
     }
 
+    /**
+     * Ends any hold-off: the compositor can no longer show deepened frames
+     * early (CompositorEarlyGuard turned on), so the next burst's trial
+     * decides on its own.
+     */
+    public void allowDeepening() {
+        deepenAllowedAtNs = 0L;
+        deepenHoldoffNs = DEEPEN_HOLDOFF_NS;
+    }
+
+    private void recordSlot(boolean onSlot) {
+        if (slotRingCount == TRIAL_FRAMES) {
+            if (slotRing[slotRingHead]) --slotRingOnSlot;
+        } else {
+            ++slotRingCount;
+        }
+        slotRing[slotRingHead] = onSlot;
+        if (onSlot) ++slotRingOnSlot;
+        slotRingHead = (slotRingHead + 1) % TRIAL_FRAMES;
+    }
+
+    private void holdOffDeepening(long nowNs) {
+        deepenAllowedAtNs = nowNs + deepenHoldoffNs;
+        deepenHoldoffNs = Math.min(MAX_DEEPEN_HOLDOFF_NS, 2L * deepenHoldoffNs);
+    }
+
     private static boolean within(long changeNs, long nowNs) {
         return changeNs != 0L && nowNs - changeNs < SETTLE_NS;
     }
@@ -190,5 +269,9 @@ public final class BuiltinQueueReserve {
         earlierFrames = 0;
         windowFrames = 0;
         earlyFrames = 0;
+        trial = false;
+        slotRingHead = 0;
+        slotRingCount = 0;
+        slotRingOnSlot = 0;
     }
 }

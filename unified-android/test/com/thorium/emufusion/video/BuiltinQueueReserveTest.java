@@ -17,6 +17,9 @@ public final class BuiltinQueueReserveTest {
         withoutTimestampsRecoveryIsSlow();
         framesShownEarlyGiveTheScanBack();
         occasionalEarlyFramesKeepTheDepth();
+        earlyRecoveriesHoldOffDeepening();
+        aDeepeningThatAddsNothingIsGivenBack();
+        aDeepeningThatHelpsIsKept();
         System.out.println("BuiltinQueueReserveTest passed");
     }
 
@@ -271,9 +274,50 @@ public final class BuiltinQueueReserveTest {
         advance(clock, BuiltinQueueReserve.SETTLE_NS);
         check(late(r, clock) == BuiltinQueueReserve.Change.NONE, "one late frame changes nothing");
         eq(0L, r.extraScans(), "still at the earliest scan");
-        // It still counts toward a burst: two more within the window deepen.
+        // A burst within the hold-off does not deepen: the depth adds no lead here.
         check(late(r, clock) == BuiltinQueueReserve.Change.NONE, "two late frames are not a burst");
-        check(late(r, clock) == BuiltinQueueReserve.Change.DEEPENED, "a third deepens again");
+        check(late(r, clock) == BuiltinQueueReserve.Change.NONE, "a burst during the hold-off");
+        eq(1L, r.heldDeepenings(), "the held burst is counted");
+        eq(0L, r.extraScans(), "still at the earliest scan");
+        // The early guard turns on: the next burst deepens (a new trial).
+        r.allowDeepening();
+        advance(clock, BuiltinQueueReserve.MISS_WINDOW_NS + 1L);
+        burst(r, clock);
+        eq(1L, r.extraScans(), "deepened after the hold-off was lifted");
+    }
+
+    /** Wind Waker HD, 2026-10-25 (per-present trace, no recorder): every
+     *  deepening landed half its frames a scan early, and a burst deepened it
+     *  again every few seconds. Each early recovery doubles the hold-off. */
+    private static void earlyRecoveriesHoldOffDeepening() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long[] clock = {50_000_000_000L};
+        long holdoff = BuiltinQueueReserve.DEEPEN_HOLDOFF_NS;
+        for (int round = 0; round < 6; ++round) {
+            burst(r, clock);
+            advance(clock, BuiltinQueueReserve.SETTLE_NS);
+            BuiltinQueueReserve.Change change = BuiltinQueueReserve.Change.NONE;
+            int frames = 0;
+            // Half early, half in their slot: "EE..".
+            while (change != BuiltinQueueReserve.Change.RECOVERED && frames < 1_000) {
+                change = frames % 4 < 2 ? early(r, clock) : onTime(r, clock, 1_000_000L);
+                ++frames;
+            }
+            check(change == BuiltinQueueReserve.Change.RECOVERED, "half early gives the scan back");
+            check(frames <= BuiltinQueueReserve.EARLY_WINDOW, "within one window: " + frames);
+            long recovered = clock[0];
+            // Bursts until just before the hold-off ends do not deepen.
+            while (clock[0] - recovered < holdoff - BuiltinQueueReserve.MISS_WINDOW_NS) {
+                advance(clock, BuiltinQueueReserve.MISS_WINDOW_NS / 4);
+                check(late(r, clock) != BuiltinQueueReserve.Change.DEEPENED, "held off");
+            }
+            eq(0L, r.extraScans(), "earliest scan through the hold-off");
+            advance(clock, BuiltinQueueReserve.MISS_WINDOW_NS + 1L);
+            holdoff = Math.min(BuiltinQueueReserve.MAX_DEEPEN_HOLDOFF_NS, 2L * holdoff);
+        }
+        eq(6L, r.earlyRecoveries(), "six early recoveries");
+        check(r.heldDeepenings() > 0L, "bursts were held");
+        eq(6L, r.deepenings(), "one deepening after each hold-off");
     }
 
     private static void occasionalEarlyFramesKeepTheDepth() {
@@ -286,6 +330,55 @@ public final class BuiltinQueueReserveTest {
             check(change == BuiltinQueueReserve.Change.NONE, "a third shown early is not enough");
         }
         eq(1L, r.extraScans(), "depth kept");
+    }
+
+    /** Shown a scan late although rendered three scans ahead: the compositor's
+     *  miss, which no depth fixes and which never counts toward a burst. */
+    private static BuiltinQueueReserve.Change compositorLate(BuiltinQueueReserve r, long[] clock) {
+        clock[0] += PERIOD;
+        long desired = clock[0];
+        return r.observe(true, desired, desired + PERIOD, desired - 3L * PERIOD,
+                desired + PERIOD - LATENCY, PERIOD);
+    }
+
+    /** One in six frames late at depth 0, and still one in six one scan deeper:
+     *  the trial fails, the scan is given back and deepening waits. */
+    private static void aDeepeningThatAddsNothingIsGivenBack() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long[] clock = {60_000_000_000L};
+        for (int i = 0; i < BuiltinQueueReserve.TRIAL_FRAMES; ++i)
+            if (i % 6 == 5) compositorLate(r, clock); else onTime(r, clock, 0L);
+        burst(r, clock);
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        BuiltinQueueReserve.Change change = BuiltinQueueReserve.Change.NONE;
+        int frames = 0;
+        while (change == BuiltinQueueReserve.Change.NONE && frames < 1_000) {
+            change = frames % 6 == 5 ? compositorLate(r, clock) : onTime(r, clock, 0L);
+            ++frames;
+        }
+        check(change == BuiltinQueueReserve.Change.RECOVERED, "the trial gives the scan back: " + change);
+        eq(BuiltinQueueReserve.TRIAL_FRAMES, frames, "after one trial's frames");
+        eq(1L, r.rejectedTrials(), "one rejected trial");
+        eq(0L, r.extraScans(), "earliest scan");
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        late(r, clock);
+        late(r, clock);
+        check(late(r, clock) == BuiltinQueueReserve.Change.NONE, "a burst during the hold-off");
+        eq(1L, r.heldDeepenings(), "held");
+    }
+
+    /** A quarter late at depth 0, all in their slot one scan deeper: kept. */
+    private static void aDeepeningThatHelpsIsKept() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long[] clock = {70_000_000_000L};
+        for (int i = 0; i < BuiltinQueueReserve.TRIAL_FRAMES; ++i)
+            if (i % 4 == 3) compositorLate(r, clock); else onTime(r, clock, 0L);
+        burst(r, clock);
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        for (int i = 0; i < 1_000; ++i)
+            check(onTime(r, clock, 0L) == BuiltinQueueReserve.Change.NONE, "kept");
+        eq(1L, r.extraScans(), "one scan deeper");
+        eq(0L, r.rejectedTrials(), "the trial passed");
     }
 
     private static void check(boolean condition, String message) {

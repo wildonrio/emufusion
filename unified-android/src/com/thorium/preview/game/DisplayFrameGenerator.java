@@ -7036,9 +7036,21 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int denseJoinedGapEvidenceCount;
     private final SubmissionTimingHistory denseSubmissionHistory = new SubmissionTimingHistory();
 
+    private final com.thorium.emufusion.video.CompositorEarlyGuard compositorEarlyGuard =
+            new com.thorium.emufusion.video.CompositorEarlyGuard();
+
     /** BuiltinQueueReserve: deepen after a burst of frames rendered past the latch; recover. */
     private void adaptBuiltinQueueReserve(GpuPhysicalHeadroomLedger.Result result) {
         if (externalTransport != null || result.panelPeriodNs <= 0L) return;
+        if (TimelineSchedulerSwitch.earlyGuard() &&
+                compositorEarlyGuard.observe(result.desiredNs, result.actualNs, result.panelPeriodNs)) {
+            // Deepened frames can no longer land early: trials decide again.
+            if (compositorEarlyGuard.active()) builtinQueueReserve.allowDeepening();
+            Log.i(TAG, "Compositor early guard " + (compositorEarlyGuard.active() ? "on" : "off") +
+                    " generator=" + generatorId +
+                    " activations=" + compositorEarlyGuard.activations() +
+                    " disabled=" + compositorEarlyGuard.disabled());
+        }
         boolean renderKnown = result.renderCompleteNs > 0L &&
                 (result.supportedMask & GpuPhysicalHeadroomLedger.RENDER_COMPLETE) != 0;
         boolean latchKnown = result.latchNs > 0L &&
@@ -9315,10 +9327,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             }
         }
         if (Build.VERSION.SDK_INT >= 18) {
+            // A compositor seen presenting frames before their slot gets a
+            // request just after it (CompositorEarlyGuard).
+            long driverDesiredNs = externalTransport == null &&
+                    TimelineSchedulerSwitch.earlyGuard() ?
+                    compositorEarlyGuard.driverDesiredNs(deadline.contentPresentationTimeNs(),
+                            deadline.driverDesiredPresentTimeNs(), frameRate.panelPeriodNs()) :
+                    deadline.driverDesiredPresentTimeNs();
             if (deadline.driverDesiredPresentTimeNs() <= 0L ||
                     !EGLExt.eglPresentationTimeANDROID(
-                            eglDisplay, eglSurface,
-                            deadline.driverDesiredPresentTimeNs()))
+                            eglDisplay, eglSurface, driverDesiredNs))
                 fail("eglPresentationTimeANDROID");
         }
         long swapStarted = densePyramidEnabled ? System.nanoTime() : 0L;
@@ -14111,6 +14129,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " builtinQueueReserveRecoveries=" + builtinQueueReserve.recoveries() +
                 " builtinQueueReserveFailedRecoveries=" + builtinQueueReserve.failedRecoveries() +
                 " builtinQueueEarlyRecoveries=" + builtinQueueReserve.earlyRecoveries() +
+                " builtinQueueHeldDeepenings=" + builtinQueueReserve.heldDeepenings() +
+                " builtinQueueRejectedTrials=" + builtinQueueReserve.rejectedTrials() +
+                " compositorEarlyGuard=" + (compositorEarlyGuard.active() ? 1 : 0) +
+                " compositorEarlyGuardActivations=" + compositorEarlyGuard.activations() +
                 (timelineMode ? " timelineMode=1 timelineActive=" + (timelineActive ? 1 : 0) +
                         " " + timeline.diagnostics() : "") +
                 " presentationResets=" + frameRate.presentationResetCallers() +

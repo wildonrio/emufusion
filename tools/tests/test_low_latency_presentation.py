@@ -141,6 +141,27 @@ class LowLatencyPresentationTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertIn("BuiltinQueueReserveTest passed", run.stdout)
 
+    def test_compositor_early_guard(self):
+        # 3.2.101: a compositor seen showing frames a scan before their slot
+        # (the Thor: SF duration 10.33 ms > a 120 Hz scan, HWC min duration 0)
+        # gets built-in requests half a scan after the slot; dropped for good
+        # if frames then land late. QA: emufusion_framegen_early_guard=0.
+        generator = GENERATOR.read_text()
+        self.assertIn("compositorEarlyGuard.driverDesiredNs(deadline.contentPresentationTimeNs(),", generator)
+        self.assertIn("compositorEarlyGuard.observe(result.desiredNs, result.actualNs, result.panelPeriodNs)",
+                      generator)
+        video = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "video"
+        test = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "video" /
+                "CompositorEarlyGuardTest.java")
+        with tempfile.TemporaryDirectory() as out:
+            subprocess.run([str(JAVA / "javac"), "-d", out, str(video / "CompositorEarlyGuard.java"),
+                            str(test)], check=True)
+            run = subprocess.run([str(JAVA / "java"), "-cp", out,
+                                  "com.thorium.emufusion.video.CompositorEarlyGuardTest"],
+                                 capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("CompositorEarlyGuardTest passed", run.stdout)
+
     def test_stale_real_image_is_passed_for_a_newer_one(self):
         # 3.2.91: a newer image while the active pair's real image still
         # waits (its generated image is up) passes that real image, so the

@@ -3,7 +3,8 @@
   "minimum_age_days": 1,
   "pinned_sha256": {
     "f8ccd78928f8f1b0fe75109d47530e7c1f9ff75c130cbf4104de4378ab960a5c": "Rollback 3.2.99 (173), released; 3.2.92-3.2.98 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "cee2f7a447ad63ed2fd9d0c32f69451565a451b61f9e8a8ed5a019cf780a19a7": "Candidate 3.2.100 (174): local cut for 3-D sources (blend where neither warp nor zero motion explains a pixel and the field is incoherent)."
+    "cee2f7a447ad63ed2fd9d0c32f69451565a451b61f9e8a8ed5a019cf780a19a7": "Candidate 3.2.100 (174): local cut for 3-D sources (blend where neither warp nor zero motion explains a pixel and the field is incoherent).",
+    "36e823fc62eac3b6844d6f6e407a50d853b65ad7a40fa3666962e7db0c6d393b": "Candidate 3.2.101 (175): compositor early guard (alternating early frames only) + queue-reserve deepening trials (Cemu judder)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -745,6 +746,22 @@
     "unified-android/build/emufusion-3.2.98-phase2-phase3-qualification-9b27273b78a0e923ef1a9e66151af918890e80551d8f50ff1c7d1c412a582cde.apk": {
       "sha256": "9b27273b78a0e923ef1a9e66151af918890e80551d8f50ff1c7d1c412a582cde",
       "reason": "Second 3.2.98 (172) candidate, briefly on the Thor; superseded by 41c27281, which also removes the per-call regex in metadata field reads (2/3 of the remaining media-pass CPU)."
+    },
+    "unified-android/build/emufusion-3.2.101-phase2-phase3-qualification-887e83ee73600fc07c3f0171fa350604ed390e67cfdb351c88d86ef6c2e19caa.apk": {
+      "sha256": "887e83ee73600fc07c3f0171fa350604ed390e67cfdb351c88d86ef6c2e19caa",
+      "reason": "First 3.2.101 (175) pacing trial (early recoveries hold off deepening); Thor: SurfaceFlinger's latch mode changed between runs and the hold-off left late frames; superseded by trial-based deepening."
+    },
+    "unified-android/build/emufusion-3.2.101-phase2-phase3-qualification-85ab5d53ab7f2d466d6e353caf53f71353ea99be7c7b76401adfc4b23cf00070.apk": {
+      "sha256": "85ab5d53ab7f2d466d6e353caf53f71353ea99be7c7b76401adfc4b23cf00070",
+      "reason": "Second 3.2.101 (175) pacing trial (deepening trials judged by on-slot share); superseded by 21c0b3ab, which adds the compositor early guard."
+    },
+    "unified-android/build/emufusion-3.2.101-phase2-phase3-qualification-21c0b3ab391c277134c277e79900b23eec52e716f453c01c1f8d8f3020aab784.apk": {
+      "sha256": "21c0b3ab391c277134c277e79900b23eec52e716f453c01c1f8d8f3020aab784",
+      "reason": "Third 3.2.101 (175) trial (early guard + deepening trials); a startup early recovery's hold-off still blocked deepening after the guard turned on; superseded by e400bb4c."
+    },
+    "unified-android/build/emufusion-3.2.101-phase2-phase3-qualification-e400bb4c589771a266f14608412f715d3a1ca7ddab1be58bb72e4db314d32c5a.apk": {
+      "sha256": "e400bb4c589771a266f14608412f715d3a1ca7ddab1be58bb72e4db314d32c5a",
+      "reason": "Fourth 3.2.101 (175) trial: early guard on any early share; Thor A/B (Wind Waker HD, matched temperature) 72-83% vs 51-59% of intervals on slot, but it would also delay SNES's consistent early runs; superseded by 36e823fc (guard only for alternating early frames)."
     }
   }
 }
