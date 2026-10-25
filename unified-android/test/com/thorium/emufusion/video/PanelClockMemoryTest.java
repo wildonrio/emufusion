@@ -74,6 +74,17 @@ public final class PanelClockMemoryTest {
         for (int i = 0; i < 300; ++i) { settling.record(t, nominal); t += steady; }  // 2.5 s steady
         double confirmed = settling.sustainedFrequencyHz(t - steady);
         check(Math.abs(confirmed - 119.91) < 1e-9, "a seed agreeing with the recent span stands in: " + confirmed);
+        // A confirmed seed gives way to the recent 8 s once they are steady
+        // (a seed 167 ppm off is within its tolerance but drifts a paced core).
+        PhysicalPresentationClock offSeed = new PhysicalPresentationClock();
+        offSeed.seedFrequencyHz(119.92);
+        t = 1_000_000_000L;
+        long live = Math.round(1e9 / 119.90);
+        for (int i = 0; i < 360; ++i) { offSeed.record(t, nominal); t += live; }     // 3 s
+        check(Math.abs(offSeed.sustainedFrequencyHz(t - live) - 119.92) < 1e-9, "the seed stands in first");
+        for (int i = 0; i < 700; ++i) { offSeed.record(t, nominal); t += live; }     // 8.8 s in all
+        double measured = offSeed.sustainedFrequencyHz(t - live);
+        check(Math.abs(measured - 1e9 / live) < 0.002, "then the live rate: " + measured);
         // Without a seed, the recent 8 s stand in once they are steady.
         PhysicalPresentationClock fresh = new PhysicalPresentationClock();
         t = 1_000_000_000L;

@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "eebce00183f6553a80bed85ad9bbc2c520d29855262557ca3c48537b0fb801c7": "Rollback 3.2.108 (182), released; 3.2.92-3.2.107 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "645e5dbc53fba36352913e779a6c294aa7a9af56b5a4ed180f7411d65f5d729a": "Release 3.2.109 (183), installed on the Thor: generated image rendered when its pair forms, copied at the callback."
+    "645e5dbc53fba36352913e779a6c294aa7a9af56b5a4ed180f7411d65f5d729a": "Rollback 3.2.109 (183), released; 3.2.92-3.2.108 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
+    "0c560e2b74645c956be0441b8d13b9bdf7efb24accc24f29f379e75f0f943120": "Release 3.2.110 (184), installed on the Thor: the steady 8-s live panel rate replaces a remembered one."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -933,6 +933,14 @@
     "unified-android/build/emufusion-3.2.107-phase2-phase3-qualification.apk": {
       "sha256": "5042d42acb6299530a5fcc31fe715ebe806042fc6d3286ea2486e2ce26d9d3ec",
       "reason": "Released 3.2.107 (identical to the GitHub release asset v3.2.107, sha256 checked 2026-10-25); 3.2.109 is the release and 3.2.108 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification-eebce00183f6553a80bed85ad9bbc2c520d29855262557ca3c48537b0fb801c7.apk": {
+      "sha256": "eebce00183f6553a80bed85ad9bbc2c520d29855262557ca3c48537b0fb801c7",
+      "reason": "Released 3.2.108 (identical to the GitHub release asset v3.2.108, sha256 checked 2026-10-25); 3.2.110 is the release and 3.2.109 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification.apk": {
+      "sha256": "eebce00183f6553a80bed85ad9bbc2c520d29855262557ca3c48537b0fb801c7",
+      "reason": "Released 3.2.108 (identical to the GitHub release asset v3.2.108, sha256 checked 2026-10-25); 3.2.110 is the release and 3.2.109 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
     }
   }
 }

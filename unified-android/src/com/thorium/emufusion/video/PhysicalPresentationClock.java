@@ -240,7 +240,15 @@ public final class PhysicalPresentationClock {
                 sustainedAnchorNs <= 0L || sustainedScans < MIN_ESTIMATE_SCANS)
             return 0.0;
         int endpoint = sustainedBaselineEndpoint();
-        if (endpoint < 0) return seedConfirmedByShortBaseline() ? seededFrequencyHz : provisionalFrequencyHz();
+        if (endpoint < 0) {
+            // The recent 8 s, once steady, before a seed: a seed within its
+            // 300-ppm tolerance was still 170 ppm off (Double Dash, 3.2.109:
+            // 119.918 against 119.898 Hz measured), so the paced core drifted
+            // 0.17 ms/s and its source-phase move was gone within seconds.
+            double provisional = provisionalFrequencyHz();
+            if (provisional > 0.0) return provisional;
+            return seedConfirmedByShortBaseline() ? seededFrequencyHz : 0.0;
+        }
         long spanNs = frequencyLastActualNs - trimTimes[endpoint];
         long scans = sustainedScans - trimScans[endpoint];
         double hz = scans * 1_000_000_000.0 / spanNs;
