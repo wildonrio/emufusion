@@ -789,6 +789,14 @@
     "unified-android/build/emufusion-3.2.103-phase2-phase3-qualification.apk": {
       "sha256": "a077bcdd9931cdfc89a59493b4e7b70872309e0f80b0a8956c57ea85f538ddae",
       "reason": "Unhashed build output of the 3.2.103 (177) diagnostic a077bcdd (trace latency split); retired with it."
+    },
+    "unified-android/build/emufusion-3.2.105-phase2-phase3-qualification-8c12d11f5b3c623bb569e3bfd4b3ef8d40ab4ea46b4550fefdf1fa2991deafc6.apk": {
+      "sha256": "8c12d11f5b3c623bb569e3bfd4b3ef8d40ab4ea46b4550fefdf1fa2991deafc6",
+      "reason": "3.2.105 (179) trial, not adopted: arrival present (generated image from the early poll when the next callback would miss its scan) fired on 0-3% of pairs (GameCube 4, NSMBU 0, 3DS 22/818, God of War II 6): at 60->120 the previous real image holds the earlier scan, and standalone emulators' images arrive ~4 ms before the callback, just after the earlier scan's compositor deadline. 3.2.104 was restored."
+    },
+    "unified-android/build/emufusion-3.2.105-phase2-phase3-qualification.apk": {
+      "sha256": "8c12d11f5b3c623bb569e3bfd4b3ef8d40ab4ea46b4550fefdf1fa2991deafc6",
+      "reason": "Unhashed build output of the 3.2.105 (179) arrival-present trial 8c12d11f; retired with it."
     }
   }
 }
