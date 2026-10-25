@@ -401,13 +401,25 @@ def _generate_phase_shader_text():
     f" if(length(v*uHistorySize)<{float(SUBPIXEL_ZERO_PX)})w=(1.0-uT)*a0+uT*c0;else\n"
     " {float eM=md(abs(aw-cw)),e0=md(abs(a0-c0));\n"
     + ("  {vec2 dx" if not SKIP_FLAT_CROSS else "  if(max(eM,e0)>2.0/255.0){vec2 dx") + f"=vec2({float(ZERO_MOTION_SPREAD)}/uHistorySize.x,0.0),dy=vec2(0.0,{float(ZERO_MOTION_SPREAD)}/uHistorySize.y);\n"
+    + (
     "   eM+=md(abs(texture(uFrameA,u-uT*v+dx).rgb-texture(uFrameC,u+(1.0-uT)*v+dx).rgb))"
     "+md(abs(texture(uFrameA,u-uT*v-dx).rgb-texture(uFrameC,u+(1.0-uT)*v-dx).rgb))"
     "+md(abs(texture(uFrameA,u-uT*v+dy).rgb-texture(uFrameC,u+(1.0-uT)*v+dy).rgb))"
     "+md(abs(texture(uFrameA,u-uT*v-dy).rgb-texture(uFrameC,u+(1.0-uT)*v-dy).rgb));\n"
     "   e0+=md(abs(texture(uFrameA,u+dx).rgb-texture(uFrameC,u+dx).rgb))+md(abs(texture(uFrameA,u-dx).rgb-texture(uFrameC,u-dx).rgb))"
     "+md(abs(texture(uFrameA,u+dy).rgb-texture(uFrameC,u+dy).rgb))+md(abs(texture(uFrameA,u-dy).rgb-texture(uFrameC,u-dy).rgb));\n"
-    "   eM*=0.2;e0*=0.2;}\n"
+    "   eM*=0.2;e0*=0.2;}\n" if not DECISION_DEMEAN else
+    # Brightness-invariant: each five-tap difference less its mean, so a
+    # lighting change between the frames (Star Fox 64's cast relit between
+    # frames) does not make the warp / zero-motion choice random per pixel.
+    "   vec3 m1=texture(uFrameA,u-uT*v+dx).rgb-texture(uFrameC,u+(1.0-uT)*v+dx).rgb,"
+    "m2=texture(uFrameA,u-uT*v-dx).rgb-texture(uFrameC,u+(1.0-uT)*v-dx).rgb,"
+    "m3=texture(uFrameA,u-uT*v+dy).rgb-texture(uFrameC,u+(1.0-uT)*v+dy).rgb,"
+    "m4=texture(uFrameA,u-uT*v-dy).rgb-texture(uFrameC,u+(1.0-uT)*v-dy).rgb,m0=aw-cw;\n"
+    "   vec3 mm=0.2*(m0+m1+m2+m3+m4);eM=0.2*(md(abs(m0-mm))+md(abs(m1-mm))+md(abs(m2-mm))+md(abs(m3-mm))+md(abs(m4-mm)));\n"
+    "   vec3 z1=texture(uFrameA,u+dx).rgb-texture(uFrameC,u+dx).rgb,z2=texture(uFrameA,u-dx).rgb-texture(uFrameC,u-dx).rgb,"
+    "z3=texture(uFrameA,u+dy).rgb-texture(uFrameC,u+dy).rgb,z4=texture(uFrameA,u-dy).rgb-texture(uFrameC,u-dy).rgb,z0=a0-c0;\n"
+    "   vec3 zm=0.2*(z0+z1+z2+z3+z4);e0=0.2*(md(abs(z0-zm))+md(abs(z1-zm))+md(abs(z2-zm))+md(abs(z3-zm))+md(abs(z4-zm)));}\n")
     + (f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM)w=(1.0-uT)*a0+uT*c0;" if ZERO_MOTION_MAX <= 0 else
      f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM&&e0<{float(ZERO_MOTION_MAX)}/255.0)w=(1.0-uT)*a0+uT*c0;")
     + ("" if GHOST_SIDE_T <= 0 else
@@ -532,6 +544,9 @@ EDGE_HOLD_T = 32.0
 # a flash), fade to the zero-motion blend instead of keeping the warp; or fade
 # to it wherever the warp's own samples disagree by DISAGREE_BLEND_T.
 SUBPIXEL_ZERO_PX = 1.0
+# The warp / zero-motion comparison on five-tap differences less their mean
+# (brightness-invariant). Needs SKIP_FLAT_CROSS.
+DECISION_DEMEAN = False
 # Small (pixel-art) histories, up to (width, height), the generator's small
 # sources: whole-pixel warps (default since 3.2.99). Replay bench, paired:
 # Mega Drive 0.520 -> 0.453 of a cross-fade, SNES 0.353 -> 0.322, NES 0.563

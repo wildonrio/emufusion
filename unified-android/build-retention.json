@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "d5083b9106e9e29bac9b221751e8df7407f306d9f68c7e1d98c4fe5f0b0bdaf5": "Rollback 3.2.97 (171), on the Thor until 3.2.98 settles. 3.2.92-3.2.96 are on GitHub Releases; no local copies (owner request 2026-10-10: disk space).",
-    "41c272813812c3c79e2f1432aaf17d8b48b076a765222f4fea4064c3cf6f38c1": "Candidate 3.2.98 (172): queue reserve gives back unused depth; generated frames shed GPU work only for lateness beyond real frames; prepared artwork catalogs, regex-free metadata field reads and paused lower-screen decoders while stopped (Thor hot while asleep)."
+    "41c272813812c3c79e2f1432aaf17d8b48b076a765222f4fea4064c3cf6f38c1": "Rollback 3.2.98 (172), released; on GitHub Releases. 3.2.92-3.2.97 are on GitHub Releases; no local copies (owner request 2026-10-10: disk space).",
+    "f8ccd78928f8f1b0fe75109d47530e7c1f9ff75c130cbf4104de4378ab960a5c": "Candidate 3.2.99 (173): whole-pixel warps for 2-D sources, per-phase search propagation; QA replay bench hooks, synthesis 25, panel-rate override."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {

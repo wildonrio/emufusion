@@ -8,6 +8,7 @@ cross-fade (same tolerance); solid: 3 of 4 neighbours severe too. A frame has
 a visible artifact when solid pixels cover 0.1% of it.
 
 usage: replay_artifacts.py DUMP_DIR [DUMP_DIR...]   (each holding <case>/<triplet>.bin)
+       replay_artifacts.py --paired BEFORE_DIR AFTER_DIR
 """
 import sys
 from pathlib import Path
@@ -43,9 +44,26 @@ def score(path):
     sev = changing & (eg >= 48) & (eg >= ex + 24)
     return 100.0 * solid(sev).sum() / sev.size
 
-for root in sys.argv[1:]:
-    out = []
-    for case in sorted(d for d in Path(root).iterdir() if d.is_dir()):
-        vals = {f.stem: score(f) for f in sorted(case.glob('*.bin')) if f.stem.isdigit()}
-        out.append((case.name, vals))
-    print(Path(root).name, '  '.join(f'{c}: art {100*np.mean([v >= 0.1 for v in vals.values()]):.0f}% solid {np.mean(list(vals.values())):.3f}% n={len(vals)}' for c, vals in out))
+def per_triplet(root):
+    return {case.name: {f.stem: score(f) for f in sorted(case.glob('*.bin')) if f.stem.isdigit()}
+            for case in sorted(d for d in Path(root).iterdir() if d.is_dir())}
+
+
+if len(sys.argv) == 4 and sys.argv[1] == '--paired':
+    # Two dump sets of the same triplets (before, after): visible-artifact
+    # frames and solid area on exactly the triplets both scored.
+    before, after = per_triplet(sys.argv[2]), per_triplet(sys.argv[3])
+    for case in sorted(set(before) & set(after)):
+        common = sorted(set(before[case]) & set(after[case]))
+        if not common:
+            continue
+        art = lambda rows: 100 * np.mean([rows[t] >= 0.1 for t in common])
+        area = lambda rows: np.mean([rows[t] for t in common])
+        print(f'{case:10s} {len(common):3d} common  artifact frames {art(before[case]):4.0f}% -> '
+              f'{art(after[case]):4.0f}%  solid area {area(before[case]):.3f}% -> {area(after[case]):.3f}%')
+else:
+    for root in sys.argv[1:]:
+        out = per_triplet(root)
+        print(Path(root).name, '  '.join(
+            f'{c}: art {100*np.mean([v >= 0.1 for v in vals.values()]):.0f}% '
+            f'solid {np.mean(list(vals.values())):.3f}% n={len(vals)}' for c, vals in out.items() if vals))

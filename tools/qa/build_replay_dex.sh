@@ -3,9 +3,12 @@
 # (tools/qa/replay_bench.py --dex). Placed ahead of the installed APK on the
 # replay process's CLASSPATH, it lets a generator change be scored without
 # building or installing an APK. QA only; never packaged.
-# usage: build_replay_dex.sh OUTPUT.dex
+# usage: build_replay_dex.sh OUTPUT.dex [REPLACEMENT.java ...]
+# A replacement compiles in place of the tree's file of the same name (a
+# shader variant for the bench), leaving the working tree untouched.
 set -eu
 output=${1:?output dex path required}
+shift
 ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 PROJECT_DIR="$ROOT_DIR/unified-android"
 SDK_DIR=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/Users/tyleryoung/Code/cemu/Cemu-0.5/android-sdk}}
@@ -31,6 +34,11 @@ SOURCES=$(find "$ROOT_DIR/android-companion/src" "$ROOT_DIR/android-launch-bridg
     ! -path '*/com/thorium/preview/game/EmuFusionGameActivity.java' \
     ! -path '*/com/thorium/preview/game/QualificationLaunchActivity.java' \
     ! -path '*/com/thorium/preview/game/SessionReturnRouter.java' -print)
+for replacement in "$@"; do
+    name=$(basename "$replacement")
+    SOURCES=$(printf '%s\n' $SOURCES | grep -v "/$name\$")
+    SOURCES="$SOURCES $replacement"
+done
 "$JAVA_HOME/bin/javac" -source 8 -target 8 -encoding UTF-8 -nowarn \
     -classpath "$CLASSPATH_JARS" -d "$work/classes" $SOURCES 2>&1 | grep -v '^Note:\|^warning:\|^1 warning' || true
 test -f "$work/classes/com/thorium/preview/game/HoldoutReplay.class"
