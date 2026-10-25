@@ -240,7 +240,7 @@ public final class PhysicalPresentationClock {
                 sustainedAnchorNs <= 0L || sustainedScans < MIN_ESTIMATE_SCANS)
             return 0.0;
         int endpoint = sustainedBaselineEndpoint();
-        if (endpoint < 0) return seedConfirmedByShortBaseline() ? seededFrequencyHz : 0.0;
+        if (endpoint < 0) return seedConfirmedByShortBaseline() ? seededFrequencyHz : provisionalFrequencyHz();
         long spanNs = frequencyLastActualNs - trimTimes[endpoint];
         long scans = sustainedScans - trimScans[endpoint];
         double hz = scans * 1_000_000_000.0 / spanNs;
@@ -271,16 +271,71 @@ public final class PhysicalPresentationClock {
     private static final long SEED_CONFIRM_MIN_SPAN_NS = 2_000_000_000L;
     private static final double SEED_CONFIRM_TOLERANCE = 3.0e-4;
 
+    // Without a usable seed -- none yet, or a live short measurement that
+    // disagrees with it: the Thor's 120 Hz mode measured anywhere from 119.76
+    // to 119.93 Hz from session to session, against the seed's 300-ppm
+    // tolerance -- the most recent PROVISIONAL_MIN_SPAN_NS, when its two
+    // halves agree within PROVISIONAL_TOLERANCE, stands in until the full
+    // window exists. Paced cores otherwise ran on their nominal clock for the
+    // first 20 s, their images sweeping through the scan (Double Dash waited
+    // 3-7 ms for the callback that showed them, against ~1 ms once locked and
+    // phase-moved). It is never remembered (only a full baseline is), and the
+    // full window refines it like any later measurement.
+    private static final long PROVISIONAL_MIN_SPAN_NS = 8_000_000_000L;
+    private static final double PROVISIONAL_TOLERANCE = 2.0e-4;
+
+    private double provisionalFrequencyHz() {
+        if (trimCount < 3) return 0.0;
+        int start = recentTrimEndpoint(PROVISIONAL_MIN_SPAN_NS);
+        if (start < 0) return 0.0;
+        long first = trimTimes[start];
+        long spanNs = frequencyLastActualNs - first;
+        long middle = first + spanNs / 2L;
+        int split = -1;
+        for (int i = 1; i < trimCount; ++i) {
+            int index = (start + i) % trimTimes.length;
+            if (index == (trimHead + trimCount) % trimTimes.length) break;
+            if (trimTimes[index] >= middle) {
+                split = index;
+                break;
+            }
+        }
+        if (split < 0 || trimTimes[split] >= frequencyLastActualNs) return 0.0;
+        double early = (trimScans[split] - trimScans[start]) * 1_000_000_000.0 /
+                (trimTimes[split] - first);
+        double late = (sustainedScans - trimScans[split]) * 1_000_000_000.0 /
+                (frequencyLastActualNs - trimTimes[split]);
+        double hz = (sustainedScans - trimScans[start]) * 1_000_000_000.0 / spanNs;
+        return Double.isFinite(early) && Double.isFinite(late) && Double.isFinite(hz) &&
+                early > 0.0 && late > 0.0 && Math.abs(early / late - 1.0) <= PROVISIONAL_TOLERANCE ?
+                hz : 0.0;
+    }
+
     /** A rate measured in an earlier session for this mode; 0 clears it. */
     public void seedFrequencyHz(double hz) {
         seededFrequencyHz = Double.isFinite(hz) && hz > 0.0 ? hz : 0.0;
     }
 
+    // The panel settles after waking and entering the mode: Thor, Double Dash
+    // on 3.2.107, successive 2-s windows measured 119.834, 119.862, 119.887,
+    // 119.899 Hz, then steady. Short measurements therefore use the most
+    // recent span, not the whole window since it began: from the start, a
+    // seed within 190 ppm of the steady rate was refused for ~18 s.
+    private int recentTrimEndpoint(long spanNs) {
+        long cutoff = frequencyLastActualNs - spanNs;
+        for (int i = trimCount - 1; i >= 0; --i) {
+            int index = (trimHead + i) % trimTimes.length;
+            if (trimTimes[index] <= cutoff) return index;
+        }
+        return -1;
+    }
+
     private boolean seedConfirmedByShortBaseline() {
         if (!(seededFrequencyHz > 0.0) || trimCount < 2) return false;
-        long spanNs = frequencyLastActualNs - trimTimes[trimHead];
-        if (spanNs < SEED_CONFIRM_MIN_SPAN_NS) return false;
-        long scans = sustainedScans - trimScans[trimHead];
+        int start = recentTrimEndpoint(SEED_CONFIRM_MIN_SPAN_NS);
+        if (start < 0) return false;
+        long spanNs = frequencyLastActualNs - trimTimes[start];
+        long scans = sustainedScans - trimScans[start];
         double shortHz = scans * 1_000_000_000.0 / spanNs;
         return Double.isFinite(shortHz) &&
                 Math.abs(shortHz / seededFrequencyHz - 1.0) <= SEED_CONFIRM_TOLERANCE;
