@@ -785,6 +785,10 @@
     "unified-android/build/emufusion-3.2.103-phase2-phase3-qualification-a077bcdd9931cdfc89a59493b4e7b70872309e0f80b0a8956c57ea85f538ddae.apk": {
       "sha256": "a077bcdd9931cdfc89a59493b4e7b70872309e0f80b0a8956c57ea85f538ddae",
       "reason": "3.2.103 (177) diagnostic: physical-trace latency split (arrival/plan/swap to slot); measured, its instrumentation ships in 3.2.104."
+    },
+    "unified-android/build/emufusion-3.2.103-phase2-phase3-qualification.apk": {
+      "sha256": "a077bcdd9931cdfc89a59493b4e7b70872309e0f80b0a8956c57ea85f538ddae",
+      "reason": "Unhashed build output of the 3.2.103 (177) diagnostic a077bcdd (trace latency split); retired with it."
     }
   }
 }
