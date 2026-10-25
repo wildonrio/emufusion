@@ -193,7 +193,12 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn("float m=max(1.0,d);float w=1.0/(m*m);", shaders["PHASE_DENSIFY"])
         self.assertIn("float m=max(1.0,d);float w=1.0/(m*m);", shaders["DENSIFY_SHARP"])
         self.assertIn("n1+=step(0.12,abs(texture(uGrayC,q).r-a));", shaders["CUT"])
-        self.assertIn("o0=vec4(min(n0,n1)/n,fade,0.0,1.0);", shaders["CUT"])
+        self.assertIn("o0=vec4(min(n0,n1)/n,fade,flash,1.0);", shaders["CUT"])
+        # 3.2.105: a light flash (mean luma +0.1 or more, neither a cut nor a
+        # fitted fade) shows the nearer real frame instead of a shredded warp.
+        self.assertIn(" float flash=step(0.1,abs(sb-sa)/n)*step(min(n0,n1)/n,0.599)*(1.0-fade);",
+                      shaders["CUT"])
+        self.assertIn(" w=mix(w,uT>=0.5?c0:a0,uCutEnabled*step(0.5,ct.b));", shaders["GENERATE_PHASE"])
         # Two flat frames that differ are a fade, not a cut.
         self.assertIn(" else fade=step(n*sbb-sb*sb,n*n*0.0009)*step(0.015,d/n);", shaders["CUT"])
         runtime = RUNTIME.read_text()

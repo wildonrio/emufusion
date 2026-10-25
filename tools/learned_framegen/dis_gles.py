@@ -491,7 +491,11 @@ def _generate_phase_shader_text():
         "    w=mix(w,uT<=0.5?a0:c0,k);}\n") +
        "  }}\n") +
     " vec4 ct=texture(uCut,vec2(0.5));\n"
+    + ("" if FLASH_BLEND_LO <= 0 else
+       f" w=mix(w,(1.0-uT)*a0+uT*c0,uCutEnabled*smoothstep({FLASH_BLEND_LO},{CUT_THRESHOLD},ct.r));\n") +
     f" w=mix(mix(w,a0,uCutEnabled*step({CUT_THRESHOLD},ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));\n"
+    + ("" if not (FLASH_MEAN > 0 and FLASH_HOLD) else
+       " w=mix(w,uT>=0.5?c0:a0,uCutEnabled*step(0.5,ct.b));\n") +
     " o0=vec4(w,1.0);}\n")
 
 
@@ -522,6 +526,20 @@ FLAT_FADE = True
 # 1.182, Mario Kart Wii 0.752 -> 0.692); one sea pair still sat at 0.45-0.53
 # and flipped with small flow changes, while the captured cuts score 0.72+.
 CUT_THRESHOLD = 0.6
+# Replay-bench experiment (2026-10-25): frames whose unexplained share (the
+# cut evidence) is between FLASH_BLEND_LO and the cut threshold fade toward
+# the temporal blend (a light flash over half the picture is warped into
+# shards otherwise; Ocarina). 0 disables.
+FLASH_BLEND_LO = 0.0
+# Default since 3.2.105: a light flash -- the picture's mean luma changes by
+# FLASH_MEAN or more, neither a scene cut nor a fitted fade -- shows the
+# nearer real frame (the newer one at the midpoint): Ocarina's dungeon flash
+# (mean luma +0.325; no other eval triplet changes it by more than 0.052) was
+# warped into shards. Replay bench: Ocarina invented area 1.00 -> 0.05% of
+# the frame, every other game bit-identical. Its temporal blend instead
+# (FLASH_HOLD off) is a grey found in neither frame (1.06 -> 1.17%).
+FLASH_MEAN = 0.1
+FLASH_HOLD = True
 
 
 # Offline experiment: the cut counts use colour (largest channel change of a
@@ -685,7 +703,12 @@ def cut_shader():
     " if(va>=n*n*0.0009){float g=(n*sab-sa*sb)/va,o=(sb-g*sa)/n,rms=sqrt(max(0.0,(sbb-g*sab-o*sb)/n)),change=d/n;\n"
     "  fade=step(0.015,change)*step(rms,0.25*change)*step(rms,0.02)" + extra + ";}\n" +
     (" else fade=step(n*sbb-sb*sb,n*n*0.0009)*step(0.015,d/n);\n" if FLAT_FADE else "") +
-    " o0=vec4(min(n0,n1)/n,fade,0.0,1.0);}\n")
+    ("" if FLASH_MEAN <= 0 else
+     f" float flash=step({FLASH_MEAN},abs(sb-sa)/n)*step(min(n0,n1)/n,{CUT_THRESHOLD - 0.001})" +
+     ("*(1.0-fade);\n" if FLASH_HOLD else ";\n") +
+     (" fade=max(fade,flash);\n" if not FLASH_HOLD else "")) +
+    (" o0=vec4(min(n0,n1)/n,fade,flash,1.0);}\n" if FLASH_MEAN > 0 and FLASH_HOLD else
+     " o0=vec4(min(n0,n1)/n,fade,0.0,1.0);}\n"))
 
 
 def colour_cut_shader():
