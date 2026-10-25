@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "36e823fc62eac3b6844d6f6e407a50d853b65ad7a40fa3666962e7db0c6d393b": "Rollback 3.2.101 (175), released; 3.2.92-3.2.100 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "a536fe9964723f586c510f5d3d0085415754ee1803f50be76ec831dc79af5f61": "Release 3.2.102 (176), installed on the Thor: keep-alive re-show through source stalls."
+    "a536fe9964723f586c510f5d3d0085415754ee1803f50be76ec831dc79af5f61": "Rollback 3.2.102 (176), released; 3.2.92-3.2.101 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
+    "5994a7c6a566acc32a3604b13cea688bfce0de14526da10fb131d2d018b5a0ed": "Release 3.2.104 (178), installed on the Thor: pixel-art synthesis by system, source phase, queue-deepen QA switch."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -769,6 +769,22 @@
     "unified-android/build/emufusion-3.2.103-phase2-phase3-qualification-bf8ddfbd01bd7411c7f9a42d9878d22692b0151229ffcbbf54b8458fc85d0bfa.apk": {
       "sha256": "bf8ddfbd01bd7411c7f9a42d9878d22692b0151229ffcbbf54b8458fc85d0bfa",
       "reason": "3.2.103 (177) trial, not adopted: early guard skipped for frames right after an adjacent-scan frame; Thor Wind Waker HD 77.5% on intended vs 89.5% on 3.2.102 (more early frames). The released 3.2.102 was restored."
+    },
+    "unified-android/build/emufusion-3.2.104-phase2-phase3-qualification-1da889e2f31ee5d6786a8520ad1ffa6d6c028411edebebd9904c1ca0409086b3.apk": {
+      "sha256": "1da889e2f31ee5d6786a8520ad1ffa6d6c028411edebebd9904c1ca0409086b3",
+      "reason": "First 3.2.104 (178) build (source phase only), never installed: superseded by c77807cc with the pixel-art synthesis and queue-deepen switch."
+    },
+    "unified-android/build/emufusion-3.2.104-phase2-phase3-qualification-c77807cce817dcdb1da1f823fbe25454b682e6395045c66cb1a81341fc954736.apk": {
+      "sha256": "c77807cce817dcdb1da1f823fbe25454b682e6395045c66cb1a81341fc954736",
+      "reason": "3.2.104 (178) trial build: phase lock moved Ocarina's hardware-core loop every 3 s without holding; superseded by 75727306 (advice stops after two moves that do not hold)."
+    },
+    "unified-android/build/emufusion-3.2.104-phase2-phase3-qualification-7572730604e15eada57815f333af7b5aa514e8abf2b04bf570dcbc7507d5a8e3.apk": {
+      "sha256": "7572730604e15eada57815f333af7b5aa514e8abf2b04bf570dcbc7507d5a8e3",
+      "reason": "3.2.104 (178) trial build: SNES (software core) took nine phase moves of up to 6 ms in 37 s and some frames then missed their callback; superseded by 5994a7c6 (jitter margin, half-scan cap, hold-off)."
+    },
+    "unified-android/build/emufusion-3.2.103-phase2-phase3-qualification-a077bcdd9931cdfc89a59493b4e7b70872309e0f80b0a8956c57ea85f538ddae.apk": {
+      "sha256": "a077bcdd9931cdfc89a59493b4e7b70872309e0f80b0a8956c57ea85f538ddae",
+      "reason": "3.2.103 (177) diagnostic: physical-trace latency split (arrival/plan/swap to slot); measured, its instrumentation ships in 3.2.104."
     }
   }
 }

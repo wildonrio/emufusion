@@ -53,6 +53,14 @@ public final class AbsoluteFramePacer {
 
     public long periodNanos() { return periodNanos; }
 
+    /**
+     * Moves the lattice later by {@code nanos} from the next frame on: a
+     * phase change (the frame generator's SourcePhaseAdvisor), not a trim.
+     */
+    public void delayNext(long nanos) {
+        if (started && nanos > 0L) deadlineNanos = saturatingAdd(deadlineNanos, nanos);
+    }
+
     /** Changes future spacing without moving the frame already scheduled. */
     public AbsoluteFramePacer withPeriodPreservingDeadline(long newPeriodNanos) {
         AbsoluteFramePacer next = new AbsoluteFramePacer(newPeriodNanos);

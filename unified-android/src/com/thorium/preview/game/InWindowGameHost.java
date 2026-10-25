@@ -973,6 +973,7 @@ public final class InWindowGameHost
             layer.setDisplayAspect(0f);
             double authoritativeHz = authoritativeVideoHz(request.systemId);
             layer.setAuthoritativeSourceHz(authoritativeHz);
+            layer.setDiscreteContent(authoritativeHz > 0.0);
             layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz),
                     directSurfaceVotesSourceClock(authoritativeHz));
             gameSurface = layer;
@@ -986,6 +987,7 @@ public final class InWindowGameHost
             layer.setDisplayAspect(0f);
             double authoritativeHz = authoritativeVideoHz(request.systemId);
             layer.setAuthoritativeSourceHz(authoritativeHz);
+            layer.setDiscreteContent(authoritativeHz > 0.0);
             layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz),
                     directSurfaceVotesSourceClock(authoritativeHz));
             gameSurface = layer;

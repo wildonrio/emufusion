@@ -18,6 +18,12 @@ public final class FrameGenerationRendererRegistry {
         return surface != null && surface.isValid() && find(surface) != null;
     }
 
+    /** The renderer's one-time phase delay for a paced source feeding this Surface, or zero. */
+    public static long takeSourcePhaseDelayNs(Surface surface) {
+        FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
+        return renderer == null ? 0L : renderer.takeSourcePhaseDelayNs();
+    }
+
     static void register(FrameGenerationRenderer renderer) {
         if (renderer == null) throw new NullPointerException("renderer");
         Surface surface = renderer.inputSurface();

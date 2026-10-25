@@ -139,6 +139,10 @@ final class HoldoutReplay {
                     width, height, refreshHz, "qa-replay", 0, () -> false, () -> true);
             generator.setAuthoritativeSourceHz(SOURCE_HZ);
             generator.setProducerTimelineHz(SOURCE_HZ);
+            // The captured system (replay_bench passes it): pixel-art rules
+            // for the consoles the host treats as pixel art.
+            String system = System.getProperty("emufusion.replay.system", "");
+            generator.setDiscreteContent(InWindowGameHost.authoritativeVideoHz(system) > 0.0);
             producer = new Producer(generator.inputSurface(), width, height);
             int submitted = 0;
             long dueNs = System.nanoTime() + SOURCE_PERIOD_NS;

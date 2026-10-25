@@ -111,6 +111,7 @@ public final class GameSurfaceView extends SurfaceView
             };
     private Runnable firstSubmittedFrameListener;
     private double authoritativeSourceHz;
+    private boolean discreteContent;
     private double producerTimelineHz;
     private float directPresentationHz = 60.0f;
     // FIXED_SOURCE for a source clock, DEFAULT for the panel mode itself.
@@ -241,6 +242,13 @@ public final class GameSurfaceView extends SurfaceView
     public void setAuthoritativeSourceHz(double value) {
         authoritativeSourceHz = value;
         if (frameGenerator != null) frameGenerator.setAuthoritativeSourceHz(value);
+    }
+
+    /** A pixel-art system: the generator's pixel-art synthesis rules. */
+    public void setDiscreteContent(boolean value) {
+        discreteContent = value;
+        FrameGenerationRenderer generator = frameGenerator;
+        if (generator != null) generator.setDiscreteContent(value);
     }
 
     /**
@@ -464,6 +472,7 @@ public final class GameSurfaceView extends SurfaceView
             generator.setLockToThirtyTierPolicy(
                     launchMode.usesLockToThirtyTierPolicy());
             generator.setAuthoritativeSourceHz(authoritativeSourceHz);
+            generator.setDiscreteContent(discreteContent);
             generator.setProducerTimelineHz(producerTimelineHz);
             generator.setStatsListener(frameRateListener);
             generator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);
@@ -602,6 +611,7 @@ public final class GameSurfaceView extends SurfaceView
             frameGenerator.setLockToThirtyTierPolicy(
                     launchMode.usesLockToThirtyTierPolicy());
             frameGenerator.setAuthoritativeSourceHz(authoritativeSourceHz);
+            frameGenerator.setDiscreteContent(discreteContent);
             frameGenerator.setProducerTimelineHz(producerTimelineHz);
             frameGenerator.setStatsListener(frameRateListener);
             frameGenerator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);

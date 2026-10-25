@@ -162,6 +162,31 @@ class LowLatencyPresentationTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertIn("CompositorEarlyGuardTest passed", run.stdout)
 
+    def test_source_phase_follows_the_callback(self):
+        # 3.2.103: a core we pace is moved once its clock is locked so its
+        # images arrive just before the callback that takes them up (Thor
+        # trace: Mega Drive waited 1.5-7.2 ms, Ocarina 4.1 ms for the callback).
+        # QA: emufusion_framegen_source_phase=0.
+        generator = GENERATOR.read_text()
+        self.assertIn("sourcePhaseAdvisor.observe(System.nanoTime() - arrived, panelPeriodNs);", generator)
+        self.assertIn("TimelineSchedulerSwitch.sourcePhase() ? sourcePhaseAdvisor.take() : 0L;", generator)
+        game = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview"
+        self.assertIn("pacer.delayNext(phaseDelayNs);",
+                      (game / "game" / "LibretroEngineSession.java").read_text())
+        self.assertIn("FrameGenerationRendererRegistry.takeSourcePhaseDelayNs(attachedSurface)",
+                      (game / "ExperimentalGlesRenderLoop.java").read_text())
+        video = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "video"
+        test = (ROOT / "unified-android" / "test" / "com" / "thorium" / "emufusion" / "video" /
+                "SourcePhaseAdvisorTest.java")
+        with tempfile.TemporaryDirectory() as out:
+            subprocess.run([str(JAVA / "javac"), "-d", out, str(video / "SourcePhaseAdvisor.java"),
+                            str(test)], check=True)
+            run = subprocess.run([str(JAVA / "java"), "-cp", out,
+                                  "com.thorium.emufusion.video.SourcePhaseAdvisorTest"],
+                                 capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("SourcePhaseAdvisorTest passed", run.stdout)
+
     def test_stale_real_image_is_passed_for_a_newer_one(self):
         # 3.2.91: a newer image while the active pair's real image still
         # waits (its generated image is up) passes that real image, so the

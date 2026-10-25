@@ -20,6 +20,7 @@ public final class BuiltinQueueReserveTest {
         earlyRecoveriesHoldOffDeepening();
         aDeepeningThatAddsNothingIsGivenBack();
         aDeepeningThatHelpsIsKept();
+        aCappedQueueNeverDeepens();
         System.out.println("BuiltinQueueReserveTest passed");
     }
 
@@ -46,6 +47,23 @@ public final class BuiltinQueueReserveTest {
         late(r, clock);
         late(r, clock);
         check(late(r, clock) == BuiltinQueueReserve.Change.DEEPENED, "three late frames deepen");
+    }
+
+    /** QA queue_deepen=0: late frames stay late rather than buy a scan of latency. */
+    private static void aCappedQueueNeverDeepens() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long[] clock = {1_000_000_000L};
+        burst(r, clock);
+        eq(1L, r.extraScans(), "deepened");
+        r.setMaxExtraScans(0);
+        eq(0L, r.extraScans(), "given back at once");
+        advance(clock, 3_000_000_000L);
+        for (int i = 0; i < 30; ++i)
+            check(late(r, clock) == BuiltinQueueReserve.Change.NONE, "never deepens");
+        eq(BuiltinQueueReserve.MIN_NS, r.reserveNs(clock[0], clock[0] + 500_000L, PERIOD), "earliest scan");
+        r.setMaxExtraScans(BuiltinQueueReserve.MAX_EXTRA_SCANS);
+        advance(clock, 3_000_000_000L);
+        burst(r, clock);
     }
 
     private static void depthIsCountedFromTheCallback() {

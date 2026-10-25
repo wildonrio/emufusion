@@ -99,7 +99,29 @@ class SingleRouteTest(unittest.TestCase):
         self.assertIn("(disDefault && !holdoutRendering);", generator)
         self.assertIn("        return disMotionNormal;\n", generator)
         # Motion under one source pixel is taken as zero.
-        self.assertIn(" if(length(v*uHistorySize)<1.0)w=(1.0-uT)*a0+uT*c0;else\n", dis_gles.shaders()["GENERATE_PHASE"])
+        self.assertIn(" if(length(v*uHistorySize)<1.0){w=(1.0-uT)*a0+uT*c0;pa=a0;pc=c0;}else\n",
+                      dis_gles.shaders()["GENERATE_PHASE"])
+
+    def test_pixel_art_rules_follow_the_system_not_the_size(self):
+        # 3.2.104: whole-pixel warps, the nearer frame's sample where two
+        # disagree, and no local cut for the fixed-clock legacy consoles;
+        # 3-D sources however small keep sub-pixel warps and blends (3-D at
+        # 320x180 with whole-pixel warps: Link's Awakening 1.316 of a
+        # cross-fade, 0.941 without).
+        shader = dis_gles.shaders()["GENERATE_PHASE"]
+        self.assertNotIn("uHistorySize.x<=400.0", shader)
+        self.assertNotIn("uHistorySize.x>400.0", shader)
+        self.assertIn(" if(uDiscrete>0.5){\n  vec2 vp=floor(v*uHistorySize+0.5)", shader)
+        self.assertIn(" if(uDiscrete>0.5) w=mix(w,uT>=0.5?pc:pa,smoothstep(12.0/255.0,24.0/255.0,md(abs(pa-pc))));",
+                      shader)
+        self.assertIn("  if(uDiscrete<0.5)w=mix(w,(1.0-uT)*a0+uT*c0,", shader)
+        flow = (GAME / "DenseInverseSearchFlow.java").read_text()
+        self.assertIn('GLES20.glUniform1f(location(generatePhase, "uDiscrete"), discrete ? 1f : 0f);', flow)
+        self.assertIn("flow.setDiscrete(discreteContent);", GENERATOR.read_text())
+        host = (GAME / "InWindowGameHost.java").read_text()
+        self.assertEqual(2, host.count("layer.setDiscreteContent(authoritativeHz > 0.0);"))
+        replay = (GAME / "HoldoutReplay.java").read_text()
+        self.assertIn("generator.setDiscreteContent(InWindowGameHost.authoritativeVideoHz(system) > 0.0);", replay)
 
 
 class FullSizeGenerationTest(unittest.TestCase):
@@ -162,7 +184,7 @@ class DisSelectionTest(unittest.TestCase):
         # cut), per-pixel zero-motion selection and the sharper densifications.
         self.assertIn("w=mix(mix(w,a0,uCutEnabled*step(0.6,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));",
                       dis_gles.shaders()["GENERATE_PHASE"])
-        self.assertIn("if(e0+8.0/255.0<eM)w=(1.0-uT)*a0+uT*c0;", dis_gles.shaders()["GENERATE_PHASE"])
+        self.assertIn("if(e0+8.0/255.0<eM){w=(1.0-uT)*a0+uT*c0;pa=a0;pc=c0;}", dis_gles.shaders()["GENERATE_PHASE"])
         self.assertIn("structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());", generator)
         self.assertIn("if (perPhase && disPhaseFlow == null) disPhaseFlow = new DenseInverseSearchFlow(true);", generator)
         self.assertIn("boolean disCut = maxFragmentTextureUnits >= 9 && disMotionUsable();", generator)

@@ -2978,6 +2978,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 now - observed < PhysicalPresentationClock.SUSTAINED_GAP_BRIDGE_NS ?
                 qualifiedPhysicalPanelHz : 0.0;
     }
+    // Fixed-clock legacy consoles (pixel art) get the pixel-art synthesis
+    // rules (DenseInverseSearchFlow.setDiscrete); set by the host.
+    private volatile boolean discreteContent;
+
+    @Override public void setDiscreteContent(boolean value) { discreteContent = value; }
+
+    @Override public long takeSourcePhaseDelayNs() {
+        return !closed.get() && TimelineSchedulerSwitch.sourcePhase() ? sourcePhaseAdvisor.take() : 0L;
+    }
     @Override public double endpointDriftUsPerSecond() { return reportedEndpointDriftUsPerS; }
     @Override public long endpointOffsetNs() { return reportedEndpointOffsetNs; }
 
@@ -7036,6 +7045,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int denseJoinedGapEvidenceCount;
     private final SubmissionTimingHistory denseSubmissionHistory = new SubmissionTimingHistory();
 
+    // How much later a paced source could deliver and keep its callback
+    // (3.2.103): each newly taken-up image's wait, offered to the core's pacer.
+    private final com.thorium.emufusion.video.SourcePhaseAdvisor sourcePhaseAdvisor =
+            new com.thorium.emufusion.video.SourcePhaseAdvisor();
+    private long sourcePhaseObservedPair;
     private final com.thorium.emufusion.video.CompositorEarlyGuard compositorEarlyGuard =
             new com.thorium.emufusion.video.CompositorEarlyGuard();
     // Physical frame ids of recent keep-alive swaps (the image on screen
@@ -7128,6 +7142,34 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private static final int PHYSICAL_TRACE_LIMIT = 2000;
     private final boolean physicalTraceEnabled = PHYSICAL_TRACE_MARKER.exists();
     private int physicalTraceLines;
+    // Per traced present: when its newest image arrived, when its slot was
+    // planned and when its swap returned, so latency splits into waiting for
+    // the callback, our work and the compositor.
+    private static final int TRACE_TIMING_RING = 64;
+    private final long[] traceTimingFrameIds = new long[TRACE_TIMING_RING];
+    private final long[] traceTimingNs = new long[TRACE_TIMING_RING * 3];
+
+    private void recordTraceTiming(long frameId, int submission, long swapReturnedNs) {
+        int slot = (int) Math.floorMod(frameId, (long) TRACE_TIMING_RING);
+        int arrival = Math.floorMod(submission, ARRIVAL_RING);
+        traceTimingFrameIds[slot] = frameId;
+        traceTimingNs[slot * 3] = submission > 0 && arrivalOrdinalRing[arrival] == submission ?
+                arrivalNsRing[arrival] : 0L;
+        traceTimingNs[slot * 3 + 1] = builtinPlanNowNs;
+        traceTimingNs[slot * 3 + 2] = swapReturnedNs;
+    }
+
+    private String traceTiming(long frameId, long slotNs) {
+        int slot = (int) Math.floorMod(frameId, (long) TRACE_TIMING_RING);
+        if (traceTimingFrameIds[slot] != frameId || slotNs <= 0L) return "";
+        StringBuilder text = new StringBuilder();
+        String[] names = {" arrivalToSlotUs=", " planToSlotUs=", " swapToSlotUs="};
+        for (int i = 0; i < 3; ++i) {
+            long ns = traceTimingNs[slot * 3 + i];
+            text.append(names[i]).append(ns > 0L ? (slotNs - ns) / 1000L : -1L);
+        }
+        return text.toString();
+    }
 
     private boolean consumeDensePhysicalGpuHeadroom() {
         GpuPhysicalHeadroomLedger.Result result;
@@ -7145,7 +7187,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         " desiredNs=" + result.desiredNs +
                         " outcome=" + result.outcome + " reason=" + result.reason +
                         " extraScans=" + builtinQueueReserve.extraScans() +
-                        " epoch=" + result.presentationEpoch);
+                        " epoch=" + result.presentationEpoch +
+                        traceTiming(result.frameId, result.desiredNs));
             }
             if (result.presentationEpoch != schedulerPresentationEpoch()) {
                 denseGpuAdaptation.invalidateRecoveryEvidence();
@@ -7411,6 +7454,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         int slot = Math.floorMod(submission, ARRIVAL_RING);
         arrivalOrdinalRing[slot] = submission;
         arrivalNsRing[slot] = System.nanoTime();
+    }
+
+    /** When the image with this submission ordinal arrived, or zero once overwritten. */
+    private long arrivalNs(int submission) {
+        int slot = Math.floorMod(submission, ARRIVAL_RING);
+        return submission > 0 && arrivalOrdinalRing[slot] == submission ? arrivalNsRing[slot] : 0L;
     }
 
     private void recordRealDisplayLag(int submission, long targetNs) {
@@ -8631,7 +8680,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // Keep 1ms for queue handoff; actual GPU completion remains checked
             // against this earlier cutoff by the physical evidence ledger.
             long planNowNs = System.nanoTime();
-            // Whole extra scans counted from the callback (BuiltinQueueReserve).
+            // Whole extra scans counted from the callback (BuiltinQueueReserve);
+            // QA queue_deepen=0 keeps the queue at its minimum.
+            builtinQueueReserve.setMaxExtraScans(TimelineSchedulerSwitch.queueDeepen() ?
+                    com.thorium.emufusion.video.BuiltinQueueReserve.MAX_EXTRA_SCANS : 0);
             builtinQueueReserveNs = builtinQueueReserve.reserveNs(callbackNs, planNowNs,
                     builtinCompositorTiming[1]);
             PhysicalPresentationDeadline egl = PhysicalPresentationDeadline.nextEgl(
@@ -9040,6 +9092,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 activeRightSequence > 0L ?
                         endpointFifoCount - (requiredEndpointPrimeDepth(true) - 2) : 0,
                 successorQueuedForPass());
+        if (timeline.arrivalPacing() && timeline.arrivalPairs() != sourcePhaseObservedPair) {
+            sourcePhaseObservedPair = timeline.arrivalPairs();
+            long arrived = arrivalNs(activeRightSubmission);
+            if (arrived > 0L)
+                sourcePhaseAdvisor.observe(System.nanoTime() - arrived, panelPeriodNs);
+        }
         if (arrivalTraceEnabled && timeline.arrivalPairs() != arrivalTracedPair &&
                 arrivalTraceLines < ARRIVAL_TRACE_LIMIT) {
             arrivalTracedPair = timeline.arrivalPairs();
@@ -9404,6 +9462,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 presentationScansPerOutput(), frameRate.panelPeriodNs());
         if (densePhysicalFrameCommitted && timelineActive && timeline.pendingKeepAlive())
             keepAliveFrameIds[keepAliveFrameIdNext++ % keepAliveFrameIds.length] = densePhysicalFrameId;
+        if (physicalTraceEnabled && densePhysicalFrameCommitted)
+            recordTraceTiming(densePhysicalFrameId, activeRightSubmission > 0 &&
+                    (renderedSynthetic || selectedPhase >= 1f) ?
+                    activeRightSubmission : activeLeftSubmission, denseSwapReturnedNs);
         if (densePyramidEnabled && densePhysicalFrameCommitted && externalTransport == null)
             denseSubmissionHistory.record(schedulerPresentationEpoch(), densePhysicalFrameId,
                     deadline.contentPresentationTimeNs(), deadline.hardCompletionDeadlineNs(),
@@ -12709,6 +12771,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         flow.cutTexture());
                 bindQuad(flow.generateSelectProgram());
             } else {
+                flow.setDiscrete(discreteContent);
                 flow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
                         structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());
                 bindQuad(flow.generatePhaseProgram());
@@ -14147,6 +14210,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " builtinQueueReserveFailedRecoveries=" + builtinQueueReserve.failedRecoveries() +
                 " builtinQueueEarlyRecoveries=" + builtinQueueReserve.earlyRecoveries() +
                 " builtinQueueHeldDeepenings=" + builtinQueueReserve.heldDeepenings() +
+                " sourcePhaseShifts=" + sourcePhaseAdvisor.shifts() +
+                " sourcePhaseShiftedUs=" + sourcePhaseAdvisor.shiftedNs() / 1000L +
+                " sourcePhaseAbandoned=" + (sourcePhaseAdvisor.abandoned() ? 1 : 0) +
                 " builtinQueueRejectedTrials=" + builtinQueueReserve.rejectedTrials() +
                 " compositorEarlyGuard=" + (compositorEarlyGuard.active() ? 1 : 0) +
                 " compositorEarlyGuardActivations=" + compositorEarlyGuard.activations() +

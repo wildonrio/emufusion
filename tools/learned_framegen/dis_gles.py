@@ -372,6 +372,7 @@ def _generate_phase_shader_text():
     # -> 0.376, Double Dash 0.600 -> 0.594, Ocarina 0.715 -> 0.712 of a
     # cross-fade, Link's Awakening within 0.2%. Zero disables it (QA).
     "uniform float uChoiceSpread;\n" +
+    ("uniform float uDiscrete;\n" if DISCRETE_UNIFORM else "") +
     ("uniform sampler2D uFlowAC,uFlowCA;\n" if OCCLUSION_SIDE_T > 0 else "") +
     "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
     "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
@@ -391,16 +392,19 @@ def _generate_phase_shader_text():
      # Pixel art moves in whole pixels: sample both frames at texel centres
      # along the motion rounded to whole pixels (the real middle frame is on
      # the grid; a half-pixel bilinear sample blurs every edge).
-     f" if(uHistorySize.x<={PIXEL_SNAP[0]:.1f}&&uHistorySize.y<={PIXEL_SNAP[1]:.1f}){{\n"
+     (" if(uDiscrete>0.5){\n" if DISCRETE_UNIFORM else
+      f" if(uHistorySize.x<={PIXEL_SNAP[0]:.1f}&&uHistorySize.y<={PIXEL_SNAP[1]:.1f}){{\n") +
      "  vec2 vp=floor(v*uHistorySize+0.5),ap=floor(uT*vp+0.5),q=floor(u*uHistorySize)+0.5;\n"
      "  aw=texture(uFrameA,(q-ap)/uHistorySize).rgb;cw=texture(uFrameC,(q+vp-ap)/uHistorySize).rgb;}\n") +
     " vec3 a0=texture(uFrameA,u).rgb,c0=texture(uFrameC,u).rgb;\n"
     " vec3 w=(1.0-uT)*aw+uT*cw;\n"
+    + (" vec3 pa=aw,pc=cw;\n" if PIXEL_PICK_T > 0 else "") +
     # Motion under one source pixel is taken as zero: a sub-pixel warp only
     # blurs sharp content (DS, NSMBU Deluxe, 3DS); offline over 28 games 1.7%
     # better on average (NSMBU Deluxe -15%, 3DS -8%, Star Fox 64 -6%); two
     # pixels breaks real 1-2 px scrolling (Game Boy, NES).
-    f" if(length(v*uHistorySize)<{float(SUBPIXEL_ZERO_PX)})w=(1.0-uT)*a0+uT*c0;else\n"
+    (f" if(length(v*uHistorySize)<{float(SUBPIXEL_ZERO_PX)})w=(1.0-uT)*a0+uT*c0;else\n" if PIXEL_PICK_T <= 0 else
+     f" if(length(v*uHistorySize)<{float(SUBPIXEL_ZERO_PX)}){{w=(1.0-uT)*a0+uT*c0;pa=a0;pc=c0;}}else\n") +
     " {float eM=md(abs(aw-cw)),e0=md(abs(a0-c0));\n"
     + ("  {vec2 dx" if not SKIP_FLAT_CROSS else "  if(max(eM,e0)>2.0/255.0){vec2 dx") + f"=vec2({float(ZERO_MOTION_SPREAD)}/uHistorySize.x,0.0),dy=vec2(0.0,{float(ZERO_MOTION_SPREAD)}/uHistorySize.y);\n"
     + (
@@ -422,7 +426,9 @@ def _generate_phase_shader_text():
     "   vec3 z1=texture(uFrameA,u+dx).rgb-texture(uFrameC,u+dx).rgb,z2=texture(uFrameA,u-dx).rgb-texture(uFrameC,u-dx).rgb,"
     "z3=texture(uFrameA,u+dy).rgb-texture(uFrameC,u+dy).rgb,z4=texture(uFrameA,u-dy).rgb-texture(uFrameC,u-dy).rgb,z0=a0-c0;\n"
     "   vec3 zm=0.2*(z0+z1+z2+z3+z4);e0=0.2*(md(abs(z0-zm))+md(abs(z1-zm))+md(abs(z2-zm))+md(abs(z3-zm))+md(abs(z4-zm)));}\n")
-    + (f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM)w=(1.0-uT)*a0+uT*c0;" if ZERO_MOTION_MAX <= 0 else
+    + (f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM){{w=(1.0-uT)*a0+uT*c0;pa=a0;pc=c0;}}"
+       if ZERO_MOTION_MAX <= 0 and PIXEL_PICK_T > 0 else
+       f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM)w=(1.0-uT)*a0+uT*c0;" if ZERO_MOTION_MAX <= 0 else
      f"  if(e0+{float(ZERO_MOTION_MARGIN)}/255.0<eM&&e0<{float(ZERO_MOTION_MAX)}/255.0)w=(1.0-uT)*a0+uT*c0;")
     + ("" if GHOST_SIDE_T <= 0 else
        f"\n  {{float gk=smoothstep({0.5*float(GHOST_SIDE_T)}/255.0,{float(GHOST_SIDE_T)}/255.0,min(eM,e0))*"
@@ -436,7 +442,8 @@ def _generate_phase_shader_text():
        "   float da=length(texture(uFlowAC,u-uT*v).xy-vp),dc=length(-texture(uFlowCA,u+(1.0-uT)*v).xy-vp);\n"
        f"   if(abs(da-dc)>{float(OCCLUSION_SIDE_MARGIN)})w=da<dc?aw:cw;}}")
     + ("" if NEITHER_BLEND_T <= 0 else
-       ("\n  if(uHistorySize.x>400.0||uHistorySize.y>300.0)" if NEITHER_LARGE_ONLY else "\n ") +
+       (("\n  if(uDiscrete<0.5)" if DISCRETE_UNIFORM else "\n  if(uHistorySize.x>400.0||uHistorySize.y>300.0)")
+        if NEITHER_LARGE_ONLY else "\n ") +
        f"w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(NEITHER_BLEND_T)}/255.0,"
        f"{float(NEITHER_BLEND_T)}/255.0,min(eM,e0))" +
        ("" if NEITHER_SPREAD_PX <= 0 else
@@ -445,6 +452,14 @@ def _generate_phase_shader_text():
        f"\n  w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(DISAGREE_BLEND_T)}/255.0,"
        f"{float(DISAGREE_BLEND_T)}/255.0,eM));")
     + "}\n"
+    + ("" if PIXEL_PICK_T <= 0 or not PIXEL_SNAP else
+       # Pixel art changes in discrete states (a palette step, a sprite's
+       # next pose, a coin's next turn): two samples that disagree are two
+       # states, and their blend is a colour or ghost the game never drew.
+       # Take the nearer frame's sample (the newer one at the midpoint).
+       ("" if PIXEL_PICK_ALL else " if(uDiscrete>0.5)" if DISCRETE_UNIFORM else
+        f" if(uHistorySize.x<={PIXEL_SNAP[0]:.1f}&&uHistorySize.y<={PIXEL_SNAP[1]:.1f})") +
+       f" w=mix(w,uT>=0.5?pc:pa,smoothstep({0.5*float(PIXEL_PICK_T)}/255.0,{float(PIXEL_PICK_T)}/255.0,md(abs(pa-pc))));\n")
     + ("" if not EDGE_OUTSIDE_SIDE else
        # Content entering or leaving the picture: a warp sample outside the
        # image only has the clamped edge (a smear); take the other frame's.
@@ -569,6 +584,24 @@ DECISION_DEMEAN = False
 # ones instead of blurring every edge by half a pixel; with whole-pixel
 # placement forgiven, solid artifacts are unchanged or fewer.
 PIXEL_SNAP = (400, 300)
+# Since 3.2.104 the pixel-art rules (whole-pixel warps, PIXEL_PICK_T, and no
+# local cut) follow uDiscrete, set for the fixed-clock legacy consoles
+# (InWindowGameHost.authoritativeVideoHz), not the history size: 3-D at
+# 320x180 with whole-pixel warps scored Link's Awakening 1.316 of a
+# cross-fade, 0.941 without; Mario 3D World 0.870 / 0.673, Wind Waker HD
+# 0.520 / 0.368, Ocarina 0.701 / 0.579 -- PS1, DS and 3DS 3-D games are that small.
+DISCRETE_UNIFORM = True
+# Default since 3.2.104: for pixel-art systems, where the two samples a pixel
+# blends differ by PIXEL_PICK_T grey levels, take the nearer frame's sample
+# (the newer one at the midpoint) instead of their blend, a colour or ghost
+# the game never drew (0 disables). Replay bench, paired, frames with content
+# found in neither real frame: NES 82 -> 3%, Mega Drive 98 -> 78% (area 3.4 ->
+# 0.7% of the frame), SNES 76 -> 41%, Game Boy 60 -> 25%; hold-out NES 0.572
+# -> 0.387 of a cross-fade, Mega Drive 0.444 -> 0.392, SNES 0.327 -> 0.308.
+# On 3-D content (any size) it is much worse: Link's Awakening 0.725 -> 1.171.
+PIXEL_PICK_T = 24.0
+# ... for every history size, not just the small ones.
+PIXEL_PICK_ALL = False
 # Where the warp's five-tap mismatch exceeds OCCLUSION_SIDE_T grey levels, take
 # the sample whose own frame's DIS flow at its source agrees with the output
 # vector by OCCLUSION_SIDE_MARGIN field pixels more than the other's does.

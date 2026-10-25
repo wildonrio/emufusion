@@ -65,6 +65,16 @@ public interface FrameGenerationRenderer extends AutoCloseable {
     /** Fresh sustained physical scan frequency, or zero when not qualified. */
     default double physicalPanelHz() { return 0.0; }
 
+    /**
+     * A one-time delay for the next frame of a source paced at
+     * {@link #physicalPanelHz()}, so its images arrive just before the panel
+     * callback that takes them up; zero when there is none. Taking it clears it.
+     */
+    default long takeSourcePhaseDelayNs() { return 0L; }
+
+    /** The source is a pixel-art system: discrete states, whole-pixel motion. */
+    default void setDiscreteContent(boolean value) {}
+
     /** Source-vs-scan drift in microseconds per second (0 = unknown/none). */
     default double endpointDriftUsPerSecond() { return 0.0; }
 

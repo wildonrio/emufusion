@@ -122,7 +122,10 @@ def run_case(case, per_case, levels, classpath, libs, kind, only=None, dumps=Non
     push(case, folders)
     subprocess.run(ADB + ['logcat', '-c'], capture_output=True)
     started = time.time()
-    command = (f'CLASSPATH={classpath} app_process -Djava.library.path={libs} /system/bin '
+    system = json.loads((folders[0] / 'meta.json').read_text()).get('system', '') \
+        if (folders[0] / 'meta.json').is_file() else ''
+    command = (f'CLASSPATH={classpath} app_process -Djava.library.path={libs} '
+               f'-Demufusion.replay.system={system} /system/bin '
                f'com.thorium.preview.game.HoldoutReplay {DEVICE_ROOT}/{case} 120 '
                f'{",".join(map(str, levels))}' + (f' {DEVICE_DUMPS}/{case}' if dumps else '') +
                (' field' if dumps and FIELD_ONLY else ''))

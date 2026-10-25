@@ -1099,9 +1099,19 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                 // The next tick, not a second nominal-clock sleep, owns the
                 // next guest step. Keep rendering and audio on this same clock.
                 nextFrameDeadlineNanos = 0L;
-            } else if (frameDelayNanos > 0L)
+            } else if (frameDelayNanos > 0L) {
                 nextFrameDeadlineNanos += guestStepDurationNanos(
                         audioPaced, producedAudioDurationNs, frameDelayNanos);
+                // Feeding the frame generator on a panel-locked clock: move
+                // the phase so images arrive just before the callback that
+                // takes them up (SourcePhaseAdvisor; zero while drifting).
+                long phaseDelayNs = pacedCoreHz > 0.0 ?
+                        FrameGenerationRendererRegistry.takeSourcePhaseDelayNs(attachedSurface) : 0L;
+                if (phaseDelayNs > 0L) {
+                    nextFrameDeadlineNanos += phaseDelayNs;
+                    Log.i(TAG, "Source phase moved hardware core delayUs=" + phaseDelayNs / 1000L);
+                }
+            }
             scheduleFrame();
         }, delayNanos, TimeUnit.NANOSECONDS);
     }

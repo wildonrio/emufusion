@@ -111,6 +111,7 @@ public class BuiltInDeadlineTest {
     long builtInLastCommittedTargetNs;
     long builtinQueueReserveNs=1000000L;
     BuiltinQueueReserve builtinQueueReserve=new BuiltinQueueReserve();
+    static class TimelineSchedulerSwitch {static boolean queueDeepen(){return true;}}
     long builtinPlanCallbackNs,builtinPlanNowNs,builtinPlanCompositeDeadlineNs,
          builtinPlanIntervalNs,builtinPlanLatencyNs;
 ''' + body + '''

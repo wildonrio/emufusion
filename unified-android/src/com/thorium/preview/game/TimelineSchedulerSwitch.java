@@ -163,6 +163,22 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         keepAlive = alive;
+        boolean phase = true;
+        try {
+            if (context != null) phase = Settings.Global.getInt(
+                    context.getContentResolver(), SOURCE_PHASE_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        sourcePhase = phase;
+        boolean deepen = true;
+        try {
+            if (context != null) deepen = Settings.Global.getInt(
+                    context.getContentResolver(), QUEUE_DEEPEN_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        queueDeepen = deepen;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -284,6 +300,28 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean keepAlive = true;
 
     static boolean keepAlive() { return keepAlive; }
+
+    /**
+     * Source phase (default, 3.2.103): a core we pace is moved once its clock
+     * is locked so its images arrive just before the callback that takes them
+     * up (SourcePhaseAdvisor). QA: emufusion_framegen_source_phase=0 keeps
+     * the arbitrary phase for comparisons.
+     */
+    static final String SOURCE_PHASE_GLOBAL = "emufusion_framegen_source_phase";
+    private static volatile boolean sourcePhase = true;
+
+    static boolean sourcePhase() { return sourcePhase; }
+
+    /**
+     * Queue deepening (default, 3.2.89): late-from-rendering frames buy an
+     * extra scan of queue (BuiltinQueueReserve). QA:
+     * emufusion_framegen_queue_deepen=0 never deepens, to weigh that scan of
+     * latency against the late frames it removes.
+     */
+    static final String QUEUE_DEEPEN_GLOBAL = "emufusion_framegen_queue_deepen";
+    private static volatile boolean queueDeepen = true;
+
+    static boolean queueDeepen() { return queueDeepen; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

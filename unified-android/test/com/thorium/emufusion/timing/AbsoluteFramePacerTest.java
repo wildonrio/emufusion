@@ -12,7 +12,25 @@ public final class AbsoluteFramePacerTest {
         exposesTheDueTimeOfTheFrameAboutToRun();
         fourCoalescedFramesExplainFivePeriodVideoGap();
         smallTrimPreservesScheduledTimestamp();
+        aPhaseDelayMovesTheLatticeOnce();
         System.out.println("AbsoluteFramePacerTest passed");
+    }
+
+    private static void aPhaseDelayMovesTheLatticeOnce() {
+        AbsoluteFramePacer pacer = new AbsoluteFramePacer(10L);
+        pacer.delayNext(3L);
+        pacer.reset(100L);
+        TestSupport.equal(100L, pacer.deadlineNanos(), "no delay before the clock starts");
+        pacer.delayAfterFrame(101L);
+        TestSupport.equal(110L, pacer.deadlineNanos(), "on the lattice");
+        pacer.delayNext(3L);
+        TestSupport.equal(7L, pacer.delayAfterFrame(116L), "the next frame waits the extra 3");
+        TestSupport.equal(123L, pacer.deadlineNanos(), "the lattice moved 3 later");
+        pacer.delayAfterFrame(124L);
+        TestSupport.equal(133L, pacer.deadlineNanos(), "and stays there");
+        pacer.delayNext(-5L);
+        pacer.delayAfterFrame(134L);
+        TestSupport.equal(143L, pacer.deadlineNanos(), "never earlier");
     }
 
     private static void smallTrimPreservesScheduledTimestamp() {

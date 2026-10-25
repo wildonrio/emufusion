@@ -1493,6 +1493,16 @@ public final class LibretroEngineSession implements EngineSession,
                             "The internal engine stopped unexpectedly.", failure);
                 }
                 if (displayDueNs != 0) pacer.reset(System.nanoTime());
+                else if (physicalFgClockApplied && physicalFgClockOwner != null) {
+                    // Locked to the panel: move the phase so images arrive
+                    // just before the callback that takes them up.
+                    long phaseDelayNs = physicalFgClockOwner.takeSourcePhaseDelayNs();
+                    if (phaseDelayNs > 0L) {
+                        pacer.delayNext(phaseDelayNs);
+                        Log.i(TAG, "Source phase moved engine=" + entry.id +
+                                " delayUs=" + phaseDelayNs / 1000L);
+                    }
+                }
                 long evidenceEndNs = System.nanoTime();
                 long pacingDelay = pacer.delayAfterFrame(evidenceEndNs);
                 boolean coalescing = displayDueNs != 0

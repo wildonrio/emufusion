@@ -335,6 +335,13 @@ final class DenseInverseSearchFlow {
 
     int generatePhaseProgram() { return generatePhase; }
 
+    // A pixel-art system (3.2.104): whole-pixel warps, the nearer frame's
+    // sample where two disagree, no local cut. 3-D sources, however small,
+    // keep sub-pixel warps and blends.
+    private boolean discrete;
+
+    void setDiscrete(boolean value) { discrete = value; }
+
     /**
      * structureMask 0: none. Otherwise synthesis 15's static-structure mask,
      * applied under warps of minMotionPx or more.
@@ -348,6 +355,7 @@ final class DenseInverseSearchFlow {
         bind(generatePhase, "uStructureMask", structureMask != 0 ? structureMask : zeroField, 3);
         GLES20.glUniform1f(location(generatePhase, "uStructureMinMotionPx"), minMotionPx);
         GLES20.glUniform2f(location(generatePhase, "uHistorySize"), historyWidth, historyHeight);
+        GLES20.glUniform1f(location(generatePhase, "uDiscrete"), discrete ? 1f : 0f);
         // 3.2.86: the per-pixel 3x3 field choice (the per-phase field is 1/8
         // of a 1080p history); QA restores 3.2.85's bilinear field.
         GLES20.glUniform1f(location(generatePhase, "uChoiceSpread"),

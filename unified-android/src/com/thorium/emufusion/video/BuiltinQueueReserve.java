@@ -87,6 +87,7 @@ public final class BuiltinQueueReserve {
     public enum Change { NONE, DEEPENED, RECOVERED, RESTORED }
 
     private int extraScans;
+    private int maxExtraScans = MAX_EXTRA_SCANS;
     private final long[] missNs = new long[MISSES_TO_DEEPEN];
     private int misses;
     private long changedAtNs, deepenedAtNs;
@@ -104,6 +105,15 @@ public final class BuiltinQueueReserve {
             rejectedTrials;
 
     public int extraScans() { return extraScans; }
+
+    /** QA: the deepest the queue may go (0 never deepens); a deeper queue is given back. */
+    public void setMaxExtraScans(int scans) {
+        maxExtraScans = Math.max(0, Math.min(MAX_EXTRA_SCANS, scans));
+        if (extraScans > maxExtraScans) {
+            extraScans = maxExtraScans;
+            trial = false;
+        }
+    }
     public long deepenings() { return deepenings; }
     public long recoveries() { return recoveries; }
     public long failedRecoveries() { return failedRecoveries; }
@@ -180,7 +190,7 @@ public final class BuiltinQueueReserve {
             if (recoveredAtNs != 0L) {
                 boolean failed = nowNs - recoveredAtNs < RECOVERY_HOLD_NS;
                 recoveredAtNs = 0L;
-                if (failed && extraScans < MAX_EXTRA_SCANS) {
+                if (failed && extraScans < maxExtraScans) {
                     ++failedRecoveries;
                     recoveryFrames = Math.min(MAX_RECOVERY_FRAMES, 2 * recoveryFrames);
                     change(nowNs, 1);
@@ -196,7 +206,7 @@ public final class BuiltinQueueReserve {
                 --misses;
             }
             missNs[misses++] = nowNs;
-            if (misses < MISSES_TO_DEEPEN || extraScans >= MAX_EXTRA_SCANS) return Change.NONE;
+            if (misses < MISSES_TO_DEEPEN || extraScans >= maxExtraScans) return Change.NONE;
             if (nowNs < deepenAllowedAtNs) {
                 ++heldDeepenings;
                 return Change.NONE;
