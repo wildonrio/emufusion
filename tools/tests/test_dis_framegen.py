@@ -45,19 +45,21 @@ class DisShaderTest(unittest.TestCase):
         program_of = {"gray": "GRAY", "down": "DOWN", "grad": "GRAD", "patchSearch": "PATCH_SEARCH",
                       "densify": "DENSIFY", "generate": "GENERATE", "toRaw": "TO_RAW",
                       "phaseSearch": "PHASE_SEARCH", "phaseDensify": "PHASE_DENSIFY",
-                      "generatePhase": "GENERATE_PHASE", "cutProgram": "CUT"}
+                      "generatePhase": "GENERATE_PHASE", "cutProgram": "CUT", "boundsProgram": "BOUNDS"}
         # QA synthesis 25 (the learned selector): its generated class; the
         # shared conv helper binds through "program".
         selector = (RUNTIME.parent / "LearnedSelectorShaders.java").read_text()
         selector_programs = {"selectFeatures", "selectC1", "selectC2", "selectC3", "selectOut",
                              "selectGenerate", "program"}
-        # Bound for the occlusion side-choice experiment; present only in its variant.
-        dis_gles.OCCLUSION_SIDE_T = 16.0
+        # Bound for the occlusion side-choice and content-bounds experiments;
+        # present only in their variants.
+        dis_gles.OCCLUSION_SIDE_T, dis_gles.CONTENT_BOUNDS = 16.0, True
         try:
             variant = dis_gles.shaders()["GENERATE_PHASE"]
         finally:
-            dis_gles.OCCLUSION_SIDE_T = 0.0
-        optional = {("generatePhase", "uFlowAC"), ("generatePhase", "uFlowCA")}
+            dis_gles.OCCLUSION_SIDE_T, dis_gles.CONTENT_BOUNDS = 0.0, False
+        optional = {("generatePhase", "uFlowAC"), ("generatePhase", "uFlowCA"),
+                    ("generatePhase", "uBounds")}
         used = set(re.findall(r'(?:bind|location)\((\w+), "(\w+)"', runtime))
         self.assertTrue(used)
         for program, name in used:

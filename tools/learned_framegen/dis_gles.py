@@ -705,7 +705,7 @@ def shaders():
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': bounds_shader(),
             'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(),
-            'DENSIFY_SHARP': sharp_densify_shader(), **({'BOUNDS': bounds_shader()} if CONTENT_BOUNDS else {})}
+            'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader()}
 
 
 def sharp_densify_shader():
