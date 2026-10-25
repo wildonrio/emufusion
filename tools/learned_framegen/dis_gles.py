@@ -342,6 +342,16 @@ FIELD_CHOICE_MARGIN = 2.0
 # from two cells away.
 FIELD_CHOICE_RADIUS = 1
 FIELD_CHOICE_TAPS = 1
+# Replay-bench experiment (2026-10-25), not adopted: a second stage only where
+# the chosen vector's two samples still differ by FIELD_CHOICE_OUTER_T grey
+# levels -- the 16 cells two away, each judged over five taps (a kart's frame
+# bars take their body's motion two cells away). Device replay bench, paired:
+# invented area full-size 0.096 -> 0.089% of the frame, eval 3-D 0.062 ->
+# 0.053%, train games 0.560 -> 0.500%, error unchanged; but on the Thor it
+# cost Wind Waker HD 3.1 -> 4.4 ms of GPU per pair (worst pair 6.3 -> 11.8
+# ms): it triggers on only a few percent of pixels, but a GPU wave pays for
+# any pixel that branches into it. 0 disables.
+FIELD_CHOICE_OUTER_T = 0.0
 
 
 def field_choice_glsl():
@@ -351,13 +361,19 @@ def field_choice_glsl():
     return (f"  if(us>=uChoiceSpread){{vec2 bv=v;float be={cost}-{float(FIELD_CHOICE_MARGIN)}/255.0;\n"
             f"   for(int y=-{r};y<={r};++y)for(int x=-{r};x<={r};++x){{\n"
             f"    vec2 k=texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize;float e={each};\n"
-            "    if(e<be){be=e;bv=k;}}\n"
-            "   v=bv;}}\n")
+            "    if(e<be){be=e;bv=k;}}\n" +
+            ("   v=bv;}}\n" if FIELD_CHOICE_OUTER_T <= 0 else
+             "   v=bv;\n"
+             f"   if(be+{float(FIELD_CHOICE_MARGIN)}/255.0>{float(FIELD_CHOICE_OUTER_T)}/255.0){{float b5=wc5(u,v)-{float(FIELD_CHOICE_MARGIN)}/255.0;\n"
+             "    for(int y=-2;y<=2;++y)for(int x=-2;x<=2;++x){if(max(abs(x),abs(y))<2)continue;\n"
+             "     vec2 k=texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy/uFlowSize;float e=wc5(u,k);\n"
+             "     if(e<b5){b5=e;bv=k;}}\n"
+             "    v=bv;}}}\n"))
 
 
 def wc5_glsl():
     """Five-tap warp mismatch of a candidate (FIELD_CHOICE_TAPS 5)."""
-    if FIELD_CHOICE_TAPS == 1:
+    if FIELD_CHOICE_TAPS == 1 and FIELD_CHOICE_OUTER_T <= 0:
         return ""
     return ("float wc5(vec2 u,vec2 k){vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n"
             " return 0.2*(wc(u,k)+wc(u+dx,k)+wc(u-dx,k)+wc(u+dy,k)+wc(u-dy,k));}\n")

@@ -877,6 +877,22 @@
     "unified-android/build/emufusion-3.2.107-phase2-phase3-qualification-56a646645a444821ffb77759f7e35c533076199796fae9d0fdc57b4f66b0e6ee.apk": {
       "sha256": "56a646645a444821ffb77759f7e35c533076199796fae9d0fdc57b4f66b0e6ee",
       "reason": "First 3.2.107 (181) candidate: its seed check measured from the window start, so a panel still settling refused a good seed (Double Dash core lock at +18.9 s); superseded by 5042d42a (recent spans)."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification-8a58d9e9ac1f8a892b844f6bfd693cefb89a48f60507efd47a95e1096da583dd.apk": {
+      "sha256": "8a58d9e9ac1f8a892b844f6bfd693cefb89a48f60507efd47a95e1096da583dd",
+      "reason": "3.2.108 (182) trial: field choice second stage; Thor Wind Waker HD GPU per pair 3.1 -> 4.4 ms, not adopted; 3.2.107 restored with identity preserved."
+    },
+    "unified-android/build/emufusion-3.2.108-phase2-phase3-qualification.apk": {
+      "sha256": "8a58d9e9ac1f8a892b844f6bfd693cefb89a48f60507efd47a95e1096da583dd",
+      "reason": "Unhashed build output of the same 3.2.108 (182) trial (8a58d9e9), not adopted."
+    },
+    "unified-android/build/emufusion-3.2.105-phase2-phase3-qualification-547840976f0b0a21d9a2ca94ed962737ac43857474bf6970b249158bd00bda46.apk": {
+      "sha256": "547840976f0b0a21d9a2ca94ed962737ac43857474bf6970b249158bd00bda46",
+      "reason": "Released 3.2.105 (identical to the GitHub release asset v3.2.105, sha256 checked 2026-10-25); 3.2.107 is the release and 3.2.106 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.105-phase2-phase3-qualification.apk": {
+      "sha256": "547840976f0b0a21d9a2ca94ed962737ac43857474bf6970b249158bd00bda46",
+      "reason": "Released 3.2.105 (identical to the GitHub release asset v3.2.105, sha256 checked 2026-10-25); 3.2.107 is the release and 3.2.106 the rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
     }
   }
 }
