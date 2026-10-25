@@ -231,6 +231,8 @@ def phase_search_shader():
     # Proposals: A's flow at its fixed-point source, and C's (negated) at its own.
     " vec2 p=x-uT*fac(x);p=x-uT*fac(p);p=x-uT*fac(p);vec2 q=x-(1.0-uT)*fca(x);q=x-(1.0-uT)*fca(q);q=x-(1.0-uT)*fca(q);\n"
     " vec2 v1=fac(p),v2=-fca(q);float e1=ssd(o,v1),e2=ssd(o,v2);vec2 v0=e2<e1?v2:v1;float e0=min(e1,e2);\n"
+    + "".join(f" {{vec2 c=fac(x+vec2({dx:.1f},{dy:.1f}));float ec=ssd(o,c);if(ec<e0){{e0=ec;v0=c;}}}}\n"
+              for d in PHASE_PROPAGATE for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))) +
     " vec2 v=v0;const float N=float(P*P);\n"
     " for(int k=0;k<ITERS;++k){float sa=0.0,sc=0.0;vec2 sj=vec2(0.0);mat2 h=mat2(0.0);vec2 b=vec2(0.0);vec2 jsa=vec2(0.0),jsc=vec2(0.0);\n"
     "  for(int y=0;y<P;++y)for(int xx=0;xx<P;++xx){vec2 q2=o+vec2(float(xx),float(y))+0.5;vec3 A=ga(q2-uT*v),C=gc(q2+(1.0-uT)*v);\n"
@@ -240,6 +242,13 @@ def phase_search_shader():
     "  vec2 bn=b-sj*mr;v-=inverse(hn)*bn;}\n"
     " float e=ssd(o,v);if(e>e0||any(isnan(v))){v=v0;e=e0;}\n"
     " o0=vec4(v,e,1.0);}\n")
+
+
+# Replay-bench experiment (2026-10-24): the per-phase search also starts from
+# A's flow this many analysis pixels away in each axis direction when that
+# matches the patch better (PatchMatch-style propagation: motion found where
+# the image is distinctive reaches repeating tiles and fast scrolls).
+PHASE_PROPAGATE = ()
 
 
 # The per-phase densification weighs each patch by 1/max(1, e)^2 of its
@@ -369,7 +378,7 @@ def _generate_phase_shader_text():
     # blurs sharp content (DS, NSMBU Deluxe, 3DS); offline over 28 games 1.7%
     # better on average (NSMBU Deluxe -15%, 3DS -8%, Star Fox 64 -6%); two
     # pixels breaks real 1-2 px scrolling (Game Boy, NES).
-    " if(length(v*uHistorySize)<1.0)w=(1.0-uT)*a0+uT*c0;else\n"
+    f" if(length(v*uHistorySize)<{float(SUBPIXEL_ZERO_PX)})w=(1.0-uT)*a0+uT*c0;else\n"
     " {float eM=md(abs(aw-cw)),e0=md(abs(a0-c0));\n"
     + ("  {vec2 dx" if not SKIP_FLAT_CROSS else "  if(max(eM,e0)>2.0/255.0){vec2 dx") + f"=vec2({float(ZERO_MOTION_SPREAD)}/uHistorySize.x,0.0),dy=vec2(0.0,{float(ZERO_MOTION_SPREAD)}/uHistorySize.y);\n"
     "   eM+=md(abs(texture(uFrameA,u-uT*v+dx).rgb-texture(uFrameC,u+(1.0-uT)*v+dx).rgb))"
@@ -385,6 +394,12 @@ def _generate_phase_shader_text():
        f"\n  {{float gk=smoothstep({0.5*float(GHOST_SIDE_T)}/255.0,{float(GHOST_SIDE_T)}/255.0,min(eM,e0))*"
        f"smoothstep({0.5*float(GHOST_MIN_MOTION_PX)},{float(GHOST_MIN_MOTION_PX)}+0.001,length(v*uHistorySize));\n"
        "   vec3 side=uT>=0.5?(eM<=e0?cw:c0):(eM<=e0?aw:a0);w=mix(w,side,gk);}")
+    + ("" if NEITHER_BLEND_T <= 0 else
+       f"\n  w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(NEITHER_BLEND_T)}/255.0,"
+       f"{float(NEITHER_BLEND_T)}/255.0,min(eM,e0)));")
+    + ("" if DISAGREE_BLEND_T <= 0 else
+       f"\n  w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(DISAGREE_BLEND_T)}/255.0,"
+       f"{float(DISAGREE_BLEND_T)}/255.0,eM));")
     + "}\n"
     " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
     "  w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);}\n"
@@ -484,6 +499,14 @@ GHOST_SIDE_T = 0.0
 GHOST_MIN_MOTION_PX = 0.0
 EDGE_HOLD_PX = 0.0
 EDGE_HOLD_T = 32.0
+# Replay-bench experiments (2026-10-24): the warp length under which a pixel
+# takes the zero-motion blend; where neither the warp nor zero motion explains
+# a pixel (both five-tap mismatches over NEITHER_BLEND_T grey levels: a glow,
+# a flash), fade to the zero-motion blend instead of keeping the warp; or fade
+# to it wherever the warp's own samples disagree by DISAGREE_BLEND_T.
+SUBPIXEL_ZERO_PX = 1.0
+NEITHER_BLEND_T = 0.0
+DISAGREE_BLEND_T = 0.0
 EDGE_ONE_SIDED_PX = 0.0
 EDGE_ONE_SIDED_T = 24.0
 

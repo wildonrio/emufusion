@@ -20,6 +20,9 @@ usage: replay_bench.py [--per-case N] [--levels 24,21,115] [--dex DEX] [--json O
        cases are folders of ~/Code/emufusion-training-data/eval (default: all)
        --dex: a working-tree build (tools/qa/build_replay_dex.sh) scored in
        place of the installed APK's code, without installing anything
+       --compare: an earlier --json run; each case is compared on exactly the
+       triplets both runs scored (the generator is deterministic per triplet;
+       runs differ only in which few triplets a run drops)
 """
 import argparse
 import json
@@ -177,6 +180,7 @@ def main():
     parser.add_argument('--kind', default='moving', choices=('moving', 'held', 'static', 'all'))
     parser.add_argument('--triplets', help='comma-separated triplet names (one case)')
     parser.add_argument('--dump-dir', help='pull every scored triplet\'s HOD1 planes here')
+    parser.add_argument('--compare', help='earlier --json run to compare against, paired')
     parser.add_argument('--dex')
     parser.add_argument('--worst', type=int, default=0, help='list the N worst triplets per case')
     parser.add_argument('--json')
@@ -218,6 +222,29 @@ def main():
         print(f'{"mean":10s} {len(scored)} cases            {means}')
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=1) + '\n')
+    if args.compare:
+        compare(results, json.loads(Path(args.compare).read_text()), levels[0])
+
+
+def compare(results, earlier, level):
+    """Per case, both runs' score on the triplets both scored."""
+    before = {r['case']: r for r in earlier if r.get('pairs')}
+    deltas = []
+    for result in results:
+        if not result.get('pairs') or result['case'] not in before:
+            continue
+        old = {p['triplet']: p for p in before[result['case']]['pairs']}
+        new = {p['triplet']: p for p in result['pairs']}
+        common = set(old) & set(new)
+        crossfade = sum(old[t]['crossfadeMae'] * old[t]['changing'] for t in common)
+        if not common or not crossfade:
+            continue
+        score = lambda rows: sum(rows[t][f'mae{level}'] * rows[t]['changing'] for t in common) / crossfade
+        deltas.append(score(new) - score(old))
+        print(f'compare {result["case"]:10s} {len(common):3d} common  {score(old):.3f} -> {score(new):.3f} '
+              f'({score(new) - score(old):+.3f})')
+    if deltas:
+        print(f'compare mean change {sum(deltas) / len(deltas):+.4f} over {len(deltas)} cases')
 
 
 if __name__ == '__main__':
