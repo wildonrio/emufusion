@@ -187,6 +187,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         earliestLatch = earliest;
+        boolean preparedImage = true;
+        try {
+            if (context != null) preparedImage = Settings.Global.getInt(
+                    context.getContentResolver(), PREPARED_FRAME_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        preparedFrame = preparedImage;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -342,6 +350,16 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean earliestLatch = true;
 
     static boolean earliestLatch() { return earliestLatch; }
+
+    /**
+     * The arrival pair's generated image is rendered when the pair forms and
+     * only copied at its vsync callback (default, 3.2.109). QA:
+     * emufusion_framegen_prepared_frame=0 renders it at the callback as before.
+     */
+    static final String PREPARED_FRAME_GLOBAL = "emufusion_framegen_prepared_frame";
+    private static volatile boolean preparedFrame = true;
+
+    static boolean preparedFrame() { return preparedFrame; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

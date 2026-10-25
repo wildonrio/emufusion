@@ -2210,6 +2210,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private int densePhaseWidth, densePhaseHeight;
     private int densePhaseMedianTexture, densePhaseMedianFramebuffer, densePhaseMedianProgram;
     // Static-structure mask (synthesis 15), recomputed once per pair.
+    // The arrival pair's generated image, rendered when the pair forms
+    // (3.2.109; QA emufusion_framegen_prepared_frame=0): its vsync callback
+    // then only copies it, as it does a real image.
+    private int preparedFrameTexture, preparedFrameFramebuffer;
+    private int preparedFrameWidth, preparedFrameHeight;
+    private long preparedFrameKeyA, preparedFrameKeyB;
+    private float preparedFrameAspect;
+    private boolean preparedFrameValid, prerenderingFrame;
+    private long preparedFrameRenders, preparedFrameHits, preparedFrameMisses;
+    private final int[] preparedFrameState = new int[5];
     private int structureMaskProgram, structureMaskTexture, structureMaskFramebuffer;
     private int structureMaskWidth, structureMaskHeight;
     private long structureMaskPromotion = -1L;
@@ -6785,8 +6795,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // image's admission (prepareArrivalPairEarly), before the vsync
             // callback that shows it -- leaving that callback only the
             // generate pass. The DIS route in drawDisFrame is unchanged.
-            if (disPhaseOnly && disDefault && timelineActive && timeline.arrivalPacing())
+            if (disPhaseOnly && disDefault && timelineActive && timeline.arrivalPacing()) {
                 prepareDisFlow(TimelineFrameScheduler.ARRIVAL_PHASE, true);
+                prerenderGeneratedFrame();
+            }
             if (!disOnly)
                 solveDenseDirection(0, historyTextures[previousIndex],
                         historyTextures[currentIndex], temporalGuide);
@@ -8656,6 +8668,84 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
+    /**
+     * Renders the arrival pair's generated image (phase {@link
+     * TimelineFrameScheduler#ARRIVAL_PHASE}) into an offscreen copy of the
+     * output, exactly as the callback would draw it, right after its motion
+     * is solved. Generated frames had finished only ~1 ms before their slot
+     * (Double Dash, 3.2.108: the generate pass alone ~4.5 ms of wall time
+     * beside Dolphin's GPU work, 9.8% after the slot), while real images, a
+     * copy, finish ~5.5 ms before it; each late one left the compositor a scan
+     * behind. Restores the caller's framebuffer and viewport.
+     */
+    private void prerenderGeneratedFrame() {
+        preparedFrameValid = false;
+        if (!TimelineSchedulerSwitch.preparedFrame() || holdoutMode || externalTransport != null ||
+                outputWidth <= 0 || outputHeight <= 0) return;
+        GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, preparedFrameState, 0);
+        GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, preparedFrameState, 1);
+        try {
+            if (preparedFrameTexture == 0 || preparedFrameWidth != outputWidth ||
+                    preparedFrameHeight != outputHeight) {
+                int[] names = new int[1];
+                if (preparedFrameTexture == 0) {
+                    GLES20.glGenTextures(1, names, 0);
+                    preparedFrameTexture = names[0];
+                    GLES20.glGenFramebuffers(1, names, 0);
+                    preparedFrameFramebuffer = names[0];
+                }
+                allocateTexture(preparedFrameTexture, outputWidth, outputHeight);
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, preparedFrameFramebuffer);
+                GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                        GLES20.GL_TEXTURE_2D, preparedFrameTexture, 0);
+                if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                        GLES20.GL_FRAMEBUFFER_COMPLETE) return;
+                preparedFrameWidth = outputWidth;
+                preparedFrameHeight = outputHeight;
+            }
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, preparedFrameFramebuffer);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            GLES20.glClearColor(0f, 0f, 0f, 1f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+            setPresentationViewport();
+            prerenderingFrame = true;
+            boolean drawn;
+            try {
+                drawn = drawDisFrame(TimelineFrameScheduler.ARRIVAL_PHASE, true);
+            } finally {
+                prerenderingFrame = false;
+            }
+            if (!drawn) return;
+            preparedFrameKeyA = historyFrameKey(previousIndex);
+            preparedFrameKeyB = historyFrameKey(currentIndex);
+            preparedFrameAspect = presentationAspect;
+            preparedFrameValid = true;
+            ++preparedFrameRenders;
+        } finally {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, preparedFrameState[0]);
+            GLES20.glViewport(preparedFrameState[1], preparedFrameState[2],
+                    preparedFrameState[3], preparedFrameState[4]);
+        }
+    }
+
+    /** The callback's generated image: the prepared copy when it is this pair's, else rendered now. */
+    private void drawPreparedOrMotionFrame(float phase) {
+        if (preparedFrameValid && preparedFrameTexture != 0 &&
+                phase == TimelineFrameScheduler.ARRIVAL_PHASE &&
+                preparedFrameWidth == outputWidth && preparedFrameHeight == outputHeight &&
+                preparedFrameAspect == presentationAspect &&
+                preparedFrameKeyA == historyFrameKey(previousIndex) &&
+                preparedFrameKeyB == historyFrameKey(currentIndex)) {
+            ++preparedFrameHits;
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            drawTexture2d(preparedFrameTexture);
+            setPresentationViewport();
+            return;
+        }
+        if (TimelineSchedulerSwitch.preparedFrame() && !holdoutMode) ++preparedFrameMisses;
+        drawMotionFrame(phase);
+    }
+
     /** Draws the Vulkan-produced app-owned image with the required Y-origin conversion. */
     private void drawExternalGeneratedTexture(int sourceTexture) {
         GLES20.glUseProgram(externalGeneratedTextureCopyProgram);
@@ -9367,11 +9457,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         if (denseTimedWarpPromotion != densePromotions) {
                             beginDenseStage(DenseGpuTimer.VISIBLE_WARP);
                             denseTimedWarpPromotion = densePromotions;
-                            drawMotionFrame(phase);
+                            drawPreparedOrMotionFrame(phase);
                             endDenseStage();
                             renderedTimedWarp = true;
                         } else {
-                            drawMotionFrame(phase);
+                            drawPreparedOrMotionFrame(phase);
                         }
                         renderedSynthetic = true;
                     } catch (RuntimeException timerFailure) {
@@ -12782,7 +12872,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private boolean drawDisFrame(float phase, boolean perPhase, boolean selector) {
-        if (timelineActive && timeline.arrivalPacing()) {
+        if (timelineActive && timeline.arrivalPacing() && !prerenderingFrame) {
             if (disFlowReady(phase, perPhase)) ++disPrecomputeHits;
             else ++disPrecomputeMisses;
         }
@@ -14278,6 +14368,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " arrivalPassedReals=" + arrivalPassedReals +
                 " disPrecomputeHits=" + disPrecomputeHits +
                 " disPrecomputeMisses=" + disPrecomputeMisses +
+                " preparedFrameRenders=" + preparedFrameRenders +
+                " preparedFrameHits=" + preparedFrameHits +
+                " preparedFrameMisses=" + preparedFrameMisses +
+                " backlogSkips=" + builtinBacklogCatchUp.skips() +
                 " timelineRequiredLatencyUs=" + (timelineRequiredLatencyNs == Long.MIN_VALUE ?
                         "unknown" : String.valueOf(timelineRequiredLatencyNs / 1000L)) +
                 " schedulerUnavailable=" +
@@ -15877,6 +15971,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         structureMaskTexture = structureMaskFramebuffer = 0;
         structureMaskWidth = structureMaskHeight = 0;
         structureMaskPromotion = -1L;
+        if (preparedFrameTexture != 0)
+            GLES20.glDeleteTextures(1, new int[] {preparedFrameTexture}, 0);
+        if (preparedFrameFramebuffer != 0)
+            GLES20.glDeleteFramebuffers(1, new int[] {preparedFrameFramebuffer}, 0);
+        preparedFrameTexture = preparedFrameFramebuffer = 0;
+        preparedFrameWidth = preparedFrameHeight = 0;
             GLES20.glDeleteTextures(2, denseFillTextures, 0);
         if (denseGlobalCoarseCostTextures[0] != 0)
             GLES20.glDeleteTextures(2, denseGlobalCoarseCostTextures, 0);

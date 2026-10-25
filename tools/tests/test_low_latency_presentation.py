@@ -107,15 +107,22 @@ class LowLatencyPresentationTest(unittest.TestCase):
         # midpoint only runs the generate pass; a finished duplicate check is
         # polled ~1 ms after arrival instead of at the next vsync.
         generator = GENERATOR.read_text()
-        self.assertIn("if (disPhaseOnly && disDefault && timelineActive && timeline.arrivalPacing())\n"
-                      "                prepareDisFlow(TimelineFrameScheduler.ARRIVAL_PHASE, true);", generator)
+        self.assertIn("if (disPhaseOnly && disDefault && timelineActive && timeline.arrivalPacing()) {\n"
+                      "                prepareDisFlow(TimelineFrameScheduler.ARRIVAL_PHASE, true);\n"
+                      "                prerenderGeneratedFrame();", generator)
+        # 3.2.109: the generated image itself is rendered then; the callback
+        # copies it (QA prepared_frame=0 renders it at the callback).
+        self.assertIn("drawn = drawDisFrame(TimelineFrameScheduler.ARRIVAL_PHASE, true);", generator)
+        self.assertEqual(generator.count("drawPreparedOrMotionFrame(phase);"), 2)
+        self.assertIn('PREPARED_FRAME_GLOBAL = "emufusion_framegen_prepared_frame"', SWITCH.read_text())
         self.assertIn("DenseInverseSearchFlow flow = prepareDisFlow(phase, perPhase);", generator)
         self.assertEqual(generator.count("prepareArrivalPairEarly();\n"), 3)
         self.assertEqual(generator.count("scheduleSignatureEarlyPoll(false);"), 2)
         self.assertIn("handler.postDelayed(signatureEarlyPoll, 1L);", generator)
         self.assertIn("observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;", generator)
         for field in ("signatureEarlyCommits=", "arrivalEarlyPairs=", "disPrecomputeHits=",
-                      "disPrecomputeMisses="):
+                      "disPrecomputeMisses=", "preparedFrameHits=", "preparedFrameMisses=",
+                      "backlogSkips="):
             self.assertIn('" ' + field + '"', generator)
 
     def test_queue_reserve_recovers_from_short_disturbances(self):
