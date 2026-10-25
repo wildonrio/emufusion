@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "41c272813812c3c79e2f1432aaf17d8b48b076a765222f4fea4064c3cf6f38c1": "Rollback 3.2.98 (172), released; on GitHub Releases. 3.2.92-3.2.97 are on GitHub Releases; no local copies (owner request 2026-10-10: disk space).",
-    "f8ccd78928f8f1b0fe75109d47530e7c1f9ff75c130cbf4104de4378ab960a5c": "Candidate 3.2.99 (173): whole-pixel warps for 2-D sources, per-phase search propagation; QA replay bench hooks, synthesis 25, panel-rate override."
+    "f8ccd78928f8f1b0fe75109d47530e7c1f9ff75c130cbf4104de4378ab960a5c": "Rollback 3.2.99 (173), released; 3.2.92-3.2.98 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
+    "cee2f7a447ad63ed2fd9d0c32f69451565a451b61f9e8a8ed5a019cf780a19a7": "Candidate 3.2.100 (174): local cut for 3-D sources (blend where neither warp nor zero motion explains a pixel and the field is incoherent)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {

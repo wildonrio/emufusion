@@ -445,6 +445,13 @@ def _generate_phase_shader_text():
        f"\n  w=mix(w,(1.0-uT)*a0+uT*c0,smoothstep({0.5*float(DISAGREE_BLEND_T)}/255.0,"
        f"{float(DISAGREE_BLEND_T)}/255.0,eM));")
     + "}\n"
+    + ("" if not EDGE_OUTSIDE_SIDE else
+       # Content entering or leaving the picture: a warp sample outside the
+       # image only has the clamped edge (a smear); take the other frame's.
+       " {vec2 pa=u-uT*v,pc=u+(1.0-uT)*v;\n"
+       "  bool oa=any(lessThan(pa,vec2(0.0)))||any(greaterThan(pa,vec2(1.0)));\n"
+       "  bool oc=any(lessThan(pc,vec2(0.0)))||any(greaterThan(pc,vec2(1.0)));\n"
+       "  if(oa&&!oc)w=cw;else if(oc&&!oa)w=aw;}\n") +
     " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
     "  w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);}\n"
     + ("" if not CONTENT_BOUNDS else
@@ -549,6 +556,9 @@ EDGE_HOLD_T = 32.0
 # a flash), fade to the zero-motion blend instead of keeping the warp; or fade
 # to it wherever the warp's own samples disagree by DISAGREE_BLEND_T.
 SUBPIXEL_ZERO_PX = 1.0
+# A warp sample outside the image (content entering or leaving the picture)
+# gives way to the other frame's sample.
+EDGE_OUTSIDE_SIDE = False
 # The warp / zero-motion comparison on five-tap differences less their mean
 # (brightness-invariant). Needs SKIP_FLAT_CROSS.
 DECISION_DEMEAN = False
