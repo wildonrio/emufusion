@@ -35,6 +35,11 @@ public final class TimelineFrameSchedulerTest {
         arrivalPacingAtSixtyFps();
         arrivalPacingCatchesUpAtSixtyFps();
         keepAliveReshowsTheImageThroughAStall();
+        takeUpLatticeKeepsSixtyEvenThroughJitter();
+        takeUpLatticeComesBackEarlierWhenArrivalsAllow();
+        takeUpLatticeIgnoresDroppedFrames();
+        takeUpLatticeReturnsAPacedCoreAfterAnOutlier();
+        takeUpLatticeStaysOffForUnevenSources();
         System.out.println("TimelineFrameSchedulerTest passed");
     }
 
@@ -79,6 +84,8 @@ public final class TimelineFrameSchedulerTest {
 
         void vsync(long displayNs) {
             Long ready = admitted.get(rightSeq);
+            scheduler.setRightArrivalLeadNs(rightSeq != 0 && ready != null ?
+                    displayNs - ready : Long.MIN_VALUE);
             scheduler.setRightReadyNs((reportReady || scheduler.arrivalPacing()) && rightSeq != 0 &&
                     ready != null ? ready : 0L);
             int kind = passing ?
@@ -537,6 +544,167 @@ public final class TimelineFrameSchedulerTest {
         check(generated >= reals * 3 / 4, "arrival 60 fps jitter: most pairs still generate " + generated + "/" + reals);
         check(rig.fifo.size() <= 1, "arrival 60 fps jitter: no backlog " + rig.fifo.size());
         check(meanMs(noJitter.realLagNs, 20) < 2.5 * PANEL / 1e6, "arrival 60 fps steady");
+    }
+
+    /**
+     * 60 fps on 120 Hz, each image arriving offsetNs after its stamp plus
+     * uniform jitter of +-jitterNs (Eden: a few ms either side of a callback).
+     */
+    private static Rig jitteredSixty(boolean lattice, long offsetNs, long jitterNs, int vsyncs,
+                                     long seed, int dropEvery) {
+        Rig rig = new Rig(PANEL, SOURCE60);
+        rig.scheduler.setArrivalPacing(true, PANEL);
+        rig.scheduler.setTakeUpLattice(lattice);
+        rig.steadyQueued = 0;
+        java.util.Random random = new java.util.Random(seed);
+        long t0 = 1_000_000_000L;
+        int produced = 0;
+        long stamp = t0;
+        long due = stamp + offsetNs;
+        for (int v = 0; v < vsyncs; ++v) {
+            rig.now = t0 + v * PANEL;
+            while (rig.now >= due) {
+                ++produced;
+                if (dropEvery <= 0 || produced % dropEvery != 0) rig.produce(produced, stamp);
+                stamp += SOURCE60;
+                due = stamp + offsetNs + (long) ((random.nextDouble() * 2.0 - 1.0) * jitterNs);
+            }
+            rig.vsync(rig.now);
+        }
+        return rig;
+    }
+
+    /** Outputs after the first {@code skip} callbacks that break the g/R rhythm (holds, skipped images). */
+    private static int unevenOutputs(List<String> shown, int skip) {
+        int uneven = 0;
+        String previous = null;
+        for (int i = skip; i < shown.size(); ++i) {
+            String now = shown.get(i);
+            if (now.equals("-")) { ++uneven; continue; }
+            boolean generated = now.startsWith("g");
+            if (previous != null && previous.startsWith("g") == generated) ++uneven;
+            previous = now;
+        }
+        return uneven;
+    }
+
+    private static void takeUpLatticeKeepsSixtyEvenThroughJitter() {
+        // Images land 0.3 ms before a callback +-2.5 ms: taken up on arrival,
+        // every crossing holds a real image a scan or skips a generated one.
+        int offUneven = 0, onUneven = 0;
+        double offLag = 0, onLag = 0;
+        for (long seed = 1; seed <= 4; ++seed) {
+            Rig off = jitteredSixty(false, -300_000L, 2_500_000L, 2400, seed, 0);
+            Rig on = jitteredSixty(true, -300_000L, 2_500_000L, 2400, seed, 0);
+            offUneven += unevenOutputs(off.shown, 120);
+            onUneven += unevenOutputs(on.shown, 120);
+            offLag += meanMs(off.realLagNs, 60) / 4;
+            onLag += meanMs(on.realLagNs, 60) / 4;
+            check(on.fifo.size() <= 1, "lattice: no backlog " + on.fifo.size());
+        }
+        check(offUneven > 200, "on arrival the jitter breaks the rhythm often: " + offUneven);
+        check(onUneven * 20 < offUneven, "lattice: rhythm kept " + offUneven + " -> " + onUneven);
+        check(onLag < offLag + PANEL / 1e6 + 0.5,
+                "lattice: at most a scan more latency " + offLag + " -> " + onLag + " ms");
+        // A steady source pays nothing.
+        Rig steadyOff = jitteredSixty(false, 1_000_000L, 0L, 1200, 1, 0);
+        Rig steadyOn = jitteredSixty(true, 1_000_000L, 0L, 1200, 1, 0);
+        check(unevenOutputs(steadyOn.shown, 60) == 0, "lattice: steady source even");
+        check(Math.abs(meanMs(steadyOn.realLagNs, 20) - meanMs(steadyOff.realLagNs, 20)) < 0.1,
+                "lattice: steady source same latency " + meanMs(steadyOff.realLagNs, 20) +
+                        " / " + meanMs(steadyOn.realLagNs, 20));
+    }
+
+    private static void takeUpLatticeComesBackEarlierWhenArrivalsAllow() {
+        // A jittery start settles the lattice on the later callback; once
+        // arrivals come a callback plus the guard before their slot for a
+        // window of pairs it moves a callback earlier, once. Images are
+        // admitted at their exact arrival times here.
+        Rig rig = new Rig(PANEL, SOURCE60);
+        rig.scheduler.setArrivalPacing(true, PANEL);
+        rig.scheduler.setTakeUpLattice(true);
+        rig.steadyQueued = 0;
+        java.util.Random random = new java.util.Random(3);
+        long t0 = 1_000_000_000L, stamp = t0, due = stamp;
+        int produced = 0;
+        int vsyncs = 2 * (TimelineFrameScheduler.LATTICE_WINDOW_PAIRS * 2 + 400);
+        for (int v = 0; v < vsyncs; ++v) {
+            long callback = t0 + v * PANEL;
+            while (callback >= due) {
+                rig.now = due;
+                rig.produce(++produced, stamp);
+                stamp += SOURCE60;
+                boolean jittery = produced < 120;
+                due = stamp + (jittery ? (long) ((random.nextDouble() * 2.0 - 1.0) * 2_500_000L) - 300_000L
+                        : -3_000_000L);
+            }
+            rig.now = callback;
+            rig.vsync(callback);
+        }
+        String diagnostics = rig.scheduler.diagnostics();
+        check(diagnostics.contains("timelineLatticeEarlier=1"), "lattice came back once: " + diagnostics);
+        double before = meanMs(rig.realLagNs.subList(200, 300), 0);
+        double settled = meanMs(rig.realLagNs.subList(rig.realLagNs.size() - 100, rig.realLagNs.size()), 0);
+        check(settled < before - PANEL / 1e6 + 0.5, "lattice: a scan less latency " + before + " -> " + settled);
+        check(unevenOutputs(rig.shown, rig.shown.size() - 600) == 0, "lattice: even after settling");
+    }
+
+    private static void takeUpLatticeReturnsAPacedCoreAfterAnOutlier() {
+        // A core the source-phase advisor placed 1.2 ms before its callback;
+        // one image 2 ms late makes the lattice follow (a scan more latency),
+        // and it comes back after a window instead of staying behind.
+        Rig rig = new Rig(PANEL, SOURCE60);
+        rig.scheduler.setArrivalPacing(true, PANEL);
+        rig.scheduler.setTakeUpLattice(true);
+        rig.steadyQueued = 0;
+        long t0 = 1_000_000_000L, stamp = t0, due = stamp - 1_200_000L;
+        int produced = 0;
+        int vsyncs = 2 * (TimelineFrameScheduler.LATTICE_WINDOW_PAIRS + 400);
+        for (int v = 0; v < vsyncs; ++v) {
+            long callback = t0 + v * PANEL;
+            while (callback >= due) {
+                rig.now = due;
+                rig.produce(++produced, stamp);
+                stamp += SOURCE60;
+                due = stamp + (produced == 200 ? 800_000L : -1_200_000L);
+            }
+            rig.now = callback;
+            rig.vsync(callback);
+        }
+        String diagnostics = rig.scheduler.diagnostics();
+        check(diagnostics.contains("timelineLatticeFollows=1") &&
+                diagnostics.contains("timelineLatticeEarlier=1"), "followed once, back once: " + diagnostics);
+        double before = meanMs(rig.realLagNs.subList(100, 190), 0);
+        double settled = meanMs(rig.realLagNs.subList(rig.realLagNs.size() - 100, rig.realLagNs.size()), 0);
+        check(Math.abs(settled - before) < 0.1, "latency back where it was " + before + " -> " + settled);
+    }
+
+    private static void takeUpLatticeIgnoresDroppedFrames() {
+        // Every 50th frame missing (a held frame bridged): one long hold each,
+        // the lattice keeps its phase and never widens its window.
+        Rig rig = jitteredSixty(true, 1_000_000L, 0L, 2400, 1, 50);
+        String diagnostics = rig.scheduler.diagnostics();
+        check(diagnostics.contains("timelineLatticeFollows=0"), "drops are not late pairs: " + diagnostics);
+        check(diagnostics.contains("timelineLatticeWindow=" + TimelineFrameScheduler.LATTICE_WINDOW_PAIRS),
+                "window unchanged: " + diagnostics);
+    }
+
+    private static void takeUpLatticeStaysOffForUnevenSources() {
+        // 50 fps on 120 Hz (2.4 outputs per pair): no lattice, pairs taken up on arrival.
+        long source50 = 20_000_000L;
+        Rig rig = new Rig(PANEL, source50);
+        rig.scheduler.setArrivalPacing(true, PANEL);
+        rig.scheduler.setTakeUpLattice(true);
+        long t0 = 1_000_000_000L, stamp = t0;
+        int produced = 0;
+        for (int v = 0; v < 600; ++v) {
+            rig.now = t0 + v * PANEL;
+            while (rig.now >= stamp + 1_000_000L) { rig.produce(++produced, stamp); stamp += source50; }
+            rig.vsync(rig.now);
+        }
+        String diagnostics = rig.scheduler.diagnostics();
+        check(diagnostics.contains("timelineLatticeHolds=0") &&
+                diagnostics.contains("timelineLatticeFollows=0"), "lattice off at 50 fps: " + diagnostics);
     }
 
     private static double meanMs(List<Long> values, int skip) {

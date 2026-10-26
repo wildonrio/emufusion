@@ -201,6 +201,11 @@ public final class GameSurfaceView extends SurfaceView
         return generator != null ? generator.endpointDriftUsPerSecond() : 0.0;
     }
 
+    public double compositorPanelHz() {
+        FrameGenerationRenderer generator = frameGenerator;
+        return generator != null ? generator.compositorPanelHz() : 0.0;
+    }
+
     public long endpointOffsetNs() {
         FrameGenerationRenderer generator = frameGenerator;
         return generator != null ? generator.endpointOffsetNs() : 0L;

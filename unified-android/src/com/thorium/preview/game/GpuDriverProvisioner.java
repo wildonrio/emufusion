@@ -30,9 +30,13 @@ import java.util.zip.ZipInputStream;
 /**
  * Per-device Vulkan driver for the embedded Switch runtime.
  *
- * <p>Eden on Adreno runs best on a replacement driver -- Mesa Turnip on the
- * 6xx/7xx series, a newer Qualcomm build on the 8xx series -- loaded through
- * libadrenotools. The standalone app makes every owner pick one by hand. Here
+ * <p>The system driver is the default, as in standalone Eden, whose driver
+ * manager leaves the stock driver in place until the owner picks another.
+ * From 3.2.33 to 3.2.111 this picked one automatically (Mesa Turnip T23 on the
+ * Thor's Adreno 740); owner, 2026-10-26, on Metroid Dread and Super Mario 3D
+ * World: "tons of shader issues ... I just use the Eden emulator as it is that
+ * works great." The automatic choice is kept only as an explicit opt-in
+ * ({@link #MODE_AUTO}, or the QA global {@code emufusion_switch_gpu_driver=auto}):
  * the GPU is probed once per OS build, the package Eden's own driver fetcher
  * recommends for that Adreno model is downloaded in the background at startup,
  * and the Switch adapter is handed its directory before its first load in the
@@ -70,7 +74,22 @@ public final class GpuDriverProvisioner {
     }
 
     static String mode(Context context) {
-        return prefs(context).getString("mode", MODE_AUTO);
+        String qa = qaMode(context);
+        if (qa != null) return qa;
+        return MODE_AUTO.equals(prefs(context).getString("mode", MODE_SYSTEM))
+                ? MODE_AUTO : MODE_SYSTEM;
+    }
+
+    /** QA only (adb settings put global emufusion_switch_gpu_driver auto|system). */
+    private static String qaMode(Context context) {
+        try {
+            String value = android.provider.Settings.Global.getString(
+                    context.getApplicationContext().getContentResolver(),
+                    "emufusion_switch_gpu_driver");
+            return MODE_AUTO.equals(value) || MODE_SYSTEM.equals(value) ? value : null;
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
     }
 
     static void setMode(Context context, String mode) {
@@ -96,13 +115,15 @@ public final class GpuDriverProvisioner {
         String[] gpu = gpuIdentity(context);
         GpuDriverTable.DriverPackage chosen = GpuDriverTable.choose(gpu[0], gpu[1]);
         File root = root(context);
-        removeOtherPackages(root, chosen);
+        boolean system = MODE_SYSTEM.equals(mode(context));
+        // The system driver needs no package: an earlier automatic download goes.
+        removeOtherPackages(root, system ? null : chosen);
         if (chosen == null) {
             Log.i(TAG, "System driver kept renderer=" + gpu[0] + " version=" + gpu[1]);
             return;
         }
-        if (MODE_SYSTEM.equals(mode(context))) {
-            Log.i(TAG, "System driver selected by setting; " + chosen.id + " not downloaded");
+        if (system) {
+            Log.i(TAG, "System driver selected; " + chosen.id + " not downloaded");
             return;
         }
         File dir = new File(root, chosen.id);
@@ -182,7 +203,7 @@ public final class GpuDriverProvisioner {
             GpuDriverTable.DriverPackage chosen = GpuDriverTable.choose(gpu[0], gpu[1]);
             String state;
             if (chosen == null) state = "system";
-            else if (MODE_SYSTEM.equals(mode(context))) state = "system-by-setting";
+            else if (MODE_SYSTEM.equals(mode(context))) state = "system";
             else {
                 File dir = new File(root(context), chosen.id);
                 state = !isInstalled(dir, chosen) ? "pending:" + chosen.id

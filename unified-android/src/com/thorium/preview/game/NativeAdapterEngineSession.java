@@ -546,6 +546,11 @@ final class NativeAdapterEngineSession implements EngineSession,
         FrameGenerationRenderer renderer = current == null ? null :
                 FrameGenerationRendererRegistry.find(current);
         double declared = declaredVideoHz();
+        if (renderer == null && current != null && !physicalFgClockApplied) {
+            updateDirectPanelClock(declared);
+            return;
+        }
+        closeDirectPanelClock();
         double panel = renderer == null ? 0.0 : renderer.physicalPanelHz();
         double target = renderer == null || !(declared > 1.0) ? 0.0 :
                 DisplaySyncPolicy.physicalSourceHz(declared, panel);
@@ -566,6 +571,40 @@ final class NativeAdapterEngineSession implements EngineSession,
             physicalFgClockApplied = false;
             physicalFgClockOwner = null;
         }
+    }
+
+    // Frame generation Off (or fallen back to Direct): the engine presents
+    // to the display Surface itself, so the panel is measured from display
+    // callbacks, as the libretro sessions' vsync-driven clock is. Until
+    // 3.2.112 Eden, Cemu and aPS3e ran their nominal 60.000 Hz against a
+    // 119.9 Hz panel there: a frame held a scan longer every ~20 s.
+    private DirectDisplayVsync directPanelClock;
+    private long directPanelClockLogs;
+
+    /** Render owner only. */
+    private void updateDirectPanelClock(double declared) {
+        if (!(declared > 1.0)) return;
+        DirectDisplayVsync clock = directPanelClock;
+        if (clock == null) {
+            try { clock = directPanelClock = new DirectDisplayVsync(context); }
+            catch (RuntimeException unavailable) { return; }
+        }
+        clock.configure(declared, DisplaySyncPolicy.synchronizedSourceHz(declared), true);
+        double measured = clock.measuredSourceHz();
+        if (!(measured > 0.0)) return;
+        // Each 2-s measurement window jitters by tens of ppm; re-trim only
+        // for 100 ppm, the threshold the generator's panel refinement uses.
+        if (pacedVideoHz > 0.0 && Math.abs(measured / pacedVideoHz - 1.0) < 1.0e-4) return;
+        if (setPacedVideoHz(measured) && directPanelClockLogs++ < 8)
+            Log.i(TAG, "Direct panel clock lock engine=" + entry.id +
+                    " declaredHz=" + declared + " pacedHz=" + measured);
+    }
+
+    /** Render owner only. */
+    private void closeDirectPanelClock() {
+        DirectDisplayVsync clock = directPanelClock;
+        directPanelClock = null;
+        if (clock != null) clock.close();
     }
 
     @Override public void setFirstFrameCallback(Runnable callback) {
@@ -762,6 +801,7 @@ final class NativeAdapterEngineSession implements EngineSession,
             if (callback != null)
                 callback.onSessionError(sessionFailureMessage(failure), failure);
         } finally {
+            closeDirectPanelClock();
             // Nothing else will ever run this queue, so release its waiters
             // rather than leaving a lifecycle callback on its full bound.
             abandonRenderTasks();

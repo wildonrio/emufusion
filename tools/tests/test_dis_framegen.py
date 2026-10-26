@@ -210,6 +210,12 @@ class DisSelectionTest(unittest.TestCase):
         # half of a 32x18 grid (a missed cut, a dissolve), the temporal blend.
         self.assertIn(" w=mix(w,(1.0-uT)*a0+uT*c0,step(0.5,texture(uLate,vec2(0.5)).r));",
                       shaders["GENERATE_PHASE"])
+        # 3.2.112: from a tenth of the grid unexplained, the nearer real frame
+        # (content the game drew) -- before the blend, which wins from half.
+        near = " w=mix(w,uT>=0.5?c0:a0,step(0.1,texture(uLate,vec2(0.5)).r));"
+        self.assertIn(near, shaders["GENERATE_PHASE"])
+        self.assertLess(shaders["GENERATE_PHASE"].index(near),
+                        shaders["GENERATE_PHASE"].index("step(0.5,texture(uLate,vec2(0.5)).r)"))
         self.assertIn("n+=step(32.0/255.0,min(eM,e0));", shaders["LATE_VERDICT"])
         self.assertIn('bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);', RUNTIME.read_text())
         # Replay dumps carry the endpoint DIS flows beside the per-phase field.

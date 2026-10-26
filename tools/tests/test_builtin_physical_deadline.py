@@ -115,6 +115,8 @@ public class BuiltInDeadlineTest {
         static boolean earliestLatch(){return true;}}
     long builtinPlanCallbackNs,builtinPlanNowNs,builtinPlanCompositeDeadlineNs,
          builtinPlanIntervalNs,builtinPlanLatencyNs;
+    long notedCompositorIntervalNs;
+    void noteCompositorInterval(long intervalNs){notedCompositorIntervalNs=intervalNs;}
 ''' + body + '''
     public static void main(String[] args) {
         BuiltInDeadlineTest t=new BuiltInDeadlineTest();
@@ -160,6 +162,8 @@ public class BuiltInDeadlineTest {
         // queue reserve's trial-checked decision).
         assert egl.contentPresentationTimeNs()==eglQueue+2000000L;
         assert egl.hardCompletionDeadlineNs()==eglQueue-1000000L;
+        // The compositor's scan interval reaches the host's panel notice.
+        assert t.notedCompositorIntervalNs==8333333L;
         t.externalTransport=new Object();
         PhysicalPresentationDeadline external=t.nextBuiltInDeadline(callback,now);
         assert external.contentPresentationTimeNs()==callback+t.frameRate.period;

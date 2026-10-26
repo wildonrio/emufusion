@@ -21,13 +21,19 @@ package com.thorium.emufusion.video;
  * doubles the hold-off, up to {@link #MAX_HOLDOFF_NS}, so the session settles
  * a scan behind -- the latency it had before, but smooth. A backlog more than
  * four hold-offs after the last skip starts again from the minimum.</p>
+ *
+ * <p>The skip is itself a visible hitch (a frame shown two scans), so since
+ * 3.2.112 (owner, 2026-10-26: "these micro stutters have got to go") a
+ * backlog must last a second before it is skipped, and skips are at least
+ * 16 s apart (was 0.2 s and 2 s: three skips in 16 s in a Double Dash
+ * session). A shorter backlog is a scan of latency, shown evenly.</p>
  */
 public final class CompositorBacklogCatchUp {
-    public static final int BACKLOG_FRAMES = 24;
+    public static final int BACKLOG_FRAMES = 120;
     public static final int JUDGE_FRAMES = 24;
-    public static final long MIN_HOLDOFF_NS = 2_000_000_000L;
-    public static final long MAX_HOLDOFF_NS = 64_000_000_000L;
-    public static final long REFORM_NS = 5_000_000_000L;
+    public static final long MIN_HOLDOFF_NS = 16_000_000_000L;
+    public static final long MAX_HOLDOFF_NS = 256_000_000_000L;
+    public static final long REFORM_NS = 30_000_000_000L;
 
     private int lateRun;
     private boolean pending;

@@ -1536,7 +1536,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         # notebook. Do not make historical acceptance labels executable policy.
         self.assertIn("**1 or 2 only**", current)
         self.assertIn("R  = n × O", current)
-        self.assertIn("|r - 1| ≤ 0.0075", current)
+        self.assertIn("|r - 1| ≤ 0.05", current)
         for mapping in (
             "| 60 | 120 | 2 | 1 |",
             "| 40 | 40 direct | 1 | 3 |",
@@ -4307,8 +4307,12 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn('"%.0f → %.0f fps", real, displayed', badge)
         # A phone that kept a slower mode than planned says so (3.2.86).
         self.assertIn('String.format(Locale.US, "%.0f fps", real) + panelHeldNotice(real));', badge)
-        self.assertIn("if (actualHz >= plannedPanelHz - 1f || actualHz >= real * 1.5) return \"\";", badge)
-        self.assertIn('return String.format(Locale.US, " · screen at %.0f Hz", actualHz);', badge)
+        self.assertIn("if (!panelHeld(plannedPanelHz, screenHz, real)) {", badge)
+        self.assertIn('return String.format(Locale.US, " · screen at %.0f Hz", screenHz);', badge)
+        # The compositor's scan interval, not Display.getMode() (a per-app
+        # override on an SDK-30 app), decides it; a divisor alone is unknown.
+        self.assertIn("compositorPanelHz()", badge)
+        self.assertIn("PANEL_HELD_CONFIRM_MS", badge)
         self.assertIn("showVerifiedFrameRates(real, displayed)", host)
         self.assertNotIn('"S-- T-- A-- Backend="', host)
         self.assertIn("setFrameRateListener", host)

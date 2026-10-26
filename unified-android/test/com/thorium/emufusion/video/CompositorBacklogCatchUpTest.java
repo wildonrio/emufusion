@@ -74,7 +74,8 @@ public final class CompositorBacklogCatchUpTest {
         check(c.reformed() >= 4L, "returning backlogs counted: " + c.reformed());
         check(c.holdoffNs() >= 16L * CompositorBacklogCatchUp.MIN_HOLDOFF_NS, "hold-off grew: " + c.holdoffNs());
         // A long calm starts again from the minimum.
-        for (int i = 0; i < 120 * 300; ++i, t += P) c.observe(t, t, P, t);   // 5 min on time
+        long calm = 5L * CompositorBacklogCatchUp.MAX_HOLDOFF_NS;
+        for (long until = t + calm; t < until; t += P) c.observe(t, t, P, t);
         while (!c.observe(t, t + P, P, t)) t += P;
         check(c.takeSkip(t), "skip after the calm");
         eq(CompositorBacklogCatchUp.MIN_HOLDOFF_NS, c.holdoffNs(), "hold-off reset");

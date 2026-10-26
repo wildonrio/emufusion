@@ -6,15 +6,20 @@ package com.thorium.emufusion.timing;
  * source clock therefore has to be an exact divisor of 120 or it will acquire
  * a recurring long/short hold pattern.
  *
- * <p>Only sub-one-percent corrections are automatic. That covers the normal
- * NTSC-family clocks (59.7275, 59.8261, 59.9227, 60.0988, and their 20/30 Hz
- * divisions) without turning a genuine 50 Hz PAL title into a 60 Hz title.
- * A rate outside this narrow neighborhood remains authentic and is explicitly
- * reported as non-uniform; it needs a proved interpolation path or a matching
- * panel mode, never a misleading average-FPS label.</p>
+ * <p>Corrections up to 5% are automatic, RetroArch's default maximum timing
+ * skew (owner, 2026-10-26: every game sped up or slowed down just enough to
+ * the nearest rate the panel shows evenly, "no more micro stutters"). That
+ * covers the NTSC-family clocks (59.7275, 59.8261, 59.9227, 60.0988, and
+ * their 20/30 Hz divisions) and also Neo Geo's 59.19 Hz and the arcade boards
+ * between 57 and 63 Hz, which at the old 0.75% budget kept their own clock
+ * and slipped a frame every second or two, without turning a genuine 50 Hz
+ * PAL title into a 60 Hz title. Audio follows the corrected rate. A rate
+ * outside this neighborhood remains authentic and is explicitly reported as
+ * non-uniform; it needs a proved interpolation path or a matching panel
+ * mode, never a misleading average-FPS label.</p>
  */
 public final class DisplaySyncPolicy {
-    public static final double MAX_RELATIVE_CORRECTION = 0.0075;
+    public static final double MAX_RELATIVE_CORRECTION = 0.05;
     private static final double[] UNIFORM_SOURCE_RATES = {
             120.0, 60.0, 40.0, 30.0, 24.0, 20.0, 15.0, 12.0, 10.0
     };

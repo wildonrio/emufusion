@@ -2978,6 +2978,23 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return PanelClockMemory.lookup(displayId, refreshHz);
     }
 
+    // Last composite interval SurfaceFlinger reported (built-in planning and
+    // swap probes), for the host's panel-mode notice.
+    private volatile long compositorIntervalNs, compositorIntervalAtNs;
+
+    private void noteCompositorInterval(long intervalNs) {
+        if (intervalNs < 1_000_000L || intervalNs > 100_000_000L) return;
+        compositorIntervalNs = intervalNs;
+        compositorIntervalAtNs = System.nanoTime();
+    }
+
+    @Override public double compositorPanelHz() {
+        long interval = compositorIntervalNs;
+        long age = System.nanoTime() - compositorIntervalAtNs;
+        return !closed.get() && interval > 0L && age >= 0L && age < 5_000_000_000L ?
+                1e9 / interval : 0.0;
+    }
+
     @Override public double physicalPanelHz() {
         long observed = qualifiedPhysicalPanelObservedNs;
         long now = System.nanoTime();
@@ -3442,7 +3459,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // that just occurred and deterministically halves a 120-Hz generated
         // stream even though the GPU work itself is within budget.
         postNextFrameCallback();
-        callbackReadyClock.callback(frameTimeNanos, System.nanoTime());
+        callbackStartedNs = System.nanoTime();
+        callbackReadyClock.callback(frameTimeNanos, callbackStartedNs);
         try {
             if (lastCallbackFrameTimeNs != 0L) {
                 long deltaUs = Math.max(1L,
@@ -7484,6 +7502,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     /** When the image with this submission ordinal arrived, or zero once overwritten. */
+    // When the current vsync callback started (System.nanoTime), for the
+    // take-up lattice's arrival lead.
+    private long callbackStartedNs;
+
     private long arrivalNs(int submission) {
         int slot = Math.floorMod(submission, ARRIVAL_RING);
         return submission > 0 && arrivalOrdinalRing[slot] == submission ? arrivalNsRing[slot] : 0L;
@@ -8789,6 +8811,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // Keep 1ms for queue handoff; actual GPU completion remains checked
             // against this earlier cutoff by the physical evidence ledger.
             long planNowNs = System.nanoTime();
+            noteCompositorInterval(builtinCompositorTiming[1]);
             // Whole extra scans counted from the callback (BuiltinQueueReserve);
             // QA queue_deepen=0 keeps the queue at its minimum.
             builtinQueueReserve.setMaxExtraScans(TimelineSchedulerSwitch.queueDeepen() ?
@@ -9179,6 +9202,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         timeline.configure(panelPeriodNs > 0L ? panelPeriodNs * scans : 0L, sourcePeriodNs);
         // LSFG-Android's arrival pacing (3.2.88); QA arrival_pacing=0 keeps the lattice.
         timeline.setArrivalPacing(TimelineSchedulerSwitch.arrivalPacing(), panelPeriodNs);
+        // Pairs taken up on a lattice of whole callbacks (3.2.112); QA takeup_lattice=0.
+        timeline.setTakeUpLattice(TimelineSchedulerSwitch.takeUpLattice());
+        long rightArrivedNs = arrivalNs(activeRightSubmission);
+        timeline.setRightArrivalLeadNs(rightArrivedNs > 0L && callbackStartedNs > 0L ?
+                callbackStartedNs - rightArrivedNs : Long.MIN_VALUE);
         // Re-show the image on screen through a source stall (3.2.102); QA keep_alive=0.
         timeline.setKeepAliveNs(TimelineSchedulerSwitch.keepAlive() ?
                 TimelineFrameScheduler.KEEP_ALIVE_NS : 0L);
@@ -9538,6 +9566,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long compositorQueryStartNs = sampleCompositorTiming ? System.nanoTime() : 0L;
         boolean compositorTimingAvailable = sampleCompositorTiming &&
                 physicalTracker.compositorTiming(builtinCompositorTiming);
+        if (compositorTimingAvailable) noteCompositorInterval(builtinCompositorTiming[1]);
         long compositorQueryEndNs = sampleCompositorTiming ? System.nanoTime() : 0L;
         if (physicalTracker != null && !physicalTracker.available())
             logPhysicalPresentationFailure(physicalTracker);

@@ -22,7 +22,7 @@
     "allowedGenerationMultipliers": [1, 2],
     "maximumSyntheticFramesPerAdjacentChangingPair": 1,
     "syntheticTimeFraction": 0.5,
-    "maximumClockCorrectionRelativeToDeclared": 0.0075,
+    "maximumClockCorrectionRelativeToDeclared": 0.05,
     "overload": "preserve-guest-speed; reduce-rendering-cost-or-disable-generation",
     "outputCadence": "selected physical refresh divided by output content rate must be an integer; verify actual presents",
     "fixed120HzExamples": {"20": 40, "30": 60, "40": 40, "60": 120},

@@ -150,6 +150,41 @@ public final class TimelineFrameScheduler {
     private long arrivalPairs, arrivalCatchUps, arrivalNoMotion;
     // QA trace of the latest pair taken up (DisplayFrameGenerator logs it on request).
     private long arrivalTraceRawSpanNs, arrivalTraceSpanNs, arrivalTraceWaitedNs;
+    // Take-up lattice (3.2.112; owner 2026-10-26: "no more micro stutters").
+    // Taking each pair up at the first callback after its image arrives turns
+    // every arrival that jitters across a callback boundary into two uneven
+    // intervals: a late one holds the real image a scan, an early one skips a
+    // generated image (NSMBU Deluxe on 3.2.110: 21 uneven intervals in 16 s,
+    // ~1.3 a second, Eden's frames landing a few ms either side of a
+    // callback). LSFG-Android does not see this: it captures the composited
+    // screen, so its input already sits on the panel's vsync lattice. Here a
+    // source whose pairs span a whole number of outputs is taken up on a
+    // lattice one smoothed span apart: an image that arrives early waits for
+    // its slot, one that arrives late is taken up at once and the lattice
+    // follows it (a scan more latency, smooth). The lattice comes an output
+    // earlier only after every pair of a window arrived at least an output
+    // plus LATTICE_GUARD_NS before its slot (one generated image skipped);
+    // a late pair within two windows of that doubles the window (up to 8x),
+    // so a source that keeps jittering settles where it is smooth.
+    private boolean takeUpLattice;
+    private long latticeNextNs;
+    private long rightArrivalLeadNs = Long.MIN_VALUE;
+    private int latticeWindowPairs = LATTICE_WINDOW_PAIRS;
+    private int latticeEarlyPairs;
+    private long latticePairIndex, latticeEarlierAtPair = Long.MIN_VALUE;
+    private boolean latticeEarlierThisPair;
+    private long latticeHolds, latticeFollows, latticeEarlier, latticeCatchUps;
+    /** Pairs that must all arrive an output early before the lattice moves earlier. */
+    public static final int LATTICE_WINDOW_PAIRS = 240;
+    public static final int LATTICE_MAX_WINDOW_PAIRS = 8 * LATTICE_WINDOW_PAIRS;
+    /**
+     * Margin an early arrival must keep after the lattice moves earlier: the
+     * source phase advisor's own target, so a paced core it placed comes
+     * back after an outlier made the lattice follow.
+     */
+    public static final long LATTICE_GUARD_NS = SourcePhaseAdvisor.TARGET_WAIT_NS;
+    /** A smoothed span within this fraction of whole outputs is planned on the lattice. */
+    public static final double LATTICE_WHOLE_TOLERANCE = 0.1;
     // LSFG-Android's low-latency preset: EMA alpha 0.2, outlier ratio 3.
     public static final double ARRIVAL_SPAN_ALPHA = 0.2;
     public static final double ARRIVAL_OUTLIER_RATIO = 3.0;
@@ -254,6 +289,8 @@ public final class TimelineFrameScheduler {
         arrivalRightSequence = 0L;
         arrivalGeneratedShown = false;
         arrivalLateStart = false;
+        latticeNextNs = 0L;
+        latticeEarlyPairs = 0;
         arrivalStartNs = 0L;
         arrivalRealDueNs = 0L;
         needLeftSequence = 0L;
@@ -273,6 +310,35 @@ public final class TimelineFrameScheduler {
     }
 
     public boolean arrivalPacing() { return arrivalPacing; }
+
+    /** Take-up lattice for arrival pacing (default since 3.2.112; QA false takes pairs up on arrival). */
+    public void setTakeUpLattice(boolean enabled) {
+        if (enabled != takeUpLattice) latticeNextNs = 0L;
+        takeUpLattice = enabled;
+    }
+
+    /**
+     * How long before this callback started the current right image arrived
+     * (callback start minus arrival, same clock), or Long.MIN_VALUE when
+     * unknown; only pairs with a known lead can move the lattice earlier.
+     */
+    public void setRightArrivalLeadNs(long leadNs) { rightArrivalLeadNs = leadNs; }
+
+    /**
+     * The lattice's step for this source (whole outputs), or zero when its
+     * frame period is not whole. The paced source period, when known, keeps
+     * a dropped frame (one pair spanning two periods) from switching it off.
+     */
+    private long latticeStepNs(long outputNs) {
+        if (!takeUpLattice || outputNs <= 0L) return 0L;
+        double period = sourcePeriodNs > 0L ? (double) sourcePeriodNs : arrivalSpanEmaNs;
+        if (!(period > 0.0)) return 0L;
+        double outputs = period / (double) outputNs;
+        long whole = Math.round(outputs);
+        if (whole < 1L || whole > 12L || Math.abs(outputs - whole) > LATTICE_WHOLE_TOLERANCE)
+            return 0L;
+        return whole * outputNs;
+    }
 
     /** The pair span used for spacing: clamped to twice the smoothed span. */
     private long arrivalSpanNs(long rawNs) {
@@ -319,7 +385,16 @@ public final class TimelineFrameScheduler {
             return NONE;
         }
         long panel = Math.max(1L, arrivalPanelPeriodNs > 0L ? arrivalPanelPeriodNs : outputPeriodNs);
+        long outputNs = Math.max(panel, outputPeriodNs);
         if (rightSequence != arrivalRightSequence) {
+            long step = latticeStepNs(outputNs);
+            if (step > 0L && latticeNextNs > 0L && excessQueued < 1 &&
+                    displayNs + panel / 4L < latticeNextNs) {
+                // Early for its slot on the take-up lattice: the real image stays up.
+                ++latticeHolds;
+                lastHoldReason = "lattice";
+                return NONE;
+            }
             // The worker takes the pair up now.
             arrivalRightSequence = rightSequence;
             arrivalStartNs = displayNs;
@@ -333,6 +408,17 @@ public final class TimelineFrameScheduler {
             // skipping one generated image moves the pairs onto their arrivals.
             long waited = rightReadyNs > 0L ? displayNs - rightReadyNs : 0L;
             arrivalLateStart = waited > span / 2L - panel / 2L;
+            step = latticeStepNs(outputNs);
+            if (step > 0L) {
+                arrivalLateStart = takeUpOnLattice(displayNs, step, outputNs, panel, excessQueued,
+                        arrivalLateStart);
+                // A pair bridging a dropped frame spans two steps; its real
+                // image still comes half a step later, so the next pair keeps
+                // its slot instead of starting a scan late.
+                arrivalRealDueNs = displayNs + Math.min(span / 2L, step / 2L);
+            } else {
+                latticeNextNs = 0L;
+            }
             arrivalTraceRawSpanNs = rightTimestampNs - leftTimestampNs;
             arrivalTraceSpanNs = span;
             arrivalTraceWaitedNs = waited;
@@ -366,6 +452,51 @@ public final class TimelineFrameScheduler {
             return kind;
         }
         return NONE;  // the generated image stays up until the real one is due
+    }
+
+    /**
+     * A pair taken up with the lattice active: where the next slot lies, and
+     * whether this pair shows its real image now (one generated image
+     * skipped, the lattice an output earlier).
+     */
+    private boolean takeUpOnLattice(long displayNs, long stepNs, long outputNs, long panel,
+                                    int excessQueued, boolean lateStart) {
+        ++latticePairIndex;
+        boolean known = latticeNextNs > 0L;
+        long lateness = known ? displayNs - latticeNextNs : 0L;
+        boolean late = known && lateness > panel / 4L;
+        // About a whole step late is a source frame that never came (a held
+        // or dropped frame), not jitter: the lattice keeps its phase.
+        boolean dropped = late && lateness >= stepNs - panel / 2L;
+        boolean earlier = false;
+        if (dropped) {
+            latticeEarlyPairs = 0;
+        } else if (late) {
+            // Late for its slot: it was held a scan; the lattice follows it.
+            ++latticeFollows;
+            if (latticeEarlierAtPair != Long.MIN_VALUE &&
+                    latticePairIndex - latticeEarlierAtPair <= 2L * latticeWindowPairs)
+                latticeWindowPairs = Math.min(LATTICE_MAX_WINDOW_PAIRS, latticeWindowPairs * 2);
+            latticeEarlierAtPair = Long.MIN_VALUE;
+            latticeEarlyPairs = 0;
+        } else if (known) {
+            boolean early = rightArrivalLeadNs != Long.MIN_VALUE &&
+                    rightArrivalLeadNs >= outputNs + LATTICE_GUARD_NS;
+            latticeEarlyPairs = early ? latticeEarlyPairs + 1 : 0;
+            if (latticeEarlyPairs >= latticeWindowPairs) {
+                earlier = true;
+                latticeEarlyPairs = 0;
+                latticeEarlierAtPair = latticePairIndex;
+                ++latticeEarlier;
+            }
+        }
+        boolean catchUp = excessQueued >= 1;
+        if (catchUp) ++latticeCatchUps;
+        // The first pair places the lattice as arrival pacing would: a pair
+        // taken up late starts on its real image, at the arrivals.
+        boolean realNow = earlier || catchUp || (!known && lateStart);
+        latticeNextNs = displayNs + (realNow ? Math.max(outputNs, stepNs - outputNs) : stepNs);
+        return realNow;
     }
 
     /** QA: false keeps added latency until frames queue up (before 3.2.87). */
@@ -776,7 +907,9 @@ public final class TimelineFrameScheduler {
     public String arrivalTrace() {
         return "rawSpanUs=" + arrivalTraceRawSpanNs / 1000L + " spanUs=" + arrivalTraceSpanNs / 1000L +
                 " emaUs=" + Math.round(arrivalSpanEmaNs / 1000.0) +
-                " waitedUs=" + arrivalTraceWaitedNs / 1000L + " lateStart=" + arrivalLateStart;
+                " waitedUs=" + arrivalTraceWaitedNs / 1000L + " lateStart=" + arrivalLateStart +
+                " latticeNextUs=" + (latticeNextNs > 0L ? latticeNextNs / 1000L : 0L) +
+                " leadUs=" + (rightArrivalLeadNs != Long.MIN_VALUE ? rightArrivalLeadNs / 1000L : -1L);
     }
     public long expectedSpanNs() { return expectedSpanNs; }
     public long outputPeriodNs() { return outputPeriodNs; }
@@ -802,6 +935,12 @@ public final class TimelineFrameScheduler {
                 " timelineArrivalLateStarts=" + arrivalLateStarts +
                 " timelineArrivalNoMotion=" + arrivalNoMotion +
                 " timelineArrivalSpanEmaUs=" + Math.round(arrivalSpanEmaNs / 1000.0) +
+                " timelineLattice=" + takeUpLattice +
+                " timelineLatticeHolds=" + latticeHolds +
+                " timelineLatticeFollows=" + latticeFollows +
+                " timelineLatticeEarlier=" + latticeEarlier +
+                " timelineLatticeCatchUps=" + latticeCatchUps +
+                " timelineLatticeWindow=" + latticeWindowPairs +
                 " timelineReadyTrims=" + readyTrims +
                 " timelineReadyAdds=" + readySlackAdds +
                 " timelineReadyExcessUs=" + readyExcessNs() / 1000L +

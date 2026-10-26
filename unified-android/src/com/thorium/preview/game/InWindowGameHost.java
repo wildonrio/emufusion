@@ -1769,7 +1769,35 @@ public final class InWindowGameHost
         badge.setVisibility(source > 0.0 ? View.VISIBLE : View.GONE);
     }
 
-    private boolean panelHeldReported;
+    private boolean panelHeldReported, panelOverrideLogged;
+    private long panelHeldSinceMs = -1L;
+    /** A mode switch completes well within this; a held panel stays held. */
+    static final long PANEL_HELD_CONFIRM_MS = 3000L;
+
+    /**
+     * The rate the screen really scans at, for the held-panel notice: the
+     * compositor's own interval when the generator has it, else the mode
+     * Android reports -- unless that mode divides the planned one, which on
+     * an app targeting SDK 30 is how a per-app frame-rate override reads
+     * (Display.getMode() returns the override's mode, not the panel's).
+     * Owner, 2026-10-26: "Android is only reporting 60 Hz" on several
+     * systems with the panel at 120. Zero when the screen's rate is unknown.
+     */
+    static double heldPanelEvidenceHz(double plannedHz, double reportedModeHz,
+                                      double compositorHz) {
+        if (compositorHz > 0.0) return compositorHz;
+        if (!(reportedModeHz > 0.0) || !(plannedHz > 0.0)) return 0.0;
+        double ratio = plannedHz / reportedModeHz;
+        long whole = Math.round(ratio);
+        if (whole >= 2 && Math.abs(ratio - whole) < 0.01) return 0.0;
+        return reportedModeHz;
+    }
+
+    /** Whether a screen at {@code screenHz} leaves no room above the game's rate. */
+    static boolean panelHeld(double plannedHz, double screenHz, double realFps) {
+        return plannedHz > 0.0 && screenHz > 0.0 && realFps > 0.0 &&
+                screenHz < plannedHz - 1.0 && screenHz < realFps * 1.5;
+    }
 
     /**
      * A phone may keep a slower mode than the one this launch asked for (a
@@ -1777,28 +1805,46 @@ public final class InWindowGameHost
      * game then has no refreshes left for generated frames and the corner
      * showed only the game's rate, which looked like generation silently
      * failing (owner's phone, NES, 2026-10-14). Returns the corner's
-     * explanation, or "" while the panel runs the planned mode or still has
-     * room above the game's rate.
+     * explanation, or "" while the panel runs the planned mode, still has
+     * room above the game's rate, or its rate is not established.
      */
     private String panelHeldNotice(double real) {
         if (!(plannedPanelHz > 0f) || !(real > 0.0)) return "";
         Display display = activity.getDisplay();
         Display.Mode mode = display == null ? null : display.getMode();
         if (mode == null) return "";
-        float actualHz = mode.getRefreshRate();
-        if (actualHz >= plannedPanelHz - 1f || actualHz >= real * 1.5) return "";
+        double compositorHz = gameSurface instanceof GameSurfaceView ?
+                ((GameSurfaceView) gameSurface).compositorPanelHz() : 0.0;
+        double modeHz = mode.getRefreshRate();
+        if (!panelOverrideLogged && compositorHz > 0.0 && Math.abs(compositorHz - modeHz) > 1.0) {
+            panelOverrideLogged = true;
+            Log.w(TAG, "Per-app frame-rate override system=" + request.systemId +
+                    " modeHz=" + modeHz + " appHz=" + display.getRefreshRate() +
+                    " compositorHz=" + String.format(Locale.US, "%.2f", compositorHz) +
+                    " planned=" + plannedPanelHz);
+        }
+        double screenHz = heldPanelEvidenceHz(plannedPanelHz, modeHz, compositorHz);
+        long nowMs = android.os.SystemClock.uptimeMillis();
+        if (!panelHeld(plannedPanelHz, screenHz, real)) {
+            panelHeldSinceMs = -1L;
+            return "";
+        }
+        if (panelHeldSinceMs < 0L) panelHeldSinceMs = nowMs;
+        if (nowMs - panelHeldSinceMs < PANEL_HELD_CONFIRM_MS) return "";
         if (!panelHeldReported) {
             panelHeldReported = true;
             Log.w(TAG, "Panel mode held system=" + request.systemId + " planned=" +
-                    plannedPanelHz + " actual=" + actualHz + " sourceFps=" +
+                    plannedPanelHz + " modeHz=" + modeHz + " compositorHz=" +
+                    String.format(Locale.US, "%.2f", compositorHz) + " sourceFps=" +
                     String.format(Locale.US, "%.1f", real));
             Toast.makeText(activity.getApplicationContext(), String.format(Locale.US,
-                    "EmuFusion requested %.0f Hz; Android currently reports %.0f Hz. " +
+                    "EmuFusion requested %.0f Hz; Android currently reports the screen " +
+                    "at %.0f Hz. " +
                     "High refresh may be limited by display settings, power saving, " +
-                    "temperature, or device policy.", plannedPanelHz, actualHz),
+                    "temperature, or device policy.", plannedPanelHz, screenHz),
                     Toast.LENGTH_LONG).show();
         }
-        return String.format(Locale.US, " · screen at %.0f Hz", actualHz);
+        return String.format(Locale.US, " · screen at %.0f Hz", screenHz);
     }
 
     private long verifiedRatesAtMs;

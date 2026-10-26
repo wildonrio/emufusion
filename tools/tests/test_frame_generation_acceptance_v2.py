@@ -74,8 +74,8 @@ def validate_manifest(manifest, matrix, root=ROOT):
     require(policy.get("maximumSyntheticFramesPerAdjacentChangingPair") == 1,
             "only one synthetic midpoint is permitted")
     require(policy.get("syntheticTimeFraction") == 0.5, "midpoint must be at 0.5")
-    require(policy.get("maximumClockCorrectionRelativeToDeclared") == 0.0075,
-            "declared-clock correction limit must be 0.75 percent")
+    require(policy.get("maximumClockCorrectionRelativeToDeclared") == 0.05,
+            "declared-clock correction limit must be 5 percent")
     require(policy.get("overload") ==
             "preserve-guest-speed; reduce-rendering-cost-or-disable-generation",
             "overload must preserve guest speed")

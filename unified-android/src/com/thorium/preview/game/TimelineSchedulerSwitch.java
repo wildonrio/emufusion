@@ -163,6 +163,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         keepAlive = alive;
+        boolean lattice = true;
+        try {
+            if (context != null) lattice = Settings.Global.getInt(
+                    context.getContentResolver(), TAKEUP_LATTICE_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        takeUpLattice = lattice;
         boolean phase = true;
         try {
             if (context != null) phase = Settings.Global.getInt(
@@ -316,6 +324,18 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean keepAlive = true;
 
     static boolean keepAlive() { return keepAlive; }
+
+    /**
+     * Take-up lattice (default, 3.2.112): arrival pacing takes a source's
+     * pairs up on a lattice of whole callbacks instead of at the first
+     * callback after each arrival, so arrivals jittering across a callback no
+     * longer alternate held and skipped images (TimelineFrameScheduler). QA:
+     * emufusion_framegen_takeup_lattice=0 takes each pair up on arrival.
+     */
+    static final String TAKEUP_LATTICE_GLOBAL = "emufusion_framegen_takeup_lattice";
+    private static volatile boolean takeUpLattice = true;
+
+    static boolean takeUpLattice() { return takeUpLattice; }
 
     /**
      * Source phase (default, 3.2.103): a core we pace is moved once its clock

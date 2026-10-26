@@ -1127,7 +1127,11 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
         // A render-driven retro_run is not one vblank: e.g. a 30 FPS Flycast
         // scene produces ~1470 PCM frames per call, a 60 FPS scene ~735.
         // Fixed display ticks here ran 30 FPS scenes at twice game speed.
-        if (clock == null || !useCoreCadence || audioPaced) return 0.0;
+        if (clock == null || !useCoreCadence) return 0.0;
+        if (audioPaced) {
+            trimAudioPacedToDisplay(clock);
+            return 0.0;
+        }
         try {
             boolean direct = attachedSurface != null && attachedSurface.isValid() &&
                     !FrameGenerationRendererRegistry.isFrameGenerationInput(attachedSurface);
@@ -1143,6 +1147,32 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
             closeDisplayClock();
         }
         return 0.0;
+    }
+
+    /**
+     * A render-driven core (Flycast) steps by its generated PCM duration, so
+     * display ticks cannot run it. Its synchronized rate still follows the
+     * measured panel with frame generation Off, as the generator's trim does
+     * with it on (3.2.112): it ran a nominal 60.000 Hz against a 119.9 Hz
+     * panel, a frame held a scan longer every ~20 s. Render thread only.
+     */
+    private void trimAudioPacedToDisplay(DisplayClock clock) {
+        boolean direct = attachedSurface != null && attachedSurface.isValid() &&
+                !FrameGenerationRendererRegistry.isFrameGenerationInput(attachedSurface);
+        try {
+            // The synchronized clock, not the trimmed one: the cadence only
+            // measures while the panel is a whole multiple of its source.
+            clock.configure(declaredCoreHz, synchronizedCoreHz, direct);
+            if (!direct) return;
+            double measuredHz = clock.measuredSourceHz();
+            if (!(measuredHz > 0.0) ||
+                    (pacedCoreHz > 0.0 && Math.abs(measuredHz / pacedCoreHz - 1.0) < 1.0e-4))
+                return;
+            setPacedVideoHz(measuredHz);
+        } catch (RuntimeException unavailable) {
+            Log.w(TAG, "Display tick source failed; audio-paced core keeps its clock", unavailable);
+            closeDisplayClock();
+        }
     }
 
     private void updateDisplayAudioClock(double observedHz) {

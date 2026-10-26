@@ -49,7 +49,8 @@ class LowLatencyPresentationTest(unittest.TestCase):
         self.assertIn("timeline.setRightReadyNs(timeline.arrivalPacing() ?\n"
                       "                callbackReadyClock.readyNs(admissionNs(activeRightSequence), callbackNs) :\n"
                       "                admissionNs(activeRightSequence));", generator)
-        self.assertIn("callbackReadyClock.callback(frameTimeNanos, System.nanoTime());", generator)
+        self.assertIn("callbackStartedNs = System.nanoTime();\n"
+                      "        callbackReadyClock.callback(frameTimeNanos, callbackStartedNs);", generator)
         self.assertIn("timeline.setReadyTrimEnabled(TimelineSchedulerSwitch.lowLatency());", generator)
         self.assertIn("observeFirstGeneratedOutput(deadline.contentPresentationTimeNs());", generator)
         self.assertIn('" firstGeneratedLagMeanUs="', generator)

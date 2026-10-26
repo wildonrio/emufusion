@@ -13,6 +13,7 @@ public final class DisplaySyncPolicyTest {
         loadTiersCannotChangeGameplaySpeed();
         correctionBoundIsRelativeToTheOriginalClock();
         genuinePalClockIsNeverSilentlySpedUp();
+        arcadeAndNeoGeoClocksLockToThePanel();
         invalidRatesRemainInvalid();
         physicalDivisorRespectsOriginalClock();
     }
@@ -85,7 +86,7 @@ public final class DisplaySyncPolicyTest {
     }
 
     private static void loadTiersCannotChangeGameplaySpeed() {
-        for (double requested : new double[] {20, 30, 40, 50, 59, 61, 120,
+        for (double requested : new double[] {20, 30, 40, 50, 56.9, 63.1, 120,
                 -1, 0, 1, Double.NaN, Double.POSITIVE_INFINITY}) {
             TestSupport.truth(!DisplaySyncPolicy.permitsCoreClockCorrection(60, requested),
                     "60 Hz guest must reject load tier or invalid clock " + requested);
@@ -120,7 +121,7 @@ public final class DisplaySyncPolicyTest {
         double declared = 60 * (1 - bound);
         TestSupport.equal(declared, DisplaySyncPolicy.synchronizedSourceHz(declared),
                 "nominal selection must respect actual gameplay speed ratio");
-        TestSupport.truth(!DisplaySyncPolicy.permitsCoreClockCorrection(60, 60.8),
+        TestSupport.truth(!DisplaySyncPolicy.permitsCoreClockCorrection(60, 63.1),
                 "multiple individually small trims cannot accumulate against a moving baseline");
     }
 
@@ -171,6 +172,25 @@ public final class DisplaySyncPolicyTest {
                 "20 Hz content must synchronize to 20");
         TestSupport.truth(DisplaySyncPolicy.isUniformOnThor(59.7275),
                 "canonical GBA cadence must divide the panel");
+    }
+
+    private static void arcadeAndNeoGeoClocksLockToThePanel() {
+        // Owner, 2026-10-26: the nearest even rate, within RetroArch's 5% skew.
+        double panel = 119.945005;
+        TestSupport.equal(60.0, DisplaySyncPolicy.synchronizedSourceHz(59.1856),
+                "Neo Geo must synchronize to 60");
+        TestSupport.equal(60.0, DisplaySyncPolicy.synchronizedSourceHz(57.5),
+                "a 57.5 Hz arcade board must synchronize to 60");
+        TestSupport.equal(60.0, DisplaySyncPolicy.synchronizedSourceHz(60.61),
+                "a 60.61 Hz arcade board must synchronize to 60");
+        TestSupport.truth(DisplaySyncPolicy.physicalSourceHz(59.1856, panel) == panel / 2.0,
+                "Neo Geo locks to half the measured panel");
+        TestSupport.truth(DisplaySyncPolicy.physicalSourceHz(75.47, 143.9) == 143.9 / 2.0,
+                "WonderSwan locks to half a 144 Hz panel");
+        TestSupport.truth(DisplaySyncPolicy.physicalSourceHz(75.47, panel) == 0.0,
+                "WonderSwan keeps its clock on a 60/120 panel (20% away)");
+        TestSupport.truth(DisplaySyncPolicy.physicalSourceHz(53.7, panel) == 0.0,
+                "a 53.7 Hz board keeps its clock (11.6% away)");
     }
 
     private static void genuinePalClockIsNeverSilentlySpedUp() {

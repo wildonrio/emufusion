@@ -81,6 +81,7 @@ public class NativeAdapterEngineSession implements EngineSession {
     void drainAudioToTrack(NativeAdapterHost h){}
     void reportEngineSpeed(NativeAdapterHost h){}
     void updatePhysicalFgClock(NativeAdapterHost h){}
+    void closeDirectPanelClock(){}
     void releaseSecondaryDisplay(){}
     void releasePhoneTouch(){}
     String sessionFailureMessage(Throwable failure){return "failure";}

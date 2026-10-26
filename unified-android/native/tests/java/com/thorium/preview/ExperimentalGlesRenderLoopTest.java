@@ -466,7 +466,7 @@ public final class ExperimentalGlesRenderLoopTest {
             check(ready.await(2, TimeUnit.SECONDS), "clock test loop did not initialize");
             check(loop.setPacedVideoHz(60.2), "small declared-clock trim was rejected");
             loop.pauseAndWait();
-            for (double invalid : new double[] {20, 30, 40, 50, 59, 61,
+            for (double invalid : new double[] {20, 30, 40, 50, 56.9, 63.1,
                     -1, 0.8, Double.NaN, Double.POSITIVE_INFINITY}) {
                 check(!loop.setPacedVideoHz(invalid), "unsafe clock accepted: " + invalid);
                 check(loop.pacedVideoHz() == 60.2, "rejected clock mutated the active trim");
@@ -968,6 +968,9 @@ public final class ExperimentalGlesRenderLoopTest {
                 50_000_000L, 16_666_667L, 33_333_333L, 16_666_667L};
         FakeHost host = new FakeHost() {
             @Override public boolean usesAudioPacing() { return true; }
+            @Override public void setSynchronizedVideoRate(double declaredHz, double synchronizedHz) {
+                call("rate:" + synchronizedHz);
+            }
             @Override public boolean runAndPresent() {
                 call("run-present"); starts.add(System.nanoTime()); ++frames;
                 try { Thread.sleep(3); } catch (InterruptedException failure) {
@@ -991,12 +994,14 @@ public final class ExperimentalGlesRenderLoopTest {
                 }, 16_666_667L, true);
         try {
             check(ready.await(2, TimeUnit.SECONDS), "audio-paced host not ready");
+            // Display ticks never run a render-driven core; since 3.2.112 its
+            // synchronized rate follows the measured panel (FG Off).
             loop.setDisplayClock(new ExperimentalGlesRenderLoop.DisplayClock() {
                 @Override public void configure(double a, double b, boolean enabled) {
-                    throw new AssertionError("fixed display clock used for render-driven core");
+                    check(b == 60.0, "measured against the synchronized clock: " + b);
                 }
                 @Override public long awaitDueTimeNs() { throw new AssertionError("display wait"); }
-                @Override public double measuredSourceHz() { return 60.0; }
+                @Override public double measuredSourceHz() { return 119.9 / 2.0; }
                 @Override public void suspend() {}
                 @Override public void close() {}
             });
@@ -1008,6 +1013,8 @@ public final class ExperimentalGlesRenderLoopTest {
             long elapsed = starts.get(6) - starts.get(0);
             check(elapsed >= 185_000_000L && elapsed < 700_000_000L,
                     "generated media time did not own deadlines: " + elapsed);
+            check(loop.pacedVideoHz() == 119.9 / 2.0, "audio-paced rate trimmed to the panel: " +
+                    loop.pacedVideoHz());
             int pausedFrames = host.frames;
             Thread.sleep(30);
             check(host.frames == pausedFrames, "audio-paced guest advanced while paused");

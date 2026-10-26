@@ -66,6 +66,14 @@ public interface FrameGenerationRenderer extends AutoCloseable {
     default double physicalPanelHz() { return 0.0; }
 
     /**
+     * The compositor's own scan rate (EGL composite interval), fresh within
+     * a few seconds, else zero. A per-app frame-rate override does not
+     * change it, while {@code Display.getMode()} reports the override to an
+     * app targeting SDK 30.
+     */
+    default double compositorPanelHz() { return 0.0; }
+
+    /**
      * A one-time delay for the next frame of a source paced at
      * {@link #physicalPanelHz()}, so its images arrive just before the panel
      * callback that takes them up; zero when there is none. Taking it clears it.

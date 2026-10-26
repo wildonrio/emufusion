@@ -1052,6 +1052,7 @@ static bool adapter_start(emufusion_native_engine* engine, const emufusion_nativ
 	// and read as a held frame at the host.  Every start therefore begins
 	// on the exact clock the stamps describe, unpaced.
 	g_emufusion_paced_video_hz.store(0.0);
+	LatteTiming_setEmuFusionVsyncHz(0.0);
 	LatteTiming_setCustomVsyncFrequency(kEmuFusionDeclaredVideoHz);
 	CafeSystem::LaunchForegroundTitle();
 	engine->started.store(true);
@@ -1483,16 +1484,30 @@ bool emufusion_native_adapter_set_paced_video_hz(double hz)
 	if (!(hz > 0.0))
 	{
 		g_emufusion_paced_video_hz.store(0.0);
+		LatteTiming_setEmuFusionVsyncHz(0.0);
 		LatteTiming_setCustomVsyncFrequency(kEmuFusionDeclaredVideoHz);
 		return true;
 	}
-	// Tiers are exact integers (20, 30, 40, 60); the vsync setter is integral.
 	const double rounded = std::round(hz);
-	if (std::fabs(hz - rounded) > 1.0e-6 || rounded < 20.0 ||
-	    rounded > static_cast<double>(kEmuFusionDeclaredVideoHz))
+	if (std::fabs(hz - rounded) <= 1.0e-6)
+	{
+		// Exact integer tiers (20, 30, 40, 60) keep the integral setter.
+		if (rounded < 20.0 || rounded > static_cast<double>(kEmuFusionDeclaredVideoHz))
+			return false;
+		g_emufusion_paced_video_hz.store(rounded);
+		LatteTiming_setEmuFusionVsyncHz(0.0);
+		LatteTiming_setCustomVsyncFrequency(static_cast<sint32>(rounded));
+		return true;
+	}
+	// A divisor of the measured panel (2026-10-26): 59.95 Hz on a 119.9 Hz
+	// panel. The integral setter could only say 60, so the guest drifted a
+	// frame against the panel every ~20 s. The host's own budget bounds the
+	// correction; this only refuses rates no tier could need.
+	if (!std::isfinite(hz) || hz < 19.5 || hz > static_cast<double>(kEmuFusionDeclaredVideoHz) * 1.01)
 		return false;
-	g_emufusion_paced_video_hz.store(rounded);
+	g_emufusion_paced_video_hz.store(hz);
 	LatteTiming_setCustomVsyncFrequency(static_cast<sint32>(rounded));
+	LatteTiming_setEmuFusionVsyncHz(hz);
 	return true;
 }
 

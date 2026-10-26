@@ -546,6 +546,8 @@ def _generate_phase_shader_text():
         f"smoothstep({float(EDGE_HOLD_T)*0.5}/255.0,{float(EDGE_HOLD_T)}/255.0,md(abs(aw-cw)));\n"
         "    w=mix(w,uT<=0.5?a0:c0,k);}\n") +
        "  }}\n") +
+    ("" if LATE_SHARE <= 0 or LATE_NEAR <= 0 else
+     f" w=mix(w,uT>=0.5?c0:a0,step({LATE_NEAR},texture(uLate,vec2(0.5)).r));\n") +
     ("" if LATE_SHARE <= 0 else
      f" w=mix(w,(1.0-uT)*a0+uT*c0,step({LATE_SHARE},texture(uLate,vec2(0.5)).r));\n") +
     " vec4 ct=texture(uCut,vec2(0.5));\n"
@@ -609,6 +611,15 @@ FLASH_HOLD = True
 # flash verdicts still override it. 0 disables.
 LATE_SHARE = 0.5
 LATE_GRID = (32, 18)
+# Since 3.2.112 (owner, 2026-10-26: "no more artifacts"): from LATE_NEAR up
+# to LATE_SHARE the frame is the nearer real frame (the newer one at the
+# midpoint) -- content the game drew, one uneven step -- instead of a warp
+# that leaves that much of the picture unexplained. Over 411 replay triplets
+# (3.2.111 generator, full/eval/train/320x180 sets) frames at 0.10 or more
+# are 5.6% of all and hold 60% of the invented area (Sonic Adventure's and
+# Sonic Superstars' transitions, Mario Kart Wii's cut, Star Fox 64 and Wii U
+# frames); 9 of the 411 were gated while already clean. 0 disables.
+LATE_NEAR = 0.1
 
 
 def late_verdict_shader():

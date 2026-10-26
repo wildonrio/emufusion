@@ -1,0 +1,75 @@
+--- a/src/Cafe/HW/Latte/Core/LatteTiming.h	2026-10-26 16:03:05
++++ b/src/Cafe/HW/Latte/Core/LatteTiming.h	2026-10-26 16:03:17
+@@ -3,5 +3,10 @@
+ void LatteTiming_setCustomVsyncFrequency(sint32 frequency);
+ void LatteTiming_disableCustomVsyncFrequency();
+ bool LatteTiming_getCustomVsyncFrequency(sint32& customFrequency);
++// EmuFusion (local, 2026-10-26): a fractional emulated vsync rate, so the
++// host can lock the guest to an exact divisor of the measured panel (59.95 Hz
++// on a 119.9 Hz panel). Zero disables it; it overrides the integral setting.
++void LatteTiming_setEmuFusionVsyncHz(double hz);
++double LatteTiming_getEmuFusionVsyncHz();
+ 
+ void LatteTiming_EnableHostDrivenVSync();
+\ No newline at end of file
+--- a/src/Cafe/HW/Latte/Core/LatteTiming.cpp	2026-10-26 16:03:05
++++ b/src/Cafe/HW/Latte/Core/LatteTiming.cpp	2026-10-26 16:03:17
+@@ -1,3 +1,4 @@
++#include <atomic>
+ #include "Cafe/HW/Latte/Core/Latte.h"
+ #include "Cafe/OS/libs/gx2/GX2_Event.h"
+ #include "Cafe/HW/Latte/Renderer/Vulkan/VsyncDriver.h"
+@@ -6,6 +7,7 @@
+ #include "Cafe/CafeSystem.h"
+ 
+ sint32 s_customVsyncFrequency = -1;
++std::atomic<double> s_emufusionVsyncHz{0.0};
+ 
+ void LatteTiming_NotifyHostVSync();
+ 
+@@ -17,8 +19,13 @@
+ 	// 59.94 -> 60 * 0.999
+ 
+ 	HRTick tick = HighResolutionTimer::getFrequency();
+-	if (s_customVsyncFrequency > 0)
++	const double emufusionHz = s_emufusionVsyncHz.load(std::memory_order_relaxed);
++	if (emufusionHz > 0.0)
+ 	{
++		tick = (HRTick)((double)tick / emufusionHz + 0.5);
++	}
++	else if (s_customVsyncFrequency > 0)
++	{
+ 		tick /= (uint64)s_customVsyncFrequency;
+ 	}
+ 	else
+@@ -40,6 +47,16 @@
+ 	s_customVsyncFrequency = -1;
+ }
+ 
++void LatteTiming_setEmuFusionVsyncHz(double hz)
++{
++	s_emufusionVsyncHz.store(hz > 0.0 ? hz : 0.0, std::memory_order_relaxed);
++}
++
++double LatteTiming_getEmuFusionVsyncHz()
++{
++	return s_emufusionVsyncHz.load(std::memory_order_relaxed);
++}
++
+ bool LatteTiming_getCustomVsyncFrequency(sint32& customFrequency)
+ {
+ 	sint32 t = s_customVsyncFrequency;
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp	2026-10-26 16:03:05
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp	2026-10-26 16:03:17
+@@ -3344,7 +3344,10 @@
+ 		}
+ 		sint32 emufusionVsyncHz = 0;
+ 		int64_t kEmuFusionStampPeriodNs = kEmuFusionSixtyPeriodNs;
+-		if (LatteTiming_getCustomVsyncFrequency(emufusionVsyncHz) && emufusionVsyncHz > 0 && emufusionVsyncHz != 60)
++		const double emufusionFractionalHz = LatteTiming_getEmuFusionVsyncHz();
++		if (emufusionFractionalHz > 0.0)
++			kEmuFusionStampPeriodNs = (int64_t)((1000000000.0 / emufusionFractionalHz) + 0.5);
++		else if (LatteTiming_getCustomVsyncFrequency(emufusionVsyncHz) && emufusionVsyncHz > 0 && emufusionVsyncHz != 60)
+ 			kEmuFusionStampPeriodNs = (int64_t)((1000000000.0 / (double)emufusionVsyncHz) + 0.5);
+ 		struct timespec now;
+ 		clock_gettime(CLOCK_MONOTONIC, &now);
