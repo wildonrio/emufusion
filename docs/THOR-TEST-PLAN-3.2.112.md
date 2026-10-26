@@ -1,4 +1,4 @@
-# Thor test plan: 3.2.112
+# Thor test plan: 3.2.112 and 3.2.113
 
 Written 2026-10-26 while the Thor was away from the Mac. 3.2.112 (186) was
 built and host-verified only. 3.2.111 was never installed, so this plan covers
@@ -64,7 +64,7 @@ For each case below, run 60 s with FG Off and grep the log:
 | --- | --- | --- |
 | Switch (Eden) | `Direct panel clock lock engine=eden` | pacedHz ≈ panel / 2 |
 | Wii U (Cemu) | `Direct panel clock lock engine=cemu` | accepted at the fractional rate (new native `42aa96b8`) |
-| PS3 (aPS3e) | — | no hook; expect no line |
+| PS3 (aPS3e) | `Direct panel clock lock engine=aps3e` | pacedHz ≈ panel / 2 (3.2.113 hook; FG On: `Clock correction adapter engine=aps3e`) |
 | Dreamcast (Flycast) | `Tier pacing hardware core ... pacedHz=59.9x` | from `trimAudioPacedToDisplay` |
 | Neo Geo (e.g. Metal Slug) | — | core runs at panel / 2 (59.95), not 59.19 |
 | Arcade, about 57.5 Hz (if available) | — | same |
@@ -119,6 +119,16 @@ For each case below, run 60 s with FG Off and grep the log:
    - Sonic Adventure and NSMBU Deluxe menu transitions;
    - Mario Kart Wii item boxes and the start cut.
    - Look for one-scan steps where garbage used to be.
+
+## 7b. 3.2.113 additions
+
+1. PS3 (aPS3e): run a 60 s game with FG Off and FG On; check the clock lines
+   above. Also check for normal pacing and audio (RPCS3's VBlank group period
+   now follows the host rate; the automatic frame limiter follows it too).
+2. Pixel art: run Game Gear (Sonic) and Mega Drive. Count gated frames
+   (frames identical to the next real one) against 3.2.112 on the device
+   replay bench (2-D sets). Visually check that smooth scrolls stay smooth on
+   SNES/NES, where no frame should be gated.
 
 ## 8. After the run
 

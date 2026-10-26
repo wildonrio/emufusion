@@ -66,9 +66,9 @@
   "patches": [
     {
       "path": "engines/patches/aps3e-emufusion-adapter.cpp",
-      "sha256": "0c7ad8bbfd50440eda68288153da091d73b13097682aff7e7aa9ef9b829a7165",
-      "bytes": 23440,
-      "revisionNote": "2026-09-09: release the opposite virtual direction on all four stick axes before forwarding the new value. Actual adapter regression tests and bounded Shadow gameplay/release/wake/Exit passed; see retainedMilestone. The following note describes the historical ABI v2 change.",
+      "sha256": "67ee7651bcecc5aec0d5cb098a47b3dc782be3efb6b5c51ee981eb15293fb9a5",
+      "bytes": 24794,
+      "revisionNote": "2026-10-26: exports emufusion_native_adapter_declared_video_hz (60) and emufusion_native_adapter_set_paced_video_hz (bounded to 0.75%, zero resets; reset at each load) for aps3e-vblank-pace.patch. Earlier: 2026-09-09: release the opposite virtual direction on all four stick axes before forwarding the new value. Actual adapter regression tests and bounded Shadow gameplay/release/wake/Exit passed; see retainedMilestone. The following note describes the historical ABI v2 change.",
       "role": "adapter-translation-unit",
       "note": "Implements the in-window Vulkan adapter, DS3 control mapping, fail-closed user-firmware installation with a concrete version sentinel, lifecycle, persistent saves, RPCS3-native Quick Resume serialization, and a versioned JavaVM handoff that avoids upstream Activity-class registration. 2026-09-07: adopted native-adapter ABI v2's set_control(engine, controller_index, control, value) signature and describe()'s new max_controllers field. describe() honestly reports max_controllers = 1, not CELL_PAD_MAX_PORT_NUM's architectural 7: reading aps3e_rp3_impl.cpp (init_config(), AndroidVirtualPadHandler::bindPadToDevice()/Key(), pad_thread::Init()) confirmed that every player configured for the 'Keyboard' device shares ONE AndroidVirtualPadHandler instance and its single fixed 26-entry APS3E_VKC/mouse_list virtual-key space (codes 0-25), and that player 0's own default cfg_pad binds all 25 non-'none' codes one-to-one already, leaving no disjoint code range for a second player's independently-routable input without either widening that vendored enum/map or reaching into the handler's private per-instance m_pads_internal button list -- both changes outside this adapter translation unit and out of scope for this pass. set_control() now takes controller_index and, per the ABI's own documented contract for a max_controllers==1 adapter, treats any index other than 0 as a fail-closed no-op rather than aliasing it onto the primary player's state. No other logic in this file was touched."
     },
@@ -164,6 +164,13 @@
       "bytes": 2876,
       "role": "local-source-patch",
       "note": "Serialize Android key lookup/use with pad initialization and retirement, tolerate absent/incompatible handlers, and release the key mutex on exceptions. Actual-method old failures reproduced on host and Android; eight corrected scenarios include live key traffic across1000 lifetimes. Bounded16KiB Shadow movement, pause/resume and normal Exit verified. Two wrapper translation units rebuilt after byte-exact d3ab control relink. No ICO/SPURS, audio, all-thread-mode or universal acceptance claim."
+    },
+    {
+      "path": "engines/patches/aps3e-vblank-pace.patch",
+      "sha256": "ada2e65227b1bb61e027e354b39a12e2138b0a1bc30afcb170365e9d99792563",
+      "bytes": 2266,
+      "role": "local-source-patch",
+      "note": "2026-10-26: RSXThread.cpp's VBlank thread takes its period from g_emufusion_vblank_hz when the host sets it (1'000'000 x rate / hz microseconds per group of `rate` VBlanks, refreshed once a second as before), and the automatic frame limiter follows the same rate. Zero keeps the configured rate and NTSC fixup. Lets EmuFusion lock PS3 games to an exact divisor of the measured panel (59.95 Hz on a 119.9 Hz panel) instead of slipping a scan every ~20 s. Local patch, not an upstream contribution; applies last in lock order (tools/tests/test_aps3e_vblank_pace.py). No device test yet (Thor away)."
     }
   ],
   "inputLifetimeIntegration": {
@@ -293,17 +300,19 @@
   "artifact": {
     "fileName": "libemufusion_native_adapter_aps3e.so",
     "stagedPath": "engines/build/arm64-v8a/libemufusion_native_adapter_aps3e.so",
-    "sha256": "d12ef7d2b8fff5269ec03d44fcd88cef7ab501a2befb4e7af25e62d8beac4bf4",
-    "bytes": 58599936,
-    "gnuBuildId": "3f96e8440761c9007d6d8c40a3d1f02f16cfc921",
+    "sha256": "22bdc0dea4449a7c7e453edfd741a183e33695316f96481b8bc58b72cca3b4be",
+    "bytes": 58612560,
+    "gnuBuildId": "a8608c56543f64f2dbec17ba98bb0c0a3cca339c",
     "elfClass": "ELF64 AArch64 shared object",
     "stripped": true,
     "ptLoadAlignment": "0x4000",
     "soname": "libemufusion_native_adapter_aps3e.so",
     "requiredExport": "emufusion_native_adapter_entry",
     "verifiedExports": [
+      "emufusion_native_adapter_declared_video_hz",
       "emufusion_native_adapter_entry",
-      "emufusion_native_adapter_set_java_vm"
+      "emufusion_native_adapter_set_java_vm",
+      "emufusion_native_adapter_set_paced_video_hz"
     ],
     "needed": [
       "libandroid.so",
@@ -315,7 +324,8 @@
       "libvulkan.so",
       "libm.so"
     ],
-    "measurement20261012Rename": "Clean full build (4,533 Ninja actions, 684 s) of the pinned archive (sha256 37fb172d...) at engines/build/candidates/c2c-aps3e with every locked patch applied in lock order (adapter and build patch under the EmuFusion name), CMake 3.22.1 + Ninja from the recorded Gradle configure arguments, NDK 27.0.12077973, RelWithDebInfo, llvm-strip --strip-unneeded. SONAME libemufusion_native_adapter_aps3e.so; 1,246 defined dynamic symbols and the same NEEDED set as the previous artifact; PT_LOAD 16 KiB aligned. Unlike the previous artifact, every translation unit was compiled together from the locked sources (no reused September/October objects, no -g0 override, no trace diagnostics). Recipe: /private/tmp/claude-501/c2c-aps3e/build.sh. Not an independent reproduction."
+    "measurement20261012Rename": "Clean full build (4,533 Ninja actions, 684 s) of the pinned archive (sha256 37fb172d...) at engines/build/candidates/c2c-aps3e with every locked patch applied in lock order (adapter and build patch under the EmuFusion name), CMake 3.22.1 + Ninja from the recorded Gradle configure arguments, NDK 27.0.12077973, RelWithDebInfo, llvm-strip --strip-unneeded. SONAME libemufusion_native_adapter_aps3e.so; 1,246 defined dynamic symbols and the same NEEDED set as the previous artifact; PT_LOAD 16 KiB aligned. Unlike the previous artifact, every translation unit was compiled together from the locked sources (no reused September/October objects, no -g0 override, no trace diagnostics). Recipe: /private/tmp/claude-501/c2c-aps3e/build.sh. Not an independent reproduction.",
+    "measurement20261026VblankPace": "Clean full build (4,533 Ninja actions, 637 s) of the pinned archive at engines/build/candidates/aps3e-vblank-pace-2026-10-26 with every locked patch in lock order plus aps3e-vblank-pace.patch, same CMake/Ninja/NDK 27.0.12077973 RelWithDebInfo recipe (~/Code/emufusion-qa-tools/aps3e-vblank/build.sh), llvm-strip --strip-unneeded. SONAME and NEEDED unchanged, PT_LOAD 16 KiB aligned, 1,248 defined dynamic symbols (+2: the clock hooks). Unstripped symbols kept as obj/libemufusion_native_adapter_aps3e.so.gz (sha256 of the expanded file 40cd80a7...); build tree removed. Previous staged d12ef7d2 kept compressed in ~/Code/emufusion-qa-tools/aps3e-backup-20261026. Host tests only."
   },
   "runtimeInputs": {
     "keysAndFirmwareBundled": false,

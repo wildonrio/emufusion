@@ -424,7 +424,8 @@ final class NativeAdapterEngineSession implements EngineSession,
      * off {@link EngineSession.Listener}.
      */
     // Optional adapter clock hooks. A known declared clock is required for
-    // any positive correction. Missing hooks remain unsupported (aPS3e);
+    // any positive correction (Eden, Cemu, and aPS3e since 3.2.113). Missing
+    // hooks in an older adapter binary leave it unchanged;
     // delivered FPS is never used as the guest's declared clock.
     private volatile double pacedVideoHz;
     private volatile double producerTimelineHz;

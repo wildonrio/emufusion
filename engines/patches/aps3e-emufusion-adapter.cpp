@@ -166,6 +166,8 @@ int virtual_key(emufusion_native_control control, float value, bool& pressed,
 // native engine only needs the VM identity cached by that hook; accept it over
 // the host's versioned adapter ABI without registering any Java frontend.
 extern JavaVM* g_jvm;
+// Defined by aps3e-vblank-pace.patch (RSXThread.cpp); see the clock hooks below.
+extern std::atomic<double> g_emufusion_vblank_hz;
 extern "C" __attribute__((visibility("default")))
 int emufusion_native_adapter_set_java_vm(std::uint32_t version, void* java_vm) {
     if (version != 1u || !java_vm) return 0;
@@ -242,6 +244,8 @@ static bool adapter_load(emufusion_native_engine* engine,
         write_error(error, error_size, "PS3 session is already running");
         return false;
     }
+    // Each session starts on the configured VBlank clock; the host re-trims it.
+    g_emufusion_vblank_hz.store(0.0, std::memory_order_relaxed);
     engine->system_directory = request->system_directory;
     engine->save_directory = request->save_directory;
     engine->content_path = request->content_path;
@@ -540,4 +544,29 @@ static const emufusion_native_adapter kAdapter = {
 extern "C" __attribute__((visibility("default")))
 const emufusion_native_adapter* emufusion_native_adapter_entry() {
     return &kAdapter;
+}
+
+// Optional VBlank clock hooks (2026-10-26; aps3e-vblank-pace.patch). The host
+// locks the guest to an exact divisor of the measured panel -- 59.95 Hz on a
+// 119.9 Hz panel -- as it does Eden's and Cemu's: without them PS3 frames
+// slipped a scan against the panel every ~20 s, with or without frame
+// generation. The trim is bounded to 0.75% of the declared rate (the host
+// checks it too); zero restores the configured rate.
+static constexpr double kEmuFusionDeclaredVblankHz = 60.0;
+
+extern "C" __attribute__((visibility("default")))
+double emufusion_native_adapter_declared_video_hz(void) {
+    return kEmuFusionDeclaredVblankHz;
+}
+
+extern "C" __attribute__((visibility("default")))
+bool emufusion_native_adapter_set_paced_video_hz(double hz) {
+    if (hz == 0.0) {
+        g_emufusion_vblank_hz.store(0.0, std::memory_order_relaxed);
+        return true;
+    }
+    if (!std::isfinite(hz) || std::fabs(hz / kEmuFusionDeclaredVblankHz - 1.0) > 0.0075 + 1.0e-12)
+        return false;
+    g_emufusion_vblank_hz.store(hz, std::memory_order_relaxed);
+    return true;
 }

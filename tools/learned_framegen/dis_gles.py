@@ -547,7 +547,9 @@ def _generate_phase_shader_text():
         "    w=mix(w,uT<=0.5?a0:c0,k);}\n") +
        "  }}\n") +
     ("" if LATE_SHARE <= 0 or LATE_NEAR <= 0 else
-     f" w=mix(w,uT>=0.5?c0:a0,step({LATE_NEAR},texture(uLate,vec2(0.5)).r));\n") +
+     (f" w=mix(w,uT>=0.5?c0:a0,step(uDiscrete>0.5?{LATE_NEAR_DISCRETE}:{LATE_NEAR},"
+      if DISCRETE_UNIFORM else f" w=mix(w,uT>=0.5?c0:a0,step({LATE_NEAR},") +
+     "texture(uLate,vec2(0.5)).r));\n") +
     ("" if LATE_SHARE <= 0 else
      f" w=mix(w,(1.0-uT)*a0+uT*c0,step({LATE_SHARE},texture(uLate,vec2(0.5)).r));\n") +
     " vec4 ct=texture(uCut,vec2(0.5));\n"
@@ -620,6 +622,13 @@ LATE_GRID = (32, 18)
 # Sonic Superstars' transitions, Mario Kart Wii's cut, Star Fox 64 and Wii U
 # frames); 9 of the 411 were gated while already clean. 0 disables.
 LATE_NEAR = 0.1
+# Pixel art (uDiscrete): most of a 2-D frame is static or matches the warp,
+# so a shredded sprite or a repeating wall leaves only a few percent of the
+# grid unexplained. Over the 74 2-D replay triplets frames at 0.05 or more
+# are 13.5% and hold 49% of the invented area -- Game Gear 6 of 14 (its
+# lava bars and checkered walls, bosses), Mega Drive 2 of 10 -- while SNES,
+# Game Boy and Master System frames never reach it; 3 clean frames gated.
+LATE_NEAR_DISCRETE = 0.05
 
 
 def late_verdict_shader():

@@ -212,7 +212,7 @@ class DisSelectionTest(unittest.TestCase):
                       shaders["GENERATE_PHASE"])
         # 3.2.112: from a tenth of the grid unexplained, the nearer real frame
         # (content the game drew) -- before the blend, which wins from half.
-        near = " w=mix(w,uT>=0.5?c0:a0,step(0.1,texture(uLate,vec2(0.5)).r));"
+        near = " w=mix(w,uT>=0.5?c0:a0,step(uDiscrete>0.5?0.05:0.1,texture(uLate,vec2(0.5)).r));"
         self.assertIn(near, shaders["GENERATE_PHASE"])
         self.assertLess(shaders["GENERATE_PHASE"].index(near),
                         shaders["GENERATE_PHASE"].index("step(0.5,texture(uLate,vec2(0.5)).r)"))

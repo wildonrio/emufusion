@@ -1,0 +1,53 @@
+--- a/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/RSXThread.cpp
++++ b/app/src/main/cpp/rpcs3/rpcs3/Emu/RSX/RSXThread.cpp
+@@ -48,6 +48,20 @@
+ extern thread_local std::string(*g_tls_log_prefix)();
+ extern atomic_t<u32> g_lv2_preempts_taken;
+ 
++// EmuFusion (local, 2026-10-26): the host trims the VBlank clock to an exact
++// divisor of the measured panel (59.95 Hz on a 119.9 Hz panel), so a game's
++// frames stop slipping a scan against it every ~20 s. Zero keeps the
++// configured rate; the adapter bounds the trim to 0.75% of it.
++std::atomic<double> g_emufusion_vblank_hz{0.0};
++
++static u64 emufusion_vblank_period(u64 vblank_rate)
++{
++	const double hz = g_emufusion_vblank_hz.load(std::memory_order_relaxed);
++	if (hz > 0.0 && vblank_rate > 0)
++		return static_cast<u64>(1'000'000.0 * static_cast<double>(vblank_rate) / hz + 0.5);
++	return 1'000'000 + u64{g_cfg.video.vblank_ntsc.get()} * 1000;
++}
++
+ LOG_CHANNEL(perf_log, "PERF");
+ 
+ template <>
+@@ -1001,7 +1015,7 @@
+ 			u64 start_time = get_system_time();
+ 
+ 			u64 vblank_rate = g_cfg.video.vblank_rate;
+-			u64 vblank_period = 1'000'000 + u64{g_cfg.video.vblank_ntsc.get()} * 1000;
++			u64 vblank_period = emufusion_vblank_period(vblank_rate);
+ 
+ 			u64 local_vblank_count = 0;
+ 
+@@ -1039,7 +1053,7 @@
+ 
+ 							// We have a rare chance to update settings without losing precision whenever local_vblank_count is 0
+ 							vblank_rate = g_cfg.video.vblank_rate;
+-							vblank_period = 1'000'000 + u64{g_cfg.video.vblank_ntsc.get()} * 1000;
++							vblank_period = emufusion_vblank_period(vblank_rate);
+ 						}
+ 
+ 						post_vblank_event(post_event_time);
+@@ -3257,7 +3271,10 @@
+ 		case frame_limit_type::_60: limit = 60.; break;
+  		case frame_limit_type::_120: limit = 120.; break;
+ 		case frame_limit_type::display_rate: limit = get_cached_display_refresh_rate(); break;
+-		case frame_limit_type::_auto: limit = static_cast<double>(g_cfg.video.vblank_rate); break;
++		case frame_limit_type::_auto:
++			limit = g_emufusion_vblank_hz.load(std::memory_order_relaxed) > 0.0 ?
++				g_emufusion_vblank_hz.load(std::memory_order_relaxed) : static_cast<double>(g_cfg.video.vblank_rate);
++			break;
+ 		case frame_limit_type::_ps3: limit = 0.; break;
+ 		case frame_limit_type::infinite: limit = 0.; break;
+ 		default:

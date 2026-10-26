@@ -38,8 +38,34 @@ def shipping_adapter():
     return former_spelling(SRC.read_bytes())
 
 
+# The VBlank clock hooks (2026-10-26, test_aps3e_vblank_pace.py) add an
+# extern, a reset in adapter_load and two exports after the entry point; none
+# touches a probed path, and the pinned chain was reviewed without them.
+VBLANK_HOOKS = tuple(former_spelling(block) for block in (
+    b'// Defined by aps3e-vblank-pace.patch (RSXThread.cpp); see the clock hooks below.\n'
+    b'extern std::atomic<double> g_emufusion_vblank_hz;\n',
+    b'    // Each session starts on the configured VBlank clock; the host re-trims it.\n'
+    b'    g_emufusion_vblank_hz.store(0.0, std::memory_order_relaxed);\n',
+))
+VBLANK_EXPORTS_START = former_spelling(b'\n// Optional VBlank clock hooks (2026-10-26; aps3e-vblank-pace.patch).')
+
+
+def without_vblank_hooks(current):
+    for block in VBLANK_HOOKS:
+        if current.count(block) != 1:
+            raise AssertionError('Adapter VBlank hooks changed; re-review the pinned probe chain')
+        current = current.replace(block, b'', 1)
+    if current.count(VBLANK_EXPORTS_START) != 1:
+        raise AssertionError('Adapter VBlank exports changed; re-review the pinned probe chain')
+    # The exports are the file's last block.
+    return current[:current.index(VBLANK_EXPORTS_START)]
+
+
 def reviewed_adapter(expected_sha=generator.EXPECTED_SHA):
     current = shipping_adapter()
+    if hashlib.sha256(current).hexdigest() == expected_sha:
+        return current
+    current = without_vblank_hooks(current)
     if hashlib.sha256(current).hexdigest() == expected_sha:
         return current
     if current.count(STICK_CLICKS) != 1:

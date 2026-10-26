@@ -3,7 +3,7 @@
   "minimum_age_days": 1,
   "pinned_sha256": {
     "0c560e2b74645c956be0441b8d13b9bdf7efb24accc24f29f379e75f0f943120": "Rollback 3.2.110 (184), released and installed on the Thor; 3.2.92-3.2.109 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "4e594203f58c6dba261a6775749dd9e1d37ea6712c34ba0e7f3bb697cb49abdd": "Release 3.2.112 (186): Switch system driver, clock lock on every engine, take-up lattice, LATE_NEAR; host-verified, not yet on the Thor (away 2026-10-26)."
+    "abc083e937898dc1eb9f52f8fe32af989edd15af307dcfe65a5209daa8054091": "Release 3.2.113 (187): PS3 VBlank clock lock, pixel-art gate; host-verified, not yet on the Thor (away 2026-10-26)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -957,6 +957,14 @@
     "unified-android/build/emufusion-3.2.111-phase2-phase3-qualification.apk": {
       "sha256": "0db30365ee3667ecd04752b05ac1fce36949e0a9544a46b6abcf704d6ae3b37f",
       "reason": "Candidate 3.2.111 (185), never installed or released (the Thor dropped off USB); superseded by 3.2.112, which contains it and is reproducible from commit 966a067."
+    },
+    "unified-android/build/emufusion-3.2.112-phase2-phase3-qualification-4e594203f58c6dba261a6775749dd9e1d37ea6712c34ba0e7f3bb697cb49abdd.apk": {
+      "sha256": "4e594203f58c6dba261a6775749dd9e1d37ea6712c34ba0e7f3bb697cb49abdd",
+      "reason": "Released 3.2.112 (identical to the GitHub release asset v3.2.112, sha256 checked 2026-10-26); 3.2.113 is the release and 3.2.110 the Thor-tested rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.112-phase2-phase3-qualification.apk": {
+      "sha256": "4e594203f58c6dba261a6775749dd9e1d37ea6712c34ba0e7f3bb697cb49abdd",
+      "reason": "Released 3.2.112 (identical to the GitHub release asset v3.2.112, sha256 checked 2026-10-26); 3.2.113 is the release and 3.2.110 the Thor-tested rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
     }
   }
 }
