@@ -48,6 +48,11 @@ final class DenseInverseSearchFlow {
     private int phasePatches, phaseFlow, phaseLevel = -1;
     // Cut/fade verdict of the last estimate (1x1 RGBA8: r cut evidence, g fade).
     private int cutProgram, cut;
+    // The frame-level verdict after the per-phase field (dis_gles.LATE_SHARE),
+    // once per pair and phase.
+    private int lateProgram, late;
+    private long lateKeyA, lateKeyB;
+    private float lateValue = -1f;
     // The picture rectangle inside letter/pillarbox bars (1x1 RGBA16F, normalised
     // left, right, bottom, top), computed only for a generation shader built
     // with content bounds (it then reads uBounds).
@@ -134,6 +139,7 @@ final class DenseInverseSearchFlow {
             }
             zeroField = texture(1, 1, true);
             cut = rgba8(1, 1, true);
+            late = rgba8(1, 1, true);
             bounds = texture(1, 1, true);
             used = finest;
             slotKey[0] = slotKey[1] = 0L;
@@ -352,7 +358,26 @@ final class DenseInverseSearchFlow {
      */
     void bindGeneratePhase(int frameA, int frameC, float t, int structureMask, float minMotionPx,
                            int cutVerdict) {
+        // Once per pair and phase: how much of the frame nothing explains.
+        if (lateProgram != 0 && (phaseKeyA != lateKeyA || phaseKeyB != lateKeyB || t != lateValue)) {
+            saveState();
+            try {
+                begin(lateProgram, 1, 1, late);
+                bind(lateProgram, "uFrameA", frameA, 0);
+                bind(lateProgram, "uFrameC", frameC, 1);
+                bind(lateProgram, "uPhaseFlow", phaseFlow, 2);
+                GLES20.glUniform1f(location(lateProgram, "uT"), t);
+                GLES20.glUniform2f(location(lateProgram, "uFlowSize"), sizes[used][0], sizes[used][1]);
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            } finally {
+                restoreState();
+            }
+            lateKeyA = phaseKeyA;
+            lateKeyB = phaseKeyB;
+            lateValue = t;
+        }
         GLES20.glUseProgram(generatePhase);
+        bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);
         GLES20.glUniform1f(location(generatePhase, "uCutEnabled"), cutVerdict != 0 ? 1f : 0f);
         bind(generatePhase, "uCut", cutVerdict != 0 ? cutVerdict : zeroField, 4);
         GLES20.glUniform1f(location(generatePhase, "uStructure"), structureMask != 0 ? 1f : 0f);
@@ -528,6 +553,7 @@ final class DenseInverseSearchFlow {
         phaseDensify = link(v, DenseInverseSearchShaders.PHASE_DENSIFY);
         generatePhase = link(DenseInverseSearchShaders.VERTEX_QUAD, DenseInverseSearchShaders.GENERATE_PHASE);
         cutProgram = link(v, DenseInverseSearchShaders.CUT);
+        lateProgram = link(v, DenseInverseSearchShaders.LATE_VERDICT);
         int[] ids = new int[1];
         GLES20.glGenFramebuffers(1, ids, 0);
         framebuffer = ids[0];
@@ -598,7 +624,9 @@ final class DenseInverseSearchFlow {
         java.util.Arrays.fill(motionValidated, 0);
         java.util.Arrays.fill(motionFill, 0);
         motionWidth = motionHeight = 0;
-        phasePatches = phaseFlow = cut = bounds = 0;
+        phasePatches = phaseFlow = cut = late = bounds = 0;
+        lateKeyA = lateKeyB = 0L;
+        lateValue = -1f;
         phaseLevel = -1;
         java.util.Arrays.fill(selectFeature, 0);
         java.util.Arrays.fill(selectHiddenA, 0);
@@ -613,11 +641,11 @@ final class DenseInverseSearchFlow {
     void release() {
         releaseTextures();
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
-                phaseSearch, phaseDensify, generatePhase, cutProgram, boundsProgram, selectFeatures, selectC1,
+                phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, boundsProgram, selectFeatures, selectC1,
                 selectC2, selectC3, selectOut, selectGenerate})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
-        phaseSearch = phaseDensify = generatePhase = cutProgram = boundsProgram = 0;
+        phaseSearch = phaseDensify = generatePhase = cutProgram = lateProgram = boundsProgram = 0;
         selectFeatures = selectC1 = selectC2 = selectC3 = selectOut = selectGenerate = 0;
         uniforms.clear();
         if (framebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {framebuffer}, 0);

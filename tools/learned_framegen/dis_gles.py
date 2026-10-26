@@ -217,7 +217,8 @@ def phase_search_shader():
     the flow level) and the final SSD."""
     return (HEADER +
     f"#define P {PATCH}\n#define S {STRIDE}\n#define ITERS {ITERATIONS}\n"
-    "uniform sampler2D uGradA,uGradC,uFlowAC,uFlowCA;uniform ivec2 uSize;uniform float uT;\n"
+    "uniform sampler2D uGradA,uGradC,uFlowAC,uFlowCA;uniform ivec2 uSize;uniform float uT;\n" +
+    ("uniform float uGlobal;\n" if PHASE_GLOBAL_GRID and PHASE_GLOBAL_DISCRETE_ONLY else "") +
     "layout(location=0) out vec4 o0;\n"
     "vec3 ga(vec2 p){return texture(uGradA,p/vec2(uSize)).xyz;}\n"
     "vec3 gc(vec2 p){return texture(uGradC,p/vec2(uSize)).xyz;}\n"
@@ -233,10 +234,12 @@ def phase_search_shader():
     " vec2 v1=fac(p),v2=-fca(q);float e1=ssd(o,v1),e2=ssd(o,v2);vec2 v0=e2<e1?v2:v1;float e0=min(e1,e2);\n"
     + "".join(f" {{vec2 c=fac(x+vec2({dx:.1f},{dy:.1f}));float ec=ssd(o,c);if(ec<e0){{e0=ec;v0=c;}}}}\n"
               for d in PHASE_PROPAGATE for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))) +
+    (" if(uGlobal>0.5){\n" if PHASE_GLOBAL_GRID and PHASE_GLOBAL_DISCRETE_ONLY else "") +
     "".join(f" {{vec2 c=fac(vec2(uSize)*vec2({(i + 0.5) / PHASE_GLOBAL_GRID[0]:.4f},{(j + 0.5) / PHASE_GLOBAL_GRID[1]:.4f}));"
             f"float ec=ssd(o,c);if(ec<e0*{1.0 + PHASE_GLOBAL_TIE:.3f}+1e-6){{e0=min(e0,ec);v0=c;}}}}\n"
             for j in range(PHASE_GLOBAL_GRID[1] if PHASE_GLOBAL_GRID else 0)
             for i in range(PHASE_GLOBAL_GRID[0] if PHASE_GLOBAL_GRID else 0)) +
+    (" }\n" if PHASE_GLOBAL_GRID and PHASE_GLOBAL_DISCRETE_ONLY else "") +
     " vec2 v=v0;const float N=float(P*P);\n"
     " for(int k=0;k<ITERS;++k){float sa=0.0,sc=0.0;vec2 sj=vec2(0.0);mat2 h=mat2(0.0);vec2 b=vec2(0.0);vec2 jsa=vec2(0.0),jsc=vec2(0.0);\n"
     "  for(int y=0;y<P;++y)for(int xx=0;xx<P;++xx){vec2 q2=o+vec2(float(xx),float(y))+0.5;vec3 A=ga(q2-uT*v),C=gc(q2+(1.0-uT)*v);\n"
@@ -261,6 +264,11 @@ PHASE_PROPAGATE = (8, 16)
 # within PHASE_GLOBAL_TIE (a repeating tile matches its aliases equally well).
 PHASE_GLOBAL_GRID = ()
 PHASE_GLOBAL_TIE = 0.0
+# ... only where uGlobal is set (the pixel-art systems: uDiscrete's sources).
+# Experiment 2026-10-25: those scroll whole screens of repeating tiles by
+# whole pixels (Game Gear's striped columns and tile fields, 89% of frames
+# with invented content), where a patch's own search locks onto an alias.
+PHASE_GLOBAL_DISCRETE_ONLY = False
 
 
 # The per-phase densification weighs each patch by 1/max(1, e)^2 of its
@@ -408,6 +416,7 @@ def _generate_phase_shader_text():
     # cross-fade, Link's Awakening within 0.2%. Zero disables it (QA).
     "uniform float uChoiceSpread;\n" +
     ("uniform float uDiscrete;\n" if DISCRETE_UNIFORM else "") +
+    ("uniform sampler2D uLate;\n" if LATE_SHARE > 0 else "") +
     ("uniform sampler2D uFlowAC,uFlowCA;\n" if OCCLUSION_SIDE_T > 0 else "") +
     "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
     "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
@@ -537,6 +546,8 @@ def _generate_phase_shader_text():
         f"smoothstep({float(EDGE_HOLD_T)*0.5}/255.0,{float(EDGE_HOLD_T)}/255.0,md(abs(aw-cw)));\n"
         "    w=mix(w,uT<=0.5?a0:c0,k);}\n") +
        "  }}\n") +
+    ("" if LATE_SHARE <= 0 else
+     f" w=mix(w,(1.0-uT)*a0+uT*c0,step({LATE_SHARE},texture(uLate,vec2(0.5)).r));\n") +
     " vec4 ct=texture(uCut,vec2(0.5));\n"
     + ("" if FLASH_BLEND_LO <= 0 else
        f" w=mix(w,(1.0-uT)*a0+uT*c0,uCutEnabled*smoothstep({FLASH_BLEND_LO},{CUT_THRESHOLD},ct.r));\n") +
@@ -587,6 +598,32 @@ FLASH_BLEND_LO = 0.0
 # (FLASH_HOLD off) is a grey found in neither frame (1.06 -> 1.17%).
 FLASH_MEAN = 0.1
 FLASH_HOLD = True
+# Since 3.2.111: a frame-level verdict after the per-phase motion -- on a
+# LATE_GRID of samples, the share where neither the phase field's warp nor
+# zero motion matches (largest channel difference over 32 grey levels) --
+# and at LATE_SHARE or more the frame is the temporal blend (a one-frame
+# dissolve) instead of a warp of nothing: missed hard cuts (Sonic
+# Adventure's sky to Big, 67%), title dissolves (NSMBU Deluxe, 74%) and
+# full-screen bursts. Over 500 replay triplets the share's median is 0.3%,
+# its 95th percentile 10.4%; ~1% of frames reach 50%. The cut, fade and
+# flash verdicts still override it. 0 disables.
+LATE_SHARE = 0.5
+LATE_GRID = (32, 18)
+
+
+def late_verdict_shader():
+    gw, gh = LATE_GRID
+    return (HEADER +
+    "uniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
+    "void main(){float n=0.0;\n"
+    f" for(int y=0;y<{gh};++y)for(int x=0;x<{gw};++x){{vec2 u=(vec2(float(x),float(y))+0.5)/vec2({float(gw)},{float(gh)});\n"
+    "  vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n"
+    "  float eM=md(abs(texture(uFrameA,u-uT*v).rgb-texture(uFrameC,u+(1.0-uT)*v).rgb));\n"
+    "  float e0=md(abs(texture(uFrameA,u).rgb-texture(uFrameC,u).rgb));\n"
+    "  n+=step(32.0/255.0,min(eM,e0));}\n"
+    f" o0=vec4(n/{float(gw * gh)},0.0,0.0,1.0);}}\n")
 
 
 # Offline experiment: the cut counts use colour (largest channel change of a
@@ -822,7 +859,7 @@ def shaders():
     return {'VERTEX': VERTEX, 'VERTEX_QUAD': VERTEX_QUAD, 'GRAY': GRAY, 'DOWN': DOWN, 'GRAD': GRAD,
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': bounds_shader(),
-            'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(),
+            'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(), 'LATE_VERDICT': late_verdict_shader(),
             'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader()}
 
 
