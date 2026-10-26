@@ -1,4 +1,4 @@
-# Thor test plan: 3.2.112 and 3.2.113
+# Thor test plan: 3.2.112 to 3.2.114
 
 Written 2026-10-26 while the Thor was away from the Mac. 3.2.112 (186) was
 built and host-verified only. 3.2.111 was never installed, so this plan covers
@@ -129,6 +129,16 @@ For each case below, run 60 s with FG Off and grep the log:
    (frames identical to the next real one) against 3.2.112 on the device
    replay bench (2-D sets). Visually check that smooth scrolls stay smooth on
    SNES/NES, where no frame should be gated.
+
+## 7c. 3.2.114 addition
+
+1. Device replay bench, paired against 3.2.113, on the 3-D sets: invented area
+   should fall about 20-30% (PICK_3D) with error within a few thousandths.
+   Look at Double Dash kart outlines and Wind Waker HD's title logo.
+2. GPU time per pair (dense GPU timer) unchanged within noise (one mix per pixel).
+3. Device-bench candidate: `propagate_ca` 8/16 in the per-phase search
+   (offline -4 to -14% invented area, Star Fox 64 worse); measure its GPU
+   cost on Wind Waker HD before considering it.
 
 ## 8. After the run
 

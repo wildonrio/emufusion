@@ -212,6 +212,13 @@ class DisSelectionTest(unittest.TestCase):
                       shaders["GENERATE_PHASE"])
         # 3.2.112: from a tenth of the grid unexplained, the nearer real frame
         # (content the game drew) -- before the blend, which wins from half.
+        # 3.2.114: 3-D takes the nearer sample where the two disagree grossly
+        # (an occlusion edge), after the local cut; sub-pixel motion keeps its blend.
+        pick3d = (" if(uDiscrete<0.5&&length(v*uHistorySize)>=1.0) w=mix(w,uT>=0.5?pc:pa,"
+                  "smoothstep(48.0/255.0,96.0/255.0,md(abs(pa-pc))));")
+        self.assertIn(pick3d, shaders["GENERATE_PHASE"])
+        self.assertLess(shaders["GENERATE_PHASE"].index("nk*(1.0-smoothstep(2.0/255.0,8.0/255.0,ng))"),
+                        shaders["GENERATE_PHASE"].index(pick3d))
         near = " w=mix(w,uT>=0.5?c0:a0,step(uDiscrete>0.5?0.05:0.1,texture(uLate,vec2(0.5)).r));"
         self.assertIn(near, shaders["GENERATE_PHASE"])
         self.assertLess(shaders["GENERATE_PHASE"].index(near),

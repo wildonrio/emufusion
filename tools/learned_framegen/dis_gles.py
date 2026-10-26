@@ -516,6 +516,13 @@ def _generate_phase_shader_text():
        ("" if PIXEL_PICK_ALL else " if(uDiscrete>0.5)" if DISCRETE_UNIFORM else
         f" if(uHistorySize.x<={PIXEL_SNAP[0]:.1f}&&uHistorySize.y<={PIXEL_SNAP[1]:.1f})") +
        f" w=mix(w,uT>=0.5?pc:pa,smoothstep({0.5*float(PIXEL_PICK_T)}/255.0,{float(PIXEL_PICK_T)}/255.0,md(abs(pa-pc))));\n")
+    + ("" if not PICK_3D or PIXEL_PICK_T <= 0 or not DISCRETE_UNIFORM else
+       # 3-D: where the two samples a pixel would mix disagree grossly -- an
+       # occlusion edge, one side seeing the object and the other what it
+       # uncovers -- their mix is a translucent second copy: take the nearer
+       # frame's sample. Sub-pixel motion keeps its blend.
+       f" if(uDiscrete<0.5&&length(v*uHistorySize)>={float(SUBPIXEL_ZERO_PX)})"
+       f" w=mix(w,uT>=0.5?pc:pa,smoothstep({float(PICK_3D[0])}/255.0,{float(PICK_3D[1])}/255.0,md(abs(pa-pc))));\n")
     + ("" if not EDGE_OUTSIDE_SIDE else
        # Content entering or leaving the picture: a warp sample outside the
        # image only has the clamped edge (a smear); take the other frame's.
@@ -722,6 +729,20 @@ DISCRETE_UNIFORM = True
 # -> 0.387 of a cross-fade, Mega Drive 0.444 -> 0.392, SNES 0.327 -> 0.308.
 # On 3-D content (any size) it is much worse: Link's Awakening 0.725 -> 1.171.
 PIXEL_PICK_T = 24.0
+# Since 3.2.114: the same pick for 3-D sources where the two samples differ
+# by PICK_3D grey levels (smooth from the first to the second; sub-pixel
+# motion keeps its blend). 3.2.104's hard 24-level pick doubled the error on
+# smooth 3-D content (Link's Awakening 0.725 -> 1.171 of a cross-fade); a
+# gross disagreement is an occlusion edge, where the mix is a ghost. Offline
+# (Python port, replay dumps of the 3.2.111 generator, with the frame-level
+# late verdicts applied): invented area full-size 0.090 -> 0.072% of the
+# frame (Double Dash 0.167 -> 0.118%, Link's Awakening 0.067 -> 0.042%),
+# 3-D at 320x180 0.130 -> 0.089%, eval 3-D (Star Fox 64, Wind Waker HD)
+# 0.150 -> 0.110%, train 3-D 0.203 -> 0.191% (Mario Kart Wii 0.037 ->
+# 0.008%, N64 0.085 -> 0.056%, NSMBU Deluxe 0.216 -> 0.173%); error within
+# 0.006 of a cross-fade everywhere, the 2-px reference mismatch lower in all
+# four sets. (32, 64) removed more but raised Wind Waker HD's error 7%.
+PICK_3D = (48.0, 96.0)
 # ... for every history size, not just the small ones.
 PIXEL_PICK_ALL = False
 # Where the warp's five-tap mismatch exceeds OCCLUSION_SIDE_T grey levels, take
