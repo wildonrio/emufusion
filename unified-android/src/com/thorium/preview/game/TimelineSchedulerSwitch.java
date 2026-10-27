@@ -163,6 +163,22 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         keepAlive = alive;
+        boolean arrivalLock = false;
+        try {
+            if (context != null) arrivalLock = Settings.Global.getInt(
+                    context.getContentResolver(), ARRIVAL_PHASE_LOCK_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        arrivalPhaseLock = arrivalLock;
+        boolean modeTrial = true;
+        try {
+            if (context != null) modeTrial = Settings.Global.getInt(
+                    context.getContentResolver(), PACING_TRIAL_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        pacingTrial = modeTrial;
         boolean lattice = false;
         try {
             if (context != null) lattice = Settings.Global.getInt(
@@ -321,6 +337,32 @@ public final class TimelineSchedulerSwitch {
      * emufusion_framegen_keep_alive=0 turns it off for comparisons.
      */
     static final String KEEP_ALIVE_GLOBAL = "emufusion_framegen_keep_alive";
+
+    /**
+     * Arrival phase lock (QA only, off by default): arrival-paced outputs that
+     * span several scans (30 fps doubled to 60 on a 120 Hz panel) stay a whole
+     * number of outputs apart, as the content-time lattice's do. Thor,
+     * 2026-10-27: it did not remove Wind Waker HD's 1- and 3-scan intervals
+     * (76.0 -> 76.7% on two scans; they are compositor landings, not take-up
+     * phase), left Ocarina unchanged and cost latency, so 3.2.88's
+     * first-due-scan behaviour stays. QA: emufusion_framegen_arrival_phase_lock=1.
+     */
+    static final String ARRIVAL_PHASE_LOCK_GLOBAL = "emufusion_framegen_arrival_phase_lock";
+    private static volatile boolean arrivalPhaseLock;
+
+    static boolean arrivalPhaseLock() { return arrivalPhaseLock; }
+
+    /**
+     * Pacing mode trial (default, 3.2.118): a source whose images arrive
+     * unevenly is tried on the content-time timeline and kept there when that
+     * holds fewer frames (PacingModeTrial; Super Mario 3D World 122-128 ->
+     * 21 frames per 1000 held longer than usual, Thor 2026-10-27). QA:
+     * emufusion_framegen_pacing_trial=0 keeps arrival pacing.
+     */
+    static final String PACING_TRIAL_GLOBAL = "emufusion_framegen_pacing_trial";
+    private static volatile boolean pacingTrial = true;
+
+    static boolean pacingTrial() { return pacingTrial; }
     private static volatile boolean keepAlive = true;
 
     static boolean keepAlive() { return keepAlive; }

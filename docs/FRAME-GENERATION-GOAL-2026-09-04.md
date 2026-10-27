@@ -40,7 +40,21 @@ reviewed before this revision; its work was not discarded.
    - SM3DW: 128 holds per 1000 in gameplay, 23% of callbacks catch up, real images held while successors are late.
    - Double Dash: 194 catch-ups from queued images.
    - Measure SM3DW, Wind Waker HD, Dread and Double Dash.
+   - The content-time timeline (`arrival_pacing=0`) on the Thor, 2026-10-27, with SM3DW alternated (two runs each, cooled between):
+
+     | | Holds per 1000 | Real image |
+     | --- | --- | --- |
+     | Arrival pacing | 67 and 123 | 52 / 40 ms |
+     | Content-time | 38 and 62 | 43 / 38 ms |
+
+     SM3DW's run-to-run spread is large (24-128 per 1000 on arrival pacing across today's runs).
+   - The content-time timeline hurt Wind Waker HD (50 -> 79 ms real), Ocarina (37 -> 75 ms) and Dread (61 -> 138 holds per 1000). It waits a whole source frame for the successor, so it suits only single-scan outputs.
+   - Implemented: `PacingModeTrial`. It starts on arrival pacing, triggers only on single-scan outputs after 2 windows above 20 holds per 1000, keeps content-time if it holds at most 0.75x, re-checks with backoff, and logs `Pacing mode trial ...`. QA `emufusion_framegen_pacing_trial=0`.
 4. **S4** Dread (30 fps): 3-6 scan intervals, 61 per 1000. Ocarina (20 fps): 6-scan intervals, 24 per 1000. Find whether the source or the scheduler causes them.
+   - Dread's long intervals: 50 planned two-scan outputs landed a scan late (GPU contention with Eden), and 57 were planned holds (successor late).
+   - Wind Waker HD's 1- and 3-scan alternation is mostly planned at arrival time (onIntended 93.5% while cadence is 76%).
+   - Tried: an output-lattice phase lock for arrival pacing. No gain (Wind Waker HD 76.0 -> 76.7%, Ocarina unchanged), more latency, so it is QA opt-in only (`emufusion_framegen_arrival_phase_lock=1`).
+   - Open: 30 fps sources need a fix in where their arrivals fall relative to the 2-scan output, or in GPU contention.
 5. **L1** Latency audit against the structural minimum for every case (`lat/split.py`), then fix the largest gaps. Switch and Wii U real images are ~37 ms, about 12 ms above it.
 6. **A1** `propagate_ca` replay bench, paired against 3.2.117 on all four sets. GPU cost needs a live session.
    - Done, not adopted.

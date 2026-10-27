@@ -47,6 +47,7 @@ import com.thorium.emufusion.video.PanelClockMemory;
 import com.thorium.emufusion.video.PhysicalPresentationClock;
 import com.thorium.emufusion.video.PresentationClockDiagnostics;
 import com.thorium.emufusion.video.PresentRhythm;
+import com.thorium.emufusion.video.PacingModeTrial;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -7276,6 +7277,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // than the usual interval.
     private final PresentRhythm presentRhythm = new PresentRhythm();
     private long presentRhythmEpoch = -1L;
+    // Arrival pacing or the content-time timeline, chosen from the same
+    // present times (PacingModeTrial).
+    private final PacingModeTrial pacingTrial = new PacingModeTrial();
+    private boolean pacingTrialContentTime;
 
     private void logPresentRhythm() {
         Log.i(TAG, "Present rhythm generator=" + generatorId +
@@ -7316,11 +7321,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             if (result.actualNs > 0L) {
                 if (result.presentationEpoch != presentRhythmEpoch) {
                     presentRhythm.restart();
+                    pacingTrial.restart();
                     presentRhythmEpoch = result.presentationEpoch;
                 }
+                boolean keepAlive = keepAliveFrame(result.frameId);
                 if (presentRhythm.record(result.desiredNs, result.actualNs,
-                        frameRate.panelPeriodNs(), keepAliveFrame(result.frameId)))
+                        frameRate.panelPeriodNs(), keepAlive))
                     logPresentRhythm();
+                pacingTrial.record(result.actualNs, frameRate.panelPeriodNs(), keepAlive);
             }
             if (result.presentationEpoch != schedulerPresentationEpoch()) {
                 denseGpuAdaptation.invalidateRecoveryEvidence();
@@ -9323,9 +9331,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         int scans = presentationScansPerOutput();
         long panelPeriodNs = frameRate.panelPeriodNs();
         long previousNs = builtInLastCommittedTargetNs;
-        // Arrival pacing shows each image at the first scan it is due; it has
-        // no output lattice to hold it to.
-        if (timeline.arrivalPacing()) return deadline;
+        // Arrival pacing (3.2.88) shows each image at the first scan it is
+        // due; it has no output lattice to hold it to. QA arrival_phase_lock=1
+        // holds multi-scan outputs to one anyway (measured on the Thor
+        // 2026-10-27: no gain for Wind Waker HD, more latency).
+        if (timeline.arrivalPacing() && !TimelineSchedulerSwitch.arrivalPhaseLock()) return deadline;
         if (scans <= 1 || panelPeriodNs <= 0L || previousNs <= 0L ||
                 externalTransport != null || !deadline.valid())
             return deadline;
@@ -9354,7 +9364,20 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long sourcePeriodNs = sourceHz > 0.0 ? Math.round(1e9 / sourceHz) : 0L;
         timeline.configure(panelPeriodNs > 0L ? panelPeriodNs * scans : 0L, sourcePeriodNs);
         // LSFG-Android's arrival pacing (3.2.88); QA arrival_pacing=0 keeps the lattice.
-        timeline.setArrivalPacing(TimelineSchedulerSwitch.arrivalPacing(), panelPeriodNs);
+        // A source whose images arrive unevenly is tried on the content-time
+        // timeline and kept there if that holds fewer frames (PacingModeTrial;
+        // QA pacing_trial=0 keeps arrival pacing).
+        boolean contentTime = TimelineSchedulerSwitch.pacingTrial() && pacingTrial.contentTime();
+        if (contentTime != pacingTrialContentTime) {
+            pacingTrialContentTime = contentTime;
+            Log.i(TAG, "Pacing mode trial generator=" + generatorId +
+                    " contentTime=" + contentTime +
+                    " arrivalPer1000=" + Math.round(pacingTrial.arrivalRate()) +
+                    " contentPer1000=" + Math.round(pacingTrial.contentRate()) +
+                    " trials=" + pacingTrial.trials() + " kept=" + pacingTrial.kept() +
+                    " rechecks=" + pacingTrial.rechecks());
+        }
+        timeline.setArrivalPacing(TimelineSchedulerSwitch.arrivalPacing() && !contentTime, panelPeriodNs);
         // Pairs taken up on a lattice of whole callbacks (3.2.112); QA takeup_lattice=0.
         timeline.setTakeUpLattice(TimelineSchedulerSwitch.takeUpLattice());
         long rightArrivedNs = arrivalNs(activeRightSubmission);

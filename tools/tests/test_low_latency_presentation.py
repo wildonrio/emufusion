@@ -89,8 +89,13 @@ class LowLatencyPresentationTest(unittest.TestCase):
         self.assertIn("public static final double ARRIVAL_SPAN_ALPHA = 0.2;", scheduler)
         self.assertIn("public static final double ARRIVAL_OUTLIER_RATIO = 3.0;", scheduler)
         generator = GENERATOR.read_text()
-        self.assertIn("timeline.setArrivalPacing(TimelineSchedulerSwitch.arrivalPacing(), panelPeriodNs);", generator)
-        self.assertIn("if (timeline.arrivalPacing()) return deadline;", generator)
+        # 3.2.118: a pacing mode trial may move an uneven source to the
+        # content-time timeline, and multi-scan arrival outputs keep the
+        # output lattice unless QA turns that off.
+        self.assertIn("timeline.setArrivalPacing(TimelineSchedulerSwitch.arrivalPacing() && !contentTime, "
+                      "panelPeriodNs);", generator)
+        self.assertIn("if (timeline.arrivalPacing() && !TimelineSchedulerSwitch.arrivalPhaseLock()) "
+                      "return deadline;", generator)
         switch = SWITCH.read_text()
         self.assertIn('ARRIVAL_PACING_GLOBAL = "emufusion_framegen_arrival_pacing";', switch)
         self.assertIn("private static volatile boolean arrivalPacing = true;", switch)
