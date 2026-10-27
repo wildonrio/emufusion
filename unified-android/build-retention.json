@@ -2,9 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "0a0e0423421ccb9fc702142fe86ef08d7ce9d53dcd03fe17fbc763e6013367da": "Rollback 3.2.117 (191), released and Thor-tested 2026-10-27.",
-    "8397aa9a017f76f3befa7182fcf291b6b9824a6206adadbc39b3c1680126895e": "Release 3.2.118 (192), GitHub v3.2.118 (asset hash checked) 2026-10-27, Thor-tested.",
-    "9b30563bbd0644a227097ef36a39fc1502657d26a60c42bd275de21d1f711870": "Candidate 3.2.119 (193): source phase lock for paced libretro cores, wrap-safe (SourcePhaseLock); Thor check 2026-10-27."
+    "8397aa9a017f76f3befa7182fcf291b6b9824a6206adadbc39b3c1680126895e": "Rollback 3.2.118 (192), released and Thor-tested 2026-10-27.",
+    "9b30563bbd0644a227097ef36a39fc1502657d26a60c42bd275de21d1f711870": "Release 3.2.119 (193), GitHub v3.2.119 (asset hash checked) 2026-10-27, Thor-tested."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -1038,6 +1037,14 @@
     "unified-android/build/emufusion-3.2.119-phase2-phase3-qualification-0635280c0d57f8f0926f76d4f30c5bcb464c3dfbb34e2ec35530cf6da3e7c777.apk": {
       "sha256": "0635280c0d57f8f0926f76d4f30c5bcb464c3dfbb34e2ec35530cf6da3e7c777",
       "reason": "First 3.2.119 candidate: its SourcePhaseLock smoothed the wait error across the scan wrap and counted its own steps as jitter (a third of simulated start phases abandoned); Thor-checked 2026-10-27, superseded. Never released."
+    },
+    "unified-android/build/emufusion-3.2.117-phase2-phase3-qualification-0a0e0423421ccb9fc702142fe86ef08d7ce9d53dcd03fe17fbc763e6013367da.apk": {
+      "sha256": "0a0e0423421ccb9fc702142fe86ef08d7ce9d53dcd03fe17fbc763e6013367da",
+      "reason": "Released 3.2.117 (191), on GitHub Releases as v3.2.117; 3.2.119 is current and 3.2.118 the Thor-tested rollback (2026-10-27), so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.117-phase2-phase3-qualification.apk": {
+      "sha256": "0a0e0423421ccb9fc702142fe86ef08d7ce9d53dcd03fe17fbc763e6013367da",
+      "reason": "Released 3.2.117 (191), on GitHub Releases as v3.2.117; 3.2.119 is current and 3.2.118 the Thor-tested rollback (2026-10-27), so no local copy is needed (owner request 2026-10-10: disk space)."
     }
   }
 }
