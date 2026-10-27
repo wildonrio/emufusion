@@ -309,7 +309,7 @@ public class RuntimeFailureTest {
         self.assertNotRegex(failure, r"(?<![=!])=\s*null\s*;")
         self.assertIn("handler.post(() -> uploadSoftwareFrameSafely(", renderer)
         upload = method(renderer, "    private void uploadSoftwareFrame(")
-        self.assertIn("if (closed.get() || externalPresentationFailed) return;", upload)
+        self.assertIn("if (closed.get() || externalPresentationFailed) {\n            releaseSoftwareSnapshot(colors);\n            return;\n        }", upload)
         self.assertIn("runtimeFailure.close();", method(renderer, "    private void closeAfterStartupFailure("))
         for path, sig in ((GAME / "GameSurfaceView.java", "    private void bindRuntimeErrorListener("),
                           (GAME / "GameSurface.java", "    private void bindRuntimeErrorListener("),
@@ -379,6 +379,9 @@ public class RuntimeFailureTest {
         boolean classifiedFrameReady,failExport;
         SourceObserver nativeSourceImageObserver=new SourceObserver();
         int nativeClassificationFinishes;
+        long workHintBusyNs;
+        void releaseSoftwareSnapshot(int[] snapshot){}
+        static class FrameWorkHint {static long threadCpuNs(){return 0L;} static long cpuSince(long s){return 0L;}}
         void clearNativeClassifiedObservation(){}
         void classifyLatestNativeObservation(){}
         void finishNativeClassifiedObservation(boolean unique){nativeClassificationFinishes++;}

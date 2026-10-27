@@ -9,7 +9,30 @@ public final class VsyncCadenceTest {
         retainsMissingCallbackGuestSteps();
         toleratesBriefOverrunsButCoalescesLongCatchUp();
         rejectsUnsafeRatesAndResetsAcrossSleep();
+        followsFractionalPanels();
         System.out.println("VsyncCadenceTest passed");
+    }
+
+    /** 59.94 and 119.88 Hz panels lock a 60.0 source to their own scans. */
+    private static void followsFractionalPanels() {
+        long period59 = 16_683_350L;
+        VsyncCadence one = warm(60.0, 59.94, period59);
+        for (int i = 9; i < 600; i++) {
+            long actual = 1_000_000_000L + i * period59;
+            one.onVsync(actual);
+            TestSupport.equal(actual, one.takeDueTimeNs(), "one source frame per 59.94 Hz scan");
+        }
+        long period119 = 8_341_675L;
+        VsyncCadence two = warm(60.0, 119.88, period119);
+        for (int i = 1; i <= 200; i++) {
+            two.onVsync(1_000_000_000L + (8 + i) * period119);
+            TestSupport.truth(two.hasPending() == (i % 2 == 0), "every second 119.88 Hz scan");
+            if (two.hasPending()) two.takeDueTimeNs();
+        }
+        VsyncCadence pal = new VsyncCadence();
+        pal.configure(50.0, 50.0, 59.94);
+        for (int i = 0; i <= 20; i++) pal.onVsync(1_000_000_000L + i * period59);
+        TestSupport.truth(!pal.ready(), "50 Hz PAL is not pulled to a 60 Hz panel");
     }
 
     private static VsyncCadence warm(double source, double panel, long period) {

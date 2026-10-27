@@ -112,6 +112,9 @@ public class WiringFixture {
         void drain(){while(!queue.isEmpty())queue.removeFirst().run();}
     }
     static class NativeSourceImageProvider {boolean valid=true;}
+    static class FrameWorkHint {static long threadCpuNs(){return 0L;} static long cpuSince(long s){return 0L;}}
+    long workHintBusyNs;
+    void releaseSoftwareSnapshot(int[] snapshot){}
     static class NativeSourceImageObserver {
         static int allocations;
         long latest,classified;final long[] candidates=new long[6];

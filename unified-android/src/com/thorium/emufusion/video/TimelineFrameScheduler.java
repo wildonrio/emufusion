@@ -820,7 +820,9 @@ public final class TimelineFrameScheduler {
             shownSequence = pendingKind == GENERATED ? 0L : pendingSequence;
             shownTargetNs = pendingTargetNs;
             lastSwapDisplayNs = decideDisplayNs;
-            if (primed && !pendingPrime && !pendingKeepAlive) {
+            // Arrival-paced decisions have no lattice ideal (zero): counting
+            // them reported the device's uptime as the timing error.
+            if (primed && !pendingPrime && !pendingKeepAlive && pendingIdealNs > 0L) {
                 long error = Math.abs(pendingTargetNs - pendingIdealNs);
                 ++timingSamples;
                 timingErrorSquares += (double) error * (double) error;

@@ -606,6 +606,7 @@ public final class GameSurfaceView extends SurfaceView
             return;
         }
         TimelineSchedulerSwitch.refresh(getContext(), launchMode);
+        FrameWorkHint.configure(getContext());
         try {
             frameGenerator = FrameGenerationRendererFactory.create(selection, output,
                     width, height, width, height, refreshRate(), "primary", displayId(),

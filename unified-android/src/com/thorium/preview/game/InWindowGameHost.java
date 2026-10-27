@@ -1140,7 +1140,7 @@ public final class InWindowGameHost
      * (120 Hz on the Thor, as it always used). Off, it plans for 60 x 2.
      */
     private float plannedPanelHz(double declaredHz) {
-        Display display = activity.getDisplay();
+        Display display = gameDisplay();
         if (display == null) return plannedPanelHz > 0.0f ? plannedPanelHz : 120.0f;
         double source = declaredHz > 1.0 && declaredHz < 1000.0
                 ? DisplaySyncPolicy.synchronizedSourceHz(declaredHz) : 0.0;
@@ -1251,7 +1251,7 @@ public final class InWindowGameHost
      * creates no presentation intermediary.
      */
     private void requestNativePanelMode(float refreshHz) {
-        Display display = activity.getDisplay();
+        Display display = gameDisplay();
         if (display == null) return;
         int selectedModeId = 0;
         // Phones often list the same refresh rate at several resolutions
@@ -1810,7 +1810,7 @@ public final class InWindowGameHost
      */
     private String panelHeldNotice(double real) {
         if (!(plannedPanelHz > 0f) || !(real > 0.0)) return "";
-        Display display = activity.getDisplay();
+        Display display = gameDisplay();
         Display.Mode mode = display == null ? null : display.getMode();
         if (mode == null) return "";
         double compositorHz = gameSurface instanceof GameSurfaceView ?
@@ -2662,6 +2662,7 @@ public final class InWindowGameHost
 
     private void detachViews() {
         mainHandler.removeCallbacks(revealLaunchSpinner);
+        preferMinimalPostProcessing(false);
         if (stickInput != null) {
             stickInput.release();
             stickInput = null;
@@ -3180,7 +3181,33 @@ public final class InWindowGameHost
         }, 3000L);
     }
 
+    /**
+     * The display the game window is on. Context#getDisplay is API 30; on
+     * Android 10 and older the window manager's display is the same one.
+     */
+    @SuppressWarnings("deprecation")
+    private Display gameDisplay() {
+        if (android.os.Build.VERSION.SDK_INT >= 30) return activity.getDisplay();
+        return activity.getWindowManager().getDefaultDisplay();
+    }
+
+    /**
+     * Asks a TV or external monitor for its low-latency game mode (HDMI ALLM
+     * or the game content type) while a game is on screen: their default
+     * picture processing adds tens of milliseconds. A built-in panel ignores
+     * it. The library turns it back off.
+     */
+    private void preferMinimalPostProcessing(boolean gameplay) {
+        if (android.os.Build.VERSION.SDK_INT < 30) return;
+        try {
+            activity.getWindow().setPreferMinimalPostProcessing(gameplay);
+        } catch (RuntimeException ignored) {
+            // A display hint; the game runs the same without it.
+        }
+    }
+
     private void enterImmersiveMode() {
+        preferMinimalPostProcessing(true);
         View decor = activity.getWindow().getDecorView();
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             activity.getWindow().setDecorFitsSystemWindows(false);

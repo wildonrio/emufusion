@@ -18,6 +18,7 @@ public final class PanelRefreshPlannerTest {
         fourTimesWhenAllowed();
         bestModeForAMeasuredVariableSource();
         replannerSwitchesOnlyForASteadyClearGain();
+        replannerMovesASteady60ToTrueDoubling();
         System.out.println("PanelRefreshPlannerTest passed");
     }
 
@@ -115,6 +116,23 @@ public final class PanelRefreshPlannerTest {
         near(PanelRefreshPlanner.bestForVariable(10, PHONE_144, 3), 120, "equal outputs keep the higher mode");
         check(PanelRefreshPlanner.variableScans(144, 30, 4) == 2, "30 fps on 144 at 4x is the 72 Hz lattice");
         check(PanelRefreshPlanner.variableScans(120, 30, 4) == 1, "and 120 on a 120 Hz panel");
+        // Doubling (the product's 2x): the mode that doubles beats more output.
+        near(PanelRefreshPlanner.bestForVariable(60, PHONE_144, 2), 120, "60 fps: 120 (2x), not 144 (2.4x)");
+        near(PanelRefreshPlanner.bestForVariable(45, PHONE_144, 2), 90, "45 fps: 90 (2x)");
+        near(PanelRefreshPlanner.bestForVariable(30, PHONE_144, 2), 120, "30 fps: 60 Hz output, the higher mode");
+        near(PanelRefreshPlanner.bestForVariable(60, THOR, 2), 120.00001, "the Thor stays 120");
+        check(PanelRefreshPlanner.doubles(120, 60, 2) && !PanelRefreshPlanner.doubles(144, 60, 2),
+                "120 doubles 60; 144 is the 2.4x fallback");
+    }
+
+    private static void replannerMovesASteady60ToTrueDoubling() {
+        PanelModeReplanner value = new PanelModeReplanner(PHONE_144, 2, 144);
+        double switched = 0;
+        long t = 0;
+        for (int i = 0; i < 20 && switched == 0; ++i, t += 1000) switched = value.observe(59.9, t);
+        near(switched, 120, "a steady 60 fps game moves from 144 to 120 although output falls");
+        PanelModeReplanner settled = new PanelModeReplanner(PHONE_144, 2, 120);
+        for (int i = 0; i < 60; ++i) check(settled.observe(60, i * 1000L) == 0, "120 already doubles 60");
     }
 
     private static void replannerSwitchesOnlyForASteadyClearGain() {

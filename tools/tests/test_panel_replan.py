@@ -26,7 +26,8 @@ class PanelReplanTest(unittest.TestCase):
 
     def test_replanner_is_conservative(self):
         for pin in ("STEADY_MS = 8_000L", "MIN_OUTPUT_GAIN = 1.15", "COOLDOWN_MS = 30_000L",
-                    "MAX_SWITCHES = 2", "if (!(then >= now * MIN_OUTPUT_GAIN)) return 0.0;"):
+                    "MAX_SWITCHES = 2",
+                    "if (!(then >= now * MIN_OUTPUT_GAIN) && !fitsDoubling) return 0.0;"):
             self.assertIn(pin, REPLANNER)
 
 

@@ -11,7 +11,10 @@ class DenseFlowDumpThrottleTest(unittest.TestCase):
             "private void dumpDensePlane(", 1)[0]
         # Disabled/exhausted capture must not add readbacks. Both successful
         # and rejected attempts must advance the timestamp before readback.
-        ordered = ["!DENSE_FLOW_DUMP_MARKER.exists()",
+        # The marker itself is looked up at most once a second.
+        self.assertIn("denseFlowDumpMarker = DENSE_FLOW_DUMP_MARKER.exists();", method)
+        self.assertIn("now - denseFlowDumpMarkerCheckedNs >= 1_000_000_000L", method)
+        ordered = ["if (!denseFlowDumpMarker) return;",
                    "!contiguousCapture && now - denseFlowDumpLastNs < 700_000_000L",
                    "denseFlowDumpCount >= DENSE_FLOW_DUMP_LIMIT",
                    "denseFlowDumpLastNs = now;",

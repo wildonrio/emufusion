@@ -148,24 +148,43 @@ public final class PanelRefreshPlanner {
      * The fixed mode giving a measured variable source the highest generated
      * output (ties: the higher mode, the launch mode, which leaves the
      * timeline room to keep a higher lattice), or 0 when no mode generates
-     * for it. On a
-     * 60/90/120/144 phone a 30 fps game with Allow 4x takes 120 (4x) rather
-     * than 144 (72 Hz at 2.4x); a 50 fps game takes 144.
+     * for it. A mode whose output is within the multiplier (up to 1.12 x it,
+     * {@link #doubles}) wins over one that only reaches the 1.3 x fallback,
+     * whatever their outputs: on a 60/90/120/144 phone a steady 60 fps game
+     * takes 120 (exactly 2x, every real frame on the lattice) rather than 144
+     * (2.4x: real frames land unevenly and more of every second is invented;
+     * owner, 2026-10-26: match the game to the nearest rate, then double). A
+     * 45 fps game takes 90, a 30 fps game 120; on the Thor (60/120) the best
+     * mode stays 120.
      */
     public static double bestForVariable(double sourceHz, double[] panelRates, int maxMultiplier) {
         double[] rates = validRates(panelRates);
         int multiplier = Math.max(1, Math.min(MAX_MULTIPLIER, maxMultiplier));
         double bestPanel = 0.0, bestOutput = 0.0;
+        boolean bestDoubles = false;
         for (double panel : rates) {
             int scans = variableScans(panel, sourceHz, multiplier);
             if (scans <= 0) continue;
             double output = panel / scans;
-            if (output >= bestOutput * (1.0 - RELATIVE_TOLERANCE)) {
+            boolean fits = doubles(panel, sourceHz, multiplier);
+            if (bestDoubles && !fits) continue;
+            if ((fits && !bestDoubles) || output >= bestOutput * (1.0 - RELATIVE_TOLERANCE)) {
                 bestOutput = output;
                 bestPanel = panel;
+                bestDoubles = fits;
             }
         }
         return bestPanel;
+    }
+
+    /**
+     * Whether a variable source's output on this mode stays within the
+     * multiplier (variableScans' preferred band) rather than its 1.3 x
+     * fallback.
+     */
+    public static boolean doubles(double panelHz, double sourceHz, int multiplier) {
+        int scans = variableScans(panelHz, sourceHz, multiplier);
+        return scans > 0 && panelHz / scans <= multiplier * sourceHz * 1.12;
     }
 
     /** Lowest rate whose scans divide evenly into source * multiplier outputs. */

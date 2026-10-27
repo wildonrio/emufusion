@@ -3391,7 +3391,9 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
                         refresh.index("ensureDenseResources()"))
         self.assertIn("boolean wasDense = densePyramidEnabled", refresh)
         self.assertIn("teardownDenseEpoch(\"settings-disabled\")", refresh)
-        self.assertIn("denseGpuTimer = DenseGpuTimer.create(TimelineSchedulerSwitch.fenceTiming())", refresh)
+        self.assertIn("denseGpuTimer = DenseGpuTimer.create(\n"
+                      "                            TimelineSchedulerSwitch.fenceTiming() || denseTimerDisjointSeen)",
+                      refresh)
         atlas_epoch = generator.split(
             "private void ensureProofAtlasTimerConfigured()", 1)[1].split(
             "private void ensureDenseResources()", 1)[0]
@@ -4144,7 +4146,8 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         method = generator.split("public boolean submitSoftwareFrame", 1)[1].split(
             "/** Resizes without replacing", 1
         )[0]
-        self.assertIn("final int[] snapshot = new int[width * height]", method)
+        self.assertIn("final int[] snapshot = acquireSoftwareSnapshot(width * height)", method)
+        self.assertIn("return new int[length];", method)
         self.assertIn("(bottom - 1 - row) * frameWidth + left", method)
         self.assertIn("snapshot, row * width, width", method)
         self.assertNotIn("(top + row) * frameWidth + left", method)

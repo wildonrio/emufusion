@@ -70,6 +70,10 @@ public class DenseRejectionTest {
     String reportedBackendLabel="Built-in";
     int invalidations,teardowns,reports,recoveries;
     RuntimeException cause;
+    static class DenseGpuTimer {static final int TIMING_SOURCE_FENCES=2; int timingSource(){return 1;}}
+    DenseGpuTimer denseGpuTimer=new DenseGpuTimer();
+    boolean denseTimerDisjointSeen;
+    static boolean isTimerDisjointRejection(String r){return r.equals("disjoint");}
     boolean isOverBudgetDenseRejection(String r){return r.equals("budget");}
     boolean isTransientDenseRejection(String r){return r.equals("transient");}
     String denseGpuFailure(String r){return r;}
@@ -107,6 +111,12 @@ public class DenseRejectionTest {
         noLattice.retireOnPermanentRejection=false;
         noLattice.rejectDense("gpu-headroom-binding-failure",null);
         assert noLattice.recoveries==0 && noLattice.densePyramidUnavailable && !noLattice.frameRate.enabled;
+        // A disjoint timer moves the session to fence timing: re-armed, no
+        // transient rejection spent, no work-level failure.
+        DenseRejectionTest disjoint=new DenseRejectionTest();
+        disjoint.rejectDense("disjoint",null);
+        assert disjoint.denseTimerDisjointSeen && disjoint.recoveries==0;
+        assert !disjoint.densePyramidUnavailable && disjoint.denseTransientRejections==0;
         DenseRejectionTest exhausted=new DenseRejectionTest();
         exhausted.denseGpuAdaptation.disabled=true;
         exhausted.rejectDense("budget",null);

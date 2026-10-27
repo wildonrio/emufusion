@@ -117,6 +117,7 @@ public class BuiltInDeadlineTest {
          builtinPlanIntervalNs,builtinPlanLatencyNs;
     long notedCompositorIntervalNs;
     void noteCompositorInterval(long intervalNs){notedCompositorIntervalNs=intervalNs;}
+    boolean earliestLatchRefuted(){return false;}
 ''' + body + '''
     public static void main(String[] args) {
         BuiltInDeadlineTest t=new BuiltInDeadlineTest();

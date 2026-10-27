@@ -1395,150 +1395,164 @@ public final class LibretroEngineSession implements EngineSession,
         catch (RuntimeException unavailable) {
             Log.w(TAG, "Display tick source unavailable; retaining absolute core clock", unavailable);
         }
+        FrameWorkHint.configure(context);
         Thread thread = new Thread(() -> {
             AbsoluteFramePacer pacer = new AbsoluteFramePacer(framePeriodNs);
             boolean resetPacer = true;
             int slowFrameEvidenceCount = 0;
-            while (!released.get()) {
-                synchronized (runLock) {
-                    while (!running && !released.get()) {
-                        resetPacer = true;
-                        DirectDisplayVsync clock = directDisplayVsync;
-                        if (clock != null) clock.suspend();
-                        try { runLock.wait(); }
+            // ADPF (FrameWorkHint): each frame's CPU time against three
+            // quarters of the frame period, so the governor keeps the core
+            // fast enough that its images arrive before the callback that
+            // shows them instead of a refresh late after a quiet stretch.
+            FrameWorkHint workHint = FrameWorkHint.forCurrentThread(
+                    "libretro-" + entry.id, framePeriodNs * 3L / 4L);
+            try {
+                while (!released.get()) {
+                    synchronized (runLock) {
+                        while (!running && !released.get()) {
+                            resetPacer = true;
+                            DirectDisplayVsync clock = directDisplayVsync;
+                            if (clock != null) clock.suspend();
+                            try { runLock.wait(); }
+                            catch (InterruptedException interrupted) {
+                                if (released.get()) return;
+                            }
+                        }
+                    }
+                    if (released.get()) return;
+                    updatePhysicalFgClock();
+                    if (pacer.periodNanos() != framePeriodNs) {
+                        // A small oscillator trim changes future spacing, not the
+                        // timestamp already scheduled. Reanchoring to thread wake
+                        // time injected an unrelated PTS jump on every refinement.
+                        if (physicalFgClockApplied && !resetPacer && Math.abs((double) framePeriodNs /
+                                pacer.periodNanos() - 1.0) <= 0.0005) {
+                            pacer = pacer.withPeriodPreservingDeadline(framePeriodNs);
+                        } else {
+                            pacer = new AbsoluteFramePacer(framePeriodNs);
+                            resetPacer = true;
+                        }
+                    }
+                    if (resetPacer) {
+                        pacer.reset(System.nanoTime());
+                        resetPacer = false;
+                    }
+                    DirectDisplayVsync displayClock = directDisplayVsync;
+                    long displayDueNs = 0;
+                    if (displayClock != null) {
+                        Surface currentSurface = surface;
+                        boolean direct = running && currentSurface != null &&
+                                currentSurface.isValid() && netplayRelay == null &&
+                                FrameGenerationRendererRegistry.find(currentSurface) == null;
+                        displayClock.configure(declaredVideoHz,
+                                1_000_000_000.0 / framePeriodNs, direct);
+                        try { displayDueNs = displayClock.awaitDueTimeNs(); }
                         catch (InterruptedException interrupted) {
                             if (released.get()) return;
                         }
                     }
-                }
-                if (released.get()) return;
-                updatePhysicalFgClock();
-                if (pacer.periodNanos() != framePeriodNs) {
-                    // A small oscillator trim changes future spacing, not the
-                    // timestamp already scheduled. Reanchoring to thread wake
-                    // time injected an unrelated PTS jump on every refinement.
-                    if (physicalFgClockApplied && !resetPacer && Math.abs((double) framePeriodNs /
-                            pacer.periodNanos() - 1.0) <= 0.0005) {
-                        pacer = pacer.withPeriodPreservingDeadline(framePeriodNs);
-                    } else {
-                        pacer = new AbsoluteFramePacer(framePeriodNs);
-                        resetPacer = true;
+                    if (!running || released.get()) continue;
+                    LibretroHost.VideoFrame newest = null;
+                    long evidenceDueNs = displayDueNs != 0 ? displayDueNs : pacer.deadlineNanos();
+                    long evidenceStartNs = System.nanoTime();
+                    long workCpuStartNs = FrameWorkHint.threadCpuNs();
+                    long evidenceCoreStartNs = 0L, evidenceCoreEndNs = 0L;
+                    long evidenceVideoEndNs = 0L, evidenceAudioEndNs = 0L;
+                    long evidenceCheckpointStartNs = 0L;
+                    try {
+                        LibretroHost active = host;
+                        if (active != null) {
+                            updateDisplayAudioClock(active, displayClock, displayDueNs != 0);
+                            // The frame about to run is due at the pacer's current
+                            // absolute deadline; that exact lattice instant is its
+                            // producer timestamp (see VideoFrame.producerTimestampNs).
+                            long scheduledNs = displayDueNs != 0
+                                    ? displayDueNs : pacer.deadlineNanos();
+                            long workStartNs = System.nanoTime();
+                            evidenceCoreStartNs = workStartNs;
+                            active.runFrame();
+                            evidenceCoreEndNs = System.nanoTime();
+                            recordFrameWork(workStartNs, evidenceCoreEndNs);
+                            // Canvas submission and bitmap conversion can take several
+                            // milliseconds on handheld displays. Keep them entirely off
+                            // the emulation/audio clock. If rendering falls behind, skip
+                            // an obsolete visual frame instead of slowing the game.
+                            newest = active.latestVideoFrame();
+                            if (newest != null) newest.producerTimestampNs = scheduledNs;
+                            evidenceVideoEndNs = System.nanoTime();
+                            // Drain on every core frame, even while AudioTrack still
+                            // owns a partial prior block. Otherwise the native ring
+                            // can overwrite its oldest samples without Java ever
+                            // observing or reporting the loss.
+                            drainAndPresentAudio(active);
+                            evidenceAudioEndNs = System.nanoTime();
+                            recordQualificationPacing();
+                        }
+                        evidenceCheckpointStartNs = System.nanoTime();
+                        long now = SystemClock.elapsedRealtime();
+                        long elapsed = activeTickMillis == 0L ? 0L : Math.max(0L, now - activeTickMillis);
+                        activeTickMillis = now;
+                        if (checkpointScheduler != null &&
+                                checkpointScheduler.advanceActivePlay(elapsed) > 0)
+                            saveAutomatic();
+                    } catch (Throwable failure) {
+                        running = false;
+                        Listener callback = listener;
+                        if (callback != null) callback.onSessionError(
+                                "The internal engine stopped unexpectedly.", failure);
                     }
-                }
-                if (resetPacer) {
-                    pacer.reset(System.nanoTime());
-                    resetPacer = false;
-                }
-                DirectDisplayVsync displayClock = directDisplayVsync;
-                long displayDueNs = 0;
-                if (displayClock != null) {
-                    Surface currentSurface = surface;
-                    boolean direct = running && currentSurface != null &&
-                            currentSurface.isValid() && netplayRelay == null &&
-                            FrameGenerationRendererRegistry.find(currentSurface) == null;
-                    displayClock.configure(declaredVideoHz,
-                            1_000_000_000.0 / framePeriodNs, direct);
-                    try { displayDueNs = displayClock.awaitDueTimeNs(); }
-                    catch (InterruptedException interrupted) {
-                        if (released.get()) return;
+                    if (displayDueNs != 0) pacer.reset(System.nanoTime());
+                    else if (physicalFgClockApplied && physicalFgClockOwner != null) {
+                        // Locked to the panel: move the phase so images arrive
+                        // just before the callback that takes them up.
+                        long phaseDelayNs = physicalFgClockOwner.takeSourcePhaseDelayNs();
+                        if (phaseDelayNs > 0L) {
+                            pacer.delayNext(phaseDelayNs);
+                            Log.i(TAG, "Source phase moved engine=" + entry.id +
+                                    " delayUs=" + phaseDelayNs / 1000L);
+                        }
                     }
-                }
-                if (!running || released.get()) continue;
-                LibretroHost.VideoFrame newest = null;
-                long evidenceDueNs = displayDueNs != 0 ? displayDueNs : pacer.deadlineNanos();
-                long evidenceStartNs = System.nanoTime();
-                long evidenceCoreStartNs = 0L, evidenceCoreEndNs = 0L;
-                long evidenceVideoEndNs = 0L, evidenceAudioEndNs = 0L;
-                long evidenceCheckpointStartNs = 0L;
-                try {
-                    LibretroHost active = host;
-                    if (active != null) {
-                        updateDisplayAudioClock(active, displayClock, displayDueNs != 0);
-                        // The frame about to run is due at the pacer's current
-                        // absolute deadline; that exact lattice instant is its
-                        // producer timestamp (see VideoFrame.producerTimestampNs).
-                        long scheduledNs = displayDueNs != 0
-                                ? displayDueNs : pacer.deadlineNanos();
-                        long workStartNs = System.nanoTime();
-                        evidenceCoreStartNs = workStartNs;
-                        active.runFrame();
-                        evidenceCoreEndNs = System.nanoTime();
-                        recordFrameWork(workStartNs, evidenceCoreEndNs);
-                        // Canvas submission and bitmap conversion can take several
-                        // milliseconds on handheld displays. Keep them entirely off
-                        // the emulation/audio clock. If rendering falls behind, skip
-                        // an obsolete visual frame instead of slowing the game.
-                        newest = active.latestVideoFrame();
-                        if (newest != null) newest.producerTimestampNs = scheduledNs;
-                        evidenceVideoEndNs = System.nanoTime();
-                        // Drain on every core frame, even while AudioTrack still
-                        // owns a partial prior block. Otherwise the native ring
-                        // can overwrite its oldest samples without Java ever
-                        // observing or reporting the loss.
-                        drainAndPresentAudio(active);
-                        evidenceAudioEndNs = System.nanoTime();
-                        recordQualificationPacing();
+                    long evidenceEndNs = System.nanoTime();
+                    workHint.retarget(framePeriodNs * 3L / 4L);
+                    workHint.report(FrameWorkHint.cpuSince(workCpuStartNs));
+                    long pacingDelay = pacer.delayAfterFrame(evidenceEndNs);
+                    boolean coalescing = displayDueNs != 0
+                            ? displayClock.coalescingCatchUpPresentation()
+                            : pacer.coalescingCatchUpPresentation();
+                    directVideoTelemetry.recordSourceDecision(newest != null, coalescing,
+                            displayDueNs != 0 && !coalescing && displayClock.hasNewerDueFrame());
+                    if (newest != null && !coalescing) {
+                        // The mailbox reports replacement in the same monitor that
+                        // performs the write. The former isEmpty()+offer pair raced
+                        // the render consumer and made telemetry contradict itself.
+                        LatestValueMailbox.OfferResult result =
+                                videoMailbox.offerLatest(
+                                        newest, LibretroHost.VideoFrame::release);
+                        if (result != LatestValueMailbox.OfferResult.REJECTED) {
+                            directVideoTelemetry.recordMailboxOffer(
+                                    result == LatestValueMailbox.OfferResult.REPLACED);
+                        } else newest.release();
+                    } else if (newest != null) newest.release();
+                    // Failure-only, bounded evidence. Stage durations are wall time:
+                    // descheduling inside a stage is not proof of expensive CPU work.
+                    // Emit after mailbox publication, never before the frame's work.
+                    if (slowFrameEvidenceCount < 16 && evidenceCoreEndNs > 0L &&
+                            evidenceEndNs - evidenceDueNs >= 2L * framePeriodNs) {
+                        ++slowFrameEvidenceCount;
+                        Log.w(TAG, "Frame loop lateness engine=" + entry.id +
+                                " dueNs=" + evidenceDueNs + " startNs=" + evidenceStartNs +
+                                " coreStartNs=" + evidenceCoreStartNs +
+                                " coreEndNs=" + evidenceCoreEndNs +
+                                " videoEndNs=" + evidenceVideoEndNs +
+                                " audioEndNs=" + evidenceAudioEndNs +
+                                " checkpointStartNs=" + evidenceCheckpointStartNs +
+                                " endNs=" + evidenceEndNs + " periodNs=" + framePeriodNs +
+                                " coalesced=" + coalescing + " displayClock=" + (displayDueNs != 0));
                     }
-                    evidenceCheckpointStartNs = System.nanoTime();
-                    long now = SystemClock.elapsedRealtime();
-                    long elapsed = activeTickMillis == 0L ? 0L : Math.max(0L, now - activeTickMillis);
-                    activeTickMillis = now;
-                    if (checkpointScheduler != null &&
-                            checkpointScheduler.advanceActivePlay(elapsed) > 0)
-                        saveAutomatic();
-                } catch (Throwable failure) {
-                    running = false;
-                    Listener callback = listener;
-                    if (callback != null) callback.onSessionError(
-                            "The internal engine stopped unexpectedly.", failure);
+                    if (displayDueNs == 0) sleepUntilNextFrame(pacingDelay);
                 }
-                if (displayDueNs != 0) pacer.reset(System.nanoTime());
-                else if (physicalFgClockApplied && physicalFgClockOwner != null) {
-                    // Locked to the panel: move the phase so images arrive
-                    // just before the callback that takes them up.
-                    long phaseDelayNs = physicalFgClockOwner.takeSourcePhaseDelayNs();
-                    if (phaseDelayNs > 0L) {
-                        pacer.delayNext(phaseDelayNs);
-                        Log.i(TAG, "Source phase moved engine=" + entry.id +
-                                " delayUs=" + phaseDelayNs / 1000L);
-                    }
-                }
-                long evidenceEndNs = System.nanoTime();
-                long pacingDelay = pacer.delayAfterFrame(evidenceEndNs);
-                boolean coalescing = displayDueNs != 0
-                        ? displayClock.coalescingCatchUpPresentation()
-                        : pacer.coalescingCatchUpPresentation();
-                directVideoTelemetry.recordSourceDecision(newest != null, coalescing,
-                        displayDueNs != 0 && !coalescing && displayClock.hasNewerDueFrame());
-                if (newest != null && !coalescing) {
-                    // The mailbox reports replacement in the same monitor that
-                    // performs the write. The former isEmpty()+offer pair raced
-                    // the render consumer and made telemetry contradict itself.
-                    LatestValueMailbox.OfferResult result =
-                            videoMailbox.offerLatest(
-                                    newest, LibretroHost.VideoFrame::release);
-                    if (result != LatestValueMailbox.OfferResult.REJECTED) {
-                        directVideoTelemetry.recordMailboxOffer(
-                                result == LatestValueMailbox.OfferResult.REPLACED);
-                    } else newest.release();
-                } else if (newest != null) newest.release();
-                // Failure-only, bounded evidence. Stage durations are wall time:
-                // descheduling inside a stage is not proof of expensive CPU work.
-                // Emit after mailbox publication, never before the frame's work.
-                if (slowFrameEvidenceCount < 16 && evidenceCoreEndNs > 0L &&
-                        evidenceEndNs - evidenceDueNs >= 2L * framePeriodNs) {
-                    ++slowFrameEvidenceCount;
-                    Log.w(TAG, "Frame loop lateness engine=" + entry.id +
-                            " dueNs=" + evidenceDueNs + " startNs=" + evidenceStartNs +
-                            " coreStartNs=" + evidenceCoreStartNs +
-                            " coreEndNs=" + evidenceCoreEndNs +
-                            " videoEndNs=" + evidenceVideoEndNs +
-                            " audioEndNs=" + evidenceAudioEndNs +
-                            " checkpointStartNs=" + evidenceCheckpointStartNs +
-                            " endNs=" + evidenceEndNs + " periodNs=" + framePeriodNs +
-                            " coalesced=" + coalescing + " displayClock=" + (displayDueNs != 0));
-                }
-                if (displayDueNs == 0) sleepUntilNextFrame(pacingDelay);
+            } finally {
+                workHint.close();
             }
         }, "emufusion-libretro-frames");
         thread.setDaemon(true);

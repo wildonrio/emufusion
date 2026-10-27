@@ -182,11 +182,20 @@ public final class PhysicalPresentationDeadline {
         return latencyNs - intervalNs * ((latencyNs - THOR_DRIVER_LEAD_NS) / intervalNs);
     }
 
+    /**
+     * Any non-negative latency is a plan. The compositor reports its ideal
+     * latency as its work duration modulo the scan (the Thor: 10.33 ms on an
+     * 8.33-ms scan, 2.0 ms), so a phone whose compositor works, say, 9 ms
+     * per 120-Hz scan reports 0.67 ms. Refusing reports under the Thor's
+     * 2-ms driver lead refused every generated frame there. The driver lead
+     * is then at most latency plus reserve, so the desired present time
+     * never precedes the completion deadline (the Thor keeps its 2 ms).
+     */
     public static PhysicalPresentationDeadline nextEgl(
             long compositeDeadlineNs, long intervalNs, long latencyNs,
             long nowNs, long minimumTargetExclusiveNs, long reserveNs) {
         if (compositeDeadlineNs <= 0L || intervalNs <= THOR_DRIVER_LEAD_NS ||
-                latencyNs < THOR_DRIVER_LEAD_NS || nowNs < 0L || reserveNs < 0L ||
+                latencyNs < 0L || nowNs < 0L || reserveNs < 0L ||
                 minimumTargetExclusiveNs < 0L ||
                 (nowNs > compositeDeadlineNs && nowNs - compositeDeadlineNs > intervalNs))
             return invalid();
@@ -207,7 +216,8 @@ public final class PhysicalPresentationDeadline {
         if (target == Long.MAX_VALUE || queueDeadline == Long.MAX_VALUE ||
                 queueDeadline <= reserveNs || queueDeadline - reserveNs <= nowNs)
             return invalid();
-        return new PhysicalPresentationDeadline(target, target - THOR_DRIVER_LEAD_NS,
+        long lead = Math.min(THOR_DRIVER_LEAD_NS, saturatingAdd(latencyNs, reserveNs));
+        return new PhysicalPresentationDeadline(target, target - lead,
                 queueDeadline - reserveNs, (int) scans, 0);
     }
 

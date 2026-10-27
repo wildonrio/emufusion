@@ -46,6 +46,7 @@ import com.thorium.emufusion.video.PhysicalPresentationCadence;
 import com.thorium.emufusion.video.PanelClockMemory;
 import com.thorium.emufusion.video.PhysicalPresentationClock;
 import com.thorium.emufusion.video.PresentationClockDiagnostics;
+import com.thorium.emufusion.video.PresentRhythm;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -3188,7 +3189,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 scheduledTimestampNs : System.nanoTime();
         final int width = right - left;
         final int height = bottom - top;
-        final int[] snapshot = new int[width * height];
+        final int[] snapshot = acquireSoftwareSnapshot(width * height);
         // Libretro software buffers and Android Bitmap rows are top-first, but
         // the sampler2D presentation quad has OpenGL's bottom-left origin.
         // Reverse rows while making the immutable crop snapshot. Doing this
@@ -3204,11 +3205,35 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return true;
     }
 
+    // Recycled crop snapshots for software cores. A fresh full-frame int[]
+    // per frame (150 KB - 1.2 MB: 9-73 MB/s) went to ART's large-object space
+    // and drove frequent collections that compete with the presenter. A
+    // snapshot comes back here once it is no longer the comparison image.
+    private final java.util.concurrent.atomic.AtomicReferenceArray<int[]> softwareSnapshotPool =
+            new java.util.concurrent.atomic.AtomicReferenceArray<>(4);
+
+    private int[] acquireSoftwareSnapshot(int length) {
+        for (int i = 0; i < softwareSnapshotPool.length(); ++i) {
+            int[] pooled = softwareSnapshotPool.getAndSet(i, null);
+            if (pooled != null && pooled.length == length) return pooled;
+        }
+        return new int[length];
+    }
+
+    private void releaseSoftwareSnapshot(int[] snapshot) {
+        if (snapshot == null) return;
+        for (int i = 0; i < softwareSnapshotPool.length(); ++i)
+            if (softwareSnapshotPool.compareAndSet(i, null, snapshot)) return;
+    }
+
     private void uploadSoftwareFrameSafely(int[] colors, int width, int height,
                                            float aspect, long producerTimestampNs) {
         // This immutable CPU copy owns no producer Image/Surface queue slot.
         // Drop copies already queued when the first fatal failure was reported.
-        if (closed.get() || externalPresentationFailed) return;
+        if (closed.get() || externalPresentationFailed) {
+            releaseSoftwareSnapshot(colors);
+            return;
+        }
         try {
             uploadSoftwareFrame(colors, width, height, aspect, producerTimestampNs);
         } catch (RuntimeException failure) {
@@ -3311,9 +3336,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     @Override public void onFrameAvailable(SurfaceTexture ignored) {
         android.os.Trace.beginSection("EmuFusion.consumeFrame");
+        long startCpuNs = FrameWorkHint.threadCpuNs();
         try {
             consumeAvailableFrame(ignored);
         } finally {
+            workHintBusyNs += FrameWorkHint.cpuSince(startCpuNs);
             android.os.Trace.endSection();
         }
     }
@@ -3444,9 +3471,20 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private void renderFrame(long frameTimeNanos) {
         android.os.Trace.beginSection("EmuFusion.renderFrame");
+        long startCpuNs = FrameWorkHint.threadCpuNs();
+        if (workHintBusyNs > 0L) {
+            workHint.retarget(workHintTargetNs(refreshHz));
+            workHint.report(workHintBusyNs);
+            workHintBusyNs = 0L;
+        }
         try {
             renderTracedFrame(frameTimeNanos);
+            if (statsReportDue) {
+                statsReportDue = false;
+                reportStats();
+            }
         } finally {
+            workHintBusyNs += FrameWorkHint.cpuSince(startCpuNs);
             android.os.Trace.endSection();
         }
     }
@@ -3510,7 +3548,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     rejectDense("async-proof-atlas-poll-failure", proofFailure);
                 }
             }
-            reportStats();
+            // Once a second this formats the cadence snapshot (~200 fields):
+            // done after this callback's present (renderFrame), not ahead of it.
+            statsReportDue = true;
             reportPresentationStall(frameTimeNanos);
             // Choreographer follows the physical panel. Every selected output
             // is an exact divisor of that callback stream, so successful swaps
@@ -4239,6 +4279,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 try { releaseGl(); }
                 catch (Throwable failure) { cleanupFailure = failure; }
                 finally {
+                    workHint.close();
+                    workHint = FrameWorkHint.NONE;
                     surfaceRetirement.complete(cleanupFailure);
                     thread.quitSafely();
                 }
@@ -4315,6 +4357,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             inputSurface = new Surface(inputTexture);
             throwIfStartupCancelled();
             requestOutputFrameRate("initialize");
+            workHint = FrameWorkHint.forCurrentThread("frame-generator",
+                    workHintTargetNs(refreshHz));
             choreographer = Choreographer.getInstance();
             healthWindowStartNanos = System.nanoTime();
             updateSchedulerHealthBaseline();
@@ -4774,7 +4818,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private void uploadSoftwareFrame(int[] colors, int width, int height, float aspect,
                                      long producerTimestampNs) {
-        if (closed.get() || externalPresentationFailed) return;
+        if (closed.get() || externalPresentationFailed) {
+            releaseSoftwareSnapshot(colors);
+            return;
+        }
         if (submittedFrameCount == 0 && externalTransportFactory != null &&
                 externalTransportFactory.nativeSoftwareGeometry() &&
                 externalTransport != null &&
@@ -4816,6 +4863,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // Fixed-clock cores count every image; only classified streams compare.
         pendingSoftwarePixelsChanged = !frameRate.usesAuthoritativeSourceRate() &&
                 softwarePixelsChangedSincePrevious(colors, width, height);
+        if (previousSoftwareColors != colors) releaseSoftwareSnapshot(previousSoftwareColors);
         previousSoftwareColors = colors;
         previousSoftwareWidth = width;
         previousSoftwareHeight = height;
@@ -5467,8 +5515,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // Software images keep their CPU pixels, so an exact comparison with the
     // previous submitted image backs the 16x9 signature, which samples 144
     // points and missed small changes (DS intro: about 15 changes a second,
-    // none caught; a moving menu cursor). Snapshots are fresh arrays, so the
-    // previous one is kept by reference. Hardware frames leave this false.
+    // none caught; a moving menu cursor). The previous snapshot is kept by
+    // reference and recycled only when the next one replaces it (see
+    // acquireSoftwareSnapshot). Hardware frames leave this false.
     private int[] previousSoftwareColors;
     private int previousSoftwareWidth;
     private int previousSoftwareHeight;
@@ -7216,6 +7265,28 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return text.toString();
     }
 
+    // What the viewer saw, in normal play on any phone with present times:
+    // one log line per 30 s (PresentRhythm). A hitch is a frame shown longer
+    // than the usual interval.
+    private final PresentRhythm presentRhythm = new PresentRhythm();
+    private long presentRhythmEpoch = -1L;
+
+    private void logPresentRhythm() {
+        Log.i(TAG, "Present rhythm generator=" + generatorId +
+                " role=" + displayRole +
+                " intervals=" + presentRhythm.intervals() +
+                " usualScans=" + presentRhythm.usualScans() +
+                " hitches=" + presentRhythm.hitches() +
+                " shown1=" + presentRhythm.shownForScans(1) +
+                " shown2=" + presentRhythm.shownForScans(2) +
+                " shown3=" + presentRhythm.shownForScans(3) +
+                " shown4=" + presentRhythm.shownForScans(4) +
+                " shown5plus=" + presentRhythm.shownForScans(5) +
+                " onIntendedPct=" + Math.round(presentRhythm.onIntendedPercent() * 10.0) / 10.0 +
+                " gaps=" + presentRhythm.gaps() +
+                " panelHz=" + Math.round(frameRate.panelHz() * 100.0) / 100.0);
+    }
+
     private boolean consumeDensePhysicalGpuHeadroom() {
         GpuPhysicalHeadroomLedger.Result result;
         while ((result = denseGpuHeadroom.takeCompleted()) != null) {
@@ -7234,6 +7305,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         " extraScans=" + builtinQueueReserve.extraScans() +
                         " epoch=" + result.presentationEpoch +
                         traceTiming(result.frameId, result.desiredNs));
+            }
+            if (result.actualNs > 0L) {
+                if (result.presentationEpoch != presentRhythmEpoch) {
+                    presentRhythm.restart();
+                    presentRhythmEpoch = result.presentationEpoch;
+                }
+                if (presentRhythm.record(result.desiredNs, result.actualNs,
+                        frameRate.panelPeriodNs())) logPresentRhythm();
             }
             if (result.presentationEpoch != schedulerPresentationEpoch()) {
                 denseGpuAdaptation.invalidateRecoveryEvidence();
@@ -7505,6 +7584,22 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // When the current vsync callback started (System.nanoTime), for the
     // take-up lattice's arrival lead.
     private long callbackStartedNs;
+    // ADPF session for this thread (FrameWorkHint): the CPU time of the vsync
+    // callbacks and arrival handlers since the previous callback, reported
+    // once per callback against half a refresh, so the governor keeps this
+    // thread fast enough to finish well before the compositor's deadline.
+    // CPU time, not wall time: a swap or fence blocked on a busy GPU is not
+    // work a faster CPU would shorten.
+    private FrameWorkHint workHint = FrameWorkHint.NONE;
+    private long workHintBusyNs;
+    // Set by the vsync callback; the once-a-second statistics run after its
+    // present. Formatting them ahead of the swap put ~1 ms of string work
+    // between the callback and the frame it was about to show, once a second.
+    private boolean statsReportDue;
+
+    private static long workHintTargetNs(float hz) {
+        return hz > 0f ? (long) (500_000_000.0 / hz) : 0L;
+    }
 
     private long arrivalNs(int submission) {
         int slot = Math.floorMod(submission, ARRIVAL_RING);
@@ -7664,8 +7759,30 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         .equals(reason);
     }
 
+    // A disjoint GPU timer (EXT_disjoint_timer_query) means the timings in
+    // flight are unusable, not that the GPU failed. Drivers raise it on clock
+    // or power changes -- rare on the Thor's Adreno, possibly often on other
+    // GPUs -- and each one counted as a visible failure: a second without
+    // generation, a lower work level, and after 32 generation off for the
+    // session. The first one now moves this session to fence timing (no
+    // disjoint state) without penalty.
+    private boolean denseTimerDisjointSeen;
+
+    private static boolean isTimerDisjointRejection(String reason) {
+        return "gpu-timer-disjoint".equals(reason) ||
+                ("native-timer-status-" + DenseGpuTimer.STATUS_DISJOINT).equals(reason);
+    }
+
     private void rejectDense(String reason, Throwable failure) {
         densePyramidEnabled = false;
+        boolean disjoint = isTimerDisjointRejection(reason) && !denseTimerDisjointSeen &&
+                denseGpuTimer != null &&
+                denseGpuTimer.timingSource() != DenseGpuTimer.TIMING_SOURCE_FENCES;
+        if (disjoint) {
+            denseTimerDisjointSeen = true;
+            Log.w(TAG, "Dense GPU timer disjoint; fence timing for this session generator=" +
+                    generatorId);
+        }
         // A transient measurement anomaly still ends this qualification epoch
         // and collapses to truthful endpoint-only output below, exactly like
         // a permanent reject. Not latching densePyramidUnavailable lets the
@@ -7673,7 +7790,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // HEALTH boundary, bounded per session so a persistently glitching
         // driver converges to the permanent fail-closed state.
         boolean overBudget = isOverBudgetDenseRejection(reason);
-        if (!denseGpuAdaptation.generationDisabled())
+        if (!disjoint && !denseGpuAdaptation.generationDisabled())
             denseGpuAdaptation.onFailure(denseGpuFailure(reason));
         else
             denseGpuAdaptation.invalidateRecoveryEvidence();
@@ -7693,7 +7810,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     " seconds=" + suspendNs / 1_000_000_000L +
                     " suspensions=" + denseOverloadSuspensions);
         }
-        boolean recoverable = suspended || (!denseGpuAdaptation.generationDisabled() &&
+        boolean recoverable = suspended || disjoint || (!denseGpuAdaptation.generationDisabled() &&
                 (isTransientDenseRejection(reason) || overBudget) &&
                 ++denseTransientRejections <= DENSE_TRANSIENT_REJECT_REARM_LIMIT);
         if (!recoverable) densePyramidUnavailable = true;
@@ -8325,9 +8442,18 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return new float[] {x / 256f, y / 256f};
     }
 
+    private long denseFlowDumpMarkerCheckedNs = Long.MIN_VALUE;
+    private boolean denseFlowDumpMarker;
+
     private void maybeDumpDenseFlow(int previousIndex, int currentIndex) {
         long now = System.nanoTime();
-        if (!DENSE_FLOW_DUMP_MARKER.exists()) return;
+        if (denseFlowDumpMarkerCheckedNs == Long.MIN_VALUE ||
+                now - denseFlowDumpMarkerCheckedNs >= 1_000_000_000L) {
+            // At most once a second, not a stat per pair (see fullImageMarkerPresent).
+            denseFlowDumpMarkerCheckedNs = now;
+            denseFlowDumpMarker = DENSE_FLOW_DUMP_MARKER.exists();
+        }
+        if (!denseFlowDumpMarker) return;
         boolean contiguousCapture = new java.io.File(
                 "/data/local/tmp/emufusion-flowdump-contiguous").exists();
         if (!contiguousCapture && now - denseFlowDumpLastNs < 700_000_000L) return;
@@ -8797,6 +8923,25 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // present (3.2.108; only with earliest-latch planning).
     private final com.thorium.emufusion.video.CompositorBacklogCatchUp builtinBacklogCatchUp =
             new com.thorium.emufusion.video.CompositorBacklogCatchUp();
+    private boolean earliestLatchRefutedLogged;
+
+    /**
+     * Earliest-latency planning (3.2.108) assumes extra reported scans are
+     * our own queueing, as on the Thor. Where the compositor really shows
+     * frames that much later, every frame lands a scan after its plan and
+     * the backlog skip cannot clear it: two such skips, and this session
+     * plans on the reported latency instead -- no added delay (the frames
+     * already showed that late), and no more periodic skips.
+     */
+    private boolean earliestLatchRefuted() {
+        boolean refuted = builtinBacklogCatchUp.ineffective() >= 2L;
+        if (refuted && !earliestLatchRefutedLogged) {
+            earliestLatchRefutedLogged = true;
+            Log.w(TAG, "Earliest-latch planning refuted; following the reported latency generator=" +
+                    generatorId + " ineffectiveSkips=" + builtinBacklogCatchUp.ineffective());
+        }
+        return refuted;
+    }
     private long builtinQueueReserveLogs;
     private long builtinPlanCallbackNs, builtinPlanNowNs;
     private long builtinPlanCompositeDeadlineNs, builtinPlanIntervalNs, builtinPlanLatencyNs;
@@ -8820,7 +8965,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     builtinCompositorTiming[1]);
             // The earliest latency the compositor's report allows (3.2.108):
             // depth beyond it is BuiltinQueueReserve's trial-checked decision.
-            long latencyNs = TimelineSchedulerSwitch.earliestLatch() ?
+            long latencyNs = TimelineSchedulerSwitch.earliestLatch() && !earliestLatchRefuted() ?
                     PhysicalPresentationDeadline.earliestCompositeLatencyNs(
                             builtinCompositorTiming[2], builtinCompositorTiming[1]) :
                     builtinCompositorTiming[2];
@@ -11508,7 +11653,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (denseRequested && !densePyramidUnavailable && !denseOverloadSuspended()) {
             try {
                 if (denseGpuTimer == null) {
-                    denseGpuTimer = DenseGpuTimer.create(TimelineSchedulerSwitch.fenceTiming());
+                    denseGpuTimer = DenseGpuTimer.create(
+                            TimelineSchedulerSwitch.fenceTiming() || denseTimerDisjointSeen);
                     Log.i(TAG, "Dense GPU timing generator=" + generatorId + " source=" +
                             (denseGpuTimer.timingSource() == DenseGpuTimer.TIMING_SOURCE_FENCES ?
                                     "native-fences" : "timer-queries"));
@@ -13567,15 +13713,31 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private boolean fullImageQueued, fullImageAttempted;
 
     /** Explicit image-only diagnostic. Its timings are instrumented, never a pacing pass. */
+    // QA marker files are looked up at most once a second: a stat on every
+    // generated present (one on external storage) was blocking I/O on the
+    // presenter thread in normal play.
+    private long fullImageMarkerCheckedNs = Long.MIN_VALUE;
+    private boolean fullImageMarker;
+
+    private boolean fullImageMarkerPresent() {
+        long now = System.nanoTime();
+        if (fullImageMarkerCheckedNs == Long.MIN_VALUE ||
+                now - fullImageMarkerCheckedNs >= 1_000_000_000L) {
+            fullImageMarkerCheckedNs = now;
+            fullImageMarker = new java.io.File(
+                    "/data/local/tmp/emufusion-full-frame-capture").exists() ||
+                    new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                            "Android/data/com.thorium.preview/files/emufusion-full-frame-capture").exists();
+        }
+        return fullImageMarker;
+    }
+
     private void beginFullImageCapture(boolean synthetic, long frameId, float phase) {
         // The explicit one-shot marker is sufficient authority for image
         // diagnostics. Do not arm the separate proof mode: that mode resets
         // epochs and can change the rendering workload we intend to inspect.
         if (fullImageCapture != null || fullImageAttempted || !synthetic ||
-                frameId <= 0 ||
-                !(new java.io.File("/data/local/tmp/emufusion-full-frame-capture").exists() ||
-                  new java.io.File(android.os.Environment.getExternalStorageDirectory(),
-                          "Android/data/com.thorium.preview/files/emufusion-full-frame-capture").exists())) return;
+                frameId <= 0 || !fullImageMarkerPresent()) return;
         fullImageAttempted = true;
         Log.i(TAG, "Full image capture armed generator=" + generatorId + " frameId=" + frameId);
         try {
@@ -14799,8 +14961,19 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         // Actual-present evidence only; the core/audio owner reads this pair.
         qualifiedPhysicalPanelObservedNs = actualNs;
-        if (externalPhysicalClock.hasSustainedBaseline())
-            PanelClockMemory.remember(displayId, refreshHz, hz);
+        if (externalPhysicalClock.hasSustainedBaseline()) rememberPanelClock(hz);
+    }
+
+    // Once a second, not on every present: each call built a key string and
+    // boxed a Double, and a drift past 10 ppm wrote SharedPreferences.
+    private long panelClockRememberedNs = Long.MIN_VALUE;
+
+    private void rememberPanelClock(double hz) {
+        long now = System.nanoTime();
+        if (panelClockRememberedNs != Long.MIN_VALUE &&
+                now - panelClockRememberedNs < 1_000_000_000L) return;
+        panelClockRememberedNs = now;
+        PanelClockMemory.remember(displayId, refreshHz, hz);
     }
 
     /** Admits the built-in physical clock's rate once it agrees with the selected mode. */
@@ -14824,8 +14997,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             qualifiedPhysicalPanelRefinedNs = builtInPhysicalClock.lastActualNs();
         }
         qualifiedPhysicalPanelObservedNs = builtInPhysicalClock.lastActualNs();
-        if (builtInPhysicalClock.hasSustainedBaseline())
-            PanelClockMemory.remember(displayId, refreshHz, physicalHz);
+        if (builtInPhysicalClock.hasSustainedBaseline()) rememberPanelClock(physicalHz);
     }
 
     // Without EGL_ANDROID_get_frame_timestamps no scanout time exists, and

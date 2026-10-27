@@ -12,8 +12,12 @@ class ReferenceCaptureTest(unittest.TestCase):
         gate=body.split('fullImageAttempted = true;',1)[0]
         self.assertNotIn('qualificationProofEnabled',gate)
         for requirement in ['fullImageCapture != null','fullImageAttempted','!synthetic',
-                            'frameId <= 0','/data/local/tmp/emufusion-full-frame-capture']:
+                            'frameId <= 0','fullImageMarkerPresent()']:
             self.assertIn(requirement,gate)
+        # The marker is looked up at most once a second, not per present.
+        marker=method(SOURCE.read_text(),'private boolean fullImageMarkerPresent(')
+        self.assertIn('/data/local/tmp/emufusion-full-frame-capture',marker)
+        self.assertIn('>= 1_000_000_000L',marker)
         self.assertIn('backendForContext(actualEglContextMajor)',body)
         self.assertIn('FullResolutionFrameReadback.readbackName(actualEglContextMajor)',body)
 

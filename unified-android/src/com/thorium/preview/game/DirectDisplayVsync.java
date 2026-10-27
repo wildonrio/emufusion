@@ -76,10 +76,21 @@ final class DirectDisplayVsync implements AutoCloseable {
         }
     }
 
+    // The mode's rate, read at most once a second outside the lock: on
+    // Android 10 and older Display#getRefreshRate is a call into the display
+    // service, and the engine thread waits on this lock every frame.
+    private float panelHz;
+    private long panelHzReadNs;
+
     private void onVsync(long timestampNs) {
+        if (display != null && (panelHzReadNs == 0L || timestampNs - panelHzReadNs >= 1_000_000_000L ||
+                timestampNs < panelHzReadNs)) {
+            panelHz = display.getRefreshRate();
+            panelHzReadNs = timestampNs;
+        }
         synchronized (lock) {
             if (!active || closed || display == null) return;
-            cadence.configure(declaredHz, sourceHz, display.getRefreshRate());
+            cadence.configure(declaredHz, sourceHz, panelHz);
             cadence.onVsync(timestampNs);
             lock.notifyAll();
             choreographer.postFrameCallback(callback);

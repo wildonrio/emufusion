@@ -1,4 +1,4 @@
-# Thor test plan: 3.2.112 to 3.2.115
+# Thor test plan: 3.2.112 to 3.2.116
 
 Written 2026-10-26 while the Thor was away from the Mac. 3.2.112 (186) was
 built and host-verified only. 3.2.111 was never installed, so this plan covers
@@ -157,6 +157,66 @@ covers the first part. Then:
 4. Offline (Wi-Fi off): open EmuFusion. The check fails and games start at once.
 5. B on the update screen skips it; the download continues and installs on the
    next return to the library.
+
+## 7e. 3.2.116: random hitches on any Android
+
+3.2.116 removes causes of random one-frame hitches that do not depend on the
+Thor, and fixes places where pacing assumed the Thor. Measure first, then
+compare with 3.2.115 where a QA switch exists.
+
+1. **The app's own count.** Every 30 s of frame generation the log has
+   `Present rhythm ... hitches=N usualScans=U onIntendedPct=P` (frames shown
+   longer than the usual interval, from the display's present times; no
+   marker file needed). Run 60 s each of SNES, NES, Mega Drive, GBA (software
+   cores), Ocarina, Double Dash, NSMBU Deluxe, Metroid Dread, SM3DW and God of
+   War II. Record hitches per 30 s. Target: 0, at most 1 on heavy Wii U and
+   Switch scenes. Cross-check one case with `pace_card.py` (`onIntended`).
+2. **CPU work hints** (ADPF). Check the log for `Work hint session
+   thread=frame-generator` and `thread=libretro-<core>`. "Work hint
+   unavailable" means the device offers none, which is fine. A/B on SNES and
+   Double Dash with `settings put global emufusion_work_hint 0` (delete it
+   afterwards): hitches per 30 s, `callbackLate`, and fan noise. The hint
+   should never raise heat.
+3. **Once-a-second snapshot after the present.** `pace_card.py`,
+   `lag_series.py` and `hi_summary.py` must still parse the CadenceSnapshot
+   lines (they are now written by a background thread).
+4. **Software frame buffers recycled.** On SNES and Mega Drive with frame
+   generation On, run `adb shell dumpsys meminfo com.thorium.preview` twice,
+   30 s apart: the Java heap should stay flat. Check `logcat -b main | grep
+   -c "concurrent copying GC"` over 60 s.
+5. **Timer glitches.** The Thor (Adreno) should keep `Dense GPU timing ...
+   source=timer-queries`. If `Dense GPU timer disjoint; fence timing for this
+   session` appears, note how often it happens.
+6. **Earliest-latch fallback.** Grep every run for `Earliest-latch planning
+   refuted`. It should not appear on the Thor. If it does (heavy Cemu or Eden
+   scenes), compare arrival-to-screen latency before and after that line. If
+   latency rises without fewer hitches, raise the threshold from two
+   ineffective skips or drop the rule.
+7. **Passthrough while generation is suspended.** With dense generation off
+   (startup, a rejection, or a `Dense GPU overload: generation suspended`
+   stretch on Wind Waker HD), each 3-D arrival classifies itself with a
+   synchronous `glFinish` + `glReadPixels` (`latestImageIsUnique`; the
+   asynchronous query path exists only while dense generation runs). Use the
+   QA physical trace through a suspension to see whether real frames hitch
+   there. If they do, give passthrough its own PBO and fence readback.
+8. **Frame generation Off.** SNES and NES: `Direct display tick clock
+   active=true`, and no hitch every ~17 s (QA physical trace, or a 240 fps
+   recording).
+9. **Bench candidate (no install).** Replay bench, paired, with the C-flow
+   propagation shader:
+   `python3 tools/learned_framegen/dis_gles.py OUT/DenseInverseSearchShaders.java --propagate-ca`,
+   then `sh tools/qa/build_replay_dex.sh OUT.dex OUT/DenseInverseSearchShaders.java`.
+   Record invented area and the error against 3.2.116 on all four sets, and
+   GPU time per pair. Adopt it only if Star Fox 64 does not get worse and the
+   GPU time per pair rises by 0.3 ms or less.
+
+On another Android (the Mac's phone emulator `emufusion_clean_phone_20261007`,
+or a phone), with `hw.lcd.vsync` set to 60, then 90, then 144:
+- NES and SNES generate.
+- `Requested native gameplay panel mode` picks 120 for 60 fps on 144.
+- A variable 3-D game at a steady 60 fps moves from 144 to 120 after about
+  8 s (`PanelModeReplanner`).
+- Nothing crashes on launch. Android 10 used to crash on `Context#getDisplay`.
 
 ## 8. After the run
 

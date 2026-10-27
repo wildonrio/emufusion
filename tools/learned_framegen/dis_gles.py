@@ -234,6 +234,8 @@ def phase_search_shader():
     " vec2 v1=fac(p),v2=-fca(q);float e1=ssd(o,v1),e2=ssd(o,v2);vec2 v0=e2<e1?v2:v1;float e0=min(e1,e2);\n"
     + "".join(f" {{vec2 c=fac(x+vec2({dx:.1f},{dy:.1f}));float ec=ssd(o,c);if(ec<e0){{e0=ec;v0=c;}}}}\n"
               for d in PHASE_PROPAGATE for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))) +
+    "".join(f" {{vec2 c=-fca(x+vec2({dx:.1f},{dy:.1f}));float ec=ssd(o,c);if(ec<e0){{e0=ec;v0=c;}}}}\n"
+              for d in PHASE_PROPAGATE_CA for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))) +
     (" if(uGlobal>0.5){\n" if PHASE_GLOBAL_GRID and PHASE_GLOBAL_DISCRETE_ONLY else "") +
     "".join(f" {{vec2 c=fac(vec2(uSize)*vec2({(i + 0.5) / PHASE_GLOBAL_GRID[0]:.4f},{(j + 0.5) / PHASE_GLOBAL_GRID[1]:.4f}));"
             f"float ec=ssd(o,c);if(ec<e0*{1.0 + PHASE_GLOBAL_TIE:.3f}+1e-6){{e0=min(e0,ec);v0=c;}}}}\n"
@@ -259,6 +261,12 @@ def phase_search_shader():
 # 0.590 -> 0.588 of a cross-fade (SNES 0.349, Link's Awakening -0.007); with
 # whole-pixel warps, 0.592 -> 0.577.
 PHASE_PROPAGATE = (8, 16)
+# ... and from C's flow (negated) this far away. Not shipped (empty). Device-
+# bench candidate (2026-10-26) at 8 and 16 px, generated for a replay dex with
+# `dis_gles.py OUT --propagate-ca`: offline (per-phase port) invented area on the
+# full-size captures -9%, Link's Awakening -14%, train set -4%, Star Fox 64
+# worse; eight more patch matches per cell, so its GPU cost decides it.
+PHASE_PROPAGATE_CA = ()
 # ... and from A's flow at a fixed grid of points across the frame (scene-wide
 # motions: a camera scroll found anywhere reaches every patch), taken on ties
 # within PHASE_GLOBAL_TIE (a repeating tile matches its aliases equally well).
@@ -957,4 +965,6 @@ def java_source():
 if __name__ == '__main__':
     import sys
     from pathlib import Path
+    if '--propagate-ca' in sys.argv[2:]:
+        PHASE_PROPAGATE_CA = (8, 16)
     Path(sys.argv[1]).write_text(java_source())

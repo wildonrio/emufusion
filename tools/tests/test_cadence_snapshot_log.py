@@ -22,13 +22,14 @@ class CadenceSnapshotLogTest(unittest.TestCase):
             files = {
                 'CadenceSnapshotLog.java': source,
                 'Log.java': 'package android.util; public class Log { public static int i(String t,String s){System.out.println(s);return 0;} }',
-                'Process.java': 'package android.os; public class Process { public static int myPid(){return 42;} }',
+                'Process.java': 'package android.os; public class Process { public static final int THREAD_PRIORITY_BACKGROUND=10; public static int myPid(){return 42;} public static void setThreadPriority(int p){} }',
                 'Harness.java': '''package com.thorium.preview.game;
-public class Harness { public static void main(String[] args) {
+public class Harness { public static void main(String[] args) throws Exception {
     StringBuilder s = new StringBuilder("App swap cadence ");
     for(int i=0;i<8000;i++) s.append(i%3==0 ? "😀" : "界");
     CadenceSnapshotLog.write("test", 4, s.toString());
     CadenceSnapshotLog.write("test", 4, s.toString());
+    CadenceSnapshotLog.drain(10000);
 } }''',
             }
             for name, text in files.items():

@@ -20,9 +20,15 @@ public final class VsyncCadence {
         divisor = 0;
         if (Double.isFinite(source) && source > 1 &&
                 Double.isFinite(panel) && panel > 1) {
+            // The reported panel rate need not be a whole multiple of the
+            // synchronized source: a 59.94 or 119.88 Hz panel runs a 60.0
+            // source at panel / scans, inside the same correction budget the
+            // core clock already allows (a 0.1% match left those panels on
+            // the free 60.000 clock, a repeated frame every ~17 s).
             double scans = panel / source;
             int rounded = (int) Math.round(scans);
-            if (rounded >= 1 && rounded <= 12 && Math.abs(scans - rounded) < 0.001 &&
+            if (rounded >= 1 && rounded <= 12 &&
+                    Math.abs(scans / rounded - 1.0) <= DisplaySyncPolicy.MAX_RELATIVE_CORRECTION &&
                     DisplaySyncPolicy.permitsCoreClockCorrection(declared, panel / rounded))
                 divisor = rounded;
         }

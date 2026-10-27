@@ -8,7 +8,8 @@ package com.thorium.emufusion.timing;
  * the rate it actually runs at: with Allow 4x a 30 fps game reaches 120 Hz on
  * a 120 Hz mode but only 72 on 144. After the measured rate has held steady
  * this re-plans with {@link PanelRefreshPlanner#bestForVariable}, and only
- * for a clear gain, rarely, so the panel does not hop between modes. On the
+ * for a clear gain or a true doubling, rarely, so the panel does not hop
+ * between modes. On the
  * Thor (60/120) the best mode is always 120 and nothing ever changes.</p>
  *
  * <p>Pure Java; the host feeds the generator's sustained source rate.</p>
@@ -54,7 +55,12 @@ public final class PanelModeReplanner {
         if (!(best > 0.0) || Math.abs(best - currentPanelHz) <= currentPanelHz * 0.002) return 0.0;
         double now = output(currentPanelHz, steadyHz);
         double then = output(best, steadyHz);
-        if (!(then >= now * MIN_OUTPUT_GAIN)) return 0.0;
+        // A clear gain, or a mode that doubles the source where the current
+        // one only reaches the 1.3 x fallback (60 fps on 144 Hz -> 120 Hz).
+        int multiplier = Math.max(1, Math.min(4, maxMultiplier));
+        boolean fitsDoubling = PanelRefreshPlanner.doubles(best, steadyHz, multiplier) &&
+                !PanelRefreshPlanner.doubles(currentPanelHz, steadyHz, multiplier);
+        if (!(then >= now * MIN_OUTPUT_GAIN) && !fitsDoubling) return 0.0;
         currentPanelHz = best;
         lastSwitchMs = nowMs;
         ++switches;

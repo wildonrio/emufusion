@@ -94,6 +94,13 @@ public final class PhysicalPresentationDeadlineTest {
                 now, 0, reserve).valid(), "overflow rejected");
         check(!PhysicalPresentationDeadline.nextEgl(deadline, 0, latency,
                 now, 0, reserve).valid(), "invalid interval rejected");
+        // A compositor working 9 ms per 8.34-ms scan reports 0.66 ms.
+        PhysicalPresentationDeadline shortLatency = PhysicalPresentationDeadline.nextEgl(
+                deadline, period, 660_000L, now, 0, reserve);
+        check(shortLatency.valid(), "a latency under the driver lead is still a plan");
+        eq(deadline + 660_000L, shortLatency.contentPresentationTimeNs(), "same reachable scan");
+        check(!PhysicalPresentationDeadline.nextEgl(deadline, period, -1L,
+                now, 0, reserve).valid(), "negative latency rejected");
     }
 
     private static void eglPhaseSweepSelectsFirstAdmissibleScan() {
