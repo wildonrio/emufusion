@@ -53,6 +53,7 @@ import com.thorium.emufusion.metadata.EngineSystemIdResolver;
 import com.thorium.emufusion.timing.DisplaySyncPolicy;
 import com.thorium.emufusion.timing.PanelModeReplanner;
 import com.thorium.emufusion.timing.PanelRefreshPlanner;
+import com.thorium.emufusion.video.BurnInShift;
 import com.thorium.preview.MenuSoundPlayer;
 import com.thorium.preview.AppVolumeController;
 import com.thorium.preview.BootVideoOverlay;
@@ -1766,7 +1767,21 @@ public final class InWindowGameHost
         // While the generator reports verified counts they own the badge.
         if (System.nanoTime() / 1_000_000L - verifiedRatesAtMs < 2500L) return;
         badge.setText(String.format(Locale.US, "%.0f fps", source) + panelHeldNotice(source));
+        shiftForBurnIn(badge);
         badge.setVisibility(source > 0.0 ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * OLED burn-in: the counter stays up for whole sessions, so it drifts a
+     * pixel at a time within a few dp of its corner (BurnInShift) instead of
+     * keeping its edges on the same pixels. Applied with each once-a-second
+     * update; a translation moves it without a new layout pass.
+     */
+    private void shiftForBurnIn(TextView badge) {
+        int amplitude = dp(BurnInShift.AMPLITUDE_DP);
+        long now = android.os.SystemClock.uptimeMillis();
+        badge.setTranslationX(BurnInShift.x(now, amplitude));
+        badge.setTranslationY(BurnInShift.y(now, amplitude));
     }
 
     private boolean panelHeldReported, panelOverrideLogged;
@@ -1866,6 +1881,7 @@ public final class InWindowGameHost
         badge.setText(displayed >= real + 1.0 ?
                 String.format(Locale.US, "%.0f → %.0f fps", real, displayed) :
                 String.format(Locale.US, "%.0f fps", real) + panelHeldNotice(real));
+        shiftForBurnIn(badge);
         badge.setVisibility(real > 0.0 ? View.VISIBLE : View.GONE);
     }
 

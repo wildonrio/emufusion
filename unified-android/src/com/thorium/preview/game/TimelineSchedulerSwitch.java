@@ -163,10 +163,10 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         keepAlive = alive;
-        boolean lattice = true;
+        boolean lattice = false;
         try {
             if (context != null) lattice = Settings.Global.getInt(
-                    context.getContentResolver(), TAKEUP_LATTICE_GLOBAL, 1) != 0;
+                    context.getContentResolver(), TAKEUP_LATTICE_GLOBAL, 0) != 0;
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
@@ -326,14 +326,18 @@ public final class TimelineSchedulerSwitch {
     static boolean keepAlive() { return keepAlive; }
 
     /**
-     * Take-up lattice (default, 3.2.112): arrival pacing takes a source's
-     * pairs up on a lattice of whole callbacks instead of at the first
-     * callback after each arrival, so arrivals jittering across a callback no
-     * longer alternate held and skipped images (TimelineFrameScheduler). QA:
-     * emufusion_framegen_takeup_lattice=0 takes each pair up on arrival.
+     * Take-up lattice (3.2.112-3.2.116 default; off since 3.2.117): arrival
+     * pacing takes a source's pairs up on a lattice of whole callbacks
+     * instead of at the first callback after each arrival
+     * (TimelineFrameScheduler). On the Thor (2026-10-27) it dropped real
+     * images: paced 2-D cores showed only generated images for stretches,
+     * each held two scans (NES 840 and Mega Drive 724 two-scan frames per
+     * 30 s against 16 and 54 without it; SNES fell back to passthrough), so
+     * pairs are taken up on arrival again, as on 3.2.110. QA:
+     * emufusion_framegen_takeup_lattice=1 turns it on.
      */
     static final String TAKEUP_LATTICE_GLOBAL = "emufusion_framegen_takeup_lattice";
-    private static volatile boolean takeUpLattice = true;
+    private static volatile boolean takeUpLattice;
 
     static boolean takeUpLattice() { return takeUpLattice; }
 

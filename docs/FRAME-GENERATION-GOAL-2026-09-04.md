@@ -6,7 +6,37 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
-October 27 (latest) **— 3.2.116 (190, candidate `10f755a7`, host-verified only; not released until the Thor test): random hitches that any Android phone would show, and pacing rules that assumed the Thor.**
+October 27 (latest) **— 3.2.117 (191, `0a0e0423`): the take-up lattice is off again; Thor test of 3.2.116.**
+
+The Thor came back still on 3.2.110 (hash `0c560e2b`), so 3.2.111-3.2.116 had never run on it. 3.2.116 was installed (`thor_install.py`, identity kept) and section 7e of the Thor test plan was run with `pace_card.py`, 60 s per case.
+- **Regression found: the 3.2.112 take-up lattice.**
+  - On paced 2-D cores the screen showed only generated images, two scans each, for long stretches. The real images were never presented: Mega Drive took up 3,975 pairs but proposed only 2,548 real images.
+  - Present rhythm two-scan frames per 30 s: NES 840 and 301, Mega Drive 412 and 724.
+  - SNES spent its first 6 s at 60 Hz of generated images only, then fell back to passthrough for the session (`presentation-below-direct-source-floor`). This matches the 120 Hz phone emulator failure on 3.2.115 and 3.2.116 that was blamed on the emulator.
+  - Same APK with `emufusion_framegen_takeup_lattice=0`: no generated-only stretches. Two-scan frames per 30 s were NES 16 and 2, Mega Drive 54 and 52. Two-scan holds in the trace window matched 3.2.110: Mega Drive 5.2 per 1,000 (3.2.110: 3-9), NES 4.1.
+  - The lattice therefore defaults off, and `=1` opts in for redesign work. 3.2.112-3.2.115 shipped with it on.
+  - A host simulation at the Thor's rates (119.89 Hz callbacks, cores paced to half that) did not reproduce the device pattern: the rig lacks the generator's queue depth and deadline planner. A redesign needs an on-device arrival trace (`emufusion_framegen_arrival_trace`).
+- **3.2.116 with the lattice off, 3-D and the rest, on interval (3.2.110 in brackets):**
+  - SNES 99.2% (now generates; was the failing case);
+  - NSMBU Deluxe 99.4% (98.8%; the lattice was written for this game and is not needed);
+  - Double Dash 99.0%, God of War II 99.6%, Ocarina 94.5% at 20 fps doubled;
+  - SM3DW 95.4% onIntended (94.6%);
+  - Metroid Dread 87.8%, with three- to six-scan intervals: still the weakest case.
+- **Other 7e checks:**
+  - work-hint sessions on the generator and libretro threads;
+  - `Dense GPU timing source=timer-queries` everywhere, no disjoint timer;
+  - no `Earliest-latch planning refuted`, no overload suspension;
+  - at most one concurrent-copying GC per run, no fatal or ANR.
+- **Remaining hitches per 30 s** (Present rhythm, lattice off): God of War II 7-13, NSMBU Deluxe 25-42, SNES 21-83, Double Dash 67 then 359, Dread 154-195, SM3DW 493-535. Heavy Wii U and Switch scenes are the next judder work.
+- **Native CPU on Switch:** Dread runs on Eden's NCE. NSMBU Deluxe falls back to Dynarmic ("Program does not utilize 39-bit address space").
+- **nxnative assessment** (owner request): docs/NXNATIVE-ANDROID-ASSESSMENT-2026-10-27.md.
+- **Owner request: the corner frame-rate counter shifts against OLED burn-in.**
+  - It drifts one pixel at a time within 4 dp of its corner (BurnInShift).
+  - Each axis follows its own triangle wave, 127 s and 331 s, so the path covers the whole box.
+  - The shift is applied with the counter's once-a-second update.
+- 3.2.117 installed on the Thor with identity checks.
+
+October 27 **— 3.2.116 (190, candidate `10f755a7`; Thor-tested in the entry above, superseded by 3.2.117, never released): random hitches that any Android phone would show, and pacing rules that assumed the Thor.**
 
 Owner, October 27: "Have you completely fixed the micro judders ... on basically all the systems? ... this shouldn't just work on the Thor, this should work on any Android." Honest scores before this candidate, on the last device measurements (3.2.110): smoothness 7/10 (96-99.9% of frames at their intended interval on most systems, Wind Waker HD 78-96%; 3.2.112's clock lock and take-up lattice never measured on the device), artifacts 6/10, latency 8/10. Two read-only code audits looked for causes that do not depend on the Thor.
 - **A stall once a second.** The vsync callback formatted the once-a-second cadence snapshot (~200 fields, 17 `String.format`, a CRC, ~10 log records) before presenting its frame. It now runs after the present, and the snapshot's checksum, split and log writes run on a background thread (`CadenceSnapshotLog`).
