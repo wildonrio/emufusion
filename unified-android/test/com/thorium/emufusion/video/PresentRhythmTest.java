@@ -9,6 +9,7 @@ public final class PresentRhythmTest {
         aHitchTheSchedulerAskedForIsOnIntended();
         pausesAreGapsNotHitches();
         aShortWindowPublishesNothing();
+        keepAlivesAreStallsNotHitches();
         System.out.println("PresentRhythmTest passed");
     }
 
@@ -78,6 +79,24 @@ public final class PresentRhythmTest {
         published |= r.record(t + PresentRhythm.WINDOW_NS, t + PresentRhythm.WINDOW_NS, P);
         check(!published, "nothing published");
         eq(0L, r.windows(), "no window");
+    }
+
+    /** Keep-alive re-shows during a load (every five refreshes) are stalls, not hitches. */
+    private static void keepAlivesAreStallsNotHitches() {
+        PresentRhythm r = new PresentRhythm();
+        long t = 1_000_000_000L;
+        boolean published = false;
+        for (int i = 0; i < 1800; ++i, t += P) published |= r.record(t, t, P, false);
+        // The source stops: the last image is shown again every five refreshes.
+        for (int i = 0; i < 40; ++i) {
+            t += 4 * P;
+            published |= r.record(t, t, P, true);
+            t += P;
+        }
+        for (int i = 0; i < 1800; ++i, t += P) published |= r.record(t, t, P, false);
+        check(published, "a window");
+        eq(0, r.hitches(), "no hitches from the stall");
+        check(r.stalls() >= 40, "stall intervals counted apart: " + r.stalls());
     }
 
     private static void check(boolean value, String message) {

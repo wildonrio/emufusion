@@ -38,6 +38,7 @@ public final class TimelineFrameSchedulerTest {
         takeUpLatticeKeepsSixtyEvenThroughJitter();
         takeUpLatticeComesBackEarlierWhenArrivalsAllow();
         takeUpLatticeIgnoresDroppedFrames();
+        takeUpLatticeKeepsRealImagesTheRendererWouldPass();
         takeUpLatticeReturnsAPacedCoreAfterAnOutlier();
         takeUpLatticeStaysOffForUnevenSources();
         System.out.println("TimelineFrameSchedulerTest passed");
@@ -60,6 +61,11 @@ public final class TimelineFrameSchedulerTest {
         long readyReportedRight;
         final List<Long> realLagNs = new ArrayList<>();
         final List<Long> firstGeneratedLagNs = new ArrayList<>();
+        // The renderer's arrival pass (DisplayFrameGenerator.prepareArrivalPairEarly):
+        // a newer image arriving while the pair's generated image is up and its
+        // real image waits replaces that real image; guarded asks the timeline first.
+        boolean arrivalPass, arrivalPassGuarded = true, pairGeneratedShown;
+        int passed;
 
         Rig(long outputPeriod, long sourcePeriod) {
             scheduler.configure(outputPeriod, sourcePeriod);
@@ -70,6 +76,14 @@ public final class TimelineFrameSchedulerTest {
             admitted.put(sequence, now);
             fifo.add(new long[] {sequence, timestamp});
             fill();
+            if (arrivalPass && rightSeq != 0 && pairGeneratedShown && !fifo.isEmpty() &&
+                    fifo.get(0)[0] == rightSeq + 1 &&
+                    (!arrivalPassGuarded || scheduler.realImageMayBePassed())) {
+                ++passed;
+                leftSeq = rightSeq; leftTs = rightTs; rightSeq = 0; rightTs = 0;
+                pairGeneratedShown = false;
+                fill();
+            }
         }
 
         void fill() {
@@ -106,8 +120,11 @@ public final class TimelineFrameSchedulerTest {
             if (kind == TimelineFrameScheduler.REAL_RIGHT && admitted.containsKey(rightSeq))
                 realLagNs.add(displayNs - admitted.get(rightSeq));
             scheduler.commit(true);
+            if (kind == TimelineFrameScheduler.GENERATED) pairGeneratedShown = true;
             if (advance == 1) {
-                leftSeq = rightSeq; leftTs = rightTs; rightSeq = 0; rightTs = 0; fill();
+                leftSeq = rightSeq; leftTs = rightTs; rightSeq = 0; rightTs = 0;
+                pairGeneratedShown = false;
+                fill();
             }
         }
     }
@@ -677,6 +694,55 @@ public final class TimelineFrameSchedulerTest {
         double before = meanMs(rig.realLagNs.subList(100, 190), 0);
         double settled = meanMs(rig.realLagNs.subList(rig.realLagNs.size() - 100, rig.realLagNs.size()), 0);
         check(Math.abs(settled - before) < 0.1, "latency back where it was " + before + " -> " + settled);
+    }
+
+    /**
+     * Thor, 2026-10-27: a paced core whose images arrive just before the
+     * callback where the previous pair's real image is due. The renderer
+     * passed that real image, the lattice held the new pair to its slot, and
+     * every pair showed only its generated image, two scans each.
+     */
+    private static Rig latticeWithArrivalPass(boolean guarded) {
+        Rig rig = new Rig(PANEL, SOURCE60);
+        rig.scheduler.setArrivalPacing(true, PANEL);
+        rig.scheduler.setTakeUpLattice(true);
+        rig.steadyQueued = 0;
+        rig.arrivalPass = true;
+        rig.arrivalPassGuarded = guarded;
+        // Images land 1.2 ms before their callback; one lands 0.8 ms after it
+        // and the lattice follows it a callback later, so later images wait a
+        // callback for their slot and arrive while the real image is due.
+        long t0 = 1_000_000_000L, stamp = t0, due = stamp - 1_200_000L;
+        int produced = 0;
+        for (int v = 0; v < 2400; ++v) {
+            long callback = t0 + v * PANEL;
+            while (callback >= due) {
+                rig.now = due;
+                rig.produce(++produced, stamp);
+                stamp += SOURCE60;
+                due = stamp + (produced == 200 ? 800_000L : -1_200_000L);
+            }
+            rig.now = callback;
+            rig.vsync(callback);
+        }
+        return rig;
+    }
+
+    private static void takeUpLatticeKeepsRealImagesTheRendererWouldPass() {
+        Rig unguarded = latticeWithArrivalPass(false);
+        check(unevenOutputs(unguarded.shown, 120) > 100 && unguarded.passed > 100,
+                "the device failure reproduces: " + unevenOutputs(unguarded.shown, 120) +
+                        " uneven, " + unguarded.passed + " passed");
+        Rig guarded = latticeWithArrivalPass(true);
+        // Only the late image itself breaks the rhythm (the lattice follows it).
+        check(unevenOutputs(guarded.shown, 120) <= 2, "every pair shows generated then real: " +
+                unevenOutputs(guarded.shown, 120) + " " +
+                String.join("", guarded.shown.subList(200, 240)));
+        check(guarded.passed == 0, "no real image passed on the lattice: " + guarded.passed);
+        // Without the lattice the pass still works as in 3.2.91.
+        Rig off = latticeWithArrivalPass(true);
+        off.scheduler.setTakeUpLattice(false);
+        check(off.scheduler.realImageMayBePassed(), "no lattice: passing allowed");
     }
 
     private static void takeUpLatticeIgnoresDroppedFrames() {

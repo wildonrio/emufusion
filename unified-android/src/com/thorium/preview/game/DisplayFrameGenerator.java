@@ -5406,7 +5406,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // a queued one. The lattice passes real images the same way.
         boolean passing = activeRightSequence != 0L;
         if (passing && (!activePairSyntheticCommitted ||
-                activeRightSequence != activeLeftSequence + 1L)) return;
+                activeRightSequence != activeLeftSequence + 1L ||
+                !timeline.realImageMayBePassed())) return;
         long anchorSequence = passing ? activeRightSequence : activeLeftSequence;
         int head = endpointFifoHead;
         if (endpointFifoSequence[head] != anchorSequence + 1L ||
@@ -7289,6 +7290,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " shown5plus=" + presentRhythm.shownForScans(5) +
                 " onIntendedPct=" + Math.round(presentRhythm.onIntendedPercent() * 10.0) / 10.0 +
                 " gaps=" + presentRhythm.gaps() +
+                " stalls=" + presentRhythm.stalls() +
                 " panelHz=" + Math.round(frameRate.panelHz() * 100.0) / 100.0);
     }
 
@@ -7317,7 +7319,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     presentRhythmEpoch = result.presentationEpoch;
                 }
                 if (presentRhythm.record(result.desiredNs, result.actualNs,
-                        frameRate.panelPeriodNs())) logPresentRhythm();
+                        frameRate.panelPeriodNs(), keepAliveFrame(result.frameId)))
+                    logPresentRhythm();
             }
             if (result.presentationEpoch != schedulerPresentationEpoch()) {
                 denseGpuAdaptation.invalidateRecoveryEvidence();

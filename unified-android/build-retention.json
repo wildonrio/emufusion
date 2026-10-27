@@ -3,7 +3,8 @@
   "minimum_age_days": 1,
   "pinned_sha256": {
     "0c560e2b74645c956be0441b8d13b9bdf7efb24accc24f29f379e75f0f943120": "Rollback 3.2.110 (184), released and installed on the Thor; 3.2.92-3.2.109 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "0a0e0423421ccb9fc702142fe86ef08d7ce9d53dcd03fe17fbc763e6013367da": "Release 3.2.117 (191): take-up lattice off by default (it dropped real images on the Thor, 2026-10-27; on since 3.2.112) and the corner frame-rate counter shifts against OLED burn-in; otherwise 3.2.116. Installed on the Thor and released (GitHub v3.2.117, asset hash checked) 2026-10-27."
+    "0a0e0423421ccb9fc702142fe86ef08d7ce9d53dcd03fe17fbc763e6013367da": "Release 3.2.117 (191): take-up lattice off by default (it dropped real images on the Thor, 2026-10-27; on since 3.2.112) and the corner frame-rate counter shifts against OLED burn-in; otherwise 3.2.116. Installed on the Thor and released (GitHub v3.2.117, asset hash checked) 2026-10-27.",
+    "493192a897b2540d7d9457d060cfa21ca9a06634d0bfc9c8e91fc08cc886b91e": "Candidate 3.2.118 (192): take-up lattice keeps real images the renderer would pass (still off by default), Present rhythm counts keep-alive stalls apart; Thor check 2026-10-27."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {

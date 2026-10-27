@@ -6,6 +6,54 @@ reviewed before this revision; its work was not discarded.
 
 ## Outcome and priority
 
+### 10/10 plan (owner, 2026-10-27: "make this a goal, and loop until it is")
+
+**Scores on 3.2.117 (Thor, 2026-10-27):** smoothness 7.5, latency 8, artifacts 6.
+
+**10/10 targets, per tested system in gameplay (loads and keep-alive frames excluded):**
+- **Smoothness:** at least 99.5% of output intervals at the intended cadence, and at most 5 Present-rhythm hitches per 30 s.
+- **Latency:** arrival to screen within 2 ms of the structural minimum: arrival + half a source period + one scan for the real image, arrival + one scan for the generated one.
+- **Artifacts:** no visible artifact in the owner's visual check, and replay-bench solid invented area at most 0.1% on 95% of frames in every set.
+
+**Open items, in order:**
+1. **S1** Present rhythm: count keep-alive re-shows and the intervals touching them as stalls, not hitches. SM3DW's 149 five-scan intervals were all keep-alives during a load.
+   - Done (host): `PresentRhythm.record(..., keepAlive)` and a `stalls=` field.
+2. **S2** Take-up lattice: find why it drops real images on paced cores. Run NES with `takeup_lattice=1` and `arrival_trace=1` for 60 s on the Thor, then fix it.
+   - Root cause found with the on-device arrival trace (NES, lattice on, 2026-10-27). The renderer's arrival pass (`prepareArrivalPairEarly`, 3.2.91) replaces a waiting real image when a newer image arrives while the generated one is up.
+   - With the lattice, pairs are taken up a callback after arrival (`waitedUs=8333`). The next image therefore lands at the callback where the real image is due. The renderer passes it, and the lattice then holds the new pair to its slot: nothing is shown at that callback, so every pair shows only its generated image.
+   - `arrivalPassedReals`: NES 1,156 and Mega Drive 1,423 with the lattice on, 44-45 without.
+   - Fix: `TimelineFrameScheduler.realImageMayBePassed()` refuses the pass while the lattice gives that real image its own slot.
+   - Regression test `takeUpLatticeKeepsRealImagesTheRendererWouldPass`: its rig models the renderer's pass, reproduces the device failure without the guard, and shows generated-then-real with it.
+   - The earlier scheduler-only simulation missed the failure because it had no renderer pass. The lattice stays off by default until a Thor check.
+   - Thor check of candidate 3.2.118 (`493192a8`), lattice on, against the same games with it off earlier on 2026-10-27. The arrival pass no longer fires: NES 0 passed real images, against 1,156.
+
+     | Game | Lattice on | Lattice off |
+     | --- | --- | --- |
+     | NES | 99.9%, 1.0 holds per 1000, 12.4/20.7 ms | 9.6/17.9 ms |
+     | NSMBU Deluxe | 99.5%, 4.7 per 1000 | 5.7 per 1000 |
+     | SM3DW | 88.3%, 122 per 1000 | 128 per 1000 |
+     | Dread | 59.2%, 202 per 1000 | 61 per 1000 |
+
+     Dread's lattice run alternated 1- and 3-scan intervals (382 and 359): the lattice does not fit a 30 fps source on a 60 Hz output.
+   - **Verdict:** the guard is kept (correct with the lattice on), but the lattice stays off and is not the S3 answer.
+3. **S3** Jittery engines (Cemu, Eden, Dolphin): give take-up a jitter allowance (the fixed lattice, or a take-up delay of the measured p95 arrival jitter) only where arrivals jitter.
+   - SM3DW: 128 holds per 1000 in gameplay, 23% of callbacks catch up, real images held while successors are late.
+   - Double Dash: 194 catch-ups from queued images.
+   - Measure SM3DW, Wind Waker HD, Dread and Double Dash.
+4. **S4** Dread (30 fps): 3-6 scan intervals, 61 per 1000. Ocarina (20 fps): 6-scan intervals, 24 per 1000. Find whether the source or the scheduler causes them.
+5. **L1** Latency audit against the structural minimum for every case (`lat/split.py`), then fix the largest gaps. Switch and Wii U real images are ~37 ms, about 12 ms above it.
+6. **A1** `propagate_ca` replay bench, paired against 3.2.117 on all four sets. GPU cost needs a live session.
+   - Done, not adopted.
+   - Hold-out error is within noise on every set (-0.003 to +0.017 of a cross-fade).
+   - Invented area, paired by triplet:
+     - Star Fox 64 eval 0.144 -> 0.075%, but small3d 0.134 -> 0.150% (frames with invented content 40 -> 50%);
+     - Mega Drive 0.291 -> 0.322%;
+     - Double Dash 0.157 -> 0.147%;
+     - Wind Waker HD 0.063-0.079 -> 0.072-0.082%.
+   - The adoption rule was "Star Fox 64 must not get worse", so it stays CLI-only.
+7. **A2** Artifact census on all sets with `replay_invented.py`. The worst classes come first.
+8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
+
 October 27 (latest) **— 3.2.117 (191, `0a0e0423`): the take-up lattice is off again; Thor test of 3.2.116.**
 
 The Thor came back still on 3.2.110 (hash `0c560e2b`), so 3.2.111-3.2.116 had never run on it. 3.2.116 was installed (`thor_install.py`, identity kept) and section 7e of the Thor test plan was run with `pace_card.py`, 60 s per case.

@@ -15,7 +15,10 @@ package com.thorium.emufusion.video;
  * for, so a hitch it did not ask for is the compositor's, not ours.</li>
  * </ul>
  * Gaps longer than {@link #MAX_INTERVAL_SCANS} refreshes are pauses, loads or
- * source stalls and are counted apart.</p>
+ * source stalls and are counted apart. So are <em>stalls</em>: intervals that
+ * begin or end with a keep-alive frame, the unchanged image shown again while
+ * the source delivers nothing (SM3DW's load: 149 five-refresh keep-alives
+ * counted as hitches, 2026-10-27).</p>
  */
 public final class PresentRhythm {
     public static final long WINDOW_NS = 30_000_000_000L;
@@ -26,8 +29,9 @@ public final class PresentRhythm {
     private long lastDesiredNs, lastActualNs;
     private long windowStartNs;
     private final int[] shown = new int[BUCKETS];
-    private int intervals, onIntended, gaps;
-    private int summaryIntervals, summaryOnIntended, summaryGaps, summaryHitches;
+    private int intervals, onIntended, gaps, stalls;
+    private boolean lastKeepAlive;
+    private int summaryIntervals, summaryOnIntended, summaryGaps, summaryHitches, summaryStalls;
     private int summaryUsualScans;
     private final int[] summaryShown = new int[BUCKETS];
     private long windows;
@@ -37,16 +41,28 @@ public final class PresentRhythm {
      * window's numbers are then readable until the next completed window.
      */
     public boolean record(long desiredNs, long actualNs, long periodNs) {
+        return record(desiredNs, actualNs, periodNs, false);
+    }
+
+    /**
+     * As {@link #record(long, long, long)}; {@code keepAlive} marks a frame
+     * that showed the unchanged image again during a source stall.
+     */
+    public boolean record(long desiredNs, long actualNs, long periodNs, boolean keepAlive) {
         if (desiredNs <= 0L || actualNs <= 0L || periodNs <= 0L) return false;
         long previousDesired = lastDesiredNs, previousActual = lastActualNs;
+        boolean stall = keepAlive || lastKeepAlive;
         lastDesiredNs = desiredNs;
         lastActualNs = actualNs;
+        lastKeepAlive = keepAlive;
         if (windowStartNs == 0L) windowStartNs = actualNs;
         if (previousActual <= 0L || actualNs <= previousActual) return false;
         long shownNs = actualNs - previousActual;
         long requestedNs = desiredNs - previousDesired;
         long scans = (shownNs + periodNs / 2) / periodNs;
-        if (scans < 1L || scans > MAX_INTERVAL_SCANS) {
+        if (stall) {
+            ++stalls;
+        } else if (scans < 1L || scans > MAX_INTERVAL_SCANS) {
             ++gaps;
         } else {
             ++intervals;
@@ -64,6 +80,7 @@ public final class PresentRhythm {
     public void restart() {
         lastDesiredNs = 0L;
         lastActualNs = 0L;
+        lastKeepAlive = false;
     }
 
     private void publish() {
@@ -75,6 +92,7 @@ public final class PresentRhythm {
         summaryIntervals = intervals;
         summaryOnIntended = onIntended;
         summaryGaps = gaps;
+        summaryStalls = stalls;
         summaryHitches = hitches;
         summaryUsualScans = usual + 1;
         ++windows;
@@ -85,6 +103,7 @@ public final class PresentRhythm {
         intervals = 0;
         onIntended = 0;
         gaps = 0;
+        stalls = 0;
         windowStartNs = nowNs;
     }
 
@@ -94,6 +113,8 @@ public final class PresentRhythm {
     /** Frames shown longer than the usual interval in the last window. */
     public int hitches() { return summaryHitches; }
     public int gaps() { return summaryGaps; }
+    /** Intervals that began or ended with a keep-alive frame (a source stall). */
+    public int stalls() { return summaryStalls; }
     /** Frames shown for 1, 2, 3, 4 and 5 or more refreshes. */
     public int shownForScans(int scans) {
         return scans < 1 ? 0 : summaryShown[Math.min(BUCKETS, scans) - 1];

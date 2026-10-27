@@ -325,6 +325,23 @@ public final class TimelineFrameScheduler {
     public void setRightArrivalLeadNs(long leadNs) { rightArrivalLeadNs = leadNs; }
 
     /**
+     * Whether a newer image may replace the active pair's waiting real image
+     * (the renderer's arrival pass, 3.2.91: the new pair's midpoint is shown
+     * at the callback where that real image was due). Never while the
+     * take-up lattice gives that real image its own slot before the next
+     * pair's: the lattice then holds the new pair to its slot, so nothing is
+     * shown at the real image's callback and every pair shows only its
+     * generated image, held two scans (Thor, 2026-10-27: NES passed 1,156
+     * real images in 60 s with the lattice on, 45 with it off).
+     */
+    public boolean realImageMayBePassed() {
+        if (!arrivalPacing || !takeUpLattice || latticeNextNs <= 0L || arrivalRealDueNs <= 0L)
+            return true;
+        long panel = Math.max(1L, arrivalPanelPeriodNs > 0L ? arrivalPanelPeriodNs : outputPeriodNs);
+        return latticeNextNs <= arrivalRealDueNs + panel / 4L;
+    }
+
+    /**
      * The lattice's step for this source (whole outputs), or zero when its
      * frame period is not whole. The paced source period, when known, keeps
      * a dropped frame (one pair spanning two periods) from switching it off.
