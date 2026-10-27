@@ -71,6 +71,12 @@ reviewed before this revision; its work was not discarded.
      - Mega Drive 11.9 / 20.3 (was 13.8-16.4 / 22.4-24.7), 99.8%;
      - GBA 8.9 / 17.3 (was 12.7 / 18.4), 99.7%.
    - NES, SNES and GBA real images are now within 1 ms of the structural minimum (16.7 ms); Mega Drive is within 3.6 ms.
+   - Native engines: `SourceRateLock` turns the phase lock's smoothed error into a PI trim of the paced video rate, at most 0.1% once a second, through `setPacedVideoHz`. A 3-minute simulation held a 2 ms wait from any start phase and learned +-250 ppm drift exactly. Thor, 2026-10-27:
+     - Dolphin (Double Dash) and ARMSX2 (God of War II) took no trim (no clock correction).
+     - Eden's trim saturated at -1000 ppm: its frames follow its rendering, not its clock.
+     - Cemu's arrival jitter set a 7.5 ms target, near a whole scan.
+     - Latency did not fall (Double Dash 12.6 / 20.9 ms, God of War II 19.0 / 27.3, NSMBU Deluxe 14.6 / 22.9, SM3DW 26.1 / 34.5).
+     - Verdict: QA-only (`emufusion_framegen_rate_lock=1`). Native engines' latency needs their own frame timing changed (engine-side), not ours.
 6. **A1** `propagate_ca` replay bench, paired against 3.2.117 on all four sets. GPU cost needs a live session.
    - Done, not adopted.
    - Hold-out error is within noise on every set (-0.003 to +0.017 of a cross-fade).

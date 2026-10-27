@@ -203,6 +203,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         sourcePhaseLock = phaseHold;
+        boolean rateHold = false;
+        try {
+            if (context != null) rateHold = Settings.Global.getInt(
+                    context.getContentResolver(), RATE_LOCK_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        rateLock = rateHold;
         boolean deepen = true;
         try {
             if (context != null) deepen = Settings.Global.getInt(
@@ -414,6 +422,19 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean sourcePhaseLock = true;
 
     static boolean sourcePhaseLock() { return sourcePhaseLock; }
+
+    /**
+     * Rate lock (QA only, off by default): native engines' paced video rate
+     * is trimmed to hold their images a short wait before the callback
+     * (SourceRateLock). Thor, 2026-10-27: Dolphin and ARMSX2 took no trim,
+     * Eden's trim saturated (its frames follow its rendering) and Cemu's
+     * jitter set a near-scan target, so latency did not fall. QA:
+     * emufusion_framegen_rate_lock=1.
+     */
+    static final String RATE_LOCK_GLOBAL = "emufusion_framegen_rate_lock";
+    private static volatile boolean rateLock;
+
+    static boolean rateLock() { return rateLock; }
 
     /**
      * Queue deepening (default, 3.2.89): late-from-rendering frames buy an

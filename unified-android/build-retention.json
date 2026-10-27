@@ -1045,6 +1045,10 @@
     "unified-android/build/emufusion-3.2.117-phase2-phase3-qualification.apk": {
       "sha256": "0a0e0423421ccb9fc702142fe86ef08d7ce9d53dcd03fe17fbc763e6013367da",
       "reason": "Released 3.2.117 (191), on GitHub Releases as v3.2.117; 3.2.119 is current and 3.2.118 the Thor-tested rollback (2026-10-27), so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.120-phase2-phase3-qualification-7d913e674b0ae7bb3c4f49018b6d7202a7909cfbe1a3ace3a4dd2c1607bc4961.apk": {
+      "sha256": "7d913e674b0ae7bb3c4f49018b6d7202a7909cfbe1a3ace3a4dd2c1607bc4961",
+      "reason": "3.2.120 candidate with the native-engine rate lock on by default; Thor-checked 2026-10-27 (no latency gain), superseded by the rate-lock-off build. Never released."
     }
   }
 }

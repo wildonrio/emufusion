@@ -3019,6 +3019,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return !closed.get() && TimelineSchedulerSwitch.sourcePhase() ? sourcePhaseAdvisor.take() : 0L;
     }
 
+    @Override public double sourcePhaseErrorNs() {
+        return !closed.get() && TimelineSchedulerSwitch.sourcePhase() &&
+                TimelineSchedulerSwitch.sourcePhaseLock() ? sourcePhaseLock.smoothedErrorNs() : Double.NaN;
+    }
+
     @Override public long takeSourcePhaseNudgeNs() {
         if (closed.get() || !TimelineSchedulerSwitch.sourcePhase() ||
                 !TimelineSchedulerSwitch.sourcePhaseLock()) return 0L;

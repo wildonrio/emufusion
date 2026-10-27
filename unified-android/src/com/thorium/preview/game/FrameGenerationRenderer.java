@@ -87,6 +87,13 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default long takeSourcePhaseNudgeNs() { return 0L; }
 
+    /**
+     * The phase lock's smoothed wait error for a source clocked by rate
+     * (positive = images arrive early and wait too long), or NaN when there
+     * is none yet (SourceRateLock).
+     */
+    default double sourcePhaseErrorNs() { return Double.NaN; }
+
     /** The source is a pixel-art system: discrete states, whole-pixel motion. */
     default void setDiscreteContent(boolean value) {}
 

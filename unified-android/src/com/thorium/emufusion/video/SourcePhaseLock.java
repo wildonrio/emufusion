@@ -146,6 +146,16 @@ public final class SourcePhaseLock {
     }
 
     public synchronized boolean abandoned() { return abandoned; }
+
+    /**
+     * The smoothed, unwrapped wait error (positive = images arrive early and
+     * wait too long), or NaN before the first {@link #WARMUP} observations:
+     * the input of a source clocked by rate instead of nudged
+     * (SourceRateLock).
+     */
+    public synchronized double smoothedErrorNs() {
+        return observed < WARMUP ? Double.NaN : errorEma;
+    }
     public synchronized long nudges() { return nudges; }
     public synchronized long nudgedTotalNs() { return nudgedTotalNs; }
     public synchronized double meanWaitNs() { return waitEma; }

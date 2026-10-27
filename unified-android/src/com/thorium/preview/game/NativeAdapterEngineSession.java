@@ -519,7 +519,12 @@ final class NativeAdapterEngineSession implements EngineSession,
         pacedVideoHz = target;
         publishProducerTiming(active);
         publishLowerSourceCadence();
-        Log.i(TAG, "Clock correction adapter engine=" + entry.id + " pacedHz=" + target);
+        // The rate lock re-trims about once a second: log the first few, then
+        // one a minute.
+        if (++clockCorrectionLogs <= 8 || clockCorrectionLogs % 60 == 0)
+            Log.i(TAG, "Clock correction adapter engine=" + entry.id + " pacedHz=" + target +
+                    " rateLockTrimPpm=" + Math.round(sourceRateLock.trim() * 1e6) +
+                    " rateLockAbandoned=" + sourceRateLock.abandoned());
         return true;
     }
 
@@ -527,6 +532,9 @@ final class NativeAdapterEngineSession implements EngineSession,
 
     private long physicalFgCheckNs;
     private long physicalFgClockMisses;
+    private final com.thorium.emufusion.video.SourceRateLock sourceRateLock =
+            new com.thorium.emufusion.video.SourceRateLock();
+    private long clockCorrectionLogs;
     private boolean physicalFgClockApplied;
     private FrameGenerationRenderer physicalFgClockOwner;
 
@@ -559,9 +567,17 @@ final class NativeAdapterEngineSession implements EngineSession,
             Log.i(TAG, "Physical clock lock waiting engine=" + entry.id +
                     " declaredHz=" + declared + " panelHz=" + panel);
         if (target > 0.0) {
+            // QA rate_lock=1: locked in phase too, trimming the rate to hold
+            // the images a short wait before the callback (SourceRateLock, at
+            // most 0.1%). Off by default: on the Thor (2026-10-27) Dolphin and
+            // ARMSX2 took no trim, Eden's frames follow its rendering (the
+            // trim saturated) and Cemu's jitter set a near-scan target.
+            if (renderer != physicalFgClockOwner) sourceRateLock.reset();
+            double trimmed = target * sourceRateLock.update(TimelineSchedulerSwitch.rateLock() ?
+                    renderer.sourcePhaseErrorNs() : Double.NaN);
             // Repeated panel measurements jitter in the micro-hertz range;
             // only a real change re-trims the guest.
-            if (Math.abs(target - pacedVideoHz) < 1.0e-3 || setPacedVideoHz(target)) {
+            if (Math.abs(trimmed - pacedVideoHz) < 1.0e-3 || setPacedVideoHz(trimmed)) {
                 physicalFgClockApplied = true;
                 physicalFgClockOwner = renderer;
             }
@@ -571,6 +587,7 @@ final class NativeAdapterEngineSession implements EngineSession,
             // nominal panel; only a different or removed renderer releases it.
             physicalFgClockApplied = false;
             physicalFgClockOwner = null;
+            sourceRateLock.reset();
         }
     }
 
