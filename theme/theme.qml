@@ -451,6 +451,21 @@ FocusScope {
     property int updatePromptChoice: 0
     property bool updatePromptDismissed: false
     property string updateStatusMessage: ""
+    // The app update comes before anything else (owner, 2026-10-27). While the
+    // updater checks GitHub or downloads a found update, game launches wait;
+    // the gate covers the library only if the check is slow or a download runs.
+    property bool updateBlocking: false
+    property double updateBlockingSince: 0
+    property bool updateGateOpen: false
+    property bool updateGateSkipped: false
+    property string updateGateState: ""
+    property real updateGateProgress: 0
+    property var updatePendingLaunch: null
+    property bool updatePendingSawCheck: false
+    // False from each return to the foreground until the updater answers, so a
+    // launch pressed in that moment waits for the answer instead of racing it.
+    property bool updateStatusKnown: false
+    property bool updateWatchFast: false
     // Navigation state is durable, but QSettings writes must never run inside
     // a controller input frame. These values are flushed after interaction
     // settles; launch() still commits synchronously before leaving Pegasus.
@@ -2737,10 +2752,16 @@ FocusScope {
     function pollUpdateStatus() {
         var request = new XMLHttpRequest()
         request.onreadystatechange = function() {
-            if (request.readyState !== XMLHttpRequest.DONE || request.status !== 200)
-                return
-            try {
-                var payload = JSON.parse(request.responseText)
+            if (request.readyState !== XMLHttpRequest.DONE) return
+            var payload = null
+            if (request.status === 200) {
+                try {
+                    payload = JSON.parse(request.responseText)
+                } catch (error) {
+                    // The updater is optional while an older package is migrating.
+                }
+            }
+            if (payload) {
                 root.updateStatusMessage = String(payload.message || "")
                 if (payload.appVersion) root.installedAppVersion = String(payload.appVersion)
                 if (Boolean(payload.installReady) && !root.updatePromptDismissed) {
@@ -2748,16 +2769,73 @@ FocusScope {
                     root.updatePromptOpen = true
                     root.forceActiveFocus()
                 }
-            } catch (error) {
-                // The updater is optional while an older package is migrating.
             }
+            // An unreachable or unreadable updater never holds a game back.
+            root.applyUpdateGate(payload)
         }
         request.open("GET", "http://127.0.0.1:43821/update/status", true)
         request.send()
     }
 
+    function applyUpdateGate(payload) {
+        var state = payload ? String(payload.state || "") : ""
+        var blocking = payload !== null && Boolean(payload.running) &&
+                (state === "checking" || state === "software")
+        updateStatusKnown = true
+        updateGateState = state
+        updateGateProgress = payload ? Number(payload.progress || 0) : 0
+        updateBlocking = blocking
+        if (blocking) {
+            if (updatePendingLaunch) updatePendingSawCheck = true
+            if (updateBlockingSince === 0) updateBlockingSince = Date.now()
+            // A quick check that finds nothing never covers the library.
+            var show = !updateGateSkipped && !gameplayActive &&
+                    (state === "software" || Date.now() - updateBlockingSince >= 800)
+            if (show && !updateGateOpen) {
+                endSearch()
+                updateGateOpen = true
+                root.forceActiveFocus()
+            }
+            return
+        }
+        updateBlockingSince = 0
+        updateGateSkipped = false
+        updateGateOpen = false
+        releaseUpdatePendingLaunch(state)
+    }
+
+    function releaseUpdatePendingLaunch(state) {
+        var game = updatePendingLaunch
+        if (!game) return
+        // The INSTALL / LATER prompt asks first; LATER starts the game.
+        if (updatePromptOpen) return
+        var sawCheck = updatePendingSawCheck
+        updatePendingLaunch = null
+        updatePendingSawCheck = false
+        // Android's installer or its permission screen took over from the
+        // check this launch waited for: the app is about to be replaced.
+        if (sawCheck && (state === "installing" || state === "permission")) return
+        launch(game)
+    }
+
+    function launchHeldGame() {
+        var game = updatePendingLaunch
+        updatePendingLaunch = null
+        updatePendingSawCheck = false
+        if (game) launch(game)
+    }
+
+    function skipUpdateGate() {
+        updateGateSkipped = true
+        updateGateOpen = false
+        root.forceActiveFocus()
+        launchHeldGame()
+    }
+
     function installReadyUpdate() {
         updatePromptOpen = false
+        updatePendingLaunch = null
+        updatePendingSawCheck = false
         requestPreviewEndpoint("update/install")
     }
 
@@ -2765,6 +2843,7 @@ FocusScope {
         updatePromptDismissed = true
         updatePromptOpen = false
         root.forceActiveFocus()
+        launchHeldGame()
     }
 
     function voiceFeedbackContextTitle() {
@@ -4426,6 +4505,14 @@ FocusScope {
 
     function launch(game) {
         if (!game) return
+        if (updateGateOpen) return
+        if (!updateGateSkipped && (updateBlocking || !updateStatusKnown)) {
+            // Starts the moment the update check finishes without an update.
+            updatePendingLaunch = game
+            updatePendingSawCheck = updateBlocking
+            if (!updateStatusKnown) pollUpdateStatus()
+            return
+        }
         if (frameGenerationModePending || !frameGenerationModeConfirmed) {
             frameGenerationPendingLaunch = game
             if (!frameGenerationModePending) refreshFrameGenerationStatus()
@@ -4853,7 +4940,12 @@ FocusScope {
             return
         }
         root.noteScreensaverVisualChange()
-        if (voiceFeedbackOpen) {
+        if (updateGateOpen) {
+            if (api.keys.isCancel(event) || event.key === Qt.Key_Back ||
+                    event.key === Qt.Key_Escape)
+                skipUpdateGate()
+            event.accepted = true
+        } else if (voiceFeedbackOpen) {
             if (event.key === Qt.Key_Left || event.key === Qt.Key_Right ||
                     event.key === Qt.Key_Up || event.key === Qt.Key_Down)
                 voiceFeedbackChoice = voiceFeedbackChoice === 0 ? 1 : 0
@@ -5389,6 +5481,14 @@ FocusScope {
         triggeredOnStart: true
         onTriggered: {
             var applicationActive = Qt.application.state === Qt.ApplicationActive
+            if (applicationActive && !root.applicationWasActive) {
+                // Opening EmuFusion starts an update check; learn its state
+                // at once and keep asking quickly while it is fresh.
+                root.updateStatusKnown = false
+                root.updateWatchFast = true
+                updateWatchWindow.restart()
+                root.pollUpdateStatus()
+            }
             if (applicationActive) {
                 if (!root.applicationWasActive && root.previewReady) {
                     // Rebuild the complete warm set after launch/resume. A
@@ -5432,12 +5532,18 @@ FocusScope {
     }
 
     Timer {
-        interval: 1800
+        interval: root.updateGateOpen || root.updateBlocking || root.updateWatchFast ? 400 : 1800
         repeat: true
         // An update banner cannot be seen behind a game; poll again on return.
         running: !root.gameplayActive
         triggeredOnStart: true
         onTriggered: root.pollUpdateStatus()
+    }
+
+    Timer {
+        id: updateWatchWindow
+        interval: 4000
+        onTriggered: root.updateWatchFast = false
     }
 
     Timer {
@@ -8637,6 +8743,78 @@ FocusScope {
         font.pixelSize: root.footerFontSize
         font.weight: Font.DemiBold
         font.letterSpacing: 1
+    }
+
+    Rectangle {
+        id: updateGateOverlay
+        z: 855
+        anchors.fill: parent
+        visible: root.updateGateOpen
+        color: "#db04070c"
+
+        MouseArea { anchors.fill: parent }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 760
+            height: 330
+            color: "#f20a0e16"
+            border.width: 2
+            border.color: root.accent
+            radius: 12
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 54
+                text: root.updateGateState === "software" ?
+                      "UPDATING EMUFUSION" : "CHECKING FOR UPDATES"
+                color: "white"
+                font.family: global.fonts.condensed
+                font.pixelSize: 48
+                font.weight: Font.Bold
+                font.letterSpacing: 1.4
+            }
+
+            Text {
+                x: 60
+                y: 130
+                width: parent.width - 120
+                text: root.updateStatusMessage !== "" ? root.updateStatusMessage :
+                      "Checking GitHub for a newer EmuFusion…"
+                color: "#b8c1d1"
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                font.family: global.fonts.sans
+                font.pixelSize: 20
+            }
+
+            Rectangle {
+                x: 80
+                y: 196
+                width: parent.width - 160
+                height: 14
+                radius: 7
+                color: "#2a3445"
+                visible: root.updateGateState === "software"
+
+                Rectangle {
+                    width: parent.width * Math.max(0, Math.min(1, root.updateGateProgress))
+                    height: parent.height
+                    radius: parent.radius
+                    color: root.accent
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 262
+                text: "GAMES START AFTER THE UPDATE     B  SKIP FOR NOW"
+                color: "#7f899c"
+                font.family: global.fonts.sans
+                font.pixelSize: 14
+                font.letterSpacing: 1
+            }
+        }
     }
 
     Rectangle {

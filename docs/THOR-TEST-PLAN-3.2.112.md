@@ -1,4 +1,4 @@
-# Thor test plan: 3.2.112 to 3.2.114
+# Thor test plan: 3.2.112 to 3.2.115
 
 Written 2026-10-26 while the Thor was away from the Mac. 3.2.112 (186) was
 built and host-verified only. 3.2.111 was never installed, so this plan covers
@@ -139,6 +139,24 @@ For each case below, run 60 s with FG Off and grep the log:
 3. Device-bench candidate: `propagate_ca` 8/16 in the per-phase search
    (offline -4 to -14% invented area, Star Fox 64 worse); measure its GPU
    cost on Wind Waker HD before considering it.
+
+## 7d. 3.2.115: update check on every open
+
+The updater on the Thor delivers 3.2.115 itself, so step 0's identity check
+covers the first part. Then:
+
+1. Open EmuFusion from the Android launcher. Expect no update screen when up to
+   date (the check finishes in under 0.8 s), and the log line
+   `EmuFusionUpdater` with no "Update check failed".
+2. Press A on a game during the first second after opening. It should start as
+   soon as the check finishes, not be dropped.
+3. When 3.2.116 exists: open EmuFusion. Expect "UPDATING EMUFUSION" with a
+   percentage, then Android's installer. Cancel it: the library shows
+   INSTALL / LATER, and the installer is not reopened by itself for 10 minutes.
+   LATER starts any game that was waiting.
+4. Offline (Wi-Fi off): open EmuFusion. The check fails and games start at once.
+5. B on the update screen skips it; the download continues and installs on the
+   next return to the library.
 
 ## 8. After the run
 

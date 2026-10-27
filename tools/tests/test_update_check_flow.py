@@ -36,6 +36,7 @@ public final class UpdateCheckFlowTest {
     static final Map<String, JSONObject> documents = new HashMap<>();
     final Map<String, String> responses = new HashMap<>();
     final List<String> operations = new ArrayList<>();
+    final List<String> messages = new ArrayList<>();
     final Context context = new Context();
     JSONObject latest;
     String state = "idle", failedDownload = "";
@@ -95,12 +96,18 @@ public final class UpdateCheckFlowTest {
         return response.getBytes(StandardCharsets.UTF_8);
     }
     void setStatus(String s, double progress, String message, boolean available, boolean ready) {
-        state = s; operations.add("status:" + s);
+        state = s; operations.add("status:" + s); messages.add(message);
     }
-    void download(String url, File target, long limit, String digest) throws IOException {
+    interface DownloadProgress { void update(long done, long total); }
+    void download(String url, File target, long limit, String digest,
+                  DownloadProgress progress) throws IOException {
         operations.add("download:" + url);
         if (url.equals(failedDownload)) throw new IOException("fixture download failure");
         if (!SHA.equals(digest)) throw new IOException("fixture checksum mismatch");
+        if (progress != null) {
+            progress.update(500, 1000); progress.update(501, 1000);
+            progress.update(1000, 1000); progress.update(10, -1);
+        }
     }
     File updateFile() { return apk; }
     // Deleting already-installed downloads is file housekeeping, not flow.
@@ -211,6 +218,13 @@ public final class UpdateCheckFlowTest {
                 require(!operations.contains("download:fixture:apk"),
                     "an already verified APK must not be downloaded again: " + operations);
                 break;
+            case "download_progress":
+                release("3.2.17"); expectInstall();
+                require(messages.contains("Downloading EmuFusion 3.2.17…"), "start: " + messages);
+                require(Collections.frequency(messages, "Downloading EmuFusion 3.2.17 — 50%") == 1,
+                    "one status write per percent: " + messages);
+                require(messages.contains("Downloading EmuFusion 3.2.17 — 100%"), "end: " + messages);
+                break;
             default: throw new AssertionError("unknown scenario");
         }
     }
@@ -250,7 +264,8 @@ class UpdateCheckFlowTests(unittest.TestCase):
                          "cheats_unavailable", "legacy_fallback", "missing_apk_checksum",
                          "wrong_apk_checksum", "identity_rejected", "both_offline",
                          "unusable_release", "already_current", "theme_only", "cheats_only",
-                         "deferred_during_gameplay", "reuse_verified_download"):
+                         "deferred_during_gameplay", "reuse_verified_download",
+                         "download_progress"):
             with self.subTest(scenario=scenario):
                 result = subprocess.run([str(JAVA / "java"), "-ea", "-cp", self.work.name,
                     "UpdateCheckFlowTest", scenario, self.work.name], env=self.env,

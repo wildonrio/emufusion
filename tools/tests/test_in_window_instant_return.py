@@ -82,11 +82,13 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # The all-systems brand row sizes each mark to its own width, hides a
         # mark that fails to load and draws low-contrast marks white
         # (owner, 2026-10-24); library chrome only.
+        # Game launches wait for the app-open update check and show its
+        # download (owner, 2026-10-27); library update gate only.
         # The pin exists so unrelated runtime-return work cannot alter the theme
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "b5bbd1f8b7e9ce2a02211bb18703ad93c35b486f95b3fe5c36118a0af5bf199e",
+            "28c18e8eaeb922048537006db81907b0b89e70b4efc19def6f0e7917c8e18c67",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):

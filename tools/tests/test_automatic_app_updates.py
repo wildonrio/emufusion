@@ -79,7 +79,7 @@ class AutomaticAppUpdateTest(unittest.TestCase):
 
     def test_verified_download_automatically_opens_installer(self):
         app_branch = UPDATE.split("if (appNew) {", 1)[1].split("} else {", 1)[0]
-        self.assertIn("download(appUrl, apk, MAX_APK, apkSha)", app_branch)
+        self.assertIn("download(appUrl, apk, MAX_APK, apkSha,", app_branch)
         self.assertIn("validateDownloadedApk(context, apk)", app_branch)
         self.assertIn("installDownloadedApk(true)", app_branch)
         self.assertIn("Intent.ACTION_VIEW", UPDATE)

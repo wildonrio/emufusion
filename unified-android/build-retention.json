@@ -3,7 +3,7 @@
   "minimum_age_days": 1,
   "pinned_sha256": {
     "0c560e2b74645c956be0441b8d13b9bdf7efb24accc24f29f379e75f0f943120": "Rollback 3.2.110 (184), released and installed on the Thor; 3.2.92-3.2.109 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
-    "e81b3e83b02b774c20bc57e18196d1e0b080a03c799d6b74ef52755b1b4dc837": "Release 3.2.114 (188): 3-D occlusion pick (PICK_3D); host-verified, not yet on the Thor (away 2026-10-26)."
+    "86a1b379378221f49b90f5d6bbfcbddc71458e3f15ee3e14a3bc80886865733b": "Release 3.2.115 (189): every open checks for an app update first and games wait for it; host-verified, not yet on the Thor (away 2026-10-26)."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -973,6 +973,18 @@
     "unified-android/build/emufusion-3.2.113-phase2-phase3-qualification.apk": {
       "sha256": "abc083e937898dc1eb9f52f8fe32af989edd15af307dcfe65a5209daa8054091",
       "reason": "Released 3.2.113 (identical to the GitHub release asset v3.2.113, sha256 checked 2026-10-26); 3.2.114 is the release and 3.2.110 the Thor-tested rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.114-phase2-phase3-qualification-e81b3e83b02b774c20bc57e18196d1e0b080a03c799d6b74ef52755b1b4dc837.apk": {
+      "sha256": "e81b3e83b02b774c20bc57e18196d1e0b080a03c799d6b74ef52755b1b4dc837",
+      "reason": "Released 3.2.114 (identical to the GitHub release asset v3.2.114, sha256 checked 2026-10-26); 3.2.115 is the release and 3.2.110 the Thor-tested rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.114-phase2-phase3-qualification.apk": {
+      "sha256": "e81b3e83b02b774c20bc57e18196d1e0b080a03c799d6b74ef52755b1b4dc837",
+      "reason": "Released 3.2.114 (identical to the GitHub release asset v3.2.114, sha256 checked 2026-10-26); 3.2.115 is the release and 3.2.110 the Thor-tested rollback, so no local copy is needed (owner request 2026-10-10: disk space)."
+    },
+    "unified-android/build/emufusion-3.2.97-phase2-phase3-qualification.apk": {
+      "sha256": "f1735b4b4b6830795a8882f307ee50882270504498cb857dd2c036800de42d3b",
+      "reason": "Plain-named copy of the never-released 3.2.97 candidate already retired under its hash name (identical bytes); replaced by the 3.2.98 build."
     }
   }
 }

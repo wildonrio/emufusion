@@ -53,15 +53,24 @@ final class UpdateManager {
     private static final String PENDING_INSTALL = "automaticInstallPending";
     private static final String DEFERRED_INSTALL = "installDeferredUntilLibrary";
     private static final String LAST_AUTOMATIC_CHECK = "lastAutomaticCheckAt";
+    private static final String LAST_CHECK_FINISHED = "lastCheckFinishedAt";
+    private static final String AUTO_INSTALLER_AT = "automaticInstallerOpenedAt";
+    private static final String AUTO_INSTALLER_CODE = "automaticInstallerVersionCode";
     // Re-check on library return once this long has passed since the last
     // automatic check, so a long-running service still finds new releases.
     private static final long RECHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
     // A failed automatic check (offline, DNS, GitHub unreachable) must not use
     // up the six-hour window: the next library visit after this retries.
     private static final long RETRY_AFTER_FAILURE_MS = 10L * 60L * 1000L;
-    // Opening EmuFusion checks right away (owner, 2026-10-24) unless an
-    // automatic check already ran this recently.
-    private static final long APP_OPEN_RECHECK_MS = 15L * 60L * 1000L;
+    // Every open of EmuFusion checks before anything else (owner, 2026-10-24
+    // and 2026-10-27). Only a check that finished this recently is reused: a
+    // duplicate resume, or the return from Android's installer or its
+    // permission screen.
+    private static final long APP_OPEN_RECHECK_MS = 60L * 1000L;
+    // A declined or failed install returns to EmuFusion. Within this window
+    // the library offers INSTALL / LATER instead of reopening Android's
+    // installer, so a package Android refuses cannot lock the owner out.
+    private static final long AUTO_INSTALLER_REPEAT_MS = 10L * 60L * 1000L;
     // The installed APK's versionName, reported with every status so the theme
     // labels show the real app version rather than its own bundled constant.
     private static volatile String installedAppVersion = "";
@@ -151,7 +160,8 @@ final class UpdateManager {
      * starts at boot and stays running, so its startup check is often hours
      * old and ran with no window to show Android's installer from (owner,
      * 2026-10-24: the phone never offered an update). Check again now, ahead
-     * of and independent of the artwork queue.
+     * of and independent of the artwork queue; the library holds game
+     * launches until this check, and a found update's download, finish.
      */
     void onAppOpened() {
         if (gameplayActive()) return;
@@ -161,7 +171,7 @@ final class UpdateManager {
             installDownloadedApk(true);
             return;
         }
-        long last = saved.getLong(LAST_AUTOMATIC_CHECK, 0L);
+        long last = saved.getLong(LAST_CHECK_FINISHED, 0L);
         if (System.currentTimeMillis() - last >= APP_OPEN_RECHECK_MS) checkAsync(false);
     }
 
@@ -177,6 +187,8 @@ final class UpdateManager {
         Thread worker = new Thread(() -> {
             try {
                 check(userInitiated);
+                context.getSharedPreferences(UPDATE_PREFERENCES, 0).edit()
+                        .putLong(LAST_CHECK_FINISHED, System.currentTimeMillis()).apply();
             } catch (Exception error) {
                 Log.e(TAG, "Update check failed", error);
                 setStatus("error", 1, "Update check failed safely", false, false);
@@ -287,10 +299,23 @@ final class UpdateManager {
                         true, true);
                 return;
             }
+            SharedPreferences saved = context.getSharedPreferences(UPDATE_PREFERENCES, 0);
+            long candidateCode = archiveVersionCode(context, apk);
+            if (automatic && candidateCode == saved.getLong(AUTO_INSTALLER_CODE, -1L) &&
+                    System.currentTimeMillis() - saved.getLong(AUTO_INSTALLER_AT, 0L)
+                            < AUTO_INSTALLER_REPEAT_MS) {
+                setStatus("available", 1,
+                        "Update downloaded — install it now to finish updating EmuFusion",
+                        true, true);
+                return;
+            }
             // Keep this flag while Android shows its one-time source permission.
             // The application lifecycle callback consumes it on return.
-            context.getSharedPreferences(UPDATE_PREFERENCES, 0).edit()
-                    .putBoolean(PENDING_INSTALL, true).apply();
+            saved.edit().putBoolean(PENDING_INSTALL, true).apply();
+            if (automatic) {
+                saved.edit().putLong(AUTO_INSTALLER_AT, System.currentTimeMillis())
+                        .putLong(AUTO_INSTALLER_CODE, candidateCode).apply();
+            }
             if (Build.VERSION.SDK_INT >= 26 &&
                     !context.getPackageManager().canRequestPackageInstalls()) {
                 Intent permission = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -367,8 +392,22 @@ final class UpdateManager {
             // A declined or deferred install leaves the verified APK in place;
             // the next check offers it again without another full download.
             if (!downloadedMatches(apk, apkSha)) {
-                setStatus("software", 0.68, "Downloading the latest app update…", true, false);
-                download(appUrl, apk, MAX_APK, apkSha);
+                String version = githubNew ? githubRelease.version :
+                        manifest.optString("companionVersionName", "").trim();
+                String label = version.isEmpty() ? "the EmuFusion update" :
+                        "EmuFusion " + version;
+                setStatus("software", 0, "Downloading " + label + "…", true, false);
+                // The library shows this percentage while it holds game
+                // launches for the update; one status write per percent.
+                final int[] shown = new int[]{-1};
+                download(appUrl, apk, MAX_APK, apkSha, (done, total) -> {
+                    if (total <= 0) return;
+                    int percent = (int) Math.min(100L, done * 100L / total);
+                    if (percent == shown[0]) return;
+                    shown[0] = percent;
+                    setStatus("software", percent / 100.0,
+                            "Downloading " + label + " — " + percent + "%", true, false);
+                });
             }
             try {
                 validateDownloadedApk(context, apk);
@@ -412,7 +451,7 @@ final class UpdateManager {
             setStatus("theme", 0.18, "Downloading the latest EmuFusion theme…",
                     appNew, false);
             File theme = new File(context.getCacheDir(), "emufusion-theme.zip");
-            download(manifest.optString("themeZipUrl"), theme, MAX_THEME, themeSha);
+            download(manifest.optString("themeZipUrl"), theme, MAX_THEME, themeSha, null);
             setStatus("theme", 0.62, "Installing the theme update…", appNew, false);
             ThemeInstaller.installZip(theme, remoteTheme);
             theme.delete();
@@ -423,7 +462,7 @@ final class UpdateManager {
                     appNew, false);
             File staged = new File(context.getCacheDir(), "libretro-cheats.zip");
             download(manifest.optString("cheatCatalogUrl", ""), staged,
-                    MAX_CHEATS, cheatsSha);
+                    MAX_CHEATS, cheatsSha, null);
             CheatArchive.verify(staged);
             installCheatArchive(staged, installedCheatArchive);
             context.getSharedPreferences(UPDATE_PREFERENCES, 0).edit()
@@ -515,12 +554,15 @@ final class UpdateManager {
         if (folder != null) new File(folder, LegacyNames.UPDATE_DOWNLOAD).delete();
         new File(apk.getAbsolutePath() + ".partial").delete();
         if (!apk.isFile()) return;
+        if (archiveVersionCode(context, apk) <= currentVersionCode() && apk.delete())
+            Log.i(TAG, "Removed a downloaded update that is already installed");
+    }
+
+    private static long archiveVersionCode(Context context, File apk) {
         PackageInfo candidate = context.getPackageManager()
                 .getPackageArchiveInfo(apk.getAbsolutePath(), 0);
-        long candidateCode = candidate == null ? 0 : Build.VERSION.SDK_INT >= 28 ?
+        return candidate == null ? 0 : Build.VERSION.SDK_INT >= 28 ?
                 candidate.getLongVersionCode() : candidate.versionCode;
-        if (candidateCode <= currentVersionCode() && apk.delete())
-            Log.i(TAG, "Removed a downloaded update that is already installed");
     }
 
     private void deferInstallUntilLibrary() {
@@ -661,8 +703,13 @@ final class UpdateManager {
         } finally { connection.disconnect(); }
     }
 
-    private static void download(String url, File target, long maximum, String expectedSha)
-            throws Exception {
+    /** Bytes received so far and the response's declared length (-1 if absent). */
+    private interface DownloadProgress {
+        void update(long done, long total);
+    }
+
+    private static void download(String url, File target, long maximum, String expectedSha,
+                                 DownloadProgress progress) throws Exception {
         if (url == null || url.isEmpty() || !url.startsWith("https://"))
             throw new java.io.IOException("Missing secure update URL");
         // Never accept a download that cannot be verified against the
@@ -680,6 +727,7 @@ final class UpdateManager {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream input = new BufferedInputStream(connection.getInputStream());
              BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(partial))) {
+            long length = connection.getContentLength();
             byte[] buffer = new byte[128 * 1024];
             int count;
             long total = 0;
@@ -688,6 +736,7 @@ final class UpdateManager {
                 if (total > maximum) throw new java.io.IOException("Update is too large");
                 digest.update(buffer, 0, count);
                 output.write(buffer, 0, count);
+                if (progress != null) progress.update(total, length);
             }
         } finally { connection.disconnect(); }
         String actual = hex(digest.digest());
