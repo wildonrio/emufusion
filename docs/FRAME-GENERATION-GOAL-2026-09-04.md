@@ -99,6 +99,17 @@ reviewed before this revision; its work was not discarded.
      - 3-D forward-backward occlusion choice.
      - `PICK_3D` (24, 64): full-size invented area -19%, but eval, small3d and train flat or worse.
    - A real gain needs better motion at occlusion edges and for non-motion animation, not a different fallback.
+   - DIS's third stage, variational refinement (Kroeger et al. 2016), was measured offline with OpenCV's implementation as the reference. It was applied to the dumped endpoint flows before the per-phase search port rebuilt the field. Not adopted.
+
+     | Set | Invented area | Frames with invented content | Error |
+     | --- | --- | --- | --- |
+     | Eval (10 iterations, alpha 40) | -11% (0.249 -> 0.222%) | 50 -> 40.5% | equal |
+     | Full-size | equal | 15.2 -> 18.2% | |
+     | Small3d | -6% | | 0.683 -> 0.762 |
+     | Train | -2% | | 0.795 -> 0.785 |
+
+     The per-phase search re-searches from these flows, so refining them moves little.
+   - Tools: scratchpad `vr/vr_flows.py` (Homebrew Python with cv2) and `vr/vr_eval.py` (genport).
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
 October 27 (latest) **— 3.2.117 (191, `0a0e0423`): the take-up lattice is off again; Thor test of 3.2.116.**
