@@ -195,6 +195,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         sourcePhase = phase;
+        boolean phaseHold = true;
+        try {
+            if (context != null) phaseHold = Settings.Global.getInt(
+                    context.getContentResolver(), SOURCE_PHASE_LOCK_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        sourcePhaseLock = phaseHold;
         boolean deepen = true;
         try {
             if (context != null) deepen = Settings.Global.getInt(
@@ -393,6 +401,19 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean sourcePhase = true;
 
     static boolean sourcePhase() { return sourcePhase; }
+
+    /**
+     * Source phase lock (default, 3.2.119): a paced libretro core is nudged
+     * every frame to hold its images a short wait before their callback
+     * (SourcePhaseLock) instead of one-off moves between which the phase
+     * drifts (NES, Thor 2026-10-27: 6 moves in 60 s, first generated image
+     * 10-15 ms after arrival from run to run). QA:
+     * emufusion_framegen_source_phase_lock=0 keeps the one-off moves.
+     */
+    static final String SOURCE_PHASE_LOCK_GLOBAL = "emufusion_framegen_source_phase_lock";
+    private static volatile boolean sourcePhaseLock = true;
+
+    static boolean sourcePhaseLock() { return sourcePhaseLock; }
 
     /**
      * Queue deepening (default, 3.2.89): late-from-rendering frames buy an

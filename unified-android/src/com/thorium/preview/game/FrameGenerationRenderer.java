@@ -80,6 +80,13 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default long takeSourcePhaseDelayNs() { return 0L; }
 
+    /**
+     * A small signed shift for the next frame of a source this renderer's
+     * phase lock holds (positive = later, SourcePhaseLock); zero when there
+     * is none. A caller that takes these gets no one-off delays.
+     */
+    default long takeSourcePhaseNudgeNs() { return 0L; }
+
     /** The source is a pixel-art system: discrete states, whole-pixel motion. */
     default void setDiscreteContent(boolean value) {}
 

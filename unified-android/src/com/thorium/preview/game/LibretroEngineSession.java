@@ -1511,6 +1511,10 @@ public final class LibretroEngineSession implements EngineSession,
                             Log.i(TAG, "Source phase moved engine=" + entry.id +
                                     " delayUs=" + phaseDelayNs / 1000L);
                         }
+                        // And held there: the measured panel clock is a few
+                        // hundred ppm off, so the phase drifts (SourcePhaseLock).
+                        long phaseNudgeNs = physicalFgClockOwner.takeSourcePhaseNudgeNs();
+                        if (phaseNudgeNs != 0L) pacer.nudge(phaseNudgeNs);
                     }
                     long evidenceEndNs = System.nanoTime();
                     workHint.retarget(framePeriodNs * 3L / 4L);

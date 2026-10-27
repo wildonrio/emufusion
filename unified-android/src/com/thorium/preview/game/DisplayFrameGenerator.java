@@ -3014,7 +3014,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     @Override public void setDiscreteContent(boolean value) { discreteContent = value; }
 
     @Override public long takeSourcePhaseDelayNs() {
+        // A source the phase lock holds takes no one-off moves as well.
+        if (sourcePhaseLockConsumer && !sourcePhaseLock.abandoned()) return 0L;
         return !closed.get() && TimelineSchedulerSwitch.sourcePhase() ? sourcePhaseAdvisor.take() : 0L;
+    }
+
+    @Override public long takeSourcePhaseNudgeNs() {
+        if (closed.get() || !TimelineSchedulerSwitch.sourcePhase() ||
+                !TimelineSchedulerSwitch.sourcePhaseLock()) return 0L;
+        sourcePhaseLockConsumer = true;
+        return sourcePhaseLock.take();
     }
     @Override public double endpointDriftUsPerSecond() { return reportedEndpointDriftUsPerS; }
     @Override public long endpointOffsetNs() { return reportedEndpointOffsetNs; }
@@ -7147,6 +7156,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // (3.2.103): each newly taken-up image's wait, offered to the core's pacer.
     private final com.thorium.emufusion.video.SourcePhaseAdvisor sourcePhaseAdvisor =
             new com.thorium.emufusion.video.SourcePhaseAdvisor();
+    // Paced libretro cores: a continuous phase lock instead of one-off moves.
+    private final com.thorium.emufusion.video.SourcePhaseLock sourcePhaseLock =
+            new com.thorium.emufusion.video.SourcePhaseLock();
+    private volatile boolean sourcePhaseLockConsumer;
     private long sourcePhaseObservedPair;
     private final com.thorium.emufusion.video.CompositorEarlyGuard compositorEarlyGuard =
             new com.thorium.emufusion.video.CompositorEarlyGuard();
@@ -9414,8 +9427,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (timeline.arrivalPacing() && timeline.arrivalPairs() != sourcePhaseObservedPair) {
             sourcePhaseObservedPair = timeline.arrivalPairs();
             long arrived = arrivalNs(activeRightSubmission);
-            if (arrived > 0L)
-                sourcePhaseAdvisor.observe(System.nanoTime() - arrived, panelPeriodNs);
+            if (arrived > 0L) {
+                long waitNs = System.nanoTime() - arrived;
+                sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);
+                sourcePhaseLock.observe(waitNs, panelPeriodNs);
+            }
         }
         if (arrivalTraceEnabled && timeline.arrivalPairs() != arrivalTracedPair &&
                 arrivalTraceLines < ARRIVAL_TRACE_LIMIT) {
@@ -14559,6 +14575,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " sourcePhaseShifts=" + sourcePhaseAdvisor.shifts() +
                 " sourcePhaseShiftedUs=" + sourcePhaseAdvisor.shiftedNs() / 1000L +
                 " sourcePhaseAbandoned=" + (sourcePhaseAdvisor.abandoned() ? 1 : 0) +
+                " sourcePhaseLockNudges=" + sourcePhaseLock.nudges() +
+                " sourcePhaseLockTotalUs=" + sourcePhaseLock.nudgedTotalNs() / 1000L +
+                " sourcePhaseLockWaitUs=" + Math.round(sourcePhaseLock.meanWaitNs() / 1000.0) +
+                " sourcePhaseLockAbandoned=" + (sourcePhaseLock.abandoned() ? 1 : 0) +
                 " builtinQueueRejectedTrials=" + builtinQueueReserve.rejectedTrials() +
                 " compositorEarlyGuard=" + (compositorEarlyGuard.active() ? 1 : 0) +
                 " compositorEarlyGuardActivations=" + compositorEarlyGuard.activations() +

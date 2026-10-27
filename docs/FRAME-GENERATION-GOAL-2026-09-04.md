@@ -56,6 +56,21 @@ reviewed before this revision; its work was not discarded.
    - Tried: an output-lattice phase lock for arrival pacing. No gain (Wind Waker HD 76.0 -> 76.7%, Ocarina unchanged), more latency, so it is QA opt-in only (`emufusion_framegen_arrival_phase_lock=1`).
    - Open: 30 fps sources need a fix in where their arrivals fall relative to the 2-scan output, or in GPU contention.
 5. **L1** Latency audit against the structural minimum for every case (`lat/split.py`), then fix the largest gaps. Switch and Wii U real images are ~37 ms, about 12 ms above it.
+   - Libretro cores (3.2.119): the phase drifted. A core locked to the panel runs at twice the measured scan, which is a few hundred ppm off, and `SourcePhaseAdvisor`'s one-off moves let the wait creep back between moves.
+     - NES moved 6 times in 60 s; its first generated image was 10-15 ms after arrival from run to run.
+     - `SourcePhaseLock` replaces those moves with a phase-locked loop on the arrival-to-callback wait:
+       - circular error, unwrapped;
+       - target 1.5 ms + 3x jitter, jitter measured only while it is not moving;
+       - at most 0.1 ms a frame, earlier or later;
+       - left alone if 10 ms of nudging does not shrink a > 1 ms error.
+     - `AbsoluteFramePacer.nudge`. QA `emufusion_framegen_source_phase_lock=0`.
+     - The first device build smoothed across the wrap and counted its own steps as jitter (a third of a 630-case simulated sweep failed); the sweep is now a test.
+   - Thor 2026-10-27, fixed build (`9b30563b`), first generated / real image:
+     - NES alternated: 9.1-9.2 / 17.4-17.5 ms against 10.5-11.1 / 18.8-19.4 ms without the lock, holds per 1000 unchanged (on 7.2 and 1.5, off 4.1 and 5.2);
+     - SNES 9.3 / 17.6 ms (was ~10.8 / 19.0), 99.8% on interval;
+     - Mega Drive 11.9 / 20.3 (was 13.8-16.4 / 22.4-24.7), 99.8%;
+     - GBA 8.9 / 17.3 (was 12.7 / 18.4), 99.7%.
+   - NES, SNES and GBA real images are now within 1 ms of the structural minimum (16.7 ms); Mega Drive is within 3.6 ms.
 6. **A1** `propagate_ca` replay bench, paired against 3.2.117 on all four sets. GPU cost needs a live session.
    - Done, not adopted.
    - Hold-out error is within noise on every set (-0.003 to +0.017 of a cross-fade).
@@ -66,6 +81,18 @@ reviewed before this revision; its work was not discarded.
      - Wind Waker HD 0.063-0.079 -> 0.072-0.082%.
    - The adoption rule was "Star Fox 64 must not get worse", so it stays CLI-only.
 7. **A2** Artifact census on all sets with `replay_invented.py`. The worst classes come first.
+   - Census (3.2.117 generator, frames with solid invented content):
+     - 2-D: Mega Drive, SNES and GBA 50%, NES 0%.
+     - 3-D: Double Dash 35%, NSMBU Deluxe 30-40%, Star Fox 64 30-40%, Wind Waker HD 20%, Link's Awakening 6%.
+   - Classes:
+     - 2-D: cyclic animation that is not motion (Casino Night's rotating bumper, blinking lights) and moving-sprite edges (Mario and Yoshi on the SNES title).
+     - 3-D: occlusion edges of large, fast near objects (Double Dash's karts).
+   - Measured offline with the genport, not adopted:
+     - 2-D nearer-frame fallback where nothing explains a pixel (`d_neither` 32): frames 31 -> 19%, but area flat and error up.
+     - `pick_t` 16.
+     - 3-D forward-backward occlusion choice.
+     - `PICK_3D` (24, 64): full-size invented area -19%, but eval, small3d and train flat or worse.
+   - A real gain needs better motion at occlusion edges and for non-motion animation, not a different fallback.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
 October 27 (latest) **— 3.2.117 (191, `0a0e0423`): the take-up lattice is off again; Thor test of 3.2.116.**

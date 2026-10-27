@@ -181,11 +181,16 @@ class LowLatencyPresentationTest(unittest.TestCase):
         # trace: Mega Drive waited 1.5-7.2 ms, Ocarina 4.1 ms for the callback).
         # QA: emufusion_framegen_source_phase=0.
         generator = GENERATOR.read_text()
-        self.assertIn("sourcePhaseAdvisor.observe(System.nanoTime() - arrived, panelPeriodNs);", generator)
+        self.assertIn("long waitNs = System.nanoTime() - arrived;", generator)
+        self.assertIn("sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);", generator)
         self.assertIn("TimelineSchedulerSwitch.sourcePhase() ? sourcePhaseAdvisor.take() : 0L;", generator)
         game = ROOT / "unified-android" / "src" / "com" / "thorium" / "preview"
-        self.assertIn("pacer.delayNext(phaseDelayNs);",
-                      (game / "game" / "LibretroEngineSession.java").read_text())
+        libretro = (game / "game" / "LibretroEngineSession.java").read_text()
+        self.assertIn("pacer.delayNext(phaseDelayNs);", libretro)
+        # 3.2.119: paced libretro cores are then held there by a phase lock
+        # (QA emufusion_framegen_source_phase_lock=0 keeps the one-off moves).
+        self.assertIn("sourcePhaseLock.observe(waitNs, panelPeriodNs);", generator)
+        self.assertIn("if (phaseNudgeNs != 0L) pacer.nudge(phaseNudgeNs);", libretro)
         self.assertIn("FrameGenerationRendererRegistry.takeSourcePhaseDelayNs(attachedSurface)",
                       (game / "ExperimentalGlesRenderLoop.java").read_text())
         video = ROOT / "unified-android" / "src" / "com" / "thorium" / "emufusion" / "video"

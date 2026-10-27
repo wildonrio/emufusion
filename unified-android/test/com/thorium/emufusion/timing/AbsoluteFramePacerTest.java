@@ -13,7 +13,23 @@ public final class AbsoluteFramePacerTest {
         fourCoalescedFramesExplainFivePeriodVideoGap();
         smallTrimPreservesScheduledTimestamp();
         aPhaseDelayMovesTheLatticeOnce();
+        aNudgeMovesTheLatticeEitherWay();
         System.out.println("AbsoluteFramePacerTest passed");
+    }
+
+    /** SourcePhaseLock: small signed shifts, later or earlier. */
+    private static void aNudgeMovesTheLatticeEitherWay() {
+        AbsoluteFramePacer pacer = new AbsoluteFramePacer(10L);
+        pacer.nudge(2L);
+        pacer.reset(100L);
+        TestSupport.equal(100L, pacer.deadlineNanos(), "no nudge before the clock starts");
+        pacer.delayAfterFrame(101L);
+        pacer.nudge(2L);
+        pacer.delayAfterFrame(111L);
+        TestSupport.equal(122L, pacer.deadlineNanos(), "two later");
+        pacer.nudge(-3L);
+        pacer.delayAfterFrame(122L);
+        TestSupport.equal(129L, pacer.deadlineNanos(), "three earlier");
     }
 
     private static void aPhaseDelayMovesTheLatticeOnce() {

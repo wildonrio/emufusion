@@ -61,6 +61,15 @@ public final class AbsoluteFramePacer {
         if (started && nanos > 0L) deadlineNanos = saturatingAdd(deadlineNanos, nanos);
     }
 
+    /**
+     * Moves the lattice by a small signed amount from the next frame on
+     * (SourcePhaseLock, at most a tenth of a millisecond a frame): positive
+     * later, negative earlier.
+     */
+    public void nudge(long nanos) {
+        if (started && nanos != 0L) deadlineNanos = saturatingAdd(deadlineNanos, nanos);
+    }
+
     /** Changes future spacing without moving the frame already scheduled. */
     public AbsoluteFramePacer withPeriodPreservingDeadline(long newPeriodNanos) {
         AbsoluteFramePacer next = new AbsoluteFramePacer(newPeriodNanos);
