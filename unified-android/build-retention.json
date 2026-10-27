@@ -4,7 +4,7 @@
   "pinned_sha256": {
     "0c560e2b74645c956be0441b8d13b9bdf7efb24accc24f29f379e75f0f943120": "Rollback 3.2.110 (184), released and installed on the Thor; 3.2.92-3.2.109 are on GitHub Releases, no local copies (owner request 2026-10-10: disk space).",
     "86a1b379378221f49b90f5d6bbfcbddc71458e3f15ee3e14a3bc80886865733b": "Release 3.2.115 (189): every open checks for an app update first and games wait for it; host-verified, not yet on the Thor (away 2026-10-26).",
-    "dd5d68ecc98ca5a17f11cd4c2aa9e825ec5d34a5e5a018b0821a992a0a587215": "Candidate 3.2.116 (190): random hitches any Android shows and Thor-only pacing rules; host-verified, held for the Thor test (owner 2026-10-27) before release."
+    "10f755a72b279185a472f645fe33cdb9eccd72873d113e45b8fff73b9f25da99": "Candidate 3.2.116 (190): random hitches any Android shows and Thor-only pacing rules; host-verified, held for the Thor test (owner 2026-10-27) before release."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -990,6 +990,10 @@
     "unified-android/build/emufusion-3.2.116-phase2-phase3-qualification-2507f6dd66c6a9af84cbbbba103376a91a46ff99c2bfab276c14e21c562d449f.apk": {
       "sha256": "2507f6dd66c6a9af84cbbbba103376a91a46ff99c2bfab276c14e21c562d449f",
       "reason": "Superseded first 3.2.116 build (2026-10-27): used only for the phone-emulator check; rebuilt as dd5d68ec with the timeline timing-error diagnostic fixed. Never released or installed on the Thor."
+    },
+    "unified-android/build/emufusion-3.2.116-phase2-phase3-qualification-dd5d68ecc98ca5a17f11cd4c2aa9e825ec5d34a5e5a018b0821a992a0a587215.apk": {
+      "sha256": "dd5d68ecc98ca5a17f11cd4c2aa9e825ec5d34a5e5a018b0821a992a0a587215",
+      "reason": "Superseded second 3.2.116 build (commit eff8611, 2026-10-27); rebuilt as 10f755a7 with the passthrough readback skipped where generation is unavailable for good. Never released or installed."
     }
   }
 }

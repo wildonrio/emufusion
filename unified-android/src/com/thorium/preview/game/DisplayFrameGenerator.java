@@ -5006,7 +5006,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         classifiedUniqueTexture = 0;
         classifiedUniqueTimestampNs = 0L;
         classifiedUniqueSubmission = 0;
-        if (!signatureReadbackSafe) {
+        // With generation unavailable for good (a device that cannot sustain
+        // it), the verdict only feeds the readout, and its synchronous
+        // glFinish made the presenter wait for the GPU on every arrival of
+        // the passthrough it now shows. Count each arrival as unique.
+        if (!signatureReadbackSafe ||
+                (densePyramidUnavailable && externalTransport == null && !holdoutMode)) {
             classifiedFrameReady = true;
             classifiedUniqueTexture = latestTexture;
             classifiedUniqueTimestampNs = currentTimestampNs;

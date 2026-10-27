@@ -114,6 +114,7 @@ public class WiringFixture {
     static class NativeSourceImageProvider {boolean valid=true;}
     static class FrameWorkHint {static long threadCpuNs(){return 0L;} static long cpuSince(long s){return 0L;}}
     long workHintBusyNs;
+    boolean densePyramidUnavailable, holdoutMode;
     void releaseSoftwareSnapshot(int[] snapshot){}
     static class NativeSourceImageObserver {
         static int allocations;

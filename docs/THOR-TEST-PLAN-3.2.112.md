@@ -198,11 +198,20 @@ compare with 3.2.115 where a QA switch exists.
    synchronous `glFinish` + `glReadPixels` (`latestImageIsUnique`; the
    asynchronous query path exists only while dense generation runs). Use the
    QA physical trace through a suspension to see whether real frames hitch
-   there. If they do, give passthrough its own PBO and fence readback.
-8. **Frame generation Off.** SNES and NES: `Direct display tick clock
+   there. If they do, give passthrough its own PBO and fence readback. (When
+   generation is unavailable for good, 3.2.116 skips this readback.)
+8. **Content holds.** 3.2.112's `LATE_NEAR` shows the nearer real frame
+   for a frame the motion cannot explain, so on screen that frame repeats a
+   real one: a hold, not a hitch, which the hitch count above cannot see.
+   Offline that was 5.6% of frames, concentrated in fast scenes. In Sonic
+   Adventure, Star Fox 64 and a Mario Kart Wii race, compare the 240 fps
+   recording's local cadence with `LATE_NEAR` 0.1 against the replay dex with
+   the band disabled (0.5). If fast scenes look steppier, the blend may be
+   the better fallback for 3-D.
+9. **Frame generation Off.** SNES and NES: `Direct display tick clock
    active=true`, and no hitch every ~17 s (QA physical trace, or a 240 fps
    recording).
-9. **Bench candidate (no install).** Replay bench, paired, with the C-flow
+10. **Bench candidate (no install).** Replay bench, paired, with the C-flow
    propagation shader:
    `python3 tools/learned_framegen/dis_gles.py OUT/DenseInverseSearchShaders.java --propagate-ca`,
    then `sh tools/qa/build_replay_dex.sh OUT.dex OUT/DenseInverseSearchShaders.java`.
