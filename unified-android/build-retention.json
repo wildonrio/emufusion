@@ -1069,6 +1069,10 @@
     "unified-android/build/emufusion-3.2.122-phase2-phase3-qualification-f68c80bfe2a45fcef861cf023b8d926427275c021d188c49648d3a5a78f82faf.apk": {
       "sha256": "f68c80bfe2a45fcef861cf023b8d926427275c021d188c49648d3a5a78f82faf",
       "reason": "First 3.2.122 build (slot 313) whose post-build retention step failed on a stale record; rebuilt as slot 314. Never installed."
+    },
+    "unified-android/build/emufusion-3.2.119-phase2-phase3-qualification.apk": {
+      "sha256": "9b30563bbd0644a227097ef36a39fc1502657d26a60c42bd275de21d1f711870",
+      "reason": "Unhashed copy of release 3.2.119 (193); no longer the rollback after 3.2.122 (2026-11-01). The asset stays on GitHub v3.2.119."
     }
   }
 }
