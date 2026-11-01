@@ -266,6 +266,10 @@ November 1 (latest) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase searc
   | Star Fox 64 (3-D) | identical | | | |
 
   - Mega Drive's per-phase search took ~1.5 ms net, against ~2.2.
+- **Not adopted: a learned per-pixel choice on physical features.** 3-D generate path, reproduced triplets of the re-recorded corpus (8 game sets, 4,000 changing pixels a triplet).
+  - A multinomial logistic model chose between the production output, the nearer frame's warped sample and the zero-motion blend. Its inputs: warp disagreement, zero-motion error, five-tap warp error, log motion, and A's gradient, with squares and two products.
+  - Trained on the expected error of its soft choice, leaving each game out: every held-out game kept production's output (1.000), against a per-pixel oracle of 0.680-0.759 of its error (0.727 overall).
+  - As with the October learned selector, the headroom exists but these inputs do not predict it.
 - **Star Fox 64 has no phase slack** (arrival trace, 3.2.124, 716 pairs). Admission-to-callback waits: p5 2.05 ms, median 2.55 ms, p95 3.65 ms, rare outliers to 10.7 ms. Even with a robust p5-p95 spread (1.6 ms) instead of min-max, the advisor's safe wait (1 ms + spread) is ~2.6 ms, where it already sits. The remaining ~3 ms above the minimum is the core's arrival jitter.
 - **SM3DW and Cemu's speed (Thor, 3.2.124, 60 s each).**
   - Cemu runs ~59 fps with generation off (presented rate) and 55.2 with it on (sourceHz).
