@@ -270,6 +270,11 @@ November 1 (latest) **— 3.2.122 (196, `8182eefc`): generation costs 20-30% les
   - God of War 99.9% (97.4%), 9.8 / 18.1 ms (12.6 / 20.8): within 1.4 ms of the minimum.
   - No work reductions.
 - The cut pass (~0.35 ms) keeps its single fragment: splitting it needs float32 render targets for its sums.
+- **SM3DW's pacing is bounded by Cemu's speed.**
+  - Cemu delivers ~56 fps on the Thor (sourceHz 55.96). On a 120 Hz panel that is 2.14 scans a frame, so every seventh frame or so holds a third scan, whatever the generator does: 95.2% on interval.
+  - Forcing the content-time timeline gave 96.2% at 42 / 53 ms.
+  - Under the doubling-only rule, the levers are Cemu's own speed (render resolution) or non-doubling phases. Both are the owner's call.
+- **Not adopted: the 3-D per-phase field one level finer.** The search and densify ran at 1/4 of 1080p instead of 1/8, with endpoint flows upsampled x2 and the patch stride 6 or 4 (generator port, reproduced triplets). Much worse: full-size 13.7 -> 26-27% of frames with invented content, error 0.587 -> 0.70; eval 9.1 -> 21-26%. Smaller patches at the finer level make a noisier field than the blur they remove.
 
 November 1 (earlier) **— 3.2.121 (195, `b7e3d8bc`): pixel-art motion fades to zero where nothing explains a pixel.**
 
