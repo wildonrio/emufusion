@@ -302,6 +302,15 @@ November 1 (earlier) **— 3.2.122 (196, `8182eefc`): generation costs 20-30% le
     - SNES (90 moving pairs): it changed 0.04% of pixels, 95% of them farther from the real frame (4.2 -> 6.6): pixels that sat unchanged for a second and moved at the midpoint.
     - Not adopted; it stays QA (`emufusion_framegen_static_overlay`, hold-out level 26). The corpus's worst case, Casino Night's fast scroll under the HUD, is not in this footage.
   - Notes: the test harness splits its QA string on commas, so `emufusion_framegen_holdout_levels` must be set over adb. Live captures go to `/sdcard/Android/data/com.thorium.preview/files/train`.
+- **Endpoint flows re-measured with production per-phase settings** (subsampled candidates, 3-D early stop), on reproduced triplets of the re-recorded corpus:
+  - OpenCV's exact flows (`genport/ocv.py`) in place of ours: Double Dash 24.2 -> 21.2% of frames with invented content, area 0.102 -> 0.085%. Star Fox 64, Wind Waker HD and SM3DW were neutral (14.4 -> 15.5%, area equal).
+  - GPU-parallel propagation (neighbour jumps 1, 2/1 or 8/4/2/1, with or without OpenCV's descent) did not recover Double Dash's gain: area 0.103-0.119%, error 0.566 -> 0.557-0.561.
+  - A wavefront compute version of OpenCV's sequential sweep would cost an estimated 3-5 ms a pair: 8 stripes, about 84 dependent steps per pass and level, both directions. Not worth a 17% area gain on one game.
+  - Flow quality is no longer the main limit on 3-D artifacts.
+- **Remaining latency gaps are set by the sources:**
+  - NSMBU Deluxe: Eden's frames follow its rendering, not a clock the generator can move; they wait 4.3 ms for their callback.
+  - Star Fox 64: a 3.1 ms wait is the advisor's margin, 1 ms plus ~1.5-2 ms of hardware-core arrival jitter.
+  - SM3DW: Cemu runs at ~56 fps.
 - **Not adopted: the 3-D per-phase field one level finer.** The search and densify ran at 1/4 of 1080p instead of 1/8, with endpoint flows upsampled x2 and the patch stride 6 or 4 (generator port, reproduced triplets). Much worse: full-size 13.7 -> 26-27% of frames with invented content, error 0.587 -> 0.70; eval 9.1 -> 21-26%. Smaller patches at the finer level make a noisier field than the blur they remove.
 
 November 1 (earlier) **— 3.2.121 (195, `b7e3d8bc`): pixel-art motion fades to zero where nothing explains a pixel.**
