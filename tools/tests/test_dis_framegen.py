@@ -61,11 +61,18 @@ class DisShaderTest(unittest.TestCase):
             dis_gles.OCCLUSION_SIDE_T, dis_gles.CONTENT_BOUNDS = 0.0, False
         optional = {("generatePhase", "uFlowAC"), ("generatePhase", "uFlowCA"),
                     ("generatePhase", "uBounds")}
+        # The pixel-art motion fade's densify variant.
+        dis_gles.PHASE_DENSIFY_DISCRETE_FADE = (10.0, 6.0)
+        try:
+            fade = dis_gles.shaders()["PHASE_DENSIFY"]
+        finally:
+            dis_gles.PHASE_DENSIFY_DISCRETE_FADE = None
         used = set(re.findall(r'(?:bind|location)\((\w+), "(\w+)"', runtime))
         self.assertTrue(used)
         for program, name in used:
             with self.subTest(program=program, uniform=name):
                 source = selector if program in selector_programs else \
+                    fade if (program, name) == ("phaseDensify", "uDiscrete") else \
                     variant if (program, name) in optional else shaders[program_of[program]]
                 self.assertRegex(source, r"uniform [^;]*\b" + name + r"\b")
 
