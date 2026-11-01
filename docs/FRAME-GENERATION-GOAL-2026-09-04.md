@@ -266,6 +266,9 @@ November 1 (latest) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase searc
   | Star Fox 64 (3-D) | identical | | | |
 
   - Mega Drive's per-phase search took ~1.5 ms net, against ~2.2.
+- **Sweeps around it (generator port, reproduced triplets):**
+  - Pixel art: stride 5 or 6, or fade thresholds 8 or 14 at stride 4, only trade error for area. For example, stride 6 is Game Boy/Game Gear area 0.252 -> 0.193% but eval error 0.523 -> 0.541. Stride 4 with threshold 10 stays.
+  - 3-D at stride 4 is worse: eval 14.4 -> 17.5% of frames (Star Fox 64 23 -> 32%), full-size 11.1 -> 12.2%. 3-D keeps 3.
 - **Thor, 60 s each, dense GPU per pair:**
   - Mega Drive 99.7% on interval, 9.6 / 17.9 ms, 4.0 ms per pair (5.1 on 3.2.122);
   - SNES 99.9%, 9.3 / 17.7 ms, 3.5 ms;
