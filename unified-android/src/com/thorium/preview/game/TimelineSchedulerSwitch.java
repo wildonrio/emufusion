@@ -309,6 +309,15 @@ public final class TimelineSchedulerSwitch {
     static final int LEARNED_SELECTOR_SYNTHESIS_LEVEL = 25;
 
     /**
+     * Synthesis 26 (QA hold-out level): 24 with the static-overlay rule
+     * (pixels unchanged for {@link #OVERLAY_LEVEL_FRAMES} real frames shown
+     * unwarped), so a hold-out capture with levels 24,26,x scores both on the
+     * same pairs.
+     */
+    static final int DIS_PHASE_OVERLAY_SYNTHESIS_LEVEL = 26;
+    static final int OVERLAY_LEVEL_FRAMES = 60;
+
+    /**
      * DIS by default. Small (2-D) sources render synthesis 24 (21 with the
      * motion refined per output phase) and larger ones synthesis 15 with DIS
      * motion (22): on paired Thor hold-outs 21 beat synthesis 15 by 15-35% on
@@ -523,7 +532,8 @@ public final class TimelineSchedulerSwitch {
                 int level = ids[i] % 100;
                 if (ids[i] == DIS_SYNTHESIS_LEVEL || ids[i] == DIS_MOTION_SYNTHESIS_LEVEL ||
                         ids[i] == DIS_PHASE_SYNTHESIS_LEVEL ||
-                        ids[i] == LEARNED_SELECTOR_SYNTHESIS_LEVEL) continue;
+                        ids[i] == LEARNED_SELECTOR_SYNTHESIS_LEVEL ||
+                        ids[i] == DIS_PHASE_OVERLAY_SYNTHESIS_LEVEL) continue;
                 if (ids[i] < 0 || ids[i] > 115 || (ids[i] > 15 && ids[i] < 100) || level > 15)
                     return DEFAULT_HOLDOUT_LEVELS.clone();
             }

@@ -13125,7 +13125,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 bindQuad(flow.generateSelectProgram());
             } else {
                 flow.setDiscrete(discreteContent);
-                flow.setStaticFrames(TimelineSchedulerSwitch.staticOverlayFrames());
+                flow.setStaticFrames(synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_OVERLAY_SYNTHESIS_LEVEL ?
+                        TimelineSchedulerSwitch.OVERLAY_LEVEL_FRAMES : TimelineSchedulerSwitch.staticOverlayFrames());
                 flow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
                         structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());
                 bindQuad(flow.generatePhaseProgram());
@@ -13150,8 +13151,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // Small (2-D) sources default to 24: on paired Thor hold-outs it beat 21
         // on every 2-D game (NES 0.547 -> 0.457, SNES 0.463 -> 0.435).
         boolean selector = synthesisLevel == TimelineSchedulerSwitch.LEARNED_SELECTOR_SYNTHESIS_LEVEL;
+        boolean overlayLevel = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_OVERLAY_SYNTHESIS_LEVEL;
         boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||
-                selector || (disDefault && !holdoutRendering);
+                overlayLevel || selector || (disDefault && !holdoutRendering);
         boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;
         if (dis && drawDisFrame(phase, disPhase, selector)) return;
         boolean phaseField = renderPhaseField(phase);

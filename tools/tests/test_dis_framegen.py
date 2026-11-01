@@ -184,7 +184,8 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn("static final int DIS_SYNTHESIS_LEVEL = 21;", switch)
         self.assertIn("if (ids[i] == DIS_SYNTHESIS_LEVEL || ids[i] == DIS_MOTION_SYNTHESIS_LEVEL ||\n"
                       "                        ids[i] == DIS_PHASE_SYNTHESIS_LEVEL ||\n"
-                      "                        ids[i] == LEARNED_SELECTOR_SYNTHESIS_LEVEL) continue;", switch)
+                      "                        ids[i] == LEARNED_SELECTOR_SYNTHESIS_LEVEL ||\n"
+                      "                        ids[i] == DIS_PHASE_OVERLAY_SYNTHESIS_LEVEL) continue;", switch)
         self.assertIn("boolean dis = disPhase || synthesisLevel == TimelineSchedulerSwitch.DIS_SYNTHESIS_LEVEL;", generator)
         self.assertIn("if (dis && drawDisFrame(phase, disPhase, selector)) return;", generator)
         # Synthesis 24 applies synthesis 15's static-structure mask.
@@ -282,7 +283,9 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn('DIS_GLOBAL = "emufusion_framegen_dis"', switch)
         # Every source renders synthesis 24; 22 is QA only.
         self.assertIn("boolean disPhase = synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_SYNTHESIS_LEVEL ||\n"
-                      "                selector || (disDefault && !holdoutRendering);", generator)
+                      "                overlayLevel || selector || (disDefault && !holdoutRendering);", generator)
+        # Hold-out level 26: 24 with the static-overlay rule, scored on the same pairs.
+        self.assertIn("static final int DIS_PHASE_OVERLAY_SYNTHESIS_LEVEL = 26;", switch)
         self.assertIn("private boolean disSmallSource() { return historyWidth <= 400 && historyHeight <= 300; }",
                       generator)
         # In normal play DIS replaces the block matcher's search; the hold-out keeps both.

@@ -1085,6 +1085,10 @@
     "unified-android/build/emufusion-3.2.124-phase2-phase3-qualification-d7db37ae81d6f0e063da6c97b6a36fd00ef09e56379765bfefb0f08b31868779.apk": {
       "sha256": "d7db37ae81d6f0e063da6c97b6a36fd00ef09e56379765bfefb0f08b31868779",
       "reason": "3.2.124 trial: QA static-overlay count (off by default) for a live A/B on Sonic 2, 2026-11-01; inconclusive (unpaired captures). 3.2.123 reinstalled. Never released."
+    },
+    "unified-android/build/emufusion-3.2.124-phase2-phase3-qualification-a990b32a7f111e9e1384c47bfbca297c9e17a43599a40de1661c5b7c7efb4429.apk": {
+      "sha256": "a990b32a7f111e9e1384c47bfbca297c9e17a43599a40de1661c5b7c7efb4429",
+      "reason": "3.2.124 trial 2: hold-out level 26 (static overlay) for a paired live A/B, 2026-11-01; negligible on Mega Drive, slightly worse on SNES. 3.2.123 reinstalled. Never released."
     }
   }
 }

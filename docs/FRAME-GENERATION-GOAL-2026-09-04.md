@@ -297,7 +297,10 @@ November 1 (earlier) **— 3.2.122 (196, `8182eefc`): generation costs 20-30% le
   - The flow keeps a per-pixel count of real frames in a row unchanged (`STATIC_COUNT`, once per pair, ping-pong RGBA8). The generate pass shows a pixel counted N or more unwarped. The October 25 trial counted 8 frames and shredded tiles; N=60 should fire only on overlays and on coincidences that are invisible anyway.
   - Live A/B on the Thor (3.2.124 trial `d7db37ae`, hold-out training capture, Sonic 2 attract, 148 triplets each at the production level): the HUD box's mean difference from the real frame fell 35.8 -> 16.9 grey levels.
   - The overall figures are not comparable: the runs captured different stretches (129 vs 67 moving frames; the second had more title fades).
-  - A paired live capture is needed before adoption; the replay bench cannot test it, because its triplets have no history.
+  - Paired live capture (hold-out level 26 = 24 with the rule at 60 frames; levels 24,26,21, so both render the same pairs; 3.2.124 trial 2 `a990b32a`):
+    - Mega Drive (Sonic 2 attract, 123 moving pairs): the rule changed almost no pixels (<0.01% of a frame). Those it changed were 89% closer to the real frame (mean difference 173 -> 12), but frames with invented content stayed 9% -> 9%.
+    - SNES (90 moving pairs): it changed 0.04% of pixels, 95% of them farther from the real frame (4.2 -> 6.6): pixels that sat unchanged for a second and moved at the midpoint.
+    - Not adopted; it stays QA (`emufusion_framegen_static_overlay`, hold-out level 26). The corpus's worst case, Casino Night's fast scroll under the HUD, is not in this footage.
   - Notes: the test harness splits its QA string on commas, so `emufusion_framegen_holdout_levels` must be set over adb. Live captures go to `/sdcard/Android/data/com.thorium.preview/files/train`.
 - **Not adopted: the 3-D per-phase field one level finer.** The search and densify ran at 1/4 of 1080p instead of 1/8, with endpoint flows upsampled x2 and the patch stride 6 or 4 (generator port, reproduced triplets). Much worse: full-size 13.7 -> 26-27% of frames with invented content, error 0.587 -> 0.70; eval 9.1 -> 21-26%. Smaller patches at the finer level make a noisier field than the blur they remove.
 
