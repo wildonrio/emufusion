@@ -238,6 +238,13 @@ November 1 (latest) **— 3.2.121 (195, `b7e3d8bc`): pixel-art motion fades to z
   - With the fade off by QA, Mega Drive gave 99.8%, 9.2 / 17.6 ms; run-to-run spread is about 2 ms.
   - Dense GPU time per pair is unchanged by the fade (first second 357 vs 382 ms).
 - **Open: Mega Drive's dense work sits at the 7.3 ms per-pair budget**, peaking at 7.75-8.1 ms with or without the fade. One run stepped down to work level 3 within 4 s; at level 2 and above the per-phase field is skipped. SNES stays under it (6.2-6.7 ms). Next: find why a 320x224 source costs ~6.5 ms.
+- **Tried and reverted (3.2.122 trial, `82f490de`): the source phase lock on hardware-rendered cores.**
+  - The finding: Dolphin, ARMSX2 and other hardware cores run on `ExperimentalGlesRenderLoop`. That loop took the one-off phase moves but not 3.2.119's per-frame lock (0 nudges). Their images waited 6.0 ms (Double Dash) and 5.3 ms (God of War) before the callback that takes them up.
+  - With the lock wired in, it engaged (265 and 180 nudges), but pacing got worse:
+    - Double Dash's wait fell to 2.3 ms, yet latency rose 11.8 / 20.2 -> 14.7 / 22.9 ms and on-interval 99.6 -> 98.3%: the queue deepened and generated frames missed the compositor.
+    - God of War's arrival jitter set an 8.3 ms target: 97.4 -> 95.2% on interval.
+  - The dense pass needs 4-6 ms of GPU per pair on these games, and it shares the GPU with the engine. It has to fit between a frame's arrival and the compositor's latch, so a shorter wait only causes misses.
+  - 3.2.121 was reinstalled (identity kept). Native-engine latency needs cheaper generation under contention, not a different phase. Next: per-pass GPU timing.
 - **Build note.** Calling `unified-android/build.sh` directly rebuilds the phase-2 cores. AppleWin and ARMSX2 are not byte-reproducible, and Azahar's lock refused its rebuild. The shipped cores were restored byte-for-byte from 3.2.120's APK, and ARMSX2's receipt from `rename-c2b/ps2-inputs`. The release was built with `build.py 311`: natives unchanged, `classes2.dex` only.
 - **Mac disk (owner request):** package download caches (uv, npm, pnpm, Homebrew, pip) and the closed October 9 upgrade-test emulator image were deleted, 19.4 -> 44.5 GB free.
 

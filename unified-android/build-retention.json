@@ -1053,6 +1053,22 @@
     "unified-android/build/emufusion-3.2.120-phase2-phase3-qualification-5b7378f53bf0df9045cac06de13f549734339df09cfb2790a3e8f414915fb724.apk": {
       "sha256": "5b7378f53bf0df9045cac06de13f549734339df09cfb2790a3e8f414915fb724",
       "reason": "3.2.120 candidate (3.2.119 plus the QA-only rate lock); installed on the Thor 2026-10-27, superseded by 3.2.121 on 2026-11-01. Never released."
+    },
+    "unified-android/build/emufusion-3.2.122-phase2-phase3-qualification-82f490de6a8d96241e6be5d0091b0afdad72b103eb1bd292e46fd67c819f709a.apk": {
+      "sha256": "82f490de6a8d96241e6be5d0091b0afdad72b103eb1bd292e46fd67c819f709a",
+      "reason": "3.2.122 trial: the source phase lock on hardware-rendered cores. Thor 2026-11-01: Double Dash latency 11.8/20.2 -> 14.7/22.9 ms (queue deepened), God of War 97.4 -> 95.2% on interval. Reverted; 3.2.121 reinstalled. Never released."
+    },
+    "unified-android/build/emufusion-3.2.118-phase2-phase3-qualification.apk": {
+      "sha256": "8397aa9a017f76f3befa7182fcf291b6b9824a6206adadbc39b3c1680126895e",
+      "reason": "Unhashed copy of release 3.2.118 (192); no longer the rollback after 3.2.121 (2026-11-01). The asset stays on GitHub v3.2.118."
+    },
+    "unified-android/build/emufusion-3.2.120-phase2-phase3-qualification.apk": {
+      "sha256": "5b7378f53bf0df9045cac06de13f549734339df09cfb2790a3e8f414915fb724",
+      "reason": "Unhashed copy of the 3.2.120 candidate, superseded by 3.2.121 (2026-11-01). Never released."
+    },
+    "unified-android/build/emufusion-3.2.122-phase2-phase3-qualification.apk": {
+      "sha256": "82f490de6a8d96241e6be5d0091b0afdad72b103eb1bd292e46fd67c819f709a",
+      "reason": "Unhashed copy of the reverted 3.2.122 hardware-core phase-lock trial (2026-11-01). Never released."
     }
   }
 }
