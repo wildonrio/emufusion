@@ -2,9 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "8182eefc0582b3031f6c9534d11d24280596244cfb0b470b2e64e04da7e4a8d4": "Rollback 3.2.122 (196), released and Thor-tested 2026-11-01.",
-    "0ca610e2c1504295b41c310dfb55997a3cb7ead37bea44869f95a29000ed993b": "Release 3.2.123 (197), GitHub v3.2.123 (asset hash checked) 2026-11-01, Thor-tested.",
-    "05d2b1d3de8279018824fa284b35c5b5837383b6a9c2956a19c87b2a2baf2f92": "Candidate 3.2.124 (198): 3.2.123 plus pixel art per-phase stride 4 (and QA static overlay, off); built 2026-11-01, Thor test pending."
+    "0ca610e2c1504295b41c310dfb55997a3cb7ead37bea44869f95a29000ed993b": "Rollback 3.2.123 (197), released and Thor-tested 2026-11-01.",
+    "05d2b1d3de8279018824fa284b35c5b5837383b6a9c2956a19c87b2a2baf2f92": "Release 3.2.124 (198), GitHub v3.2.124 (asset hash checked) 2026-11-01, Thor-tested."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -1090,6 +1089,10 @@
     "unified-android/build/emufusion-3.2.124-phase2-phase3-qualification-a990b32a7f111e9e1384c47bfbca297c9e17a43599a40de1661c5b7c7efb4429.apk": {
       "sha256": "a990b32a7f111e9e1384c47bfbca297c9e17a43599a40de1661c5b7c7efb4429",
       "reason": "3.2.124 trial 2: hold-out level 26 (static overlay) for a paired live A/B, 2026-11-01; negligible on Mega Drive, slightly worse on SNES. 3.2.123 reinstalled. Never released."
+    },
+    "unified-android/build/emufusion-3.2.122-phase2-phase3-qualification.apk": {
+      "sha256": "8182eefc0582b3031f6c9534d11d24280596244cfb0b470b2e64e04da7e4a8d4",
+      "reason": "Unhashed copy of release 3.2.122; no longer the rollback after 3.2.124 (2026-11-01). The asset stays on GitHub v3.2.122."
     }
   }
 }
