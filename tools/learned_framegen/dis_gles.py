@@ -291,7 +291,30 @@ TO_RAW = (HEADER +
     " vec2 v=clamp(s/16.0*uScale,-uLimit,uLimit);o0=vec4(p16(v.x),p16(v.y));}\n")
 
 
+# Per-phase search cost (Thor 2026-11-01, per-pass timing: ~1.9 ms a pair,
+# the largest pass). Its start is the best of ~10 candidates, each scored by
+# a full 8x8 patch SSD (60% of its reads). PHASE_CAND_SUBSAMPLE scores them on
+# every other pixel (4x4, a quarter of the reads), then measures the chosen
+# start on the full patch for the keep-start test. PHASE_BREAK stops a
+# patch's Gauss-Newton steps once its SSD stops falling (OpenCV's DIS rule;
+# the step of that iteration is kept), from the same reads.
+PHASE_CAND_SUBSAMPLE = False
+PHASE_BREAK = False
+
+
 def phase_search_shader():
+    text = _phase_search_shader_text()
+    if PHASE_CAND_SUBSAMPLE:
+        # Candidates (the two proposals and every propagated or global one)
+        # are scored on the subsample; the start is then measured in full.
+        n = text.count("float ec=ssd(o,c);")
+        text = text.replace("float e1=ssd(o,v1),e2=ssd(o,v2);", "float e1=ssdc(o,v1),e2=ssdc(o,v2);")
+        text = text.replace("float ec=ssd(o,c);", "float ec=ssdc(o,c);")
+        assert n > 0 and "ssdc(o,v1)" in text
+    return text
+
+
+def _phase_search_shader_text():
     """Per-phase symmetric refinement (the REA-studied method: motion estimated at
     the output time). For each 8x8 patch of the output grid at time t, Gauss-
     Newton on A(x - t*v) = C(x + (1-t)*v) (mean-normalised), starting from the
@@ -310,7 +333,12 @@ def phase_search_shader():
     "float ssd(vec2 o,vec2 v){float sa=0.0,sc=0.0,saa=0.0,scc=0.0,sac=0.0;\n"
     " for(int y=0;y<P;++y)for(int x=0;x<P;++x){vec2 q=o+vec2(float(x),float(y))+0.5;float a=ga(q-uT*v).x,c=gc(q+(1.0-uT)*v).x;\n"
     "  sa+=a;sc+=c;saa+=a*a;scc+=c*c;sac+=a*c;}\n"
-    " const float N=float(P*P);return (saa-sa*sa/N)+(scc-sc*sc/N)-2.0*(sac-sa*sc/N);}\n"
+    " const float N=float(P*P);return (saa-sa*sa/N)+(scc-sc*sc/N)-2.0*(sac-sa*sc/N);}\n" +
+    ("float ssdc(vec2 o,vec2 v){float sa=0.0,sc=0.0,saa=0.0,scc=0.0,sac=0.0;\n"
+     " for(int y=0;y<P;y+=2)for(int x=0;x<P;x+=2){vec2 q=o+vec2(float(x),float(y))+1.0;float a=ga(q-uT*v).x,c=gc(q+(1.0-uT)*v).x;\n"
+     "  sa+=a;sc+=c;saa+=a*a;scc+=c*c;sac+=a*c;}\n"
+     " const float N=float(P*P/4);return 4.0*((saa-sa*sa/N)+(scc-sc*sc/N)-2.0*(sac-sa*sc/N));}\n"
+     if PHASE_CAND_SUBSAMPLE else "") +
     "void main(){vec2 o=vec2(ivec2(gl_FragCoord.xy)*S);vec2 x=o+0.5*float(P);\n"
     # Proposals: A's flow at its fixed-point source, and C's (negated) at its own.
     " vec2 p=x-uT*fac(x);p=x-uT*fac(p);p=x-uT*fac(p);vec2 q=x-(1.0-uT)*fca(x);q=x-(1.0-uT)*fca(q);q=x-(1.0-uT)*fca(q);\n"
@@ -325,13 +353,18 @@ def phase_search_shader():
             for j in range(PHASE_GLOBAL_GRID[1] if PHASE_GLOBAL_GRID else 0)
             for i in range(PHASE_GLOBAL_GRID[0] if PHASE_GLOBAL_GRID else 0)) +
     (" }\n" if PHASE_GLOBAL_GRID and PHASE_GLOBAL_DISCRETE_ONLY else "") +
-    " vec2 v=v0;const float N=float(P*P);\n"
-    " for(int k=0;k<ITERS;++k){float sa=0.0,sc=0.0;vec2 sj=vec2(0.0);mat2 h=mat2(0.0);vec2 b=vec2(0.0);vec2 jsa=vec2(0.0),jsc=vec2(0.0);\n"
+    (" e0=ssd(o,v0);\n" if PHASE_CAND_SUBSAMPLE else "") +
+    " vec2 v=v0;const float N=float(P*P);\n" +
+    (" float prev=1e30;\n" if PHASE_BREAK else "") +
+    " for(int k=0;k<ITERS;++k){float sa=0.0,sc=0.0" + (",srr=0.0" if PHASE_BREAK else "") +
+    ";vec2 sj=vec2(0.0);mat2 h=mat2(0.0);vec2 b=vec2(0.0);vec2 jsa=vec2(0.0),jsc=vec2(0.0);\n"
     "  for(int y=0;y<P;++y)for(int xx=0;xx<P;++xx){vec2 q2=o+vec2(float(xx),float(y))+0.5;vec3 A=ga(q2-uT*v),C=gc(q2+(1.0-uT)*v);\n"
-    "   vec2 j=(1.0-uT)*C.yz+uT*A.yz;float r=C.x-A.x;sa+=A.x;sc+=C.x;sj+=j;h+=mat2(j.x*j.x,j.x*j.y,j.x*j.y,j.y*j.y);b+=j*r;}\n"
+    "   vec2 j=(1.0-uT)*C.yz+uT*A.yz;float r=C.x-A.x;sa+=A.x;sc+=C.x;sj+=j;h+=mat2(j.x*j.x,j.x*j.y,j.x*j.y,j.y*j.y);b+=j*r;" +
+    ("srr+=r*r;" if PHASE_BREAK else "") + "}\n"
     # Mean-normalised residual: r_i - mean(r); its Jacobian j_i - mean(j).
     "  float mr=(sc-sa)/N;mat2 hn=h-mat2(sj.x*sj.x,sj.x*sj.y,sj.x*sj.y,sj.y*sj.y)/N+mat2(1e-4,0.0,0.0,1e-4);\n"
-    "  vec2 bn=b-sj*mr;v-=inverse(hn)*bn;}\n"
+    "  vec2 bn=b-sj*mr;v-=inverse(hn)*bn;" +
+    ("float ek=srr-N*mr*mr;if(ek>=prev)break;prev=ek;" if PHASE_BREAK else "") + "}\n"
     " float e=ssd(o,v);if(e>e0||any(isnan(v))){v=v0;e=e0;}\n"
     " o0=vec4(v,e,1.0);}\n")
 
