@@ -373,7 +373,12 @@ PHASE_DENSIFY_CROSS = True
 # copy of a real frame, which invents nothing: Mega Drive, SNES and NES
 # frames with invented content 33.8 -> 18.9%, error 0.526 -> 0.532. 3-D got
 # worse at every threshold, so the fade is pixel-art only. (T, q) or None.
-PHASE_DENSIFY_DISCRETE_FADE = None
+# Default since 3.2.121. Device replay bench (Thor 2026-11-01, paired, the
+# late verdict reading the unfaded motion): SNES frames with invented content
+# 57 -> 14%, Mega Drive invented area 0.319 -> 0.205%, Game Gear 0.604 ->
+# 0.539%; error -1% (Mega Drive) to +5% (NES), whole-frame holds unchanged
+# but for Game Gear 16 -> 18 and Game Boy 3 -> 5 of 52.
+PHASE_DENSIFY_DISCRETE_FADE = (10.0, 6.0)
 
 
 def phase_densify_discrete_fade_shader(T, q):
@@ -395,9 +400,11 @@ def phase_densify_discrete_fade_shader(T, q):
     "   d+=abs(texture(uGrayC,(x+OF[k]+(1.0-uT)*v)/vec2(uSize)).r-texture(uGrayA,(x+OF[k]-uT*v)/vec2(uSize)).r);}"
     "d*=255.0/float(nt);\n"
     "  float m=max(1.0,d);float w=1.0/(m*m);mmin=min(mmin,m);acc+=w*v;wsum+=w;}\n"
-    " vec2 v=acc/max(wsum,1e-6);\n"
-    f" if(uDiscrete>0.5)v*=min(1.0,pow({float(T)}/mmin,{float(q)}));\n"
-    " o0=vec4(v,0.0,1.0);}\n")
+    " vec2 v=acc/max(wsum,1e-6);vec2 vf=v;\n"
+    f" if(uDiscrete>0.5)vf*=min(1.0,pow({float(T)}/mmin,{float(q)}));\n"
+    # .xy unfaded for the late verdict (how much of the frame nothing
+    # explains); the faded motion in .zw for the whole-pixel generate pass.
+    " o0=vec4(v,vf);}\n")
 
 
 def phase_densify_shader():
@@ -928,6 +935,18 @@ def bounds_shader():
 
 def generate_phase_shader():
     text = _generate_phase_shader_text()
+    if PHASE_DENSIFY_DISCRETE_FADE is not None:
+        # The pixel-art fade: the densify writes the faded motion to .zw and
+        # keeps .xy unfaded for the late verdict; the whole-pixel path reads
+        # .zw (equal to .xy elsewhere).
+        n = text.count("texture(uPhaseFlow,u).xy") + text.count(",0).xy/uFlowSize")
+        text = text.replace("texture(uPhaseFlow,u).xy", "pf(texture(uPhaseFlow,u))")
+        text = text.replace("texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0).xy",
+                            "pf(texelFetch(uPhaseFlow,clamp(ub+ivec2(x,y),ivec2(0),um),0))")
+        assert "uPhaseFlow" not in text.replace("pf(texture(uPhaseFlow", "").replace(
+            "pf(texelFetch(uPhaseFlow", "").replace("uniform sampler2D", "").split("void main", 1)[1], n
+        text = text.replace("float md(vec3 x)", "vec2 pf(vec4 f){return uDiscrete>0.5?f.zw:f.xy;}\n"
+                            "float md(vec3 x)", 1)
     if not (CONTENT_BOUNDS and CLAMP_WARP_SAMPLES):
         return text
     # Every frame sample is clamped to the picture's outermost pixel centres,

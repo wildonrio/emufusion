@@ -210,10 +210,38 @@ reviewed before this revision; its work was not discarded.
      - Found by accident: a 6th-power weight with the old 1e-6 floor on the weight sum does the same (20.3%). Sharper weights without the floor are worse (40.5%), so the fade does the work.
      - 3-D: worse at every threshold tried (10-24 grey levels; Star Fox 64 17 -> 28-33% of frames), so it is pixel-art only.
      - The sharper variant broke Game Boy's 1-px diagonal lines into dashes: Game Boy frames went 33 -> 50% (Game Gear's area improved). The explicit fade still needs the same check, then a device replay.
+     - **Adopted in 3.2.121** after a device replay: SNES frames with invented content 57 -> 14%, Mega Drive area -36% (see the November 1 entry).
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-October 27 (latest) **— 3.2.117 (191, `0a0e0423`): the take-up lattice is off again; Thor test of 3.2.116.**
+November 1 (latest) **— 3.2.121 (195, `b7e3d8bc`): pixel-art motion fades to zero where nothing explains a pixel.**
+
+- **Change (whole-pixel path only).** The per-phase densification scales each pixel's motion by min(1, (10 / e)^6). Here e is the best covering patch's mean 3x3 error in grey levels. Zero motion on that path is a whole-pixel copy of a real frame, which invents nothing. 3-D is unchanged.
+  - The densify writes the unfaded motion to `.xy`, which the late verdict reads, and the faded motion to `.zw`, which the pixel-art generate pass reads.
+  - A first device version faded the field the late verdict reads. It turned frames into whole-frame holds (Game Gear 16 -> 23 of 54).
+  - QA `emufusion_framegen_pixel_fade=0`; generator switch `PHASE_DENSIFY_DISCRETE_FADE`.
+- **Replay bench on the Thor (device output, same triplets before and after).** Frames with invented content and invented area:
+
+  | System | Frames with invented content | Invented area | Error | Whole-frame holds |
+  | --- | --- | --- | --- | --- |
+  | SNES | 57 -> 14% | 0.118 -> 0.067% | 0.310 -> 0.322 | 0 -> 0 |
+  | Mega Drive | 38 -> 31% | 0.319 -> 0.205% | 0.778 -> 0.767 | 5 -> 5 |
+  | NES | 7 -> 0% | 0.020 -> 0.024% | 0.566 -> 0.595 | 7 -> 7 |
+  | Game Gear | 60 -> 60% | 0.604 -> 0.539% | 0.786 -> 0.814 | 16 -> 18 |
+  | Game Boy | 23 -> 27% | 0.065 -> 0.067% | 0.235 -> 0.243 | 3 -> 5 |
+
+  - The error rises where a sprite's pose changes: the sprite is shown at the nearer real frame's pose instead of a torn mix.
+  - Game Boy's 1-px diagonal lines break into dashes with or without the fade.
+- **Thor gameplay, 60 s each, 3.2.119 in brackets:**
+  - Mega Drive 99.5% on interval, 11.4 / 19.7 ms first generated / real image (99.8%, 11.9 / 20.3);
+  - SNES 99.8%, 9.2 / 17.5 ms (99.8%, 9.3 / 17.6).
+  - With the fade off by QA, Mega Drive gave 99.8%, 9.2 / 17.6 ms; run-to-run spread is about 2 ms.
+  - Dense GPU time per pair is unchanged by the fade (first second 357 vs 382 ms).
+- **Open: Mega Drive's dense work sits at the 7.3 ms per-pair budget**, peaking at 7.75-8.1 ms with or without the fade. One run stepped down to work level 3 within 4 s; at level 2 and above the per-phase field is skipped. SNES stays under it (6.2-6.7 ms). Next: find why a 320x224 source costs ~6.5 ms.
+- **Build note.** Calling `unified-android/build.sh` directly rebuilds the phase-2 cores. AppleWin and ARMSX2 are not byte-reproducible, and Azahar's lock refused its rebuild. The shipped cores were restored byte-for-byte from 3.2.120's APK, and ARMSX2's receipt from `rename-c2b/ps2-inputs`. The release was built with `build.py 311`: natives unchanged, `classes2.dex` only.
+- **Mac disk (owner request):** package download caches (uv, npm, pnpm, Homebrew, pip) and the closed October 9 upgrade-test emulator image were deleted, 19.4 -> 44.5 GB free.
+
+October 27 **— 3.2.117 (191, `0a0e0423`): the take-up lattice is off again; Thor test of 3.2.116.**
 
 The Thor came back still on 3.2.110 (hash `0c560e2b`), so 3.2.111-3.2.116 had never run on it. 3.2.116 was installed (`thor_install.py`, identity kept) and section 7e of the Thor test plan was run with `pace_card.py`, 60 s per case.
 - **Regression found: the 3.2.112 take-up lattice.**

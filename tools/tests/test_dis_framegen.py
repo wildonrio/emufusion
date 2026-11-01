@@ -62,11 +62,12 @@ class DisShaderTest(unittest.TestCase):
         optional = {("generatePhase", "uFlowAC"), ("generatePhase", "uFlowCA"),
                     ("generatePhase", "uBounds")}
         # The pixel-art motion fade's densify variant.
-        dis_gles.PHASE_DENSIFY_DISCRETE_FADE = (10.0, 6.0)
+        default_fade = dis_gles.PHASE_DENSIFY_DISCRETE_FADE
+        dis_gles.PHASE_DENSIFY_DISCRETE_FADE = default_fade or (10.0, 6.0)
         try:
             fade = dis_gles.shaders()["PHASE_DENSIFY"]
         finally:
-            dis_gles.PHASE_DENSIFY_DISCRETE_FADE = None
+            dis_gles.PHASE_DENSIFY_DISCRETE_FADE = default_fade
         used = set(re.findall(r'(?:bind|location)\((\w+), "(\w+)"', runtime))
         self.assertTrue(used)
         for program, name in used:
