@@ -266,6 +266,18 @@ November 1 (latest) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase searc
   | Star Fox 64 (3-D) | identical | | | |
 
   - Mega Drive's per-phase search took ~1.5 ms net, against ~2.2.
+- **SM3DW and Cemu's speed (Thor, 3.2.124, 60 s each).**
+  - Cemu runs ~59 fps with generation off (presented rate) and 55.2 with it on (sourceHz).
+  - Lighter generation through the QA work floor barely helps:
+
+    | Work floor | Cemu fps | Dense GPU a pair | On interval | First generated / real image |
+    | --- | --- | --- | --- | --- |
+    | Normal | 55.2 | 2.6 ms | 96.7% | 18.3 / 27.3 ms |
+    | 3 | 55.7 | 1.7 ms | 94.8% | |
+    | 5 (no per-phase field) | 57.0 | | 95.5% | 14.4 / 22.8 ms |
+
+  - The cost to Cemu is mostly generation and 120 Hz presentation being active, not the motion estimation, so yielding GPU work cannot bring SM3DW to 60.
+  - Dropping the per-phase field on Cemu would save ~4.5 ms of latency but give up its 20-30% error reduction there. That is an owner decision.
 - **Sweeps around it (generator port, reproduced triplets):**
   - Pixel art: stride 5 or 6, or fade thresholds 8 or 14 at stride 4, only trade error for area. For example, stride 6 is Game Boy/Game Gear area 0.252 -> 0.193% but eval error 0.523 -> 0.541. Stride 4 with threshold 10 stays.
   - 3-D at stride 4 is worse: eval 14.4 -> 17.5% of frames (Star Fox 64 23 -> 32%), full-size 11.1 -> 12.2%. 3-D keeps 3.
