@@ -1073,6 +1073,10 @@
     "unified-android/build/emufusion-3.2.119-phase2-phase3-qualification.apk": {
       "sha256": "9b30563bbd0644a227097ef36a39fc1502657d26a60c42bd275de21d1f711870",
       "reason": "Unhashed copy of release 3.2.119 (193); no longer the rollback after 3.2.122 (2026-11-01). The asset stays on GitHub v3.2.119."
+    },
+    "unified-android/build/emufusion-3.2.123-phase2-phase3-qualification-b1213c5cd71e94fe2ebcec515f9e41f1835e1233fed2c2d10c2e45ef84305efc.apk": {
+      "sha256": "b1213c5cd71e94fe2ebcec515f9e41f1835e1233fed2c2d10c2e45ef84305efc",
+      "reason": "3.2.123 trial: phase lock on hardware-rendered cores with a jitter gate. Thor 2026-11-01: God of War 9.8/18.1 -> 15.8/24.2 ms, Double Dash unchanged. Reverted; 3.2.122 reinstalled. Never released."
     }
   }
 }
