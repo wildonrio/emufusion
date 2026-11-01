@@ -13125,6 +13125,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 bindQuad(flow.generateSelectProgram());
             } else {
                 flow.setDiscrete(discreteContent);
+                flow.setStaticFrames(TimelineSchedulerSwitch.staticOverlayFrames());
                 flow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
                         structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());
                 bindQuad(flow.generatePhaseProgram());

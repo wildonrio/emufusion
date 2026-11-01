@@ -1081,6 +1081,10 @@
     "unified-android/build/emufusion-3.2.121-phase2-phase3-qualification.apk": {
       "sha256": "b7e3d8bc25739bbb7d0c13ea56f4bf25c484b7831672e75d8ef14a9da833b930",
       "reason": "Unhashed copy of release 3.2.121 (195); no longer the rollback after 3.2.123 (2026-11-01). The asset stays on GitHub v3.2.121."
+    },
+    "unified-android/build/emufusion-3.2.124-phase2-phase3-qualification-d7db37ae81d6f0e063da6c97b6a36fd00ef09e56379765bfefb0f08b31868779.apk": {
+      "sha256": "d7db37ae81d6f0e063da6c97b6a36fd00ef09e56379765bfefb0f08b31868779",
+      "reason": "3.2.124 trial: QA static-overlay count (off by default) for a live A/B on Sonic 2, 2026-11-01; inconclusive (unpaired captures). 3.2.123 reinstalled. Never released."
     }
   }
 }

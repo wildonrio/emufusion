@@ -219,6 +219,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         pixelFade = fade;
+        int overlayFrames = 0;
+        try {
+            if (context != null) overlayFrames = Settings.Global.getInt(
+                    context.getContentResolver(), STATIC_OVERLAY_GLOBAL, 0);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        staticOverlayFrames = Math.max(0, Math.min(255, overlayFrames));
         boolean deepen = true;
         try {
             if (context != null) deepen = Settings.Global.getInt(
@@ -456,6 +464,16 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean pixelFade = true;
 
     static boolean pixelFade() { return pixelFade; }
+
+    /**
+     * Static overlays (QA, off by default): a pixel unchanged for this many
+     * real frames in a row is shown unwarped (a HUD over a scroll;
+     * dis_gles.py STATIC_OVERLAY). QA: emufusion_framegen_static_overlay=60.
+     */
+    static final String STATIC_OVERLAY_GLOBAL = "emufusion_framegen_static_overlay";
+    private static volatile int staticOverlayFrames;
+
+    static int staticOverlayFrames() { return staticOverlayFrames; }
 
     /**
      * Queue deepening (default, 3.2.89): late-from-rendering frames buy an

@@ -54,6 +54,12 @@ final class DenseInverseSearchFlow {
     // Late verdict rows (dis_gles.py LATE_GRID[1]): each counted by its own fragment.
     static final int LATE_ROWS = 18;
     private int lateRowsProgram, lateRows;
+    // Static overlays (QA emufusion_framegen_static_overlay): per history
+    // pixel, real frames in a row unchanged (1/255 each), ping-pong.
+    private int staticCountProgram, staticIndex;
+    private final int[] staticCounts = new int[2];
+    private long staticKeyA, staticKeyB;
+    private float staticFrames;
     private long lateKeyA, lateKeyB;
     private float lateValue = -1f;
     // The picture rectangle inside letter/pillarbox bars (1x1 RGBA16F, normalised
@@ -144,6 +150,12 @@ final class DenseInverseSearchFlow {
             cut = rgba8(1, 1, true);
             late = rgba8(1, 1, true);
             lateRows = texture(1, LATE_ROWS, true);
+            staticCounts[0] = rgba8(width, height, true);
+            staticCounts[1] = rgba8(width, height, true);
+            clearTarget(staticCounts[0]);
+            clearTarget(staticCounts[1]);
+            staticIndex = 0;
+            staticKeyA = staticKeyB = 0L;
             bounds = texture(1, 1, true);
             used = finest;
             slotKey[0] = slotKey[1] = 0L;
@@ -290,6 +302,22 @@ final class DenseInverseSearchFlow {
         }
     }
 
+    private void clearTarget(int target) {
+        saveState();
+        try {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffer);
+            GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                    GLES20.GL_TEXTURE_2D, target, 0);
+            GLES20.glClearColor(0f, 0f, 0f, 0f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        } finally {
+            restoreState();
+        }
+    }
+
+    /** QA: real frames in a row unchanged from which a pixel is a static overlay; 0 off. */
+    void setStaticFrames(float frames) { staticFrames = Math.max(0f, frames); }
+
     private int rgba8(int width, int height, boolean nearest) {
         int[] id = new int[1];
         GLES20.glGenTextures(1, id, 0);
@@ -389,8 +417,28 @@ final class DenseInverseSearchFlow {
             lateKeyB = phaseKeyB;
             lateValue = t;
         }
+        // Once per pair: advance the static-overlay counts.
+        boolean overlay = staticFrames > 0f && staticCountProgram != 0 && staticCounts[0] != 0;
+        if (overlay && (phaseKeyA != staticKeyA || phaseKeyB != staticKeyB)) {
+            saveState();
+            try {
+                int next = 1 - staticIndex;
+                begin(staticCountProgram, historyWidth, historyHeight, staticCounts[next]);
+                bind(staticCountProgram, "uFrameA", frameA, 0);
+                bind(staticCountProgram, "uFrameC", frameC, 1);
+                bind(staticCountProgram, "uCount", staticCounts[staticIndex], 2);
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+                staticIndex = next;
+            } finally {
+                restoreState();
+            }
+            staticKeyA = phaseKeyA;
+            staticKeyB = phaseKeyB;
+        }
         GLES20.glUseProgram(generatePhase);
         bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);
+        bind(generatePhase, "uStatic", overlay ? staticCounts[staticIndex] : zeroField, 9);
+        GLES20.glUniform1f(location(generatePhase, "uStaticFrames"), overlay ? staticFrames : 0f);
         GLES20.glUniform1f(location(generatePhase, "uCutEnabled"), cutVerdict != 0 ? 1f : 0f);
         bind(generatePhase, "uCut", cutVerdict != 0 ? cutVerdict : zeroField, 4);
         GLES20.glUniform1f(location(generatePhase, "uStructure"), structureMask != 0 ? 1f : 0f);
@@ -607,10 +655,11 @@ final class DenseInverseSearchFlow {
         cutProgram = link(v, DenseInverseSearchShaders.CUT);
         lateProgram = link(v, DenseInverseSearchShaders.LATE_VERDICT);
         lateRowsProgram = link(v, DenseInverseSearchShaders.LATE_ROWS);
+        staticCountProgram = link(v, DenseInverseSearchShaders.STATIC_COUNT);
         String[] labels = {"GRAY", "DOWN", "GRAD", "PATCH_SEARCH", "DENSIFY", "GENERATE", "TO_RAW",
-                "PHASE_SEARCH", "PHASE_DENSIFY", "GENERATE_PHASE", "CUT", "LATE_VERDICT", "LATE_ROWS"};
+                "PHASE_SEARCH", "PHASE_DENSIFY", "GENERATE_PHASE", "CUT", "LATE_VERDICT", "LATE_ROWS", "STATIC_COUNT"};
         int[] programs = {gray, down, grad, patchSearch, densify, generate, toRaw, phaseSearch,
-                phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram};
+                phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram};
         for (int i = 0; i < programs.length; ++i) passNames.put(programs[i], labels[i]);
         int[] ids = new int[1];
         GLES20.glGenFramebuffers(1, ids, 0);
@@ -683,6 +732,8 @@ final class DenseInverseSearchFlow {
         java.util.Arrays.fill(motionFill, 0);
         motionWidth = motionHeight = 0;
         phasePatches = phaseFlow = cut = late = lateRows = bounds = 0;
+        staticCounts[0] = staticCounts[1] = 0;
+        staticKeyA = staticKeyB = 0L;
         lateKeyA = lateKeyB = 0L;
         lateValue = -1f;
         phaseLevel = -1;
@@ -699,11 +750,12 @@ final class DenseInverseSearchFlow {
     void release() {
         releaseTextures();
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
-                phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, boundsProgram, selectFeatures, selectC1,
+                phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram, boundsProgram, selectFeatures, selectC1,
                 selectC2, selectC3, selectOut, selectGenerate})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
         phaseSearch = phaseDensify = generatePhase = cutProgram = lateProgram = lateRowsProgram = boundsProgram = 0;
+        staticCountProgram = 0;
         selectFeatures = selectC1 = selectC2 = selectC3 = selectOut = selectGenerate = 0;
         uniforms.clear();
         if (framebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {framebuffer}, 0);

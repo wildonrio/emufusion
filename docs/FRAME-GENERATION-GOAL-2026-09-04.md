@@ -293,6 +293,12 @@ November 1 (earlier) **— 3.2.122 (196, `8182eefc`): generation costs 20-30% le
   - God of War: 9.8 / 18.1 -> 15.8 / 24.2 ms, with a queue deepening. Double Dash: unchanged (11.2 / 19.6 ms).
   - A GPU-rendered core's arrival includes its own variable GPU queueing, so moving its CPU frame start does not move arrivals predictably.
   - 3.2.122 was reinstalled (identity kept).
+- **Static overlays, QA only (`emufusion_framegen_static_overlay=N`, off by default).** Sonic 2's HUD over a fast scroll is still the worst Mega Drive window on device output: the scroll's warp matches the letters as well as zero motion does, so only time can tell them apart.
+  - The flow keeps a per-pixel count of real frames in a row unchanged (`STATIC_COUNT`, once per pair, ping-pong RGBA8). The generate pass shows a pixel counted N or more unwarped. The October 25 trial counted 8 frames and shredded tiles; N=60 should fire only on overlays and on coincidences that are invisible anyway.
+  - Live A/B on the Thor (3.2.124 trial `d7db37ae`, hold-out training capture, Sonic 2 attract, 148 triplets each at the production level): the HUD box's mean difference from the real frame fell 35.8 -> 16.9 grey levels.
+  - The overall figures are not comparable: the runs captured different stretches (129 vs 67 moving frames; the second had more title fades).
+  - A paired live capture is needed before adoption; the replay bench cannot test it, because its triplets have no history.
+  - Notes: the test harness splits its QA string on commas, so `emufusion_framegen_holdout_levels` must be set over adb. Live captures go to `/sdcard/Android/data/com.thorium.preview/files/train`.
 - **Not adopted: the 3-D per-phase field one level finer.** The search and densify ran at 1/4 of 1080p instead of 1/8, with endpoint flows upsampled x2 and the patch stride 6 or 4 (generator port, reproduced triplets). Much worse: full-size 13.7 -> 26-27% of frames with invented content, error 0.587 -> 0.70; eval 9.1 -> 21-26%. Smaller patches at the finer level make a noisier field than the blur they remove.
 
 November 1 (earlier) **— 3.2.121 (195, `b7e3d8bc`): pixel-art motion fades to zero where nothing explains a pixel.**

@@ -592,6 +592,7 @@ def _generate_phase_shader_text():
     "uniform float uChoiceSpread;\n" +
     ("uniform float uDiscrete;\n" if DISCRETE_UNIFORM else "") +
     ("uniform sampler2D uLate;\n" if LATE_SHARE > 0 else "") +
+    ("uniform sampler2D uStatic;uniform float uStaticFrames;\n" if STATIC_OVERLAY else "") +
     ("uniform sampler2D uFlowAC,uFlowCA;\n" if OCCLUSION_SIDE_T > 0 else "") +
     "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
     "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
@@ -707,6 +708,10 @@ def _generate_phase_shader_text():
        "  if(oa&&!oc)w=cw;else if(oc&&!oa)w=aw;}\n") +
     " if(uStructure>0.5&&length(v*uHistorySize)>=uStructureMinMotionPx){\n"
     "  w=mix(w,(1.0-uT)*a0+uT*c0,texture(uStructureMask,u).r);}\n"
+    + ("" if not STATIC_OVERLAY else
+       # A pixel unchanged for uStaticFrames real frames in a row is a static
+       # overlay (a HUD over a scroll): shown unwarped.
+       " if(uStaticFrames>0.0&&texture(uStatic,u).r*255.0>uStaticFrames-0.5)w=(1.0-uT)*a0+uT*c0;\n")
     + ("" if not CONTENT_BOUNDS else
        " {vec4 bb=texture(uBounds,vec2(0.5));vec2 lo=bb.xz,hi=bb.yw;\n"
        "  if(any(lessThan(u,lo))||any(greaterThan(u,hi)))w=(1.0-uT)*a0+uT*c0;\n"
@@ -811,6 +816,24 @@ LATE_NEAR = 0.1
 # lava bars and checkered walls, bosses), Mega Drive 2 of 10 -- while SNES,
 # Game Boy and Master System frames never reach it; 3 clean frames gated.
 LATE_NEAR_DISCRETE = 0.05
+
+
+# Static overlays (2026-11-01, QA emufusion_framegen_static_overlay=N): per
+# history pixel, the real frames in a row it stayed unchanged (within 1.5
+# grey levels; 1/255 a frame, saturating), advanced once per pair. A pixel
+# counted N or more is shown unwarped. Sonic 2's HUD over a fast scroll
+# was garbled because the scroll's warp matched its letters as well as zero
+# motion did; only time tells them apart. A long count (about a second)
+# fires only on overlays and on coincidences that are invisible anyway (a
+# pattern whose period equals its step per frame). The October 25 trial
+# counted 8 frames, which shredded tiles. Off (0) until measured live.
+STATIC_OVERLAY = True
+STATIC_COUNT = (HEADER +
+    "uniform sampler2D uFrameA,uFrameC,uCount;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec3 e=abs(texelFetch(uFrameA,p,0).rgb-texelFetch(uFrameC,p,0).rgb);\n"
+    " float n=texelFetch(uCount,p,0).r;\n"
+    " o0=vec4(step(max(max(e.r,e.g),e.b),1.5/255.0)*min(n+1.0/255.0,1.0),0.0,0.0,1.0);}\n")
 
 
 # The late verdict counted its whole grid in one fragment: 576 samples of
@@ -1117,6 +1140,7 @@ def shaders():
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': bounds_shader(),
             'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(), 'LATE_VERDICT': late_verdict_shader(), 'LATE_ROWS': late_rows_shader(),
+            'STATIC_COUNT': STATIC_COUNT,
             'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader(),
             'PATCH_PROPAGATE': patch_propagate_shader()}
 
