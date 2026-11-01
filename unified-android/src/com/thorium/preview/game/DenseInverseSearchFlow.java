@@ -333,6 +333,8 @@ final class DenseInverseSearchFlow {
             bind(phaseSearch, "uFlowCA", flows[1][used], 3);
             GLES30.glUniform2i(location(phaseSearch, "uSize"), sizes[used][0], sizes[used][1]);
             GLES20.glUniform1f(location(phaseSearch, "uT"), t);
+            // 3-D only: a patch's Gauss-Newton steps stop once its SSD stops falling.
+            GLES20.glUniform1f(location(phaseSearch, "uDiscrete"), discrete ? 1f : 0f);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
             begin(phaseDensify, sizes[used][0], sizes[used][1], phaseFlow);
             bind(phaseDensify, "uGrayA", pyramid[0][used], 0);

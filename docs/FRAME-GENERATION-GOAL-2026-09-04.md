@@ -248,7 +248,21 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.122 (196, `8182eefc`): generation costs 20-30% less GPU; lower latency on GPU-bound engines.**
+November 1 (latest) **— 3.2.123 (197, `0ca610e2`): the 3-D per-phase search stops each patch once its match stops improving.**
+
+- **Change.** On the 3-D path (`uDiscrete` 0), each per-phase patch's Gauss-Newton steps stop once its SSD stops falling (OpenCV's DIS rule), from the same reads. `PHASE_BREAK = '3d'`; pixel art keeps every step, because SNES got worse with it.
+- **Generator port, 3-D sets:** full-size 13.7 -> 12.6% of frames with invented content, eval 13.9 -> 12.9%, error equal.
+- **Device replay, same triplets as 3.2.122:**
+  - Star Fox 64 21 -> 14% of frames (area 0.044 -> 0.040%);
+  - Wind Waker HD and Double Dash unchanged;
+  - error equal;
+  - per-phase search 1,431 -> 1,246 µs.
+- **Thor, 60 s each, 3.2.122 in brackets:**
+  - Double Dash 100% on interval, 9.2 / 17.4 ms (11.0 / 19.3), within 0.7 ms of the minimum; dense GPU 3.19 ms a pair (3.46);
+  - NSMBU Deluxe 99.7%, 11.3 / 19.6 ms (11.5 / 19.9);
+  - Star Fox 64 (30 fps doubled) 100% on interval, 11.2 / 28.1 ms, 3.1 ms above its 25-ms minimum.
+
+November 1 (earlier) **— 3.2.122 (196, `8182eefc`): generation costs 20-30% less GPU; lower latency on GPU-bound engines.**
 
 - **Where the time went.** QA per-pass timing (marker `/data/local/tmp/emufusion-dis-pass-timing`, replay bench only) drains the GPU after every pass, at about 0.3 ms per pass. Star Fox 64:
   - per-phase search 2.2 ms;

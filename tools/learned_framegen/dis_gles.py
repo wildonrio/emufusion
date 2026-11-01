@@ -303,7 +303,11 @@ TO_RAW = (HEADER +
 # 0.569 -> 0.568; full-size 13.7 -> 13.7%, 0.587 -> 0.586. With PHASE_BREAK
 # as well SNES got worse (11 -> 19% of frames), so that stays off.
 PHASE_CAND_SUBSAMPLE = True
-PHASE_BREAK = False
+# '3d' (since 3.2.123): the early stop on the 3-D path only (uDiscrete 0).
+# With the subsample, generator port on 3-D sets: full-size 13.7 -> 12.6% of
+# frames with invented content, eval (Star Fox 64, Wind Waker HD, Link's
+# Awakening) 13.9 -> 12.9%, error equal; pixel art got worse (SNES above).
+PHASE_BREAK = '3d'
 
 
 def phase_search_shader():
@@ -328,6 +332,7 @@ def _phase_search_shader_text():
     return (HEADER +
     f"#define P {PATCH}\n#define S {STRIDE}\n#define ITERS {ITERATIONS}\n"
     "uniform sampler2D uGradA,uGradC,uFlowAC,uFlowCA;uniform ivec2 uSize;uniform float uT;\n" +
+    ("uniform float uDiscrete;\n" if PHASE_BREAK == '3d' else "") +
     ("uniform float uGlobal;\n" if PHASE_GLOBAL_GRID and PHASE_GLOBAL_DISCRETE_ONLY else "") +
     "layout(location=0) out vec4 o0;\n"
     "vec3 ga(vec2 p){return texture(uGradA,p/vec2(uSize)).xyz;}\n"
@@ -368,7 +373,8 @@ def _phase_search_shader_text():
     # Mean-normalised residual: r_i - mean(r); its Jacobian j_i - mean(j).
     "  float mr=(sc-sa)/N;mat2 hn=h-mat2(sj.x*sj.x,sj.x*sj.y,sj.x*sj.y,sj.y*sj.y)/N+mat2(1e-4,0.0,0.0,1e-4);\n"
     "  vec2 bn=b-sj*mr;v-=inverse(hn)*bn;" +
-    ("float ek=srr-N*mr*mr;if(ek>=prev)break;prev=ek;" if PHASE_BREAK else "") + "}\n"
+    ("float ek=srr-N*mr*mr;if(" + ("uDiscrete<0.5&&" if PHASE_BREAK == '3d' else "") +
+     "ek>=prev)break;prev=ek;" if PHASE_BREAK else "") + "}\n"
     " float e=ssd(o,v);if(e>e0||any(isnan(v))){v=v0;e=e0;}\n"
     " o0=vec4(v,e,1.0);}\n")
 
