@@ -46,7 +46,7 @@ class DisShaderTest(unittest.TestCase):
                       "densify": "DENSIFY", "generate": "GENERATE", "toRaw": "TO_RAW",
                       "phaseSearch": "PHASE_SEARCH", "phaseDensify": "PHASE_DENSIFY",
                       "generatePhase": "GENERATE_PHASE", "cutProgram": "CUT", "boundsProgram": "BOUNDS",
-                      "lateProgram": "LATE_VERDICT"}
+                      "lateProgram": "LATE_VERDICT", "lateRowsProgram": "LATE_ROWS"}
         # QA synthesis 25 (the learned selector): its generated class; the
         # shared conv helper binds through "program".
         selector = (RUNTIME.parent / "LearnedSelectorShaders.java").read_text()
@@ -231,7 +231,11 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn(near, shaders["GENERATE_PHASE"])
         self.assertLess(shaders["GENERATE_PHASE"].index(near),
                         shaders["GENERATE_PHASE"].index("step(0.5,texture(uLate,vec2(0.5)).r)"))
-        self.assertIn("n+=step(32.0/255.0,min(eM,e0));", shaders["LATE_VERDICT"])
+        self.assertIn("n+=step(32.0/255.0,min(eM,e0));", shaders["LATE_ROWS"])
+        # Rows counted in parallel, summed into the same share (exact half-float counts).
+        self.assertEqual(dis_gles.LATE_GRID[1], int(re.search(r"static final int LATE_ROWS = (\d+);",
+                                                               RUNTIME.read_text()).group(1)))
+        self.assertIn("n/576.0", shaders["LATE_VERDICT"])
         self.assertIn('bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);', RUNTIME.read_text())
         # Replay dumps carry the endpoint DIS flows beside the per-phase field.
         self.assertIn('dumpFloatPlane(out, "disFlowACF32", disField.endpointFlowTexture(0),', generator)

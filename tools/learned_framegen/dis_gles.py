@@ -770,8 +770,37 @@ LATE_NEAR = 0.1
 LATE_NEAR_DISCRETE = 0.05
 
 
+# The late verdict counted its whole grid in one fragment: 576 samples of
+# five texture reads in a single GPU thread, ~0.9 ms a pair on the Thor
+# (2026-11-01, per-pass timing). Each row is now counted by its own fragment
+# (LATE_ROWS, one column, half-float counts: exact) and LATE_VERDICT sums the
+# rows, the same value. False restores the single pass (offline harness).
+LATE_ROWS = True
+
+
+def late_rows_shader():
+    gw, gh = LATE_GRID
+    return (HEADER +
+    "uniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
+    "void main(){float n=0.0;float y=floor(gl_FragCoord.y);\n"
+    f" for(int x=0;x<{gw};++x){{vec2 u=(vec2(float(x),y)+0.5)/vec2({float(gw)},{float(gh)});\n"
+    "  vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n"
+    "  float eM=md(abs(texture(uFrameA,u-uT*v).rgb-texture(uFrameC,u+(1.0-uT)*v).rgb));\n"
+    "  float e0=md(abs(texture(uFrameA,u).rgb-texture(uFrameC,u).rgb));\n"
+    "  n+=step(32.0/255.0,min(eM,e0));}\n"
+    " o0=vec4(n,0.0,0.0,1.0);}\n")
+
+
 def late_verdict_shader():
     gw, gh = LATE_GRID
+    if LATE_ROWS:
+        return (HEADER +
+        "uniform sampler2D uLateRows;\n"
+        "layout(location=0) out vec4 o0;\n"
+        f"void main(){{float n=0.0;for(int y=0;y<{gh};++y)n+=texelFetch(uLateRows,ivec2(0,y),0).r;\n"
+        f" o0=vec4(n/{float(gw * gh)},0.0,0.0,1.0);}}\n")
     return (HEADER +
     "uniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\n"
     "layout(location=0) out vec4 o0;\n"
@@ -1044,7 +1073,7 @@ def shaders():
     return {'VERTEX': VERTEX, 'VERTEX_QUAD': VERTEX_QUAD, 'GRAY': GRAY, 'DOWN': DOWN, 'GRAD': GRAD,
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': bounds_shader(),
-            'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(), 'LATE_VERDICT': late_verdict_shader(),
+            'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(), 'LATE_VERDICT': late_verdict_shader(), 'LATE_ROWS': late_rows_shader(),
             'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader(),
             'PATCH_PROPAGATE': patch_propagate_shader()}
 

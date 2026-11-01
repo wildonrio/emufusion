@@ -51,6 +51,9 @@ final class DenseInverseSearchFlow {
     // The frame-level verdict after the per-phase field (dis_gles.LATE_SHARE),
     // once per pair and phase.
     private int lateProgram, late;
+    // Late verdict rows (dis_gles.py LATE_GRID[1]): each counted by its own fragment.
+    static final int LATE_ROWS = 18;
+    private int lateRowsProgram, lateRows;
     private long lateKeyA, lateKeyB;
     private float lateValue = -1f;
     // The picture rectangle inside letter/pillarbox bars (1x1 RGBA16F, normalised
@@ -140,6 +143,7 @@ final class DenseInverseSearchFlow {
             zeroField = texture(1, 1, true);
             cut = rgba8(1, 1, true);
             late = rgba8(1, 1, true);
+            lateRows = texture(1, LATE_ROWS, true);
             bounds = texture(1, 1, true);
             used = finest;
             slotKey[0] = slotKey[1] = 0L;
@@ -366,12 +370,15 @@ final class DenseInverseSearchFlow {
         if (lateProgram != 0 && (phaseKeyA != lateKeyA || phaseKeyB != lateKeyB || t != lateValue)) {
             saveState();
             try {
+                begin(lateRowsProgram, 1, LATE_ROWS, lateRows);
+                bind(lateRowsProgram, "uFrameA", frameA, 0);
+                bind(lateRowsProgram, "uFrameC", frameC, 1);
+                bind(lateRowsProgram, "uPhaseFlow", phaseFlow, 2);
+                GLES20.glUniform1f(location(lateRowsProgram, "uT"), t);
+                GLES20.glUniform2f(location(lateRowsProgram, "uFlowSize"), sizes[used][0], sizes[used][1]);
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
                 begin(lateProgram, 1, 1, late);
-                bind(lateProgram, "uFrameA", frameA, 0);
-                bind(lateProgram, "uFrameC", frameC, 1);
-                bind(lateProgram, "uPhaseFlow", phaseFlow, 2);
-                GLES20.glUniform1f(location(lateProgram, "uT"), t);
-                GLES20.glUniform2f(location(lateProgram, "uFlowSize"), sizes[used][0], sizes[used][1]);
+                bind(lateProgram, "uLateRows", lateRows, 0);
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
             } finally {
                 restoreState();
@@ -508,7 +515,45 @@ final class DenseInverseSearchFlow {
 
     // --- GL helpers -------------------------------------------------------------
 
+    // QA pass timing (marker file; the replay bench only): the GPU is drained
+    // after every pass and its wall time charged to the pass's program and
+    // size, so each pass's cost, fixed overhead included, can be read off a
+    // log. It must not run in play: every drain stalls the pipeline.
+    private static final boolean PASS_TIMING =
+            new java.io.File("/data/local/tmp/emufusion-dis-pass-timing").exists();
+    private final Map<Integer, String> passNames = new HashMap<>();
+    private final Map<String, long[]> passTimes = new java.util.TreeMap<>();
+    private String timedPass;
+    private long timedStartNs, timedSequences;
+
+    /** QA: start timing the named pass (null ends the current one). */
+    void markPass(String name) {
+        if (!PASS_TIMING) return;
+        GLES20.glFinish();
+        long now = System.nanoTime();
+        if (timedPass != null) {
+            long[] total = passTimes.get(timedPass);
+            if (total == null) passTimes.put(timedPass, total = new long[2]);
+            total[0] += now - timedStartNs;
+            ++total[1];
+        }
+        timedPass = name;
+        timedStartNs = now;
+        if (name == null && ++timedSequences % 60L == 0L) {
+            StringBuilder line = new StringBuilder("DIS pass timing sequences=").append(timedSequences);
+            for (Map.Entry<String, long[]> entry : passTimes.entrySet())
+                line.append(' ').append(entry.getKey()).append('=')
+                        .append(entry.getValue()[0] / 1000L / Math.max(1L, entry.getValue()[1]))
+                        .append("usx").append(entry.getValue()[1]);
+            android.util.Log.i("EmuFusionFrameGen", line.toString());
+        }
+    }
+
     private void begin(int program, int width, int height, int target) {
+        if (PASS_TIMING) {
+            String name = passNames.get(program);
+            markPass((name != null ? name : "P" + program) + "@" + width + "x" + height);
+        }
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffer);
         GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
                 GLES20.GL_TEXTURE_2D, target, 0);
@@ -539,6 +584,7 @@ final class DenseInverseSearchFlow {
     }
 
     private void restoreState() {
+        if (PASS_TIMING) markPass(null);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, savedFramebuffer[0]);
         GLES20.glViewport(savedViewport[0], savedViewport[1], savedViewport[2], savedViewport[3]);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
@@ -558,6 +604,12 @@ final class DenseInverseSearchFlow {
         generatePhase = link(DenseInverseSearchShaders.VERTEX_QUAD, DenseInverseSearchShaders.GENERATE_PHASE);
         cutProgram = link(v, DenseInverseSearchShaders.CUT);
         lateProgram = link(v, DenseInverseSearchShaders.LATE_VERDICT);
+        lateRowsProgram = link(v, DenseInverseSearchShaders.LATE_ROWS);
+        String[] labels = {"GRAY", "DOWN", "GRAD", "PATCH_SEARCH", "DENSIFY", "GENERATE", "TO_RAW",
+                "PHASE_SEARCH", "PHASE_DENSIFY", "GENERATE_PHASE", "CUT", "LATE_VERDICT", "LATE_ROWS"};
+        int[] programs = {gray, down, grad, patchSearch, densify, generate, toRaw, phaseSearch,
+                phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram};
+        for (int i = 0; i < programs.length; ++i) passNames.put(programs[i], labels[i]);
         int[] ids = new int[1];
         GLES20.glGenFramebuffers(1, ids, 0);
         framebuffer = ids[0];
@@ -628,7 +680,7 @@ final class DenseInverseSearchFlow {
         java.util.Arrays.fill(motionValidated, 0);
         java.util.Arrays.fill(motionFill, 0);
         motionWidth = motionHeight = 0;
-        phasePatches = phaseFlow = cut = late = bounds = 0;
+        phasePatches = phaseFlow = cut = late = lateRows = bounds = 0;
         lateKeyA = lateKeyB = 0L;
         lateValue = -1f;
         phaseLevel = -1;
@@ -645,11 +697,11 @@ final class DenseInverseSearchFlow {
     void release() {
         releaseTextures();
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
-                phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, boundsProgram, selectFeatures, selectC1,
+                phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, boundsProgram, selectFeatures, selectC1,
                 selectC2, selectC3, selectOut, selectGenerate})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
-        phaseSearch = phaseDensify = generatePhase = cutProgram = lateProgram = boundsProgram = 0;
+        phaseSearch = phaseDensify = generatePhase = cutProgram = lateProgram = lateRowsProgram = boundsProgram = 0;
         selectFeatures = selectC1 = selectC2 = selectC3 = selectOut = selectGenerate = 0;
         uniforms.clear();
         if (framebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {framebuffer}, 0);

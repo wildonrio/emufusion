@@ -13133,7 +13133,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             flow.bindGenerate(historyTextures[previousIndex], historyTextures[currentIndex], phase);
             bindQuad(flow.generateProgram());
         }
+        flow.markPass("GENERATE_DRAW");
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        flow.markPass(null);
         return true;
     }
 
