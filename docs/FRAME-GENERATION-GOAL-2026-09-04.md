@@ -110,6 +110,107 @@ reviewed before this revision; its work was not discarded.
 
      The per-phase search re-searches from these flows, so refining them moves little.
    - Tools: scratchpad `vr/vr_flows.py` (Homebrew Python with cv2) and `vr/vr_eval.py` (genport).
+   - Lead (2026-10-27): better endpoint flows cut invented area.
+     - Stronger flows (OpenCV DIS) were substituted for the dumped endpoint flows, with the per-phase search port and the generate port unchanged.
+     - Full-size and eval sets, invented area:
+
+       | Endpoint flows | Full-size | Eval |
+       | --- | --- | --- |
+       | Ours | 0.069% | 0.249% |
+       | OpenCV, our own parameters (patch 8, stride 3, 6 iterations, no refinement) | 0.059% | 0.189% |
+       | OpenCV ultrafast at 2x | 0.057% | 0.176% |
+
+       Error is equal or slightly better.
+     - The one difference that matters is OpenCV's spatial propagation (patches visited in raster order take a neighbour's flow when it matches better, then a reverse pass): with it off, OpenCV's flows give 0.099 / 0.317%. Our port has none.
+   - Parallel GPU approximations were measured in the desktop GLSL harness and did not move the hold-out error (`PATCH_PROPAGATE`: 1-8 passes, nearest neighbours or 8/4/2/1-patch jumps; offline-only shader).
+     - That harness does not run production's 2-D path (it gives SNES 95% invented frames), so it is not a faithful test.
+   - Next: a Python port of the endpoint search in genport, so that sequential and GPU-feasible propagation (row sweeps, jumps) can be scored with the invented measure through the production per-phase and generate ports.
+   - Done: `~/Code/emufusion-qa-tools/genport/endpoint.py` ports `PATCH_SEARCH` plus `DENSIFY_SHARP` coarse to fine. It matches the device's dumped endpoint flows within 0.02-0.12 px mean (0.6-5% of pixels > 0.5 px off).
+   - Within it, propagation is not the answer:
+
+     | Set | No propagation | Sequential (OpenCV-like raster and reverse passes) | Parallel jumps (8/4/2/1) |
+     | --- | --- | --- | --- |
+     | Eval | 0.234% | 0.307% (Mega Drive and SNES better, Star Fox 64 0.275 -> 0.608%) | 0.279% |
+     | Full-size | 0.067% | 0.069% | 0.068% |
+
+   - The invented measure is noisy at 10-20 triplets a case: the port's flows, 0.1 px from the device's, move Star Fox 64 from 0.332 to 0.275%.
+   - The OpenCV-flow gain therefore needs re-testing on a larger corpus. Replay-bench dumps at 60 a case: `pca/big-eval`, `pca/big-full`.
+   - Large corpus (2026-10-27): 264 eval triplets over 8 games and 94 full-size triplets over 4. Invented area, with frames that have invented content in brackets:
+
+     | Endpoint flows | Eval | Full-size |
+     | --- | --- | --- |
+     | Ours | 0.189% (20.8%) | 0.064% (14.9%) |
+     | OpenCV, our parameters, in place of ours | 0.120% (19.7%) | 0.053% (13.8%) |
+     | OpenCV ultrafast at 2x, in place of ours | 0.136% (20.5%) | 0.051% (12.8%) |
+     | Ours plus OpenCV's as extra per-phase candidates | 0.171% (19.7%) | 0.055% (13.8%) |
+
+     - The gain holds, with error equal or better (eval 0.580 -> 0.577, full-size 0.620 -> 0.601).
+     - It is mostly 3-D: Ocarina 0.837 -> 0.243% (one frame with a large region), Star Fox 64 0.187 -> 0.117%, and Double Dash 0.110 -> 0.080% (frames 28 -> 19%).
+     - SNES (0.091 -> 0.108%), Wind Waker HD (0.075 -> 0.079%) and NSMBU Deluxe (0.102 -> 0.155%, 5 triplets) got worse. As extra candidates, OpenCV's flows keep SNES at 0.092% but give back most of the 3-D gain.
+   - Device-port variants on four eval games and two full-size games did not reproduce the gain (base 0.401% / 0.092%):
+     - OpenCV's densification (1/max(1, d), one pixel): 0.392 / 0.087%;
+     - Sobel gradients: 0.395 / 0.091%;
+     - coarsest-level start without the zero bias: 0.384 / 0.093%; from zero only: 0.409 / 0.099%;
+     - OpenCV-order propagation where both passes descend: 0.418 / 0.110%.
+   - The 10/10 measure is per frame. Frames with invented content over 0.1% must be at most 5% in every set. On the large corpus that is far off:
+     - Mega Drive 64%, SNES 46%, NSMBU Deluxe 40%, Star Fox 64 39%, Double Dash 28%, Wind Waker HD 20%, Link's Awakening 12%;
+     - Ocarina, NES and SM3DW 4% or less.
+   - The worst Mega Drive windows (`genport/worst.py`) fall into four classes:
+     - the HUD over a scrolling background ("SCORE TIME RINGS" garbled);
+     - rotating pinball flippers;
+     - edges between parallax layers;
+     - the SEGA logo's scene change.
+   - The HUD box holds only ~14% of Mega Drive's invented area (3% of the frames). The rest follows the per-phase field, which bleeds across parallax layers and sprites.
+   - Not adopted for 2-D (genport, Mega Drive, SNES and NES):
+     - keeping a pixel still where it and both pixels the warp would fetch are unchanged between the real frames: no change. Sonic 2's HUD letters fail it, because a 12 px scroll fetches background from 6 px away.
+     - the frame's 4-6 dominant whole-pixel motions as extra per-pixel candidates: worse (0.199 -> 0.230-0.513%). Per-pixel choices make speckled mixes.
+   - **What makes OpenCV's flows better.** `genport/ocv.py` is a NumPy port of OpenCV 4.x DIS that reproduces its flows to 0.000 px. Its source (`dis_flow.cpp`) differs from our endpoint search in five ways:
+     - the step uses the plain structure tensor, while only the gradient is mean-normalised. This damps the step on a patch with a net gradient (an edge).
+     - each patch stops once its SSD stops falling. The step of that iteration is kept.
+     - a result more than a patch from its start is discarded. We compare SSDs instead.
+     - the 6 iterations are split 3 and 3 between a forward and a reverse propagation pass.
+     - sequential spatial propagation over 8 row stripes.
+   - Moving each choice of OpenCV towards ours, invented area (eval / full-size, OpenCV 0.121 / 0.053%):
+
+     | Change to OpenCV | Eval | Full-size |
+     | --- | --- | --- |
+     | Mean-normalised Hessian | 0.129% | 0.052% |
+     | No early stop | 0.154% | 0.056% |
+     | Keep the start when the SSD got worse | 0.119% | 0.055% |
+     | 6 iterations in each pass | 0.152% | 0.055% |
+     | No propagation | 0.172% | 0.089% (Double Dash 0.080 -> 0.185%) |
+
+   - Adding OpenCV's first three choices to our own parallel search (`endpoint.py`, no propagation):
+
+     | Our search plus | Eval | Full-size | Error (eval / full-size) |
+     | --- | --- | --- | --- |
+     | Nothing | 0.189% | 0.064% | 0.580 / 0.620 |
+     | Plain Hessian | 0.174% | | |
+     | Early stop | 0.189% | | |
+     | Distance rejection | 0.103% | | |
+     | All three | 0.112% (frames 21.2 -> 20.1%) | | 0.581 / |
+
+     - Star Fox 64 0.184 -> 0.112% (frames 36 -> 29%) and Ocarina 0.844 -> 0.163% (one frame).
+     - Double Dash's area is unchanged (0.104%), but its error falls 0.656 -> 0.641.
+     - Mega Drive, SNES, NES and Wind Waker HD are unchanged within noise.
+     - The device shader has them as `ENDPOINT_PLAIN_HESSIAN`, `ENDPOINT_BREAK` and `ENDPOINT_REJECT_DIST` (off; GLSL ES compiles). The early stop reuses the descent's reads, and distance rejection drops the final SSD pass.
+   - **On the device the three are about neutral; kept off.** Device replay bench (working-tree dex with them on, Thor 2026-10-27; panels off). The device's flows match the port's within 0.01-0.09 px. The device's own output, `replay_invented` paired by triplet against the large corpus:
+     - eval 12.7 -> 14.6% of frames, 0.062 -> 0.071%: one Mega Drive frame went from a hold (0%) to generated (1.6%, error lower), the rest within noise;
+     - Star Fox 64 0.058 -> 0.035%;
+     - full-size 16.0 -> 17.0%, 0.065 -> 0.066%;
+     - error equal (0.653 -> 0.650, 0.844 -> 0.846).
+   - **The generator port overstates on frames the device does not generate through the ported path.** Cut, flash and late-hold decisions are not ported. The port reproduces the device's output (mean difference at most 1 grey level) on 20 of Mega Drive's 28 triplets, 18 of Star Fox 64's 28, 25 of Ocarina's 28, 32 of Double Dash's 36, and all of the rest. Its invented area on the other triplets is not what the device shows: Ocarina's 0.84% eval figure was one such frame. Port results from here on count only reproduced triplets.
+   - Port only, reproduced triplets, not adopted:
+     - per-phase patches of 6 or 4 pixels: worse (frames 42 -> 44-53%);
+     - OpenCV's descent in the per-phase search: frames 42.4 -> 39.4% (Mega Drive, SNES, Star Fox 64), full-size 0.064 -> 0.059%.
+   - **Lead for pixel art: fade the per-phase motion to zero where no patch explains a pixel.**
+     - In the per-phase densification, scale each pixel's motion by min(1, (10 / e)^6). Here e is the smallest 3x3 mean error (grey levels) among the patches covering the pixel. The weights stay 1/max(1, e)^2.
+     - On the whole-pixel path, zero motion falls back to a whole-pixel copy of a real frame, which invents nothing.
+     - Mega Drive, SNES and NES: frames with invented content 33.8 -> 18.9%, area 0.128 -> 0.087%, error 0.526 -> 0.532. SNES sprites (Mario, Koopas) no longer tear in the sheets.
+     - Found by accident: a 6th-power weight with the old 1e-6 floor on the weight sum does the same (20.3%). Sharper weights without the floor are worse (40.5%), so the fade does the work.
+     - 3-D: worse at every threshold tried (10-24 grey levels; Star Fox 64 17 -> 28-33% of frames), so it is pixel-art only.
+     - The sharper variant broke Game Boy's 1-px diagonal lines into dashes: Game Boy frames went 33 -> 50% (Game Gear's area improved). The explicit fade still needs the same check, then a device replay.
+   - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
 October 27 (latest) **— 3.2.117 (191, `0a0e0423`): the take-up lattice is off again; Thor test of 3.2.116.**

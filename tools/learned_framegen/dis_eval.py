@@ -107,9 +107,19 @@ def pipeline(s, tag, a, c, t, finest, divisor=1):
                    [('sampler', 'uRef', f'{tag}{ref}d{k}'), ('sampler', 'uTarget', f'{tag}{tgt}g{k}'),
                     ('sampler', 'uCoarse', coarse), ('i2', 'uSize', *sizes[k]),
                     ('f1', 'uHasCoarse', 0.0 if coarse.endswith('zero') else 1.0)])
+            patches = f'{tag}{ref}p{k}'
+            for n in range(D.PATCH_PROPAGATION):
+                nxt = f'{tag}{ref}p{k}q{n}'
+                s.tex(nxt, gw, gh, half=True)
+                jump = D.PROPAGATE_JUMPS[n % len(D.PROPAGATE_JUMPS)]
+                s.draw('PATCH_PROPAGATE', gw, gh, [nxt],
+                       [('sampler', 'uRef', f'{tag}{ref}d{k}'), ('sampler', 'uTarget', f'{tag}{tgt}g{k}'),
+                        ('sampler', 'uPatches', patches), ('i2', 'uSize', *sizes[k]), ('i2', 'uGrid', gw, gh),
+                        ('i1', 'uJump', jump)])
+                patches = nxt
             s.draw('DENSIFY', *sizes[k], [f'{tag}{ref}f{k}'],
                    [('sampler', 'uRef', f'{tag}{ref}g{k}'), ('sampler', 'uTarget', f'{tag}{tgt}g{k}'),
-                    ('sampler', 'uPatches', f'{tag}{ref}p{k}'), ('i2', 'uSize', *sizes[k]),
+                    ('sampler', 'uPatches', patches), ('i2', 'uSize', *sizes[k]),
                     ('i2', 'uGrid', gw, gh)])
             coarse = f'{tag}{ref}f{k}'
     s.tex(f'{tag}out', w, h)
@@ -197,6 +207,7 @@ def main():
     parser.add_argument('--stride', type=int, default=D.STRIDE)
     parser.add_argument('--phase', action='store_true', help='per-phase symmetric refinement')
     parser.add_argument('--phase-passes', type=int, default=1)
+    parser.add_argument('--propagate-patches', type=int, default=0, help='parallel spatial propagation passes per level (experiment)')
     parser.add_argument('--densify-power', type=float, help='per-phase densification weight exponent (experiment)')
     parser.add_argument('--no-densify-cross', action='store_true', help='per-phase densification at one pixel')
     parser.add_argument('--skip-flat-cross', action='store_true')
@@ -239,6 +250,7 @@ def main():
     SAVE = args.save
     VERDICTS = {} if os.environ.get('DIS_VERDICTS') else None
     D.ITERATIONS, D.STRIDE = args.iterations, args.stride
+    D.PATCH_PROPAGATION = args.propagate_patches
     if args.densify_power is not None:
         D.PHASE_DENSIFY_POWER = int(args.densify_power) if args.densify_power == int(args.densify_power) else args.densify_power
     if args.skip_flat_cross: D.SKIP_FLAT_CROSS = True
@@ -288,7 +300,7 @@ def main():
                 "#version 300 es\nout vec2 vTexCoord;\nvoid main(){vec2 p=vec2(gl_VertexID==1?3.0:-1.0,"
                 "gl_VertexID==2?3.0:-1.0);gl_Position=vec4(p,0.0,1.0);vTexCoord=0.5*(p+1.0);}\n")
             s = Script(tmp)
-            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY', 'PHASE_SMOOTH', 'GRAY_CLAMP', 'BOUNDS_ANY', 'CUT') + \
+            for name in ('GRAY', 'DOWN', 'GRAD', 'PATCH_SEARCH', 'PATCH_PROPAGATE', 'DENSIFY', 'PHASE_SEARCH', 'PHASE_DENSIFY', 'PHASE_SMOOTH', 'GRAY_CLAMP', 'BOUNDS_ANY', 'CUT') + \
                     (('BOUNDS',) if D.CONTENT_BOUNDS else ()):
                 # The per-phase route's instance densifies its endpoint flows sharply.
                 frag = 'DENSIFY_SHARP' if name == 'DENSIFY' and PHASE else name

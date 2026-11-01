@@ -105,6 +105,51 @@ def coarse_search_block():
             "   float e=aa-a*a/N+(stt-st*st/N)-2.0*(at-a*st/N);if(e<best){best=e;u0=c;}}}\n")
 
 
+# OpenCV's DIS descent (dis_flow.cpp, 2026-10-27). An exact NumPy port of OpenCV
+# (genport/ocv.py, its flows to 0.000 px) traced its fewer invented pixels to
+# how each patch descends, besides its sequential propagation: the step uses
+# the plain structure tensor (not mean-normalised; a damped step where the
+# patch has a net gradient, an edge), stops once the patch's SSD stops falling
+# (the step taken in that iteration is kept), and a result more than a patch
+# from its start is discarded instead of comparing SSDs. In our own parallel
+# search (genport/endpoint.py) the three cut the eval set's invented area
+# 0.189 -> 0.112% (Star Fox 64 0.184 -> 0.112%), error equal.
+ENDPOINT_PLAIN_HESSIAN = False
+ENDPOINT_BREAK = False
+ENDPOINT_REJECT_DIST = False
+
+
+def endpoint_descent_block():
+    if not ENDPOINT_BREAK:
+        return (" for(int k=0;k<ITERS;++k){vec2 s1=vec2(0.0);float sw=0.0;\n"
+                "  for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);float w=tg(vec2(q)+0.5+u);s1+=r(q).yz*w;sw+=w;}\n"
+                "  vec2 b=s1-(sw/N)*g0-g1+m0*g0;u-=hi*b;}\n")
+    # The patch's mean-normalised SSD at the position before the step, from the
+    # same reads; the step is kept, then the descent stops (OpenCV's order).
+    return (" float prev=1e30;\n"
+            " for(int k=0;k<ITERS;++k){vec2 s1=vec2(0.0);float sw=0.0,sww=0.0,swt=0.0;\n"
+            "  for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);float w=tg(vec2(q)+0.5+u);vec3 rv=r(q);\n"
+            "   s1+=rv.yz*w;sw+=w;sww+=w*w;swt+=w*rv.x;}\n"
+            "  float e=sww-sw*sw/N+(stt-st*st/N)-2.0*(swt-sw*st/N);\n"
+            "  vec2 b=s1-(sw/N)*g0-g1+m0*g0;u-=hi*b;if(e>=prev)break;prev=e;}\n")
+
+
+def endpoint_accept_block():
+    if ENDPOINT_REJECT_DIST:
+        # The SSD output is not read by the densification; the last one measured.
+        return (" if(length(u-u0)>float(P)||any(isnan(u)))u=u0;\n"
+                f" o0=vec4(u,{'prev' if ENDPOINT_BREAK else '0.0'},1.0);}}\n")
+    # Keep the start when the search made the patch match worse. Mean-
+    # normalised SSD from running sums: one pass over the patch.
+    return (" float a0=0.0,a00=0.0,at0=0.0,a1=0.0,a11=0.0,at1=0.0;\n"
+            " for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);vec2 c=vec2(q)+0.5;float t=r(q).x;\n"
+            "  float w0=tg(c+u0),w1=tg(c+u);a0+=w0;a00+=w0*w0;at0+=w0*t;a1+=w1;a11+=w1*w1;at1+=w1*t;}\n"
+            " float tt=stt-st*st/N;\n"
+            " float e0=a00-a0*a0/N+tt-2.0*(at0-a0*st/N),e1=a11-a1*a1/N+tt-2.0*(at1-a1*st/N);\n"
+            " if(e1>e0||any(isnan(u))){u=u0;e1=e0;}\n"
+            " o0=vec4(u,e1,1.0);}\n")
+
+
 def patch_search_shader():
     return (HEADER +
     f"#define P {PATCH}\n#define S {STRIDE}\n#define ITERS {ITERATIONS}\n"
@@ -122,21 +167,59 @@ def patch_search_shader():
     " for(int y=0;y<P;++y)for(int x=0;x<P;++x){vec3 v=r(o+ivec2(x,y));\n"
     "  st+=v.x;stt+=v.x*v.x;g0+=v.yz;g1+=v.yz*v.x;h+=mat2(v.y*v.y,v.y*v.z,v.y*v.z,v.z*v.z);}\n"
     " const float N=float(P*P);float m0=st/N;\n" + coarse_search_block() +
-    # Mean-normalised: subtract the patch means from both sides.
-    " mat2 hn=h-mat2(g0.x*g0.x,g0.x*g0.y,g0.x*g0.y,g0.y*g0.y)/N+mat2(1e-4,0.0,0.0,1e-4);\n"
+    # Mean-normalised gradient; the Hessian too unless ENDPOINT_PLAIN_HESSIAN.
+    (" mat2 hn=h+mat2(1e-4,0.0,0.0,1e-4);\n" if ENDPOINT_PLAIN_HESSIAN else
+     " mat2 hn=h-mat2(g0.x*g0.x,g0.x*g0.y,g0.x*g0.y,g0.y*g0.y)/N+mat2(1e-4,0.0,0.0,1e-4);\n") +
     " mat2 hi=inverse(hn);\n"
-    " vec2 u=u0;\n"
+    " vec2 u=u0;\n" + endpoint_descent_block() + endpoint_accept_block())
+
+
+# Spatial propagation between the patches of a level (offline experiment,
+# 2026-10-27). OpenCV's DIS visits the patches in raster order and lets each
+# take its neighbours' flow when that matches it better, before descending;
+# with our parameters but its propagation off, OpenCV's flows made the
+# generated frames ~1.6x as inventive (eval set 0.189 -> 0.317% invented area),
+# and our port, which has none, sat at 0.249%. On the GPU the passes are
+# parallel: each patch takes the best of its own and its four neighbours'
+# current flows, then PROPAGATE_ITERS more Gauss-Newton steps.
+PATCH_PROPAGATION = 0
+PROPAGATE_ITERS = 3
+# Neighbour distances (patches) of successive passes: long-range first, like jump flooding.
+PROPAGATE_JUMPS = (8, 4, 2, 1)
+
+
+def patch_propagate_shader():
+    return (HEADER +
+    f"#define P {PATCH}\n#define S {STRIDE}\n#define ITERS {PROPAGATE_ITERS}\n"
+    "uniform sampler2D uRef,uTarget,uPatches;\n"
+    "uniform ivec2 uSize,uGrid;uniform int uJump;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "vec3 r(ivec2 q){return texelFetch(uRef,clamp(q,ivec2(0),uSize-1),0).xyz;}\n"
+    "float tg(vec2 p){return texture(uTarget,p/vec2(uSize)).r;}\n"
+    "vec2 fl(ivec2 g){return texelFetch(uPatches,clamp(g,ivec2(0),uGrid-1),0).xy;}\n"
+    "void main(){\n"
+    " ivec2 g=ivec2(gl_FragCoord.xy);ivec2 o=g*S;\n"
+    " float st=0.0,stt=0.0;vec2 g0=vec2(0.0),g1=vec2(0.0);mat2 h=mat2(0.0);\n"
+    " for(int y=0;y<P;++y)for(int x=0;x<P;++x){vec3 v=r(o+ivec2(x,y));\n"
+    "  st+=v.x;stt+=v.x*v.x;g0+=v.yz;g1+=v.yz*v.x;h+=mat2(v.y*v.y,v.y*v.z,v.y*v.z,v.z*v.z);}\n"
+    " const float N=float(P*P);float m0=st/N;float tt=stt-st*st/N;\n"
+    " int j=max(1,uJump);vec2 cand[5];cand[0]=fl(g);cand[1]=fl(g+ivec2(-j,0));cand[2]=fl(g+ivec2(j,0));\n"
+    " cand[3]=fl(g+ivec2(0,-j));cand[4]=fl(g+ivec2(0,j));\n"
+    " vec2 u0=cand[0];float best=1e30;\n"
+    " for(int k=0;k<5;++k){vec2 c=cand[k];float a=0.0,aa=0.0,at=0.0;\n"
+    "  for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);float w=tg(vec2(q)+0.5+c),t=r(q).x;\n"
+    "   a+=w;aa+=w*w;at+=w*t;}\n"
+    "  float e=aa-a*a/N+tt-2.0*(at-a*st/N);if(e<best){best=e;u0=c;}}\n"
+    " mat2 hn=h-mat2(g0.x*g0.x,g0.x*g0.y,g0.x*g0.y,g0.y*g0.y)/N+mat2(1e-4,0.0,0.0,1e-4);\n"
+    " mat2 hi=inverse(hn);vec2 u=u0;\n"
     " for(int k=0;k<ITERS;++k){vec2 s1=vec2(0.0);float sw=0.0;\n"
     "  for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);float w=tg(vec2(q)+0.5+u);s1+=r(q).yz*w;sw+=w;}\n"
     "  vec2 b=s1-(sw/N)*g0-g1+m0*g0;u-=hi*b;}\n"
-    # Keep the start when the search made the patch match worse. Mean-
-    # normalised SSD from running sums: one pass over the patch.
-    " float a0=0.0,a00=0.0,at0=0.0,a1=0.0,a11=0.0,at1=0.0;\n"
-    " for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);vec2 c=vec2(q)+0.5;float t=r(q).x;\n"
-    "  float w0=tg(c+u0),w1=tg(c+u);a0+=w0;a00+=w0*w0;at0+=w0*t;a1+=w1;a11+=w1*w1;at1+=w1*t;}\n"
-    " float tt=stt-st*st/N;\n"
-    " float e0=a00-a0*a0/N+tt-2.0*(at0-a0*st/N),e1=a11-a1*a1/N+tt-2.0*(at1-a1*st/N);\n"
-    " if(e1>e0||any(isnan(u))){u=u0;e1=e0;}\n"
+    " float a1=0.0,a11=0.0,at1=0.0;\n"
+    " for(int y=0;y<P;++y)for(int x=0;x<P;++x){ivec2 q=o+ivec2(x,y);float w1=tg(vec2(q)+0.5+u),t=r(q).x;\n"
+    "  a1+=w1;a11+=w1*w1;at1+=w1*t;}\n"
+    " float e1=a11-a1*a1/N+tt-2.0*(at1-a1*st/N);\n"
+    " if(e1>best||any(isnan(u))){u=u0;e1=best;}\n"
     " o0=vec4(u,e1,1.0);}\n")
 
 
@@ -909,7 +992,8 @@ def shaders():
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': bounds_shader(),
             'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(), 'LATE_VERDICT': late_verdict_shader(),
-            'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader()}
+            'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader(),
+            'PATCH_PROPAGATE': patch_propagate_shader()}
 
 
 def sharp_densify_shader():
@@ -942,7 +1026,7 @@ def java_string(s):
 
 
 # Offline experiments the device does not compile (measured, not adopted).
-OFFLINE_ONLY_SHADERS = ('PHASE_SMOOTH', 'GRAY_CLAMP', 'BOUNDS_ANY')
+OFFLINE_ONLY_SHADERS = ('PHASE_SMOOTH', 'GRAY_CLAMP', 'BOUNDS_ANY', 'PATCH_PROPAGATE')
 
 
 def java_source():
