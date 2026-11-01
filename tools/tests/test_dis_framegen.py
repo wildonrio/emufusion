@@ -238,6 +238,12 @@ class DisSelectionTest(unittest.TestCase):
         self.assertEqual(dis_gles.LATE_GRID[1], int(re.search(r"static final int LATE_ROWS = (\d+);",
                                                                RUNTIME.read_text()).group(1)))
         self.assertIn("n/576.0", shaders["LATE_VERDICT"])
+        # Pixel art's per-phase stride: the Java grid matches the generator's.
+        flow = RUNTIME.read_text()
+        self.assertIn(f"PHASE_DISCRETE_STRIDE = {dis_gles.PHASE_DISCRETE_STRIDE}, PHASE_STRIDE = {dis_gles.STRIDE}, "
+                      f"PHASE_PATCH = {dis_gles.PATCH};", flow)
+        self.assertIn("uniform int uS;\n#define S uS\n", shaders["PHASE_SEARCH"])
+        self.assertIn("uniform int uS;\n#define S uS\n", shaders["PHASE_DENSIFY"])
         self.assertIn('bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);', RUNTIME.read_text())
         # Replay dumps carry the endpoint DIS flows beside the per-phase field.
         self.assertIn('dumpFloatPlane(out, "disFlowACF32", disField.endpointFlowTexture(0),', generator)

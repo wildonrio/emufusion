@@ -227,6 +227,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         staticOverlayFrames = Math.max(0, Math.min(255, overlayFrames));
+        int stride = DenseInverseSearchFlow.PHASE_DISCRETE_STRIDE;
+        try {
+            if (context != null) stride = Settings.Global.getInt(
+                    context.getContentResolver(), PIXEL_STRIDE_GLOBAL, stride);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        pixelStride = stride == 3 ? 3 : DenseInverseSearchFlow.PHASE_DISCRETE_STRIDE;
         boolean deepen = true;
         try {
             if (context != null) deepen = Settings.Global.getInt(
@@ -483,6 +491,16 @@ public final class TimelineSchedulerSwitch {
     private static volatile int staticOverlayFrames;
 
     static int staticOverlayFrames() { return staticOverlayFrames; }
+
+    /**
+     * Pixel art's per-phase patch stride (3.2.124): 4, cheaper and with less
+     * invented content, at a few more whole-frame holds on Game Gear and
+     * NES. QA: emufusion_framegen_pixel_stride=3 restores 3.2.123's grid.
+     */
+    static final String PIXEL_STRIDE_GLOBAL = "emufusion_framegen_pixel_stride";
+    private static volatile int pixelStride = DenseInverseSearchFlow.PHASE_DISCRETE_STRIDE;
+
+    static int pixelStride() { return pixelStride; }
 
     /**
      * Queue deepening (default, 3.2.89): late-from-rendering frames buy an

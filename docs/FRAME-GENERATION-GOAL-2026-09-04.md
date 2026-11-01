@@ -248,7 +248,30 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.123 (197, `0ca610e2`): the 3-D per-phase search stops each patch once its match stops improving.**
+November 1 (latest) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase search uses a patch every 4 pixels.**
+
+- **Change.** On the pixel-art path the per-phase search and densification use a patch stride of 4 instead of 3: 44% fewer patches, and 4 covering patches a pixel instead of 9. The stride is a uniform (`uS`); 3-D keeps 3.
+  - QA `emufusion_framegen_pixel_stride=3` restores 3.2.123's grid.
+  - Also in this build, off by default: the QA static-overlay count and hold-out level 26.
+- **Generator port, reproduced triplets:** Mega Drive, SNES and NES 19.2 -> 16.4% of frames with invented content, error +1%; Game Boy and Game Gear 51.9 -> 45.4%, error 0.390 -> 0.381.
+- **Device replay, same triplets as 3.2.123:**
+
+  | System | Frames with invented content | Invented area | Error | Whole-frame holds |
+  | --- | --- | --- | --- | --- |
+  | SNES | 11 -> 5% | | +2% | |
+  | Mega Drive | | 0.169 -> 0.150% | | |
+  | Game Gear | 61 -> 53% | 2.18 -> 0.43% | +3.5% | 17 -> 22 of 59 |
+  | Game Boy | 29 -> 26% | | | |
+  | NES | | | +1.6% | 12 -> 14 of 19 |
+  | Star Fox 64 (3-D) | identical | | | |
+
+  - Mega Drive's per-phase search took ~1.5 ms net, against ~2.2.
+- **Thor, 60 s each, dense GPU per pair:**
+  - Mega Drive 99.7% on interval, 9.6 / 17.9 ms, 4.0 ms per pair (5.1 on 3.2.122);
+  - SNES 99.9%, 9.3 / 17.7 ms, 3.5 ms;
+  - Game Gear 99.9%, 9.7 / 18.0 ms, 2.1 ms.
+
+November 1 (earlier) **— 3.2.123 (197, `0ca610e2`): the 3-D per-phase search stops each patch once its match stops improving.**
 
 - **Change.** On the 3-D path (`uDiscrete` 0), each per-phase patch's Gauss-Newton steps stop once its SSD stops falling (OpenCV's DIS rule), from the same reads. `PHASE_BREAK = '3d'`; pixel art keeps every step, because SNES got worse with it.
 - **Generator port, 3-D sets:** full-size 13.7 -> 12.6% of frames with invented content, eval 13.9 -> 12.9%, error equal.

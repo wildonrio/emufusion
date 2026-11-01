@@ -53,6 +53,8 @@ final class DenseInverseSearchFlow {
     private int lateProgram, late;
     // Late verdict rows (dis_gles.py LATE_GRID[1]): each counted by its own fragment.
     static final int LATE_ROWS = 18;
+    // Per-phase patch stride: pixel art 4 (dis_gles.py PHASE_DISCRETE_STRIDE), 3-D 3.
+    static final int PHASE_DISCRETE_STRIDE = 4, PHASE_STRIDE = 3, PHASE_PATCH = 8;
     private int lateRowsProgram, lateRows;
     // Static overlays (QA emufusion_framegen_static_overlay): per history
     // pixel, real frames in a row unchanged (1/255 each), ping-pong.
@@ -354,7 +356,12 @@ final class DenseInverseSearchFlow {
                 phaseFlow = texture(sizes[used][0], sizes[used][1], true);
                 phaseLevel = used;
             }
-            begin(phaseSearch, grids[used][0], grids[used][1], phasePatches);
+            // Pixel art takes a coarser patch grid (a subset of the allocated one).
+            int stride = discrete ? TimelineSchedulerSwitch.pixelStride() : PHASE_STRIDE;
+            int gridW = Math.max(1, (sizes[used][0] - PHASE_PATCH) / stride + 1);
+            int gridH = Math.max(1, (sizes[used][1] - PHASE_PATCH) / stride + 1);
+            begin(phaseSearch, gridW, gridH, phasePatches);
+            GLES30.glUniform1i(location(phaseSearch, "uS"), stride);
             bind(phaseSearch, "uGradA", gradients[0][used], 0);
             bind(phaseSearch, "uGradC", gradients[1][used], 1);
             bind(phaseSearch, "uFlowAC", flows[0][used], 2);
@@ -369,7 +376,8 @@ final class DenseInverseSearchFlow {
             bind(phaseDensify, "uGrayC", pyramid[1][used], 1);
             bind(phaseDensify, "uPatches", phasePatches, 2);
             GLES30.glUniform2i(location(phaseDensify, "uSize"), sizes[used][0], sizes[used][1]);
-            GLES30.glUniform2i(location(phaseDensify, "uGrid"), grids[used][0], grids[used][1]);
+            GLES30.glUniform2i(location(phaseDensify, "uGrid"), gridW, gridH);
+            GLES30.glUniform1i(location(phaseDensify, "uS"), stride);
             GLES20.glUniform1f(location(phaseDensify, "uT"), t);
             // Pixel art: the motion fades to zero where no patch explains a
             // pixel (unused unless the densify shader was generated with it).

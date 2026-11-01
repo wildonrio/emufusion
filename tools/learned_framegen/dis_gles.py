@@ -310,7 +310,30 @@ PHASE_CAND_SUBSAMPLE = True
 PHASE_BREAK = '3d'
 
 
+# Pixel art's per-phase patch stride (since 3.2.124). Its search and
+# densification run at the source's own size, so they cost the most there
+# (Mega Drive ~2.2 ms a pair). Stride 4 (44% fewer patches, 4 covering
+# patches a pixel instead of 9), generator port on reproduced triplets:
+# Mega Drive, SNES and NES 19.2 -> 16.4% of frames with invented content,
+# error +1%; Game Boy and Game Gear 51.9 -> 45.4%, error 0.390 -> 0.381.
+# The per-phase passes take the stride as uniform uS (3 for 3-D). None
+# keeps the compile-time stride.
+PHASE_DISCRETE_STRIDE = 4
+
+
+def _stride_uniform(text):
+    if PHASE_DISCRETE_STRIDE is None:
+        return text
+    old = f"#define S {STRIDE}\n"
+    assert text.count(old) == 1
+    return text.replace(old, "uniform int uS;\n#define S uS\n")
+
+
 def phase_search_shader():
+    return _stride_uniform(_phase_search_shader())
+
+
+def _phase_search_shader():
     text = _phase_search_shader_text()
     if PHASE_CAND_SUBSAMPLE:
         # Candidates (the two proposals and every propagated or global one)
@@ -451,6 +474,10 @@ def phase_densify_discrete_fade_shader(T, q):
 
 
 def phase_densify_shader():
+    return _stride_uniform(_phase_densify_shader())
+
+
+def _phase_densify_shader():
     if PHASE_DENSIFY_DISCRETE_FADE is not None:
         return phase_densify_discrete_fade_shader(*PHASE_DENSIFY_DISCRETE_FADE)
     if PHASE_DENSIFY_CROSS:
