@@ -366,9 +366,43 @@ PHASE_GLOBAL_DISCRETE_ONLY = False
 # five-tap (cross) error: sharper motion edges than 1/max(1, e) at one pixel.
 PHASE_DENSIFY_POWER = 2
 PHASE_DENSIFY_CROSS = True
+# Pixel art (whole-pixel path, uDiscrete; 2026-10-27, genport on the large
+# corpus): where no covering patch explains a pixel's 3x3 neighbourhood, its
+# motion fades to zero, x min(1, (T / e)^q) with e the best covering patch's
+# mean 3x3 error in grey levels. Zero motion on that path is a whole-pixel
+# copy of a real frame, which invents nothing: Mega Drive, SNES and NES
+# frames with invented content 33.8 -> 18.9%, error 0.526 -> 0.532. 3-D got
+# worse at every threshold, so the fade is pixel-art only. (T, q) or None.
+PHASE_DENSIFY_DISCRETE_FADE = None
+
+
+def phase_densify_discrete_fade_shader(T, q):
+    """The per-phase densification with the pixel-art fade: uDiscrete 0 is the
+    5-tap, 1/max(1, e)^2 densification unchanged; 1 takes a 3x3 error and
+    fades the motion where the best covering patch's error exceeds T."""
+    return (HEADER +
+    f"#define P {PATCH}\n#define S {STRIDE}\n"
+    "uniform sampler2D uGrayA,uGrayC,uPatches;uniform ivec2 uSize,uGrid;uniform float uT,uDiscrete;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "const vec2 OF[9]=vec2[9](vec2(0.0),vec2(1.0,0.0),vec2(-1.0,0.0),vec2(0.0,1.0),vec2(0.0,-1.0),"
+    "vec2(1.0,1.0),vec2(-1.0,1.0),vec2(1.0,-1.0),vec2(-1.0,-1.0));\n"
+    "void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec2 x=vec2(p)+0.5;int nt=uDiscrete>0.5?9:5;\n"
+    " ivec2 hi=min(p/S,uGrid-1);ivec2 lo=max((p-P+S)/S,ivec2(0));lo=min(lo,hi);\n"
+    " vec2 acc=vec2(0.0);float wsum=0.0,mmin=1e30;\n"
+    " for(int gy=lo.y;gy<=hi.y;++gy)for(int gx=lo.x;gx<=hi.x;++gx){\n"
+    "  vec2 v=texelFetch(uPatches,ivec2(gx,gy),0).xy;\n"
+    "  float d=0.0;for(int k=0;k<9;++k){if(k>=nt)break;\n"
+    "   d+=abs(texture(uGrayC,(x+OF[k]+(1.0-uT)*v)/vec2(uSize)).r-texture(uGrayA,(x+OF[k]-uT*v)/vec2(uSize)).r);}"
+    "d*=255.0/float(nt);\n"
+    "  float m=max(1.0,d);float w=1.0/(m*m);mmin=min(mmin,m);acc+=w*v;wsum+=w;}\n"
+    " vec2 v=acc/max(wsum,1e-6);\n"
+    f" if(uDiscrete>0.5)v*=min(1.0,pow({float(T)}/mmin,{float(q)}));\n"
+    " o0=vec4(v,0.0,1.0);}\n")
 
 
 def phase_densify_shader():
+    if PHASE_DENSIFY_DISCRETE_FADE is not None:
+        return phase_densify_discrete_fade_shader(*PHASE_DENSIFY_DISCRETE_FADE)
     if PHASE_DENSIFY_CROSS:
         err = ("  float d=0.0;for(int k=0;k<5;++k){vec2 o=k==0?vec2(0.0):k==1?vec2(1.0,0.0):k==2?vec2(-1.0,0.0):"
                "k==3?vec2(0.0,1.0):vec2(0.0,-1.0);\n"

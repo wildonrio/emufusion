@@ -337,6 +337,10 @@ final class DenseInverseSearchFlow {
             GLES30.glUniform2i(location(phaseDensify, "uSize"), sizes[used][0], sizes[used][1]);
             GLES30.glUniform2i(location(phaseDensify, "uGrid"), grids[used][0], grids[used][1]);
             GLES20.glUniform1f(location(phaseDensify, "uT"), t);
+            // Pixel art: the motion fades to zero where no patch explains a
+            // pixel (unused unless the densify shader was generated with it).
+            GLES20.glUniform1f(location(phaseDensify, "uDiscrete"),
+                    discrete && TimelineSchedulerSwitch.pixelFade() ? 1f : 0f);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
         } finally {
             restoreState();

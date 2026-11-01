@@ -13075,6 +13075,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             flow.estimateKeyB = keyB;
         }
         if (perPhase && (keyA != flow.phaseKeyA || keyB != flow.phaseKeyB || phase != flow.phaseValue)) {
+            // The per-phase densification already reads the pixel-art mode.
+            flow.setDiscrete(discreteContent);
             flow.estimatePhase(phase);
             flow.phaseKeyA = keyA;
             flow.phaseKeyB = keyB;

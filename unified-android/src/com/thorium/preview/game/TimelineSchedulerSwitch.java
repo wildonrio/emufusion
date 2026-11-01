@@ -211,6 +211,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         rateLock = rateHold;
+        boolean fade = true;
+        try {
+            if (context != null) fade = Settings.Global.getInt(
+                    context.getContentResolver(), PIXEL_FADE_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        pixelFade = fade;
         boolean deepen = true;
         try {
             if (context != null) deepen = Settings.Global.getInt(
@@ -435,6 +443,19 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean rateLock;
 
     static boolean rateLock() { return rateLock; }
+
+    /**
+     * Pixel-art motion fade: on the whole-pixel path, the per-phase motion
+     * fades to zero where no covering patch explains a pixel's 3x3
+     * neighbourhood (a whole-pixel copy of a real frame invents nothing).
+     * Active only in a build whose densify shader has the fade
+     * (dis_gles.py PHASE_DENSIFY_DISCRETE_FADE). QA:
+     * emufusion_framegen_pixel_fade=0.
+     */
+    static final String PIXEL_FADE_GLOBAL = "emufusion_framegen_pixel_fade";
+    private static volatile boolean pixelFade = true;
+
+    static boolean pixelFade() { return pixelFade; }
 
     /**
      * Queue deepening (default, 3.2.89): late-from-rendering frames buy an
