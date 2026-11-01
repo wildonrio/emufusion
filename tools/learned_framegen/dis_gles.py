@@ -298,7 +298,11 @@ TO_RAW = (HEADER +
 # start on the full patch for the keep-start test. PHASE_BREAK stops a
 # patch's Gauss-Newton steps once its SSD stops falling (OpenCV's DIS rule;
 # the step of that iteration is kept), from the same reads.
-PHASE_CAND_SUBSAMPLE = False
+# On since 3.2.122: generator port on the re-recorded large corpus (triplets
+# it reproduces): eval 14.3% -> 14.3% of frames with invented content, error
+# 0.569 -> 0.568; full-size 13.7 -> 13.7%, 0.587 -> 0.586. With PHASE_BREAK
+# as well SNES got worse (11 -> 19% of frames), so that stays off.
+PHASE_CAND_SUBSAMPLE = True
 PHASE_BREAK = False
 
 

@@ -214,7 +214,30 @@ reviewed before this revision; its work was not discarded.
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.121 (195, `b7e3d8bc`): pixel-art motion fades to zero where nothing explains a pixel.**
+November 1 (latest) **— 3.2.122 (196, `8182eefc`): generation costs 20-30% less GPU; lower latency on GPU-bound engines.**
+
+- **Where the time went.** QA per-pass timing (marker `/data/local/tmp/emufusion-dis-pass-timing`, replay bench only) drains the GPU after every pass, at about 0.3 ms per pass. Star Fox 64:
+  - per-phase search 2.2 ms;
+  - generated frame 1.9 ms;
+  - late verdict 1.2 ms, its whole 32x18 grid counted in one fragment, 2,880 texture reads in one GPU thread;
+  - cut 0.65 ms, also one fragment;
+  - the other ~30 pyramid, search and densify passes 0.3-0.6 ms each, mostly the drain.
+- **Changes:**
+  - The late verdict counts each row in its own fragment (1x18 half-float, exact) and sums the rows: the same value, with generated frames bit-identical on the replay bench. ~0.9 ms -> ~0.05 ms.
+  - The per-phase search scores its ~10 start candidates on every other pixel of the 8x8 patch, then measures the chosen start in full (`PHASE_CAND_SUBSAMPLE`). The generator port on the re-recorded corpus (triplets it reproduces) is neutral: eval 14.3 -> 14.3% of frames with invented content, error 0.569 -> 0.568; full-size 13.7 -> 13.7%, 0.587 -> 0.586.
+  - Adding the early stop as well (`PHASE_BREAK`) made SNES worse (11 -> 19% of frames), so it stays off.
+- **Thor, 60 s each, 3.2.121 in brackets.** Dense GPU time per pair (Forward stage):
+  - Mega Drive 5.1 / 5.5 ms mean / p95 (6.4 / 7.0, at the 7.3-ms budget);
+  - Double Dash 3.5 / 3.6 ms (5.0 / 6.0);
+  - God of War 3.9 / 4.2 ms (5.2 / 5.7).
+- **Pacing and latency (first generated / real image):**
+  - Mega Drive 99.7% on interval, 8.9 / 17.2 ms (99.5%, 11.4 / 19.7): within 0.5 ms of the 16.7-ms minimum;
+  - Double Dash 99.8%, 11.0 / 19.3 ms (99.6%, 11.8 / 20.2);
+  - God of War 99.9% (97.4%), 9.8 / 18.1 ms (12.6 / 20.8): within 1.4 ms of the minimum.
+  - No work reductions.
+- The cut pass (~0.35 ms) keeps its single fragment: splitting it needs float32 render targets for its sums.
+
+November 1 (earlier) **— 3.2.121 (195, `b7e3d8bc`): pixel-art motion fades to zero where nothing explains a pixel.**
 
 - **Change (whole-pixel path only).** The per-phase densification scales each pixel's motion by min(1, (10 / e)^6). Here e is the best covering patch's mean 3x3 error in grey levels. Zero motion on that path is a whole-pixel copy of a real frame, which invents nothing. 3-D is unchanged.
   - The densify writes the unfaded motion to `.xy`, which the late verdict reads, and the faded motion to `.zw`, which the pixel-art generate pass reads.
