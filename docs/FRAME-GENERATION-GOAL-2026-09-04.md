@@ -10,6 +10,40 @@ reviewed before this revision; its work was not discarded.
 
 **Scores on 3.2.117 (Thor, 2026-10-27):** smoothness 7.5, latency 8, artifacts 6.
 
+**Status on 3.2.122 (Thor, 2026-11-01).**
+
+*Latency* (first generated / real image; 16.7 ms is the real image's structural minimum at 60 fps):
+
+| System | Latency | Above the minimum |
+| --- | --- | --- |
+| NES, SNES, GBA | ~9 / 17.5 ms | within 1 ms |
+| Mega Drive | 8.9 / 17.2 ms | 0.5 ms |
+| God of War (PS2) | 9.8 / 18.1 ms | 1.4 ms |
+| Double Dash | 11.0 / 19.3 ms | 2.6 ms |
+| NSMBU Deluxe | 11.5 / 19.9 ms | 3.2 ms |
+| SM3DW | 19.1 / 28.3 ms | 11.6 ms |
+
+*Smoothness* (on the intended interval):
+- 99.5-99.9% for retro, Mega Drive, God of War, Double Dash and NSMBU Deluxe;
+- SM3DW 95.2%: Cemu delivers frames in bursts on a saturated GPU.
+
+*Artifacts* (device output, re-recorded large corpus, frames with invented content):
+
+| Set | Frames |
+| --- | --- |
+| Mega Drive | 41% |
+| NSMBU Deluxe | 40% (5 triplets) |
+| Double Dash | 27% |
+| Wind Waker HD | 18% |
+| Star Fox 64 | 17% |
+| Link's Awakening, full-size | 16% |
+| SNES | 15% |
+| SM3DW | 5% |
+| NES | 4% |
+| Ocarina, Link's Awakening eval | 0% |
+
+The 3-D failures are fast near objects: Double Dash's karts tear at their edges, and the per-phase field is 1/8 of a 1080p picture.
+
 **10/10 targets, per tested system in gameplay (loads and keep-alive frames excluded):**
 - **Smoothness:** at least 99.5% of output intervals at the intended cadence, and at most 5 Present-rhythm hitches per 30 s.
 - **Latency:** arrival to screen within 2 ms of the structural minimum: arrival + half a source period + one scan for the real image, arrival + one scan for the generated one.
