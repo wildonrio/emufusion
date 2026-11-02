@@ -268,6 +268,12 @@ November 2 **— Eden trial 3.2.131 (205, `ec9a780d`, not released): low GPU que
   - **NSMBU Deluxe is a 32-bit (AArch32) game.** Its modules load at 0x6ea000 (the 32-bit layout), and NCE runs only AArch64 code, so the 36-bit change never applied. The earlier "36-bit, load it with the 39-bit layout" lead was wrong. No test title uses the 36-bit layout, so the untested change was removed.
   - Dread's 11.6 / 30.0 ms at default priority is its best run so far; 3.2.125 measured 28.2 / 46.7 ms. Its latency depends on whether the queue deepens, which varies from run to run.
 - **Reverted.** The Eden sources and the staged adapter (`0106ea52`) are restored, the Thor is back on 3.2.130 (identity unchanged), and the 3.2.131 APK and symbols are retired.
+- **Second trial, same day (`e8867bdb`, Eden adapter `e671c95a`): hand Eden's buffers over only once rendered.**
+  - Hypothesis: `updateTexImage` binds Eden's buffer with a GPU-side wait on its fence. Every later command in our context waits behind it until Eden's GPU finishes, including outputs that do not need the new image. That would make frames late and deepen the queue, and low priority would make it worse.
+  - Change: with a frame generator attached, Eden presents from its own present thread (its stock `async_presentation` path). That thread waits for the frame's `present_done` fence after stamping the submission time and before `vkQueuePresentKHR`. Confirmed in the log (`EmuFusion: present thread on`).
+  - Thor, one run each: Dread 85.3% cadence, 11.2 / 29.9 ms; it still deepened once, then recovered early (the default-priority run gave 83.2%, 11.6 / 30.0 ms). NSMBU Deluxe 98.0% (33 two-scan intervals), 18.3 / 26.5 ms, deepened, guard on (default run 99.4%, 12.5 / 20.9 ms).
+  - Not adopted. Dread deepens with or without the fence wait in our stream, so head-of-line blocking is not what triggers it. The present thread's extra hop costs NSMBU Deluxe its rhythm. Reverted the same way.
+- **Mac disk after the trials: 24 GB free.** None of it is trial output (all removed): 17 GB of swap (5 days of uptime) and a staged macOS update (14 GB in `/System/Volumes/Update`, plus three update snapshots). A restart that installs the update returns both.
 - **Mac disk (owner, November 2).** Free space went from 25 to 42 GB:
   - retired APKs 3.2.121-3.2.128 (2.9 GB);
   - deleted the rejected selector experiment's candidate stacks (`emufusion-training-data/_cands`, 6.1 GB) and old scratch dumps;

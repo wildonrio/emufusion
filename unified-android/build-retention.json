@@ -1167,8 +1167,12 @@
       "reason": "Eden trial 3.2.131 (low queue priority + 36-bit NCE) not adopted 2026-11-02; Thor restored to 3.2.130."
     },
     "unified-android/build/emufusion-3.2.131-phase2-phase3-qualification.apk": {
-      "sha256": "ec9a780dc93f61f3f7d4861ca66115d2dfc132ad4c222a6fcc69627cd09120ab",
-      "reason": "Eden trial 3.2.131 (low queue priority + 36-bit NCE) not adopted 2026-11-02; Thor restored to 3.2.130."
+      "sha256": "e8867bdbe585f8066dc885d415a16e83ecc6c02df74659236970026966dd46ed",
+      "reason": "Eden trial 3.2.131 (ready-fence hand-over on the present thread) not adopted 2026-11-02; Thor restored to 3.2.130."
+    },
+    "unified-android/build/emufusion-3.2.131-phase2-phase3-qualification-e8867bdbe585f8066dc885d415a16e83ecc6c02df74659236970026966dd46ed.apk": {
+      "sha256": "e8867bdbe585f8066dc885d415a16e83ecc6c02df74659236970026966dd46ed",
+      "reason": "Eden trial 3.2.131 (ready-fence hand-over on the present thread) not adopted 2026-11-02; Thor restored to 3.2.130."
     }
   }
 }
