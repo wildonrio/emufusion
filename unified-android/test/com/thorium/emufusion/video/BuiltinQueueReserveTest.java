@@ -9,6 +9,7 @@ public final class BuiltinQueueReserveTest {
         isolatedMissesStayAtTheEarliestScan();
         aBurstDeepensOnce();
         compositorMissesDoNotCount();
+        framesReadyForAnEarlierLatchDoNotCount();
         recorderBurstGivesTheScanBackOnceFramesFitEarlier();
         recoveryNeedsUnbrokenEvidence();
         failedRecoveryRestoresAtOnceAndBacksOff();
@@ -143,6 +144,32 @@ public final class BuiltinQueueReserveTest {
         eq(0L, r.extraScans(), "no deepening");
         check(new BuiltinQueueReserve().observe(true, 1L, 1L, 1L, 1L, 0L) == BuiltinQueueReserve.Change.NONE,
                 "no panel period, no change");
+    }
+
+    /** Metroid Dread, 2026-11-02: shown a scan late, but rendered before the
+     *  latch a scan earlier than the one that took it. The compositor held
+     *  it; another scan of queue would not have changed that. */
+    private static void framesReadyForAnEarlierLatchDoNotCount() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long desired = 5_000_000_000L;
+        for (int i = 0; i < 10; ++i) {
+            desired += PERIOD;
+            long latch = desired + PERIOD - LATENCY;
+            check(r.observe(true, desired, desired + PERIOD, latch - PERIOD - 1_075_000L,
+                    latch, PERIOD) == BuiltinQueueReserve.Change.NONE, "ready for the earlier latch");
+        }
+        eq(0L, r.extraScans(), "no deepening");
+        // Finished just inside the margin before that latch: still ours.
+        BuiltinQueueReserve close = new BuiltinQueueReserve();
+        desired = 6_000_000_000L;
+        BuiltinQueueReserve.Change change = BuiltinQueueReserve.Change.NONE;
+        for (int i = 0; i < 3; ++i) {
+            desired += PERIOD;
+            long latch = desired + PERIOD - LATENCY;
+            change = close.observe(true, desired, desired + PERIOD, latch - PERIOD - 500_000L,
+                    latch, PERIOD);
+        }
+        check(change == BuiltinQueueReserve.Change.DEEPENED, "a near miss still deepens: " + change);
     }
 
     private static void recorderBurstGivesTheScanBackOnceFramesFitEarlier() {
