@@ -437,6 +437,7 @@ November 1 (earlier) **— 3.2.125 (199, `81a9b8ea`): a deepened queue whose fra
     - the nearer frame: 35%;
     - forward-backward flow consistency: 51%.
   - The gain needs both where to step in and which side, which the October and November learned selectors could not predict from per-pixel features.
+  - A per-pixel pick by the measure itself (computable on the device, without the middle frame) is worse too. Among the same five candidates, each pixel took the one whose 3x3 patch is best found in A or C within 3 px. Mega Drive went 41 -> 67% of frames, area 0.197 -> 0.533%. In pixel art any per-pixel composite makes seams, so the remaining 2-D artifacts need region-level motion, not per-pixel choice.
 
 November 1 (earlier) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase search uses a patch every 4 pixels.**
 
