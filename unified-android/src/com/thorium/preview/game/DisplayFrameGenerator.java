@@ -3365,6 +3365,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             consumeAvailableFrame(ignored);
         } finally {
             workHintBusyNs += FrameWorkHint.cpuSince(startCpuNs);
+            if (physicalTraceEnabled) traceConsumeEndNs = System.nanoTime();
             android.os.Trace.endSection();
         }
     }
@@ -3584,8 +3585,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             synchronizeBufferedPresentationEpoch();
             if (retryPendingAppOwnedPresentation()) return;
             long presentationEpochBeforePrepare = schedulerPresentationEpoch();
+            long rightBeforePrepare = activeRightSequence;
             prepareBufferedPairIfPossible();
             prepareExternalRealPairIfPossible();
+            // QA trace: this callback formed (and solved) its pair before planning.
+            if (physicalTraceEnabled) traceCallbackFormedPair =
+                    activeRightSequence != 0L && activeRightSequence != rightBeforePrepare;
             if (schedulerPresentationEpoch() != presentationEpochBeforePrepare) {
                 logBufferedEpochBoundary("pair-prepare",
                         presentationEpochBeforePrepare);
@@ -5399,14 +5404,22 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private void pollSignatureEarly() {
         signatureEarlyPollPosted = false;
         if (closed.get() || externalPresentationFailed || inputTexture == null) return;
+        android.os.Trace.beginSection("EmuFusion.earlyPoll");
         try {
             long before = signatureVsyncCommits;
             pollSignatureOnVsync();
             signatureEarlyCommits += signatureVsyncCommits - before;
-            prepareArrivalPairEarly();
+            android.os.Trace.beginSection("EmuFusion.arrivalPair");
+            try {
+                prepareArrivalPairEarly();
+            } finally {
+                android.os.Trace.endSection();
+            }
             scheduleSignatureEarlyPoll(true);
         } catch (RuntimeException failure) {
             failRuntimePresentation("Unable to commit emulator frame", failure);
+        } finally {
+            android.os.Trace.endSection();
         }
     }
 
@@ -5474,6 +5487,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             ++arrivalEarlyPairs;
             // Start the solve now rather than at the callback's swap.
             GLES20.glFlush();
+            if (physicalTraceEnabled) traceConsumeEndNs = System.nanoTime();
         }
     }
 
@@ -6204,11 +6218,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 beginDenseStage(DenseGpuTimer.ENDPOINT_COPY);
                 denseCopyStageOpen = true;
             }
-            if (initialPair) {
-                consumeEndpointIntoHistory(previousIndex, true);
-                consumeEndpointIntoHistory(currentIndex, false);
-            } else {
-                consumeEndpointIntoHistory(currentIndex, false);
+            android.os.Trace.beginSection("EmuFusion.endpointCopy");
+            try {
+                if (initialPair) {
+                    consumeEndpointIntoHistory(previousIndex, true);
+                    consumeEndpointIntoHistory(currentIndex, false);
+                } else {
+                    consumeEndpointIntoHistory(currentIndex, false);
+                }
+            } finally {
+                android.os.Trace.endSection();
             }
             if (dense) {
                 endDenseStage();
@@ -6249,12 +6268,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     ++externalUnsafePairCount;
                 }
             } else if (dense) {
+                android.os.Trace.beginSection("EmuFusion.estimate");
                 try {
                     estimateDenseMotion();
                     if (holdoutMode && motionEstimateReady) evaluateHoldoutPair();
                 } catch (RuntimeException denseFailure) {
                     rejectDense("buffered-pair-estimator-failure", denseFailure);
                     motionEstimateReady = false;
+                } finally {
+                    android.os.Trace.endSection();
                 }
             } else if (!builtinCadenceReady) {
                 // A qualified dense failure has no authorized legacy visual
@@ -6947,7 +6969,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         denseCpuSubmitLastUs = submitUs;
         denseCpuSubmitTotalUs += submitUs;
         denseCpuSubmitMaxUs = Math.max(denseCpuSubmitMaxUs, submitUs);
-        pollDenseTimers();
+        // The timers are read by the next callback, before it chooses its
+        // pixels, not here: a pair solved at its image's arrival has ~3.8 ms
+        // before the callback that shows it, and reading the queries took
+        // 0.37 ms (up to 2.3 ms) of that, holding the callback past its vsync
+        // (3.2.139; Eden, NSMBU Deluxe in play).
     }
 
     private void beginDenseStage(int stage) {
@@ -7293,30 +7319,42 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // Per traced present: when its newest image arrived, when its slot was
     // planned and when its swap returned, so latency splits into waiting for
     // the callback, our work and the compositor.
-    private static final int TRACE_TIMING_RING = 64;
+    // Also the callback's vsync and when the last image consumption ended
+    // before its plan: a callback planned late behind arrival work shows as
+    // vsync-to-plan time with a consumption just before the plan.
+    private static final int TRACE_TIMING_RING = 64, TRACE_TIMING_FIELDS = 5;
     private final long[] traceTimingFrameIds = new long[TRACE_TIMING_RING];
-    private final long[] traceTimingNs = new long[TRACE_TIMING_RING * 3];
+    private final long[] traceTimingNs = new long[TRACE_TIMING_RING * TRACE_TIMING_FIELDS];
+    private long traceConsumeEndNs;
+    private boolean traceCallbackFormedPair;
+    private final boolean[] traceTimingFormedPair = new boolean[TRACE_TIMING_RING];
 
     private void recordTraceTiming(long frameId, int submission, long swapReturnedNs) {
         int slot = (int) Math.floorMod(frameId, (long) TRACE_TIMING_RING);
         int arrival = Math.floorMod(submission, ARRIVAL_RING);
+        int base = slot * TRACE_TIMING_FIELDS;
         traceTimingFrameIds[slot] = frameId;
-        traceTimingNs[slot * 3] = submission > 0 && arrivalOrdinalRing[arrival] == submission ?
+        traceTimingNs[base] = submission > 0 && arrivalOrdinalRing[arrival] == submission ?
                 arrivalNsRing[arrival] : 0L;
-        traceTimingNs[slot * 3 + 1] = builtinPlanNowNs;
-        traceTimingNs[slot * 3 + 2] = swapReturnedNs;
+        traceTimingNs[base + 1] = builtinPlanNowNs;
+        traceTimingNs[base + 2] = swapReturnedNs;
+        traceTimingNs[base + 3] = builtinPlanCallbackNs;
+        traceTimingNs[base + 4] = traceConsumeEndNs;
+        traceTimingFormedPair[slot] = traceCallbackFormedPair;
     }
 
     private String traceTiming(long frameId, long slotNs) {
         int slot = (int) Math.floorMod(frameId, (long) TRACE_TIMING_RING);
         if (traceTimingFrameIds[slot] != frameId || slotNs <= 0L) return "";
         StringBuilder text = new StringBuilder();
-        String[] names = {" arrivalToSlotUs=", " planToSlotUs=", " swapToSlotUs="};
-        for (int i = 0; i < 3; ++i) {
-            long ns = traceTimingNs[slot * 3 + i];
+        String[] names = {" arrivalToSlotUs=", " planToSlotUs=", " swapToSlotUs=",
+                " vsyncToSlotUs=", " consumeEndToSlotUs="};
+        for (int i = 0; i < TRACE_TIMING_FIELDS; ++i) {
+            long ns = traceTimingNs[slot * TRACE_TIMING_FIELDS + i];
             text.append(names[i]).append(ns > 0L ? (slotNs - ns) / 1000L : -1L);
         }
-        return text.toString();
+        return text.append(" callbackFormedPair=").append(traceTimingFormedPair[slot] ? 1 : 0)
+                .toString();
     }
 
     // What the viewer saw, in normal play on any phone with present times:
@@ -9828,6 +9866,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     compositorEarlyGuard.driverDesiredNs(deadline.contentPresentationTimeNs(),
                             deadline.driverDesiredPresentTimeNs(), frameRate.panelPeriodNs()) :
                     deadline.driverDesiredPresentTimeNs();
+            // QA (emufusion_framegen_present_asap=1): no requested time, as
+            // stock LSFG-Android presents (vkQueuePresentKHR, FIFO, paced by
+            // CPU sleeps): the compositor shows each frame at the first scan
+            // it can. Long.MIN_VALUE is NATIVE_WINDOW_TIMESTAMP_AUTO.
+            if (externalTransport == null && TimelineSchedulerSwitch.presentAsap())
+                driverDesiredNs = Long.MIN_VALUE;
             if (deadline.driverDesiredPresentTimeNs() <= 0L ||
                     !EGLExt.eglPresentationTimeANDROID(
                             eglDisplay, eglSurface, driverDesiredNs))

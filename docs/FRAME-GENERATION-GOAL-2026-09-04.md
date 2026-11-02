@@ -249,6 +249,18 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
+November 2 (latest) **— The compositor's mode, not our presentation, sets Switch latency on the Thor; why our callbacks plan late (3.2.137-3.2.140 diagnostics).**
+
+- **Owner, November 2:** LSFG for Android is about 9/10 on latency, artifacts and smoothness; why does ours fall short with it available to learn from?
+  - From the source we built LSFG-Android-Thor from (`~/Code/LSFG-Android-Thor`, upstream commit `b847541`): stock LSFG-Android 0.1.2 presents with a plain `vkQueuePresentKHR` (FIFO, min+1 images) and no requested present time, pacing with CPU sleeps (`sleepUntilVsyncAligned`). The `VK_GOOGLE_display_timing` stamps in that tree are our own October changes, not upstream.
+  - QA `emufusion_framegen_present_asap=1` (3.2.140) queues built-in frames the same way (`NATIVE_WINDOW_TIMESTAMP_AUTO`). Thor: NES 18.1 / 26.4 ms with 98% of frames held a scan by the compositor; NSMBU Deluxe in play 19.5 / 27.8 ms, 99.8% on interval, 89% held. Stamped (default, same session): NSMBU 19.5 / 27.8 ms, 99.7%. Unstamped presents do not change the compositor's mode, so they are not why LSFG feels faster; the comparison still to make is LSFG itself on the Thor (uninstalled at the owner's request, October 23).
+- **The compositor's two modes in more detail.** Every NES session starts in the pipelined mode while the planner's first targets are ~15 ms ahead (before dense timing arms). It switches to the fast mode only when a callback presents nothing (the pipeline drains); 3.2.131's one backlog skip did that at 9 s and NES stayed fast (87% of frames on time at 7 ms plans), 3.2.136's did not. The two builds share every NES code path; one skip is luck.
+- **Why some callbacks plan late (physical trace `vsyncToSlotUs`, `consumeEndToSlotUs`, `callbackFormedPair`; system trace sections `EmuFusion.earlyPoll`, `arrivalPair`, `estimate`, `endpointCopy`).**
+  - Eden's image arrives ~3.8 ms before the callback that shows its generated frame. The pair is formed and solved in the 1-ms early poll; when that work runs past the vsync, the callback waits behind it.
+  - NSMBU Deluxe in play, 3.2.137: vsync to plan median 0.70 ms, p99 3.2 ms. 194 generated frames planned more than 1.5 ms late, 181 of them behind arrival work. The fast mode was left exactly at such frames (2.9-3.0 ms late).
+  - 3.2.138 trace: the early poll's pair work took up to 4.8 ms; reading the GPU stage timers at the end of `estimateDenseMotion` took 0.37 ms median (2.3 ms max) of it. 3.2.139 leaves the timers to the next callback, which already reads them before choosing its pixels. NSMBU, 3.2.140: still 169-343 late plans in 16 s (p99 2.8-3.5 ms): the solve and prepared frame themselves (0.5-2 ms) and the signature poll remain.
+- **Thor, 3.2.140 (`8c5e3b83`):** NSMBU Deluxe in play 99.7-99.8% on interval, 19.5 / 27.8 ms in every run today regardless of input size, presentation stamp or phase lock (QA `source_phase_lock=0`: 4 vs 6 two-scan intervals, within run-to-run noise).
+
 November 2 (Switch GPU cost) **— Eden hands the generator its own 1280x720 picture (3.2.136 candidate).**
 
 - **Owner, November 2: "keep going on eden, cut the GPU cost".**

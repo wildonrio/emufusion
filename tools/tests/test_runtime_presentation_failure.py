@@ -381,6 +381,7 @@ public class RuntimeFailureTest {
         SourceObserver nativeSourceImageObserver=new SourceObserver();
         int nativeClassificationFinishes;
         long workHintBusyNs;
+        boolean physicalTraceEnabled; long traceConsumeEndNs;
         void releaseSoftwareSnapshot(int[] snapshot){}
         static class FrameWorkHint {static long threadCpuNs(){return 0L;} static long cpuSince(long s){return 0L;}}
         void clearNativeClassifiedObservation(){}

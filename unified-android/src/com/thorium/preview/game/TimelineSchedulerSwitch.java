@@ -267,6 +267,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         engineSourceSize = sourceSize;
+        boolean asap = false;
+        try {
+            if (context != null) asap = Settings.Global.getInt(
+                    context.getContentResolver(), PRESENT_ASAP_GLOBAL, 0) == 1;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep requested present times.
+        }
+        presentAsap = asap;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -553,6 +561,16 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean engineSourceSize = true;
 
     static boolean engineSourceSize() { return engineSourceSize; }
+
+    /**
+     * QA only: emufusion_framegen_present_asap=1 queues built-in frames with
+     * no requested present time (as stock LSFG-Android), so the compositor
+     * shows each at the first scan it can, for comparison with planned slots.
+     */
+    static final String PRESENT_ASAP_GLOBAL = "emufusion_framegen_present_asap";
+    private static volatile boolean presentAsap;
+
+    static boolean presentAsap() { return presentAsap; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }
