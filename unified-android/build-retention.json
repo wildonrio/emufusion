@@ -1161,6 +1161,14 @@
     "unified-android/build/emufusion-3.2.128-phase2-phase3-qualification-1ebbba51f13110efae392f02d1c07cae40204aceed0c7e941a4b1b07d627e5c1.apk": {
       "sha256": "1ebbba51f13110efae392f02d1c07cae40204aceed0c7e941a4b1b07d627e5c1",
       "reason": "Superseded release 3.2.128; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.128."
+    },
+    "unified-android/build/emufusion-3.2.131-phase2-phase3-qualification-ec9a780dc93f61f3f7d4861ca66115d2dfc132ad4c222a6fcc69627cd09120ab.apk": {
+      "sha256": "ec9a780dc93f61f3f7d4861ca66115d2dfc132ad4c222a6fcc69627cd09120ab",
+      "reason": "Eden trial 3.2.131 (low queue priority + 36-bit NCE) not adopted 2026-11-02; Thor restored to 3.2.130."
+    },
+    "unified-android/build/emufusion-3.2.131-phase2-phase3-qualification.apk": {
+      "sha256": "ec9a780dc93f61f3f7d4861ca66115d2dfc132ad4c222a6fcc69627cd09120ab",
+      "reason": "Eden trial 3.2.131 (low queue priority + 36-bit NCE) not adopted 2026-11-02; Thor restored to 3.2.130."
     }
   }
 }

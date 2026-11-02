@@ -249,6 +249,32 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
+November 2 **— Eden trial 3.2.131 (205, `ec9a780d`, not released): low GPU queue priority in Eden is not adopted; New Super Mario Bros. U Deluxe is a 32-bit game.**
+
+- **Owner, November 2: Eden may be changed** ("I told you you could alter Eden ffs"). This supersedes the November 1 decision below that Eden is not changed. Eden edits stay local (never upstream); the picture must stay as good as stock Eden.
+- **Trial.** Two Eden changes in one adapter (`ca050c02`), with QA switches:
+  - Eden's Vulkan queues ask for `VK_QUEUE_GLOBAL_PRIORITY_LOW` (`VK_KHR_global_priority` on the Thor), as Cemu and Dolphin have since 3.2.92. QA: `setprop debug.emufusion.engine_queue_priority default`.
+  - A 64-bit application that declares the 36-bit address space gets the 39-bit layout so NCE can run it (NCE places guest addresses in Eden's fastmem window, above 36 bits on arm64).
+- **Thor, one 60 s run per setting (same APK):**
+
+  | Case | Queue priority | On intended | Cadence | First generated / real image | Queue deepenings |
+  | --- | --- | --- | --- | --- | --- |
+  | Metroid Dread | low | 92.9% | 86.8% | 27.4 / 46.1 ms | 2 (to two scans), guard on |
+  | Metroid Dread | default | 93.1% | 83.2% | 11.6 / 30.0 ms | 1, recovered early |
+  | NSMBU Deluxe | low | 99.1% | 99.4% | 18.6 / 26.9 ms | 1 |
+  | NSMBU Deluxe | default | 99.5% | 99.4% | 12.5 / 20.9 ms | 0 |
+
+  - Low priority took effect (`EmuFusion: Vulkan queue global priority low`) but deepened the queue more in both games. Unlike Cemu (Wind Waker HD 37 -> 30 ms), it gave Eden no latency gain. Likely cause: our real images wait on Eden's own buffer fence, and Eden's work at low priority queues behind other GPU clients.
+  - **NSMBU Deluxe is a 32-bit (AArch32) game.** Its modules load at 0x6ea000 (the 32-bit layout), and NCE runs only AArch64 code, so the 36-bit change never applied. The earlier "36-bit, load it with the 39-bit layout" lead was wrong. No test title uses the 36-bit layout, so the untested change was removed.
+  - Dread's 11.6 / 30.0 ms at default priority is its best run so far; 3.2.125 measured 28.2 / 46.7 ms. Its latency depends on whether the queue deepens, which varies from run to run.
+- **Reverted.** The Eden sources and the staged adapter (`0106ea52`) are restored, the Thor is back on 3.2.130 (identity unchanged), and the 3.2.131 APK and symbols are retired.
+- **Mac disk (owner, November 2).** Free space went from 25 to 42 GB:
+  - retired APKs 3.2.121-3.2.128 (2.9 GB);
+  - deleted the rejected selector experiment's candidate stacks (`emufusion-training-data/_cands`, 6.1 GB) and old scratch dumps;
+  - removed Dolphin's `/tmp` build root (1.8 GB); `build_core.sh` now removes it after a verified build;
+  - removed a September 6 Gradle/CMake cache inside the extracted aPS3e source (6.8 GB);
+  - removed compiler objects and extracted source copies from closed candidate trials (9.2 GB, receipt `engines/build/candidates/intermediate-cleanup-20261102.json`).
+
 November 1 (latest) **— 3.2.130 (204, `aaa30195`): hardware cores keep their presentation when the panel clock qualifies.**
 
 - **Change.** 3.2.128's rule now also covers a stamped producer timeline (Dolphin, ARMSX2 and other hardware cores): when the measured panel clock qualifies, the source evidence is cleared but presentation is not restarted.
@@ -392,7 +418,7 @@ November 1 (earlier) **— 3.2.126 (200, `595f9d78`): late frames just after the
 November 1 (earlier) **— 3.2.125 (199, `81a9b8ea`): a deepened queue whose frames land early turns the early guard on instead of giving the scan back.**
 
 - **Owner, November 1: decide the open questions from the owner's stated expectations, without asking.** Decisions:
-  - Eden is not changed: Switch must look like stock Eden, and Eden's rules forbid AI work outside the portability exception. NSMBU Deluxe's remaining ~1 ms is worked from our side.
+  - Eden is not changed: Switch must look like stock Eden, and Eden's rules forbid AI work outside the portability exception. NSMBU Deluxe's remaining ~1 ms is worked from our side. (Superseded November 2: the owner allows Eden changes.)
   - Thor runs stay short (fan); no long capture sessions.
   - The artifact bar stays as written.
   - Wind Waker HD does not get the content-time timeline (+17 ms, two scans, for a still-failing 86%). One scan of steady latency for an even rhythm is acceptable ("a scan of steady latency over a recurring hitch").
@@ -609,7 +635,7 @@ The Thor came back still on 3.2.110 (hash `0c560e2b`), so 3.2.111-3.2.116 had ne
   - no `Earliest-latch planning refuted`, no overload suspension;
   - at most one concurrent-copying GC per run, no fatal or ANR.
 - **Remaining hitches per 30 s** (Present rhythm, lattice off): God of War II 7-13, NSMBU Deluxe 25-42, SNES 21-83, Double Dash 67 then 359, Dread 154-195, SM3DW 493-535. Heavy Wii U and Switch scenes are the next judder work.
-- **Native CPU on Switch:** Dread runs on Eden's NCE. NSMBU Deluxe falls back to Dynarmic ("Program does not utilize 39-bit address space").
+- **Native CPU on Switch:** Dread runs on Eden's NCE. NSMBU Deluxe falls back to Dynarmic ("Program does not utilize 39-bit address space"). (November 2: it is a 32-bit game; NCE runs only 64-bit code.)
 - **nxnative assessment** (owner request): docs/NXNATIVE-ANDROID-ASSESSMENT-2026-10-27.md.
 - **Owner request: the corner frame-rate counter shifts against OLED burn-in.**
   - It drifts one pixel at a time within 4 dp of its corner (BurnInShift).
