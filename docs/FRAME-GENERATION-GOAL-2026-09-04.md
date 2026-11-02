@@ -251,7 +251,7 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
 
 November 1 (latest) **— 3.2.125 (199, `81a9b8ea`): a deepened queue whose frames land early turns the early guard on instead of giving the scan back.**
 
-- **Owner, November 1: decide the open questions from his stated expectations, without asking.** Decisions:
+- **Owner, November 1: decide the open questions from the owner's stated expectations, without asking.** Decisions:
   - Eden is not changed: Switch must look like stock Eden, and Eden's rules forbid AI work outside the portability exception. NSMBU Deluxe's remaining ~1 ms is worked from our side.
   - Thor runs stay short (fan); no long capture sessions.
   - The artifact bar stays as written.
