@@ -326,8 +326,13 @@ public final class BuiltinQueueReserveTest {
         eq(1L, r.extraScans(), "the depth stays");
         eq(0L, r.earlyRecoveries(), "no early recovery");
         eq(1L, r.guardRequests(), "one guard request");
-        // The guard is on: frames land in their slot and the trial keeps the scan.
+        // The guard is on. Frames queued with the old request may still land
+        // late: a burst right after it does not deepen.
         r.setEarlyGuardAvailable(false);
+        for (int i = 0; i < 3; ++i)
+            check(late(r, clock) == BuiltinQueueReserve.Change.NONE, "settling after the guard");
+        eq(1L, r.extraScans(), "no second scan for frames planned before the guard");
+        // Frames land in their slot and the trial keeps the scan.
         advance(clock, BuiltinQueueReserve.SETTLE_NS);
         for (int i = 0; i < 2 * BuiltinQueueReserve.TRIAL_FRAMES; ++i)
             check(onTime(r, clock, -2_000_000L) == BuiltinQueueReserve.Change.NONE,

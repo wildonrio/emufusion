@@ -249,7 +249,23 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.125 (199, `81a9b8ea`): a deepened queue whose frames land early turns the early guard on instead of giving the scan back.**
+November 1 (latest) **— 3.2.126 (200, `595f9d78`): late frames just after the early guard turns on no longer deepen the queue (3DS regression in 3.2.125).**
+
+- **Regression found in a sweep of other systems on 3.2.125** (60 s each).
+  - 3DS: the guard turned on through 3.2.125's new path. A burst of late frames 0.2 s later, queued with the old request, deepened the queue a second scan. Real images then landed late every other frame for ~8 s.
+  - Planned 3-scan spacings: 28.3% of intervals (3.2.124 control: 0.3%). Intervals on their mode: 40% against 61%. First generated / real image 22.6 / 39.0 ms against 15.1 / 29.0.
+- **Change:** in `BuiltinQueueReserve`, late frames within the 250-ms settle after a guard request no longer count toward a deepening (as for frames queued before a deepening).
+- **Thor, 3.2.126 candidate, 60 s each:**
+  - 3DS: planned 3-scan spacings 0.9%, shown differing from planned 0.9% (3.2.124: 3.1%), first generated / real image 12.8 / 24.0 ms. No deepening happened in this run, so the new settle rule was covered by the unit test, not by the device run.
+  - Wind Waker HD: 69.7% of intervals on their two scans (3.2.125: 76.1%; 3.2.124: 52.8%), 87.0% in their requested scan, 11.0% late, 22.9 / 39.6 ms. The guard turned on through the new path; a later deepening to two scans was rejected by its trial.
+- **The rest of the sweep (3.2.125):**
+  - PSP 99.9% on interval, 11.6 / 19.9 ms;
+  - Dreamcast 99.8%, 9.0 / 17.3 ms;
+  - PS1: the test scene runs at a varying 17-23 fps, so cadence does not apply;
+  - DS: the scene is near-static (53 presents).
+- The 3DS test scene switches between 30 and 60 fps, so the interval-mode figure mixes both rates. Planned against shown spacing is the comparable measure there.
+
+November 1 (earlier) **— 3.2.125 (199, `81a9b8ea`): a deepened queue whose frames land early turns the early guard on instead of giving the scan back.**
 
 - **Owner, November 1: decide the open questions from the owner's stated expectations, without asking.** Decisions:
   - Eden is not changed: Switch must look like stock Eden, and Eden's rules forbid AI work outside the portability exception. NSMBU Deluxe's remaining ~1 ms is worked from our side.

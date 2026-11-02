@@ -109,7 +109,7 @@ public final class BuiltinQueueReserve {
     private int maxExtraScans = MAX_EXTRA_SCANS;
     private final long[] missNs = new long[MISSES_TO_DEEPEN];
     private int misses;
-    private long changedAtNs, deepenedAtNs;
+    private long changedAtNs, deepenedAtNs, guardAtNs;
     private int earlierFrames;
     private int recoveryFrames = RECOVERY_FRAMES;
     private long recoveredAtNs;
@@ -193,6 +193,7 @@ public final class BuiltinQueueReserve {
                     // a running trial restarts on frames planned with it.
                     ++guardRequests;
                     changedAtNs = nowNs;
+                    guardAtNs = nowNs;
                     windowFrames = 0;
                     earlyFrames = 0;
                     earlySwitches = 0;
@@ -231,8 +232,12 @@ public final class BuiltinQueueReserve {
             boolean fromRendering = renderCompleteNs > 0L && actualNs > 0L &&
                     actualNs - desiredNs >= panelPeriodNs / 2L &&
                     renderCompleteNs > desiredNs - 2L * panelPeriodNs;
-            // Frames queued at the shallower depth before a deepening.
-            if (!fromRendering || within(deepenedAtNs, nowNs)) return Change.NONE;
+            // Frames queued at the shallower depth before a deepening, or
+            // with the old request before the guard turned on (3DS, 3.2.125
+            // candidate: a burst 0.2 s after the guard deepened a second scan,
+            // then real images landed late every other frame for 8 s).
+            if (!fromRendering || within(deepenedAtNs, nowNs) || within(guardAtNs, nowNs))
+                return Change.NONE;
             if (recoveredAtNs != 0L) {
                 boolean failed = nowNs - recoveredAtNs < RECOVERY_HOLD_NS;
                 recoveredAtNs = 0L;
