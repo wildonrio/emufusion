@@ -1129,6 +1129,38 @@
     "unified-android/build/emufusion-3.2.128-phase2-phase3-qualification.apk": {
       "sha256": "1ebbba51f13110efae392f02d1c07cae40204aceed0c7e941a4b1b07d627e5c1",
       "reason": "Unhashed copy of release 3.2.128; no longer the rollback after 3.2.130 (2026-11-01). The asset stays on GitHub v3.2.128."
+    },
+    "unified-android/build/emufusion-3.2.121-phase2-phase3-qualification-b7e3d8bc25739bbb7d0c13ea56f4bf25c484b7831672e75d8ef14a9da833b930.apk": {
+      "sha256": "b7e3d8bc25739bbb7d0c13ea56f4bf25c484b7831672e75d8ef14a9da833b930",
+      "reason": "Superseded release 3.2.121; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.121."
+    },
+    "unified-android/build/emufusion-3.2.122-phase2-phase3-qualification-8182eefc0582b3031f6c9534d11d24280596244cfb0b470b2e64e04da7e4a8d4.apk": {
+      "sha256": "8182eefc0582b3031f6c9534d11d24280596244cfb0b470b2e64e04da7e4a8d4",
+      "reason": "Superseded release 3.2.122; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.122."
+    },
+    "unified-android/build/emufusion-3.2.123-phase2-phase3-qualification-0ca610e2c1504295b41c310dfb55997a3cb7ead37bea44869f95a29000ed993b.apk": {
+      "sha256": "0ca610e2c1504295b41c310dfb55997a3cb7ead37bea44869f95a29000ed993b",
+      "reason": "Superseded release 3.2.123; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.123."
+    },
+    "unified-android/build/emufusion-3.2.124-phase2-phase3-qualification-05d2b1d3de8279018824fa284b35c5b5837383b6a9c2956a19c87b2a2baf2f92.apk": {
+      "sha256": "05d2b1d3de8279018824fa284b35c5b5837383b6a9c2956a19c87b2a2baf2f92",
+      "reason": "Superseded release 3.2.124; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.124."
+    },
+    "unified-android/build/emufusion-3.2.125-phase2-phase3-qualification-81a9b8eaca5bd4787d9f1b2b806937bef31d7bb7b2c97548ddd6ec15c6942b69.apk": {
+      "sha256": "81a9b8eaca5bd4787d9f1b2b806937bef31d7bb7b2c97548ddd6ec15c6942b69",
+      "reason": "Superseded release 3.2.125; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.125."
+    },
+    "unified-android/build/emufusion-3.2.126-phase2-phase3-qualification-595f9d78756cd31bfaa9ba0d368f3d8800a2a6f3eac6e42225224b3fee3c0c53.apk": {
+      "sha256": "595f9d78756cd31bfaa9ba0d368f3d8800a2a6f3eac6e42225224b3fee3c0c53",
+      "reason": "Superseded release 3.2.126; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.126."
+    },
+    "unified-android/build/emufusion-3.2.127-phase2-phase3-qualification-d44b39435012d509ae2ff131874537cca5b6a006f153d650a58c43aaec413a42.apk": {
+      "sha256": "d44b39435012d509ae2ff131874537cca5b6a006f153d650a58c43aaec413a42",
+      "reason": "Superseded release 3.2.127; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.127."
+    },
+    "unified-android/build/emufusion-3.2.128-phase2-phase3-qualification-1ebbba51f13110efae392f02d1c07cae40204aceed0c7e941a4b1b07d627e5c1.apk": {
+      "sha256": "1ebbba51f13110efae392f02d1c07cae40204aceed0c7e941a4b1b07d627e5c1",
+      "reason": "Superseded release 3.2.128; current is 3.2.130 with rollback 3.2.129 (2026-11-02). The asset stays on GitHub v3.2.128."
     }
   }
 }

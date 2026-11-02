@@ -1479,6 +1479,9 @@ DOLPHIN_DEPENDENCIES
         mkdir -p "$OUTPUT_DIR/dolphin-system/dolphin-emu"
         cp -R "$staged_source/Data/Sys/." \
             "$OUTPUT_DIR/dolphin-system/dolphin-emu/Sys/"
+        # The owned root (1.8 GB) is rebuilt from scratch on every run and the
+        # build is deterministic, so drop it once the verified core is out.
+        rm -rf "$build"
         ;;
     ppsspp)
         # This uses PPSSPP's own libretro adapter behind EmuFusion's host; it does
