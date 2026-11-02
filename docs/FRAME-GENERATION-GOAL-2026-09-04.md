@@ -258,6 +258,17 @@ November 1 (latest) **— 3.2.126 (200, `595f9d78`): late frames just after the 
 - **Thor, 3.2.126 candidate, 60 s each:**
   - 3DS: planned 3-scan spacings 0.9%, shown differing from planned 0.9% (3.2.124: 3.1%), first generated / real image 12.8 / 24.0 ms. No deepening happened in this run, so the new settle rule was covered by the unit test, not by the device run.
   - Wind Waker HD: 69.7% of intervals on their two scans (3.2.125: 76.1%; 3.2.124: 52.8%), 87.0% in their requested scan, 11.0% late, 22.9 / 39.6 ms. The guard turned on through the new path; a later deepening to two scans was rejected by its trial.
+- **Learned generators, offline (after 3.2.126), not adopted:**
+  - A small two-frame network of our own (three coarse-to-fine flow blocks with a blend mask, 173k parameters), trained on 2,448 captured 3-D triplets.
+    - With the teacher flows as a side loss it collapsed to zero motion, a cross-fade, within 2,000 steps: Wind Waker HD 93% of frames with invented content, error 1.27.
+    - Supervised on the teacher flows alone for 1,500 steps, its flow error still equalled zero motion's on unseen triplets, though the teacher flows check out against the images.
+    - It cannot learn motion from two frames at this size. Our DIS field already interpolates as well as the teacher, so this route is dropped.
+  - A CNN selector over the generator's own candidates (device output, A-side and C-side warp samples, A and C unwarped; 4 dilated 3x3 layers of 24 channels, softmax).
+    - Inputs: the candidates, their disagreements, field spread and motion.
+    - Trained on the middle frame, leaving each game out.
+    - All 282 3-D triplets: device 10.6% of frames with invented content, error 0.724; the hard pick (argmax) 9.9%; soft weights 18.4%.
+    - By game, the hard pick: Double Dash 27 -> 14%, Wind Waker HD 18 -> 11%, SM3DW 5 -> 0%, NSMBU Deluxe 40 -> 20%, but Star Fox 64 17 -> 33%. Error rose 18-53% wherever invented content fell.
+    - It trades the error for invented content and does not generalise to every game; not adopted.
 - **The rest of the sweep (3.2.125):**
   - PSP 99.9% on interval, 11.6 / 19.9 ms;
   - Dreamcast 99.8%, 9.0 / 17.3 ms;
