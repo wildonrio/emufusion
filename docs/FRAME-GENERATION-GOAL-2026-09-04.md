@@ -351,20 +351,35 @@ November 1 (earlier) **— 3.2.126 (200, `595f9d78`): late frames just after the
     - It trades the error for invented content and does not generalise to every game; not adopted.
     - Only where its pick is confident (weight at least 0.8 on a non-device candidate): identical to the device on Double Dash (27%) and Star Fox 64 (17%). Its useful picks are low-confidence ones.
     - With more training data (395 device-replayed triplets from 16 further 3-D games, `replay_bench --set train`), held-out Double Dash fell further (27 -> 11% of frames with invented content) but its error rose 42% (1.231 -> 1.751). Star Fox 64 got worse again: 17 -> 48% of frames. Stopped: more data does not make it generalise.
-    - Device output on those 16 sets (frames with invented content):
+    - The replay bench's own `art` column on those 16 sets was Sonic Superstars 75%, PS3 50%, N64 47%, Sonic Adventure 44%, Dread 41%, 3DS and Mario Kart Wii 33%, NSMBU Deluxe 20%, PS1 12%, Wii U 7%, the rest 0%.
+      - That column is not the 10/10 measure: it counts solid severe patches against the real frame and does not subtract the real frame's own invented content.
+      - With `replay_invented` (content found in neither real frame beyond the real middle frame's), Dread is 3.4% of frames, area 0.019%. Its worst bench frames are the title screen's random red glitch flicker, which the real middle frame has as well.
+    - **Census with the 10/10 measure** (`replay_invented`, 3.2.130 device output, train captures at 480x270, frames with invented content):
+      - Within 5%:
 
-      | Sets | Frames |
-      | --- | --- |
-      | Sonic Superstars | 75% (menus and transitions) |
-      | PS3 | 50% |
-      | N64 | 47% |
-      | Sonic Adventure | 44% |
-      | Dread | 41% |
-      | 3DS, Mario Kart Wii | 33% |
-      | NSMBU Deluxe | 20% |
-      | PS1 | 12% |
-      | Wii U | 7% |
-      | Sunshine, God of War (PS2, PSP), Switch, Odyssey | 0% |
+        | Set | Frames |
+        | --- | --- |
+        | Sunshine, God of War (PS2), God of War (PSP), PS1, Switch | 0% |
+        | Mario Kart Wii, Wii U | 3% |
+        | Dread | 3.4% |
+        | 3DS | 4% |
+
+      - Over it:
+
+        | Set | Frames |
+        | --- | --- |
+        | Double Dash | 7% |
+        | Sonic Adventure | 10% |
+        | Odyssey | 10% (10 triplets) |
+        | Sonic Superstars | 31% |
+        | N64 | 33% |
+        | PS3 | 35% |
+        | NSMBU Deluxe | 40% |
+
+      - Mean 11.8%. Nine of 16 3-D sets meet the frame criterion.
+    - Not adopted: the nearer real frame, unwarped, where neither the warp nor zero motion explains a pixel (`neither_mode='near_zero'`, port).
+      - Dread: 3.4% -> 6.9-20.7%.
+      - Full-size sets: 13.3 -> 12.2% of frames, but invented area 0.058 -> 0.065%.
 - **The rest of the sweep (3.2.125):**
   - PSP 99.9% on interval, 11.6 / 19.9 ms;
   - Dreamcast 99.8%, 9.0 / 17.3 ms;
