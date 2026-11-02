@@ -3066,6 +3066,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     @Override public void setAuthoritativeSourceHz(double sourceHz) {
         if (closed.get()) return;
         handler.post(() -> {
+            // A pacing trim of the same clock (the panel tier confirmed, 60.000
+            // -> 59.914 Hz) keeps the FIFO, dense epoch and proofs, as a
+            // hardware core's producer retime does. The full reset below cost
+            // Mega Drive a 58-ms stall 8 s into play (Thor, 3.2.126).
+            if (displayId == 0 && frameRate.retimeAuthoritativeSourceHz(sourceHz)) {
+                Log.i(TAG, "Authoritative source retime generator=" + generatorId +
+                        " sourceHz=" + sourceHz);
+                return;
+            }
             // A live source-mode change invalidates any delayed uniqueness
             // query and its retained texture as one ownership epoch. Tear the
             // native ring down before resetEndpointFifo clears the Java side;

@@ -4427,6 +4427,25 @@ public final class AdaptiveFrameRateController {
     }
 
     /**
+     * Follows a small pacing trim of the authoritative clock (the host moving a
+     * paced core to its physical-panel tier, e.g. 60.000 -> 59.914 Hz) without
+     * the reset a new source takes: the same tier, within the producer
+     * retime's fraction. Keeps every proof and the presentation epoch.
+     */
+    public boolean retimeAuthoritativeSourceHz(double value) {
+        if (!(authoritativeSourceHz > 0.0) || !Double.isFinite(value) ||
+                value < MIN_GENERATION_SOURCE_HZ ||
+                tierFor(value) != tierFor(authoritativeSourceHz) ||
+                Math.abs(value / authoritativeSourceHz - 1.0) >
+                        MAX_PRODUCER_TIMELINE_RETIME_FRACTION) return false;
+        authoritativeSourceHz = value;
+        measuredProducerPeriodNs = 1_000_000_000.0 / value;
+        return true;
+    }
+
+    public double authoritativeSourceHzForDiagnostics() { return authoritativeSourceHz; }
+
+    /**
      * Uses a core's declared video clock for systems whose video callback is
      * itself the authoritative scan cadence. Static pixels are still a real
      * core frame on those systems and must not be mistaken for slowdown.

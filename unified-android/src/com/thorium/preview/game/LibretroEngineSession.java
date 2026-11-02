@@ -258,6 +258,8 @@ public final class LibretroEngineSession implements EngineSession,
     private List<GamepadDescriptor> devices = new ArrayList<>();
     private long activeTickMillis;
     private volatile long framePeriodNs = FRAME_NS;
+    /** Period changes up to this fraction keep the pacer's scheduled deadline. */
+    static final double PACER_TRIM_FRACTION = 0.005;
     private volatile double declaredVideoHz;
     private volatile double synchronizedCoreHz;
     private volatile double pacedCoreHz;
@@ -1424,9 +1426,13 @@ public final class LibretroEngineSession implements EngineSession,
                     if (pacer.periodNanos() != framePeriodNs) {
                         // A small oscillator trim changes future spacing, not the
                         // timestamp already scheduled. Reanchoring to thread wake
-                        // time injected an unrelated PTS jump on every refinement.
+                        // time injected an unrelated PTS jump on every refinement,
+                        // and on the first move to the panel tier (60.000 -> 59.948
+                        // Hz, 0.09%): a 4-5 scan hitch on Mega Drive and SNES
+                        // (Thor, 3.2.127 candidate). Same bound as the generator's
+                        // authoritative retime.
                         if (physicalFgClockApplied && !resetPacer && Math.abs((double) framePeriodNs /
-                                pacer.periodNanos() - 1.0) <= 0.0005) {
+                                pacer.periodNanos() - 1.0) <= PACER_TRIM_FRACTION) {
                             pacer = pacer.withPeriodPreservingDeadline(framePeriodNs);
                         } else {
                             pacer = new AbsoluteFramePacer(framePeriodNs);

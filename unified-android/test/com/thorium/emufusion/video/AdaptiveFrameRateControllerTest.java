@@ -2,6 +2,7 @@ package com.thorium.emufusion.video;
 
 public final class AdaptiveFrameRateControllerTest {
     public static void main(String[] args) {
+        authoritativePanelTrimIsARetime();
         stableSixtyStaysSixtyAndGeneratesTo120();
         fiftyFiveFallsToForty();
         fortyFiveFallsToForty();
@@ -5232,6 +5233,24 @@ public final class AdaptiveFrameRateControllerTest {
     /** Native GLES/Vulkan stamp: base + sequence / stamp clock, rounded once. */
     private static long latticeStamp(long baseNs, long tick, double stampHz) {
         return baseNs + Math.round(tick * 1_000_000_000.0 / stampHz);
+    }
+
+    /** Mega Drive, Thor 3.2.126: the host moved the paced core from 60.000 to
+     *  its panel tier 59.914 Hz 8 s into play, and the full source reset
+     *  stalled the picture 58 ms. A same-tier trim keeps the epoch. */
+    private static void authoritativePanelTrimIsARetime() {
+        AdaptiveFrameRateController value = new AdaptiveFrameRateController(120.0);
+        check(!value.retimeAuthoritativeSourceHz(59.914), "no authoritative clock: nothing to retime");
+        value.setAuthoritativeSourceHz(60.0);
+        long epoch = value.presentationEpoch();
+        check(value.retimeAuthoritativeSourceHz(59.914), "a panel-tier trim is a retime");
+        check(value.authoritativeSourceHzForDiagnostics() == 59.914, "the trimmed clock is installed");
+        eq(epoch, value.presentationEpoch(), "a retime keeps the presentation epoch");
+        check(value.usesAuthoritativeSourceRate(), "still authoritative");
+        check(!value.retimeAuthoritativeSourceHz(59.0), "1.5 percent is a new source, not a retime");
+        check(!value.retimeAuthoritativeSourceHz(30.0), "another tier is a new source");
+        check(!value.retimeAuthoritativeSourceHz(Double.NaN), "invalid refused");
+        check(value.authoritativeSourceHzForDiagnostics() == 59.914, "refusals keep the clock");
     }
 
     private static void panelPacedStampsStayContinuousOnNominalOrRetimedTimeline() {

@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "81a9b8eaca5bd4787d9f1b2b806937bef31d7bb7b2c97548ddd6ec15c6942b69": "Rollback 3.2.125 (199), released and Thor-tested 2026-11-01.",
-    "595f9d78756cd31bfaa9ba0d368f3d8800a2a6f3eac6e42225224b3fee3c0c53": "Release 3.2.126 (200), GitHub v3.2.126 (asset hash checked) 2026-11-01, Thor-tested."
+    "595f9d78756cd31bfaa9ba0d368f3d8800a2a6f3eac6e42225224b3fee3c0c53": "Rollback 3.2.126 (200), released and Thor-tested 2026-11-01.",
+    "d44b39435012d509ae2ff131874537cca5b6a006f153d650a58c43aaec413a42": "Release 3.2.127 (201), GitHub v3.2.127 (asset hash checked) 2026-11-01, Thor-tested."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -1101,6 +1101,14 @@
     "unified-android/build/emufusion-3.2.124-phase2-phase3-qualification.apk": {
       "sha256": "05d2b1d3de8279018824fa284b35c5b5837383b6a9c2956a19c87b2a2baf2f92",
       "reason": "Unhashed copy of release 3.2.124; no longer the rollback after 3.2.126 (2026-11-01). The asset stays on GitHub v3.2.124."
+    },
+    "unified-android/build/emufusion-3.2.125-phase2-phase3-qualification.apk": {
+      "sha256": "81a9b8eaca5bd4787d9f1b2b806937bef31d7bb7b2c97548ddd6ec15c6942b69",
+      "reason": "Unhashed copy of release 3.2.125; no longer the rollback after 3.2.127 (2026-11-01). The asset stays on GitHub v3.2.125."
+    },
+    "unified-android/build/emufusion-3.2.127-phase2-phase3-qualification-37e69951afe52d20a3c30fef9da470112aebb5c10f0c5ba28d01ca53fdded48d.apk": {
+      "sha256": "37e69951afe52d20a3c30fef9da470112aebb5c10f0c5ba28d01ca53fdded48d",
+      "reason": "3.2.127 candidate 1 (generator retime only), 2026-11-01; superseded by candidate 2 (d44b3943) with the pacer deadline kept. Never released."
     }
   }
 }

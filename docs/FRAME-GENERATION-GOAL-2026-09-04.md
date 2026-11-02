@@ -249,7 +249,31 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.126 (200, `595f9d78`): late frames just after the early guard turns on no longer deepen the queue (3DS regression in 3.2.125).**
+November 1 (latest) **— 3.2.127 (201, `d44b3943`): moving a software core to its panel tier no longer resets frame generation or the pacer.**
+
+- **Hitch check on 3.2.126** (60 s each, steady state from 3 s after start, ~14 s of trace):
+
+  | System | On interval | First generated / real image | Hitches in the window |
+  | --- | --- | --- | --- |
+  | Mega Drive | 99.6% | 9.0 / 17.4 ms | 6 |
+  | God of War II | 99.5% | 10.3 / 18.6 ms | 5 |
+  | NSMBU Deluxe | 99.3% | 16.9 / 25.3 ms | 13 |
+  | Double Dash | 96.7% | 12.5 / 20.7 ms | 53, during a content-time trial |
+
+  None meets 5 per 30 s in this early window.
+- **Mega Drive's worst one was ours.** 8 s into play the host moved the paced core from 60.000 Hz to its panel tier (59.914 Hz) once the panel clock confirmed.
+  - `setAuthoritativeSourceHz` tore down the dense epoch and reset the FIFO and controller for that 0.14% trim: a 58-ms freeze.
+  - Hardware cores already take such trims through `retimeProducerTimeline`.
+- **Changes:**
+  - `AdaptiveFrameRateController.retimeAuthoritativeSourceHz`: a same-tier change within 0.5% updates the clock and keeps every proof and the presentation epoch (`Authoritative source retime` in the log).
+  - The libretro pacer keeps its scheduled deadline for period changes up to 0.5% (`PACER_TRIM_FRACTION`; was 0.05%, which the first move to the panel tier, 0.07-0.09%, exceeded and so re-anchored).
+- **Thor, candidate 2 (`d44b3943`), 60 s each:** Mega Drive 99.7% on interval, SNES 99.7%, NES 99.4%; first generated / real image 9.0-11.0 / 17.3-19.3 ms. Every tier change took the retime path, with no re-prime.
+- **The remaining start-up hitches are run-ahead's.**
+  - The native host turns run-ahead on 120 frames in, after a determinism check of two saved-state replays. The check costs 8-18 ms on the frame thread (SNES 18.5 ms), and its frame lands late: a 4-5 scan hitch about 2 s into every session.
+  - On BlastEm run-ahead then turns itself off ("predicted image differs from the true image") and drops that frame's image: a 2-12 scan hitch.
+  - Next: spread the check over two frames and keep the true image when run-ahead turns off (native host).
+
+November 1 (earlier) **— 3.2.126 (200, `595f9d78`): late frames just after the early guard turns on no longer deepen the queue (3DS regression in 3.2.125).**
 
 - **Regression found in a sweep of other systems on 3.2.125** (60 s each).
   - 3DS: the guard turned on through 3.2.125's new path. A burst of late frames 0.2 s later, queued with the old request, deepened the queue a second scan. Real images then landed late every other frame for ~8 s.
