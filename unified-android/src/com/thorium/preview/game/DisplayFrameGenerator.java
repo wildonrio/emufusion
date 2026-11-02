@@ -7280,6 +7280,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private static final int PHYSICAL_TRACE_LIMIT = 2000;
     private final boolean physicalTraceEnabled = PHYSICAL_TRACE_MARKER.exists();
     private int physicalTraceLines;
+    // Touching the marker again restarts the window (checked once a second),
+    // so a run that first navigates menus into gameplay traces gameplay:
+    // Eden has no save states, so Switch tests start at the title.
+    private long physicalTraceMarkerModified =
+            physicalTraceEnabled ? PHYSICAL_TRACE_MARKER.lastModified() : 0L;
+    private long physicalTraceCheckedNs;
     // Per traced present: when its newest image arrived, when its slot was
     // planned and when its swap returned, so latency splits into waiting for
     // the callback, our work and the compositor.
@@ -7336,9 +7342,21 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " panelHz=" + Math.round(frameRate.panelHz() * 100.0) / 100.0);
     }
 
+    private void rearmPhysicalTrace() {
+        long now = System.nanoTime();
+        if (now - physicalTraceCheckedNs < 1_000_000_000L) return;
+        physicalTraceCheckedNs = now;
+        long modified = PHYSICAL_TRACE_MARKER.lastModified();
+        if (modified <= physicalTraceMarkerModified) return;
+        physicalTraceMarkerModified = modified;
+        physicalTraceLines = 0;
+        Log.i(TAG, "Physical trace re-armed generator=" + generatorId);
+    }
+
     private boolean consumeDensePhysicalGpuHeadroom() {
         GpuPhysicalHeadroomLedger.Result result;
         while ((result = denseGpuHeadroom.takeCompleted()) != null) {
+            if (physicalTraceEnabled) rearmPhysicalTrace();
             if (physicalTraceEnabled && physicalTraceLines < PHYSICAL_TRACE_LIMIT) {
                 ++physicalTraceLines;
                 Log.i(TAG, "Physical trace frame=" + result.frameId +
