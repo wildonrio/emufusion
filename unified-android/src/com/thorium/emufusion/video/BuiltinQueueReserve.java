@@ -230,13 +230,15 @@ public final class BuiltinQueueReserve {
             // more lead would have made it: a frame rendered long before its
             // slot and still late is the compositor's miss, not ours.
             // A frame ready for the latch a scan before the one that took it
-            // was held by the compositor, not by our rendering (Metroid Dread,
-            // 2026-11-02: finished 1 ms before that latch, 11 ms before its
-            // slot, with the guard on; it took the queue to a second scan).
+            // was held by the compositor, not by our rendering: more depth
+            // cannot help it. Metroid Dread, 2026-11-02: with the early guard
+            // on, 47 of 58 late frames were ready for that latch (by up to
+            // 13 ms) and took the queue to a second scan (27 / 46 ms against
+            // 11 / 30 ms in runs that gave the first scan back).
             boolean fromRendering = renderCompleteNs > 0L && actualNs > 0L &&
                     actualNs - desiredNs >= panelPeriodNs / 2L &&
                     renderCompleteNs > desiredNs - 2L * panelPeriodNs &&
-                    (latchNs <= 0L || renderCompleteNs > latchNs - panelPeriodNs - EARLY_MARGIN_NS);
+                    (latchNs <= 0L || renderCompleteNs > latchNs - panelPeriodNs);
             // Frames queued at the shallower depth before a deepening, or
             // with the old request before the guard turned on (3DS, 3.2.125
             // candidate: a burst 0.2 s after the guard deepened a second scan,

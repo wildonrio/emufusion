@@ -155,18 +155,20 @@ public final class BuiltinQueueReserveTest {
         for (int i = 0; i < 10; ++i) {
             desired += PERIOD;
             long latch = desired + PERIOD - LATENCY;
-            check(r.observe(true, desired, desired + PERIOD, latch - PERIOD - 1_075_000L,
+            // 0.27 ms and 13 ms before that latch, both seen in the run.
+            long ready = (i % 2 == 0 ? 273_000L : 13_000_000L);
+            check(r.observe(true, desired, desired + PERIOD, latch - PERIOD - ready,
                     latch, PERIOD) == BuiltinQueueReserve.Change.NONE, "ready for the earlier latch");
         }
         eq(0L, r.extraScans(), "no deepening");
-        // Finished just inside the margin before that latch: still ours.
+        // Finished just after that latch: rendering made it late.
         BuiltinQueueReserve close = new BuiltinQueueReserve();
         desired = 6_000_000_000L;
         BuiltinQueueReserve.Change change = BuiltinQueueReserve.Change.NONE;
         for (int i = 0; i < 3; ++i) {
             desired += PERIOD;
             long latch = desired + PERIOD - LATENCY;
-            change = close.observe(true, desired, desired + PERIOD, latch - PERIOD - 500_000L,
+            change = close.observe(true, desired, desired + PERIOD, latch - PERIOD + 300_000L,
                     latch, PERIOD);
         }
         check(change == BuiltinQueueReserve.Change.DEEPENED, "a near miss still deepens: " + change);
