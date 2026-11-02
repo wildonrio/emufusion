@@ -442,6 +442,7 @@ November 1 (earlier) **— 3.2.125 (199, `81a9b8ea`): a deepened queue whose fra
     - All four 2-D sets: error 0.611 -> 0.565-0.583 (Mega Drive 0.666 -> 0.541-0.557), but frames with invented content unchanged (20.5%) and invented area up (0.088 -> 0.103-0.118%).
     - By set: NES 4 -> 0% and Mega Drive (16x16) 41 -> 41%, SNES 15 -> 15-22%.
     - Block borders make the seams pixels used to. Closer to the real frame, but no artifact gain; not adopted.
+    - Kept only where all four neighbouring blocks chose the same motion (device output at layer borders): Mega Drive, SNES and NES 19.8 -> 22.2-25.9% of frames, error 0.577 -> 0.541-0.550. The seams move to where block output meets device output.
   - A per-pixel pick by the measure itself (computable on the device, without the middle frame) is worse too. Among the same five candidates, each pixel took the one whose 3x3 patch is best found in A or C within 3 px. Mega Drive went 41 -> 67% of frames, area 0.197 -> 0.533%. In pixel art any per-pixel composite makes seams, so the remaining 2-D artifacts need region-level motion, not per-pixel choice.
 
 November 1 (earlier) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase search uses a patch every 4 pixels.**
