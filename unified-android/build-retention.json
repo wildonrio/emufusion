@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "aaa301959c10aa14f746c71ccfbec32e3c4389cda67d64be73644560eb88c4d6": "Rollback 3.2.130 (204), released and Thor-tested 2026-11-01.",
-    "1e175e30345364c31cbbc6e7b0f2497846191ee95ac5e3d1c721a3badb0cd143": "Release 3.2.131 (205), GitHub v3.2.131, Thor-tested 2026-11-02."
+    "1e175e30345364c31cbbc6e7b0f2497846191ee95ac5e3d1c721a3badb0cd143": "Rollback 3.2.131 (205), released and Thor-tested 2026-11-02.",
+    "8c5e3b831c1efef07a18bd8baedb484eb20da664e13346b1e17e351ec333fcd5": "Release 3.2.140 (214), GitHub v3.2.140, Thor-tested 2026-11-02."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -1213,6 +1213,46 @@
     "unified-android/build/emufusion-3.2.135-phase2-phase3-qualification.apk": {
       "sha256": "bc60d38be7fd888049d294129ecdb5871c255b9dc3a5de4a75220c34cd0711ef",
       "reason": "Eden phase-lock / present-timing diagnostic (3.2.134-3.2.135), closed 2026-11-02; Thor restored to 3.2.131."
+    },
+    "unified-android/build/emufusion-3.2.130-phase2-phase3-qualification-aaa301959c10aa14f746c71ccfbec32e3c4389cda67d64be73644560eb88c4d6.apk": {
+      "sha256": "aaa301959c10aa14f746c71ccfbec32e3c4389cda67d64be73644560eb88c4d6",
+      "reason": "Superseded rollback 3.2.130 (204); 3.2.131 is the rollback for 3.2.140, 2026-11-02."
+    },
+    "unified-android/build/emufusion-3.2.130-phase2-phase3-qualification.apk": {
+      "sha256": "aaa301959c10aa14f746c71ccfbec32e3c4389cda67d64be73644560eb88c4d6",
+      "reason": "Superseded rollback 3.2.130 (204); 3.2.131 is the rollback for 3.2.140, 2026-11-02."
+    },
+    "unified-android/build/emufusion-3.2.136-phase2-phase3-qualification-0232c22da07a6ed5872ade1239f9beba39d33c279a625d83cee86299918a72e7.apk": {
+      "sha256": "0232c22da07a6ed5872ade1239f9beba39d33c279a625d83cee86299918a72e7",
+      "reason": "Eden source-size / late-callback diagnostic candidates (3.2.136-3.2.139), closed 2026-11-02; Thor on release 3.2.140."
+    },
+    "unified-android/build/emufusion-3.2.136-phase2-phase3-qualification.apk": {
+      "sha256": "0232c22da07a6ed5872ade1239f9beba39d33c279a625d83cee86299918a72e7",
+      "reason": "Eden source-size / late-callback diagnostic candidates (3.2.136-3.2.139), closed 2026-11-02; Thor on release 3.2.140."
+    },
+    "unified-android/build/emufusion-3.2.137-phase2-phase3-qualification-4c9de2780549478f436885aa68b2847827f0eea4c89d011ca6910f711b2723cc.apk": {
+      "sha256": "4c9de2780549478f436885aa68b2847827f0eea4c89d011ca6910f711b2723cc",
+      "reason": "Eden source-size / late-callback diagnostic candidates (3.2.136-3.2.139), closed 2026-11-02; Thor on release 3.2.140."
+    },
+    "unified-android/build/emufusion-3.2.137-phase2-phase3-qualification.apk": {
+      "sha256": "4c9de2780549478f436885aa68b2847827f0eea4c89d011ca6910f711b2723cc",
+      "reason": "Eden source-size / late-callback diagnostic candidates (3.2.136-3.2.139), closed 2026-11-02; Thor on release 3.2.140."
+    },
+    "unified-android/build/emufusion-3.2.138-phase2-phase3-qualification-7e9ab3af7c05e6448c38e04e6e10c6f4046bb89161c12a892447ff4c18f97995.apk": {
+      "sha256": "7e9ab3af7c05e6448c38e04e6e10c6f4046bb89161c12a892447ff4c18f97995",
+      "reason": "Eden source-size / late-callback diagnostic candidates (3.2.136-3.2.139), closed 2026-11-02; Thor on release 3.2.140."
+    },
+    "unified-android/build/emufusion-3.2.138-phase2-phase3-qualification.apk": {
+      "sha256": "7e9ab3af7c05e6448c38e04e6e10c6f4046bb89161c12a892447ff4c18f97995",
+      "reason": "Eden source-size / late-callback diagnostic candidates (3.2.136-3.2.139), closed 2026-11-02; Thor on release 3.2.140."
+    },
+    "unified-android/build/emufusion-3.2.139-phase2-phase3-qualification-023b27ac35e9450a8c3ae7cc48e356c6c27d427ed3cc5fd7f5d336c244c073de.apk": {
+      "sha256": "023b27ac35e9450a8c3ae7cc48e356c6c27d427ed3cc5fd7f5d336c244c073de",
+      "reason": "Eden source-size / late-callback diagnostic candidates (3.2.136-3.2.139), closed 2026-11-02; Thor on release 3.2.140."
+    },
+    "unified-android/build/emufusion-3.2.139-phase2-phase3-qualification.apk": {
+      "sha256": "023b27ac35e9450a8c3ae7cc48e356c6c27d427ed3cc5fd7f5d336c244c073de",
+      "reason": "Eden source-size / late-callback diagnostic candidates (3.2.136-3.2.139), closed 2026-11-02; Thor on release 3.2.140."
     }
   }
 }
