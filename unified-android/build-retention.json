@@ -1109,6 +1109,14 @@
     "unified-android/build/emufusion-3.2.127-phase2-phase3-qualification-37e69951afe52d20a3c30fef9da470112aebb5c10f0c5ba28d01ca53fdded48d.apk": {
       "sha256": "37e69951afe52d20a3c30fef9da470112aebb5c10f0c5ba28d01ca53fdded48d",
       "reason": "3.2.127 candidate 1 (generator retime only), 2026-11-01; superseded by candidate 2 (d44b3943) with the pacer deadline kept. Never released."
+    },
+    "unified-android/build/emufusion-3.2.128-phase2-phase3-qualification-bb641420b3c5ddb6660117dd2396f7cdfcb07780f2ecc0f11909bffdb0fb8e9b.apk": {
+      "sha256": "bb641420b3c5ddb6660117dd2396f7cdfcb07780f2ecc0f11909bffdb0fb8e9b",
+      "reason": "3.2.128 trial: run-ahead replay check moved between frames (native idle work), 2026-11-01. Start-up hitches stayed (Mega Drive worse); reverted, 3.2.127 reinstalled. Never released."
+    },
+    "unified-android/build/emufusion-3.2.128-phase2-phase3-qualification.apk": {
+      "sha256": "bb641420b3c5ddb6660117dd2396f7cdfcb07780f2ecc0f11909bffdb0fb8e9b",
+      "reason": "Unhashed copy of the 3.2.128 trial (run-ahead idle check), never released."
     }
   }
 }

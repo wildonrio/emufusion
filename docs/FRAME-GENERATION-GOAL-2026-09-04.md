@@ -271,7 +271,11 @@ November 1 (latest) **— 3.2.127 (201, `d44b3943`): moving a software core to i
 - **The remaining start-up hitches are run-ahead's.**
   - The native host turns run-ahead on 120 frames in, after a determinism check of two saved-state replays. The check costs 8-18 ms on the frame thread (SNES 18.5 ms), and its frame lands late: a 4-5 scan hitch about 2 s into every session.
   - On BlastEm run-ahead then turns itself off ("predicted image differs from the true image") and drops that frame's image: a 2-12 scan hitch.
-  - Next: spread the check over two frames and keep the true image when run-ahead turns off (native host).
+  - **Tried and reverted (3.2.128 trial `bb641420`):** the check moved out of the frame, into two halves run in the frame loop's slack after the image was handed on (`emufusion_retro_idle_work`; the second replay reused the first half's input).
+    - Native tests passed (ASan/UBSan included), and on the Thor the check did run between frames (`idle=1`, 10-21 ms over both halves).
+    - The hitches stayed at run-ahead's switch-on: SNES 5 scans, NES 4, Mega Drive 9, with BlastEm's switch-off another 9.
+    - So the cost is the switch itself, not the check: the image jumps a frame, and each frame now does two core runs and two savestates.
+    - Mega Drive had more hitches than on 3.2.127 (19 against 6 in the window), so the change was reverted and 3.2.127 reinstalled (identity kept).
 
 November 1 (earlier) **— 3.2.126 (200, `595f9d78`): late frames just after the early guard turns on no longer deepen the queue (3DS regression in 3.2.125).**
 
