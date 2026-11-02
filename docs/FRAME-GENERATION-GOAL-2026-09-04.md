@@ -377,6 +377,8 @@ November 1 (earlier) **— 3.2.126 (200, `595f9d78`): late frames just after the
         | NSMBU Deluxe | 40% |
 
       - Mean 11.8%. Nine of 16 3-D sets meet the frame criterion.
+      - NSMBU Deluxe's train captures are menus: a title dissolve, and thin panel-border lines in sliding and zooming menus. Its gameplay captures (`play/nsmbud`, 34 moving pairs) score 12% of frames, area 0.069%.
+        - Worst gameplay windows: the level-start title text over the moving level (0.95%), an iris-wipe transition's edge over pipes, sprite edges (Toadette, a Koopa) and spinning coins.
     - Not adopted: the nearer real frame, unwarped, where neither the warp nor zero motion explains a pixel (`neither_mode='near_zero'`, port).
       - Dread: 3.4% -> 6.9-20.7%.
       - Full-size sets: 13.3 -> 12.2% of frames, but invented area 0.058 -> 0.065%.
