@@ -278,6 +278,25 @@ November 1 (latest) **— 3.2.125 (199, `81a9b8ea`): a deepened queue whose fram
 - **Measured, not adopted:**
   - The 3-D field choice judged over a wider window (3x3 or 5x5 taps, 1-2 history px apart): Double Dash unchanged (24% of frames with invented content, area 0.094-0.099% against 0.099%). Without the choice: 30%, 0.164%. Its shredded karts come from the per-phase field, not the per-pixel choice.
   - Compositor check (SNES with generation on, `dumpsys SurfaceFlinger`): every layer is composed by the display hardware (DEVICE), including ours at 120 Hz, so composition is not what costs Cemu its frame rate.
+- **Headroom for a learned per-pixel selector (offline, corpus device dumps, after release).** Oracle: per pixel, among the device output, the A-side and C-side warp samples, and A and C unwarped, the one closest to the real middle frame (cost box-filtered over 5x5). Frames with invented content and error:
+
+  | Set | Device | Oracle |
+  | --- | --- | --- |
+  | Mega Drive | 41%, 0.666 | 56%, 0.302 |
+  | SNES | 15%, 0.398 | 30%, 0.236 |
+  | Star Fox 64 | 17%, 0.785 | 17%, 0.441 |
+  | Wind Waker HD | 18%, 0.386 | 4%, 0.336 |
+  | Double Dash (full-size) | 27%, 1.231 | 8%, 1.084 |
+  | Ocarina (full-size) | 0%, 0.634 | 0%, 0.523 |
+
+  - For pixel art, matching the middle frame pixel by pixel mixes sources into seams found in neither real frame: invented content doubles while the error halves. A selector trained on error would make 2-D worse.
+  - For 3-D the headroom is real (Double Dash 27 -> 8%, Wind Waker HD 18 -> 4%). Where the device output invents content (Double Dash), the oracle keeps it 41% of the time and otherwise takes one warp sample (A side 27%, C side 20%), rarely an unwarped frame. That is an occlusion-side choice whose side varies.
+  - Side rules without the middle frame, applied where the two samples differ by 32 grey levels, all make Double Dash worse (27% device):
+    - the oracle's side everywhere they differ: 35%;
+    - the sample closer to the local mean of the output: 41%;
+    - the nearer frame: 35%;
+    - forward-backward flow consistency: 51%.
+  - The gain needs both where to step in and which side, which the October and November learned selectors could not predict from per-pixel features.
 
 November 1 (earlier) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase search uses a patch every 4 pixels.**
 
