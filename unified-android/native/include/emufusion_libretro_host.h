@@ -189,6 +189,9 @@ void emufusion_retro_set_paused(emufusion_retro_host *host, bool paused);
 /* Frames of run-ahead, 0 (off) to 2. A software-rendered game still has to
  * pass a savestate replay check first; see emufusion_libretro_host.c. */
 void emufusion_retro_set_runahead(emufusion_retro_host *host, unsigned frames);
+/* Run-ahead was refused for what this core does (its savestates do not
+ * replay the same frames), not for speed. */
+bool emufusion_retro_runahead_refused_for_good(emufusion_retro_host *host);
 bool emufusion_retro_set_joypad_button(emufusion_retro_host *host, unsigned port,
                                     unsigned button, bool pressed);
 bool emufusion_retro_set_analog_axis(emufusion_retro_host *host, unsigned port,

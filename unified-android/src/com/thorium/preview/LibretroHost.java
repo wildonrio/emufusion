@@ -208,6 +208,12 @@ public final class LibretroHost implements Closeable {
         requestedRunAheadFrames = Math.max(0, Math.min(2, frames));
     }
 
+    /** Run-ahead was refused for what the core does, not for speed. */
+    public synchronized boolean runAheadRefusedForGood() {
+        checkOpen();
+        return nativeRunAheadRefusedForGood(handle);
+    }
+
     public synchronized void runFrame() {
         checkOpen();
         pendingInput.applyTo(nativeInput);
@@ -432,6 +438,7 @@ public final class LibretroHost implements Closeable {
     private static native void nativeUnloadGame(long handle);
     private static native void nativeRunFrame(long handle);
     private static native void nativeSetRunAhead(long handle, int frames);
+    private static native boolean nativeRunAheadRefusedForGood(long handle);
     private static native void nativeSetPaused(long handle, boolean paused);
     private static native void nativeSetJoypadButton(long handle, int port, int button,
                                                      boolean pressed);

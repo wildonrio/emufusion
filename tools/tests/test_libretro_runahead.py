@@ -60,6 +60,23 @@ class LibretroRunAheadTest(unittest.TestCase):
         run = body_after(host, 'public synchronized void runFrame()')
         self.assertLess(run.index('nativeSetRunAhead(handle, runAhead)'), run.index('nativeRunFrame(handle)'))
 
+    def test_engines_that_refuse_for_good_are_not_checked_again(self):
+        # BlastEm turned run-ahead on and off within two seconds of every Mega
+        # Drive game: two hitches. A refusal for what the core does is
+        # remembered per engine until the app is updated; one for speed is not.
+        refuse = body_after(self.host, 'static void runahead_refuse(emufusion_retro_host')
+        self.assertIn('strstr(reason, "too slow") == NULL', refuse)
+        session = LIBRETRO_SESSION.read_text(encoding='utf-8')
+        frames = body_after(session, 'private int runAheadFrames()')
+        self.assertIn('!RunAheadMemory.refused(appContext, entry.id)', frames)
+        self.assertIn('pollRunAheadRefusal(host);', session)
+        poll = body_after(session, 'private void pollRunAheadRefusal(LibretroHost active)')
+        self.assertIn('RunAheadMemory.remember(appContext, entry.id)', poll)
+        memory = (LIBRETRO_SESSION.parent / 'RunAheadMemory.java').read_text(encoding='utf-8')
+        self.assertIn('lastUpdateTime', memory)
+        self.assertIn('Java_com_thorium_preview_LibretroHost_nativeRunAheadRefusedForGood',
+                      JNI_C.read_text(encoding='utf-8'))
+
     def test_the_native_suite_runs_the_mock_core_test(self):
         runner = (NATIVE / 'run_tests.sh').read_text(encoding='utf-8')
         self.assertEqual(runner.count('runahead_host_test" "$TEST_DIR/mock_core.so"'), 1)

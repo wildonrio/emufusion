@@ -118,6 +118,7 @@ int main(int argc, char **argv) {
     CHECK(emufusion_retro_run_frame(host, error, sizeof(error)), "run failed");
     CHECK(image(host) == (uint16_t)(start + run + 2u) &&
           state_value(host, error, sizeof(error)) == start + run, "two frames ahead");
+    CHECK(!emufusion_retro_runahead_refused_for_good(host), "an active run-ahead is not refused");
     emufusion_retro_destroy(host);
 
     /* Savestates that miss state: replay differs, ordinary frames stay
@@ -131,6 +132,8 @@ int main(int argc, char **argv) {
         CHECK(image(host) == (uint16_t)state_value(host, error, sizeof(error)),
               "a failed check keeps ordinary frames");
     }
+    CHECK(emufusion_retro_runahead_refused_for_good(host),
+          "a savestate that does not replay is refused for good");
     set_hidden_state(false);
     emufusion_retro_destroy(host);
 

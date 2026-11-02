@@ -149,6 +149,14 @@ Java_com_thorium_preview_LibretroHost_nativeSetRunAhead(
     emufusion_retro_set_runahead(from_handle(handle), frames > 0 ? (unsigned)frames : 0u);
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_LibretroHost_nativeRunAheadRefusedForGood(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)env;
+    (void)type;
+    return emufusion_retro_runahead_refused_for_good(from_handle(handle)) ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT void JNICALL
 Java_com_thorium_preview_LibretroHost_nativeSetPaused(
         JNIEnv *env, jclass type, jlong handle, jboolean paused) {

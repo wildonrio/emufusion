@@ -156,6 +156,9 @@ struct emufusion_retro_host {
     uint64_t runahead_expected_input;
     /* The check's replays ended in byte-identical states. */
     bool runahead_state_stable;
+    /* Refused for what the core does (its savestates do not replay), not for
+     * this moment's speed: the app remembers it per engine. */
+    bool runahead_refused_for_good;
     bool suppress_video;
     bool suppress_audio;
     /* Hash instead of show/play: the replay check and sampled comparisons. */
@@ -1800,6 +1803,7 @@ bool emufusion_retro_load_game(emufusion_retro_host *host, const char *game_path
     host->completed_game_load = true;
     /* Every game earns run-ahead on its own replay check. */
     host->runahead_status = RUNAHEAD_UNCHECKED;
+    host->runahead_refused_for_good = false;
     host->runahead_runs = 0;
     host->runahead_state_size = 0;
     host->runahead_expected_state = 0;
@@ -1960,6 +1964,7 @@ static const char *core_name(const emufusion_retro_host *host) {
 
 static void runahead_refuse(emufusion_retro_host *host, const char *reason) {
     host->runahead_status = RUNAHEAD_REFUSED;
+    host->runahead_refused_for_good = strstr(reason, "too slow") == NULL;
 #if defined(__ANDROID__)
     __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
             "Run-ahead off core=%s reason=%s", core_name(host), reason);
@@ -2168,6 +2173,14 @@ static bool runahead_run(emufusion_retro_host *host) {
             runahead_refuse(host, "too slow for the frame period");
     }
     return true;
+}
+
+bool emufusion_retro_runahead_refused_for_good(emufusion_retro_host *host) {
+    bool refused;
+    lock_host();
+    refused = host && host->runahead_status == RUNAHEAD_REFUSED && host->runahead_refused_for_good;
+    unlock_host();
+    return refused;
 }
 
 void emufusion_retro_set_runahead(emufusion_retro_host *host, unsigned frames) {

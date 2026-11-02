@@ -492,7 +492,10 @@ public final class AdaptiveFrameRateController {
         physicalDisplayClockQualified = true;
         // The guest may now be retimed by its owner. Old canonical source
         // evidence cannot survive this boundary and mask the fractional PTS.
-        setAuthoritativeSourceHz(authoritativeSourceHz);
+        // A declared (authoritative) clock keeps its presentation: restarting
+        // it here, when the panel clock qualifies ~2 s into play, was a 5-scan
+        // hitch on every paced libretro game (Thor, 3.2.128 candidate).
+        applyAuthoritativeSourceHz(authoritativeSourceHz, !(authoritativeSourceHz > 0.0));
     }
 
     /** Refines an already qualified oscillator without discarding real PTS evidence.
@@ -4451,6 +4454,10 @@ public final class AdaptiveFrameRateController {
      * core frame on those systems and must not be mistaken for slowdown.
      */
     public void setAuthoritativeSourceHz(double value) {
+        applyAuthoritativeSourceHz(value, true);
+    }
+
+    private void applyAuthoritativeSourceHz(double value, boolean restartPresentation) {
         qualifiedClockRevokedAtProducerNs = 0L;
         clearDirectLatticeMapping();
         resetLockedTierEndpointGate();
@@ -4478,7 +4485,7 @@ public final class AdaptiveFrameRateController {
         previousProducerSubmissionOrdinal = 0L;
         measuredSubmissionPeriodNs = 0.0;
         producerSubmissionClockObserved = false;
-        resetPresentation();
+        if (restartPresentation) resetPresentation();
     }
 
     public boolean usesAuthoritativeSourceRate() {

@@ -249,7 +249,27 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.127 (201, `d44b3943`): moving a software core to its panel tier no longer resets frame generation or the pacer.**
+November 1 (latest) **— 3.2.128 (202, `1ebbba51`): the panel clock qualifying keeps a declared clock's presentation; engines whose run-ahead fails are remembered.**
+
+- **The start-up hitch's real cause.**
+  - 3.2.127 retimed the authoritative clock in place, yet a 4-5 scan gap stayed at the same moment, with the presentation epoch advancing.
+  - The per-caller reset counts named it: `AdaptiveFrameRateController.setPhysicalDisplayRefreshHz`, run when the measured panel clock qualifies (~2 s into play, just before the host's tier move), re-applied `setAuthoritativeSourceHz` and restarted presentation.
+  - Now it clears the source evidence as before but keeps presentation when the source has a declared (authoritative) clock. Other sources are unchanged.
+- **Run-ahead memory.** Run-ahead refused for what the core does (its savestates do not replay), not for speed, is remembered per engine until the app is updated (`RunAheadMemory`; native `emufusion_retro_runahead_refused_for_good`).
+  - BlastEm ran it all session in one Mega Drive run, then switched it off after 2 s in the next ("predicted frame differs"): two hitches. The refusal was recorded and the next session skipped the check.
+- **Thor (`1ebbba51`), 60 s each, intervals off their scan in the trace window:**
+
+  | System | 3.2.126-3.2.127 | 3.2.128 | On interval | First generated / real image |
+  | --- | --- | --- | --- | --- |
+  | Mega Drive (two runs) | 6-19 | 2 and 2 | 99.9% | 8.8-9.0 / 17.1-17.4 ms |
+  | NES | 5-11 | 3 | 99.8% | 9.0 / 17.4 ms |
+  | SNES | 6-10 | 16 | 99.2% | |
+
+  - SNES's panel clock confirmed late in this run (8 s), so the core ran at 60.000 Hz until then; its remaining hitches follow that, and the 20.6-ms in-frame run-ahead check gave a 5-scan one.
+  - The tier move itself no longer hitches on any of them.
+- The reverted idle-time run-ahead check (3.2.128 trial) coincided with this reset on SNES and NES, so it deserves a retry now.
+
+November 1 (earlier) **— 3.2.127 (201, `d44b3943`): moving a software core to its panel tier no longer resets frame generation or the pacer.**
 
 - **Hitch check on 3.2.126** (60 s each, steady state from 3 s after start, ~14 s of trace):
 

@@ -169,7 +169,27 @@ public final class LibretroEngineSession implements EngineSession,
      * whose savestates replay identically (see emufusion_libretro_host.c).
      */
     private int runAheadFrames() {
-        return netplayRelay == null && !NO_RUN_AHEAD_MARKER.exists() ? 1 : 0;
+        return netplayRelay == null && !NO_RUN_AHEAD_MARKER.exists() &&
+                !RunAheadMemory.refused(appContext, entry.id) ? 1 : 0;
+    }
+
+    // Frame thread: whether this session's refusal has been looked for/recorded.
+    private int runAheadPollFrames;
+    private boolean runAheadRefusalRecorded;
+
+    /** Records an engine whose savestates do not replay (RunAheadMemory). */
+    private void pollRunAheadRefusal(LibretroHost active) {
+        if (runAheadRefusalRecorded || active == null || ++runAheadPollFrames < 60) return;
+        runAheadPollFrames = 0;
+        try {
+            if (!active.runAheadRefusedForGood()) return;
+        } catch (RuntimeException ignored) {
+            return;
+        }
+        runAheadRefusalRecorded = true;
+        RunAheadMemory.remember(appContext, entry.id);
+        Log.i(TAG, "Run-ahead refused for good engine=" + entry.id +
+                "; remembered until the app is updated");
     }
 
     /**
@@ -1423,6 +1443,7 @@ public final class LibretroEngineSession implements EngineSession,
                     }
                     if (released.get()) return;
                     updatePhysicalFgClock();
+                    pollRunAheadRefusal(host);
                     if (pacer.periodNanos() != framePeriodNs) {
                         // A small oscillator trim changes future spacing, not the
                         // timestamp already scheduled. Reanchoring to thread wake

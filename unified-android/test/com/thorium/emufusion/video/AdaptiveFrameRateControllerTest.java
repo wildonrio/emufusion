@@ -5251,6 +5251,12 @@ public final class AdaptiveFrameRateControllerTest {
         check(!value.retimeAuthoritativeSourceHz(30.0), "another tier is a new source");
         check(!value.retimeAuthoritativeSourceHz(Double.NaN), "invalid refused");
         check(value.authoritativeSourceHzForDiagnostics() == 59.914, "refusals keep the clock");
+        // The panel clock qualifying (~2 s into play) keeps a declared clock's
+        // presentation.
+        long before = value.presentationEpoch();
+        value.setPhysicalDisplayRefreshHz(119.83);
+        eq(before, value.presentationEpoch(), "panel qualification keeps a declared clock's presentation");
+        check(value.usesAuthoritativeSourceRate(), "the declared clock stays");
     }
 
     private static void panelPacedStampsStayContinuousOnNominalOrRetimedTimeline() {
