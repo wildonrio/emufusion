@@ -269,6 +269,7 @@ November 1 (latest) **— 3.2.126 (200, `595f9d78`): late frames just after the 
     - All 282 3-D triplets: device 10.6% of frames with invented content, error 0.724; the hard pick (argmax) 9.9%; soft weights 18.4%.
     - By game, the hard pick: Double Dash 27 -> 14%, Wind Waker HD 18 -> 11%, SM3DW 5 -> 0%, NSMBU Deluxe 40 -> 20%, but Star Fox 64 17 -> 33%. Error rose 18-53% wherever invented content fell.
     - It trades the error for invented content and does not generalise to every game; not adopted.
+    - Only where its pick is confident (weight at least 0.8 on a non-device candidate): identical to the device on Double Dash (27%) and Star Fox 64 (17%). Its useful picks are low-confidence ones.
 - **The rest of the sweep (3.2.125):**
   - PSP 99.9% on interval, 11.6 / 19.9 ms;
   - Dreamcast 99.8%, 9.0 / 17.3 ms;
