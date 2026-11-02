@@ -249,6 +249,21 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
+November 2 (latest) **— 3.2.131 (205, `1e175e30`): a late frame that was ready for the earlier latch no longer deepens the queue.**
+
+- **Dread's latency has two modes.** In six Thor runs today it was either ~11 / 30 ms (first generated / real image) or ~27 / 46 ms.
+  - The fast runs deepened once at start, saw early frames and gave the scan back within a second.
+  - The slow runs turned the early guard on instead (the 3.2.125 path), then deepened to a second scan. Cadence was the same in both modes (83-87%).
+- **Cause.** Per-present traces of the slow runs: 47 of 58 and 49 of 67 late frames had finished rendering before the latch a scan earlier than the one that took them, by up to 13 ms. Nearly all came at one or two extra scans with the guard on. In the fast runs every late frame really finished after its latch.
+  - Those frames were held by the compositor, not by our rendering. `fromRendering` counted any late frame that finished within two scans of its slot, so they deepened the queue a second time.
+- **Change.** `BuiltinQueueReserve.observe`: a late frame that finished before the earlier latch is not a rendering miss (zero margin). A frame that finished after it still counts.
+  - Test: `framesReadyForAnEarlierLatchDoNotCount` covers 0.27 ms and 13 ms ahead, plus a near miss 0.3 ms late that still deepens.
+  - Host suite: 2829 tests pass.
+- **Thor (`1e175e30`, 60 s):** Dread 86.0% on interval, 11.7 / 30.0 ms, deepened once then recovered early (the fast mode, so this run did not exercise the change).
+  - The 1-ms-margin build (`51ee9927`) went to the slow mode: 82.9%, 27.1 / 45.6 ms, a second scan on a frame 0.27 ms ahead of the earlier latch. That frame no longer counts.
+  - 3DS on that build: 97.3% on intended, 19.8 / 34.4 ms; 22 of 124 late frames were ready early.
+- **Still open:** the guard's own late frames. It requests half a scan after the slot. In Dread's slow runs, frames ready a scan early still landed a scan late. The guard bought no cadence there (83-87% either way). A guard that turns itself off when ready frames land late is the next candidate.
+
 November 2 **— Eden trial 3.2.131 (205, `ec9a780d`, not released): low GPU queue priority in Eden is not adopted; New Super Mario Bros. U Deluxe is a 32-bit game.**
 
 - **Owner, November 2: Eden may be changed** ("I told you you could alter Eden ffs"). This supersedes the November 1 decision below that Eden is not changed. Eden edits stay local (never upstream); the picture must stay as good as stock Eden.
