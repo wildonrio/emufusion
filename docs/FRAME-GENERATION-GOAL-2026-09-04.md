@@ -249,6 +249,54 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
+November 2 (Switch GPU cost) **— Eden hands the generator its own 1280x720 picture (3.2.136 candidate).**
+
+- **Owner, November 2: "keep going on eden, cut the GPU cost".**
+- **Lighter generation lowers Switch latency through the queue depth (Thor, 3.2.131, NSMBU Deluxe).** QA work floor 5 against the normal level, same session. 3.2.131 cannot re-arm the physical trace, so both windows are the first ~16 s Eden presents (title and the path into the map), not play.
+
+  | | Normal | Work floor 5 |
+  | --- | --- | --- |
+  | Dense GPU per pair | 3.4 ms | 2.5 ms |
+  | Generated / real image, arrival to scan-out (median) | 19.4 / 27.8 ms | 11.7 / 20.4 ms |
+  | Frames at an extra scan of queue | 18% | 3% |
+  | Frames shown a scan late | 23% | 26% |
+  | On the intended interval | 97.9% | 98.8% |
+
+  - The late frames are not late renders: they finished ~5 ms before their slot and were latched like the on-time ones, in runs of up to 210 frames. SurfaceFlinger's FrameTimeline (40 dumps over ~10 s, 1,655 display frames) shows every composition on time, so these runs are compositor- or display-side. Still open.
+- **Where our GPU time goes (replay bench, Thor, NSMBU Deluxe triplets, production level 24, QA pass timing; each pass includes a ~0.33 ms drain).**
+
+  | Pass | 1080p history | Eden's 1280x720, analysis /2 | 1280x720, analysis /3 |
+  | --- | --- | --- | --- |
+  | Generate draw | 1.11 ms | 0.73 ms | 0.76 ms |
+  | Per-phase search | 1.14 ms | 1.62 ms | 0.98 ms |
+  | Finest patch search | 0.57 ms | 0.70 ms | 0.49 ms |
+  | Luma (GRAY) | 0.51 ms | 0.47 ms | 0.49 ms |
+
+  - Not in these figures: the three full-size copies each source frame takes (external image -> latest -> endpoint FIFO -> history), which scale with the history too.
+- **Eden renders the Switch's handheld picture, 1280x720, and upscaled it into our 1920x1080 input Surface.** Every copy and generation pass then ran on 2.25 times the game's pixels.
+- **Change.**
+  - `GameSurfaceView.setSourceSize`: the generator's input Surface takes the engine's own picture size where it fits the panel. `InWindowGameHost` sets 1280x720 for Eden. Eden's swapchain follows the window's default size (`ChooseSwapExtent` takes `currentExtent`), so its present becomes a 1:1 copy.
+  - `DisplayFrameGenerator`: an input smaller than the output keeps its own aspect (`setPresentationViewport`); the arrival pair's generated image is prepared at the input size and scaled once at the callback, like real images (`preparedAtInputSize`; pixel art keeps the output size).
+  - `DenseInverseSearchFlow`: histories 961-1280 wide take a third for the analysis image (426x240; field 213x120 against 1080p's 240x135).
+  - QA: `emufusion_framegen_engine_source_size=0` restores the panel-sized input for paired runs.
+- **Replay bench, quality (fraction of a cross-fade's error, all triplets; 1080p history / 720p analysis /2 / 720p analysis /3):** NSMBU Deluxe 0.421 / 0.406 / 0.410, Link's Awakening 0.696 / 0.684 / 0.680. /3 against /2 on the same triplets: -0.0002.
+- **Thor, 3.2.136 (`0232c22d`), NSMBU Deluxe in play (trace re-armed on the map), alternating order, QA off = panel-sized input.**
+
+  | Run (order) | Input | Dense GPU per pair | On interval | 2-scan intervals in ~16 s | Compositor mode changes | Generated / real (median) |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 1st | panel | 3.69 ms | 99.9% | 1 | 2 | 19.5 / 27.8 ms |
+  | 2nd | 1280x720 | 2.63 ms | 99.2% | 15 | 20 | 19.5 / 27.8 ms |
+  | 1st | 1280x720 | 2.63 ms | 99.2% | 15 | 19 | 19.4 / 27.7 ms |
+  | 2nd | panel | 3.71 ms | 98.8% | 24 | 38 | 19.4 / 27.8 ms |
+
+  - GPU per pair 29% lower; latency and smoothness unchanged (both inputs flap the same way). The picture is correct on the panel (16:9, Eden's bilinear upscale now ours).
+- **What limits Switch latency and smoothness in play: the Thor's compositor has two modes.**
+  - Fast: a buffer latched ~1.8 ms before a scan is shown at that scan (the composer presents early). Pipelined: latched ~10.1 ms before (SurfaceFlinger's 10.33 ms duration at 120 Hz), one scan later. Every frame of a run takes the same mode.
+  - In play the compositor is mostly pipelined (85-99% of frames). Our plans are ~15 ms ahead then, or ~6.7 ms ahead when earliest-latch planning bets on the fast mode; a bet against a pipelined compositor shows every frame a scan late, so latency is the same either way.
+  - The fast mode is entered when the pipeline drains (a frame dropped by the compositor; EGL_BAD_ACCESS on its timestamps) and left when one frame finishes after its fast slot. Every exit here was a generated frame planned 2.3-4 ms later than its neighbours (its callback ran late) and finished 0.4-1.5 ms after the fast slot. Each change of mode is a 2-scan or 0-scan interval: this, not rendering, is the 98.8-99.2% cadence.
+  - Generated frames drawn at the callback instead of from the prepared copy (120-160 per 16 s, both inputs) are part of the same picture.
+  - Next: keep the callback on time (no arrival work ahead of a due callback), so frames meet the fast slot, and plan for the mode the compositor is actually in.
+
 November 2 (Switch) **— Switch gameplay measured for the first time; Eden's images landed on our panel callback and waited a scan (phase lock for Eden, 3.2.134 candidate).**
 
 - **The Switch test scenes were title screens.** Dread, NSMBU Deluxe and Odyssey resume into their titles: Eden has no save states, so the app's exit checkpoint cannot restore play. Every earlier Switch smoothness and latency figure is a title screen.

@@ -15,7 +15,7 @@ class ViewportContainmentTest(unittest.TestCase):
                       '    private void setPresentationViewport(')
         fixture = '''
 public class ViewportTest {
-    int outputWidth, outputHeight;
+    int inputWidth, inputHeight, outputWidth, outputHeight;
     float presentationAspect;
     static class GLES20 {
         static int x,y,w,h;
@@ -24,15 +24,21 @@ public class ViewportTest {
 ''' + body + '''
     public static void main(String[] args) {
         ViewportTest t=new ViewportTest();
-        for(int[] panel:new int[][]{{1920,1080},{1240,1080},{1080,1920},{1919,1079}}){
+        for(int[] panel:new int[][]{{1920,1080},{1240,1080},{1080,1920},{1919,1079},{2400,1080}}){
             t.outputWidth=panel[0];t.outputHeight=panel[1];
-            for(float aspect:new float[]{4f/3f,16f/9f,2.4f,10f/9f,0f}){
-                t.presentationAspect=aspect;t.setPresentationViewport();
-                assert GLES20.x>=0 && GLES20.y>=0;
-                assert GLES20.x+GLES20.w<=panel[0] && GLES20.y+GLES20.h<=panel[1];
-                assert GLES20.w==panel[0] || GLES20.h==panel[1];
-                float expected=aspect>0?aspect:(float)panel[0]/panel[1];
-                assert Math.abs(GLES20.w-GLES20.h*expected)<=Math.max(1f,expected);
+            // A panel-sized input fills by the output's shape; an engine's own
+            // smaller picture (Eden's 1280x720) keeps its 16:9 everywhere.
+            for(int[] input:new int[][]{{panel[0],panel[1]},{1280,720}}){
+                t.inputWidth=input[0];t.inputHeight=input[1];
+                boolean sourceSized=input[0]!=panel[0]||input[1]!=panel[1];
+                for(float aspect:new float[]{4f/3f,16f/9f,2.4f,10f/9f,0f}){
+                    t.presentationAspect=aspect;t.setPresentationViewport();
+                    assert GLES20.x>=0 && GLES20.y>=0;
+                    assert GLES20.x+GLES20.w<=panel[0] && GLES20.y+GLES20.h<=panel[1];
+                    assert GLES20.w==panel[0] || GLES20.h==panel[1];
+                    float expected=aspect>0?aspect:sourceSized?16f/9f:(float)panel[0]/panel[1];
+                    assert Math.abs(GLES20.w-GLES20.h*expected)<=Math.max(1f,expected);
+                }
             }
         }
     }

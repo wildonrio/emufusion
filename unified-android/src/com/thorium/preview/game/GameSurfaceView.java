@@ -122,6 +122,8 @@ public final class GameSurfaceView extends SurfaceView
     private final FrameGenerationSettings.Mode launchMode;
     /** The system's hardware display aspect, or 0 to fill the parent. */
     private float displayAspect;
+    /** The engine's fixed picture size (setSourceSize), or 0. */
+    private volatile int sourceWidth, sourceHeight;
 
     public GameSurfaceView(Context context) {
         this(context, FrameGenerationSettings.mode(context));
@@ -247,6 +249,28 @@ public final class GameSurfaceView extends SurfaceView
     public void setAuthoritativeSourceHz(double value) {
         authoritativeSourceHz = value;
         if (frameGenerator != null) frameGenerator.setAuthoritativeSourceHz(value);
+    }
+
+    /**
+     * The engine's own picture size, when it renders a fixed size smaller than
+     * the panel and upscales it into whatever window it is given (Eden's
+     * handheld Switch: 1280x720). The generator's input Surface then takes
+     * that size: the engine stops upscaling, every copy and generation pass
+     * works on its own pixels (2.25 times fewer on a 1080p panel), and the
+     * generator scales the image once to the panel, bilinear like the engine.
+     * Ignored where it does not fit the panel. Set before the surface exists.
+     */
+    public void setSourceSize(int width, int height) {
+        sourceWidth = Math.max(0, width);
+        sourceHeight = Math.max(0, height);
+    }
+
+    /** The generator's input size for a panel-sized output: [width, height]. */
+    private int[] generatorInputSize(int width, int height) {
+        boolean source = sourceWidth > 0 && sourceHeight > 0 &&
+                sourceWidth <= width && sourceHeight <= height &&
+                TimelineSchedulerSwitch.engineSourceSize();
+        return source ? new int[] {sourceWidth, sourceHeight} : new int[] {width, height};
     }
 
     /** A pixel-art system: the generator's pixel-art synthesis rules. */
@@ -394,7 +418,8 @@ public final class GameSurfaceView extends SurfaceView
         } else if (frameGenerator != null) {
             float hz = refreshRate();
             lastReportedPanelHz = hz;
-            frameGenerator.resize(width, height, width, height, hz);
+            int[] input = generatorInputSize(width, height);
+            frameGenerator.resize(input[0], input[1], width, height, hz);
         }
         if (listener != null) {
             if (first) listener.onSurfaceAvailable(engineSurface, width, height);
@@ -482,9 +507,11 @@ public final class GameSurfaceView extends SurfaceView
             generator.setStatsListener(frameRateListener);
             generator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);
             if (slotLatticeProducer) generator.setSlotLatticeProducer(true);
-            if (pendingWidth != createdWidth || pendingHeight != createdHeight)
-                generator.resize(pendingWidth, pendingHeight, pendingWidth,
+            if (pendingWidth != createdWidth || pendingHeight != createdHeight) {
+                int[] input = generatorInputSize(pendingWidth, pendingHeight);
+                generator.resize(input[0], input[1], pendingWidth,
                         pendingHeight, lastReportedPanelHz);
+            }
         }
         if (listener != null)
             listener.onSurfaceAvailable(engineSurface, pendingWidth, pendingHeight);
@@ -608,8 +635,9 @@ public final class GameSurfaceView extends SurfaceView
         TimelineSchedulerSwitch.refresh(getContext(), launchMode);
         FrameWorkHint.configure(getContext());
         try {
+            int[] inputSize = generatorInputSize(width, height);
             frameGenerator = FrameGenerationRendererFactory.create(selection, output,
-                    width, height, width, height, refreshRate(), "primary", displayId(),
+                    inputSize[0], inputSize[1], width, height, refreshRate(), "primary", displayId(),
                     this::qualificationProofEnabled, this::densePyramidEnabled,
                     this::denseV27ReducedAnalysisEnabled,
                     this::denseV28ReducedAnalysisEnabled);

@@ -8906,9 +8906,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 outputWidth <= 0 || outputHeight <= 0) return;
         GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, preparedFrameState, 0);
         GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, preparedFrameState, 1);
+        boolean atInput = preparedAtInputSize();
+        int width = atInput ? inputWidth : outputWidth;
+        int height = atInput ? inputHeight : outputHeight;
         try {
-            if (preparedFrameTexture == 0 || preparedFrameWidth != outputWidth ||
-                    preparedFrameHeight != outputHeight) {
+            if (preparedFrameTexture == 0 || preparedFrameWidth != width ||
+                    preparedFrameHeight != height) {
                 int[] names = new int[1];
                 if (preparedFrameTexture == 0) {
                     GLES20.glGenTextures(1, names, 0);
@@ -8916,20 +8919,20 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     GLES20.glGenFramebuffers(1, names, 0);
                     preparedFrameFramebuffer = names[0];
                 }
-                allocateTexture(preparedFrameTexture, outputWidth, outputHeight);
+                allocateTexture(preparedFrameTexture, width, height);
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, preparedFrameFramebuffer);
                 GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
                         GLES20.GL_TEXTURE_2D, preparedFrameTexture, 0);
                 if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
                         GLES20.GL_FRAMEBUFFER_COMPLETE) return;
-                preparedFrameWidth = outputWidth;
-                preparedFrameHeight = outputHeight;
+                preparedFrameWidth = width;
+                preparedFrameHeight = height;
             }
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, preparedFrameFramebuffer);
-            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            GLES20.glViewport(0, 0, width, height);
             GLES20.glClearColor(0f, 0f, 0f, 1f);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-            setPresentationViewport();
+            if (!atInput) setPresentationViewport();
             prerenderingFrame = true;
             boolean drawn;
             try {
@@ -8950,15 +8953,34 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
     }
 
+    /**
+     * Whether the arrival pair's image is prepared at the input's size: an
+     * engine presenting its own, smaller picture (Eden's 1280x720 on a 1080p
+     * panel) has every pass and the generate draw at its own pixels, and the
+     * callback scales the image once, as it does real images (3.2.136).
+     * Pixel art keeps the output size: its whole-pixel warp is the upscale.
+     */
+    private boolean preparedAtInputSize() {
+        return !discreteContent && historyWidth == inputWidth && historyHeight == inputHeight &&
+                inputWidth < outputWidth && inputHeight < outputHeight;
+    }
+
     /** The callback's generated image: the prepared copy when it is this pair's, else rendered now. */
     private void drawPreparedOrMotionFrame(float phase) {
+        boolean atInput = preparedAtInputSize();
         if (preparedFrameValid && preparedFrameTexture != 0 &&
                 phase == TimelineFrameScheduler.ARRIVAL_PHASE &&
-                preparedFrameWidth == outputWidth && preparedFrameHeight == outputHeight &&
+                preparedFrameWidth == (atInput ? inputWidth : outputWidth) &&
+                preparedFrameHeight == (atInput ? inputHeight : outputHeight) &&
                 preparedFrameAspect == presentationAspect &&
                 preparedFrameKeyA == historyFrameKey(previousIndex) &&
                 preparedFrameKeyB == historyFrameKey(currentIndex)) {
             ++preparedFrameHits;
+            if (atInput) {
+                setPresentationViewport();
+                drawTexture2d(preparedFrameTexture);
+                return;
+            }
             GLES20.glViewport(0, 0, outputWidth, outputHeight);
             drawTexture2d(preparedFrameTexture);
             setPresentationViewport();
@@ -9074,7 +9096,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     /** Preserve aspect and contain the whole image, including on the lower panel. */
     private void setPresentationViewport() {
+        // An input smaller than the output is the engine's own picture
+        // (GameSurfaceView.setSourceSize): it keeps its shape on any panel.
+        boolean sourceSized = inputWidth > 0 && inputHeight > 0 &&
+                (inputWidth != outputWidth || inputHeight != outputHeight);
         float aspect = presentationAspect > 0f ? presentationAspect :
+                sourceSized ? (float) inputWidth / inputHeight :
                 (float) outputWidth / outputHeight;
         com.thorium.emufusion.video.PresentationGeometry.Rectangle bounds =
                 com.thorium.emufusion.video.PresentationGeometry.fitInside(

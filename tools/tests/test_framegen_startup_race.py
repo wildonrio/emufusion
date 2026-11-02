@@ -122,6 +122,7 @@ public class StartupRace {
         ArrayList<FrameGenerationRenderer> made=new ArrayList<>();
         SurfaceHolder getHolder(){return holder;}int getWidth(){return width;}int getHeight(){return height;}
         float refreshRate(){return 120;}
+        int[] generatorInputSize(int w,int h){return new int[]{w,h};}
         String activeFrameGenerationBackend(){return activeBackend.name();}
         void propagatePanelRefresh(String s){}void bindRuntimeErrorListener(int g){}
         void requestDirectFrameRate(Surface s){}

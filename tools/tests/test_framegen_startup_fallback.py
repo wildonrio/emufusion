@@ -117,6 +117,7 @@ public class StartupFallbackTest {
         Primary(FrameGenerationSettings.Mode mode){launchMode=mode;}
         Object getContext(){return this;} int displayId(){return 0;}
         float refreshRate(){return 120f;}
+        int[] generatorInputSize(int w,int h){return new int[]{w,h};}
         boolean qualificationProofEnabled(){return false;} boolean densePyramidEnabled(){return true;}
         boolean denseV27ReducedAnalysisEnabled(){return false;} boolean denseV28ReducedAnalysisEnabled(){return true;}
         void requestDirectFrameRate(Surface s){} void propagatePanelRefresh(String r){}

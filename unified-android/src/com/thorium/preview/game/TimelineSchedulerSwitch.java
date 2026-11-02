@@ -259,6 +259,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         preparedFrame = preparedImage;
+        boolean sourceSize = true;
+        try {
+            if (context != null) sourceSize = Settings.Global.getInt(
+                    context.getContentResolver(), ENGINE_SOURCE_SIZE_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        engineSourceSize = sourceSize;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -534,6 +542,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean preparedFrame = true;
 
     static boolean preparedFrame() { return preparedFrame; }
+
+    /**
+     * An engine that renders a fixed picture smaller than the panel gets an
+     * input Surface of that size (GameSurfaceView.setSourceSize; default,
+     * 3.2.136). QA: emufusion_framegen_engine_source_size=0 gives it the
+     * panel size as before, for paired comparisons.
+     */
+    static final String ENGINE_SOURCE_SIZE_GLOBAL = "emufusion_framegen_engine_source_size";
+    private static volatile boolean engineSourceSize = true;
+
+    static boolean engineSourceSize() { return engineSourceSize; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

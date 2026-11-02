@@ -19,13 +19,14 @@ import java.util.Set;
  * the same passes on a desktop GPU over captured hold-out triplets.
  *
  * Per real frame: luma of the history image box-filtered to the analysis size
- * (native up to 640 wide, a half up to 1280, else a quarter) and a 2x2-mean
- * pyramid, cached per frame. Per pair, both directions, coarse to fine down
- * to the full analysis resolution: 8x8 patches on a 3-px grid align by
- * inverse-compositional Gauss-Newton from the coarser flow; densification
- * gives each pixel the error-weighted mean of the covering patches. The output
- * pass samples the full-resolution history where the content comes from
- * (fixed point along each flow) and blends by the phase.
+ * (native up to 640 wide, a half up to 960, a third up to 1280, else a
+ * quarter) and a 2x2-mean pyramid, cached per frame. Per pair, both
+ * directions, coarse to fine down to the full analysis resolution: 8x8
+ * patches on a 3-px grid align by inverse-compositional Gauss-Newton from
+ * the coarser flow; densification gives each pixel the error-weighted mean
+ * of the covering patches. The output pass samples the full-resolution
+ * history where the content comes from (fixed point along each flow) and
+ * blends by the phase.
  *
  * All methods run on the GL thread of the owning generator.
  */
@@ -115,7 +116,11 @@ final class DenseInverseSearchFlow {
             releaseTextures();
             historyWidth = width;
             historyHeight = height;
-            divisor = width > 1280 ? 4 : width > 640 ? 2 : 1;
+            // A third for 961-1280 (3.2.136, Eden's own 1280x720): its field
+            // stays near the 1080p history's (213x120 against 240x135) and
+            // the per-phase search costs 0.98 ms instead of a half's 1.62 ms;
+            // replay bench, NSMBU Deluxe and Link's Awakening, paired: equal.
+            divisor = width > 1280 ? 4 : width > 960 ? 3 : width > 640 ? 2 : 1;
             int w = Math.max(1, width / divisor), h = Math.max(1, height / divisor);
             finest = 0;
             List<int[]> list = new ArrayList<>();

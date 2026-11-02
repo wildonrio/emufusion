@@ -37,7 +37,7 @@ def load_set(fields_root, frames_root):
 
 
 def geometry(width, field_width):
-    divisor = 4 if width > 1280 else 2 if width > 640 else 1
+    divisor = 4 if width > 1280 else 3 if width > 960 else 2 if width > 640 else 1
     level = int(round(math.log2(width / divisor / field_width)))
     return divisor, level
 

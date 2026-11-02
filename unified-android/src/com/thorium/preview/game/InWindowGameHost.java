@@ -991,6 +991,9 @@ public final class InWindowGameHost
             layer.setDiscreteContent(authoritativeHz > 0.0);
             layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz),
                     directSurfaceVotesSourceClock(authoritativeHz));
+            // Eden runs the Switch in handheld mode at its native scale: a
+            // 1280x720 picture it would upscale into a panel-sized window.
+            if ("eden".equals(request.engineId)) layer.setSourceSize(1280, 720);
             gameSurface = layer;
         }
         FrameLayout.LayoutParams videoParams = match();

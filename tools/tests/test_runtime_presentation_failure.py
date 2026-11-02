@@ -232,6 +232,7 @@ public class RuntimeFailureTest {
         GameSurface.Listener listener;
         FrameGenerationSettings.Mode launchMode=FrameGenerationSettings.Mode.AUTO;
         float refreshRate(){return 120f;}
+        int[] generatorInputSize(int w,int h){return new int[]{w,h};}
         int getWidth(){return 1920;} int getHeight(){return 1080;}
         void bindRuntimeErrorListener(int generation){binds++;}
         void startGeneratorAsync(Surface s,int w,int h){starts++;}
