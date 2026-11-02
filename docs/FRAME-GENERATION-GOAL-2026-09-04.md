@@ -350,6 +350,21 @@ November 1 (earlier) **— 3.2.126 (200, `595f9d78`): late frames just after the
     - By game, the hard pick: Double Dash 27 -> 14%, Wind Waker HD 18 -> 11%, SM3DW 5 -> 0%, NSMBU Deluxe 40 -> 20%, but Star Fox 64 17 -> 33%. Error rose 18-53% wherever invented content fell.
     - It trades the error for invented content and does not generalise to every game; not adopted.
     - Only where its pick is confident (weight at least 0.8 on a non-device candidate): identical to the device on Double Dash (27%) and Star Fox 64 (17%). Its useful picks are low-confidence ones.
+    - With more training data (395 device-replayed triplets from 16 further 3-D games, `replay_bench --set train`), held-out Double Dash fell further (27 -> 11% of frames with invented content) but its error rose 42% (1.231 -> 1.751). Star Fox 64 got worse again: 17 -> 48% of frames. Stopped: more data does not make it generalise.
+    - Device output on those 16 sets (frames with invented content):
+
+      | Sets | Frames |
+      | --- | --- |
+      | Sonic Superstars | 75% (menus and transitions) |
+      | PS3 | 50% |
+      | N64 | 47% |
+      | Sonic Adventure | 44% |
+      | Dread | 41% |
+      | 3DS, Mario Kart Wii | 33% |
+      | NSMBU Deluxe | 20% |
+      | PS1 | 12% |
+      | Wii U | 7% |
+      | Sunshine, God of War (PS2, PSP), Switch, Odyssey | 0% |
 - **The rest of the sweep (3.2.125):**
   - PSP 99.9% on interval, 11.6 / 19.9 ms;
   - Dreamcast 99.8%, 9.0 / 17.3 ms;
