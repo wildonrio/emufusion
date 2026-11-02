@@ -492,10 +492,12 @@ public final class AdaptiveFrameRateController {
         physicalDisplayClockQualified = true;
         // The guest may now be retimed by its owner. Old canonical source
         // evidence cannot survive this boundary and mask the fractional PTS.
-        // A declared (authoritative) clock keeps its presentation: restarting
-        // it here, when the panel clock qualifies ~2 s into play, was a 5-scan
-        // hitch on every paced libretro game (Thor, 3.2.128 candidate).
-        applyAuthoritativeSourceHz(authoritativeSourceHz, !(authoritativeSourceHz > 0.0));
+        // A declared (authoritative) clock or a stamped producer timeline keeps
+        // its presentation: restarting it here, when the panel clock qualifies
+        // ~2 s into play, was a 5-scan hitch on every paced libretro game
+        // (Thor, 3.2.128 candidate) and 3-4 scan hitches on Dolphin.
+        applyAuthoritativeSourceHz(authoritativeSourceHz,
+                !(authoritativeSourceHz > 0.0 || installedProducerTimelineHz > 0.0));
     }
 
     /** Refines an already qualified oscillator without discarding real PTS evidence.

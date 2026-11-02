@@ -249,7 +249,22 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.129 (203, `cea82f94`): run-ahead's replay check runs between frames.**
+November 1 (latest) **— 3.2.130 (204, `aaa30195`): hardware cores keep their presentation when the panel clock qualifies.**
+
+- **Change.** 3.2.128's rule now also covers a stamped producer timeline (Dolphin, ARMSX2 and other hardware cores): when the measured panel clock qualifies, the source evidence is cleared but presentation is not restarted.
+- **Before (3.2.126 hitch check):**
+  - Double Dash: 3- and 4-scan hitches at the qualification, ~2 s into play;
+  - God of War II: 4- and 5-scan ones. Its 1-s gap was the game's own load (no unique frames).
+- **Thor (`aaa30195`), 60 s each:**
+
+  | Game | On interval | Off-scan intervals in steady play | First generated / real image |
+  | --- | --- | --- | --- |
+  | God of War II | 99.8% (99.5% on 3.2.126) | two 2-scan | 10.9 / 19.2 ms |
+  | Double Dash | 98.8% (96.7%) | 21 of 2 scans, 2 of 3 | 16.7 / 25.1 ms |
+
+  - Double Dash's queue deepened at start and recovered only after 7 s, which raised that run's latency. A first Double Dash run sat on a 15-s still scene and was discarded.
+
+November 1 (earlier) **— 3.2.129 (203, `cea82f94`): run-ahead's replay check runs between frames.**
 
 - **Change.** The replay check moved out of the frame, as in the reverted 3.2.128 trial, now that 3.2.128 removed the presentation restart that coincided with it.
   - It runs in two halves in the frame loop's slack after the image is handed on (`LibretroHost.idleWork` / native `emufusion_retro_idle_work`; at least 8 ms of slack).

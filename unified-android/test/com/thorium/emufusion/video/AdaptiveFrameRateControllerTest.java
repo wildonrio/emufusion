@@ -5257,6 +5257,12 @@ public final class AdaptiveFrameRateControllerTest {
         value.setPhysicalDisplayRefreshHz(119.83);
         eq(before, value.presentationEpoch(), "panel qualification keeps a declared clock's presentation");
         check(value.usesAuthoritativeSourceRate(), "the declared clock stays");
+        // So does a hardware core's stamped producer timeline (Dolphin, ARMSX2).
+        AdaptiveFrameRateController stamped = new AdaptiveFrameRateController(120.0);
+        stamped.setProducerTimelineHz(60.0);
+        long stampedBefore = stamped.presentationEpoch();
+        stamped.setPhysicalDisplayRefreshHz(119.83);
+        eq(stampedBefore, stamped.presentationEpoch(), "panel qualification keeps a producer timeline's presentation");
     }
 
     private static void panelPacedStampsStayContinuousOnNominalOrRetimedTimeline() {
