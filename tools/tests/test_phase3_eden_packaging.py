@@ -49,7 +49,7 @@ SUPERSEDED_COMMIT = "5ec94b19714f75489cdfc62d890d2f94d45514ce"
 # October 11 passes the frontend-provisioned per-GPU driver (Turnip) to Eden.
 # 3.2.34 runs the guest natively (NCE) and flushes saves for process replacement.
 # 3.2.64 adds bounded, logging-only diagnostics for guest faults and InvalidHandle.
-ADAPTER_SHA256 = "0106ea5229c8353f58d3c7d3fc597fc47246232b393ce141283e42a7a4d624b1"
+ADAPTER_SHA256 = "811d4716e61e56232657ed88c2026b540781d78ca22f3ed5aa6f39b51c0a04c2"
 ADAPTER_LIBRARY = "libemufusion_native_adapter_eden.so"
 STAGED_ADAPTER = ROOT / "engines" / "build" / "arm64-v8a" / ADAPTER_LIBRARY
 ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-emufusion-adapter.cpp"

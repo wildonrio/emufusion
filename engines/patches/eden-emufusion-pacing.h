@@ -38,6 +38,26 @@ inline bool SetPacedVsyncHz(double hz) {
     return true;
 }
 
+// Phase lock (2026-11-02): the host nudges the next VI callback a little
+// earlier or later so images arrive just before the frame generator's panel
+// callback. With only a rate correction the phase stayed wherever the session
+// started (Eden's images landed on the callback, then waited a whole scan).
+inline std::atomic<std::int64_t> g_vi_phase_nudge_ns{0};
+inline void NudgeViPhase(std::int64_t ns) {
+    g_vi_phase_nudge_ns.fetch_add(ns, std::memory_order_relaxed);
+}
+// Applied to one callback period, at most a quarter of it; the rest waits.
+inline std::int64_t TakeViPhaseNudge(std::int64_t periodNs) {
+    const std::int64_t limit = periodNs / 4;
+    std::int64_t pending = g_vi_phase_nudge_ns.load(std::memory_order_relaxed);
+    std::int64_t taken;
+    do {
+        taken = pending > limit ? limit : (pending < -limit ? -limit : pending);
+    } while (!g_vi_phase_nudge_ns.compare_exchange_weak(pending, pending - taken,
+                                                        std::memory_order_relaxed));
+    return taken;
+}
+
 inline double BaseVsyncHz() {
     const double hz = PacedVsyncHz();
     return hz > 0.0 ? hz : kDeclaredVsyncHz;

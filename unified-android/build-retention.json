@@ -1181,6 +1181,14 @@
     "unified-android/build/emufusion-3.2.131-phase2-phase3-qualification-51ee992756cd397d173ccb558d4c1d75c7ab3da5a5a9f3564a0e69a78072b10e.apk": {
       "sha256": "51ee992756cd397d173ccb558d4c1d75c7ab3da5a5a9f3564a0e69a78072b10e",
       "reason": "3.2.131 candidate with a 1 ms margin, superseded by the zero-margin build 1e175e30 (2026-11-02)."
+    },
+    "unified-android/build/emufusion-3.2.132-phase2-phase3-qualification.apk": {
+      "sha256": "d21161dec959338391e9ae4bbc65a6c7e6bdc70193761facbea6418b329da864",
+      "reason": "3.2.132 QA trace re-arm build, superseded by the 3.2.133 diagnostic (2026-11-02)."
+    },
+    "unified-android/build/emufusion-3.2.132-phase2-phase3-qualification-d21161dec959338391e9ae4bbc65a6c7e6bdc70193761facbea6418b329da864.apk": {
+      "sha256": "d21161dec959338391e9ae4bbc65a6c7e6bdc70193761facbea6418b329da864",
+      "reason": "3.2.132 QA trace re-arm build, superseded by the 3.2.133 diagnostic (2026-11-02)."
     }
   }
 }

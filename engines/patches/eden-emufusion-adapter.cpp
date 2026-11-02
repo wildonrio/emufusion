@@ -1039,6 +1039,14 @@ bool emufusion_native_adapter_set_paced_video_hz(double hz) {
     return EmuFusion::SetPacedVsyncHz(hz);
 }
 
+// Moves the next VI callback by ns (positive = later); the frame generator's
+// phase lock calls this with small steps. Always accepted.
+extern "C" __attribute__((visibility("default")))
+bool emufusion_native_adapter_nudge_video_phase_v1(int64_t ns) {
+    EmuFusion::NudgeViPhase(ns);
+    return true;
+}
+
 extern "C" __attribute__((visibility("default")))
 uint32_t emufusion_native_adapter_timing_capabilities_v1(void) {
     return EMUFUSION_NATIVE_TIMING_BASE_CLOCK_CORRECTION |

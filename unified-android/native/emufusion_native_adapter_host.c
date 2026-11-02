@@ -645,6 +645,19 @@ bool emufusion_native_adapter_set_paced_video_hz(emufusion_native_adapter_host *
     return setter(hz);
 }
 
+bool emufusion_native_adapter_nudge_video_phase(emufusion_native_adapter_host *host,
+                                                int64_t ns) {
+    bool (*nudge)(int64_t) = NULL;
+    void *symbol;
+    if (!host || !host->library || !host->started) return false;
+    if (ns == 0 || ns > 1000000 || ns < -1000000) return false;
+    dlerror();
+    symbol = dlsym(host->library, "emufusion_native_adapter_nudge_video_phase_v1");
+    if (!symbol) return false;
+    memcpy(&nudge, &symbol, sizeof(nudge));
+    return nudge(ns);
+}
+
 uint32_t emufusion_native_adapter_timing_capabilities(emufusion_native_adapter_host *host) {
     uint32_t (*reader)(void) = NULL;
     void *symbol;

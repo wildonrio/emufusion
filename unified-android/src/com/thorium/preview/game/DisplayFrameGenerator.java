@@ -5370,6 +5370,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final boolean arrivalTraceEnabled = ARRIVAL_TRACE_MARKER.exists();
     private long arrivalTracedPair;
     private int arrivalTraceLines;
+    // Touching the marker again restarts the window, as for the physical trace.
+    private long arrivalTraceMarkerModified =
+            arrivalTraceEnabled ? ARRIVAL_TRACE_MARKER.lastModified() : 0L;
+    private long arrivalTraceCheckedNs;
     private long disPrecomputeHits, disPrecomputeMisses;
 
     private boolean signatureVsyncPollEnabled() {
@@ -7280,12 +7284,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private static final int PHYSICAL_TRACE_LIMIT = 2000;
     private final boolean physicalTraceEnabled = PHYSICAL_TRACE_MARKER.exists();
     private int physicalTraceLines;
-    // Touching the marker again restarts the window (checked once a second),
+    // Touching the marker again restarts the window (checked every 120 presents),
     // so a run that first navigates menus into gameplay traces gameplay:
     // Eden has no save states, so Switch tests start at the title.
     private long physicalTraceMarkerModified =
             physicalTraceEnabled ? PHYSICAL_TRACE_MARKER.lastModified() : 0L;
-    private long physicalTraceCheckedNs;
+    private long physicalTraceRearmChecks;
     // Per traced present: when its newest image arrived, when its slot was
     // planned and when its swap returned, so latency splits into waiting for
     // the callback, our work and the compositor.
@@ -7343,9 +7347,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void rearmPhysicalTrace() {
-        long now = System.nanoTime();
-        if (now - physicalTraceCheckedNs < 1_000_000_000L) return;
-        physicalTraceCheckedNs = now;
+        // Counted, not timed: this completion path takes no clock readings.
+        if (++physicalTraceRearmChecks % 120L != 0L) return;
         long modified = PHYSICAL_TRACE_MARKER.lastModified();
         if (modified <= physicalTraceMarkerModified) return;
         physicalTraceMarkerModified = modified;
@@ -9475,14 +9478,28 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 sourcePhaseLock.observe(waitNs, panelPeriodNs);
             }
         }
+        if (arrivalTraceEnabled && callbackNs - arrivalTraceCheckedNs >= 1_000_000_000L) {
+            arrivalTraceCheckedNs = callbackNs;
+            long modified = ARRIVAL_TRACE_MARKER.lastModified();
+            if (modified > arrivalTraceMarkerModified) {
+                arrivalTraceMarkerModified = modified;
+                arrivalTraceLines = 0;
+                Log.i(TAG, "Arrival trace re-armed generator=" + generatorId);
+            }
+        }
         if (arrivalTraceEnabled && timeline.arrivalPairs() != arrivalTracedPair &&
                 arrivalTraceLines < ARRIVAL_TRACE_LIMIT) {
             arrivalTracedPair = timeline.arrivalPairs();
             ++arrivalTraceLines;
             long admitted = admissionNs(activeRightSequence);
+            long consumed = arrivalNs(activeRightSubmission);
             Log.i(TAG, "Arrival trace generator=" + generatorId + " pair=" + arrivalTracedPair +
                     " right=" + activeRightSequence + " kind=" + kind + " " + timeline.arrivalTrace() +
                     " sinceAdmissionUs=" + (admitted > 0L ? (callbackNs - admitted) / 1000L : -1L) +
+                    // Producer stamp (the engine's submission time) to our
+                    // consumption: a stalled consumer shows here.
+                    " stampToConsumeUs=" + (consumed > 0L && activeRightTimestampNs > 0L ?
+                            (consumed - activeRightTimestampNs) / 1000L : -1L) +
                     " excessQueued=" + (activeRightSequence > 0L ?
                             endpointFifoCount - (requiredEndpointPrimeDepth(true) - 2) : 0) +
                     " fifo=" + endpointFifoCount);

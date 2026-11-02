@@ -591,6 +591,35 @@ final class NativeAdapterEngineSession implements EngineSession,
         }
     }
 
+    /**
+     * The renderer's source phase lock, applied to an engine that owns its
+     * frame clock: Eden's images landed on the generator's panel callback
+     * (Thor, 2026-11-02: within 0.1 ms in NSMBU Deluxe and Metroid Dread) and
+     * were taken up a whole scan later. A rate trim never moved them (the
+     * clock is already locked to the panel; only its phase was wrong), so
+     * the adapter moves its next frame callback by the lock's small steps.
+     * Only while the clock is locked to that renderer; an adapter without the
+     * export declines once and is not asked again.
+     */
+    private void forwardSourcePhaseNudge(NativeAdapterHost active) {
+        if (!physicalFgClockApplied || phaseNudgeUnsupported) return;
+        FrameGenerationRenderer owner = physicalFgClockOwner;
+        if (owner == null) return;
+        long nudgeNs = owner.takeSourcePhaseNudgeNs();
+        if (nudgeNs == 0L) return;
+        if (!active.nudgeVideoPhase(nudgeNs)) {
+            phaseNudgeUnsupported = true;
+            Log.i(TAG, "Source phase nudge unsupported engine=" + entry.id);
+            return;
+        }
+        phaseNudgedTotalNs += nudgeNs;
+        if (++phaseNudges % 120L == 1L)
+            Log.i(TAG, "Source phase nudged engine=" + entry.id + " nudges=" + phaseNudges +
+                    " totalUs=" + phaseNudgedTotalNs / 1000L);
+    }
+    private boolean phaseNudgeUnsupported;
+    private long phaseNudges, phaseNudgedTotalNs;
+
     // Frame generation Off (or fallen back to Direct): the engine presents
     // to the display Surface itself, so the panel is measured from display
     // callbacks, as the libretro sessions' vsync-driven clock is. Until
@@ -804,6 +833,7 @@ final class NativeAdapterEngineSession implements EngineSession,
                 drainAudioToTrack(active);
                 reportEngineSpeed(active);
                 updatePhysicalFgClock(active);
+                forwardSourcePhaseNudge(active);
                 sleepQuietly(RENDER_TICK_MS);
             }
         } catch (Throwable failure) {

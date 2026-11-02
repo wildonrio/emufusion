@@ -361,6 +361,17 @@ Java_com_thorium_preview_NativeAdapterHost_nativeSetPacedVideoHz(
             JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_NativeAdapterHost_nativeNudgeVideoPhase(
+        JNIEnv *env, jclass type, jlong handle, jlong ns) {
+    (void)env;
+    (void)type;
+    emufusion_adapter_jni_session *session = from_handle(handle);
+    if (!session) return JNI_FALSE;
+    return emufusion_native_adapter_nudge_video_phase(session->host, (int64_t)ns) ?
+            JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT void JNICALL
 Java_com_thorium_preview_NativeAdapterHost_nativeCreate(
         JNIEnv *env, jclass type, jlong handle) {

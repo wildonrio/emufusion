@@ -149,6 +149,8 @@ public final class NativeAdapterHost implements Closeable {
 
     /** Bounded correction of the declared clock; explicit zero restores normal timing. */
     public boolean setPacedVideoHz(double hz) { return nativeSetPacedVideoHz(handle, hz); }
+    /** Moves the engine's next frame callback by ns (positive = later); false if unsupported. */
+    public boolean nudgeVideoPhase(long ns) { return nativeNudgeVideoPhase(handle, ns); }
 
     /** Versioned optional capabilities, zero when absent or not yet started. */
     public int timingCapabilities() { return nativeTimingCapabilities(handle); }
@@ -233,6 +235,7 @@ public final class NativeAdapterHost implements Closeable {
     private static native double nativeAverageFps(long handle);
     private static native double nativeDeclaredVideoHz(long handle);
     private static native boolean nativeSetPacedVideoHz(long handle, double hz);
+    private static native boolean nativeNudgeVideoPhase(long handle, long ns);
     private static native int nativeTimingCapabilities(long handle);
     private static native double nativeProducerTimelineHz(long handle);
     private static native int nativeSourceImageBinding(long handle, ByteBuffer output);

@@ -249,6 +249,27 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
+November 2 (Switch) **— Switch gameplay measured for the first time; Eden's images landed on our panel callback and waited a scan (phase lock for Eden, 3.2.134 candidate).**
+
+- **The Switch test scenes were title screens.** Dread, NSMBU Deluxe and Odyssey resume into their titles: Eden has no save states, so the app's exit checkpoint cannot restore play. Every earlier Switch smoothness and latency figure is a title screen.
+  - Dread's file 1 replays about 5 minutes of prologue and an unskippable cutscene. Its gameplay runs at 60 fps; cutscenes at 24-30.
+  - NSMBU Deluxe reaches level 1-1 in about 60 s of presses: L+R, file 1, one player, Toadette, OK, right, A.
+  - `emufusion-qa-tools/pace_move.py` drives that path, keeps the player running and jumping, and re-arms the physical and arrival traces in play. QA (3.2.132): touching a trace marker again restarts its window.
+- **NSMBU Deluxe in play (world map, the first scripted run):** 99.5% on interval.
+  - Arrival to actual scan-out: generated 19.5 ms, real 27.8 ms, with the queue a scan deeper (97% of frames).
+  - The title-screen run's 12.5 / 20.9 ms was the snapshot's planned figure. 64% of its frames reached the screen a scan late, and the physical trace gives 18.9 / 27.3 ms. Use the physical trace for latency.
+- **Visible artifact in play:** a generated frame from the scrolling map shredded the "Menu" label and smeared the HUD panels, which slide away while the player walks.
+- **Where the latency goes (3.2.133 diagnostics, NSMBU Deluxe in play):**
+  - Eden is not blocked on buffers: 5 swapchain images, FIFO, about 40 µs mean wait in vkAcquireNextImageKHR (max 0.34 ms).
+  - A 6-s atrace shows Eden's QueuePresentKHR (about 0.2 ms) lands within 0.1 ms of our render callback starting, every frame. That is about 1.5 ms after Eden's VI tick.
+  - Our consumeFrame starts a fixed 3.8 ms after the callback (p10-p90 3.6-3.9 ms), after the callback's own work. The image is therefore always taken up at the next callback, a whole scan after Eden made it. The recorded 4.3-4.7 ms "callback wait" is the second half of that scan in every Eden session, Dread included.
+  - The clock lock holds Eden's VI at exactly half the panel, so that phase never drifts away. The rate lock's 0.1% trim (2026-10-27) could not move it.
+- **Change (candidate):** Eden takes the source phase lock's steps directly.
+  - `emufusion_native_adapter_nudge_video_phase_v1(int64 ns)` moves the next VI callback; `TakeViPhaseNudge` applies at most a quarter period per callback.
+  - Host: `emufusion_native_adapter_nudge_video_phase`, `NativeAdapterHost.nudgeVideoPhase`. `NativeAdapterEngineSession.forwardSourcePhaseNudge` passes the renderer's `SourcePhaseLock` steps (at most 0.1 ms per frame) while the clock is locked to that renderer.
+  - Expected: Eden's images settle about 1.5 ms before a callback instead of on it, made about 6-7 ms closer to when they are shown.
+  - `eden-emufusion-clock.patch` is regenerated for the conductor and swapchain sections (it must reverse-apply to the tree); the lock records the new adapter `811d4716`.
+
 November 2 (latest) **— 3.2.131 (205, `1e175e30`): a late frame that was ready for the earlier latch no longer deepens the queue.**
 
 - **Dread's latency has two modes.** In six Thor runs today it was either ~11 / 30 ms (first generated / real image) or ~27 / 46 ms.

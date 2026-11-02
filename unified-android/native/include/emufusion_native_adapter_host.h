@@ -86,6 +86,13 @@ double emufusion_native_adapter_declared_video_hz(emufusion_native_adapter_host 
 bool emufusion_native_adapter_set_paced_video_hz(emufusion_native_adapter_host *host,
                                               double hz);
 
+/* Optional phase nudge: bool emufusion_native_adapter_nudge_video_phase_v1(int64_t ns)
+ * moves the engine's next frame callback by ns (positive = later), so the
+ * frame generator can hold its images just before the panel callback. The
+ * host passes at most +-1 ms per call; missing export = unsupported. */
+bool emufusion_native_adapter_nudge_video_phase(emufusion_native_adapter_host *host,
+                                                int64_t ns);
+
 /* Optional version-1 timing capabilities. Missing exports mean unknown, not
  * an inferred 60-Hz source. Submission timestamps and VI callback counts are
  * diagnostics: neither establishes guest-image identity or content cadence.
