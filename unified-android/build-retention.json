@@ -1189,6 +1189,30 @@
     "unified-android/build/emufusion-3.2.132-phase2-phase3-qualification-d21161dec959338391e9ae4bbc65a6c7e6bdc70193761facbea6418b329da864.apk": {
       "sha256": "d21161dec959338391e9ae4bbc65a6c7e6bdc70193761facbea6418b329da864",
       "reason": "3.2.132 QA trace re-arm build, superseded by the 3.2.133 diagnostic (2026-11-02)."
+    },
+    "unified-android/build/emufusion-3.2.133-phase2-phase3-qualification-d9dafee9540f6ee664a5626a0bf2465897acf5a6c5a2bb19a1319b130869acca.apk": {
+      "sha256": "d9dafee9540f6ee664a5626a0bf2465897acf5a6c5a2bb19a1319b130869acca",
+      "reason": "3.2.133 Eden acquire-wait diagnostic, superseded by 3.2.134 (same diagnostics plus the phase lock), 2026-11-02."
+    },
+    "unified-android/build/emufusion-3.2.133-phase2-phase3-qualification.apk": {
+      "sha256": "d9dafee9540f6ee664a5626a0bf2465897acf5a6c5a2bb19a1319b130869acca",
+      "reason": "3.2.133 Eden acquire-wait diagnostic, superseded by 3.2.134 (same diagnostics plus the phase lock), 2026-11-02."
+    },
+    "unified-android/build/emufusion-3.2.134-phase2-phase3-qualification.apk": {
+      "sha256": "38967870ce13a4de0d5abbc57e35ad774c087ddce721e6486293402d19c2331a",
+      "reason": "Eden phase-lock / present-timing diagnostic (3.2.134-3.2.135), closed 2026-11-02; Thor restored to 3.2.131."
+    },
+    "unified-android/build/emufusion-3.2.134-phase2-phase3-qualification-38967870ce13a4de0d5abbc57e35ad774c087ddce721e6486293402d19c2331a.apk": {
+      "sha256": "38967870ce13a4de0d5abbc57e35ad774c087ddce721e6486293402d19c2331a",
+      "reason": "Eden phase-lock / present-timing diagnostic (3.2.134-3.2.135), closed 2026-11-02; Thor restored to 3.2.131."
+    },
+    "unified-android/build/emufusion-3.2.135-phase2-phase3-qualification-bc60d38be7fd888049d294129ecdb5871c255b9dc3a5de4a75220c34cd0711ef.apk": {
+      "sha256": "bc60d38be7fd888049d294129ecdb5871c255b9dc3a5de4a75220c34cd0711ef",
+      "reason": "Eden phase-lock / present-timing diagnostic (3.2.134-3.2.135), closed 2026-11-02; Thor restored to 3.2.131."
+    },
+    "unified-android/build/emufusion-3.2.135-phase2-phase3-qualification.apk": {
+      "sha256": "bc60d38be7fd888049d294129ecdb5871c255b9dc3a5de4a75220c34cd0711ef",
+      "reason": "Eden phase-lock / present-timing diagnostic (3.2.134-3.2.135), closed 2026-11-02; Thor restored to 3.2.131."
     }
   }
 }

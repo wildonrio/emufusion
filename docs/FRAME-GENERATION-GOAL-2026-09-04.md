@@ -269,6 +269,13 @@ November 2 (Switch) **— Switch gameplay measured for the first time; Eden's im
   - Host: `emufusion_native_adapter_nudge_video_phase`, `NativeAdapterHost.nudgeVideoPhase`. `NativeAdapterEngineSession.forwardSourcePhaseNudge` passes the renderer's `SourcePhaseLock` steps (at most 0.1 ms per frame) while the clock is locked to that renderer.
   - Expected: Eden's images settle about 1.5 ms before a callback instead of on it, made about 6-7 ms closer to when they are shown.
   - `eden-emufusion-clock.patch` is regenerated for the conductor and swapchain sections (it must reverse-apply to the tree); the lock records the new adapter `811d4716`.
+- **Thor, 3.2.134 (phase lock) and 3.2.135 (Eden present timing), NSMBU Deluxe in play.** The lock does not help, and the reason is now measured.
+  - The lock nudged Eden's VI 48-62 ms in 480-720 steps and was abandoned: the callback wait stayed at 4.3-4.5 ms. Generated / real images still reached the screen 19.5 / 27.8 ms after arrival. Cadence 99.6-99.8%.
+  - Eden's `vkQueuePresentKHR` blocks for 5.5-7.8 ms (max 9.4 ms), starting 8.5-10 ms after its VI callback. Its image therefore reaches us about 17 ms after the VI tick, once its own GPU work completes.
+  - With NSMBU near GPU saturation, that completion lands right after our high-priority per-callback GPU work, about 3.8 ms after our callback. That is why moving Eden's clock moved nothing. The image is ready about 4.5 ms before the callback that uses it.
+  - The remaining Switch latency is set by GPU load (Eden's frame plus our generation), not by clock phase. Next levers: our GPU cost per output, Eden's render load, and the HUD-over-motion artifact.
+  - The atrace text was lossy around these wakes (sched events missing on one CPU); the Eden-side timing line is the reliable source.
+  - The phase-lock export and the timing diagnostics stay: harmless, and the export can act where Eden is not GPU-bound. The Thor is back on 3.2.131 (identity unchanged); the 3.2.132-3.2.135 diagnostic APKs are retired.
 
 November 2 (latest) **— 3.2.131 (205, `1e175e30`): a late frame that was ready for the earlier latch no longer deepens the queue.**
 

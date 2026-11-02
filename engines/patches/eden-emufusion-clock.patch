@@ -104,14 +104,15 @@ index f71a5d822..720e142d4 100644
  
  } // namespace Service::Nvnflinger
 diff --git a/src/core/hle/service/vi/conductor.cpp b/src/core/hle/service/vi/conductor.cpp
-index fd7233cf9..80c4a1927 100644
+index fd7233cf9..ea3ada3a0 100644
 --- a/src/core/hle/service/vi/conductor.cpp
 +++ b/src/core/hle/service/vi/conductor.cpp
-@@ -4,9 +4,11 @@
+@@ -4,9 +4,12 @@
  // SPDX-FileCopyrightText: Copyright 2024 yuzu Emulator Project
  // SPDX-License-Identifier: GPL-2.0-or-later
  
 +#include "common/emufusion_pacing.h"
++#include "common/emufusion_source_image.h"
  #include <algorithm>
  
  #include "common/adpf.h"
@@ -119,10 +120,12 @@ index fd7233cf9..80c4a1927 100644
  #include "common/settings.h"
  #include "common/thread.h"
  #include "core/core.h"
-@@ -81,6 +83,14 @@ void Conductor::ProcessVsync() {
+@@ -81,6 +84,16 @@ void Conductor::ProcessVsync() {
          m_container.ComposeOnDisplay(&m_swap_interval, &m_compose_speed_scale, display_id);
          manager.SignalVsync(m_system.Kernel());
      }
++    EmuFusion::g_last_vi_ns.store(static_cast<std::int64_t>(EmuFusion::SourceMonotonicNs()),
++                                  std::memory_order_relaxed);
 +    const auto period_ns = this->GetFramePeriodNs();
 +    const auto sequence = EmuFusion::RecordViCallback(m_swap_interval, period_ns);
 +    if (sequence == 1 || sequence % 240 == 0) {
@@ -134,7 +137,7 @@ index fd7233cf9..80c4a1927 100644
  }
  
  void Conductor::VsyncThread(std::stop_token token) {
-@@ -101,12 +111,12 @@ void Conductor::VsyncThread(std::stop_token token) {
+@@ -101,12 +114,12 @@ void Conductor::VsyncThread(std::stop_token token) {
  
  s64 Conductor::GetNextTicks() const {
      const auto& settings = Settings::values;
@@ -149,7 +152,7 @@ index fd7233cf9..80c4a1927 100644
          } else {
              // Run at unlocked framerate.
              speed_scale = 0.01f;
-@@ -121,25 +131,32 @@ s64 Conductor::GetNextTicks() const {
+@@ -121,25 +134,32 @@ s64 Conductor::GetNextTicks() const {
          speed_scale = 1.f;
      }
  
@@ -569,7 +572,7 @@ index c51f8ed77..c96c50f60 100644
  
  } // namespace Vulkan
 diff --git a/src/video_core/renderer_vulkan/vk_swapchain.cpp b/src/video_core/renderer_vulkan/vk_swapchain.cpp
-index fdbad1672..e244c2bc1 100644
+index fdbad1672..ec7affd97 100644
 --- a/src/video_core/renderer_vulkan/vk_swapchain.cpp
 +++ b/src/video_core/renderer_vulkan/vk_swapchain.cpp
 @@ -4,7 +4,11 @@
@@ -595,7 +598,7 @@ index fdbad1672..e244c2bc1 100644
      }
  
      Destroy();
-@@ -151,11 +157,25 @@ void Swapchain::Create(
+@@ -151,11 +157,28 @@ void Swapchain::Create(
      CreateSwapchain(capabilities);
      CreateSemaphores();
  
@@ -612,6 +615,9 @@ index fdbad1672..e244c2bc1 100644
 +static std::int64_t emufusion_acquire_wait_ns, emufusion_acquire_max_ns;
 +static std::int64_t emufusion_reuse_wait_ns, emufusion_reuse_max_ns;
 +static std::uint32_t emufusion_acquire_count;
++static std::int64_t emufusion_present_call_ns, emufusion_present_call_max_ns;
++static std::int64_t emufusion_vi_to_present_ns, emufusion_vi_to_present_max_ns;
++static std::uint32_t emufusion_present_count;
 +#endif
 +
  bool Swapchain::AcquireNextImage() {
@@ -621,7 +627,7 @@ index fdbad1672..e244c2bc1 100644
      const VkResult result = device.GetLogical().AcquireNextImageKHR(
          *swapchain, (std::numeric_limits<u64>::max)(), *present_semaphores[frame_index],
          VK_NULL_HANDLE, &image_index);
-@@ -167,12 +187,13 @@ bool Swapchain::AcquireNextImage() {
+@@ -167,12 +190,13 @@ bool Swapchain::AcquireNextImage() {
          break;
      case VK_ERROR_OUT_OF_DATE_KHR:
          is_outdated = true;
@@ -636,7 +642,7 @@ index fdbad1672..e244c2bc1 100644
          break;
      }
  
-@@ -197,25 +218,83 @@ bool Swapchain::AcquireNextImage() {
+@@ -197,25 +221,91 @@ bool Swapchain::AcquireNextImage() {
      };
  
  #ifdef __ANDROID__
@@ -702,7 +708,8 @@ index fdbad1672..e244c2bc1 100644
 +                 "displayTiming={} baseHz={:.9f} sampledViCallbacks={} "
 +                 "sampledSwapInterval={} sourceIdentity=unjoined physicalPresent=unverified "
 +                 "imageCount={} presentMode={} acquireWaitMeanUs={} acquireWaitMaxUs={} "
-+                 "reuseWaitMeanUs={} reuseWaitMaxUs={}",
++                 "reuseWaitMeanUs={} reuseWaitMaxUs={} presentCallMeanUs={} presentCallMaxUs={} "
++                 "viToPresentMeanUs={} viToPresentMaxUs={}",
 +                 submission_sequence, now_ns, device.HasEmuFusionDisplayTiming(),
 +                 EmuFusion::BaseVsyncHz(), EmuFusion::g_vi_callbacks.load(std::memory_order_relaxed),
 +                 EmuFusion::g_last_swap_interval.load(std::memory_order_relaxed), image_count,
@@ -710,7 +717,14 @@ index fdbad1672..e244c2bc1 100644
 +                 emufusion_acquire_count ? emufusion_acquire_wait_ns / emufusion_acquire_count / 1000 : 0,
 +                 emufusion_acquire_max_ns / 1000,
 +                 emufusion_acquire_count ? emufusion_reuse_wait_ns / emufusion_acquire_count / 1000 : 0,
-+                 emufusion_reuse_max_ns / 1000);
++                 emufusion_reuse_max_ns / 1000,
++                 emufusion_present_count ? emufusion_present_call_ns / emufusion_present_count / 1000 : 0,
++                 emufusion_present_call_max_ns / 1000,
++                 emufusion_present_count ? emufusion_vi_to_present_ns / emufusion_present_count / 1000 : 0,
++                 emufusion_vi_to_present_max_ns / 1000);
++        emufusion_present_call_ns = emufusion_present_call_max_ns = 0;
++        emufusion_vi_to_present_ns = emufusion_vi_to_present_max_ns = 0;
++        emufusion_present_count = 0;
 +        emufusion_acquire_wait_ns = emufusion_acquire_max_ns = 0;
 +        emufusion_reuse_wait_ns = emufusion_reuse_max_ns = 0;
 +        emufusion_acquire_count = 0;
@@ -723,19 +737,35 @@ index fdbad1672..e244c2bc1 100644
          .waitSemaphoreCount = render_semaphore ? 1U : 0U,
          .pWaitSemaphores = &render_semaphore,
          .swapchainCount = 1,
-@@ -224,7 +303,10 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
+@@ -224,7 +314,26 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
          .pResults = nullptr,
      };
      std::scoped_lock lock{scheduler.submit_mutex};
 -    switch (const VkResult result = present_queue.Present(present_info)) {
++#ifdef __ANDROID__
++    const auto emufusion_present_start = static_cast<std::int64_t>(EmuFusion::SourceMonotonicNs());
++#endif
 +    const VkResult result = present_queue.Present(present_info);
++#ifdef __ANDROID__
++    {
++        const auto end = static_cast<std::int64_t>(EmuFusion::SourceMonotonicNs());
++        const auto call = end - emufusion_present_start;
++        const auto vi = EmuFusion::g_last_vi_ns.load(std::memory_order_relaxed);
++        const auto since_vi = vi > 0 ? emufusion_present_start - vi : 0;
++        emufusion_present_call_ns += call;
++        emufusion_present_call_max_ns = (std::max)(emufusion_present_call_max_ns, call);
++        emufusion_vi_to_present_ns += since_vi;
++        emufusion_vi_to_present_max_ns = (std::max)(emufusion_vi_to_present_max_ns, since_vi);
++        ++emufusion_present_count;
++    }
++#endif
 +    EmuFusion::g_source_images.FinishPresent(source_record_token, static_cast<int32_t>(result),
 +                                        result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR);
 +    switch (result) {
      case VK_SUCCESS:
          break;
      case VK_SUBOPTIMAL_KHR:
-@@ -238,6 +320,9 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
+@@ -238,6 +347,9 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
          break;
      default:
          LOG_CRITICAL(Render_Vulkan, "Failed to present with error {}", string_VkResult(result));
@@ -745,7 +775,7 @@ index fdbad1672..e244c2bc1 100644
          break;
      }
      ++frame_index;
-@@ -362,6 +447,13 @@ void Swapchain::Destroy() {
+@@ -362,6 +474,13 @@ void Swapchain::Destroy() {
      swapchain.reset();
  }
  

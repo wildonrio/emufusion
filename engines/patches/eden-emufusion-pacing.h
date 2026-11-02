@@ -82,6 +82,8 @@ inline std::int64_t CompositionPeriodNs(double baseHz, int swapInterval, double 
 // submission attempt need not complete or display. These sampled atomics are
 // not an image-to-VI join and must never authorize a source-content timeline.
 inline std::atomic<std::uint64_t> g_vi_callbacks{0};
+// Diagnostics: monotonic time of the latest VI callback (vsync processed).
+inline std::atomic<std::int64_t> g_last_vi_ns{0};
 inline std::atomic<std::uint64_t> g_submission_attempts{0};
 inline std::atomic<int> g_last_swap_interval{1};
 inline std::atomic<std::int64_t> g_last_composition_period_ns{0};

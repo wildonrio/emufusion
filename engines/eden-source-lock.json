@@ -172,38 +172,38 @@
     {
       "path": "src/video_core/renderer_vulkan/vk_swapchain.cpp",
       "pathIsRelativeTo": "engines/build/switch-src/eden",
-      "sha256": "b935f41d72b1db482b2284eb2737dc7b1f2ea945efd6f041f33a4facc8a2861a",
+      "sha256": "854c22d5b9a20cf0f43f31162f934539b04768d1153381297ea3771ac2e1b7c5",
       "role": "local-source-patch",
       "note": "2026-09-04 source rebuilt: removes fabricated wall-time 60-Hz stamp lattice; VK_GOOGLE_display_timing desiredPresentTime carries actual monotonic submission timestamp only. Submission attempt counters and sampled VI counters explicitly report sourceIdentity=unjoined and physicalPresent=unverified. Reproduced by engines/patches/eden-emufusion-clock.patch. Current rebuild records exact submitted Frame provenance in a bounded nonblocking sideband and adds bounded/error-safe acquisition and old-swapchain retirement. 2026-11-02 (diagnostic, logging only): the 240-present timing line adds the swapchain image count, present mode and the mean/max time blocked in vkAcquireNextImageKHR and in the image-reuse wait.",
-      "sizeBytes": 18641
+      "sizeBytes": 20223
     },
     {
       "path": "src/common/emufusion_pacing.h",
       "pathIsRelativeTo": "engines/build/switch-src/eden",
-      "sha256": "cd44244049c649e6d9569206cc40c1ae9187c2f5ae006c4aa84272f48fd2561f",
+      "sha256": "85bf061f15358996daecc14cf0f6656048e9cc107aaa9120198e196ee1088fbf",
       "role": "local-source-patch",
       "note": "2026-09-04 source rebuilt: canonical engines/patches/eden-emufusion-pacing.h. Atomic fractional VI base correction is finite and bounded to +/-0.75 percent of 60 Hz. Shared high-precision period helper preserves normalized swap interval and composition speed scale. VI callback and submission-attempt counters are diagnostics, not image identity or physical-present evidence. 2026-11-02: VI phase nudge (NudgeViPhase / TakeViPhaseNudge, at most a quarter period per callback).",
-      "sizeBytes": 4393
+      "sizeBytes": 4519
     },
     {
       "path": "src/core/hle/service/vi/conductor.cpp",
       "pathIsRelativeTo": "engines/build/switch-src/eden",
-      "sha256": "0c92e99944d3f4cc7f449b5a0cbaea54f0698150b1e62eb803eec81a19fca247",
+      "sha256": "6b9e209c37aaf645e92e02a2265a9b60815928d1c912c4f773d44b9473a80804",
       "role": "local-source-patch",
-      "note": "2026-09-04 source rebuilt: applies bounded fractional base VI Hz through the common helper, preserving composition swap interval and original speed scale, and logs callback-only diagnostics. Does not establish whole-guest/audio clock synchronization or image identity. Reproduced by engines/patches/eden-emufusion-clock.patch. 2026-11-02: GetNextTicks adds the pending VI phase nudge to the next callback period.",
-      "sizeBytes": 6006
+      "note": "2026-09-04 source rebuilt: applies bounded fractional base VI Hz through the common helper, preserving composition swap interval and original speed scale, and logs callback-only diagnostics. Does not establish whole-guest/audio clock synchronization or image identity. Reproduced by engines/patches/eden-emufusion-clock.patch. 2026-11-02: GetNextTicks adds the pending VI phase nudge to the next callback period. 2026-11-02 (diagnostic): records the VI callback time.",
+      "sizeBytes": 6204
     },
     {
       "path": "engines/patches/eden-emufusion-pacing.h",
-      "sha256": "cd44244049c649e6d9569206cc40c1ae9187c2f5ae006c4aa84272f48fd2561f",
-      "sizeBytes": 4393,
+      "sha256": "85bf061f15358996daecc14cf0f6656048e9cc107aaa9120198e196ee1088fbf",
+      "sizeBytes": 4519,
       "role": "timing-source-reproduction",
-      "note": "2026-09-04 native source rebuilt. Tracked timing subset reproduction input; default apply script checks without edits. Not a complete Eden dependency closure. 2026-11-02: VI phase nudge for the frame generator's source phase lock."
+      "note": "2026-09-04 native source rebuilt. Tracked timing subset reproduction input; default apply script checks without edits. Not a complete Eden dependency closure. 2026-11-02: VI phase nudge for the frame generator's source phase lock. 2026-11-02 (diagnostic): g_last_vi_ns."
     },
     {
       "path": "engines/patches/eden-emufusion-clock.patch",
-      "sha256": "dec52b034fee77ff1cb788abd02b25d006cc0b924a91c030fd2f4bcef47ef01c",
-      "sizeBytes": 36325,
+      "sha256": "5e0e1fe006e87e8eb0cc88a74ab573661e8a5ce31a19ada48a0a00f3a6f9f3ed",
+      "sizeBytes": 38135,
       "role": "timing-source-reproduction",
       "note": "2026-09-04 native source rebuilt. Tracked timing subset reproduction input; default apply script checks without edits. Not a complete Eden dependency closure. 2026-11-02: conductor.cpp adds the VI phase nudge to GetNextTicks; vk_swapchain.cpp timing line adds acquire/reuse wait diagnostics."
     },
@@ -425,8 +425,8 @@
   "artifact": {
     "fileName": "libemufusion_native_adapter_eden.so",
     "stagedPath": "engines/build/arm64-v8a/libemufusion_native_adapter_eden.so",
-    "sha256": "811d4716e61e56232657ed88c2026b540781d78ca22f3ed5aa6f39b51c0a04c2",
-    "sizeBytes": 35557904,
+    "sha256": "0696ade9de1e298138d8ede420d32e72089217ea0cc06f055b81d8b9f72a402b",
+    "sizeBytes": 35558456,
     "elfMachine": "AARCH64",
     "ptLoadAlignment": "0x4000",
     "stripped": true,
@@ -443,12 +443,13 @@
       "emufusion_native_adapter_nudge_video_phase_v1"
     ],
     "exportsOnlyTheAdapterEntry": false,
-    "definedDynamicSymbolCount": 52641,
+    "definedDynamicSymbolCount": 52642,
     "note": "MEASURED, not asserted. Rebuilt with ENABLE_WEB_SERVICE=OFF, guest airplane mode, the overflow-safe host-memory teardown guard, and complete post-kernel DeviceMemory release for safe same-process relaunch. All required exports are present and the PT_LOAD segments are 16 KiB aligned, but the library is NOT reduced to the adapter entry: it is Eden's whole native library (SONAME libyuzu-android.so) with the adapter compiled in, so it still exports Eden's, OpenSSL's, and FFmpeg's symbol tables. EmuFusion dlopens it by absolute path from the app-private native library directory, so the SONAME/filename difference does not affect loading, but -fvisibility=hidden plus --exclude-libs,ALL has NOT been applied and this artifact does not meet the one-exported-symbol goal recorded in engines/build_native_adapter.sh. 2026-09-04: native timing subset rebuilt, stripped with configured NDK 28.2.13676358, staged and inspected; see docs/EDEN-TIMING-BUILD-2026-09-04.json. This proves packaging/source compilation, not device cadence, actual guest clock or image quality. Subsequent 2026-09-04 image/lifecycle rebuild measured separately in docs/EDEN-SOURCE-IMAGE-LIFECYCLE-BUILD-2026-09-04.json; no device lifecycle or exact consumed-image join PASS is claimed. 2026-09-07 local multiplayer rebuild: MEASURED, not asserted. Rebuilt engines/patches/eden-emufusion-adapter.cpp for ABI v2 controller_index routing and max_controllers=8 (see the patches[] entry above for the exact source change) via `ninja -C engines/build/switch-src/eden/build-android -j6 yuzu-android` against the still-pinned c0ffc900cdf19b9373549c59a7e6b22c33615ea4 checkout -- HEAD was verified unchanged before building. Ninja recompiled roughly half the object graph (861 of 1582 pre-existing .o outputs touched within the first ~10 minutes, 1739 total build steps to completion) despite only one translation unit's source actually changing; this matches the broad-rebuild behavior already recorded for this tree in docs/EDEN-SOURCE-IMAGE-JOIN-CHECKPOINT-2026-09-04.md's Rebuild boundary section (there attributed to a value-type change cascading through video_core; here the likely cause is checkout/working-tree mtimes sitting newer than the previously-built object files, which is an environmental property of this tree, not evidence the adapter edit itself touched unrelated code -- git diff of engines/patches/eden-emufusion-adapter.cpp against its pre-edit content confirms the change is limited to adapter_describe/adapter_load/adapter_set_control and the new kMaxLocalControllers constant). ninja exited 0; the final step was `Linking CXX shared library src/android/app/src/main/jni/libyuzu-android.so`. Stripped with the same configured NDK 28.2.13676358 llvm-strip (--strip-all) immediately after, into an isolated temporary path before inspection, exactly as this checkpoint's Rebuild boundary describes. All eight required exports above were confirmed present via llvm-nm -D --defined-only (llvm-nm -gU, used previously, reports zero symbols against this llvm-nm build and was not a valid check here -- -D is the form that actually lists the library's dynamic symbol table). ELF64/AArch64 and 16 KiB PT_LOAD alignment on all four LOAD segments confirmed via llvm-readelf -h/-l. Defined dynamic symbol count moved 52637 -> 52639 and the artifact sha256/sizeBytes both changed from the prior entry (bcf042f3381deece0439f0af48e6c76a3bc909874cbca17a2543e10934d7619b, 35559680 bytes) to the values above -- a small, non-trivial difference consistent with one changed translation unit's code plus the rebuilt scm_rev.cpp version/timestamp string that is regenerated on every invocation of this build regardless of source changes. Full on-device testing was explicitly out of scope for this rebuild and is not claimed. Prior artifact and this lock file's pre-edit content are preserved for rollback in engines/build/candidates/eden-multiplayer-2026-09-07/rollback-bcf042f3381deece0439f0af48e6c76a3bc909874cbca17a2543e10934d7619b/README.md.",
     "measurement20261012Rename": "Fresh configure of the pinned Eden checkout (c0ffc900) at the repository's current path in build-emufusion with the locked options and the tree's CPM source cache, NDK 28.2.13676358; full yuzu-android build after renaming the adapter (src/android/app/src/main/jni/emufusion_adapter.cpp = engines/patches/eden-emufusion-adapter.cpp), the four common/emufusion_*.h headers and the fourteen sources that named the product; llvm-strip --strip-all. Only core.cpp had changed since the 2026-09-07 configured build the previous artifact linked (it was recompiled for that artifact too), so the code is that artifact's under the new names. Adapter hooks are exported as emufusion_*; 52639 defined dynamic symbols; all PT_LOAD segments 16 KiB aligned. Not a clean independent rebuild proof.",
     "measurement20261013Diagnostics": "Incremental rebuild of build-emufusion (same configure, NDK 28.2.13676358) after the five logging-only diagnostic patches above; llvm-strip --strip-all. Previous artifact bc18590a0cad64cc1059d62bdf1e69d5cabad80f952b132d876adce26f26ba79. Unstripped library kept as engines/build/candidates/eden-diagnostics-2026-10-13/libyuzu-android.unstripped.so.gz for symbolication. 52639 defined dynamic symbols, required exports unchanged, PT_LOAD 16 KiB aligned.",
     "measurement20261102AcquireDiagnostic": "Rebuild of build-emufusion (same configure, NDK 28.2.13676358; Homebrew ninja discarded its old build log, so every object was recompiled) after the 2026-11-02 acquire-wait diagnostic; llvm-strip --strip-all. Previous artifact 0106ea5229c8353f58d3c7d3fc597fc47246232b393ce141283e42a7a4d624b1 kept compressed in ~/Code/emufusion-qa-tools/eden-backup-20261102. Unstripped library kept as engines/build/candidates/eden-acquire-diagnostic-2026-11-02/libyuzu-android.unstripped.so.gz. 52639 defined dynamic symbols, required exports present, PT_LOAD 16 KiB aligned.",
-    "measurement20261102PhaseLock": "Rebuild of build-emufusion (same configure, NDK 28.2.13676358; Homebrew ninja discarded its old build log, so every object was recompiled) after the 2026-11-02 VI phase nudge (source phase lock); llvm-strip --strip-all. Previous artifact 36711f421029d9c7245f60fd0ce9680a71796b4f3238db5a82269dbe90aac08f kept compressed in ~/Code/emufusion-qa-tools/eden-backup-20261102. Unstripped library kept as engines/build/candidates/eden-phase-lock-2026-11-02/libyuzu-android.unstripped.so.gz. 52641 defined dynamic symbols, required exports present, PT_LOAD 16 KiB aligned."
+    "measurement20261102PhaseLock": "Rebuild of build-emufusion (same configure, NDK 28.2.13676358; Homebrew ninja discarded its old build log, so every object was recompiled) after the 2026-11-02 VI phase nudge (source phase lock); llvm-strip --strip-all. Previous artifact 36711f421029d9c7245f60fd0ce9680a71796b4f3238db5a82269dbe90aac08f kept compressed in ~/Code/emufusion-qa-tools/eden-backup-20261102. Unstripped library kept as engines/build/candidates/eden-phase-lock-2026-11-02/libyuzu-android.unstripped.so.gz. 52641 defined dynamic symbols, required exports present, PT_LOAD 16 KiB aligned.",
+    "measurement20261102PresentTiming": "Rebuild of build-emufusion (same configure, NDK 28.2.13676358; Homebrew ninja discarded its old build log, so every object was recompiled) after the 2026-11-02 present-call and VI-to-present diagnostics; llvm-strip --strip-all. Previous artifact 811d4716e61e56232657ed88c2026b540781d78ca22f3ed5aa6f39b51c0a04c2 kept compressed in ~/Code/emufusion-qa-tools/eden-backup-20261102. Unstripped library kept as engines/build/candidates/eden-present-timing-2026-11-02/libyuzu-android.unstripped.so.gz. 52642 defined dynamic symbols, required exports present, PT_LOAD 16 KiB aligned."
   },
   "runtimeInputs": {
     "keysAndFirmwareBundled": false,
