@@ -46,6 +46,8 @@
 #define RUNAHEAD_FIRST_CHECK_RUN 120u
 #define RUNAHEAD_CHECK_FRAMES 2u
 #define RUNAHEAD_SAMPLE_RUNS 120u
+/* Frames an idle-driven check may take before the inline check runs instead. */
+#define RUNAHEAD_IDLE_GRACE_RUNS 600u
 #define RUNAHEAD_VARIABLE_SIZE_QUIRK (1ull << 2) /* CORE_VARIABLE_SIZE */
 #define RUNAHEAD_COST_WINDOW 300u
 #define RUNAHEAD_MAX_COST_SHARE 0.6
@@ -170,6 +172,21 @@ struct emufusion_retro_host {
     uint64_t runahead_runs;
     uint64_t runahead_cost_ns;
     unsigned runahead_cost_frames;
+    /* The replay check in two halves between frames (emufusion_retro_idle_work):
+     * the first replay's result and its input, and how long both halves took. */
+    bool runahead_idle_driven;
+    unsigned runahead_check_stage;
+    uint64_t runahead_first_video;
+    uint64_t runahead_first_audio;
+    uint64_t runahead_first_state;
+    uint64_t runahead_check_ns;
+    uint32_t runahead_check_joypad[MAX_PORTS];
+    int16_t runahead_check_analog[MAX_PORTS][MAX_ANALOG_INDEXES][MAX_ANALOG_IDS];
+    int16_t runahead_check_pointer_x[MAX_PORTS];
+    int16_t runahead_check_pointer_y[MAX_PORTS];
+    bool runahead_check_pointer_pressed[MAX_PORTS];
+    void *runahead_resume;
+    size_t runahead_resume_capacity;
 #if defined(__ANDROID__)
     /* Bounded per-host input evidence, retained across context recreation.
      * Separate release/transition budget prevents a held button from using
@@ -1810,6 +1827,8 @@ bool emufusion_retro_load_game(emufusion_retro_host *host, const char *game_path
     host->runahead_expected_video = 0;
     host->runahead_cost_ns = 0;
     host->runahead_cost_frames = 0;
+    host->runahead_check_stage = 0;
+    host->runahead_check_ns = 0;
     host->set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
     memset(&host->current_av_info, 0, sizeof(host->current_av_info));
     host->get_system_av_info(&host->current_av_info);
@@ -2092,6 +2111,101 @@ static bool runahead_check(emufusion_retro_host *host) {
     return true;
 }
 
+static void runahead_swap_check_input(emufusion_retro_host *host) {
+#define RUNAHEAD_SWAP(a, b) do { \
+        uint8_t tmp[sizeof(a)]; memcpy(tmp, (a), sizeof(a)); \
+        memcpy((a), (b), sizeof(a)); memcpy((b), tmp, sizeof(a)); } while (0)
+    RUNAHEAD_SWAP(host->joypad_mask, host->runahead_check_joypad);
+    RUNAHEAD_SWAP(host->analog_state, host->runahead_check_analog);
+    RUNAHEAD_SWAP(host->pointer_x, host->runahead_check_pointer_x);
+    RUNAHEAD_SWAP(host->pointer_y, host->runahead_check_pointer_y);
+    RUNAHEAD_SWAP(host->pointer_pressed, host->runahead_check_pointer_pressed);
+#undef RUNAHEAD_SWAP
+}
+
+/* One half of the replay check, between frames. Inside the 120th frame it
+ * took 8-21 ms (SNES 20.6 ms on the Thor) and that image reached the frame
+ * generator late: a 5-scan hitch two seconds into every SNES session. First
+ * half: save the state, replay the frames, return to it. Second half, a frame
+ * later: keep the state the game has moved on to, replay the same frames from
+ * the same savestate with the same input, and return. */
+static void runahead_check_step(emufusion_retro_host *host) {
+    uint64_t start = monotonic_ns();
+    runahead_replay_result first, second;
+    size_t resume_size = 0;
+    bool ok;
+    if (host->runahead_check_stage == 0) {
+        if (host->serialization_quirks & RUNAHEAD_UNSAFE_QUIRKS) {
+            runahead_refuse(host, "core reports incomplete savestates");
+            return;
+        }
+        if (!runahead_save(host)) {
+            runahead_refuse(host, "no usable savestate");
+            return;
+        }
+        memcpy(host->runahead_check_joypad, host->joypad_mask, sizeof(host->joypad_mask));
+        memcpy(host->runahead_check_analog, host->analog_state, sizeof(host->analog_state));
+        memcpy(host->runahead_check_pointer_x, host->pointer_x, sizeof(host->pointer_x));
+        memcpy(host->runahead_check_pointer_y, host->pointer_y, sizeof(host->pointer_y));
+        memcpy(host->runahead_check_pointer_pressed, host->pointer_pressed,
+               sizeof(host->pointer_pressed));
+        if (!runahead_replay(host, &first) || !runahead_restore(host)) {
+            runahead_refuse(host, "savestate could not be saved or restored");
+            return;
+        }
+        host->runahead_first_video = first.video;
+        host->runahead_first_audio = first.audio;
+        host->runahead_first_state = first.state;
+        host->runahead_check_ns = monotonic_ns() - start;
+        host->runahead_check_stage = 1;
+        return;
+    }
+    host->runahead_check_stage = 0;
+    if (!runahead_serialize_into(host, &host->runahead_resume,
+                                 &host->runahead_resume_capacity, &resume_size)) {
+        runahead_refuse(host, "savestate could not be saved or restored");
+        return;
+    }
+    runahead_swap_check_input(host);
+    ok = runahead_restore(host) && runahead_replay(host, &second);
+    runahead_swap_check_input(host);
+    if (!host->unserialize(host->runahead_resume, resume_size) || !ok) {
+        runahead_refuse(host, "savestate could not be saved or restored");
+        return;
+    }
+    first.video = host->runahead_first_video;
+    first.audio = host->runahead_first_audio;
+    first.state = host->runahead_first_state;
+    if (first.state != second.state && first.video != second.video) {
+        runahead_refuse(host, "replay from a savestate differs");
+        return;
+    }
+    host->runahead_status = RUNAHEAD_ACTIVE;
+    host->runahead_state_stable = first.state == second.state;
+#if defined(__ANDROID__)
+    __android_log_print(ANDROID_LOG_INFO, "EmuFusionNativeHost",
+            "Run-ahead on core=%s frames=%u stateBytes=%zu checkMs=%.2f "
+            "sameState=%d sameImages=%d sameSound=%d idle=1",
+            core_name(host), host->runahead_requested, host->runahead_saved_size,
+            (double)(host->runahead_check_ns + (monotonic_ns() - start)) / 1e6,
+            first.state == second.state, first.video == second.video,
+            first.audio == second.audio);
+#endif
+}
+
+bool emufusion_retro_idle_work(emufusion_retro_host *host) {
+    lock_host();
+    if (!host || !host->game_loaded || host->paused) RETURN_UNLOCKED(false);
+    host->runahead_idle_driven = true;
+    if (!host->runahead_requested || host->runahead_status != RUNAHEAD_UNCHECKED ||
+            host->hw_negotiated || !host->serialize_size || !host->serialize ||
+            !host->unserialize || host->runahead_runs < RUNAHEAD_FIRST_CHECK_RUN)
+        RETURN_UNLOCKED(false);
+    active_host = host;
+    runahead_check_step(host);
+    RETURN_UNLOCKED(true);
+}
+
 /* Runs one frame with run-ahead; false when it does not apply this step
  * (the caller runs the frame normally). */
 static bool runahead_run(emufusion_retro_host *host) {
@@ -2102,8 +2216,13 @@ static bool runahead_run(emufusion_retro_host *host) {
             host->hw_negotiated || !host->serialize_size || !host->serialize ||
             !host->unserialize) return false;
     host->runahead_runs++;
+    /* A host that does idle work checks between frames; without one (or if
+     * it stopped calling) the check runs inline, inside a frame. */
     if (host->runahead_status == RUNAHEAD_UNCHECKED &&
-            (host->runahead_runs < RUNAHEAD_FIRST_CHECK_RUN || !runahead_check(host)))
+            (host->runahead_runs < RUNAHEAD_FIRST_CHECK_RUN ||
+             (host->runahead_idle_driven &&
+              host->runahead_runs < RUNAHEAD_FIRST_CHECK_RUN + RUNAHEAD_IDLE_GRACE_RUNS) ||
+             !runahead_check(host)))
         return false;
     start = monotonic_ns();
     input = input_signature(host);
@@ -2713,6 +2832,7 @@ void emufusion_retro_destroy(emufusion_retro_host *host) {
     free(host->audio_ring);
     free(host->runahead_state);
     free(host->runahead_scratch);
+    free(host->runahead_resume);
     free(host->core_path);
     free(host->system_directory);
     free(host->save_directory);

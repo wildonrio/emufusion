@@ -121,6 +121,34 @@ int main(int argc, char **argv) {
     CHECK(!emufusion_retro_runahead_refused_for_good(host), "an active run-ahead is not refused");
     emufusion_retro_destroy(host);
 
+    /* A host doing idle work: the replay check runs between frames in two
+     * halves (after run 120 and run 121), never inside a frame, and leaves
+     * the true state, image and sound exactly as an ordinary frame would. */
+    host = open_game(argv, error, sizeof(error));
+    CHECK(host, "create/load failed");
+    start = state_value(host, error, sizeof(error));
+    emufusion_retro_set_runahead(host, 1);
+    for (run = 1; run <= FIRST_CHECK_RUN + 1u; run++) {
+        bool worked;
+        CHECK(emufusion_retro_run_frame(host, error, sizeof(error)), "run failed");
+        CHECK(state_value(host, error, sizeof(error)) == start + run &&
+              image(host) == (uint16_t)(start + run), "frames up to the check are ordinary");
+        CHECK(sound(host, samples, 64) == 2 && samples[2] == (int16_t)(start + run),
+              "sound up to the check");
+        worked = emufusion_retro_idle_work(host);
+        CHECK(worked == (run >= FIRST_CHECK_RUN), "idle work only for the check");
+        CHECK(state_value(host, error, sizeof(error)) == start + run &&
+              image(host) == (uint16_t)(start + run), "idle work leaves the state and image");
+        CHECK(sound(host, samples, 64) == 0, "idle replays are silent");
+    }
+    for (; run <= FIRST_CHECK_RUN + 60u; run++) {
+        CHECK(emufusion_retro_run_frame(host, error, sizeof(error)), "run failed");
+        CHECK(!emufusion_retro_idle_work(host), "nothing left to do between frames");
+        CHECK(state_value(host, error, sizeof(error)) == start + run &&
+              image(host) == (uint16_t)(start + run + 1u), "after the idle check, one frame ahead");
+    }
+    emufusion_retro_destroy(host);
+
     /* Savestates that miss state: replay differs, ordinary frames stay
      * (an ordinary frame shows exactly the state the step ended in). */
     host = open_game(argv, error, sizeof(error));

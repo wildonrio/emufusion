@@ -208,6 +208,16 @@ public final class LibretroHost implements Closeable {
         requestedRunAheadFrames = Math.max(0, Math.min(2, frames));
     }
 
+    /**
+     * Native work between frames, after this frame's image has been handed on:
+     * run-ahead's savestate replay check (8-21 ms inside a frame, a visible
+     * hitch two seconds into a session). True if it did any.
+     */
+    public synchronized boolean idleWork() {
+        checkOpen();
+        return nativeIdleWork(handle);
+    }
+
     /** Run-ahead was refused for what the core does, not for speed. */
     public synchronized boolean runAheadRefusedForGood() {
         checkOpen();
@@ -439,6 +449,7 @@ public final class LibretroHost implements Closeable {
     private static native void nativeRunFrame(long handle);
     private static native void nativeSetRunAhead(long handle, int frames);
     private static native boolean nativeRunAheadRefusedForGood(long handle);
+    private static native boolean nativeIdleWork(long handle);
     private static native void nativeSetPaused(long handle, boolean paused);
     private static native void nativeSetJoypadButton(long handle, int port, int button,
                                                      boolean pressed);

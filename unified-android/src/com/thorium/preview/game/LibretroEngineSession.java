@@ -280,6 +280,8 @@ public final class LibretroEngineSession implements EngineSession,
     private volatile long framePeriodNs = FRAME_NS;
     /** Period changes up to this fraction keep the pacer's scheduled deadline. */
     static final double PACER_TRIM_FRACTION = 0.005;
+    /** Slack a frame must leave before native idle work runs in it. */
+    static final long IDLE_WORK_MIN_SLACK_NS = 8_000_000L;
     private volatile double declaredVideoHz;
     private volatile double synchronizedCoreHz;
     private volatile double pacedCoreHz;
@@ -1580,7 +1582,17 @@ public final class LibretroEngineSession implements EngineSession,
                                 " endNs=" + evidenceEndNs + " periodNs=" + framePeriodNs +
                                 " coalesced=" + coalescing + " displayClock=" + (displayDueNs != 0));
                     }
-                    if (displayDueNs == 0) sleepUntilNextFrame(pacingDelay);
+                    // Native work that must not delay an image (run-ahead's
+                    // replay check) runs in this frame's slack, after the image
+                    // was handed on; the sleep still ends at the pacer's deadline.
+                    long nextFrameNs = evidenceEndNs + pacingDelay;
+                    LibretroHost idle = host;
+                    if (idle != null && running && displayDueNs == 0 &&
+                            pacingDelay >= IDLE_WORK_MIN_SLACK_NS) {
+                        try { idle.idleWork(); } catch (RuntimeException ignored) {}
+                    }
+                    if (displayDueNs == 0)
+                        sleepUntilNextFrame(Math.max(0L, nextFrameNs - System.nanoTime()));
                 }
             } finally {
                 workHint.close();

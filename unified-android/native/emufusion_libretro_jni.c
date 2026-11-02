@@ -150,6 +150,14 @@ Java_com_thorium_preview_LibretroHost_nativeSetRunAhead(
 }
 
 JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_LibretroHost_nativeIdleWork(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)env;
+    (void)type;
+    return emufusion_retro_idle_work(from_handle(handle)) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
 Java_com_thorium_preview_LibretroHost_nativeRunAheadRefusedForGood(
         JNIEnv *env, jclass type, jlong handle) {
     (void)env;

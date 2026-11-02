@@ -249,7 +249,24 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.128 (202, `1ebbba51`): the panel clock qualifying keeps a declared clock's presentation; engines whose run-ahead fails are remembered.**
+November 1 (latest) **— 3.2.129 (203, `cea82f94`): run-ahead's replay check runs between frames.**
+
+- **Change.** The replay check moved out of the frame, as in the reverted 3.2.128 trial, now that 3.2.128 removed the presentation restart that coincided with it.
+  - It runs in two halves in the frame loop's slack after the image is handed on (`LibretroHost.idleWork` / native `emufusion_retro_idle_work`; at least 8 ms of slack).
+  - The second replay reuses the first half's input.
+  - A host that never does idle work, or stops for 600 frames, falls back to the inline check.
+- **Thor (`cea82f94`), 60 s each:**
+
+  | System | On interval | Longest off-scan interval | First generated / real image |
+  | --- | --- | --- | --- |
+  | SNES | 99.6% (99.2% on 3.2.128) | 2 scans | 11.8 / 20.2 ms |
+  | NES | 99.7% | 2 scans | 9.3 / 17.6 ms |
+  | Mega Drive | 99.9% | 2 scans | 8.8 / 17.2 ms |
+
+  - SNES's check (21.7 ms over both halves) no longer delays a frame: no hitch at run-ahead's switch-on (5 scans on 3.2.128).
+  - SNES's latency is within the ~2 ms run-to-run spread.
+
+November 1 (earlier) **— 3.2.128 (202, `1ebbba51`): the panel clock qualifying keeps a declared clock's presentation; engines whose run-ahead fails are remembered.**
 
 - **The start-up hitch's real cause.**
   - 3.2.127 retimed the authoritative clock in place, yet a 4-5 scan gap stayed at the same moment, with the presentation epoch advancing.
