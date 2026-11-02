@@ -9,6 +9,7 @@ public final class CompositorEarlyGuardTest {
         aRunOfEarlyFramesLeavesItOff();
         lateFramesTurnItOffForGood();
         unknownResultsAreIgnored();
+        theReserveCanTurnItOn();
         System.out.println("CompositorEarlyGuardTest passed");
     }
 
@@ -96,6 +97,21 @@ public final class CompositorEarlyGuardTest {
         }
         check(!g.active(), "off");
         eq(77L, g.driverDesiredNs(0L, 77L, PERIOD), "no target, planned request");
+    }
+
+    /** BuiltinQueueReserve turns it on when a deepening's frames show early. */
+    private static void theReserveCanTurnItOn() {
+        CompositorEarlyGuard g = new CompositorEarlyGuard();
+        long[] clock = {9_000_000_000L};
+        check(g.activate(), "turned on");
+        check(g.active(), "on");
+        eq(1L, g.activations(), "one activation");
+        check(!g.activate(), "already on");
+        eq(5_000L + PERIOD / 2L, g.driverDesiredNs(5_000L, 3_000L, PERIOD), "half a scan after");
+        // Most frames late with it on: off for good, and it cannot be turned on again.
+        window(g, clock, 0, 1);
+        check(!g.active() && g.disabled(), "off for good");
+        check(!g.activate(), "not after it was turned off for good");
     }
 
     private static void check(boolean condition, String message) {

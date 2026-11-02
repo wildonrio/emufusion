@@ -54,6 +54,16 @@ package com.thorium.emufusion.video;
  * every other source frame early, 72.6% of intervals on their two scans. In
  * the other it latches ~1.8 ms before the slot, so depth 0 left 12% late and a
  * scan of lead is what helps. Burst rules alone cannot tell them apart.</li>
+ * <li>Frames shown early at the extra depth, alternating with frames in their
+ * slot, turn the early guard on instead of giving the scan back, while the
+ * guard can still turn on ({@link #setEarlyGuardAvailable}): the guard's own window is 120 frames and
+ * the early recovery took the scan back within 48, so the guard never saw the
+ * early frames it exists for. Wind Waker HD, 3.2.124 (Thor, 2026-11-01): one
+ * deepening 8 s into play, recovered early within 0.7 s, then 241 held
+ * bursts while real images, submitted 6 ms before their slot, finished 2-5 ms
+ * after it beside Cemu's GPU work: 54% of real images a scan late, 52.8% of
+ * intervals on their two scans. 3.2.101 measured the guard holding a
+ * deepening there at 72-83% against 51-59%.</li>
  * </ul>
  */
 public final class BuiltinQueueReserve {
@@ -77,6 +87,13 @@ public final class BuiltinQueueReserve {
      *  scan early give the depth back. */
     public static final int EARLY_TO_RECOVER = 20;
     public static final int EARLY_WINDOW = 48;
+    /**
+     * Early frames ask for the early guard only when they alternate with
+     * frames in their slot this often in the window (the judder the guard
+     * removes). A run of frames all shown early is even and sooner: the scan
+     * goes back, as the guard's own rule leaves such runs alone (SNES).
+     */
+    public static final int SWITCHES_FOR_GUARD = 4;
     /** A deepening's trial: frames with a known display time at the new depth. */
     public static final int TRIAL_FRAMES = 120;
     /** The share of frames in their slot a deepening must add to be kept. */
@@ -85,7 +102,8 @@ public final class BuiltinQueueReserve {
     public static final long DEEPEN_HOLDOFF_NS = 30_000_000_000L;
     public static final long MAX_DEEPEN_HOLDOFF_NS = 480_000_000_000L;
 
-    public enum Change { NONE, DEEPENED, RECOVERED, RESTORED }
+    /** GUARD: frames shown early at the extra depth; the caller turns the early guard on. */
+    public enum Change { NONE, DEEPENED, RECOVERED, RESTORED, GUARD }
 
     private int extraScans;
     private int maxExtraScans = MAX_EXTRA_SCANS;
@@ -95,7 +113,8 @@ public final class BuiltinQueueReserve {
     private int earlierFrames;
     private int recoveryFrames = RECOVERY_FRAMES;
     private long recoveredAtNs;
-    private int windowFrames, earlyFrames;
+    private int windowFrames, earlyFrames, earlySwitches;
+    private boolean previousEarly;
     private long deepenHoldoffNs = DEEPEN_HOLDOFF_NS, deepenAllowedAtNs;
     // Whether each of the last TRIAL_FRAMES frames at this depth was in its slot.
     private final boolean[] slotRing = new boolean[TRIAL_FRAMES];
@@ -103,7 +122,8 @@ public final class BuiltinQueueReserve {
     private boolean trial;
     private double trialBaseline;
     private long deepenings, recoveries, failedRecoveries, earlyRecoveries, heldDeepenings,
-            rejectedTrials;
+            rejectedTrials, guardRequests;
+    private boolean earlyGuardAvailable;
 
     public int extraScans() { return extraScans; }
 
@@ -124,6 +144,15 @@ public final class BuiltinQueueReserve {
     /** Deepenings given back because they did not put more frames in their slot. */
     public long rejectedTrials() { return rejectedTrials; }
     public int recoveryFrames() { return recoveryFrames; }
+    /** Early bursts at the extra depth answered by turning the early guard on. */
+    public long guardRequests() { return guardRequests; }
+
+    /**
+     * Whether the early guard is enabled and still off: early frames at the
+     * extra depth then ask for it ({@link Change#GUARD}) instead of giving the
+     * scan back.
+     */
+    public void setEarlyGuardAvailable(boolean available) { earlyGuardAvailable = available; }
 
     /**
      * The reserve to plan a frame with (PhysicalPresentationDeadline.nextEgl):
@@ -153,9 +182,25 @@ public final class BuiltinQueueReserve {
             if (++windowFrames > EARLY_WINDOW) {
                 windowFrames = 1;
                 earlyFrames = 0;
+                earlySwitches = 0;
             }
-            if (actualNs > 0L && desiredNs - actualNs >= panelPeriodNs / 2L &&
-                    ++earlyFrames >= EARLY_TO_RECOVER) {
+            boolean shownEarly = actualNs > 0L && desiredNs - actualNs >= panelPeriodNs / 2L;
+            if (windowFrames > 1 && shownEarly != previousEarly) ++earlySwitches;
+            previousEarly = shownEarly;
+            if (shownEarly && ++earlyFrames >= EARLY_TO_RECOVER) {
+                if (earlyGuardAvailable && earlySwitches >= SWITCHES_FOR_GUARD) {
+                    // The guard stops ready frames from showing a scan early;
+                    // a running trial restarts on frames planned with it.
+                    ++guardRequests;
+                    changedAtNs = nowNs;
+                    windowFrames = 0;
+                    earlyFrames = 0;
+                    earlySwitches = 0;
+                    slotRingHead = 0;
+                    slotRingCount = 0;
+                    slotRingOnSlot = 0;
+                    return Change.GUARD;
+                }
                 ++recoveries;
                 ++earlyRecoveries;
                 // Not a recovery trial: the depth was not holding frames
@@ -280,6 +325,7 @@ public final class BuiltinQueueReserve {
         earlierFrames = 0;
         windowFrames = 0;
         earlyFrames = 0;
+        earlySwitches = 0;
         trial = false;
         slotRingHead = 0;
         slotRingCount = 0;

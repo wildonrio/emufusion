@@ -18,6 +18,7 @@ public final class BuiltinQueueReserveTest {
         framesShownEarlyGiveTheScanBack();
         occasionalEarlyFramesKeepTheDepth();
         earlyRecoveriesHoldOffDeepening();
+        earlyFramesTurnTheGuardOnInsteadOfGivingTheScanBack();
         aDeepeningThatAddsNothingIsGivenBack();
         aDeepeningThatHelpsIsKept();
         aCappedQueueNeverDeepens();
@@ -302,6 +303,62 @@ public final class BuiltinQueueReserveTest {
         advance(clock, BuiltinQueueReserve.MISS_WINDOW_NS + 1L);
         burst(r, clock);
         eq(1L, r.extraScans(), "deepened after the hold-off was lifted");
+    }
+
+    /** Wind Waker HD, 3.2.124 (2026-11-01): the early recovery took the scan
+     *  back before the guard's 120-frame window could see the early frames.
+     *  While the guard can still turn on, early frames ask for it and the
+     *  depth stays; the trial then decides on frames planned with it. */
+    private static void earlyFramesTurnTheGuardOnInsteadOfGivingTheScanBack() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        r.setEarlyGuardAvailable(true);
+        long[] clock = {70_000_000_000L};
+        burst(r, clock);
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        BuiltinQueueReserve.Change change = BuiltinQueueReserve.Change.NONE;
+        int frames = 0;
+        while (change == BuiltinQueueReserve.Change.NONE && frames < 1_000) {
+            change = frames % 4 < 2 ? early(r, clock) : onTime(r, clock, 1_000_000L);
+            ++frames;
+        }
+        check(change == BuiltinQueueReserve.Change.GUARD, "early frames ask for the guard: " + change);
+        check(frames <= BuiltinQueueReserve.EARLY_WINDOW, "within one window: " + frames);
+        eq(1L, r.extraScans(), "the depth stays");
+        eq(0L, r.earlyRecoveries(), "no early recovery");
+        eq(1L, r.guardRequests(), "one guard request");
+        // The guard is on: frames land in their slot and the trial keeps the scan.
+        r.setEarlyGuardAvailable(false);
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        for (int i = 0; i < 2 * BuiltinQueueReserve.TRIAL_FRAMES; ++i)
+            check(onTime(r, clock, -2_000_000L) == BuiltinQueueReserve.Change.NONE,
+                    "frames in their slot keep the depth");
+        eq(1L, r.extraScans(), "the deepening is kept");
+        eq(0L, r.rejectedTrials(), "the trial passed");
+        // Early frames with the guard already on still give the scan back.
+        change = BuiltinQueueReserve.Change.NONE;
+        frames = 0;
+        while (change == BuiltinQueueReserve.Change.NONE && frames < 1_000) {
+            change = early(r, clock);
+            ++frames;
+        }
+        check(change == BuiltinQueueReserve.Change.RECOVERED, "guard on, early frames recover");
+        eq(0L, r.extraScans(), "back at the earliest scan");
+
+        // A run of frames all shown early (SNES) is even and sooner: the scan
+        // goes back even while the guard could turn on.
+        BuiltinQueueReserve even = new BuiltinQueueReserve();
+        even.setEarlyGuardAvailable(true);
+        long[] clock2 = {90_000_000_000L};
+        burst(even, clock2);
+        advance(clock2, BuiltinQueueReserve.SETTLE_NS);
+        change = BuiltinQueueReserve.Change.NONE;
+        frames = 0;
+        while (change == BuiltinQueueReserve.Change.NONE && frames < 1_000) {
+            change = early(even, clock2);
+            ++frames;
+        }
+        check(change == BuiltinQueueReserve.Change.RECOVERED, "all early recovers: " + change);
+        eq(0L, even.guardRequests(), "no guard request");
     }
 
     /** Wind Waker HD, 2026-10-25 (per-present trace, no recorder): every

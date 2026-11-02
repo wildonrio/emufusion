@@ -26,6 +26,7 @@ reviewed before this revision; its work was not discarded.
 *Smoothness* (on the intended interval):
 - 99.5-99.9% for retro, Mega Drive, God of War, Double Dash and NSMBU Deluxe;
 - SM3DW 95.2%: Cemu delivers frames in bursts on a saturated GPU.
+- 30 fps sources, two scans each (3.2.125): Wind Waker HD 76.1% (52.8% on 3.2.124; the rest is Cemu's own 50/17 ms frame pairs), Metroid Dread 85.8%.
 
 *Artifacts* (device output, re-recorded large corpus, frames with invented content):
 
@@ -248,7 +249,37 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 1 (latest) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase search uses a patch every 4 pixels.**
+November 1 (latest) **— 3.2.125 (199, `81a9b8ea`): a deepened queue whose frames land early turns the early guard on instead of giving the scan back.**
+
+- **Owner, November 1: decide the open questions from his stated expectations, without asking.** Decisions:
+  - Eden is not changed: Switch must look like stock Eden, and Eden's rules forbid AI work outside the portability exception. NSMBU Deluxe's remaining ~1 ms is worked from our side.
+  - Thor runs stay short (fan); no long capture sessions.
+  - The artifact bar stays as written.
+  - Wind Waker HD does not get the content-time timeline (+17 ms, two scans, for a still-failing 86%). One scan of steady latency for an even rhythm is acceptable ("a scan of steady latency over a recurring hitch").
+  - Cemu's per-phase field stays. Correction to the earlier entry: work floor 5 does not drop the DIS per-phase field (only the old synthesis-15 phase field checks the work level); it coarsens the endpoint search. Its 14.4 / 22.8 ms run sits inside SM3DW's run-to-run spread (work floor 3 gave 23.6 / 32.5 ms). The corpus replay without the per-phase field (level 21) is worse on Wind Waker HD (frames with invented content 14 -> 21%, error 0.329 -> 0.428) and neutral on SM3DW (0%, error 0.447 -> 0.483).
+  - SM3DW keeps Cemu's stock resolution: the Thor's Cemu has no resolution graphic pack, so it already renders the Wii U's native 720p (upscaled into the 1080p surface).
+- **Wind Waker HD, 3.2.124 (Thor, 60 s, arrival trace).** 52.8% of intervals on their two scans; 41.5% of presents a scan late (real images 54%, generated 28%).
+  - Real images were submitted ~6 ms before their slot but finished 2-5 ms after it, behind Cemu's GPU work; generated images, prerendered at arrival, finished ~1.4 ms before it. Real-late and generated-on-time alternate as 3- and 1-scan intervals.
+  - The queue reserve deepened once, 8 s into play. Its frames then showed a scan early, and the early recovery gave the scan back within 0.7 s (48-frame window), before the early guard's 120-frame window could turn the guard on. Deepening was then held off for the rest of the run (241 held bursts).
+  - Cemu's own delivery: 80% of pairs span 33 ms, 10% 50 ms followed by 10% at 17 ms. Cemu misses one of its 60 Hz refreshes and catches up, which no scheduler can hide without two scans of latency.
+- **Change.** While the guard is enabled and not yet on, early frames at the extra depth that alternate with frames in their slot (at least 4 switches in the 48-frame window) return `Change.GUARD`. The caller turns the guard on (`CompositorEarlyGuard.activate()`), the depth stays, and a running trial restarts on frames planned with the guard. A run of frames all shown early (SNES) still gives the scan back. With the guard already on, early frames recover as before. Telemetry: `builtinQueueGuardRequests`; log `Compositor early guard on ... reason=deepened-frames-early`.
+- **Thor, 60 s each:**
+
+  | Case | Build | On their scans | In their requested scan | Late | First generated / real image |
+  | --- | --- | --- | --- | --- | --- |
+  | Wind Waker HD | 3.2.124 | 52.8% | 55.9% | 41.5% | 16.7 / 33.2 ms |
+  | Wind Waker HD | 3.2.125 | 76.1% | 93.9% | 3.5% | 24.1 / 42.2 ms |
+  | Metroid Dread | 3.2.124 | 85.4% | 94.1% | 4.5% | 28.1 / 46.7 ms |
+  | Metroid Dread | 3.2.125 | 85.8% | 92.5% | 5.4% | 28.2 / 46.7 ms |
+  | SNES | 3.2.125 | 99.6% | | | 9.4 / 17.8 ms (guard off) |
+
+  - Both 3.2.125 Cemu and Eden runs turned the guard on through the new path. Dread's 3.2.124 control turned it on through the guard's own window, so Dread is unchanged.
+  - Wind Waker HD's remaining 1- and 3-scan intervals (131 and 120 of 1,225) are mostly Cemu's 50/17 ms pairs.
+- **Measured, not adopted:**
+  - The 3-D field choice judged over a wider window (3x3 or 5x5 taps, 1-2 history px apart): Double Dash unchanged (24% of frames with invented content, area 0.094-0.099% against 0.099%). Without the choice: 30%, 0.164%. Its shredded karts come from the per-phase field, not the per-pixel choice.
+  - Compositor check (SNES with generation on, `dumpsys SurfaceFlinger`): every layer is composed by the display hardware (DEVICE), including ours at 120 Hz, so composition is not what costs Cemu its frame rate.
+
+November 1 (earlier) **— 3.2.124 (198, `05d2b1d3`): pixel art's per-phase search uses a patch every 4 pixels.**
 
 - **Change.** On the pixel-art path the per-phase search and densification use a patch stride of 4 instead of 3: 44% fewer patches, and 4 covering patches a pixel instead of 9. The stride is a uniform (`uS`); 3-D keeps 3.
   - QA `emufusion_framegen_pixel_stride=3` restores 3.2.123's grid.

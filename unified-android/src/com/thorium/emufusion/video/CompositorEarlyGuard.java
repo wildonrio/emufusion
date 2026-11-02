@@ -55,6 +55,22 @@ public final class CompositorEarlyGuard {
     }
 
     /**
+     * Turns the guard on now (BuiltinQueueReserve saw a deepening's frames
+     * shown early before this window could): false if it is already on or
+     * turned off for good.
+     */
+    public boolean activate() {
+        if (active || disabled) return false;
+        active = true;
+        ++activations;
+        frames = 0;
+        early = 0;
+        late = 0;
+        switches = 0;
+        return true;
+    }
+
+    /**
      * One frame's physical result against its planned slot.
      *
      * @return whether the guard changed

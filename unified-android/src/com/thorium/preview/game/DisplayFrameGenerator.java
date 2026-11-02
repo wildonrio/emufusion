@@ -7201,11 +7201,21 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             builtinBacklogCatchUp.observe(result.desiredNs, result.actualNs, result.panelPeriodNs,
                     result.actualNs);
         int previous = builtinQueueReserve.extraScans();
+        builtinQueueReserve.setEarlyGuardAvailable(TimelineSchedulerSwitch.earlyGuard() &&
+                !compositorEarlyGuard.active() && !compositorEarlyGuard.disabled());
         com.thorium.emufusion.video.BuiltinQueueReserve.Change change = builtinQueueReserve.observe(
                 result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS,
                 result.desiredNs, result.actualNs,
                 renderKnown ? result.renderCompleteNs : 0L,
                 latchKnown ? result.latchNs : 0L, result.panelPeriodNs);
+        if (change == com.thorium.emufusion.video.BuiltinQueueReserve.Change.GUARD &&
+                compositorEarlyGuard.activate()) {
+            Log.i(TAG, "Compositor early guard on generator=" + generatorId +
+                    " activations=" + compositorEarlyGuard.activations() +
+                    " disabled=" + compositorEarlyGuard.disabled() + " reason=deepened-frames-early" +
+                    " extraScans=" + builtinQueueReserve.extraScans());
+            return;
+        }
         if (change == com.thorium.emufusion.video.BuiltinQueueReserve.Change.NONE ||
                 ++builtinQueueReserveLogs > 32L) return;
         Log.i(TAG, "Built-in queue depth " + change.name().toLowerCase(java.util.Locale.ROOT) +
@@ -14584,6 +14594,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " builtinQueueReserveFailedRecoveries=" + builtinQueueReserve.failedRecoveries() +
                 " builtinQueueEarlyRecoveries=" + builtinQueueReserve.earlyRecoveries() +
                 " builtinQueueHeldDeepenings=" + builtinQueueReserve.heldDeepenings() +
+                " builtinQueueGuardRequests=" + builtinQueueReserve.guardRequests() +
                 " sourcePhaseShifts=" + sourcePhaseAdvisor.shifts() +
                 " sourcePhaseShiftedUs=" + sourcePhaseAdvisor.shiftedNs() / 1000L +
                 " sourcePhaseAbandoned=" + (sourcePhaseAdvisor.abandoned() ? 1 : 0) +
