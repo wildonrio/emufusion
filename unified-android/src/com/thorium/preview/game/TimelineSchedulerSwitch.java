@@ -275,6 +275,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep requested present times.
         }
         presentAsap = asap;
+        boolean verdict = true;
+        try {
+            if (context != null) verdict = Settings.Global.getInt(
+                    context.getContentResolver(), VERDICT_WAIT_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        verdictWait = verdict;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -571,6 +579,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean presentAsap;
 
     static boolean presentAsap() { return presentAsap; }
+
+    /**
+     * An arriving image's uniqueness check is waited for on a GPU fence, at
+     * most until shortly before the next callback, instead of polled 1 ms
+     * later (default, 3.2.141). QA: emufusion_framegen_verdict_wait=0 keeps
+     * the 1-ms poll only, for paired comparisons.
+     */
+    static final String VERDICT_WAIT_GLOBAL = "emufusion_framegen_verdict_wait";
+    private static volatile boolean verdictWait = true;
+
+    static boolean verdictWait() { return verdictWait; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

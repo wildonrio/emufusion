@@ -249,7 +249,40 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 2 (latest) **— LSFG-Android measured on the Thor beside ours: it is behind on latency and smoothness in Switch play.**
+November 2 (latest) **— 3.2.141 (215, `debf7c41`): an arriving image's uniqueness check is waited for on a GPU fence, so the pair's solve starts sooner.**
+
+- **Why (Thor, 3.2.140, NSMBU Deluxe in play; system trace).**
+  - The solve that forms a pair in the early poll began 2.30 ms (median) before the app vsync and took 0.89 ms.
+  - 7 solves in 6 s overran that vsync; each one is a generated frame planned late.
+    - Four started late, 0.3-0.7 ms before the vsync. Three of those ran 2.8-3.3 ms because the frame thread was on a little core (cpu0/cpu2): `estimate` took 1.4-1.9 ms there, against ~0.4 ms on the mid cores.
+    - The rest ran long because the thread was preempted or asleep: once for 2.2 ms, woken by one of our own binder threads.
+  - The uniqueness check that gates the solve was ready at the first 1-ms poll for 161 of 166 images. The poll fires 1.1 ms after the image is taken in, so most of that wait was the poll interval.
+- **Change.** The first poll after an arrival now waits on a fence (`glClientWaitSync`) for at most 1 ms, ending 2 ms before the next vsync (`verdictWaitBudgetNs`). Once the check is answered, the poll runs at once; if not, the 1-ms poll continues as before.
+  - QA `emufusion_framegen_verdict_wait=0` restores the poll alone.
+  - The stats line gains `verdictWaits=waits/answered`.
+- **Thor, same build, wait on vs off (NSMBU Deluxe in play):**
+
+  | | On | Off |
+  | --- | --- | --- |
+  | Waits answered | 82% (median 0.42 ms) | – |
+  | Solve start before the vsync (median) | 2.88 ms | 2.30 ms (3.2.140) |
+  | Generated frames planned >1.5 ms late, 16 s | 40 | 144 (3.2.140 earlier: 53) |
+  | Compositor mode changes, 16 s | 7 | 20 |
+  | Two-scan intervals | 5 | 12 |
+  | On cadence | 99.7% | 99.4% |
+  | Arrival to scan-out (generated / real) | 19.4 / 27.7 ms | 19.1 / 27.5 ms |
+
+  - Latency is unchanged: the compositor stayed in its pipelined mode 86% of the time in both runs.
+  - Double Dash on 3.2.141 matched its baseline: 10.9 / 19.3 ms, 99.7%, mostly in the fast mode.
+  - All 2,842 host tests pass.
+- **What the compositor counters show.** SurfaceFlinger never missed a frame (`PrevFrameMissed` and `PrevFramePending` stay 0). The pipelined mode is a frame held a scan once one is queued ahead.
+  - Exits from the fast mode in the wait-on run: two at generated frames planned 2.5-4.2 ms late, one at an on-time real frame.
+  - Fast stretches lasted 0.3-1 s.
+- **Next for Eden latency.**
+  - Keep the frame thread off the little cores during arrival work (the work-hint target is half a refresh, so the governor rarely boosts).
+  - Then drain the compositor's queue with one deliberate skip on entering the pipelined mode, once those entries are rare enough for the hitch budget.
+
+November 2 **— LSFG-Android measured on the Thor beside ours: it is behind on latency and smoothness in Switch play.**
 
 - **Owner, November 2: "yes reinstall LSFG and measure it side by side".** Stock LSFG-Android 0.1.2 (`com.lsfg.android`, APK `ec4d16fa`) was reinstalled for the test with the owner's own Lossless.dll and its defaults (2x, flow 1.0, performance mode, Balanced pacing, MediaProjection capture), then removed again.
   - EmuFusion's frame generation was off and LSFG's overlay ran on top: NSMBU Deluxe on Eden, in play (`pace_move.py` path).

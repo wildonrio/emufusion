@@ -5394,11 +5394,56 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (!retry) {
             signatureEarlyPollTries = 0;
             if (signatureEarlyPollPosted) return;
+            if (TimelineSchedulerSwitch.verdictWait() && signatureVerdictSignaled()) {
+                pollSignatureEarly();
+                return;
+            }
         } else if (++signatureEarlyPollTries >= SIGNATURE_EARLY_POLL_TRIES) {
             return;
         }
         signatureEarlyPollPosted = true;
         handler.postDelayed(signatureEarlyPoll, 1L);
+    }
+
+    // The 1-ms poll found the check finished at its first try for 161 of 166
+    // Eden images (NSMBU Deluxe, 3.2.140), so the pair's motion solve began
+    // 1.1 ms after the image was taken in and 2.3 ms before the callback
+    // that shows it; the solves that overran that callback (7 in 6 s, each
+    // a late generated frame) lacked that slack. Waiting on a fence instead
+    // starts the solve once the GPU has the answer. The wait never runs into
+    // the callback: it ends VERDICT_WAIT_MARGIN_NS before the next vsync,
+    // which leaves the solve its usual time, and a check still running then
+    // goes back to the 1-ms poll.
+    private static final long VERDICT_WAIT_MAX_NS = 1_000_000L;
+    private static final long VERDICT_WAIT_MARGIN_NS = 2_000_000L;
+    private long verdictWaits, verdictWaitHits;
+
+    /** How long an arrival may wait for its check: 0 when the next vsync is too close. */
+    static long verdictWaitBudgetNs(long nowNs, long lastVsyncNs, long periodNs) {
+        if (periodNs <= 0L || lastVsyncNs == 0L) return 0L;
+        long next = nowNs <= lastVsyncNs ? lastVsyncNs :
+                lastVsyncNs + ((nowNs - lastVsyncNs) / periodNs + 1L) * periodNs;
+        return Math.max(0L, Math.min(VERDICT_WAIT_MAX_NS, next - nowNs - VERDICT_WAIT_MARGIN_NS));
+    }
+
+    private boolean signatureVerdictSignaled() {
+        long budget = verdictWaitBudgetNs(System.nanoTime(), lastCallbackFrameTimeNs,
+                refreshHz > 0f ? (long) (1_000_000_000.0 / refreshHz) : 0L);
+        if (budget <= 0L) return false;
+        long fence = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (fence == 0L) return false;
+        ++verdictWaits;
+        android.os.Trace.beginSection("EmuFusion.verdictWait");
+        try {
+            int result = GLES30.glClientWaitSync(fence, GLES30.GL_SYNC_FLUSH_COMMANDS_BIT, budget);
+            boolean signaled = result == GLES30.GL_ALREADY_SIGNALED ||
+                    result == GLES30.GL_CONDITION_SATISFIED;
+            if (signaled) ++verdictWaitHits;
+            return signaled;
+        } finally {
+            GLES30.glDeleteSync(fence);
+            android.os.Trace.endSection();
+        }
     }
 
     private void pollSignatureEarly() {
@@ -14745,6 +14790,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " signatureVsyncCommits=" + signatureVsyncCommits +
                 " signatureEarlyCommits=" + signatureEarlyCommits +
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
+                " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
                 " arrivalPassedReals=" + arrivalPassedReals +
                 " disPrecomputeHits=" + disPrecomputeHits +
                 " disPrecomputeMisses=" + disPrecomputeMisses +
