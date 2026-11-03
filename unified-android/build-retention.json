@@ -1309,6 +1309,14 @@
     "unified-android/build/emufusion-3.2.146-phase2-phase3-qualification.apk": {
       "sha256": "8cc90f42c92b3f47538732e30df876650be4471cb614e11c0cf8d6248bf89657",
       "reason": "Counter-in-frame / pin-fix candidate (3.2.146), superseded by 3.2.147, 2026-11-02."
+    },
+    "unified-android/build/emufusion-3.2.148-phase2-phase3-qualification-2911d4c9bdece16d0c3dbc6ecd327a7ff12bf4857b18662e90072dd367f31508.apk": {
+      "sha256": "2911d4c9bdece16d0c3dbc6ecd327a7ff12bf4857b18662e90072dd367f31508",
+      "reason": "Admission-based source phase lock trial (3.2.148), not adopted 2026-11-02; Thor restored to release 3.2.147."
+    },
+    "unified-android/build/emufusion-3.2.148-phase2-phase3-qualification.apk": {
+      "sha256": "2911d4c9bdece16d0c3dbc6ecd327a7ff12bf4857b18662e90072dd367f31508",
+      "reason": "Admission-based source phase lock trial (3.2.148), not adopted 2026-11-02; Thor restored to release 3.2.147."
     }
   }
 }

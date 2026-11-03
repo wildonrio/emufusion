@@ -249,7 +249,29 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 2 (latest) **— NSMBU Deluxe's world map, recorded in play: the replay bench finds it clean (3.2.147).**
+November 2 (latest) **— Tried and not adopted: the source phase lock timed from admission instead of arrival (3.2.148 trial).**
+
+- **Motivation.** A 3.2.147 NSMBU Deluxe run spent 96% of the time in the compositor's pipelined mode.
+  - 479 of 998 generated frames came from pairs the callback had to form itself: Eden queues an image before its GPU finishes it, so the uniqueness check was still unanswered at the callback.
+  - 188 of those finished on the GPU at or after the scan. Pairs formed early were never late.
+- **Change tried.** The lock measured each wait from the right image's admission (check answered) instead of its arrival, so a pair formed in its callback read as late and moved Eden's frames earlier. QA `phase_lock_ready`.
+- **Thor, NSMBU Deluxe in play, two pairs of runs:**
+
+  | | Admission | Arrival |
+  | --- | --- | --- |
+  | Pairs formed in the callback | 186, 123 | 120, 110 |
+  | Generated frames done on the GPU after the scan | 79, 85 | 4, 12 |
+  | Fast-mode share | 82%, 9% | 42%, 91% |
+  | On cadence | 99.9%, 99.8% | 99.8%, 99.8% |
+
+  - Timing from admission consistently made more generated frames late on the GPU.
+  - Fast-mode share is spread across the range in both settings (9-91%), so it is not the deciding factor.
+  - Reverted; the Thor is back on 3.2.147 and the trial APK is retired.
+- **What the runs show.**
+  - The first arrival run stayed pipelined 58% of the time with only 4 GPU-late frames. Once in the pipelined mode, a session can stay there with nothing still going wrong.
+  - So a deliberate drain back to the fast mode would have recovered most of that run, at the cost of one repeated frame.
+
+November 2 **— NSMBU Deluxe's world map, recorded in play: the replay bench finds it clean (3.2.147).**
 
 - **Why new captures.** The full-size NSMBU set (`full/nsmbud`, 48 triplets from before 3.2.136) is mostly held frames. The bench scored only 6 of the 48 as moving, all at 0.00% invented area (error 0.407 of a cross-fade), and none show the owner's reported scene: the HUD buttons ("Map View", "Items", "Menu") over the scrolling world map.
 - **Capture.** `~/Code/emufusion-qa-tools/capture_play.py OUT CASE` navigates into play first, using `pace_move`'s NAV path, which ends on Acorn Plains' map. It then arms both capture markers (checked on every frame) for 76 s while Toadette walks.
