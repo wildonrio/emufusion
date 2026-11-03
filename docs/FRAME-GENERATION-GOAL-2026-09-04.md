@@ -249,7 +249,42 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 2 (latest) **— 3.2.141 (215, `debf7c41`): an arriving image's uniqueness check is waited for on a GPU fence, so the pair's solve starts sooner.**
+November 2 (latest) **— 3.2.143 (217, `3287eaa0`): the frame thread stays off the little cores; late generated frames in Eden play 140 -> 4 per 16 s.**
+
+- **Change.** The generator's thread is restricted to every CPU outside the lowest-clocked cluster: `sched_setaffinity` on itself, with the cluster found from each CPU's `cpuinfo_max_freq`, within the CPUs Android currently allows.
+  - The native code is `DenseGpuTimer.nativePinFastCores` (`emufusion_framegen_timer_jni.c`).
+  - The mask is applied at start and again with each once-a-second report on the frame thread, because Android resets it when the app's CPU set changes.
+  - On uniform CPUs it does nothing. On the Thor the mask is 0xf8 (cpu3-7).
+  - QA `emufusion_framegen_fast_cores=0` leaves placement to the scheduler; the stats line gains `fastCores=0x..`.
+  - Replaces the quarter-refresh work-hint trial (3.2.142), which did not move the thread off the little cores.
+- **Thor, NSMBU Deluxe in play, same build, pinned vs not:**
+
+  | | Pinned | Not pinned |
+  | --- | --- | --- |
+  | Frame thread on little cores | 0.0% | 4.0% |
+  | Generated frames planned >1.5 ms late, 16 s | 4 | 140 |
+  | Vsync to plan, p99 | 1.17 ms | 2.78 ms |
+  | Arrival solves past the vsync (6 s trace) | 4 | 40 |
+  | Compositor mode changes, 16 s | 8 | 20 |
+  | Two-scan intervals / on cadence | 7 / 99.6% | 26 / 98.7% |
+  | Fast-mode share | 52% | 40% |
+  | Arrival to scan-out, generated / real (median) | 11.2 / 19.5 ms | 17.6 / 26.0 ms |
+
+- **Double Dash.**
+
+  | | Pinned | Not pinned |
+  | --- | --- | --- |
+  | Arrival to scan-out, generated / real | 9.4 / 17.7 ms | 10.7 / 18.9 ms |
+  | On cadence | 98.2% | 97.5% |
+  | Shown at the interval asked for | 100% | 99.7% |
+
+  - Its uneven intervals come from Dolphin's own delivery: arrival wait p90 5.4-8.7 ms. On 3.2.141 it measured 99.7% on cadence.
+- All 2,845 host tests pass (the health-window fixture gained the new call's stub).
+- **What remains for Eden.**
+  - Mode changes no longer follow late plans (only 4 in 16 s), so the remaining 8 have other causes: generated frames whose GPU work finishes after the scan, and the compositor's own misses at on-time frames.
+  - Those are next, then a deliberate drain back to the fast mode.
+
+November 2 **— 3.2.141 (215, `debf7c41`): an arriving image's uniqueness check is waited for on a GPU fence, so the pair's solve starts sooner.**
 
 - **Why (Thor, 3.2.140, NSMBU Deluxe in play; system trace).**
   - The solve that forms a pair in the early poll began 2.30 ms (median) before the app vsync and took 0.89 ms.

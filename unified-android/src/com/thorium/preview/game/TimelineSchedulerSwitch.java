@@ -283,6 +283,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         verdictWait = verdict;
+        boolean fast = true;
+        try {
+            if (context != null) fast = Settings.Global.getInt(
+                    context.getContentResolver(), FAST_CORES_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        fastCores = fast;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -590,6 +598,16 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean verdictWait = true;
 
     static boolean verdictWait() { return verdictWait; }
+
+    /**
+     * The frame thread runs only on CPUs outside the lowest-clocked cluster
+     * (default, 3.2.143). QA: emufusion_framegen_fast_cores=0 leaves its
+     * placement to the scheduler, for paired comparisons.
+     */
+    static final String FAST_CORES_GLOBAL = "emufusion_framegen_fast_cores";
+    private static volatile boolean fastCores = true;
+
+    static boolean fastCores() { return fastCores; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

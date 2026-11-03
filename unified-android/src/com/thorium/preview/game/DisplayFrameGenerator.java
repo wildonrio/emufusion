@@ -4388,6 +4388,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             requestOutputFrameRate("initialize");
             workHint = FrameWorkHint.forCurrentThread("frame-generator",
                     workHintTargetNs(refreshHz));
+            pinFrameThreadToFastCores();
             choreographer = Choreographer.getInstance();
             healthWindowStartNanos = System.nanoTime();
             updateSchedulerHealthBaseline();
@@ -14606,7 +14607,34 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return hash;
     }
 
+    // The frame thread stays off the lowest-clocked CPU cluster (3.2.143).
+    // An arrival solve that ran on a Thor little core took 1.4-1.9 ms
+    // instead of ~0.4 and planned its generated frame late (Eden, NSMBU
+    // Deluxe, 3.2.140-3.2.142: ~2% of the thread's time, 3 of 7 overruns in
+    // one trace); a quarter-refresh work hint did not move it off them. The
+    // mask is applied again once a second, because Android resets it when
+    // the app's CPU set changes (background and back). QA:
+    // emufusion_framegen_fast_cores=0 leaves placement to the scheduler.
+    private long fastCoreMask;
+    private boolean fastCorePinUnavailable;
+
+    private void pinFrameThreadToFastCores() {
+        if (fastCorePinUnavailable || !TimelineSchedulerSwitch.fastCores() ||
+                handler == null || android.os.Looper.myLooper() != handler.getLooper()) return;
+        try {
+            long mask = DenseGpuTimer.pinCurrentThreadToFastCores();
+            if (mask != fastCoreMask)
+                Log.i(TAG, "Frame thread CPU mask=0x" + Long.toHexString(mask) +
+                        " generator=" + generatorId);
+            fastCoreMask = mask;
+        } catch (UnsatisfiedLinkError | RuntimeException failure) {
+            fastCorePinUnavailable = true;
+            Log.w(TAG, "Frame thread CPU mask unavailable generator=" + generatorId, failure);
+        }
+    }
+
     private void reportStats() {
+        pinFrameThreadToFastCores();
         // Measured unique rate, or AUTO's locked 30/20 clock while locked.
         double source = frameRate.reportedSourceHz();
         double targetOutput = frameRate.targetOutputHz();
@@ -14791,6 +14819,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " signatureEarlyCommits=" + signatureEarlyCommits +
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
+                " fastCores=0x" + Long.toHexString(fastCoreMask) +
                 " arrivalPassedReals=" + arrivalPassedReals +
                 " disPrecomputeHits=" + disPrecomputeHits +
                 " disPrecomputeMisses=" + disPrecomputeMisses +

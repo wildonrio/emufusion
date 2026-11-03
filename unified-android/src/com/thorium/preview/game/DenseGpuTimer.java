@@ -54,6 +54,18 @@ final class DenseGpuTimer implements AutoCloseable {
 
     private DenseGpuTimer(long handle) { this.handle = handle; }
 
+    /**
+     * Keeps the calling thread off the lowest-clocked CPU cluster: the mask
+     * applied, 0 on uniform CPUs, or -errno.
+     */
+    static synchronized long pinCurrentThreadToFastCores() {
+        if (!libraryLoaded) {
+            System.loadLibrary("emufusion_framegen_timer");
+            libraryLoaded = true;
+        }
+        return nativePinFastCores();
+    }
+
     boolean begin(int stage, long sequence) {
         return handle != 0L && nativeBegin(handle, stage, sequence);
     }
@@ -141,6 +153,7 @@ final class DenseGpuTimer implements AutoCloseable {
     }
 
     private static native long nativeCreate(boolean forceFences);
+    private static native long nativePinFastCores();
     private static native boolean nativeBegin(long handle, int stage, long sequence);
     private static native boolean nativeEnd(long handle);
     private static native long[] nativePoll(long handle, long currentPairSequence,
