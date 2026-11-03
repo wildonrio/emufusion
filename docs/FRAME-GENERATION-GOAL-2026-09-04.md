@@ -249,7 +249,24 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 2 (latest) **— Tried and not adopted: the source phase lock timed from admission instead of arrival (3.2.148 trial).**
+November 3 (latest) **— Why some Eden generated frames still finish after the scan: GPU sharing, which the Thor cannot trace below the app.**
+
+- **NSMBU Deluxe in play, 3.2.147:** 89% in the fast mode, 99.5% on cadence (9 two-scan intervals), 117 of 999 pairs formed in their callback, 45 generated frames done on the GPU after the scan.
+- **Our own GPU work is not the cause.**
+  - Estimator plus generate take 2.8 ms of GPU per pair on average (`completeGpuTotalUs` / pairs, max 4.1 ms), well inside the ~6.7 ms between a callback and its scan.
+  - The context already has high priority (granted 0x3101, September).
+  - In play every generated frame is the prepared image, rendered at Eden's 1280x720 and only copied at the callback: `preparedFrameHits` 60 a second, misses 0.
+  - The misses (60 a second) happen only in the menus during navigation, where frames take the full output-size generate pass.
+- **No GPU-level trace on this firmware.**
+  - The kernel's Adreno tracepoints (`kgsl/adreno_cmdbatch_*`, including preemption) exist but are root-only.
+  - The vendor `gfx` atrace category does not enable them.
+  - Perfetto's `linux.ftrace` is blocked by SELinux for `traced_probes` (a 2 s trace with sched and kgsl events came back at 798 bytes).
+  - So which GPU work our late frames wait behind cannot be shown directly.
+- **Open for Eden.**
+  - A faster drain back to the fast mode needs the owner's word, since the catch-up skip is held to one per 16 s by the October 26 "no micro-stutters" rule. The question is asked.
+  - Otherwise, cheaper work for pairs formed in their callback.
+
+November 2 **— Tried and not adopted: the source phase lock timed from admission instead of arrival (3.2.148 trial).**
 
 - **Motivation.** A 3.2.147 NSMBU Deluxe run spent 96% of the time in the compositor's pipelined mode.
   - 479 of 998 generated frames came from pairs the callback had to form itself: Eden queues an image before its GPU finishes it, so the uniqueness check was still unanswered at the callback.
