@@ -249,7 +249,35 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 2 (latest) **— The compositor's mode, not our presentation, sets Switch latency on the Thor; why our callbacks plan late (3.2.137-3.2.140 diagnostics).**
+November 2 (latest) **— LSFG-Android measured on the Thor beside ours: it is behind on latency and smoothness in Switch play.**
+
+- **Owner, November 2: "yes reinstall LSFG and measure it side by side".** Stock LSFG-Android 0.1.2 (`com.lsfg.android`, APK `ec4d16fa`) was reinstalled for the test with the owner's own Lossless.dll and its defaults (2x, flow 1.0, performance mode, Balanced pacing, MediaProjection capture), then removed again.
+  - EmuFusion's frame generation was off and LSFG's overlay ran on top: NSMBU Deluxe on Eden, in play (`pace_move.py` path).
+  - On Android 13 the overlay can hide itself from its own capture only with hidden-API access, so the owner set `hidden_api_policy=1` for the test. Without it the overlay captures its own output and freezes over the game (6 s trace: 120 Hz captures, no new images).
+  - LSFG Thor Fix (`com.lsfg.android.thor` 0.1.2-thor2, our own October fork) is not LSFG's method. Its Goal-FPS scheduler read the 120 Hz panel as 60 Hz and generated nothing (`source=60 output=60 panel=60`, "cannot sustain its lowest uniform output").
+- **Method.** A system trace plus the compositor's own per-buffer present times (`dumpsys SurfaceFlinger --latency` sampled through the trace; `pace_move.py` `SFLATENCY`). `~/Code/emufusion-qa-tools/lsfg_chain.py` follows each game frame through four steps: Eden's queue, the compositor's capture for LSFG, LSFG's posts, and the overlay's frame on the panel.
+- **Result, Eden's queue to the panel (median).**
+
+  | | Generated image | Real image | New image every scan |
+  | --- | --- | --- | --- |
+  | Game shown directly (no frame generation) | – | 14.4 ms | – |
+  | LSFG-Android 0.1.2 | 56 ms | 56 ms | 11% of intervals |
+  | EmuFusion 3.2.140, same session | 19.2 ms | 27.6 ms | 99.9% |
+
+  - Where LSFG's time goes:
+    - the compositor hands it the frame 8.0 ms after Eden queues it;
+    - its generation takes 13.7 ms on a GPU Eden already fills;
+    - its overlay adds 32 ms from post to panel, 24 ms of that from the overlay's HWUI frame to the panel (a TextureView in an app window goes through Android's normal UI pipeline).
+  - Why it rarely shows a new image every scan:
+    - It posts the generated and the real image 2.8 ms apart, because generation uses up its pacing budget.
+    - The TextureView shows only the newest image at each refresh, so 314 of 712 posted images never reached the screen.
+    - Intervals were 2 scans 76% of the time (60 Hz) and 3-5 scans 13% of the time.
+  - Eden itself slowed to 56 fps under LSFG's GPU load (worst gap 41.7 ms).
+  - The in-app corner and `pace_card` latency is the planned slot; `split_latency.py` gives the actual scan-out used above.
+- **A lighter game was not a valid LSFG test.** Mega Drive with EmuFusion's generation off runs the panel at 60 Hz (EmuFusion selects the source's mode), so LSFG cannot double there.
+- **Conclusion.** On the Thor, LSFG-Android does not beat ours on Switch latency or smoothness; its capture-and-overlay design costs about 40 ms on top of the game. Whatever earned it 9/10 is not reproduced here (perhaps an Android 14 phone, where an app can be captured on its own, or lighter games). The lesson that still stands is its artifact behavior: it blends where motion cannot be tracked.
+
+November 2 **— The compositor's mode, not our presentation, sets Switch latency on the Thor; why our callbacks plan late (3.2.137-3.2.140 diagnostics).**
 
 - **Owner, November 2:** LSFG for Android is about 9/10 on latency, artifacts and smoothness; why does ours fall short with it available to learn from?
   - From the source we built LSFG-Android-Thor from (`~/Code/LSFG-Android-Thor`, upstream commit `b847541`): stock LSFG-Android 0.1.2 presents with a plain `vkQueuePresentKHR` (FIFO, min+1 images) and no requested present time, pacing with CPU sleeps (`sleepUntilVsyncAligned`). The `VK_GOOGLE_display_timing` stamps in that tree are our own October changes, not upstream.
