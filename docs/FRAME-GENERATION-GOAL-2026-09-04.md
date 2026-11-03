@@ -282,6 +282,21 @@ November 3 (latest) **— NSMBU Deluxe's sliding HUD, offline (genport, map trip
   - Endpoint and per-phase search one pyramid level finer (426x240 field instead of 213x120): 0014 1.97 -> 1.63%, 0037 1.11 -> 1.05% (port to port). A small gain at four times the solve area.
   - A regional candidate (an exhaustive A->C search per 64-px block on gradient magnitude, offered to the per-pixel choice): no gain (0014 1.85-1.91%, 0037 1.05-1.22%).
   - Not taken further. The HUD needs a motion model for a rigid, fading overlay layer, not a denser field.
+- **The blend, not only the motion (same triplets, early November 3).**
+  - The block search finds every HUD element's move exactly: title, x05 counter and bottom-left buttons +19 to +21 px; bottom-right buttons -19 px; the map 0.
+  - Invented pixels in 0014: title 45%, x05 27%, bottom buttons 14%, menu 14%.
+  - With that motion forced as the field, the frame still scores 1.62%. Built from the block motion alone:
+
+    | | 0014 | 0037 |
+    | --- | --- | --- |
+    | A's warp only | 0.49% | 0.68% |
+    | C's warp only | 0.85% | 0.86% |
+    | 50/50 blend of both warps | 1.74% | 1.46% |
+
+  - So once the motion is right, the blend is what invents. The HUD is semi-transparent and fades in, so A and C hold the map behind each letter at different opacities, and their mix matches neither frame.
+  - Recovering B would need the overlay separated from the background (a layer model). A single-source warp scores near the measure's floor but shows the HUD at one frame's opacity.
+  - The broad version of "one source where the warps disagree" (`PICK_3D`) was measured in October and not adopted (other sets worse), so any use here must trigger only on this class: a rigid, fading overlay over a still background.
+
 
 November 3 **— Eden artifacts by the 10/10 measure (3.2.147): NSMBU Deluxe's sliding HUD and Link's Awakening's picture edge.**
 
