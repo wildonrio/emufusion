@@ -1581,16 +1581,11 @@ Java_com_thorium_preview_game_PhysicalPresentationTracker_nativeDestroy(
 #include <errno.h>
 #include <sys/syscall.h>
 
-/*
- * Restricts the calling thread to every CPU outside the lowest-clocked
- * cluster (each CPU's cpuinfo_max_freq), within the CPUs it may use now.
- * Returns the mask applied, 0 when the CPUs are uniform or nothing would
- * remain, or -errno. A 64-bit mask covers every phone and handheld SoC.
- */
-JNIEXPORT jlong JNICALL
-Java_com_thorium_preview_game_DenseGpuTimer_nativePinFastCores(JNIEnv *env, jclass type) {
-    (void) env;
-    (void) type;
+/* Every CPU outside the lowest-clocked cluster; read once, clocks are fixed. */
+static unsigned long long fast_cpu_mask(void) {
+    static unsigned long long cached = 0;
+    static int known = 0;
+    if (known) return cached;
     long freq[64];
     long lowest = 0;
     int count = 0;
@@ -1608,12 +1603,27 @@ Java_com_thorium_preview_game_DenseGpuTimer_nativePinFastCores(JNIEnv *env, jcla
             if (lowest == 0 || freq[cpu] < lowest) lowest = freq[cpu];
         }
     }
-    unsigned long long allowed = 0;
-    if (syscall(__NR_sched_getaffinity, 0, sizeof allowed, &allowed) < 0) return -errno;
     unsigned long long fast = 0;
     for (int cpu = 0; cpu < count; ++cpu)
         if (freq[cpu] > lowest) fast |= 1ULL << cpu;
-    fast &= allowed;
+    cached = fast;
+    known = 1;
+    return cached;
+}
+
+/*
+ * Restricts the calling thread to every CPU outside the lowest-clocked
+ * cluster (each CPU's cpuinfo_max_freq), within the CPUs it may use now.
+ * Returns the mask applied, 0 when the CPUs are uniform or nothing would
+ * remain, or -errno. A 64-bit mask covers every phone and handheld SoC.
+ */
+JNIEXPORT jlong JNICALL
+Java_com_thorium_preview_game_DenseGpuTimer_nativePinFastCores(JNIEnv *env, jclass type) {
+    (void) env;
+    (void) type;
+    unsigned long long allowed = 0;
+    if (syscall(__NR_sched_getaffinity, 0, sizeof allowed, &allowed) < 0) return -errno;
+    unsigned long long fast = fast_cpu_mask() & allowed;
     if (fast == 0) return 0;
     if (syscall(__NR_sched_setaffinity, 0, sizeof fast, &fast) < 0) return -errno;
     return (jlong) fast;

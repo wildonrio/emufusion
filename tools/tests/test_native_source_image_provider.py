@@ -141,7 +141,7 @@ public class ProviderTest {
             fixture_path.write_text(fixture)
             sources = [stub, fixture_path, VIDEO / "NativeSourceImageProvider.java",
                        VIDEO / "RuntimePresentationFailure.java", GAME / "FrameGenerationRenderer.java",
-                       GAME / "FrameGenerationRendererRegistry.java"]
+                       GAME / "FrameRateOverlay.java", GAME / "FrameGenerationRendererRegistry.java"]
             result = subprocess.run([str(JAVA / "javac"), "--release", "8", "-d", str(directory),
                                      *map(str, sources)], capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

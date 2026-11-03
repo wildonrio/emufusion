@@ -2936,6 +2936,52 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // discontinuity" cuts per second on exactly two-period spans).
     private volatile boolean slotLatticeProducer;
 
+    // The corner frame-rate counter is drawn into each presented frame
+    // (3.2.145). As a TextView over the game it redrew the app window once a
+    // second, and each redraw moved the compositor between its fast and
+    // pipelined modes: NSMBU Deluxe in play, 3.2.144, 13 mode changes in
+    // 16 s and 98.7% on cadence with the view, 3 and 99.5% without it.
+    private volatile FrameRateOverlay frameRateOverlay;
+    private FrameRateOverlay.Image uploadedOverlayImage;
+    private int overlayTexture;
+    private final int[] overlayState = new int[5];
+
+    @Override public void setFrameRateOverlay(FrameRateOverlay overlay) {
+        frameRateOverlay = overlay;
+    }
+
+    private void drawFrameRateOverlay() {
+        FrameRateOverlay overlay = frameRateOverlay;
+        if (overlay == null || overlay.image == null || outputWidth <= 0 || outputHeight <= 0) return;
+        FrameRateOverlay.Image image = overlay.image;
+        if (overlayTexture == 0) {
+            int[] name = new int[1];
+            GLES20.glGenTextures(1, name, 0);
+            overlayTexture = name[0];
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, overlayTexture);
+            textureParameters(GLES20.GL_TEXTURE_2D);
+            uploadedOverlayImage = null;
+        }
+        if (image != uploadedOverlayImage) {
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, overlayTexture);
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, image.width, image.height,
+                    0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, image.rgba.duplicate().position(0));
+            uploadedOverlayImage = image;
+        }
+        GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, overlayState, 0);
+        GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, overlayState, 1);
+        boolean blend = GLES20.glIsEnabled(GLES20.GL_BLEND);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        GLES20.glViewport(overlay.leftPx, outputHeight - overlay.topPx - image.height,
+                image.width, image.height);
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+        drawTexture2d(overlayTexture);
+        if (!blend) GLES20.glDisable(GLES20.GL_BLEND);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, overlayState[0]);
+        GLES20.glViewport(overlayState[1], overlayState[2], overlayState[3], overlayState[4]);
+    }
+
     @Override public void setSlotLatticeProducer(boolean value) {
         if (closed.get()) return;
         slotLatticeProducer = value;
@@ -9963,6 +10009,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             return;
         }
         beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);
+        drawFrameRateOverlay();
         long denseSwapEnteredNs = densePyramidEnabled ? System.nanoTime() : 0L;
         if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
             discardFullImageCapture();
@@ -14607,7 +14654,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return hash;
     }
 
-    // The frame thread stays off the lowest-clocked CPU cluster (3.2.143).
+    // The frame thread stays off the lowest-clocked CPU cluster (3.2.143;
+    // re-applied once a second since 3.2.146).
     // An arrival solve that ran on a Thor little core took 1.4-1.9 ms
     // instead of ~0.4 and planned its generated frame late (Eden, NSMBU
     // Deluxe, 3.2.140-3.2.142: ~2% of the thread's time, 3 of 7 overruns in
@@ -14634,7 +14682,6 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void reportStats() {
-        pinFrameThreadToFastCores();
         // Measured unique rate, or AUTO's locked 30/20 clock while locked.
         double source = frameRate.reportedSourceHz();
         double targetOutput = frameRate.targetOutputHz();
@@ -14658,6 +14705,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         long elapsedNs = now - statsWindowStartNanos;
         if (elapsedNs < 1_000_000_000L) return;
+        // Once a second, not per callback: reportStats runs at every
+        // timeline selection, and 3.2.143 re-applied the mask there, reading
+        // the CPUs' clocks 120 times a second (frame thread busy 4.0 s of 6
+        // instead of 1.75; callbacks 4.8 ms instead of 1.4).
+        pinFrameThreadToFastCores();
         long committed = presents - statsWindowStartPresents;
         // Keep successful app-side swaps as diagnostic evidence, but publish
         // only EGL_DISPLAY_PRESENT_TIME_ANDROID as A. A compositor-dropped

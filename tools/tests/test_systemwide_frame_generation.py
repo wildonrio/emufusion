@@ -4309,7 +4309,10 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertNotIn("activeFrameGenerationBackend()", badge)
         self.assertIn('"%.0f → %.0f fps", real, displayed', badge)
         # A phone that kept a slower mode than planned says so (3.2.86).
-        self.assertIn('String.format(Locale.US, "%.0f fps", real) + panelHeldNotice(real));', badge)
+        self.assertIn('String.format(Locale.US, "%.0f fps", real) + panelHeldNotice(real),', badge)
+        # Drawn into the generator's frames while one presents (3.2.145): a
+        # view update redrew the window and moved the compositor's mode.
+        self.assertIn('if (((GameSurfaceView) gameSurface).setFrameRateOverlay(overlay)) {', badge)
         self.assertIn("if (!panelHeld(plannedPanelHz, screenHz, real)) {", badge)
         self.assertIn('return String.format(Locale.US, " · screen at %.0f Hz", screenHz);', badge)
         # The compositor's scan interval, not Display.getMode() (a per-app

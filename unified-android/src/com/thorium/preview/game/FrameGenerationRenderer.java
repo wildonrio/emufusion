@@ -138,6 +138,9 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      *  guest frame is a doubled span with one submission. */
     default void setSlotLatticeProducer(boolean value) {}
 
+    /** The corner counter to draw into each presented frame, or null for none. */
+    default void setFrameRateOverlay(FrameRateOverlay overlay) {}
+
     /**
      * AUTO frame generation: tiers 60/30/20 only; a source that cannot hold
      * 60 is locked to 30 (or 20) and doubled. False keeps the adaptive

@@ -280,6 +280,7 @@ class GlesStopCompletionTest(unittest.TestCase):
             "src/com/thorium/emufusion/video/NativeSourceImageProvider.java",
             "src/com/thorium/emufusion/video/RuntimePresentationFailure.java",
             "src/com/thorium/preview/game/FrameGenerationRenderer.java",
+            "src/com/thorium/preview/game/FrameRateOverlay.java",
             "src/com/thorium/preview/game/FrameGenerationRendererRegistry.java",
             "src/com/thorium/emufusion/timing/DisplaySyncPolicy.java",
             "src/com/thorium/preview/LibretroHost.java",

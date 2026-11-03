@@ -236,6 +236,21 @@ public final class GameSurfaceView extends SurfaceView
         return frameGenerator != null;
     }
 
+    private volatile FrameRateOverlay frameRateOverlay;
+
+    /**
+     * Draws the corner counter into the generated output (null removes it);
+     * false when no generator presents this Surface, so the caller shows it
+     * some other way. Kept for a generator created later.
+     */
+    public boolean setFrameRateOverlay(FrameRateOverlay overlay) {
+        frameRateOverlay = overlay;
+        FrameGenerationRenderer generator = frameGenerator;
+        if (generator == null) return false;
+        generator.setFrameRateOverlay(overlay);
+        return true;
+    }
+
     public void setFrameRateListener(FrameGenerationRenderer.StatsListener value) {
         frameRateListener = value;
         if (frameGenerator != null) frameGenerator.setStatsListener(value);
@@ -507,6 +522,7 @@ public final class GameSurfaceView extends SurfaceView
             generator.setStatsListener(frameRateListener);
             generator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);
             if (slotLatticeProducer) generator.setSlotLatticeProducer(true);
+            generator.setFrameRateOverlay(frameRateOverlay);
             if (pendingWidth != createdWidth || pendingHeight != createdHeight) {
                 int[] input = generatorInputSize(pendingWidth, pendingHeight);
                 generator.resize(input[0], input[1], pendingWidth,

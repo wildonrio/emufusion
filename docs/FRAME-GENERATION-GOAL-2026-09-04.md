@@ -249,7 +249,49 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 2 (latest) **— 3.2.143 (217, `3287eaa0`): the frame thread stays off the little cores; late generated frames in Eden play 140 -> 4 per 16 s.**
+November 2 (latest) **— 3.2.147 (221, `515bd45b`): the frame-rate counter is drawn into our own frames; 3.2.143's per-callback CPU cost fixed.**
+
+- **The counter moved the compositor between modes (3.2.144 diagnostic, QA `emufusion_qa_frame_rate_badge_hidden=1`).**
+  - The corner counter was a TextView over the game, updated once a second (`setText` plus the burn-in shift), so the app window redrew every second.
+  - With the counter shown, the remaining switches to the pipelined mode came at on-time frames, at those redraws.
+  - NSMBU Deluxe in play, same build:
+
+    | | Counter shown | Counter hidden |
+    | --- | --- | --- |
+    | Mode changes, 16 s | 13 | 3 |
+    | Fast-mode share | 56% | 76% |
+    | Two-scan intervals / on cadence | 26 / 98.7% | 9 / 99.5% |
+
+- **Change (3.2.145).** While a generator presents the game, the host renders the counter's text into premultiplied RGBA (`FrameRateOverlay.Image`, same look: 12 sp on half-black, 8 x 3 dp padding) with its burn-in position.
+  - The generator draws it last before the swap (`drawFrameRateOverlay`, after the QA full-image capture) and uploads only a new image.
+  - The view stays for Surfaces no generator presents.
+  - Thor: the counter shows in the frame, and the app window no longer redraws during play (0 UI-thread frames in a 6 s trace).
+- **3.2.143 bug, fixed in 3.2.146.**
+  - `pinFrameThreadToFastCores()` sat at the top of `reportStats()`, which runs at every timeline selection and returns early until a second has passed. So the mask was recomputed 120 times a second, reading up to 64 sysfs files each time.
+  - The frame thread ran 4.0-4.2 s of every 6 (1.75 s unpinned), and callbacks took 4.8 ms median (1.4 ms before).
+  - It is now applied once a second after the report's gate, and the native code reads the CPUs' clocks once.
+  - 3.2.143's late-plan gain survived the bug; its CPU cost did not belong.
+- **Thor, NSMBU Deluxe in play:**
+
+  | | 3.2.146 | 3.2.147 |
+  | --- | --- | --- |
+  | Callback median | 1.37 ms | 1.69 ms |
+  | Frame thread running | 1.78 s of 6 | 1.75 s |
+  | Little-core time | 0% | 0% |
+  | Late generated plans, 16 s | 5 | 10 |
+  | Fast-mode share | 100% | 36% (14 changes) |
+  | On cadence | 99.8% | 99.2% |
+  | Arrival to scan-out, generated / real | 11.1 / 19.5 ms | 19.4 / 27.7 ms (median) |
+
+  - 3.2.147 is 3.2.146 with the counter image held as bytes instead of an Android Bitmap, so the harnesses that compile the renderer interface need no Android stubs.
+  - The 3.2.147 run's changes to the pipelined mode came from GPU completion after the scan (6 of 7), including real-frame copies finishing 1.5 ms late: the GPU busy with Eden's own work. Only one came from a late plan.
+  - Double Dash, 3.2.146: 99.9% on cadence, callbacks 1.38 ms, 11.3 / 19.6 ms (median). Its two changes to the pipelined mode were late generated plans, and it stayed pipelined afterwards.
+  - All 2,848 host tests pass.
+- **Next.**
+  - GPU contention with the engine (our copies queued behind Eden's work).
+  - A deliberate drain back to the fast mode after an isolated miss.
+
+November 2 **— 3.2.143 (217, `3287eaa0`): the frame thread stays off the little cores; late generated frames in Eden play 140 -> 4 per 16 s.**
 
 - **Change.** The generator's thread is restricted to every CPU outside the lowest-clocked cluster: `sched_setaffinity` on itself, with the cluster found from each CPU's `cpuinfo_max_freq`, within the CPUs Android currently allows.
   - The native code is `DenseGpuTimer.nativePinFastCores` (`emufusion_framegen_timer_jni.c`).

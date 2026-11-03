@@ -214,10 +214,11 @@ class RuntimeDirectRecoveryTest(unittest.TestCase):
     static class Host {
         static final String TAG="test";Queue RETIREMENT_RELEASES=new Queue(),activity=new Queue(),mainHandler=activity;
         boolean prepared=true,presentationRecoveryAttempted,presentationRecoveryPending,surfaceAvailable=true,ownerRequestedDirect;
-        boolean libraryReturned,fatalErrorVisible;AtomicBoolean exitStarted=new AtomicBoolean();
+        boolean libraryReturned,fatalErrorVisible,badgeHiddenForQa;AtomicBoolean exitStarted=new AtomicBoolean();
         EngineSession session=new EngineSession();Object gameSurface=new GameSurfaceView();Request request=new Request();
         TextView frameRateBadge=new TextView();
         int fatal;void updateGameplayScreenOn(){}void showFatalError(String m,boolean r){fatal++;fatalErrorVisible=true;}
+        void hideBadge(){frameRateBadge.setVisibility(View.GONE);}
         Host(){((GameSurfaceView)gameSurface).renderer.producer=session;}
 ''' + bodies + r'''
     }
@@ -345,12 +346,14 @@ class RuntimeDirectRecoveryTest(unittest.TestCase):
     static class Request {FrameGenerationSettings.Mode frameGenerationMode=FrameGenerationSettings.Mode.BUILT_IN_ALPHA;}
     static class GameSurfaceView {String activeFrameGenerationBackend(){return "Direct";}}
     static class Host {
-        boolean presentationRecoveryPending,presentationRecoveryAttempted,ownerRequestedDirect;
+        boolean presentationRecoveryPending,presentationRecoveryAttempted,ownerRequestedDirect,badgeHiddenForQa;
         long verifiedRatesAtMs;
         Queue RETIREMENT_RELEASES=new Queue();TextView frameRateBadge=new TextView();
         Request request=new Request();Object gameSurface=new GameSurfaceView();
         String panelHeldNotice(double real){return "";}
         void shiftForBurnIn(TextView badge){}
+        void hideBadge(){frameRateBadge.setVisibility(View.GONE);}
+        void showBadge(TextView b,String t,boolean v){b.setText(t);b.setVisibility(v?View.VISIBLE:View.GONE);}
 ''' + bodies + r'''
     }
     public static void main(String[] args) {

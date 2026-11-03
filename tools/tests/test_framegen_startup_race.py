@@ -75,7 +75,7 @@ public class StartupRace {
         void setAuthoritativeSourceHz(double v){} void setProducerTimelineHz(double v){}
         void setDiscreteContent(boolean v){}
         void setStatsListener(Object v){} void setFirstSubmittedFrameListener(Runnable v){}
-        void setSlotLatticeProducer(boolean v){}
+        void setSlotLatticeProducer(boolean v){}void setFrameRateOverlay(Object o){}
         void setLockToThirtyTierPolicy(boolean v){}
         void setRequestedPanelRefreshHz(float hz){}
         void resize(int w,int h,int a,int b,float hz){resizes++;}
@@ -112,7 +112,7 @@ public class StartupRace {
         boolean startupFellBackToDirect,runtimeRecoveryPending,slotLatticeProducer,ownerRequestedDirect;
         int surfaceGeneration,quarantinedSurfaceGeneration=-1,pendingWidth,pendingHeight;
         float lastReportedPanelHz,requestedPanelRefreshHz;double authoritativeSourceHz,producerTimelineHz;boolean discreteContent;
-        Object frameRateListener;Runnable firstSubmittedFrameListener;
+        Object frameRateListener,frameRateOverlay;Runnable firstSubmittedFrameListener;
         GameSurface.Listener listener=new GameSurface.Listener();
         Surface outputSurface,engineSurface;FrameGenerationRenderer frameGenerator;
         FrameGenerationBackendPolicy.Backend activeBackend=FrameGenerationBackendPolicy.Backend.DIRECT;

@@ -409,6 +409,11 @@ public final class InWindowGameHost
     private TextView status;
     /** Owner-visible frame-generation badge: source, target, delivered, backend. */
     private TextView frameRateBadge;
+    // QA only: emufusion_qa_frame_rate_badge_hidden=1 keeps the counter
+    // hidden, so a run can test whether its once-a-second window redraw
+    // moves the compositor between its fast and pipelined modes.
+    static final String BADGE_HIDDEN_QA_GLOBAL = "emufusion_qa_frame_rate_badge_hidden";
+    private boolean badgeHiddenForQa;
     private Button restoreButton;
     private Button cheatsButton;
     private boolean prepared;
@@ -1102,6 +1107,8 @@ public final class InWindowGameHost
         frameRateBadge.setTextSize(12f);
         frameRateBadge.setPadding(dp(8), dp(3), dp(8), dp(3));
         frameRateBadge.setVisibility(View.GONE);
+        badgeHiddenForQa = android.provider.Settings.Global.getInt(
+                activity.getContentResolver(), BADGE_HIDDEN_QA_GLOBAL, 0) == 1;
         FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
@@ -1761,17 +1768,91 @@ public final class InWindowGameHost
                                       double actual, boolean qualified) {
         TextView badge = frameRateBadge;
         if (badge != null && (ownerRequestedDirect || presentationRecoveryAttempted)) {
-            badge.setVisibility(View.GONE);
+            hideBadge();
             return; // queued stats from the retired generator are no longer live
         }
-        if (badge == null || request == null ||
+        if (badge == null || request == null || badgeHiddenForQa ||
                 request.frameGenerationMode == FrameGenerationSettings.Mode.OFF)
             return;
         // While the generator reports verified counts they own the badge.
         if (System.nanoTime() / 1_000_000L - verifiedRatesAtMs < 2500L) return;
-        badge.setText(String.format(Locale.US, "%.0f fps", source) + panelHeldNotice(source));
+        showBadge(badge, String.format(Locale.US, "%.0f fps", source) +
+                panelHeldNotice(source), source > 0.0);
+    }
+
+    // While a frame generator presents the game, the counter is drawn into
+    // its frames (FrameRateOverlay, 3.2.145) instead of shown as the view:
+    // each update of a view over the game redrew the app window, and each
+    // redraw moved the compositor between its fast and pipelined modes
+    // (NSMBU Deluxe in play, 3.2.144: 13 mode changes in 16 s with the view,
+    // 3 without it). The view stays for Surfaces no generator presents.
+    private String overlayText;
+    private FrameRateOverlay.Image overlayImage;
+
+    private void showBadge(TextView badge, String text, boolean visible) {
+        if (gameSurface instanceof GameSurfaceView) {
+            FrameRateOverlay overlay = null;
+            if (visible) {
+                if (!text.equals(overlayText)) {
+                    overlayImage = renderBadge(text);
+                    overlayText = text;
+                }
+                int amplitude = dp(BurnInShift.AMPLITUDE_DP);
+                long now = android.os.SystemClock.uptimeMillis();
+                overlay = new FrameRateOverlay(overlayImage,
+                        dp(10) + BurnInShift.x(now, amplitude),
+                        dp(8) + BurnInShift.y(now, amplitude));
+            }
+            if (((GameSurfaceView) gameSurface).setFrameRateOverlay(overlay)) {
+                badge.setVisibility(View.GONE);
+                return;
+            }
+        }
+        badge.setText(text);
         shiftForBurnIn(badge);
-        badge.setVisibility(source > 0.0 ? View.VISIBLE : View.GONE);
+        badge.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
+
+    private void hideBadge() {
+        if (frameRateBadge != null) frameRateBadge.setVisibility(View.GONE);
+        if (gameSurface instanceof GameSurfaceView)
+            ((GameSurfaceView) gameSurface).setFrameRateOverlay(null);
+    }
+
+    /** The view's look: 12 sp white text on half-black, 8 x 3 dp padding. */
+    private FrameRateOverlay.Image renderBadge(String text) {
+        android.graphics.Paint paint =
+                new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.argb(0xE6, 0xFF, 0xFF, 0xFF));
+        paint.setTextSize(android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_SP, 12f,
+                activity.getResources().getDisplayMetrics()));
+        android.graphics.Paint.FontMetrics metrics = paint.getFontMetrics();
+        int padX = dp(8), padY = dp(3);
+        int width = Math.max(1, Math.round(paint.measureText(text)) + 2 * padX);
+        int height = Math.max(1, Math.round(metrics.descent - metrics.ascent) + 2 * padY);
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
+                width, height, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+        canvas.drawColor(Color.argb(0x80, 0x00, 0x00, 0x00));
+        canvas.drawText(text, padX, padY - metrics.ascent, paint);
+        // getPixels gives unpremultiplied ARGB, top row first; the generator
+        // blends premultiplied RGBA with GL's bottom row first.
+        int[] argb = new int[width * height];
+        bitmap.getPixels(argb, 0, width, 0, 0, width, height);
+        bitmap.recycle();
+        java.nio.ByteBuffer rgba = java.nio.ByteBuffer.allocateDirect(width * height * 4);
+        for (int y = height - 1; y >= 0; --y) {
+            for (int x = 0; x < width; ++x) {
+                int color = argb[y * width + x], alpha = color >>> 24;
+                rgba.put((byte) (((color >> 16) & 0xFF) * alpha / 255));
+                rgba.put((byte) (((color >> 8) & 0xFF) * alpha / 255));
+                rgba.put((byte) ((color & 0xFF) * alpha / 255));
+                rgba.put((byte) alpha);
+            }
+        }
+        rgba.position(0);
+        return new FrameRateOverlay.Image(width, height, rgba);
     }
 
     /**
@@ -1877,15 +1958,14 @@ public final class InWindowGameHost
     private void showVerifiedFrameRates(double real, double displayed) {
         TextView badge = frameRateBadge;
         if (badge == null || request == null || ownerRequestedDirect ||
-                presentationRecoveryAttempted ||
+                presentationRecoveryAttempted || badgeHiddenForQa ||
                 request.frameGenerationMode == FrameGenerationSettings.Mode.OFF)
             return;
         verifiedRatesAtMs = System.nanoTime() / 1_000_000L;
-        badge.setText(displayed >= real + 1.0 ?
+        showBadge(badge, displayed >= real + 1.0 ?
                 String.format(Locale.US, "%.0f → %.0f fps", real, displayed) :
-                String.format(Locale.US, "%.0f fps", real) + panelHeldNotice(real));
-        shiftForBurnIn(badge);
-        badge.setVisibility(real > 0.0 ? View.VISIBLE : View.GONE);
+                String.format(Locale.US, "%.0f fps", real) + panelHeldNotice(real),
+                real > 0.0);
     }
 
     private void observeReportedOutput(double output) {
@@ -2836,7 +2916,7 @@ public final class InWindowGameHost
                 presentationRecoveryPending || presentationRecoveryAttempted ||
                 !(gameSurface instanceof GameSurfaceView)) return;
         GameSurfaceView layer = (GameSurfaceView) gameSurface;
-        if (frameRateBadge != null) frameRateBadge.setVisibility(View.GONE);
+        hideBadge();
         layer.requestOwnerDirect();
         if (!prepared) return;
         FrameGenerationRenderer renderer = layer.beginOwnerDirectRecovery();
@@ -2859,7 +2939,7 @@ public final class InWindowGameHost
         final EngineSession recovering = session;
         presentationRecoveryAttempted = true;
         presentationRecoveryPending = true;
-        if (frameRateBadge != null) frameRateBadge.setVisibility(View.GONE);
+        hideBadge();
         prepared = false;
         surfaceAvailable = false;
         updateGameplayScreenOn();
