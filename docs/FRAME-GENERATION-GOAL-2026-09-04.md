@@ -286,6 +286,7 @@ November 3 (latest) **— The 10/10 artifact measure matches A and C at quarter-
   - HUD triplets 0014 / 0033 / 0015 / 0037: device 1.02 / 1.06 / 0.95 / 0.46%; still-gated blocks 0.43 / 0.85 / 0.85 / 0.25%; plus the nearer frame where the warps disagree (8-16 grey levels) 0.24 / 0.43 / 0.22 / 0.13%, at higher hold-out error (0.61 -> 0.72).
   - In the crops "Plains" is clean with blocks and pick, but "Acorn" and the star-coin rings stay broken.
   - **Not adopted.** None reaches the 0.1% bar or a clean HUD. The block search is an extra full-frame GPU pass on Eden, whose late frames are already GPU sharing. The HUD needs a layer model: a moving, fading overlay separated from the map.
+- **Decision on the open Eden question (faster drains back to the fast mode).** Decided from the owner's stated expectations (October 26: "these micro stutters have got to go"; a scan of steady latency is acceptable to remove a hitch): the catch-up skip stays at most once per 16 s. Holds already present nothing, so the compositor's queue drains for free whenever the source stalls; a skip during motion is a visible step.
 
 November 3 **— NSMBU Deluxe's sliding HUD, offline (genport, map triplet 0014): the motion field, not the generate pass, tears the letters; the 10/10 measure has an aliasing floor on thin moving text.**
 
