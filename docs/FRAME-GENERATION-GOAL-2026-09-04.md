@@ -249,7 +249,22 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 2 (latest) **— 3.2.147 (221, `515bd45b`): the frame-rate counter is drawn into our own frames; 3.2.143's per-callback CPU cost fixed.**
+November 2 (latest) **— NSMBU Deluxe's world map, recorded in play: the replay bench finds it clean (3.2.147).**
+
+- **Why new captures.** The full-size NSMBU set (`full/nsmbud`, 48 triplets from before 3.2.136) is mostly held frames. The bench scored only 6 of the 48 as moving, all at 0.00% invented area (error 0.407 of a cross-fade), and none show the owner's reported scene: the HUD buttons ("Map View", "Items", "Menu") over the scrolling world map.
+- **Capture.** `~/Code/emufusion-qa-tools/capture_play.py OUT CASE` navigates into play first, using `pace_move`'s NAV path, which ends on Acorn Plains' map. It then arms both capture markers (checked on every frame) for 76 s while Toadette walks.
+  - 48 full-size triplets at Eden's 1280x720 in `~/Code/emufusion-training-data/map/nsmbud` (207 MB, local only).
+  - Helpers are in `train_capture_lib.py`.
+- **Replay bench, 3.2.147 generator (`--set map`, synthesis 24, Thor with panels off).**
+  - 36 of 40 moving triplets scored: invented area 0.01%, frames with invented content 0%, error 0.541 of a cross-fade.
+  - That is inside the 10/10 artifact bar for this set.
+  - Four triplets are no better than a cross-fade: 0032 (15.9 vs 8.7), 0024, 0031 and 0046. In 0032 the error runs along edges over the whole map while the HUD buttons fade in: a small misalignment of the whole picture, not torn buttons.
+  - The dumps hold the generated image at 320x180, so the HUD itself cannot be inspected at full size from them.
+  - Dumps and logs: `~/Code/emufusion-qa-tools/dumps-2026-11-02/`.
+- **Next for NSMBU artifacts:** the owner's visual check of the map HUD on 3.2.147.
+- **Thor lower panel:** squeezed again (framebuffer 1080x1920 on the 1080x1240 panel, activeModeId 1). `thor_lower_display_repair.py --repair --force` did not fix it this time. A reboot clears it; the owner was told.
+
+November 2 **— 3.2.147 (221, `515bd45b`): the frame-rate counter is drawn into our own frames; 3.2.143's per-callback CPU cost fixed.**
 
 - **The counter moved the compositor between modes (3.2.144 diagnostic, QA `emufusion_qa_frame_rate_badge_hidden=1`).**
   - The corner counter was a TextView over the game, updated once a second (`setText` plus the burn-in shift), so the app window redrew every second.
