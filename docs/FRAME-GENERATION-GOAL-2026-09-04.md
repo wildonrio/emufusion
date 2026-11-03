@@ -277,6 +277,11 @@ November 3 (latest) **— NSMBU Deluxe's sliding HUD, offline (genport, map trip
 - **Next.**
   - A more accurate field for thin, high-contrast foreground (a finer solve level where the field spreads).
   - Scoring the hold-out at a higher resolution, so the 10/10 measure does not flag correct motion of thin text.
+- **Field-side tries, same night (genport; `finer.py`, `blockcand.py` in `~/Code/emufusion-qa-tools/genport`).**
+  - The endpoint flow in the HUD box is noisy at either level: moving cells median 5-7 px, p10 -7 to -11 px (backwards), p90 19 px, for a 19 px move. The letters repeat every ~20 px and fade in, so the patch descent locks onto neighbouring letters.
+  - Endpoint and per-phase search one pyramid level finer (426x240 field instead of 213x120): 0014 1.97 -> 1.63%, 0037 1.11 -> 1.05% (port to port). A small gain at four times the solve area.
+  - A regional candidate (an exhaustive A->C search per 64-px block on gradient magnitude, offered to the per-pixel choice): no gain (0014 1.85-1.91%, 0037 1.05-1.22%).
+  - Not taken further. The HUD needs a motion model for a rigid, fading overlay layer, not a denser field.
 
 November 3 **— Eden artifacts by the 10/10 measure (3.2.147): NSMBU Deluxe's sliding HUD and Link's Awakening's picture edge.**
 
