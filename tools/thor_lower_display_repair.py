@@ -34,6 +34,7 @@ JAVA_SOURCE = HERE / "thor_lower_display" / "SfLowerDisplay.java"
 DEVICE_DEX = "/data/local/tmp/emufusion-lower-display-repair.dex"
 DEFAULT_ADB = Path.home() / "Library/Android/sdk/platform-tools/adb"
 DEFAULT_SERIAL = "427c87b2"
+INVALID_LAYER_STACK = 0xFFFFFFFF
 SDK = Path(os.environ.get("ANDROID_HOME", Path.home() / "Library/Android/sdk"))
 JAVA_HOME = Path(os.environ.get(
     "JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"))
@@ -138,6 +139,13 @@ def repair(device, display_id, info):
         dex = build_dex(workdir)
         device.run("push", str(dex), DEVICE_DEX)
         helper = f"CLASSPATH={DEVICE_DEX} app_process /system/bin SfLowerDisplay"
+        # SurfaceFlinger resizes the framebuffer only when the requested size
+        # differs from the size it already holds for the display. When that
+        # state already reads the panel's size (the framebuffer alone stuck at
+        # 1080x1920, November 3), setting it again does nothing, so go one row
+        # short first, then back to the panel's size.
+        print(device.run("shell", f"{helper} size {display_id} {width} {int(height) - 1}").strip())
+        print(device.run("shell", f"{helper} client-frame {info['layerStack']} 200").strip())
         print(device.run("shell", f"{helper} size {display_id} {width} {height}").strip())
         print(device.run("shell", f"{helper} client-frame {info['layerStack']} 600").strip())
     finally:
@@ -176,6 +184,10 @@ def main(argv=None):
         return 2
     if info["layerStack"] is None:
         print("cannot repair: lower layer stack unknown")
+        return 1
+    if info["layerStack"] == INVALID_LAYER_STACK:
+        # Asleep: SurfaceFlinger reports no layer stack for either display.
+        print("cannot repair: the lower panel is off (no layer stack); wake the Thor first")
         return 1
     repair(device, display_id, info)
     display_id, info = lower_display(device.surfaceflinger())

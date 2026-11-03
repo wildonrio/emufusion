@@ -103,6 +103,35 @@ class LowerDisplayCheckTest(unittest.TestCase):
             _, info = MODULE.lower_display((evidence / name).read_text(errors="replace"))
             self.assertEqual(not MODULE.problems(info), healthy, name)
 
+    def test_asleep_display_is_refused_not_repaired(self):
+        # Asleep, SurfaceFlinger reports layerStack 4294967295 for both displays;
+        # the helper's int parse of it crashed with "Killed" (November 3).
+        asleep = dump("1080x1920", "1080x1920").replace("layerStack=4 ", "layerStack=4294967295 ")
+        calls = []
+
+        class Device:
+            def __init__(self, *args): pass
+            def surfaceflinger(self): return asleep
+            def run(self, *args, **kwargs): calls.append(args); return ""
+
+        original = MODULE.Device
+        MODULE.Device = Device
+        try:
+            self.assertEqual(MODULE.main(["--repair"]), 1)
+        finally:
+            MODULE.Device = original
+        self.assertEqual(calls, [])
+
+    def test_repair_moves_the_size_off_and_back(self):
+        # SurfaceFlinger resizes only on a changed size: one row short, then the panel's.
+        tool = (ROOT / "tools/thor_lower_display_repair.py").read_text()
+        repair = tool[tool.index("def repair("):tool.index("def describe(")]
+        short = repair.index("{int(height) - 1}")
+        exact = repair.index('f"{helper} size {display_id} {width} {height}"')
+        self.assertLess(short, exact)
+        self.assertEqual(repair.count("client-frame"), 2)
+        self.assertLess(exact, repair.rindex("client-frame"))
+
     def test_helper_is_shell_only_and_restores_its_layer(self):
         source = MODULE.JAVA_SOURCE.read_text()
         self.assertIn('"setDisplaySize"', source)
