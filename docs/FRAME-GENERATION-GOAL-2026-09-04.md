@@ -249,7 +249,36 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 3 (latest) **— Eden artifacts by the 10/10 measure (3.2.147): NSMBU Deluxe's sliding HUD and Link's Awakening's picture edge.**
+November 3 (latest) **— NSMBU Deluxe's sliding HUD, offline (genport, map triplet 0014): the motion field, not the generate pass, tears the letters; the 10/10 measure has an aliasing floor on thin moving text.**
+
+- **What the HUD does.** Measured on the full-size real frames:
+  - "Acorn Plains-" slides right 11 px from A to B and 8 px from B to C (eased; 19 px from A to C) over a still map.
+  - It also fades in: its letters' mean brightness goes 208, 224, 236, and their pixel count 4,610, 5,278, 5,509.
+- **The field has the motion but not accurately.** In the HUD box the per-phase field reads 16-22 px for a 19 px move (p90 18.2, max 22.2); the background reads 0.
+- **Generate-pass variants change little.** Genport's base reproduces the device frame (1.84% invented). Variants tried on 0014 / 0037:
+
+  | Variant | Invented (0014 / 0037) |
+  | --- | --- |
+  | Zero-motion choice off | 1.76 / 1.30% |
+  | Blend where neither frame matches, off | 1.46 / 1.14% |
+  | Blend toward the nearer warp instead | 1.40 / 1.16% |
+  | Wider neighbour candidates (ring 2-6, radius 2, always on) | no change on the whole map set (11.1% of frames either way) |
+  | Per-pixel refinement of +-1 to +-3 px around the field vector | 1.66-1.80 / 0.99-1.04% |
+  | Fade-tolerant matching (local mean removed) | 1.68-1.93 / 1.24-1.68% |
+  | The nearer frame's sample where the warps disagree (`pick3d`) | 1.66-1.81 / 1.04-1.08% |
+
+- **The measure's floor.** An oracle frame (B with its HUD box replaced by A shifted exactly):
+  - shifted 9.5 px: 0.276% invented;
+  - 11 px: 0.050%;
+  - 12 px (a whole scoring pixel): 0.000%;
+  - C shifted -9.5 px: 0.344%.
+  - The hold-out scores at 320x180 by point sampling, where the letters are 1-2 px thick, so a perfect move to a fractional scoring pixel already exceeds the 0.1% bar.
+  - The device's 1.8% is about 6x that floor: real tearing plus scoring aliasing.
+- **Next.**
+  - A more accurate field for thin, high-contrast foreground (a finer solve level where the field spreads).
+  - Scoring the hold-out at a higher resolution, so the 10/10 measure does not flag correct motion of thin text.
+
+November 3 **— Eden artifacts by the 10/10 measure (3.2.147): NSMBU Deluxe's sliding HUD and Link's Awakening's picture edge.**
 
 - **Measure.** `replay_invented.py` counts frames whose generated image holds content found in neither real frame, beyond the real middle frame's own. The bar is at most 5% of frames over 0.1% in every set.
   - The replay bench's `solid` column averages area and read near zero; this is the per-frame count.
