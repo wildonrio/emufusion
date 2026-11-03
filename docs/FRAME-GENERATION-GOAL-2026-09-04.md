@@ -249,7 +249,28 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 3 (latest) **— The 10/10 artifact measure matches A and C at quarter-pixel phases; the NSMBU HUD fixes tried offline are not adopted.**
+November 3 (latest) **— 3.2.149 (223, `ecbffa4b`): the 3-D nearer-frame pick starts at 32 grey levels (was 48).**
+
+- **Change.** Where the two warp samples a 3-D pixel would mix differ by 32-64 grey levels (was 48-96), the nearer frame's sample replaces their mix, a translucent second copy at an occlusion edge (`PICK_3D`, 3.2.114). Shader constants only.
+- **Device replay bench (Thor, panels off; working-tree dex, then the installed APK).** Paired against the unchanged tree on the same triplets, sub-pixel invented measure:
+
+  | Set | Frames with invented content | Area | Hold-out error |
+  | --- | --- | --- | --- |
+  | Double Dash, full size | 28 -> 20% | 0.087 -> 0.072% | 1.954 -> 1.957 |
+  | Star Fox 64 | 12 -> 8% | 0.029 -> 0.025% | 0.740 -> 0.741 |
+  | Link's Awakening, full size | 6 -> 6% | 0.047 -> 0.030% | 0.582 -> 0.581 |
+  | NSMBU Deluxe map | 11 -> 11% | 0.050 -> 0.041% | 0.945 -> 0.968 |
+  | Wind Waker HD | 21 -> 21% | 0.053 -> 0.050% | 0.370 -> 0.383 |
+  | Ocarina eval / full size | 4 / 0% unchanged | 0.008 -> 0.006% / 0.004 -> 0.003% | +0.001 / +0.002 |
+  | SM3DW, Link's Awakening eval, NSMBU older full set | 0% unchanged | unchanged | +0.017 / +0.001 / +0.009 |
+
+  - The largest error rises are NSMBU map 0024 (a fading HUD, 384 changed pixels) and SM3DW 0205 (41 changed pixels); neither is visible at viewing size.
+  - The installed 3.2.149 reproduces the candidate dex's hold-out scores exactly on all 86 paired full-size and map triplets.
+- **Not adopted, same bench:** blending toward the nearer frame's warp instead of the plain cross-fade where neither motion nor zero motion explains a pixel (`near_warp` in the genport). Double Dash 27 -> 23% and Wind Waker HD 21 -> 17% of frames, but Link's Awakening full size 0.047 -> 0.058% area; production already limits that blend to smooth areas (`NEITHER_EDGE`), so the port's larger gain did not carry over. The forward-backward occlusion choice was neutral in the port.
+- **Thor, NSMBU Deluxe in play (one run):** 99.6% on the intended interval, 99.7% cadence (5 two-scan and 1 three-scan intervals), first generated / real image 11.8 / 20.3 ms, 52% of presents in the fast mode (this varies 9-100% from run to run on every build). Picture correct; panels off and identity unchanged afterwards (UID 10206, first install 2026-09-11).
+- **Build note.** A bare `unified-android/build.sh` (no reuse flags) rebuilt the Phase 2 cores in place; AppleWin and ARMSX2 came out byte-different from their tested artifacts and Azahar's publish check stopped the build. Both were restored from the pinned 3.2.147 APK (byte-identical copies) and ARMSX2's receipt from the October 12 inputs; registry and identity checks pass, and 3.2.149, built with the survey recipe (`build.py 350`), differs from 3.2.147 only in `classes2.dex`, the manifest and signatures. The failed build's work and source trees (6.4 GB) were removed.
+
+November 3 **— The 10/10 artifact measure matches A and C at quarter-pixel phases; the NSMBU HUD fixes tried offline are not adopted.**
 
 - **Measure change (`tools/qa/replay_invented.py`, default `--phases 4`; `--phases 1` is the measure until today).**
   - A and C are matched at 4x4 sub-pixel phases of the 320x180 scoring plane, sampled from the full-size history. Before, they were matched only at whole scoring pixels (4 px of a 1280x720 picture).

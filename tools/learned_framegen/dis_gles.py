@@ -996,7 +996,15 @@ PIXEL_PICK_T = 24.0
 # 0.008%, N64 0.085 -> 0.056%, NSMBU Deluxe 0.216 -> 0.173%); error within
 # 0.006 of a cross-fade everywhere, the 2-px reference mismatch lower in all
 # four sets. (32, 64) removed more but raised Wind Waker HD's error 7%.
-PICK_3D = (48.0, 96.0)
+# (32, 64) since 3.2.149: device replay bench, working-tree dex paired against
+# (48, 96) on the same triplets, scored with the sub-pixel invented measure
+# (2026-11-03): frames with invented content Double Dash 28 -> 20%, Star Fox
+# 64 12 -> 8%; area Link's Awakening full-size 0.047 -> 0.030%, NSMBU Deluxe
+# map 0.050 -> 0.041%, Double Dash 0.087 -> 0.072%, no set worse. Hold-out
+# error +0.001 to +0.023 of a cross-fade (NSMBU map, a fading HUD; SM3DW +0.017
+# from 41 changed pixels). The old measure, matching only whole scoring
+# pixels, had hidden part of these ghosts behind the real frame's own floor.
+PICK_3D = (32.0, 64.0)
 # ... for every history size, not just the small ones.
 PIXEL_PICK_ALL = False
 # Where the warp's five-tap mismatch exceeds OCCLUSION_SIDE_T grey levels, take

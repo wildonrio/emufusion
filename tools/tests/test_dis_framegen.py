@@ -224,8 +224,9 @@ class DisSelectionTest(unittest.TestCase):
         # (content the game drew) -- before the blend, which wins from half.
         # 3.2.114: 3-D takes the nearer sample where the two disagree grossly
         # (an occlusion edge), after the local cut; sub-pixel motion keeps its blend.
+        # 3.2.149: from 32-64 grey levels (was 48-96).
         pick3d = (" if(uDiscrete<0.5&&length(v*uHistorySize)>=1.0) w=mix(w,uT>=0.5?pc:pa,"
-                  "smoothstep(48.0/255.0,96.0/255.0,md(abs(pa-pc))));")
+                  "smoothstep(32.0/255.0,64.0/255.0,md(abs(pa-pc))));")
         self.assertIn(pick3d, shaders["GENERATE_PHASE"])
         self.assertLess(shaders["GENERATE_PHASE"].index("nk*(1.0-smoothstep(2.0/255.0,8.0/255.0,ng))"),
                         shaders["GENERATE_PHASE"].index(pick3d))
