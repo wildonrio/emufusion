@@ -8,7 +8,15 @@ only invented area beyond B's counts. A frame has a visible artifact when the
 generated frame's solid invented area exceeds B's by MIN_AREA % of the frame.
 Comparing against A and C only (not B) forgives where along the motion the
 generated frame sits.
+A and C are matched at PHASES x PHASES sub-pixel offsets of the scoring plane
+(sampled from the full-size history), not only whole scoring pixels: the plane
+is a quarter of a 1280x720 picture, so a correct move of a fractional scoring
+pixel otherwise reads as invented on every thin, high-contrast detail (a perfect
+9.5 px move of NSMBU Deluxe's map scored 1.1%; it scores 0 with 4 phases, while
+a double image still scores 7.6%). --phases 1 is the measure used until
+November 3, 2026.
 usage: replay_invented.py DUMP_DIR [case...] [--plane generated24] [--masks OUT] [--base DUMP_DIR]
+       [--phases N]
        DUMP_DIR from replay_bench.py --dump-dir; --base compares the same triplets
        of an earlier dump (paired). Needs torch (MPS on the Mac, else CPU).
 """
@@ -23,18 +31,20 @@ from PIL import Image
 
 DEV = 'mps' if torch.backends.mps.is_available() else 'cpu'
 RADIUS, T, MIN_AREA = 12, 24.0, 0.1
+PHASES = 4
 
 
-def fit(img, w, h):
+def fit(img, w, h, ox=0.0, oy=0.0):
     """The history image at the generated plane's size, sampled as the GPU's
     hold-out pass samples it (bilinear at each output texel centre, no
     antialiasing): a filtered resize differs at every edge and reads as
-    invented content (NSMBU Deluxe's static menu, 1080p -> 320x180)."""
-    if img.shape[:2] == (h, w):
+    invented content (NSMBU Deluxe's static menu, 1080p -> 320x180).
+    (ox, oy): an offset in plane pixels."""
+    if img.shape[:2] == (h, w) and ox == 0 and oy == 0:
         return img
     src = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)[None]
-    ys = (torch.arange(h, dtype=torch.float32) + 0.5) / h * 2 - 1
-    xs = (torch.arange(w, dtype=torch.float32) + 0.5) / w * 2 - 1
+    ys = (torch.arange(h, dtype=torch.float32) + 0.5 + oy) / h * 2 - 1
+    xs = (torch.arange(w, dtype=torch.float32) + 0.5 + ox) / w * 2 - 1
     grid = torch.stack(torch.meshgrid(ys, xs, indexing='ij')[::-1], -1)[None]
     out = F.grid_sample(src, grid, mode='bilinear', padding_mode='border', align_corners=False)
     return out[0].permute(1, 2, 0).round().clamp(0, 255).byte().numpy()
@@ -42,6 +52,12 @@ def fit(img, w, h):
 
 def t(img):
     return torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1).to(DEV)  # 3,H,W
+
+
+def references(imgs, w, h, phases=None):
+    """Each history image at every sub-pixel phase of the plane, as GPU tensors."""
+    n = PHASES if phases is None else phases
+    return [t(fit(img, w, h, i / n, j / n)) for img in imgs for j in range(n) for i in range(n)]
 
 
 def best_match(g, refs):
@@ -72,10 +88,10 @@ def frame(path, plane):
     g = p[plane]; h, w = g.shape[:2]
     a, b, c = (fit(p[k], w, h) for k in ('previous', 'reference', 'current'))
     x = ((a.astype(np.int16) + c) // 2).astype(np.uint8)
-    A, C = t(a), t(c)
+    refs = references((p['previous'], p['current']), w, h)
     out, masks = {}, {}
     for name, img in (('gen', g), ('real', b), ('fade', x)):
-        s = solid(best_match(t(img), (A, C)) > T)
+        s = solid(best_match(t(img), refs) > T)
         out[name] = 100.0 * s.float().mean().item()
         masks[name] = s.cpu().numpy()
     return out, masks, (a, b, c, g)
@@ -101,7 +117,9 @@ def main():
     ap.add_argument('dump'); ap.add_argument('cases', nargs='*')
     ap.add_argument('--plane', default='generated24'); ap.add_argument('--masks')
     ap.add_argument('--base')
+    ap.add_argument('--phases', type=int, default=PHASES, help='sub-pixel phases per axis; 1 = the measure until 2026-11-03')
     args = ap.parse_args()
+    globals()['PHASES'] = args.phases
     if args.base:
         paired(Path(args.base), Path(args.dump), args.cases, args.plane)
         return

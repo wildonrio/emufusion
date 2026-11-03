@@ -249,7 +249,45 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 3 (latest) **— NSMBU Deluxe's sliding HUD, offline (genport, map triplet 0014): the motion field, not the generate pass, tears the letters; the 10/10 measure has an aliasing floor on thin moving text.**
+November 3 (latest) **— The 10/10 artifact measure matches A and C at quarter-pixel phases; the NSMBU HUD fixes tried offline are not adopted.**
+
+- **Measure change (`tools/qa/replay_invented.py`, default `--phases 4`; `--phases 1` is the measure until today).**
+  - A and C are matched at 4x4 sub-pixel phases of the 320x180 scoring plane, sampled from the full-size history. Before, they were matched only at whole scoring pixels (4 px of a 1280x720 picture).
+  - Why: a correct move by a fraction of a scoring pixel read as invented on any fine detail. On real NSMBU Deluxe map frames (whole-frame synthetic moves), a perfect move scored 1.1-2.7% with the old measure and 0.000% with phases. A double image still scores 7.6-9.0% and a torn region 0.2%.
+  - Cost: phases forgive part of a ghost of very thin detail. Synthetic strokes one scoring pixel wide: 2.6 -> 0.25%, still over the 0.1% bar. Cross-fades on the device dumps drop up to ~2x (Mega Drive 14.7 -> 8.2%) but are still flagged on 70-100% of frames for most sets.
+  - The real middle frame's own floor no longer hides the generated frame's errors. Under the old measure B's aliasing cancelled the generated frame's.
+  - Visual check of every frame where the two measures disagree:
+    - NSMBU map 0033: the generated HUD letters are garbled. Only the new measure flags them; the old one read 1.57% generated against 1.55% real.
+    - NSMBU menu 0043 and Link's Awakening 0024: the old measure flagged card edges and palm tips that look right. The new one flags nothing.
+    - Wind Waker HD 0203: both flag the logo's ghosted edge.
+  - Test: `tools/tests/test_replay_invented_subpixel.py`.
+- **Device dumps (3.2.147) under both measures** (frames with invented content, excess area):
+
+  | Set | n | Old measure | New measure |
+  | --- | --- | --- | --- |
+  | NSMBU Deluxe world map | 36 | 5.6%, 0.068% | 11.1%, 0.051% (HUD: 0033 0.52, 0015 0.49, 0014 0.44) |
+  | NSMBU Deluxe, older full set | 6 | 33%, 0.122% | 0%, 0.012% |
+  | Link's Awakening, full size | 19 | 16%, 0.059% | 5.3%, 0.044% (0047, picture edge, 0.69) |
+  | Double Dash, full size | 27 | 30%, 0.117% | 26%, 0.080% |
+  | Ocarina, full size | 26 | 4%, 0.008% | 0%, 0.004% |
+  | Mega Drive | 13 | 23%, 0.143% | 23%, 0.136% |
+  | SNES | 13 | 15%, 0.060% | 15%, 0.060% |
+  | Star Fox 64 | 25 | 12%, 0.043% | 12%, 0.029% |
+  | Wind Waker HD | 25 | 28%, 0.080% | 20%, 0.052% |
+  | Ocarina | 25 | 4%, 0.008% | 4%, 0.007% |
+  | NES, GBA, SM3DW, Link's Awakening | 4-25 | 0-25% | 0% |
+
+- **NSMBU HUD, offline (genport, new measure).**
+  - A per-64-px-block motion (exhaustive A->C search on gradient magnitude), used for a whole block when its mean cost is under 0.8x the field's:
+    - unconditioned: NSMBU map area 0.116 -> 0.105%, but Double Dash 0.311 -> 0.370% (the block's motion overrides the karts');
+    - gated on how well one shift explains a block: the HUD blocks fail it too, so it removes the gain;
+    - gated on a still scene (half the blocks best at zero motion): NSMBU map 0.116 -> 0.104%, Double Dash unchanged (fires on 2% of blocks).
+  - With the block motion forced, single-source warps score 0.00-0.03% on the HUD triplets and the 50/50 blend 0.38-0.99%: the fading, semi-transparent letters show different map behind them in A and C.
+  - HUD triplets 0014 / 0033 / 0015 / 0037: device 1.02 / 1.06 / 0.95 / 0.46%; still-gated blocks 0.43 / 0.85 / 0.85 / 0.25%; plus the nearer frame where the warps disagree (8-16 grey levels) 0.24 / 0.43 / 0.22 / 0.13%, at higher hold-out error (0.61 -> 0.72).
+  - In the crops "Plains" is clean with blocks and pick, but "Acorn" and the star-coin rings stay broken.
+  - **Not adopted.** None reaches the 0.1% bar or a clean HUD. The block search is an extra full-frame GPU pass on Eden, whose late frames are already GPU sharing. The HUD needs a layer model: a moving, fading overlay separated from the map.
+
+November 3 **— NSMBU Deluxe's sliding HUD, offline (genport, map triplet 0014): the motion field, not the generate pass, tears the letters; the 10/10 measure has an aliasing floor on thin moving text.**
 
 - **What the HUD does.** Measured on the full-size real frames:
   - "Acorn Plains-" slides right 11 px from A to B and 8 px from B to C (eased; 19 px from A to C) over a still map.
