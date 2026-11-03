@@ -249,7 +249,27 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 3 (latest) **— Why some Eden generated frames still finish after the scan: GPU sharing, which the Thor cannot trace below the app.**
+November 3 (latest) **— Eden artifacts by the 10/10 measure (3.2.147): NSMBU Deluxe's sliding HUD and Link's Awakening's picture edge.**
+
+- **Measure.** `replay_invented.py` counts frames whose generated image holds content found in neither real frame, beyond the real middle frame's own. The bar is at most 5% of frames over 0.1% in every set.
+  - The replay bench's `solid` column averages area and read near zero; this is the per-frame count.
+
+  | Set (3.2.147, synthesis 24) | n | Frames with invented content | Excess area | Cross-fade for comparison | Worst |
+  | --- | --- | --- | --- | --- | --- |
+  | Link's Awakening, full size | 19 | 16% | 0.059% | 42%, 1.187% | 0047 0.78%, 0045 0.13%, 0024 0.10% |
+  | NSMBU Deluxe world map (new) | 36 | 5.6% | 0.068% | 17%, 0.463% | 0014 1.43%, 0037 0.96% |
+  | NSMBU Deluxe, older full set | 6 | 33% | 0.122% | 67%, 1.677% | 0043 0.44% |
+
+- **NSMBU Deluxe 0014: the HUD sliding in.** Every invented area in the frame is HUD: "Acorn Plains-", the x05 counter, and the Map View / Items / Menu buttons.
+  - In the real frames the HUD slides in from the left, about 10 px per real frame at 1280x720, over a map that barely moves.
+  - The field cell is ~6 px and a matching patch ~48 px of the picture, so text strokes and background share patches and the warp tears the letters. This is the owner's reported HUD tearing.
+  - A cross-fade is worse on this measure (17% of frames), so blending is not the fix. The motion of a thin foreground layer has to be right.
+- **Link's Awakening 0047: a picture-edge strip.** Content enters at the top edge over a large smooth cloud. This is the known weak class for every engine, LSFG included.
+- **Next (offline, genport against these triplets).**
+  - A per-pixel choice among neighbouring motion candidates, chosen at full resolution by photo-consistency, for thin high-contrast foreground with its own motion.
+  - Captures: `~/Code/emufusion-training-data/map/nsmbud`. Dumps: `~/Code/emufusion-qa-tools/dumps-2026-11-02/{nsmbud-map,zla-full,nsmbud-full}`.
+
+November 3 **— Why some Eden generated frames still finish after the scan: GPU sharing, which the Thor cannot trace below the app.**
 
 - **NSMBU Deluxe in play, 3.2.147:** 89% in the fast mode, 99.5% on cadence (9 two-scan intervals), 117 of 999 pairs formed in their callback, 45 generated frames done on the GPU after the scan.
 - **Our own GPU work is not the cause.**
