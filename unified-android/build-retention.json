@@ -1261,6 +1261,14 @@
     "unified-android/build/emufusion-3.2.131-phase2-phase3-qualification.apk": {
       "sha256": "1e175e30345364c31cbbc6e7b0f2497846191ee95ac5e3d1c721a3badb0cd143",
       "reason": "Superseded rollback 3.2.131 (205); 3.2.140 is the rollback for 3.2.141, 2026-11-02."
+    },
+    "unified-android/build/emufusion-3.2.142-phase2-phase3-qualification-6c32ac6e50590323d4f1e17e65fe1cf5d89c391a4b435adfd04f75fa47df41c8.apk": {
+      "sha256": "6c32ac6e50590323d4f1e17e65fe1cf5d89c391a4b435adfd04f75fa47df41c8",
+      "reason": "Work-hint quarter-refresh trial (3.2.142), not adopted 2026-11-02; Thor restored to release 3.2.141."
+    },
+    "unified-android/build/emufusion-3.2.142-phase2-phase3-qualification.apk": {
+      "sha256": "6c32ac6e50590323d4f1e17e65fe1cf5d89c391a4b435adfd04f75fa47df41c8",
+      "reason": "Work-hint quarter-refresh trial (3.2.142), not adopted 2026-11-02; Thor restored to release 3.2.141."
     }
   }
 }

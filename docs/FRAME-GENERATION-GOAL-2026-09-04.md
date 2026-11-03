@@ -279,7 +279,10 @@ November 2 (latest) **— 3.2.141 (215, `debf7c41`): an arriving image's uniquen
   - Exits from the fast mode in the wait-on run: two at generated frames planned 2.5-4.2 ms late, one at an on-time real frame.
   - Fast stretches lasted 0.3-1 s.
 - **Next for Eden latency.**
-  - Keep the frame thread off the little cores during arrival work (the work-hint target is half a refresh, so the governor rarely boosts).
+  - Keep the frame thread off the little cores during arrival work.
+    - Tried and not adopted: a work-hint target of a quarter refresh instead of half (3.2.142 trial, QA divisor switch).
+    - On the Thor (NSMBU Deluxe in play) the frame thread still spent 2.0% of its time on little cores (1.8% before), and an arrival solve still ran on cpu0 (1.63 ms). Mid-core solves were unchanged (~0.7 ms).
+    - That run had 134 late plans and 22 two-scan intervals (98.9%), within the run-to-run spread seen today. The trial APK is retired and the Thor is back on 3.2.141.
   - Then drain the compositor's queue with one deliberate skip on entering the pipelined mode, once those entries are rare enough for the hitch budget.
 
 November 2 **— LSFG-Android measured on the Thor beside ours: it is behind on latency and smoothness in Switch play.**
