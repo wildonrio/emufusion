@@ -286,6 +286,22 @@ November 3 (latest) **— The 10/10 artifact measure matches A and C at quarter-
   - HUD triplets 0014 / 0033 / 0015 / 0037: device 1.02 / 1.06 / 0.95 / 0.46%; still-gated blocks 0.43 / 0.85 / 0.85 / 0.25%; plus the nearer frame where the warps disagree (8-16 grey levels) 0.24 / 0.43 / 0.22 / 0.13%, at higher hold-out error (0.61 -> 0.72).
   - In the crops "Plains" is clean with blocks and pick, but "Acorn" and the star-coin rings stay broken.
   - **Not adopted.** None reaches the 0.1% bar or a clean HUD. The block search is an extra full-frame GPU pass on Eden, whose late frames are already GPU sharing. The HUD needs a layer model: a moving, fading overlay separated from the map.
+- **3-D nearer-frame pick re-scored with the new measure (genport, `picksweep.py`).** Production takes the nearer frame's sample where the two warp samples differ by 48-96 grey levels (`PICK_3D`, 3.2.114); its October threshold choice was judged with the old measure. Against production:
+
+  | Set | (48, 96), production | (32, 64) | (24, 48) |
+  | --- | --- | --- | --- |
+  | Double Dash, full size | 37.0%, 0.201%, err 0.689 | 29.6%, 0.152%, 0.689 | 25.9%, 0.100%, 0.779 |
+  | Star Fox 64 | 44.0%, 0.202%, 0.604 | 44.0%, 0.172%, 0.603 | 44.0%, 0.149%, 0.605 |
+  | Wind Waker HD | 20.0%, 0.059%, 0.378 | 16.0%, 0.056%, 0.390 | 20.0%, 0.050%, 0.399 |
+  | Link's Awakening, full size | 10.5%, 0.059%, 0.579 | 10.5%, 0.037%, 0.579 | 5.3%, 0.038%, 0.579 |
+  | NSMBU Deluxe map | 11.1%, 0.082%, 0.933 | 11.1%, 0.072%, 0.953 | 11.1%, 0.065%, 0.979 |
+  | NSMBU Deluxe, older full set | 16.7%, 0.062%, 0.475 | 16.7%, 0.050%, 0.481 | 16.7%, 0.040%, 0.570 |
+  | Ocarina eval / full size, SM3DW, Link's Awakening eval | flat | flat (SM3DW err +2%) | flat (SM3DW err +4%) |
+
+  - Frames with invented content, mean area, hold-out error. The pick replaces a translucent mix with one real frame's sample, so the invented measure falls partly by construction; the hold-out error is the check on misplacement.
+  - (32, 64) lowers area on every set that moves, with error equal on Double Dash, Star Fox 64 and Link's Awakening and at most +3% elsewhere. (24, 48) costs Double Dash 13% and NSMBU 20% in error.
+  - Crops (Double Dash 0031): the pick turns the translucent second copy of the kart frames and Bowser's spikes into solid edges. Wind Waker HD 0203's logo edge is broken either way.
+  - **Candidate: `PICK_3D = (32, 64)`**, for a device replay bench paired against 3.2.147 before any release (the Thor is not on adb at the moment). Change: the constant in `tools/learned_framegen/dis_gles.py`, the regenerated `DenseInverseSearchShaders.java`, and the expected string in `tools/tests/test_dis_framegen.py`.
 - **Decision on the open Eden question (faster drains back to the fast mode).** Decided from the owner's stated expectations (October 26: "these micro stutters have got to go"; a scan of steady latency is acceptable to remove a hitch): the catch-up skip stays at most once per 16 s. Holds already present nothing, so the compositor's queue drains for free whenever the source stalls; a skip during motion is a visible step.
 
 November 3 **— NSMBU Deluxe's sliding HUD, offline (genport, map triplet 0014): the motion field, not the generate pass, tears the letters; the 10/10 measure has an aliasing floor on thin moving text.**
