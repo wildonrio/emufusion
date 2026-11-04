@@ -270,7 +270,8 @@ November 3 (latest) **— 3.2.150 (224, `11dd131c`): the 3-D blend where no moti
 - **Installed APK** reproduces the candidate's hold-out scores exactly on all 110 paired full-size and map triplets.
 - **Thor, NSMBU Deluxe in play:** 99.5% on the intended interval, 99.7% cadence (5 two-scan intervals), 92.7% of presents in their planned scan, first generated / real image 13.7 / 22.0 ms (varies with the fast-mode share from run to run). Picture correct; panels off and identity unchanged afterwards.
 - APK members differ from 3.2.149 only in `classes2.dex`, the manifest and signatures (survey recipe run 351).
-- Still scoring when this was released: `NEITHER_BLEND_T` 64 with `NEITHER_EDGE` (1, 4) (-0.011, -8, +0.001), the blend switched off entirely, and 48 with `NEITHER_EDGE` (0.5, 2) or (1, 4) plus the 12 margin.
+- Finished after the release, against 3.2.149: the blend switched off entirely -0.007 (so the blend at 48 is better than none); 48 with `NEITHER_EDGE` (0.5, 2) -0.007; 48 with `NEITHER_EDGE` (1, 4) and the 12 margin -0.020, the adopted pair without the gate -0.021.
+- **Against 3.2.150 (same bench, its own base):** `ZERO_MOTION_MARGIN` 16 -0.004 area but Wind Waker HD 0.049 -> 0.052% and hold-out +0.007; `NEITHER_BLEND_T` 64 0.000; both together 0.000 with Star Fox 64 frames +4. 3.2.150 is at the optimum of these constants; further gains need changes to the motion itself, not its thresholds.
 
 November 3 **— 3.2.149 (223, `ecbffa4b`): the 3-D nearer-frame pick starts at 32 grey levels (was 48).**
 
