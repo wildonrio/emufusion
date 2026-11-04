@@ -393,6 +393,7 @@ final class DenseInverseSearchFlow {
             GLES20.glUniform1f(location(phaseSearch, "uT"), t);
             // 3-D only: a patch's Gauss-Newton steps stop once its SSD stops falling.
             GLES20.glUniform1f(location(phaseSearch, "uDiscrete"), discrete ? 1f : 0f);
+            GLES20.glUniform1f(location(phaseSearch, "uPropagateCa"), propagateCa ? 1f : 0f);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
             begin(phaseDensify, sizes[used][0], sizes[used][1], phaseFlow);
             bind(phaseDensify, "uGrayA", pyramid[0][used], 0);
@@ -469,6 +470,12 @@ final class DenseInverseSearchFlow {
     private boolean discrete;
 
     void setDiscrete(boolean value) { discrete = value; }
+
+    // A Switch (Eden) session: the per-phase search also starts from C's flow
+    // 8 and 16 px away (dis_gles.py PHASE_PROPAGATE_CA_SWITCH).
+    private boolean propagateCa;
+
+    void setPropagateCa(boolean value) { propagateCa = value; }
 
     /**
      * structureMask 0: none. Otherwise synthesis 15's static-structure mask,

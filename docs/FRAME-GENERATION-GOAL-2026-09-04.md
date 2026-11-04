@@ -249,7 +249,23 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 4 (latest) **— Eden latency: half the frames sit a scan behind after one late render; quiet-moment catch-up skips halve that but add two-scan intervals (QA opt-in, not default). Motion-search options re-checked with the new measure.**
+November 4 (latest) **— 3.2.153 (227, `1393683a`): Switch (Eden) sessions also search from C's flow per phase.**
+
+- **Change.** The per-phase search starts each patch also from C's flow (negated) 8 and 16 analysis pixels away, the candidates of `PHASE_PROPAGATE_CA` behind a `uPropagateCa` uniform (`PHASE_PROPAGATE_CA_SWITCH`). The host sets it for Eden sessions (`GameSurfaceView.setSwitchContent`), the replay bench for captures recorded on the Switch; every other system runs the same search as before. QA `emufusion_framegen_switch_reverse_candidates=0` leaves it out.
+- **Device replay bench, paired against the installed 3.2.150:** Link's Awakening full size invented area 0.024 -> 0.012%, NSMBU Deluxe map 0.039 -> 0.036%, hold-out error within 0.001; Star Fox 64 (not a Switch capture) byte-identical on all 24 triplets.
+- **Thor, NSMBU Deluxe in play, same APK, one run each:**
+
+  | | Candidates on | Off |
+  | --- | --- | --- |
+  | On the intended interval | 99.7% | 99.6% |
+  | Cadence (two-scan intervals) | 99.3% (14) | 99.1% (17) |
+  | Arrival to screen, generated / real (mean) | 12.6 / 20.9 ms | 13.9 / 22.3 ms |
+  | GPU per pair (estimator + generate) | 2.52 ms | 2.36 ms (3.2.150: 2.36 ms) |
+
+  The 0.16 ms more per pair cost no frames; the late share (23.5 / 45.9%) follows the compositor backlog episodes, not this change.
+- APK members differ from 3.2.150 only in `classes2.dex`, the manifest and signatures (survey recipe run 354). Thor identity unchanged (UID 10206, first install 2026-09-11).
+
+November 4 **— Eden latency: half the frames sit a scan behind after one late render; quiet-moment catch-up skips halve that but add two-scan intervals (QA opt-in, not default). Motion-search options re-checked with the new measure.**
 
 - **Where NSMBU Deluxe's latency goes (3.2.149 / 3.2.150 in play, physical trace).**
   - Frames at depth 0 in the fast mode reach the screen 11.2 ms (generated) / 19.6 ms (real) after arrival, within ~3 ms of the structural minimum. About half the frames run a scan deeper (+8.3 ms): either the planner's trial deepening (3.2.150 run, 52% at depth 1) or the compositor holding them (3.2.149 run, 47.9% late at depth 0).

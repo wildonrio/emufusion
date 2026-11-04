@@ -111,7 +111,7 @@ public final class GameSurfaceView extends SurfaceView
             };
     private Runnable firstSubmittedFrameListener;
     private double authoritativeSourceHz;
-    private boolean discreteContent;
+    private boolean discreteContent, switchContent;
     private double producerTimelineHz;
     private float directPresentationHz = 60.0f;
     // FIXED_SOURCE for a source clock, DEFAULT for the panel mode itself.
@@ -293,6 +293,13 @@ public final class GameSurfaceView extends SurfaceView
         discreteContent = value;
         FrameGenerationRenderer generator = frameGenerator;
         if (generator != null) generator.setDiscreteContent(value);
+    }
+
+    /** A Switch (Eden) session: the generator's Switch motion candidates. */
+    public void setSwitchContent(boolean value) {
+        switchContent = value;
+        FrameGenerationRenderer generator = frameGenerator;
+        if (generator != null) generator.setSwitchContent(value);
     }
 
     /**
@@ -518,6 +525,7 @@ public final class GameSurfaceView extends SurfaceView
                     launchMode.usesLockToThirtyTierPolicy());
             generator.setAuthoritativeSourceHz(authoritativeSourceHz);
             generator.setDiscreteContent(discreteContent);
+            generator.setSwitchContent(switchContent);
             generator.setProducerTimelineHz(producerTimelineHz);
             generator.setStatsListener(frameRateListener);
             generator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);
@@ -662,6 +670,7 @@ public final class GameSurfaceView extends SurfaceView
                     launchMode.usesLockToThirtyTierPolicy());
             frameGenerator.setAuthoritativeSourceHz(authoritativeSourceHz);
             frameGenerator.setDiscreteContent(discreteContent);
+            frameGenerator.setSwitchContent(switchContent);
             frameGenerator.setProducerTimelineHz(producerTimelineHz);
             frameGenerator.setStatsListener(frameRateListener);
             frameGenerator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);

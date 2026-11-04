@@ -3058,6 +3058,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private volatile boolean discreteContent;
 
     @Override public void setDiscreteContent(boolean value) { discreteContent = value; }
+    // A Switch (Eden) session: C's flow as per-phase candidates (dis_gles.py
+    // PHASE_PROPAGATE_CA_SWITCH; QA emufusion_framegen_switch_reverse_candidates=0).
+    private volatile boolean switchContent;
+    @Override public void setSwitchContent(boolean value) { switchContent = value; }
 
     @Override public long takeSourcePhaseDelayNs() {
         // A source the phase lock holds takes no one-off moves as well.
@@ -13310,6 +13314,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (perPhase && (keyA != flow.phaseKeyA || keyB != flow.phaseKeyB || phase != flow.phaseValue)) {
             // The per-phase densification already reads the pixel-art mode.
             flow.setDiscrete(discreteContent);
+            flow.setPropagateCa(switchContent && TimelineSchedulerSwitch.switchReverseCandidates());
             flow.estimatePhase(phase);
             flow.phaseKeyA = keyA;
             flow.phaseKeyB = keyB;

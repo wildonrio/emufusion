@@ -980,6 +980,7 @@ public final class InWindowGameHost
             double authoritativeHz = authoritativeVideoHz(request.systemId);
             layer.setAuthoritativeSourceHz(authoritativeHz);
             layer.setDiscreteContent(authoritativeHz > 0.0);
+            layer.setSwitchContent("eden".equals(request.engineId));
             layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz),
                     directSurfaceVotesSourceClock(authoritativeHz));
             gameSurface = layer;
@@ -994,6 +995,7 @@ public final class InWindowGameHost
             double authoritativeHz = authoritativeVideoHz(request.systemId);
             layer.setAuthoritativeSourceHz(authoritativeHz);
             layer.setDiscreteContent(authoritativeHz > 0.0);
+            layer.setSwitchContent("eden".equals(request.engineId));
             layer.setDirectPresentationHz(directSurfaceCadenceHz(authoritativeHz),
                     directSurfaceVotesSourceClock(authoritativeHz));
             // Eden runs the Switch in handheld mode at its native scale: a

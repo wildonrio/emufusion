@@ -357,6 +357,7 @@ def _phase_search_shader_text():
     "uniform sampler2D uGradA,uGradC,uFlowAC,uFlowCA;uniform ivec2 uSize;uniform float uT;\n" +
     ("uniform float uDiscrete;\n" if PHASE_BREAK == '3d' else "") +
     ("uniform float uGlobal;\n" if PHASE_GLOBAL_GRID and PHASE_GLOBAL_DISCRETE_ONLY else "") +
+    ("uniform float uPropagateCa;\n" if PHASE_PROPAGATE_CA_SWITCH else "") +
     "layout(location=0) out vec4 o0;\n"
     "vec3 ga(vec2 p){return texture(uGradA,p/vec2(uSize)).xyz;}\n"
     "vec3 gc(vec2 p){return texture(uGradC,p/vec2(uSize)).xyz;}\n"
@@ -379,6 +380,10 @@ def _phase_search_shader_text():
               for d in PHASE_PROPAGATE for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))) +
     "".join(f" {{vec2 c=-fca(x+vec2({dx:.1f},{dy:.1f}));float ec=ssd(o,c);if(ec<e0){{e0=ec;v0=c;}}}}\n"
               for d in PHASE_PROPAGATE_CA for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))) +
+    ((" if(uPropagateCa>0.5){\n" +
+      "".join(f" {{vec2 c=-fca(x+vec2({dx:.1f},{dy:.1f}));float ec=ssd(o,c);if(ec<e0){{e0=ec;v0=c;}}}}\n"
+              for d in PHASE_PROPAGATE_CA_SWITCH for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))) +
+      " }\n") if PHASE_PROPAGATE_CA_SWITCH else "") +
     (" if(uGlobal>0.5){\n" if PHASE_GLOBAL_GRID and PHASE_GLOBAL_DISCRETE_ONLY else "") +
     "".join(f" {{vec2 c=fac(vec2(uSize)*vec2({(i + 0.5) / PHASE_GLOBAL_GRID[0]:.4f},{(j + 0.5) / PHASE_GLOBAL_GRID[1]:.4f}));"
             f"float ec=ssd(o,c);if(ec<e0*{1.0 + PHASE_GLOBAL_TIE:.3f}+1e-6){{e0=min(e0,ec);v0=c;}}}}\n"
@@ -416,6 +421,13 @@ PHASE_PROPAGATE = (8, 16)
 # full-size captures -9%, Link's Awakening -14%, train set -4%, Star Fox 64
 # worse; eight more patch matches per cell, so its GPU cost decides it.
 PHASE_PROPAGATE_CA = ()
+# ... the same C-flow candidates, only where uPropagateCa is set: the host
+# sets it for Switch (Eden) sessions (2026-11-04). Device replay bench against
+# 3.2.150 with them on everywhere: Link's Awakening full-size invented area
+# 0.024 -> 0.012%, NSMBU Deluxe map 0.039 -> 0.036%, but Star Fox 64 0.023 ->
+# 0.045% and Wind Waker HD, Double Dash and SNES worse. A uniform branch costs
+# the other systems nothing.
+PHASE_PROPAGATE_CA_SWITCH = (8, 16)
 # ... and from A's flow at a fixed grid of points across the frame (scene-wide
 # motions: a camera scroll found anywhere reaches every patch), taken on ties
 # within PHASE_GLOBAL_TIE (a repeating tile matches its aliases equally well).

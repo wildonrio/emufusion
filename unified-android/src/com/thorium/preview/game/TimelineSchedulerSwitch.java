@@ -299,6 +299,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         quietSkip = quiet;
+        boolean reverse = true;
+        try {
+            if (context != null) reverse = Settings.Global.getInt(
+                    context.getContentResolver(), SWITCH_REVERSE_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        switchReverseCandidates = reverse;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -629,6 +637,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean quietSkip = false;
 
     static boolean quietSkip() { return quietSkip; }
+
+    /**
+     * Switch (Eden) sessions: the per-phase search also starts from C's flow
+     * (default, dis_gles.py PHASE_PROPAGATE_CA_SWITCH). QA:
+     * emufusion_framegen_switch_reverse_candidates=0 leaves it out, for
+     * paired comparisons.
+     */
+    static final String SWITCH_REVERSE_GLOBAL = "emufusion_framegen_switch_reverse_candidates";
+    private static volatile boolean switchReverseCandidates = true;
+
+    static boolean switchReverseCandidates() { return switchReverseCandidates; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

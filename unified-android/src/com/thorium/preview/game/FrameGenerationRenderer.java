@@ -97,6 +97,9 @@ public interface FrameGenerationRenderer extends AutoCloseable {
     /** The source is a pixel-art system: discrete states, whole-pixel motion. */
     default void setDiscreteContent(boolean value) {}
 
+    /** The source is a Switch (Eden): the per-phase search also tries C's flow. */
+    default void setSwitchContent(boolean value) {}
+
     /** Source-vs-scan drift in microseconds per second (0 = unknown/none). */
     default double endpointDriftUsPerSecond() { return 0.0; }
 

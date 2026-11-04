@@ -143,6 +143,7 @@ final class HoldoutReplay {
             // for the consoles the host treats as pixel art.
             String system = System.getProperty("emufusion.replay.system", "");
             generator.setDiscreteContent(InWindowGameHost.authoritativeVideoHz(system) > 0.0);
+            generator.setSwitchContent("switch".equals(system));
             producer = new Producer(generator.inputSurface(), width, height);
             int submitted = 0;
             long dueNs = System.nanoTime() + SOURCE_PERIOD_NS;
