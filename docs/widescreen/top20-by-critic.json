@@ -1,0 +1,2142 @@
+{
+ "dreamcast": [
+  {
+   "title": "Soul Calibur",
+   "key": "soul calibur",
+   "critic": 9.8,
+   "user": "8.5",
+   "release": "1999-09-08",
+   "developer": "Project Soul"
+  },
+  {
+   "title": "Resident Evil: Code Veronica",
+   "key": "resident evil code veronica",
+   "critic": 9.4,
+   "user": "8.4",
+   "release": "2000-03-28",
+   "developer": ""
+  },
+  {
+   "title": "Rayman 2: The Great Escape",
+   "key": "rayman 2 the great escape",
+   "critic": 9.3,
+   "user": "8.4",
+   "release": "2000-03-21",
+   "developer": "Ubi Soft Entertainment Software"
+  },
+  {
+   "title": "Jet Grind Radio",
+   "key": "jet grind radio",
+   "critic": 9.2,
+   "user": "8.5",
+   "release": "2000-06-29",
+   "developer": "Smilebit"
+  },
+  {
+   "title": "Skies of Arcadia",
+   "key": "skies of arcadia",
+   "critic": 9.1,
+   "user": "8.9",
+   "release": "2000-11-13",
+   "developer": ""
+  },
+  {
+   "title": "Crazy Taxi",
+   "key": "crazy taxi",
+   "critic": 9.0,
+   "user": "8.5",
+   "release": "2000-01-24",
+   "developer": "Hitmaker"
+  },
+  {
+   "title": "Marvel vs. Capcom 2",
+   "key": "marvel vs capcom 2",
+   "critic": 9.0,
+   "user": "8.9",
+   "release": "2000-06-29",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Shenmue",
+   "key": "shenmue",
+   "critic": 8.9,
+   "user": "9.0",
+   "release": "2000-11-07",
+   "developer": ""
+  },
+  {
+   "title": "Legacy of Kain: Soul Reaver",
+   "key": "legacy of kain soul reaver",
+   "critic": 8.8,
+   "user": "8.6",
+   "release": "2000-01-27",
+   "developer": "Crystal Dynamics"
+  },
+  {
+   "title": "MDK 2",
+   "key": "mdk 2",
+   "critic": 8.8,
+   "user": "8.0",
+   "release": "2000-03-31",
+   "developer": "BioWare"
+  },
+  {
+   "title": "Sonic Adventure",
+   "key": "sonic adventure",
+   "critic": 8.7,
+   "user": "8.6",
+   "release": "1999-09-09",
+   "developer": "Sonic Team"
+  },
+  {
+   "title": "Sonic Adventure 2",
+   "key": "sonic adventure 2",
+   "critic": 8.3,
+   "user": "8.6",
+   "release": "2001-06-19",
+   "developer": "Sega Studios USA"
+  },
+  {
+   "title": "Ecco the Dolphin: Defender of the Future",
+   "key": "ecco the dolphin defender of the future",
+   "critic": 8.1,
+   "user": "7.9",
+   "release": "2000-08-15",
+   "developer": "Appaloosa Interactive"
+  },
+  {
+   "title": "Hydro Thunder",
+   "key": "hydro thunder",
+   "critic": 7.9,
+   "user": "8.1",
+   "release": "1999-09-08",
+   "developer": "Eurocom Developments"
+  },
+  {
+   "title": "Star Wars: Episode I: Racer",
+   "key": "star wars episode i racer",
+   "critic": 7.5,
+   "user": "7.8",
+   "release": "2000-04-04",
+   "developer": "LucasArts Entertainment"
+  },
+  {
+   "title": "Mortal Kombat Gold",
+   "key": "mortal kombat gold",
+   "critic": 5.5,
+   "user": "7.2",
+   "release": "1999-08-31",
+   "developer": "Eurocom Developments"
+  },
+  {
+   "title": "Fighting Force 2",
+   "key": "fighting force 2",
+   "critic": 5.0,
+   "user": "6.5",
+   "release": "1999-11-30",
+   "developer": "Core Design"
+  },
+  {
+   "title": "South Park Rally",
+   "key": "south park rally",
+   "critic": 4.5,
+   "user": "5.8",
+   "release": "2000-06-30",
+   "developer": "Tantalus Interactive"
+  }
+ ],
+ "gamegear": [
+  {
+   "title": "Sonic the Hedgehog",
+   "key": "sonic the hedgehog",
+   "critic": 8.7,
+   "user": "7.5",
+   "release": "1991-12-28",
+   "developer": "Ancient"
+  },
+  {
+   "title": "Micro Machines 2: Turbo Tournament",
+   "key": "micro machines 2 turbo tournament",
+   "critic": 8.6,
+   "user": "7.8",
+   "release": "1995-05-01",
+   "developer": "Codemasters"
+  },
+  {
+   "title": "Shinobi II: The Silent Fury",
+   "key": "shinobi ii the silent fury",
+   "critic": 8.5,
+   "user": "8.0",
+   "release": "1992-12-11",
+   "developer": "Sega Enterprises"
+  },
+  {
+   "title": "Dr. Robotnik's Mean Bean Machine",
+   "key": "dr robotnik s mean bean machine",
+   "critic": 8.4,
+   "user": "7.3",
+   "release": "1993-12-01",
+   "developer": "Compile"
+  },
+  {
+   "title": "Ecco the Dolphin",
+   "key": "ecco the dolphin",
+   "critic": 8.4,
+   "user": "6.3",
+   "release": "1994-03-11",
+   "developer": "Novotrade Software"
+  },
+  {
+   "title": "Ernie Els Golf",
+   "key": "ernie els golf",
+   "critic": 8.4,
+   "user": "5.5",
+   "release": "1994-07-01",
+   "developer": "Codemasters"
+  },
+  {
+   "title": "Cool Spot",
+   "key": "cool spot",
+   "critic": 8.3,
+   "user": "7.0",
+   "release": "1993-01-01",
+   "developer": "Virgin Games"
+  },
+  {
+   "title": "Pete Sampras Tennis",
+   "key": "pete sampras tennis",
+   "critic": 8.3,
+   "user": "5.6",
+   "release": "1994-08-19",
+   "developer": "Big Red Software"
+  },
+  {
+   "title": "Micro Machines",
+   "key": "micro machines",
+   "critic": 8.1,
+   "user": "7.2",
+   "release": "1993-11-01",
+   "developer": "Codemasters"
+  },
+  {
+   "title": "Sonic the Hedgehog: Triple Trouble",
+   "key": "sonic the hedgehog triple trouble",
+   "critic": 8.1,
+   "user": "7.7",
+   "release": "1994-11-11",
+   "developer": "Aspect"
+  },
+  {
+   "title": "World Cup Soccer",
+   "key": "world cup soccer",
+   "critic": 8.1,
+   "user": "6.3",
+   "release": "1993",
+   "developer": "SIMS Co., Ltd."
+  },
+  {
+   "title": "Bram Stoker's Dracula",
+   "key": "bram stoker s dracula",
+   "critic": 8.0,
+   "user": "4.6",
+   "release": "1993-08-01",
+   "developer": "Probe Software"
+  },
+  {
+   "title": "Fatal Fury Special",
+   "key": "fatal fury special",
+   "critic": 8.0,
+   "user": "7.5",
+   "release": "1994-11-25",
+   "developer": "Takara"
+  },
+  {
+   "title": "Prince of Persia",
+   "key": "prince of persia",
+   "critic": 8.0,
+   "user": "7.0",
+   "release": "1992-09-01",
+   "developer": "Domark Software"
+  },
+  {
+   "title": "Road Rash",
+   "key": "road rash",
+   "critic": 8.0,
+   "user": "7.1",
+   "release": "1994-03-01",
+   "developer": "Probe Software"
+  },
+  {
+   "title": "Streets of Rage 2",
+   "key": "streets of rage 2",
+   "critic": 8.0,
+   "user": "7.5",
+   "release": "1993-08-01",
+   "developer": "Japan System House"
+  },
+  {
+   "title": "Chessmaster",
+   "key": "chessmaster",
+   "critic": 7.9,
+   "user": "5.4",
+   "release": "1991-12-01",
+   "developer": "The Software Toolworks"
+  },
+  {
+   "title": "GP Rider",
+   "key": "gp rider",
+   "critic": 7.9,
+   "user": "6.6",
+   "release": "1994-04-22",
+   "developer": "Sega AM2"
+  },
+  {
+   "title": "Lemmings",
+   "key": "lemmings",
+   "critic": 7.9,
+   "user": "6.9",
+   "release": "1992-11-01",
+   "developer": "Probe Software"
+  },
+  {
+   "title": "Lucky Dime Caper starring Donald Duck",
+   "key": "lucky dime caper starring donald duck",
+   "critic": 7.9,
+   "user": "7.7",
+   "release": "1991-10-01",
+   "developer": "Sega Enterprises"
+  }
+ ],
+ "gb": [
+  {
+   "title": "Tetris",
+   "key": "tetris",
+   "critic": 9.1,
+   "user": "8.7",
+   "release": "1989-06-14",
+   "developer": "Bullet-Proof Software"
+  },
+  {
+   "title": "The Legend of Zelda: Link's Awakening",
+   "key": "the legend of zelda link s awakening",
+   "critic": 9.0,
+   "user": "8.9",
+   "release": "1993-06-06",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Pok\u00e9mon Blue Version",
+   "key": "pok mon blue version",
+   "critic": 8.9,
+   "user": "8.6",
+   "release": "1996-01-01",
+   "developer": "Game Freak"
+  },
+  {
+   "title": "Tetris Attack",
+   "key": "tetris attack",
+   "critic": 8.9,
+   "user": "7.5",
+   "release": "1996-08-01",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Pok\u00e9mon Red Version",
+   "key": "pok mon red version",
+   "critic": 8.8,
+   "user": "8.5",
+   "release": "1996-01-01",
+   "developer": "Game Freak"
+  },
+  {
+   "title": "Wario Land II",
+   "key": "wario land ii",
+   "critic": 8.7,
+   "user": "8.0",
+   "release": "1998-03-09",
+   "developer": "Nintendo R&D1"
+  },
+  {
+   "title": "Donkey Kong",
+   "key": "donkey kong",
+   "critic": 8.6,
+   "user": "8.5",
+   "release": "1994-06-14",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Parodius",
+   "key": "parodius",
+   "critic": 8.6,
+   "user": "7.5",
+   "release": "1991-04-05",
+   "developer": "Konami"
+  },
+  {
+   "title": "Mole Mania",
+   "key": "mole mania",
+   "critic": 8.5,
+   "user": "7.8",
+   "release": "1996-07-21",
+   "developer": "Pax Softnica"
+  },
+  {
+   "title": "Monster Max",
+   "key": "monster max",
+   "critic": 8.5,
+   "user": "7.5",
+   "release": "1994-08-01",
+   "developer": "Rare"
+  },
+  {
+   "title": "Tiny Toon Adventures: Babs' Big Break",
+   "key": "tiny toon adventures babs big break",
+   "critic": 8.5,
+   "user": "7.4",
+   "release": "1992-02-01",
+   "developer": "Konami"
+  },
+  {
+   "title": "Wario Land: Super Mario Land 3",
+   "key": "wario land super mario land 3",
+   "critic": 8.5,
+   "user": "8.5",
+   "release": "1994-01-21",
+   "developer": "Nintendo R&D1"
+  },
+  {
+   "title": "Battle Arena Toshinden",
+   "key": "battle arena toshinden",
+   "critic": 8.4,
+   "user": "6.7",
+   "release": "1996-03-22",
+   "developer": "Betop"
+  },
+  {
+   "title": "Castlevania II: Belmont's Revenge",
+   "key": "castlevania ii belmont s revenge",
+   "critic": 8.4,
+   "user": "7.6",
+   "release": "1991-07-12",
+   "developer": "Konami"
+  },
+  {
+   "title": "Final Fantasy Legend II",
+   "key": "final fantasy legend ii",
+   "critic": 8.4,
+   "user": "7.4",
+   "release": "1990-12-14",
+   "developer": "Square"
+  },
+  {
+   "title": "Pok\u00e9mon Yellow Version: Special Pikachu Edition",
+   "key": "pok mon yellow version special pikachu edition",
+   "critic": 8.4,
+   "user": "8.4",
+   "release": "1999",
+   "developer": "Nintendo Co., Ltd."
+  },
+  {
+   "title": "Choplifter II: Rescue Survive",
+   "key": "choplifter ii rescue survive",
+   "critic": 8.3,
+   "user": "7.6",
+   "release": "1991-06-21",
+   "developer": "Beam Software"
+  },
+  {
+   "title": "Donkey Kong Land III",
+   "key": "donkey kong land iii",
+   "critic": 8.3,
+   "user": "7.4",
+   "release": "1997-10-27",
+   "developer": "Rare"
+  },
+  {
+   "title": "Donkey Kong Land",
+   "key": "donkey kong land",
+   "critic": 8.2,
+   "user": "7.4",
+   "release": "1995-06-26",
+   "developer": "Rare"
+  },
+  {
+   "title": "Kwirk",
+   "key": "kwirk",
+   "critic": 8.2,
+   "user": "6.7",
+   "release": "1989",
+   "developer": "Atlus Co., Ltd."
+  }
+ ],
+ "gba": [
+  {
+   "title": "Advance Wars",
+   "key": "advance wars",
+   "critic": 9.2,
+   "user": "8.5",
+   "release": "2001-09-09",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Mario Kart: Super Circuit",
+   "key": "mario kart super circuit",
+   "critic": 9.2,
+   "user": "7.7",
+   "release": "2001-08-26",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Super Mario Advance 4: Super Mario Bros. 3",
+   "key": "super mario advance 4 super mario bros 3",
+   "critic": 9.2,
+   "user": "8.6",
+   "release": "2003-10-21",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Final Fantasy VI Advance",
+   "key": "final fantasy vi advance",
+   "critic": 9.1,
+   "user": "8.8",
+   "release": "2007-02-05",
+   "developer": "TOSE"
+  },
+  {
+   "title": "Metroid Fusion",
+   "key": "metroid fusion",
+   "critic": 9.1,
+   "user": "8.7",
+   "release": "2002-11-17",
+   "developer": "Nintendo R&D1"
+  },
+  {
+   "title": "Ultimate Card Games",
+   "key": "ultimate card games",
+   "critic": 9.1,
+   "user": "6.8",
+   "release": "2004-12-31",
+   "developer": "Cosmigo"
+  },
+  {
+   "title": "Advance Wars 2: Black Hole Rising",
+   "key": "advance wars 2 black hole rising",
+   "critic": 9.0,
+   "user": "8.5",
+   "release": "2003-06-24",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Mario & Luigi: Superstar Saga",
+   "key": "mario and luigi superstar saga",
+   "critic": 9.0,
+   "user": "8.5",
+   "release": "2003-11-17",
+   "developer": "AlphaDream Corporation, Ltd."
+  },
+  {
+   "title": "Metroid: Zero Mission",
+   "key": "metroid zero mission",
+   "critic": 9.0,
+   "user": "8.8",
+   "release": "2004-02-09",
+   "developer": "Nintendo R&D1"
+  },
+  {
+   "title": "The Legend of Zelda: The Minish Cap",
+   "key": "the legend of zelda the minish cap",
+   "critic": 9.0,
+   "user": "8.7",
+   "release": "2005-01-10",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Fire Emblem",
+   "key": "fire emblem",
+   "critic": 8.9,
+   "user": "8.7",
+   "release": "2003-11-03",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Golden Sun",
+   "key": "golden sun",
+   "critic": 8.9,
+   "user": "8.6",
+   "release": "2001-11-11",
+   "developer": "Camelot Software Planning"
+  },
+  {
+   "title": "WarioWare, Inc.: Mega Microgame$!",
+   "key": "warioware inc mega microgame",
+   "critic": 8.9,
+   "user": "8.3",
+   "release": "2003-05-26",
+   "developer": "Nintendo R&D1"
+  },
+  {
+   "title": "Castlevania: Aria of Sorrow",
+   "key": "castlevania aria of sorrow",
+   "critic": 8.8,
+   "user": "8.9",
+   "release": "2003-05-06",
+   "developer": "Konami"
+  },
+  {
+   "title": "Castlevania: Circle of the Moon",
+   "key": "castlevania circle of the moon",
+   "critic": 8.8,
+   "user": "8.1",
+   "release": "2001-06-10",
+   "developer": "Konami"
+  },
+  {
+   "title": "Tony Hawk's Pro Skater 3",
+   "key": "tony hawk s pro skater 3",
+   "critic": 8.8,
+   "user": "6.5",
+   "release": "2002-03-04",
+   "developer": "Vicarious Visions"
+  },
+  {
+   "title": "Tony Hawk's Underground",
+   "key": "tony hawk s underground",
+   "critic": 8.8,
+   "user": "6.6",
+   "release": "2003-10-27",
+   "developer": "Vicarious Visions"
+  },
+  {
+   "title": "WarioWare: Twisted!",
+   "key": "warioware twisted",
+   "critic": 8.8,
+   "user": "8.0",
+   "release": "2005-05-23",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Alien Hominid",
+   "key": "alien hominid",
+   "critic": 8.7,
+   "user": "7.4",
+   "release": "2006-02-03",
+   "developer": "Tuna Technologies"
+  },
+  {
+   "title": "Final Fantasy Tactics Advance",
+   "key": "final fantasy tactics advance",
+   "critic": 8.7,
+   "user": "8.3",
+   "release": "2003-09-08",
+   "developer": "Square"
+  }
+ ],
+ "gbc": [
+  {
+   "title": "Metal Gear Solid",
+   "key": "metal gear solid",
+   "critic": 9.5,
+   "user": "8.0",
+   "release": "2000-04-24",
+   "developer": "TOSE"
+  },
+  {
+   "title": "The Legend of Zelda: Oracle of Ages",
+   "key": "the legend of zelda oracle of ages",
+   "critic": 9.3,
+   "user": "8.5",
+   "release": "2001-05-14",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Super Mario Bros. Deluxe",
+   "key": "super mario bros deluxe",
+   "critic": 9.2,
+   "user": "8.1",
+   "release": "1999-04-30",
+   "developer": "Nintendo"
+  },
+  {
+   "title": "Survival Kids",
+   "key": "survival kids",
+   "critic": 9.2,
+   "user": "7.8",
+   "release": "1999-06-17",
+   "developer": "Konami Computer Entertainment Sapporo"
+  },
+  {
+   "title": "Mario Tennis",
+   "key": "mario tennis",
+   "critic": 9.1,
+   "user": "8.1",
+   "release": "2001-01-16",
+   "developer": "Camelot Software Planning"
+  },
+  {
+   "title": "Pok\u00e9mon Silver Version",
+   "key": "pok mon silver version",
+   "critic": 9.1,
+   "user": "8.8",
+   "release": "1999-11-21",
+   "developer": "Game Freak"
+  },
+  {
+   "title": "The Legend of Zelda: Link's Awakening DX",
+   "key": "the legend of zelda link s awakening dx",
+   "critic": 9.1,
+   "user": "9.0",
+   "release": "1998-12-12",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "The Legend of Zelda: Oracle of Seasons",
+   "key": "the legend of zelda oracle of seasons",
+   "critic": 9.1,
+   "user": "8.4",
+   "release": "2001-05-14",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Wario Land 3",
+   "key": "wario land 3",
+   "critic": 9.0,
+   "user": "8.1",
+   "release": "2000-05-30",
+   "developer": "Nintendo R&D1"
+  },
+  {
+   "title": "Donkey Kong Country",
+   "key": "donkey kong country",
+   "critic": 8.9,
+   "user": "7.5",
+   "release": "2000-11-20",
+   "developer": "Rare"
+  },
+  {
+   "title": "Pok\u00e9mon Gold Version",
+   "key": "pok mon gold version",
+   "critic": 8.9,
+   "user": "8.8",
+   "release": "1999-11-21",
+   "developer": "Game Freak"
+  },
+  {
+   "title": "Magical Tetris Challenge",
+   "key": "magical tetris challenge",
+   "critic": 8.8,
+   "user": "7.5",
+   "release": "1999-11-12",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Mario Golf",
+   "key": "mario golf",
+   "critic": 8.8,
+   "user": "7.6",
+   "release": "1999-10-01",
+   "developer": "Camelot Software Planning"
+  },
+  {
+   "title": "Pok\u00e9mon Puzzle Challenge",
+   "key": "pok mon puzzle challenge",
+   "critic": 8.8,
+   "user": "7.5",
+   "release": "2000-09-21",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Cannon Fodder",
+   "key": "cannon fodder",
+   "critic": 8.7,
+   "user": "7.1",
+   "release": "2000-12-05",
+   "developer": "Codemasters"
+  },
+  {
+   "title": "Micro Machines V3",
+   "key": "micro machines v3",
+   "critic": 8.7,
+   "user": "6.9",
+   "release": "2000-11-13",
+   "developer": "Novalicious"
+  },
+  {
+   "title": "Wario Land II",
+   "key": "wario land ii",
+   "critic": 8.7,
+   "user": "8.0",
+   "release": "1999-02-10",
+   "developer": "Nintendo R&D1"
+  },
+  {
+   "title": "Warlocked",
+   "key": "warlocked",
+   "critic": 8.7,
+   "user": "7.5",
+   "release": "2000-06-24",
+   "developer": "Bits Studios"
+  },
+  {
+   "title": "Dragon Warrior III",
+   "key": "dragon warrior iii",
+   "critic": 8.6,
+   "user": "8.0",
+   "release": "2001-07-16",
+   "developer": "TOSE"
+  },
+  {
+   "title": "Mickey's Racing Adventure",
+   "key": "mickey s racing adventure",
+   "critic": 8.6,
+   "user": "7.7",
+   "release": "1999-11-22",
+   "developer": "Rare"
+  }
+ ],
+ "gc": [
+  {
+   "title": "Metroid Prime",
+   "key": "metroid prime",
+   "critic": 9.6,
+   "user": "9.0",
+   "release": "2002-11-17",
+   "developer": "Retro Studios"
+  },
+  {
+   "title": "Resident Evil 4",
+   "key": "resident evil 4",
+   "critic": 9.6,
+   "user": "9.1",
+   "release": "2005-01-11",
+   "developer": ""
+  },
+  {
+   "title": "The Legend of Zelda: Twilight Princess",
+   "key": "the legend of zelda twilight princess",
+   "critic": 9.5,
+   "user": "9.1",
+   "release": "2006-12-11",
+   "developer": "Nintendo"
+  },
+  {
+   "title": "The Legend of Zelda: The Wind Waker",
+   "key": "the legend of zelda the wind waker",
+   "critic": 9.4,
+   "user": "9.1",
+   "release": "2003-03-24",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "SoulCalibur II",
+   "key": "soulcalibur ii",
+   "critic": 9.3,
+   "user": "8.5",
+   "release": "2003-08-27",
+   "developer": "Namco"
+  },
+  {
+   "title": "The Legend of Zelda: Collector's Edition",
+   "key": "the legend of zelda collector s edition",
+   "critic": 9.3,
+   "user": "8.7",
+   "release": "2003-11-17",
+   "developer": "Nintendo"
+  },
+  {
+   "title": "Metroid Prime 2: Echoes",
+   "key": "metroid prime 2 echoes",
+   "critic": 9.2,
+   "user": "8.8",
+   "release": "2004-11-15",
+   "developer": "Retro Studios"
+  },
+  {
+   "title": "Super Mario Sunshine",
+   "key": "super mario sunshine",
+   "critic": 9.2,
+   "user": "8.4",
+   "release": "2002-08-26",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Eternal Darkness: Sanity's Requiem",
+   "key": "eternal darkness sanity s requiem",
+   "critic": 9.1,
+   "user": "8.6",
+   "release": "2002-06-23",
+   "developer": "Silicon Knights"
+  },
+  {
+   "title": "Super Smash Bros. Melee",
+   "key": "super smash bros melee",
+   "critic": 9.1,
+   "user": "8.9",
+   "release": "2001-12-03",
+   "developer": "HAL Labs"
+  },
+  {
+   "title": "The Legend of Zelda: Ocarina of Time: Master Quest",
+   "key": "the legend of zelda ocarina of time master quest",
+   "critic": 9.0,
+   "user": "9",
+   "release": "2003-01-01",
+   "developer": ""
+  },
+  {
+   "title": "Burnout 2: Point of Impact",
+   "key": "burnout 2 point of impact",
+   "critic": 8.9,
+   "user": "8.2",
+   "release": "2003-04-09",
+   "developer": "Criterion Games"
+  },
+  {
+   "title": "F-Zero GX",
+   "key": "f zero gx",
+   "critic": 8.9,
+   "user": "8.8",
+   "release": "2003-08-26",
+   "developer": "Amusement Vision"
+  },
+  {
+   "title": "Mario Kart: Double Dash!!",
+   "key": "mario kart double dash",
+   "critic": 8.7,
+   "user": "8.8",
+   "release": "2003-11-17",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "The Legend of Zelda: Four Swords Adventures",
+   "key": "the legend of zelda four swords adventures",
+   "critic": 8.5,
+   "user": "7.3",
+   "release": "2004-06-07",
+   "developer": "Nintendo"
+  },
+  {
+   "title": "Donkey Kong Jungle Beat",
+   "key": "donkey kong jungle beat",
+   "critic": 8.2,
+   "user": "7.9",
+   "release": "2005-03-14",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Wave Race: Blue Storm",
+   "key": "wave race blue storm",
+   "critic": 8.2,
+   "user": "7.6",
+   "release": "2001-11-17",
+   "developer": "Nintendo Software Technology"
+  },
+  {
+   "title": "Star Fox Adventures",
+   "key": "star fox adventures",
+   "critic": 8.0,
+   "user": "8.1",
+   "release": "2002-09-23",
+   "developer": "Rare"
+  },
+  {
+   "title": "Luigi's Mansion",
+   "key": "luigi s mansion",
+   "critic": 7.9,
+   "user": "8.1",
+   "release": "2001-11-17",
+   "developer": "GREZZO"
+  },
+  {
+   "title": "Mega Man X Collection",
+   "key": "mega man x collection",
+   "critic": 7.6,
+   "user": "7.5",
+   "release": "2006-01-10",
+   "developer": "Capcom"
+  }
+ ],
+ "megadrive": [
+  {
+   "title": "Lightening Force: Quest for the Darkstar",
+   "key": "lightening force quest for the darkstar",
+   "critic": 9.1,
+   "user": "8.4",
+   "release": "1992-07-24",
+   "developer": "TechnoSoft"
+  },
+  {
+   "title": "NHL 94",
+   "key": "nhl 94",
+   "critic": 9.1,
+   "user": "8.0",
+   "release": "1993-09-11",
+   "developer": "High Score Productions"
+  },
+  {
+   "title": "Flashback: The Quest for Identity",
+   "key": "flashback the quest for identity",
+   "critic": 9.0,
+   "user": "8.3",
+   "release": "1993-02-20",
+   "developer": "Delphine Software International"
+  },
+  {
+   "title": "NHL 96",
+   "key": "nhl 96",
+   "critic": 9.0,
+   "user": "7.1",
+   "release": "1995-10-06",
+   "developer": "High Score Productions"
+  },
+  {
+   "title": "Disney's Aladdin",
+   "key": "disney s aladdin",
+   "critic": 8.9,
+   "user": "8.1",
+   "release": "1993-11-11",
+   "developer": "Virgin Games"
+  },
+  {
+   "title": "Jungle Strike",
+   "key": "jungle strike",
+   "critic": 8.9,
+   "user": "7.6",
+   "release": "1993",
+   "developer": "Electronic Arts, Inc."
+  },
+  {
+   "title": "PGA Tour Golf III",
+   "key": "pga tour golf iii",
+   "critic": 8.9,
+   "user": "7.2",
+   "release": "1994-01-01",
+   "developer": "High Score Productions"
+  },
+  {
+   "title": "Castle of Illusion Starring Mickey Mouse",
+   "key": "castle of illusion starring mickey mouse",
+   "critic": 8.8,
+   "user": "8.1",
+   "release": "1990-11-21",
+   "developer": "Sega Enterprises"
+  },
+  {
+   "title": "NBA Jam Tournament Edition",
+   "key": "nba jam tournament edition",
+   "critic": 8.8,
+   "user": "8.1",
+   "release": "1995-02-23",
+   "developer": "Iguana Entertainment"
+  },
+  {
+   "title": "Shining Force II",
+   "key": "shining force ii",
+   "critic": 8.8,
+   "user": "8.6",
+   "release": "1993-10-01",
+   "developer": "Sonic Co."
+  },
+  {
+   "title": "Sonic & Knuckles",
+   "key": "sonic and knuckles",
+   "critic": 8.8,
+   "user": "8.8",
+   "release": "1994-10-18",
+   "developer": "Sonic Team"
+  },
+  {
+   "title": "Sonic the Hedgehog",
+   "key": "sonic the hedgehog",
+   "critic": 8.8,
+   "user": "8.4",
+   "release": "1991-06-23",
+   "developer": "Sonic Team"
+  },
+  {
+   "title": "Contra: Hard Corps",
+   "key": "contra hard corps",
+   "critic": 8.7,
+   "user": "8.4",
+   "release": "1994-09-15",
+   "developer": "Konami"
+  },
+  {
+   "title": "Desert Strike: Return to the Gulf",
+   "key": "desert strike return to the gulf",
+   "critic": 8.7,
+   "user": "7.7",
+   "release": "1992-03-01",
+   "developer": "Electronic Arts"
+  },
+  {
+   "title": "Gunstar Heroes",
+   "key": "gunstar heroes",
+   "critic": 8.7,
+   "user": "8.5",
+   "release": "1993-09-09",
+   "developer": "Treasure"
+  },
+  {
+   "title": "John Madden Football '92",
+   "key": "john madden football 92",
+   "critic": 8.7,
+   "user": "7.1",
+   "release": "1991-01-01",
+   "developer": "Electronic Arts"
+  },
+  {
+   "title": "Monster World IV",
+   "key": "monster world iv",
+   "critic": 8.7,
+   "user": "8.3",
+   "release": "1994-04-01",
+   "developer": "Westone"
+  },
+  {
+   "title": "NHL Hockey",
+   "key": "nhl hockey",
+   "critic": 8.7,
+   "user": "7.5",
+   "release": "1991-08-01",
+   "developer": "Park Place Productions"
+  },
+  {
+   "title": "Ristar",
+   "key": "ristar",
+   "critic": 8.7,
+   "user": "8.1",
+   "release": "1995-02-16",
+   "developer": "Sega Enterprises"
+  },
+  {
+   "title": "Shinobi III: Return of the Ninja Master",
+   "key": "shinobi iii return of the ninja master",
+   "critic": 8.7,
+   "user": "8.6",
+   "release": "1993-07-23",
+   "developer": "Megasoft"
+  }
+ ],
+ "n3ds": [
+  {
+   "title": "The Legend of Zelda Ocarina of Time 3D",
+   "key": "the legend of zelda ocarina of time 3d",
+   "critic": 9.4,
+   "user": "9.1",
+   "release": "2011-06-19",
+   "developer": "GREZZO"
+  },
+  {
+   "title": "The Legend of Zelda A Link Between Worlds",
+   "key": "the legend of zelda a link between worlds",
+   "critic": 9.1,
+   "user": "8.9",
+   "release": "2013-11-22",
+   "developer": "Nintendo"
+  },
+  {
+   "title": "The Legend of Zelda Majora's Mask 3D",
+   "key": "the legend of zelda majora s mask 3d",
+   "critic": 9.0,
+   "user": "8.9",
+   "release": "2015-02-13",
+   "developer": "GREZZO"
+  },
+  {
+   "title": "Metroid: Samus Returns",
+   "key": "metroid samus returns",
+   "critic": 8.6,
+   "user": "8.7",
+   "release": "2017-09-15",
+   "developer": "Mercury Steam"
+  },
+  {
+   "title": "Kid Icarus: Uprising",
+   "key": "kid icarus uprising",
+   "critic": 8.4,
+   "user": "8.7",
+   "release": "2012-03-23",
+   "developer": "Project Sora"
+  },
+  {
+   "title": "Star Fox 64 3D",
+   "key": "star fox 64 3d",
+   "critic": 8.1,
+   "user": "8",
+   "release": "2011-09-09",
+   "developer": "Q-Games"
+  }
+ ],
+ "n64": [
+  {
+   "title": "The Legend of Zelda: Ocarina of Time",
+   "key": "the legend of zelda ocarina of time",
+   "critic": 9.7,
+   "user": "9.3",
+   "release": "1998-11-23",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Super Mario 64",
+   "key": "super mario 64",
+   "critic": 9.6,
+   "user": "9.1",
+   "release": "1996-09-26",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Perfect Dark",
+   "key": "perfect dark",
+   "critic": 9.5,
+   "user": "8.6",
+   "release": "2000-05-22",
+   "developer": "Rare"
+  },
+  {
+   "title": "GoldenEye 007",
+   "key": "goldeneye 007",
+   "critic": 9.4,
+   "user": "8.8",
+   "release": "1997-08-25",
+   "developer": "Rare"
+  },
+  {
+   "title": "Banjo-Kazooie",
+   "key": "banjo kazooie",
+   "critic": 9.2,
+   "user": "8.9",
+   "release": "1998-06-29",
+   "developer": "Rare"
+  },
+  {
+   "title": "The Legend of Zelda: Majora's Mask",
+   "key": "the legend of zelda majora s mask",
+   "critic": 9.2,
+   "user": "9.1",
+   "release": "2000-10-25",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Tony Hawk's Pro Skater",
+   "key": "tony hawk s pro skater",
+   "critic": 9.1,
+   "user": "7.6",
+   "release": "2000-03-15",
+   "developer": "Edge Of Reality"
+  },
+  {
+   "title": "Wave Race 64",
+   "key": "wave race 64",
+   "critic": 9.1,
+   "user": "7.9",
+   "release": "1996-11-01",
+   "developer": ""
+  },
+  {
+   "title": "Banjo-Tooie",
+   "key": "banjo tooie",
+   "critic": 9.0,
+   "user": "8.7",
+   "release": "2000-11-20",
+   "developer": "Rare"
+  },
+  {
+   "title": "International Superstar Soccer '98",
+   "key": "international superstar soccer 98",
+   "critic": 9.0,
+   "user": "7.7",
+   "release": "1998-06-04",
+   "developer": "Konami Computer Entertainment Osaka"
+  },
+  {
+   "title": "International Superstar Soccer 64",
+   "key": "international superstar soccer 64",
+   "critic": 9.0,
+   "user": "7.7",
+   "release": "1997-07-30",
+   "developer": "Konami Computer Entertainment Osaka"
+  },
+  {
+   "title": "Blast Corps",
+   "key": "blast corps",
+   "critic": 8.9,
+   "user": "7.8",
+   "release": "1997-02-28",
+   "developer": "Rare"
+  },
+  {
+   "title": "Conker's Bad Fur Day",
+   "key": "conker s bad fur day",
+   "critic": 8.9,
+   "user": "8.6",
+   "release": "2001-03-04",
+   "developer": "Rare"
+  },
+  {
+   "title": "Diddy Kong Racing",
+   "key": "diddy kong racing",
+   "critic": 8.9,
+   "user": "8.3",
+   "release": "1997-11-24",
+   "developer": "Rare"
+  },
+  {
+   "title": "Excitebike 64",
+   "key": "excitebike 64",
+   "critic": 8.9,
+   "user": "7.6",
+   "release": "2000-04-30",
+   "developer": "Left Field Productions"
+  },
+  {
+   "title": "Paper Mario",
+   "key": "paper mario",
+   "critic": 8.9,
+   "user": "8.8",
+   "release": "2001-02-05",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Rayman 2: The Great Escape",
+   "key": "rayman 2 the great escape",
+   "critic": 8.9,
+   "user": "8.2",
+   "release": "1999-11-06",
+   "developer": "Ubi Soft Entertainment Software"
+  },
+  {
+   "title": "Star Fox 64",
+   "key": "star fox 64",
+   "critic": 8.9,
+   "user": "8.6",
+   "release": "1997-07-01",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Turok 2: Seeds of Evil",
+   "key": "turok 2 seeds of evil",
+   "critic": 8.9,
+   "user": "7.8",
+   "release": "1998-12-10",
+   "developer": "Iguana Entertainment"
+  },
+  {
+   "title": "1080\u00b0 Snowboarding",
+   "key": "1080 snowboarding",
+   "critic": 8.8,
+   "user": "7.7",
+   "release": "1998-02-28",
+   "developer": "Nintendo EAD"
+  }
+ ],
+ "nes": [
+  {
+   "title": "Super Mario Bros. 3",
+   "key": "super mario bros 3",
+   "critic": 9.6,
+   "user": "9.1",
+   "release": "1988-01-01",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Tecmo Super Bowl",
+   "key": "tecmo super bowl",
+   "critic": 9.2,
+   "user": "8.3",
+   "release": "1991-12-01",
+   "developer": "Tecmo"
+  },
+  {
+   "title": "Megaman II",
+   "key": "megaman ii",
+   "critic": 9.0,
+   "user": "8.8",
+   "release": "1988-12-24",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Super Mario Bros",
+   "key": "super mario bros",
+   "critic": 9.0,
+   "user": "8.7",
+   "release": "1985-09-13",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Castlevania III: Dracula's Curse",
+   "key": "castlevania iii dracula s curse",
+   "critic": 8.9,
+   "user": "8.4",
+   "release": "1989-12-22",
+   "developer": "Konami"
+  },
+  {
+   "title": "Tetris",
+   "key": "tetris",
+   "critic": 8.9,
+   "user": "8.4",
+   "release": "1989-11-01",
+   "developer": "Nintendo"
+  },
+  {
+   "title": "Contra",
+   "key": "contra",
+   "critic": 8.8,
+   "user": "8.7",
+   "release": "1988-02-09",
+   "developer": "Konami"
+  },
+  {
+   "title": "Kirby's Adventure",
+   "key": "kirby s adventure",
+   "critic": 8.8,
+   "user": "8.5",
+   "release": "1993-03-26",
+   "developer": "HAL Laboratory"
+  },
+  {
+   "title": "Ninja Gaiden II: The Dark Sword of Chaos",
+   "key": "ninja gaiden ii the dark sword of chaos",
+   "critic": 8.8,
+   "user": "8.4",
+   "release": "1990-04-06",
+   "developer": "Tecmo"
+  },
+  {
+   "title": "Mike Tyson's Punch-Out!!",
+   "key": "mike tyson s punch out",
+   "critic": 8.7,
+   "user": "8.7",
+   "release": "1987-10-01",
+   "developer": "Nintendo R&D3"
+  },
+  {
+   "title": "Baseball Stars",
+   "key": "baseball stars",
+   "critic": 8.6,
+   "user": "7.8",
+   "release": "1989-05-19",
+   "developer": "SNK"
+  },
+  {
+   "title": "Final Fantasy III",
+   "key": "final fantasy iii",
+   "critic": 8.6,
+   "user": "7.6",
+   "release": "1990-04-27",
+   "developer": "Square"
+  },
+  {
+   "title": "FinalFantasy3",
+   "key": "finalfantasy3",
+   "critic": 8.6,
+   "user": "7.6",
+   "release": "1990-04-27",
+   "developer": "Square"
+  },
+  {
+   "title": "Mega Man 3",
+   "key": "mega man 3",
+   "critic": 8.6,
+   "user": "8.4",
+   "release": "1990-09-28",
+   "developer": "Capcom"
+  },
+  {
+   "title": "The Legend of Zelda",
+   "key": "the legend of zelda",
+   "critic": 8.6,
+   "user": "8.7",
+   "release": "1986-02-21",
+   "developer": "Nintendo"
+  },
+  {
+   "title": "Adventures of Lolo 3",
+   "key": "adventures of lolo 3",
+   "critic": 8.5,
+   "user": "7.5",
+   "release": "1990-12-26",
+   "developer": "HAL Laboratory"
+  },
+  {
+   "title": "Bionic Commando",
+   "key": "bionic commando",
+   "critic": 8.5,
+   "user": "7.8",
+   "release": "1988-07-20",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Life Force",
+   "key": "life force",
+   "critic": 8.5,
+   "user": "7.9",
+   "release": "1987-09-25",
+   "developer": "Konami"
+  },
+  {
+   "title": "Baseball Stars II",
+   "key": "baseball stars ii",
+   "critic": 8.4,
+   "user": "7.2",
+   "release": "1992-07-01",
+   "developer": "Pixel"
+  },
+  {
+   "title": "Crisis Force",
+   "key": "crisis force",
+   "critic": 8.4,
+   "user": "7.8",
+   "release": "1991-08-27",
+   "developer": "Konami"
+  }
+ ],
+ "ps2": [
+  {
+   "title": "Grand Theft Auto III",
+   "key": "grand theft auto iii",
+   "critic": 9.5,
+   "user": "8.3",
+   "release": "2001-10-22",
+   "developer": "Rockstar North"
+  },
+  {
+   "title": "Tony Hawk's Pro Skater 3",
+   "key": "tony hawk s pro skater 3",
+   "critic": 9.5,
+   "user": "7.6",
+   "release": "2001-10-30",
+   "developer": "Neversoft Entertainment"
+  },
+  {
+   "title": "God of War",
+   "key": "god of war",
+   "critic": 9.4,
+   "user": "8.9",
+   "release": "2005-03-22",
+   "developer": "SCE Santa Monica Studio"
+  },
+  {
+   "title": "Grand Theft Auto: Vice City",
+   "key": "grand theft auto vice city",
+   "critic": 9.4,
+   "user": "8.8",
+   "release": "2002-10-29",
+   "developer": "Rockstar North"
+  },
+  {
+   "title": "God of War II",
+   "key": "god of war ii",
+   "critic": 9.3,
+   "user": "9.1",
+   "release": "2007-03-13",
+   "developer": "SCE Studio Santa Monica"
+  },
+  {
+   "title": "Prince of Persia: The Sands of Time",
+   "key": "prince of persia the sands of time",
+   "critic": 9.2,
+   "user": "8.5",
+   "release": "2003-11-10",
+   "developer": "Ubisoft"
+  },
+  {
+   "title": "Shadow of the Colossus",
+   "key": "shadow of the colossus",
+   "critic": 9.1,
+   "user": "9.2",
+   "release": "2005-10-18",
+   "developer": "Team ICO"
+  },
+  {
+   "title": "DOA2: Hardcore",
+   "key": "doa2 hardcore",
+   "critic": 8.9,
+   "user": "7.8",
+   "release": "2000-10-25",
+   "developer": "Team Ninja"
+  },
+  {
+   "title": "Tekken 5",
+   "key": "tekken 5",
+   "critic": 8.9,
+   "user": "8.6",
+   "release": "2005-02-24",
+   "developer": "Namco"
+  },
+  {
+   "title": "Sly 2: Band of Thieves",
+   "key": "sly 2 band of thieves",
+   "critic": 8.8,
+   "user": "8.8",
+   "release": "2004-09-14",
+   "developer": "Sucker Punch Productions"
+  },
+  {
+   "title": "Katamari Damacy",
+   "key": "katamari damacy",
+   "critic": 8.6,
+   "user": "8.7",
+   "release": "2004-09-21",
+   "developer": "Namco"
+  },
+  {
+   "title": "Kingdom Hearts",
+   "key": "kingdom hearts",
+   "critic": 8.6,
+   "user": "8.7",
+   "release": "2002-09-16",
+   "developer": "Square"
+  },
+  {
+   "title": "Soulcalibur III",
+   "key": "soulcalibur iii",
+   "critic": 8.6,
+   "user": "8.5",
+   "release": "2005-10-25",
+   "developer": "Namco"
+  },
+  {
+   "title": "Sly Cooper and the Thievius Raccoonus",
+   "key": "sly cooper and the thievius raccoonus",
+   "critic": 8.5,
+   "user": "8.5",
+   "release": "2002-09-24",
+   "developer": "Sucker Punch"
+  },
+  {
+   "title": "Sly 3: Honor Among Thieves",
+   "key": "sly 3 honor among thieves",
+   "critic": 8.4,
+   "user": "8.7",
+   "release": "2005-09-26",
+   "developer": "Sucker Punch Productions"
+  },
+  {
+   "title": "Half-Life",
+   "key": "half life",
+   "critic": 8.3,
+   "user": "8.3",
+   "release": "2001-11-11",
+   "developer": "Gearbox Software"
+  },
+  {
+   "title": "Resident Evil 2",
+   "key": "resident evil 2",
+   "critic": 7.9,
+   "user": "8.8",
+   "release": "2000-12-06",
+   "developer": "TOSE"
+  },
+  {
+   "title": "The Simpsons: Hit & Run",
+   "key": "the simpsons hit and run",
+   "critic": 7.8,
+   "user": "8.4",
+   "release": "2003-09-16",
+   "developer": ""
+  }
+ ],
+ "ps3": [
+  {
+   "title": "The Ico & Shadow of the Colossus Collection",
+   "key": "the ico and shadow of the colossus collection",
+   "critic": 9.2,
+   "user": "8.9",
+   "release": "2011-09-27",
+   "developer": "Team ICO"
+  }
+ ],
+ "psp": [
+  {
+   "title": "God of War: Chains of Olympus",
+   "key": "god of war chains of olympus",
+   "critic": 9.1,
+   "user": "8.3",
+   "release": "2008-03-04",
+   "developer": "Ready at Dawn"
+  },
+  {
+   "title": "LittleBigPlanet",
+   "key": "littlebigplanet",
+   "critic": 8.8,
+   "user": "7.8",
+   "release": "2009-11-17",
+   "developer": "SCE Studio Cambridge"
+  },
+  {
+   "title": "God of War: Ghost of Sparta",
+   "key": "god of war ghost of sparta",
+   "critic": 8.7,
+   "user": "8.7",
+   "release": "2010-11-02",
+   "developer": "Ready at Dawn"
+  },
+  {
+   "title": "Castlevania: The Dracula X Chronicles",
+   "key": "castlevania the dracula x chronicles",
+   "critic": 8.1,
+   "user": "8.1",
+   "release": "2007-10-23",
+   "developer": "Konami"
+  }
+ ],
+ "psx": [
+  {
+   "title": "Wipeout XL",
+   "key": "wipeout xl",
+   "critic": 9.5,
+   "user": "8.2",
+   "release": "1996-09-30",
+   "developer": "Psygnosis"
+  },
+  {
+   "title": "Castlevania: Symphony of the Night",
+   "key": "castlevania symphony of the night",
+   "critic": 9.3,
+   "user": "9.3",
+   "release": "1997-10-02",
+   "developer": "Konami"
+  },
+  {
+   "title": "Spyro: Year of the Dragon",
+   "key": "spyro year of the dragon",
+   "critic": 9.1,
+   "user": "8.7",
+   "release": "2000-10-10",
+   "developer": "Insomniac Games"
+  },
+  {
+   "title": "Die Hard Trilogy",
+   "key": "die hard trilogy",
+   "critic": 8.6,
+   "user": "7.7",
+   "release": "1996-08-31",
+   "developer": "Probe Entertainment"
+  },
+  {
+   "title": "Bushido Blade",
+   "key": "bushido blade",
+   "critic": 8.1,
+   "user": "7.9",
+   "release": "1997-09-30",
+   "developer": "Light Weight"
+  },
+  {
+   "title": "Mega Man X4",
+   "key": "mega man x4",
+   "critic": 7.4,
+   "user": "8.5",
+   "release": "1997-09-25",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Mega Man X5",
+   "key": "mega man x5",
+   "critic": 7.3,
+   "user": "8.0",
+   "release": "2001-02-01",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Mega Man 8",
+   "key": "mega man 8",
+   "critic": 7.1,
+   "user": "7.0",
+   "release": "1997-02-28",
+   "developer": ""
+  },
+  {
+   "title": "Mega Man X6",
+   "key": "mega man x6",
+   "critic": 6.9,
+   "user": "6.9",
+   "release": "2001-12-04",
+   "developer": "Capcom"
+  },
+  {
+   "title": "Twisted Metal",
+   "key": "twisted metal",
+   "critic": 6.7,
+   "user": "6.8",
+   "release": "1995-11-05",
+   "developer": "SingleTrac Entertainment Technologies"
+  }
+ ],
+ "snes": [
+  {
+   "title": "Super Mario World 2: Yoshi's Island",
+   "key": "super mario world 2 yoshi s island",
+   "critic": 9.6,
+   "user": "8.9",
+   "release": "1995-08-05",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Chrono Trigger",
+   "key": "chrono trigger",
+   "critic": 9.5,
+   "user": "9.3",
+   "release": "1995-03-11",
+   "developer": "Square"
+  },
+  {
+   "title": "Super Metroid",
+   "key": "super metroid",
+   "critic": 9.5,
+   "user": "9.1",
+   "release": "1994-03-19",
+   "developer": "Intelligent Systems"
+  },
+  {
+   "title": "Final Fantasy III",
+   "key": "final fantasy iii",
+   "critic": 9.4,
+   "user": "9.1",
+   "release": "1994",
+   "developer": "Square Enix Co., Ltd."
+  },
+  {
+   "title": "Super Mario World",
+   "key": "super mario world",
+   "critic": 9.4,
+   "user": "9.3",
+   "release": "1990-11-21",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Super Mario Kart",
+   "key": "super mario kart",
+   "critic": 9.3,
+   "user": "8.4",
+   "release": "1992-08-27",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "The Legend of Zelda: A Link to the Past",
+   "key": "the legend of zelda a link to the past",
+   "critic": 9.3,
+   "user": "9.3",
+   "release": "1991-11-21",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Super Mario All-Stars",
+   "key": "super mario all stars",
+   "critic": 9.2,
+   "user": "9.0",
+   "release": "1993-07-14",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Star Ocean",
+   "key": "star ocean",
+   "critic": 9.1,
+   "user": "7.8",
+   "release": "1996-07-19",
+   "developer": "tri-Ace"
+  },
+  {
+   "title": "Donkey Kong Country 2: Diddy's Kong Quest",
+   "key": "donkey kong country 2 diddy s kong quest",
+   "critic": 9.0,
+   "user": "9.0",
+   "release": "1995-11-21",
+   "developer": "Rare"
+  },
+  {
+   "title": "NBA Live 95",
+   "key": "nba live 95",
+   "critic": 9.0,
+   "user": "7.3",
+   "release": "1994-12-03",
+   "developer": "Hitmen Productions"
+  },
+  {
+   "title": "Donkey Kong Country",
+   "key": "donkey kong country",
+   "critic": 8.9,
+   "user": "8.8",
+   "release": "1994-11-24",
+   "developer": "Rare"
+  },
+  {
+   "title": "Mortal Kombat II",
+   "key": "mortal kombat ii",
+   "critic": 8.9,
+   "user": "8.0",
+   "release": "1994-09-01",
+   "developer": "Sculptured Software"
+  },
+  {
+   "title": "Super Mario RPG: Legend of the Seven Stars",
+   "key": "super mario rpg legend of the seven stars",
+   "critic": 8.9,
+   "user": "9.0",
+   "release": "1996-03-09",
+   "developer": "Square"
+  },
+  {
+   "title": "International Superstar Soccer Deluxe",
+   "key": "international superstar soccer deluxe",
+   "critic": 8.8,
+   "user": "8.3",
+   "release": "1995-09-22",
+   "developer": "Konami"
+  },
+  {
+   "title": "Jimmy Connors Pro Tennis Tour",
+   "key": "jimmy connors pro tennis tour",
+   "critic": 8.8,
+   "user": "6.8",
+   "release": "1993-10-29",
+   "developer": "Blue Byte Software"
+  },
+  {
+   "title": "Live A Live",
+   "key": "live a live",
+   "critic": 8.8,
+   "user": "8.0",
+   "release": "1994-09-02",
+   "developer": "Square"
+  },
+  {
+   "title": "Madden NFL 95",
+   "key": "madden nfl 95",
+   "critic": 8.8,
+   "user": "6.5",
+   "release": "1994-11-01",
+   "developer": "Visual Concepts"
+  },
+  {
+   "title": "NBA Jam",
+   "key": "nba jam",
+   "critic": 8.8,
+   "user": "7.7",
+   "release": "1994-03-01",
+   "developer": "Iguana Entertainment"
+  },
+  {
+   "title": "NHL '94",
+   "key": "nhl 94",
+   "critic": 8.8,
+   "user": "7.7",
+   "release": "1993-10-01",
+   "developer": "Electronic Arts Canada"
+  }
+ ],
+ "switch": [
+  {
+   "title": "Super Mario Odyssey",
+   "key": "super mario odyssey",
+   "critic": 9.7,
+   "user": "9.1",
+   "release": "2017-10-27",
+   "developer": "Nintendo EPD"
+  },
+  {
+   "title": "Super Mario Bros. Wonder",
+   "key": "super mario bros wonder",
+   "critic": 9.2,
+   "user": "9.0",
+   "release": "2023-10-20",
+   "developer": "Nintendo EPD"
+  },
+  {
+   "title": "Bayonetta 2",
+   "key": "bayonetta 2",
+   "critic": 9.1,
+   "user": "9",
+   "release": "2014-10-24",
+   "developer": "PlatinumGames"
+  },
+  {
+   "title": "Metroid Dread",
+   "key": "metroid dread",
+   "critic": 8.8,
+   "user": "8.8",
+   "release": "2021-10-08",
+   "developer": "Mercury Steam"
+  },
+  {
+   "title": "Prince of Persia The Lost Crown",
+   "key": "prince of persia the lost crown",
+   "critic": 8.8,
+   "user": "8.3",
+   "release": "2024-01-18",
+   "developer": "Ubisoft Montpellier"
+  },
+  {
+   "title": "Sonic X Shadow Generations",
+   "key": "sonic x shadow generations",
+   "critic": 8.2,
+   "user": "8.6",
+   "release": "2024-10-25",
+   "developer": "Sonic Team"
+  },
+  {
+   "title": "Mega Man 11",
+   "key": "mega man 11",
+   "critic": 8.0,
+   "user": "7.8",
+   "release": "2018-10-02",
+   "developer": "Capcom"
+  },
+  {
+   "title": "New Super Mario Bros. U Deluxe",
+   "key": "new super mario bros u deluxe",
+   "critic": 8.0,
+   "user": "7.7",
+   "release": "2019-01-11",
+   "developer": "Nintendo EPD"
+  },
+  {
+   "title": "Sonic Superstars",
+   "key": "sonic superstars",
+   "critic": 6.7,
+   "user": "7.6",
+   "release": "2023-10-17",
+   "developer": "Sonic Team"
+  }
+ ],
+ "wii": [
+  {
+   "title": "Super Mario Galaxy",
+   "key": "super mario galaxy",
+   "critic": 9.8,
+   "user": "9.2",
+   "release": "2007-11-12",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Super Mario Galaxy 2",
+   "key": "super mario galaxy 2",
+   "critic": 9.7,
+   "user": "9.1",
+   "release": "2010-05-23",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "The Legend of Zelda: Twilight Princess",
+   "key": "the legend of zelda twilight princess",
+   "critic": 9.5,
+   "user": "9.0",
+   "release": "2006-11-19",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Donkey Kong Country Returns",
+   "key": "donkey kong country returns",
+   "critic": 8.8,
+   "user": "8.7",
+   "release": "2010-11-21",
+   "developer": "Retro Studios"
+  },
+  {
+   "title": "New Super Mario Bros. Wii",
+   "key": "new super mario bros wii",
+   "critic": 8.8,
+   "user": "8.6",
+   "release": "2009-11-15",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "Punch-Out!!",
+   "key": "punch out",
+   "critic": 8.7,
+   "user": "8.6",
+   "release": "2009-05-18",
+   "developer": "Next Level Games"
+  },
+  {
+   "title": "Mario Kart Wii",
+   "key": "mario kart wii",
+   "critic": 8.2,
+   "user": "8.6",
+   "release": "2008-04-27",
+   "developer": "Nintendo"
+  },
+  {
+   "title": "Castlevania: The Adventure ReBirth",
+   "key": "castlevania the adventure rebirth",
+   "critic": 8.1,
+   "user": "8.0",
+   "release": "2009-12-28",
+   "developer": "M2"
+  },
+  {
+   "title": "Muramasa: The Demon Blade",
+   "key": "muramasa the demon blade",
+   "critic": 8.1,
+   "user": "7.9",
+   "release": "2009-09-08",
+   "developer": "Vanillaware"
+  },
+  {
+   "title": "Contra ReBirth",
+   "key": "contra rebirth",
+   "critic": 7.7,
+   "user": "7.8",
+   "release": "2009-09-07",
+   "developer": "M2"
+  },
+  {
+   "title": "Excite Truck",
+   "key": "excite truck",
+   "critic": 7.4,
+   "user": "7.7",
+   "release": "2006-11-19",
+   "developer": "Monster Games Inc."
+  },
+  {
+   "title": "Pandora's Tower",
+   "key": "pandora s tower",
+   "critic": 7.3,
+   "user": "8.1",
+   "release": "2013-04-16",
+   "developer": "Ganbarion"
+  }
+ ],
+ "wiiu": [
+  {
+   "title": "Super Mario 3D World",
+   "key": "super mario 3d world",
+   "critic": 9.3,
+   "user": "8.9",
+   "release": "2013-11-22",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "The Legend of Zelda: The Wind Waker HD",
+   "key": "the legend of zelda the wind waker hd",
+   "critic": 9.1,
+   "user": "9.1",
+   "release": "2013-09-20",
+   "developer": "Nintendo EAD"
+  },
+  {
+   "title": "The Legend of Zelda: Twilight Princess HD",
+   "key": "the legend of zelda twilight princess hd",
+   "critic": 8.6,
+   "user": "8.9",
+   "release": "2016-03-04",
+   "developer": "Tantalus Interactive"
+  },
+  {
+   "title": "Bayonetta",
+   "key": "bayonetta",
+   "critic": 8.4,
+   "user": "8.7",
+   "release": "2014-10-24",
+   "developer": "PlatinumGames"
+  },
+  {
+   "title": "Donkey Kong Country: Tropical Freeze",
+   "key": "donkey kong country tropical freeze",
+   "critic": 8.4,
+   "user": "8.8",
+   "release": "2014-02-21",
+   "developer": "Retro Studios"
+  }
+ ]
+}
