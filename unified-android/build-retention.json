@@ -2,8 +2,7 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "ecbffa4b12f485e2c392338eead6fa38920ecf5df04662c13b5504b2c8048373": "Rollback 3.2.149 (223), released and Thor-tested 2026-11-03.",
-    "11dd131c86c67f16a14c448b9f695d8d81001c276d25988d038cbb9afd3cbaf6": "Release 3.2.150 (224), GitHub v3.2.150, Thor-tested 2026-11-03.",
+    "11dd131c86c67f16a14c448b9f695d8d81001c276d25988d038cbb9afd3cbaf6": "Rollback 3.2.150 (224), released and Thor-tested 2026-11-03.",
     "1393683aac42b5fcd74d75eb7f8f8eae3a60b512d04ce2bf21b026840456f101": "Release 3.2.153 (227), GitHub v3.2.153, Thor-tested 2026-11-04."
   },
   "retired_diagnostic_apks": {
@@ -1350,6 +1349,14 @@
     "unified-android/build/emufusion-3.2.152-phase2-phase3-qualification.apk": {
       "sha256": "22f10b558bb42b892456fd1c6e035e04e852aa7e1a4ab6d5f471135a58691701",
       "reason": "Closed trial 3.2.152 (226): quiet-moment catch-up skips, kept as a default-off QA opt-in; Thor restored to 3.2.150, 2026-11-04."
+    },
+    "unified-android/build/emufusion-3.2.149-phase2-phase3-qualification-ecbffa4b12f485e2c392338eead6fa38920ecf5df04662c13b5504b2c8048373.apk": {
+      "sha256": "ecbffa4b12f485e2c392338eead6fa38920ecf5df04662c13b5504b2c8048373",
+      "reason": "Superseded rollback 3.2.149 (223); 3.2.150 is the rollback for 3.2.153, 2026-11-04."
+    },
+    "unified-android/build/emufusion-3.2.149-phase2-phase3-qualification.apk": {
+      "sha256": "ecbffa4b12f485e2c392338eead6fa38920ecf5df04662c13b5504b2c8048373",
+      "reason": "Superseded rollback 3.2.149 (223); 3.2.150 is the rollback for 3.2.153, 2026-11-04."
     }
   }
 }
