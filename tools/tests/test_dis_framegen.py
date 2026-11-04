@@ -195,7 +195,8 @@ class DisSelectionTest(unittest.TestCase):
         # cut), per-pixel zero-motion selection and the sharper densifications.
         self.assertIn("w=mix(mix(w,a0,uCutEnabled*step(0.6,ct.r)),(1.0-uT)*a0+uT*c0,uCutEnabled*step(0.5,ct.g));",
                       dis_gles.shaders()["GENERATE_PHASE"])
-        self.assertIn("if(e0+8.0/255.0<eM){w=(1.0-uT)*a0+uT*c0;pa=a0;pc=c0;}", dis_gles.shaders()["GENERATE_PHASE"])
+        # 3.2.150: zero motion needs a 12-level lead (was 8).
+        self.assertIn("if(e0+12.0/255.0<eM){w=(1.0-uT)*a0+uT*c0;pa=a0;pc=c0;}", dis_gles.shaders()["GENERATE_PHASE"])
         self.assertIn("structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());", generator)
         self.assertIn("if (perPhase && disPhaseFlow == null) disPhaseFlow = new DenseInverseSearchFlow(true);", generator)
         self.assertIn("boolean disCut = maxFragmentTextureUnits >= 9 && disMotionUsable();", generator)
@@ -212,7 +213,8 @@ class DisSelectionTest(unittest.TestCase):
         self.assertIn(" w=mix(w,uT>=0.5?c0:a0,uCutEnabled*step(0.5,ct.b));", shaders["GENERATE_PHASE"])
         # 3.2.106: the local cut blends only where both real frames are smooth
         # (a glow); at an object's outline its blend is a translucent ghost.
-        self.assertIn("if(uDiscrete<0.5){float nk=smoothstep(16.0/255.0,32.0/255.0,min(eM,e0))*"
+        # 3.2.150: from 24-48 grey levels of mismatch (was 16-32).
+        self.assertIn("if(uDiscrete<0.5){float nk=smoothstep(24.0/255.0,48.0/255.0,min(eM,e0))*"
                       "smoothstep(3.0,6.0,us);", shaders["GENERATE_PHASE"])
         self.assertIn("w=mix(w,(1.0-uT)*a0+uT*c0,nk*(1.0-smoothstep(2.0/255.0,8.0/255.0,ng)));",
                       shaders["GENERATE_PHASE"])

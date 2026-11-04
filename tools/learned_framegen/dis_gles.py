@@ -508,8 +508,15 @@ def _phase_densify_shader():
 # five-tap warp error, each neighbour's weight with the difference of the
 # phase-warped guide image (edge-aware). Off when PHASE_SMOOTH_ITERS is 0.
 PHASE_SMOOTH_ITERS = 0
-# The zero-motion selection margin in grey levels (shipped 8; offline experiment).
-ZERO_MOTION_MARGIN = 8.0
+# The zero-motion selection margin in grey levels (8 until 3.2.149).
+# Since 3.2.150 with ZERO_MOTION_MARGIN 12: device replay bench paired against
+# 3.2.149 on the same triplets, sub-pixel invented measure (2026-11-03): area
+# Double Dash 0.069 -> 0.060%, Link's Awakening full-size 0.029 -> 0.022%,
+# NSMBU Deluxe map 0.041 -> 0.039%; Star Fox 64 frames with invented content
+# 8 -> 4%; no set worse, hold-out error within 0.003 of a cross-fade. Alone,
+# 48 gave 0.012 percentage points less area summed over ten sets and 12 gave
+# 0.010; together 0.021. 24 and 4 were worse.
+ZERO_MOTION_MARGIN = 12.0
 # Offline experiment: zero motion must also fit within this many grey levels (0: no cap).
 ZERO_MOTION_MAX = 0.0
 # Offline experiment: the five-tap comparison's offset in history pixels (shipped 1).
@@ -1020,7 +1027,8 @@ OCCLUSION_SIDE_MARGIN = 1.0
 # the frame, Ocarina 0.16 -> 0.07%, Wind Waker HD 0.042 -> 0.031%; average
 # error +0.002 to +0.009 of a cross-fade. Pixel-art sources keep their
 # whole-pixel warps (NES +0.034 with it).
-NEITHER_BLEND_T = 32.0
+# 48 since 3.2.150 (was 32), see ZERO_MOTION_MARGIN.
+NEITHER_BLEND_T = 48.0
 # ... only where the neighbouring field vectors also spread by this many
 # history pixels (the field is incoherent: no real correspondence there).
 NEITHER_SPREAD_PX = 6.0

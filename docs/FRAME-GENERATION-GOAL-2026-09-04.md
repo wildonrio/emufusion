@@ -249,7 +249,30 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 3 (latest) **— 3.2.149 (223, `ecbffa4b`): the 3-D nearer-frame pick starts at 32 grey levels (was 48).**
+November 3 (latest) **— 3.2.150 (224, `11dd131c`): the 3-D blend where no motion explains a pixel starts at 48 grey levels (was 32); zero motion needs a 12-level lead (was 8).**
+
+- **Search.** Six single-constant variants of 3.2.149's generate pass, then combinations, each a working-tree dex on the Thor's replay bench (panels off), paired by triplet against 3.2.149 with the sub-pixel invented measure. Sums over the ten 3-D sets (eval Star Fox 64, Ocarina, SM3DW, Wind Waker HD, Link's Awakening; full-size Ocarina, Double Dash, Link's Awakening, NSMBU Deluxe; NSMBU map):
+
+  | Variant | Invented area (sum of set means) | Frames with invented content (sum) | Hold-out error (sum) | Sets worse |
+  | --- | --- | --- | --- | --- |
+  | `NEITHER_BLEND_T` 48 + `ZERO_MOTION_MARGIN` 12 (adopted) | -0.021 | -4 | +0.003 | none |
+  | `NEITHER_BLEND_T` 48 | -0.012 | -8 | -0.001 | none |
+  | `NEITHER_BLEND_T` 64 | -0.011 | -8 | 0.000 | none |
+  | `NEITHER_BLEND_T` 48, `NEITHER_EDGE` (1, 4) | -0.011 | -8 | -0.001 | none |
+  | `ZERO_MOTION_MARGIN` 12 | -0.010 | -4 | +0.005 | none |
+  | `NEITHER_EDGE` (1, 4) | -0.009 | -4 | -0.001 | none |
+  | `NEITHER_BLEND_T` 24 | +0.006 | 0 | +0.003 | Link's Awakening |
+  | `ZERO_MOTION_MARGIN` 4 | +0.014 | +8 | -0.003 | Wind Waker HD, Double Dash |
+  | `NEITHER_EDGE` (4, 12) | +0.016 | +4 | +0.004 | four sets |
+
+- **Adopted pair, per set:** Double Dash area 0.069 -> 0.060%, Link's Awakening full size 0.029 -> 0.022%, NSMBU map 0.041 -> 0.039%, Star Fox 64 frames with invented content 8 -> 4%; the rest equal; hold-out error within 0.003 of a cross-fade on every set.
+- **Pixel art** (the zero-motion margin applies there too; same triplets, paired): Mega Drive area 0.069 -> 0.063%, SNES, NES and GBA unchanged, hold-out equal.
+- **Installed APK** reproduces the candidate's hold-out scores exactly on all 110 paired full-size and map triplets.
+- **Thor, NSMBU Deluxe in play:** 99.5% on the intended interval, 99.7% cadence (5 two-scan intervals), 92.7% of presents in their planned scan, first generated / real image 13.7 / 22.0 ms (varies with the fast-mode share from run to run). Picture correct; panels off and identity unchanged afterwards.
+- APK members differ from 3.2.149 only in `classes2.dex`, the manifest and signatures (survey recipe run 351).
+- Still scoring when this was released: `NEITHER_BLEND_T` 64 with `NEITHER_EDGE` (1, 4) (-0.011, -8, +0.001), the blend switched off entirely, and 48 with `NEITHER_EDGE` (0.5, 2) or (1, 4) plus the 12 margin.
+
+November 3 **— 3.2.149 (223, `ecbffa4b`): the 3-D nearer-frame pick starts at 32 grey levels (was 48).**
 
 - **Change.** Where the two warp samples a 3-D pixel would mix differ by 32-64 grey levels (was 48-96), the nearer frame's sample replaces their mix, a translucent second copy at an occlusion edge (`PICK_3D`, 3.2.114). Shader constants only.
 - **Device replay bench (Thor, panels off; working-tree dex, then the installed APK).** Paired against the unchanged tree on the same triplets, sub-pixel invented measure:
