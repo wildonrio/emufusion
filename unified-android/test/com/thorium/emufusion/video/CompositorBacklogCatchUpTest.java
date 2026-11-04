@@ -8,6 +8,11 @@ public final class CompositorBacklogCatchUpTest {
         isolatedLateFramesAreNotABacklog();
         aSkipThatDoesNotClearBacksOff();
         backlogsThatKeepReturningBackOff();
+        aQuietBacklogSkipsWithoutTheHoldoff();
+        aDueSkipWaitsForAQuietMoment();
+        busyPicturesNeverSkipEarly();
+        quietSkipsKeepTheirOwnHoldoff();
+        quietTimingCanBeTurnedOff();
         System.out.println("CompositorBacklogCatchUpTest passed");
     }
 
@@ -79,6 +84,92 @@ public final class CompositorBacklogCatchUpTest {
         while (!c.observe(t, t + P, P, t)) t += P;
         check(c.takeSkip(t), "skip after the calm");
         eq(CompositorBacklogCatchUp.MIN_HOLDOFF_NS, c.holdoffNs(), "hold-off reset");
+    }
+
+    /** Two quiet pairs and a short backlog: skipped at once, the budget untouched. */
+    private static void aQuietBacklogSkipsWithoutTheHoldoff() {
+        CompositorBacklogCatchUp c = new CompositorBacklogCatchUp();
+        long t = 1_000_000_000L;
+        c.observeChange(0.001, t);
+        c.observeChange(0.002, t);
+        for (int i = 0; i < CompositorBacklogCatchUp.QUIET_BACKLOG_FRAMES - 1; ++i, t += P) {
+            c.observe(t, t + P, P, t);
+            check(!c.takeSkip(t), "not a backlog yet");
+        }
+        c.observe(t, t + P, P, t);
+        c.observeChange(0.0, t);
+        check(c.takeSkip(t), "quiet skip");
+        eq(0L, c.skips(), "budgeted skips");
+        eq(1L, c.quietSkips(), "quiet skips");
+        check(!c.takeSkip(t), "only once");
+    }
+
+    /** A due skip waits while the picture moves, then takes the quiet moment. */
+    private static void aDueSkipWaitsForAQuietMoment() {
+        CompositorBacklogCatchUp c = new CompositorBacklogCatchUp();
+        long t = 1_000_000_000L;
+        while (!c.observe(t, t + P, P, t)) { c.observeChange(0.2, t); t += P; }
+        c.observeChange(0.2, t);
+        check(!c.takeSkip(t), "waits while busy");
+        t += P;
+        c.observe(t, t + P, P, t);
+        c.observeChange(0.001, t);
+        check(!c.takeSkip(t), "one quiet pair is not enough");
+        c.observeChange(0.001, t);
+        check(c.takeSkip(t), "quiet moment");
+        eq(1L, c.skips(), "the budgeted skip");
+    }
+
+    /** Busy throughout: the due skip still comes, after the wait. */
+    private static void busyPicturesNeverSkipEarly() {
+        CompositorBacklogCatchUp c = new CompositorBacklogCatchUp();
+        long t = 1_000_000_000L;
+        int taken = 0;
+        long dueAt = -1L;
+        for (int i = 0; i < 2000; ++i, t += P) {
+            boolean due = c.observe(t, t + P, P, t);
+            if (due && dueAt < 0L) dueAt = t;
+            c.observeChange(0.05, t);
+            if (c.takeSkip(t)) {
+                ++taken;
+                check(t - dueAt >= CompositorBacklogCatchUp.QUIET_WAIT_NS, "waited for quiet");
+                break;
+            }
+        }
+        eq(1L, taken, "skipped after the wait");
+        eq(0L, c.quietSkips(), "never quiet");
+    }
+
+    /** Quiet skips that do not clear the backlog back off on their own. */
+    private static void quietSkipsKeepTheirOwnHoldoff() {
+        CompositorBacklogCatchUp c = new CompositorBacklogCatchUp();
+        long t = 1_000_000_000L;
+        long last = -1L;
+        for (int i = 0; i < 3000; ++i, t += P) {
+            c.observe(t, t + P, P, t);          // the compositor keeps every frame late
+            c.observeChange(0.0, t);
+            long before = c.quietSkips();
+            if (c.takeSkip(t) && c.quietSkips() > before) {
+                if (last >= 0L) check(t - last >= CompositorBacklogCatchUp.QUIET_HOLDOFF_NS, "spaced");
+                last = t;
+            }
+        }
+        check(c.quietIneffective() >= 2L, "ineffective quiet skips counted");
+        check(c.quietSkips() <= 6L, "backed off: " + c.quietSkips());
+    }
+
+    private static void quietTimingCanBeTurnedOff() {
+        CompositorBacklogCatchUp c = new CompositorBacklogCatchUp();
+        c.setQuietEnabled(false);
+        long t = 1_000_000_000L;
+        for (int i = 0; i < CompositorBacklogCatchUp.BACKLOG_FRAMES - 1; ++i, t += P) {
+            c.observe(t, t + P, P, t);
+            c.observeChange(0.0, t);
+            check(!c.takeSkip(t), "no quiet skips");
+        }
+        c.observeChange(0.5, t);
+        check(c.observe(t, t + P, P, t), "a backlog");
+        check(c.takeSkip(t), "skips at once, as before");
     }
 
     private static void check(boolean condition, String message) {

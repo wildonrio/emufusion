@@ -249,7 +249,38 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 3 (latest) **— 3.2.150 (224, `11dd131c`): the 3-D blend where no motion explains a pixel starts at 48 grey levels (was 32); zero motion needs a 12-level lead (was 8).**
+November 4 (latest) **— Eden latency: half the frames sit a scan behind after one late render; quiet-moment catch-up skips halve that but add two-scan intervals (QA opt-in, not default). Motion-search options re-checked with the new measure.**
+
+- **Where NSMBU Deluxe's latency goes (3.2.149 / 3.2.150 in play, physical trace).**
+  - Frames at depth 0 in the fast mode reach the screen 11.2 ms (generated) / 19.6 ms (real) after arrival, within ~3 ms of the structural minimum. About half the frames run a scan deeper (+8.3 ms): either the planner's trial deepening (3.2.150 run, 52% at depth 1) or the compositor holding them (3.2.149 run, 47.9% late at depth 0).
+  - The held frames are not GPU misses: their render finished a median 3.7 ms before the compositor's latch (late frames 2.5 ms). One late render leaves the compositor's queue a frame deep, and it stays so until a callback presents nothing. In 3.2.149's window: 676 frames in a row (5.6 s) a scan behind; the catch-up skip's hold-off had grown to 32 s.
+- **Trial: catch-up skips timed by quiet pairs (3.2.151, 3.2.152; QA `emufusion_framegen_quiet_skip=1`, off by default).**
+  - Per pair, the GPU counts samples of a 160x90 grid where the two real frames differ by 8 grey levels or more (`QUIET_ROWS`, `QUIET_SUM`, dis_gles.py). A backlog of 24 frames is skipped where at most 0.5% changed, every 2 s at most, outside the 16-s budget; a due skip waits up to 4 s for such a moment (`CompositorBacklogCatchUp`).
+  - Recorded captures: 22% of NSMBU level pairs, 59% of world-map pairs and 46% of Link's Awakening pairs change less than 1% of the grid; none is fully still.
+  - 3.2.151 read the count back through a pixel-pack buffer. On the Thor that stalled the frame thread (2,008 queue cutoff misses in 16 s against 1) and generation collapsed in stretches (100 -> 2-6 generated frames per 200). 3.2.152 uses an ANY_SAMPLES_PASSED query (the pass discards above 72 changed samples), polled without waiting: cutoff misses back to 2-3.
+  - **3.2.152, NSMBU Deluxe in play, one run each (same APK):**
+
+    | | Quiet skips on | Off |
+    | --- | --- | --- |
+    | Shown a scan late | 34.5% | 72.4% |
+    | Arrival to screen, generated / real (mean) | 14.6 / 22.8 ms | 16.8 / 25.2 ms |
+    | Cadence (two-scan intervals) | 98.9% (21) | 99.4% (12) |
+    | Skips | 9 quiet, 1 budgeted | 1 budgeted |
+
+  - **Not the default.** Each quiet skip is one more two-scan interval. At 0.5% of the grid a walking character (Toadette on the map is ~0.15%) still counts as quiet, so a skip can stall the one thing being watched; a threshold strict enough to be safely invisible would never fire in NSMBU's animated world. Under the owner's smoothness-first rule the code stays as a QA opt-in, the measurement pass runs only when it is on, and the Thor is back on 3.2.150 (identity unchanged). 3.2.151 and 3.2.152 are retired.
+- **Motion-search options against 3.2.150 (device replay bench, sub-pixel measure, eval incl. pixel art + full size + map; sums over 14 sets):**
+
+  | Variant | Invented area | Better | Worse | Hold-out |
+  | --- | --- | --- | --- | --- |
+  | `ENDPOINT_PLAIN_HESSIAN` | -0.073 | Mega Drive 0.133 -> 0.062%, Ocarina, Link's Awakening full size | Star Fox 64 0.023 -> 0.033%, Wind Waker HD | +0.014 |
+  | `ENDPOINT_BREAK` | -0.069 | Mega Drive -> 0.059%, Wind Waker HD | Star Fox 64, Double Dash | +0.023 |
+  | `ENDPOINT_REJECT_DIST` | -0.063 | Mega Drive, Double Dash | Star Fox 64, Link's Awakening | +0.043 |
+  | all three | -0.073 | Mega Drive, Double Dash | Link's Awakening, NSMBU map, SNES | +0.046 |
+  | `PHASE_PROPAGATE_CA` (8, 16) | +0.015 | Link's Awakening full size 0.024 -> 0.012%, NSMBU map, NES | Star Fox 64 0.023 -> 0.045%, Wind Waker HD, Double Dash, SNES | +0.025 |
+
+  - The three OpenCV choices are a pixel-art (Mega Drive) gain with 3-D losses; the endpoint search would need the pixel-art flag to use them only there. `PHASE_PROPAGATE_CA` is the only option that helps both Eden sets, at eight more patch matches per cell; any Eden-only use needs its GPU cost measured in play first.
+
+November 3 **— 3.2.150 (224, `11dd131c`): the 3-D blend where no motion explains a pixel starts at 48 grey levels (was 32); zero motion needs a 12-level lead (was 8).**
 
 - **Search.** Six single-constant variants of 3.2.149's generate pass, then combinations, each a working-tree dex on the Thor's replay bench (panels off), paired by triplet against 3.2.149 with the sub-pixel invented measure. Sums over the ten 3-D sets (eval Star Fox 64, Ocarina, SM3DW, Wind Waker HD, Link's Awakening; full-size Ocarina, Double Dash, Link's Awakening, NSMBU Deluxe; NSMBU map):
 

@@ -70,6 +70,14 @@ final class DenseInverseSearchShaders {
             .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uFrameA,uFrameC,uPhaseFlow;uniform float uT;uniform vec2 uFlowSize;\nlayout(location=0) out vec4 o0;\nfloat md(vec3 x){return max(max(x.r,x.g),x.b);}\nvoid main(){float n=0.0;float y=floor(gl_FragCoord.y);\n for(int x=0;x<32;++x){vec2 u=(vec2(float(x),y)+0.5)/vec2(32.0,18.0);\n  vec2 v=texture(uPhaseFlow,u).xy/uFlowSize;\n  float eM=md(abs(texture(uFrameA,u-uT*v).rgb-texture(uFrameC,u+(1.0-uT)*v).rgb));\n  float e0=md(abs(texture(uFrameA,u).rgb-texture(uFrameC,u).rgb));\n  n+=step(32.0/255.0,min(eM,e0));}\n o0=vec4(n,0.0,0.0,1.0);}\n")
             .toString();
 
+    static final String QUIET_ROWS = new StringBuilder(433)
+            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uFrameA,uFrameC;\nlayout(location=0) out vec4 o0;\nfloat md(vec3 x){return max(max(x.r,x.g),x.b);}\nvoid main(){float n=0.0;float y=floor(gl_FragCoord.y);\n for(int x=0;x<160;++x){vec2 u=(vec2(float(x),y)+0.5)/vec2(160.0,90.0);\n  n+=step(8.0/255.0,md(abs(texture(uFrameA,u).rgb-texture(uFrameC,u).rgb)));}\n o0=vec4(n,0.0,0.0,1.0);}\n")
+            .toString();
+
+    static final String QUIET_SUM = new StringBuilder(270)
+            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uQuietRows;\nlayout(location=0) out vec4 o0;\nvoid main(){float n=0.0;for(int y=0;y<90;++y)n+=texelFetch(uQuietRows,ivec2(0,y),0).r;\n if(n>72.0)discard;o0=vec4(1.0);}\n")
+            .toString();
+
     static final String STATIC_COUNT = new StringBuilder(391)
             .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uFrameA,uFrameC,uCount;\nlayout(location=0) out vec4 o0;\nvoid main(){ivec2 p=ivec2(gl_FragCoord.xy);vec3 e=abs(texelFetch(uFrameA,p,0).rgb-texelFetch(uFrameC,p,0).rgb);\n float n=texelFetch(uCount,p,0).r;\n o0=vec4(step(max(max(e.r,e.g),e.b),1.5/255.0)*min(n+1.0/255.0,1.0),0.0,0.0,1.0);}\n")
             .toString();

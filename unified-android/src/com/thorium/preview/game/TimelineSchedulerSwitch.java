@@ -291,6 +291,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         fastCores = fast;
+        boolean quiet = false;
+        try {
+            if (context != null) quiet = Settings.Global.getInt(
+                    context.getContentResolver(), QUIET_SKIP_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        quietSkip = quiet;
         int floor = 0;
         try {
             if (context != null) floor = Settings.Global.getInt(
@@ -608,6 +616,19 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean fastCores = true;
 
     static boolean fastCores() { return fastCores; }
+
+    /**
+     * QA opt-in (emufusion_framegen_quiet_skip=1, 2026-11-04): compositor
+     * catch-up skips timed by how much the picture changes
+     * (CompositorBacklogCatchUp), and the GPU measurement that feeds them.
+     * Off by default: NSMBU Deluxe in play went from 72% to 35% of frames
+     * shown a scan late, but each quiet skip is one more two-scan interval
+     * (21 against 12 in 16 s) and its world has no fully still pairs.
+     */
+    static final String QUIET_SKIP_GLOBAL = "emufusion_framegen_quiet_skip";
+    private static volatile boolean quietSkip = false;
+
+    static boolean quietSkip() { return quietSkip; }
     private static volatile boolean disDefault = true;
 
     static boolean disDefault() { return disDefault; }

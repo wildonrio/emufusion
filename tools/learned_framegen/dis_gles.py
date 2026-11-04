@@ -893,6 +893,43 @@ def late_rows_shader():
     " o0=vec4(n,0.0,0.0,1.0);}\n")
 
 
+# Quiet pairs (3.2.151): how much of the picture changed between the two
+# real frames, sampled on a 160x90 grid (8 px apart at 1280x720, so a
+# sprite is not missed) with no motion -- a sample counts when it differs by
+# QUIET_T grey levels or more. QUIET_ROWS counts each row (one column,
+# half-float: exact); QUIET_SUM adds the rows and keeps its one fragment only
+# when at most QUIET_SHARE of the grid changed, inside an ANY_SAMPLES_PASSED
+# query the CPU polls without waiting. (A pixel-pack readback of the count,
+# the first candidate, stalled the frame thread on the Thor: 2,008 queue
+# cutoff misses in 16 s against 1, and generation collapsed.)
+# CompositorBacklogCatchUp times its skips by it: a skip where almost nothing
+# moves repeats a picture no one can tell apart.
+QUIET_GRID = (160, 90)
+QUIET_T = 8.0
+QUIET_SHARE = 0.005
+
+
+def quiet_rows_shader():
+    gw, gh = QUIET_GRID
+    return (HEADER +
+    "uniform sampler2D uFrameA,uFrameC;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
+    "void main(){float n=0.0;float y=floor(gl_FragCoord.y);\n"
+    f" for(int x=0;x<{gw};++x){{vec2 u=(vec2(float(x),y)+0.5)/vec2({float(gw)},{float(gh)});\n"
+    f"  n+=step({QUIET_T}/255.0,md(abs(texture(uFrameA,u).rgb-texture(uFrameC,u).rgb)));}}\n"
+    " o0=vec4(n,0.0,0.0,1.0);}\n")
+
+
+def quiet_sum_shader():
+    gh = QUIET_GRID[1]
+    return (HEADER +
+    "uniform sampler2D uQuietRows;\n"
+    "layout(location=0) out vec4 o0;\n"
+    f"void main(){{float n=0.0;for(int y=0;y<{gh};++y)n+=texelFetch(uQuietRows,ivec2(0,y),0).r;\n"
+    f" if(n>{float(round(QUIET_SHARE * QUIET_GRID[0] * QUIET_GRID[1]))})discard;o0=vec4(1.0);}}\n")
+
+
 def late_verdict_shader():
     gw, gh = LATE_GRID
     if LATE_ROWS:
@@ -1183,6 +1220,7 @@ def shaders():
             'PATCH_SEARCH': patch_search_shader(), 'DENSIFY': densify_shader(), 'GENERATE': GENERATE,
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': bounds_shader(),
             'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(), 'LATE_VERDICT': late_verdict_shader(), 'LATE_ROWS': late_rows_shader(),
+            'QUIET_ROWS': quiet_rows_shader(), 'QUIET_SUM': quiet_sum_shader(),
             'STATIC_COUNT': STATIC_COUNT,
             'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader(),
             'PATCH_PROPAGATE': patch_propagate_shader()}

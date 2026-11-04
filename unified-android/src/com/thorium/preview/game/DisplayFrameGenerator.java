@@ -3979,10 +3979,25 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // Every frame a scan behind its slot since one late render: present
             // nothing at this callback so the compositor's queue empties
             // (CompositorBacklogCatchUp; handled like a missed callback).
+            // QA opt-in: quiet pairs time the skip, one where almost nothing
+            // moves (TimelineSchedulerSwitch.quietSkip).
+            if (externalTransport == null) {
+                builtinBacklogCatchUp.setQuietEnabled(TimelineSchedulerSwitch.quietSkip());
+                if (disPhaseFlow != null) {
+                    disPhaseFlow.setQuietMeasure(TimelineSchedulerSwitch.quietSkip());
+                    double changed = disPhaseFlow.pollQuietShare();
+                    if (changed >= 0.0) builtinBacklogCatchUp.observeChange(changed, deadlineNowNs);
+                }
+            }
+            long quietBefore = builtinBacklogCatchUp.quietSkips();
             if (externalTransport == null && builtinBacklogCatchUp.takeSkip(deadlineNowNs)) {
-                if (builtinBacklogCatchUp.skips() <= 32L)
+                boolean quietSkip = builtinBacklogCatchUp.quietSkips() > quietBefore;
+                if (builtinBacklogCatchUp.skips() + builtinBacklogCatchUp.quietSkips() <= 64L)
                     Log.i(TAG, "Compositor backlog skip generator=" + generatorId +
+                            " quiet=" + quietSkip +
                             " skips=" + builtinBacklogCatchUp.skips() +
+                            " quietSkips=" + builtinBacklogCatchUp.quietSkips() +
+                            " quietIneffective=" + builtinBacklogCatchUp.quietIneffective() +
                             " ineffective=" + builtinBacklogCatchUp.ineffective() +
                             " reformed=" + builtinBacklogCatchUp.reformed() +
                             " holdoffMs=" + builtinBacklogCatchUp.holdoffNs() / 1_000_000L);
@@ -14879,6 +14894,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " preparedFrameHits=" + preparedFrameHits +
                 " preparedFrameMisses=" + preparedFrameMisses +
                 " backlogSkips=" + builtinBacklogCatchUp.skips() +
+                " quietSkips=" + builtinBacklogCatchUp.quietSkips() +
                 " timelineRequiredLatencyUs=" + (timelineRequiredLatencyNs == Long.MIN_VALUE ?
                         "unknown" : String.valueOf(timelineRequiredLatencyNs / 1000L)) +
                 " schedulerUnavailable=" +

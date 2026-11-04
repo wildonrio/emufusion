@@ -57,6 +57,21 @@ final class DenseInverseSearchFlow {
     // Per-phase patch stride: pixel art 4 (dis_gles.py PHASE_DISCRETE_STRIDE), 3-D 3.
     static final int PHASE_DISCRETE_STRIDE = 4, PHASE_STRIDE = 3, PHASE_PATCH = 8;
     private int lateRowsProgram, lateRows;
+    // Quiet pairs (dis_gles.py QUIET_GRID): per pair, whether at most 0.5% of
+    // a 160x90 grid differs by 8 grey levels or more between the two real
+    // frames, as an ANY_SAMPLES_PASSED query (two in flight) the CPU polls
+    // without waiting. A pixel-pack readback stalled the frame thread.
+    static final int QUIET_ROWS = 90;
+    private int quietRowsProgram, quietSumProgram, quietRows, quiet;
+    private final int[] quietQuery = new int[2];
+    private final boolean[] quietPending = new boolean[2];
+    private final long[] quietSerial = new long[2];
+    private final int[] quietResult = new int[1];
+    private long quietKeyA, quietKeyB, quietSerials, quietDropped;
+    private boolean quietMeasure;
+
+    /** QA (TimelineSchedulerSwitch.quietSkip): measure quiet pairs at all. */
+    void setQuietMeasure(boolean enabled) { quietMeasure = enabled; }
     // Static overlays (QA emufusion_framegen_static_overlay): per history
     // pixel, real frames in a row unchanged (1/255 each), ping-pong.
     private int staticCountProgram, staticIndex;
@@ -157,6 +172,9 @@ final class DenseInverseSearchFlow {
             cut = rgba8(1, 1, true);
             late = rgba8(1, 1, true);
             lateRows = texture(1, LATE_ROWS, true);
+            quietRows = texture(1, QUIET_ROWS, true);
+            quiet = rgba8(1, 1, true);
+            if (quietQuery[0] == 0) GLES30.glGenQueries(2, quietQuery, 0);
             staticCounts[0] = rgba8(width, height, true);
             staticCounts[1] = rgba8(width, height, true);
             clearTarget(staticCounts[0]);
@@ -396,6 +414,55 @@ final class DenseInverseSearchFlow {
 
     int generatePhaseProgram() { return generatePhase; }
 
+    private void measureQuiet(int frameA, int frameC) {
+        int slot = (int) (quietSerials & 1L);
+        if (quietPending[slot]) {
+            // Two pairs still in flight: this one goes unmeasured.
+            ++quietDropped;
+            return;
+        }
+        saveState();
+        try {
+            begin(quietRowsProgram, 1, QUIET_ROWS, quietRows);
+            bind(quietRowsProgram, "uFrameA", frameA, 0);
+            bind(quietRowsProgram, "uFrameC", frameC, 1);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            begin(quietSumProgram, 1, 1, quiet);
+            bind(quietSumProgram, "uQuietRows", quietRows, 0);
+            GLES30.glBeginQuery(GLES30.GL_ANY_SAMPLES_PASSED, quietQuery[slot]);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            GLES30.glEndQuery(GLES30.GL_ANY_SAMPLES_PASSED);
+            quietPending[slot] = true;
+            quietSerial[slot] = ++quietSerials;
+        } finally {
+            restoreState();
+        }
+    }
+
+    /**
+     * The newest finished quiet measurement: 0 for a quiet pair (at most 0.5%
+     * of the grid changed), 1 otherwise, -1 when none finished since the last
+     * call. Never waits.
+     */
+    double pollQuietShare() {
+        double share = -1.0;
+        long newest = 0L;
+        for (int slot = 0; slot < 2; ++slot) {
+            if (!quietPending[slot]) continue;
+            GLES30.glGetQueryObjectuiv(quietQuery[slot], GLES30.GL_QUERY_RESULT_AVAILABLE, quietResult, 0);
+            if (quietResult[0] == 0) continue;
+            GLES30.glGetQueryObjectuiv(quietQuery[slot], GLES30.GL_QUERY_RESULT, quietResult, 0);
+            quietPending[slot] = false;
+            if (quietSerial[slot] > newest) {
+                share = quietResult[0] != 0 ? 0.0 : 1.0;
+                newest = quietSerial[slot];
+            }
+        }
+        return share;
+    }
+
+    long quietDropped() { return quietDropped; }
+
     // A pixel-art system (3.2.104): whole-pixel warps, the nearer frame's
     // sample where two disagree, no local cut. 3-D sources, however small,
     // keep sub-pixel warps and blends.
@@ -429,6 +496,13 @@ final class DenseInverseSearchFlow {
             lateKeyA = phaseKeyA;
             lateKeyB = phaseKeyB;
             lateValue = t;
+        }
+        // Once per pair: how much changed between the two real frames.
+        if (quietMeasure && quietSumProgram != 0 && quietQuery[0] != 0 &&
+                (phaseKeyA != quietKeyA || phaseKeyB != quietKeyB)) {
+            measureQuiet(frameA, frameC);
+            quietKeyA = phaseKeyA;
+            quietKeyB = phaseKeyB;
         }
         // Once per pair: advance the static-overlay counts.
         boolean overlay = staticFrames > 0f && staticCountProgram != 0 && staticCounts[0] != 0;
@@ -668,11 +742,15 @@ final class DenseInverseSearchFlow {
         cutProgram = link(v, DenseInverseSearchShaders.CUT);
         lateProgram = link(v, DenseInverseSearchShaders.LATE_VERDICT);
         lateRowsProgram = link(v, DenseInverseSearchShaders.LATE_ROWS);
+        quietRowsProgram = link(v, DenseInverseSearchShaders.QUIET_ROWS);
+        quietSumProgram = link(v, DenseInverseSearchShaders.QUIET_SUM);
         staticCountProgram = link(v, DenseInverseSearchShaders.STATIC_COUNT);
         String[] labels = {"GRAY", "DOWN", "GRAD", "PATCH_SEARCH", "DENSIFY", "GENERATE", "TO_RAW",
-                "PHASE_SEARCH", "PHASE_DENSIFY", "GENERATE_PHASE", "CUT", "LATE_VERDICT", "LATE_ROWS", "STATIC_COUNT"};
+                "PHASE_SEARCH", "PHASE_DENSIFY", "GENERATE_PHASE", "CUT", "LATE_VERDICT", "LATE_ROWS", "STATIC_COUNT",
+                "QUIET_ROWS", "QUIET_SUM"};
         int[] programs = {gray, down, grad, patchSearch, densify, generate, toRaw, phaseSearch,
-                phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram};
+                phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram,
+                quietRowsProgram, quietSumProgram};
         for (int i = 0; i < programs.length; ++i) passNames.put(programs[i], labels[i]);
         int[] ids = new int[1];
         GLES20.glGenFramebuffers(1, ids, 0);
@@ -745,6 +823,8 @@ final class DenseInverseSearchFlow {
         java.util.Arrays.fill(motionFill, 0);
         motionWidth = motionHeight = 0;
         phasePatches = phaseFlow = cut = late = lateRows = bounds = 0;
+        quietRows = quiet = 0;
+        quietKeyA = quietKeyB = 0L;
         staticCounts[0] = staticCounts[1] = 0;
         staticKeyA = staticKeyB = 0L;
         lateKeyA = lateKeyB = 0L;
@@ -763,12 +843,16 @@ final class DenseInverseSearchFlow {
     void release() {
         releaseTextures();
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
-                phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram, boundsProgram, selectFeatures, selectC1,
+                phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram,
+                quietRowsProgram, quietSumProgram, boundsProgram, selectFeatures, selectC1,
                 selectC2, selectC3, selectOut, selectGenerate})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
         phaseSearch = phaseDensify = generatePhase = cutProgram = lateProgram = lateRowsProgram = boundsProgram = 0;
-        staticCountProgram = 0;
+        staticCountProgram = quietRowsProgram = quietSumProgram = 0;
+        if (quietQuery[0] != 0) GLES30.glDeleteQueries(2, quietQuery, 0);
+        quietQuery[0] = quietQuery[1] = 0;
+        quietPending[0] = quietPending[1] = false;
         selectFeatures = selectC1 = selectC2 = selectC3 = selectOut = selectGenerate = 0;
         uniforms.clear();
         if (framebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {framebuffer}, 0);

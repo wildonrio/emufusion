@@ -1333,6 +1333,22 @@
     "unified-android/build/emufusion-3.2.147-phase2-phase3-qualification.apk": {
       "sha256": "515bd45b6ece0834381ce695617cc4e4232965301fadc0c3179a407f4c29a9d6",
       "reason": "Superseded rollback 3.2.147 (221); 3.2.149 is the rollback for 3.2.150, 2026-11-03."
+    },
+    "unified-android/build/emufusion-3.2.151-phase2-phase3-qualification-1c3a693d74ce0ad104d4ea98f17cbd3327dd5faff77b84f5d707e5558eccd163.apk": {
+      "sha256": "1c3a693d74ce0ad104d4ea98f17cbd3327dd5faff77b84f5d707e5558eccd163",
+      "reason": "Rejected candidate 3.2.151 (225): its pixel-pack readback of the quiet count stalled the frame thread (2,008 queue cutoff misses in 16 s); replaced by 3.2.152, 2026-11-04."
+    },
+    "unified-android/build/emufusion-3.2.151-phase2-phase3-qualification.apk": {
+      "sha256": "1c3a693d74ce0ad104d4ea98f17cbd3327dd5faff77b84f5d707e5558eccd163",
+      "reason": "Rejected candidate 3.2.151 (225): its pixel-pack readback of the quiet count stalled the frame thread (2,008 queue cutoff misses in 16 s); replaced by 3.2.152, 2026-11-04."
+    },
+    "unified-android/build/emufusion-3.2.152-phase2-phase3-qualification-22f10b558bb42b892456fd1c6e035e04e852aa7e1a4ab6d5f471135a58691701.apk": {
+      "sha256": "22f10b558bb42b892456fd1c6e035e04e852aa7e1a4ab6d5f471135a58691701",
+      "reason": "Closed trial 3.2.152 (226): quiet-moment catch-up skips, kept as a default-off QA opt-in; Thor restored to 3.2.150, 2026-11-04."
+    },
+    "unified-android/build/emufusion-3.2.152-phase2-phase3-qualification.apk": {
+      "sha256": "22f10b558bb42b892456fd1c6e035e04e852aa7e1a4ab6d5f471135a58691701",
+      "reason": "Closed trial 3.2.152 (226): quiet-moment catch-up skips, kept as a default-off QA opt-in; Thor restored to 3.2.150, 2026-11-04."
     }
   }
 }
