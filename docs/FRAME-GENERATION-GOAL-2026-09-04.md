@@ -263,7 +263,8 @@ November 4 (latest) **— 3.2.153 (227, `1393683a`): Switch (Eden) sessions also
   | GPU per pair (estimator + generate) | 2.52 ms | 2.36 ms (3.2.150: 2.36 ms) |
 
   The 0.16 ms more per pair cost no frames; the late share (23.5 / 45.9%) follows the compositor backlog episodes, not this change.
-- APK members differ from 3.2.150 only in `classes2.dex`, the manifest and signatures (survey recipe run 354). Thor identity unchanged (UID 10206, first install 2026-09-11).
+- APK members differ from 3.2.150 only in `classes2.dex`, the manifest and signatures (survey recipe run 354).
+- **Next Switch-only option, not adopted:** the endpoint search's plain structure tensor (`ENDPOINT_PLAIN_HESSIAN`) for Eden sessions only, on top of 3.2.153 (same bench, paired against the installed 3.2.153): Link's Awakening full size 0.012 -> 0.010%, but NSMBU Deluxe map 0.036 -> 0.040%; Star Fox 64 byte-identical. Reverted. Thor identity unchanged (UID 10206, first install 2026-09-11).
 
 November 4 **— Eden latency: half the frames sit a scan behind after one late render; quiet-moment catch-up skips halve that but add two-scan intervals (QA opt-in, not default). Motion-search options re-checked with the new measure.**
 
