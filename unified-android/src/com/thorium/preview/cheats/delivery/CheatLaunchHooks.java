@@ -69,7 +69,7 @@ public final class CheatLaunchHooks {
             resolved = CheatControl.gameCheatsFor(app, request.systemId, request.gameTitle,
                     contentNameOf(request), discIdentityOf(request), engine);
             if (CheatDelivery.widescreenByCheat(canonical)) {
-                boolean hackOn = WidescreenHackPolicy.isHackEnabledFor(app, request.systemId);
+                boolean hackOn = WidescreenHackPolicy.isHackEnabledFor(app, request, engine);
                 Set<String> before = resolved.selection.enabledIds();
                 Set<String> after = WidescreenCheatOverlay.apply(CheatControl.directory(app),
                         CheatControl.store(app), resolved.gameKey, resolved.rows,

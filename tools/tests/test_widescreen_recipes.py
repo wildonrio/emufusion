@@ -71,6 +71,10 @@ class PlumbingTest(unittest.TestCase):
         self.assertIn('TitleMatcher.normalize(title).replaceAll("\\\\bthe\\\\b", " ")', recipes)
         self.assertNotIn('TitleMatcher.normalize(gameName)', recipes)
 
+    def test_a_picture_widened_at_startup_is_not_squeezed_into_the_old_shape(self):
+        session = (GAME / 'PpssppGlesEngineSession.java').read_text()
+        self.assertIn('Math.max(presentationAspect, widescreenRecipe.maxAspect)', session)
+
     def test_aspect_is_reread_after_a_width_change(self):
         session = (GAME / 'LibretroEngineSession.java').read_text()
         self.assertIn('widescreenAspectChecks = newest.width != widescreenFrameWidth', session)

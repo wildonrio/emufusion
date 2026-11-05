@@ -959,6 +959,106 @@
         }
       },
       "release": false
+    },
+    "gamecube": {
+      "engine": "dolphin",
+      "relaunch": true,
+      "baseWidth": 640,
+      "height": 480,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "options": {
+        "dolphin_widescreen_hack": "disabled"
+      },
+      "onOptions": {},
+      "offOptions": {},
+      "games": {
+        "Super Smash Bros. Melee": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Metroid Prime": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Super Mario Sunshine": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "The Legend of Zelda: The Wind Waker": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Resident Evil 4": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Eternal Darkness: Sanity's Requiem": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Mario Kart: Double Dash!!": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Donkey Kong Jungle Beat": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Star Fox Adventures": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Wave Race: Blue Storm": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        }
+      },
+      "release": false
+    },
+    "dreamcast": {
+      "engine": "flycast",
+      "relaunch": true,
+      "baseWidth": 640,
+      "height": 480,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "options": {},
+      "onOptions": {},
+      "offOptions": {},
+      "games": {
+        "Crazy Taxi": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Jet Grind Radio": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Rayman 2: The Great Escape": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        },
+        "Sonic Adventure": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+        }
+      },
+      "release": false
     }
   }
 }

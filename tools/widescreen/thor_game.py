@@ -81,9 +81,12 @@ def main():
                               stderr=subprocess.DEVNULL)
     try:
         quoted = rom.replace("'", "'\\''")
+        # What the library would pass; without it the file name stands in for the title.
+        name = os.environ.get('THOR_GAME_TITLE', '').replace("'", "'\\''")
+        title = f" --es title '{name}'" if name else ''
         shell(f"am start -a com.thorium.preview.LAUNCH_INTERNAL_GAME -n {ACTIVITY} --es path '{quoted}' "
               f"--es system {system} --es engine_id {engine} --ez qualification_only true "
-              f"--es qualification_session {SESSION}")
+              f"--es qualification_session {SESSION}{title}")
         if not wait_log(log, r'Gameplay layer presenting', 120):
             screen(out / 'no-present.png')
             print('NO_PRESENT')

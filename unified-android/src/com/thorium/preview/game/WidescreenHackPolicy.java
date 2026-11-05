@@ -59,6 +59,16 @@ public final class WidescreenHackPolicy {
         return WidescreenSettings.isHackEnabled(context);
     }
 
+    /** A game with a relaunch recipe follows the player's tap and swipe, not the system setting. */
+    public static boolean isHackEnabledFor(Context context, GameLaunchRequest request, String engine) {
+        WidescreenRecipes.Recipe recipe = WidescreenRecipes.find(
+                context, request.systemId, request.gameTitle);
+        if (recipe != null && recipe.relaunch && recipe.engine.equals(engine))
+            return WidescreenSession.remembered(context, recipe, request.gameTitle,
+                    request.qualificationSession);
+        return isHackEnabledFor(context, request.systemId);
+    }
+
     /** Contract 4: {@code native | hack | cheats | unavailable}. */
     public static String availability(String systemId) {
         return WidescreenHackTable.availability(systemId);
@@ -117,7 +127,7 @@ public final class WidescreenHackPolicy {
         String system = request.systemId;
         File root = engineRoot(context, engine);
         if (root == null) return;
-        boolean hackOn = isHackEnabledFor(context, system);
+        boolean hackOn = isHackEnabledFor(context, request, engine);
         Map<String, String> overrides = new java.util.LinkedHashMap<>(
                 WidescreenHackTable.coreOptionOverrides(
                         system, engine, hackOn, perGameWidescreenCodeSelected));

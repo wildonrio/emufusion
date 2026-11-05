@@ -502,12 +502,16 @@ final class PpssppGlesEngineSession implements EngineSession,
                             presentationAspect <= 0.1f || presentationAspect >= 10f)
                         throw new IllegalStateException(
                                 "No safe presentation aspect for " + request.systemId);
-                    loop.setPresentationAspect(presentationAspect);
                     WidescreenRecipes.Recipe widescreenRecipe = WidescreenRecipes.find(
                             appContext, request.systemId, request.gameTitle);
                     if (widescreenRecipe != null && widescreenRecipe.engine.equals(entry.id))
                         widescreen = new WidescreenSession(appContext, widescreenRecipe,
                                 request.gameTitle, request.qualificationSession);
+                    // A picture widened at startup is presented at its own width: squeezed into
+                    // the original shape it would be distorted, and some cores still report that.
+                    loop.setPresentationAspect(widescreen != null && widescreen.isEnabled()
+                            ? Math.max(presentationAspect, widescreenRecipe.maxAspect)
+                            : presentationAspect);
                     Log.i(TAG, "Resolved presentation aspect engine=" + entry.id +
                             " system=" + request.systemId + " aspect=" +
                             presentationAspect);

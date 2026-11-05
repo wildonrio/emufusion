@@ -3,6 +3,7 @@ package com.thorium.preview.game;
 import android.content.Context;
 import android.util.Log;
 
+import com.thorium.emufusion.metadata.EngineSystemIdResolver;
 import com.thorium.emufusion.metadata.TitleMatcher;
 
 import org.json.JSONObject;
@@ -104,10 +105,12 @@ public final class WidescreenRecipes {
     public static Recipe find(Context context, String systemId, String gameName) {
         if (context == null || systemId == null || gameName == null) return null;
         Map<String, Recipe> recipes = table(context);
-        String key = systemId + "/" + gameKey(gameName);
+        // The library says gc where the engines say gamecube.
+        String system = EngineSystemIdResolver.canonical(systemId);
+        String key = system + "/" + gameKey(gameName);
         if (recipes.containsKey(key)) return recipes.get(key);
         // No entry of its own: the system's recipe for the rest of its library, if it has one.
-        return recipes.get(systemId + "/" + FALLBACK_KEY);
+        return recipes.get(system + "/" + FALLBACK_KEY);
     }
 
     private static Map<String, Recipe> table(Context context) {
