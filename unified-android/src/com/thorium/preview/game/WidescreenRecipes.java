@@ -49,10 +49,16 @@ public final class WidescreenRecipes {
         public final boolean exactBase;
         /** Core options applied at launch, on or off: scene and HUD rules live here. */
         public final Map<String, String> options;
+        /** For an engine that reads widescreen only at startup: the choice takes a restart. */
+        public final boolean relaunch;
+        /** Core options at launch when the player has widescreen on, and off. */
+        public final Map<String, String> onOptions;
+        public final Map<String, String> offOptions;
 
         Recipe(String system, String key, String engine, String widthOption, boolean widthIsAspect,
                int baseWidth, int height, float pixelAspect, float maxAspect, boolean exactBase,
-               Map<String, String> options) {
+               Map<String, String> options, boolean relaunch,
+               Map<String, String> onOptions, Map<String, String> offOptions) {
             this.system = system;
             this.key = key;
             this.engine = engine;
@@ -64,6 +70,9 @@ public final class WidescreenRecipes {
             this.maxAspect = maxAspect;
             this.exactBase = exactBase;
             this.options = Collections.unmodifiableMap(options);
+            this.relaunch = relaunch;
+            this.onOptions = Collections.unmodifiableMap(onOptions);
+            this.offOptions = Collections.unmodifiableMap(offOptions);
         }
 
         /** Whether this recipe can widen a game the core reports at this size. */
@@ -86,11 +95,16 @@ public final class WidescreenRecipes {
 
     private WidescreenRecipes() {}
 
+    /** "Legend of Zelda, The - Link's Awakening" and "The Legend of Zelda: Link's Awakening" match. */
+    static String gameKey(String title) {
+        return TitleMatcher.normalize(title).replaceAll("\\bthe\\b", " ").trim().replaceAll(" +", " ");
+    }
+
     /** The recipe for this game, or null when it must not be touched. */
     public static Recipe find(Context context, String systemId, String gameName) {
         if (context == null || systemId == null || gameName == null) return null;
         Map<String, Recipe> recipes = table(context);
-        String key = systemId + "/" + TitleMatcher.normalize(gameName);
+        String key = systemId + "/" + gameKey(gameName);
         if (recipes.containsKey(key)) return recipes.get(key);
         // No entry of its own: the system's recipe for the rest of its library, if it has one.
         return recipes.get(systemId + "/" + FALLBACK_KEY);
@@ -132,7 +146,7 @@ public final class WidescreenRecipes {
             for (Iterator<String> keys = games.keys(); keys.hasNext(); ) {
                 String title = keys.next();
                 JSONObject game = games.getJSONObject(title);
-                String key = TitleMatcher.normalize(title);
+                String key = gameKey(title);
                 // Tested and left alone: keep the key, so the system's fallback can't take it.
                 into.put(system + "/" + key, STRATEGY_WIDEN.equals(game.optString("strategy"))
                         ? recipe(system, key, entry, game) : null);
@@ -148,14 +162,20 @@ public final class WidescreenRecipes {
         Map<String, String> options = new LinkedHashMap<>();
         copyStrings(entry.optJSONObject("options"), options);
         copyStrings(game.optJSONObject("options"), options);
+        Map<String, String> onOptions = new LinkedHashMap<>();
+        copyStrings(entry.optJSONObject("onOptions"), onOptions);
+        copyStrings(game.optJSONObject("onOptions"), onOptions);
+        Map<String, String> offOptions = new LinkedHashMap<>();
+        copyStrings(entry.optJSONObject("offOptions"), offOptions);
+        copyStrings(game.optJSONObject("offOptions"), offOptions);
         return new Recipe(system, key,
                 game.optString("engine", entry.getString("engine")),
-                entry.getString("widthOption"), entry.optBoolean("widthIsAspect", false),
+                entry.optString("widthOption", ""), entry.optBoolean("widthIsAspect", false),
                 entry.getInt("baseWidth"), entry.getInt("height"),
                 (float) entry.getDouble("pixelAspect"),
                 (float) game.optDouble("maxAspect", entry.optDouble("maxAspect", 2.4)),
                 entry.optBoolean("exactBase", false),
-                options);
+                options, entry.optBoolean("relaunch", false), onOptions, offOptions);
     }
 
     private static void copyStrings(JSONObject from, Map<String, String> into) throws Exception {

@@ -129,7 +129,12 @@ public final class WidescreenHackPolicy {
         WidescreenRecipes.Recipe recipe = WidescreenRecipes.find(context, system, request.gameTitle);
         if (recipe != null && recipe.engine.equals(engine)) {
             overrides.putAll(recipe.options);
-            overrides.put(recipe.widthOption, "0");
+            if (recipe.relaunch) {
+                overrides.putAll(WidescreenSession.remembered(context, recipe, request.gameTitle,
+                        request.qualificationSession) ? recipe.onOptions : recipe.offOptions);
+            } else {
+                overrides.put(recipe.widthOption, "0");
+            }
         }
         overrides.putAll(qaCoreOptionOverrides(context));
         File file = CoreOptionOverrideFile.in(root);

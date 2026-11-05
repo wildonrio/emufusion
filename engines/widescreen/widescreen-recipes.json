@@ -850,6 +850,60 @@
         }
       },
       "release": true
+    },
+    "n64": {
+      "engine": "mupen64plus-next",
+      "relaunch": true,
+      "baseWidth": 320,
+      "height": 240,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "options": {},
+      "onOptions": {
+        "mupen64plus-aspect": "16:9 adjusted",
+        "mupen64plus-169screensize": "1920x1080"
+      },
+      "offOptions": {
+        "mupen64plus-aspect": "4:3"
+      },
+      "games": {
+        "The Legend of Zelda: Ocarina of Time": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: title sequence, Hyrule Field at true 16:9, logo undistorted"
+        },
+        "Banjo-Kazooie": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: intro and title; one intro transition frame looked broken, to check"
+        }
+      },
+      "release": false
+    },
+    "psx": {
+      "engine": "swanstation",
+      "relaunch": true,
+      "baseWidth": 320,
+      "height": 240,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "options": {},
+      "onOptions": {
+        "swanstation_GPU_WidescreenHack": "true",
+        "swanstation_Display_AspectRatio": "16:9"
+      },
+      "offOptions": {
+        "swanstation_GPU_WidescreenHack": "false",
+        "swanstation_Display_AspectRatio": "4:3"
+      },
+      "games": {
+        "Wipeout XL": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: loading screen and intro video only; play not reached"
+        }
+      },
+      "release": false
     }
   }
 }

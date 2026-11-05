@@ -36,6 +36,7 @@ final class WidescreenOverlayView extends View {
     private final int tapSlopPixels;
     private final int barMinimumPixels;
     private WidescreenSession session;
+    private Runnable relaunch;
     private boolean touchControlsShown;
     private long promptStartMs;
     private long hintStartMs;
@@ -66,6 +67,15 @@ final class WidescreenOverlayView extends View {
     }
 
     void setTouchControlsShown(boolean shown) { touchControlsShown = shown; }
+
+    /** Restarts the game, for recipes whose engine reads widescreen only at startup. */
+    void setRelaunch(Runnable restart) { relaunch = restart; }
+
+    private boolean relaunchNow() {
+        if (session == null || !session.recipe.relaunch || relaunch == null) return false;
+        relaunch.run();
+        return true;
+    }
 
     private void showPrompt() {
         hintStartMs = 0L;
@@ -112,14 +122,14 @@ final class WidescreenOverlayView extends View {
                 if (following && session.isEnabled() && swipedInward(event)) {
                     following = false;
                     session.setEnabled(false);
-                    showPrompt();
+                    if (!relaunchNow()) showPrompt();
                 }
                 return following;
             case MotionEvent.ACTION_UP:
                 if (following && !session.isEnabled() &&
                         Math.hypot(event.getX() - downX, event.getY() - downY) < tapSlopPixels) {
                     session.setEnabled(true);
-                    showHint();
+                    if (!relaunchNow()) showHint();
                 }
                 following = false;
                 return true;

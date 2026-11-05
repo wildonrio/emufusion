@@ -20,7 +20,7 @@ class RecipeTableTest(unittest.TestCase):
     def test_every_system_declares_how_to_widen(self):
         for name, system in RECIPES['systems'].items():
             for field in ('engine', 'widthOption', 'baseWidth', 'height', 'pixelAspect', 'games'):
-                self.assertIn(field, system, name)
+                self.assertIn('onOptions' if field == 'widthOption' and system.get('relaunch') else field, system, name)
             self.assertGreater(system['pixelAspect'], 0.5)
 
     def test_every_game_has_a_known_strategy_and_evidence(self):
@@ -55,6 +55,22 @@ class RecipeTableTest(unittest.TestCase):
 
 
 class PlumbingTest(unittest.TestCase):
+    def test_a_relaunch_recipe_restarts_the_game_with_its_options(self):
+        overlay = (GAME / 'WidescreenOverlayView.java').read_text()
+        self.assertIn('if (!relaunchNow()) showHint();', overlay)
+        self.assertIn('if (!relaunchNow()) showPrompt();', overlay)
+        host = (GAME / 'InWindowGameHost.java').read_text()
+        self.assertIn('widescreenOverlay.setRelaunch(() -> replaceWith(request));', host)
+        policy = (GAME / 'WidescreenHackPolicy.java').read_text()
+        self.assertIn('? recipe.onOptions : recipe.offOptions', policy)
+        session = (GAME / 'WidescreenSession.java').read_text()
+        self.assertIn('if (recipe.relaunch) prefs.edit().putBoolean(prefKey, on).commit();', session)
+
+    def test_a_library_name_with_the_moved_to_the_end_still_finds_its_recipe(self):
+        recipes = (GAME / 'WidescreenRecipes.java').read_text()
+        self.assertIn('TitleMatcher.normalize(title).replaceAll("\\\\bthe\\\\b", " ")', recipes)
+        self.assertNotIn('TitleMatcher.normalize(gameName)', recipes)
+
     def test_aspect_is_reread_after_a_width_change(self):
         session = (GAME / 'LibretroEngineSession.java').read_text()
         self.assertIn('widescreenAspectChecks = newest.width != widescreenFrameWidth', session)

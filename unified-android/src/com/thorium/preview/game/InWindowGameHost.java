@@ -1115,6 +1115,7 @@ public final class InWindowGameHost
         });
         root.addView(touchControls, match());
         widescreenOverlay = new WidescreenOverlayView(activity);
+        widescreenOverlay.setRelaunch(() -> replaceWith(request));
         root.addView(widescreenOverlay, match());
         frameRateBadge = new TextView(activity);
         frameRateBadge.setTextColor(Color.argb(0xE6, 0xFF, 0xFF, 0xFF));

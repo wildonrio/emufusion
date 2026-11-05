@@ -208,6 +208,7 @@ final class PpssppGlesEngineSession implements EngineSession,
     private boolean audioSilenceWarned;
     private long presentedFrames;
     private volatile Runnable firstFrameCallback;
+    private volatile WidescreenSession widescreen;
     private long frameSampleStartedAtMillis;
     private long receivedAudioFrames;
     private long writtenAudioFrames;
@@ -239,6 +240,8 @@ final class PpssppGlesEngineSession implements EngineSession,
                     }
                 });
     }
+
+    @Override public WidescreenSession widescreen() { return widescreen; }
 
     @Override public void prepare(GameLaunchRequest request, Listener callback) {
         if (request == null || callback == null)
@@ -500,6 +503,11 @@ final class PpssppGlesEngineSession implements EngineSession,
                         throw new IllegalStateException(
                                 "No safe presentation aspect for " + request.systemId);
                     loop.setPresentationAspect(presentationAspect);
+                    WidescreenRecipes.Recipe widescreenRecipe = WidescreenRecipes.find(
+                            appContext, request.systemId, request.gameTitle);
+                    if (widescreenRecipe != null && widescreenRecipe.engine.equals(entry.id))
+                        widescreen = new WidescreenSession(appContext, widescreenRecipe,
+                                request.gameTitle, request.qualificationSession);
                     Log.i(TAG, "Resolved presentation aspect engine=" + entry.id +
                             " system=" + request.systemId + " aspect=" +
                             presentationAspect);
