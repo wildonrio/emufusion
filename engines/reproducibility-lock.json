@@ -110,17 +110,18 @@
       "id": "blastem",
       "sourceCommit": "84e567e17b6fb3cea23146c4209c18d50d46cbf0",
       "sourceArchiveSha256": "7bf9a28959fbced50479e59b7832bf9b2a9746bb06620bdd5c28c89d205e8fc7",
-      "recipeSha256": "40f6e1167c8464c1f9c381e254402973990c9f2a4a1b1158e665a526cb5859ac",
+      "recipeSha256": "7388b12baa126c44ce5b2f42caa63ebfcdccb2eec520e0e12f0a3a0438a5fa91",
       "patches": {
         "engines/patches/blastem-libretro-android-portability.patch": "4966522359464467f8b9f150356fdc03ba7f056a12f24ca822f71a9c8b173eed",
-        "engines/patches/blastem-new-core-frame-end-rebase-hang.patch": "d899b13fe0728e5e927e30736e1c1c7c57d2906a6814c6150823e911cc73686c"
+        "engines/patches/blastem-new-core-frame-end-rebase-hang.patch": "d899b13fe0728e5e927e30736e1c1c7c57d2906a6814c6150823e911cc73686c",
+        "engines/patches/blastem-emufusion-widescreen.patch": "f88a5af0115348463534edd9f95695a3d9a9f7c8a9706c145df70b4352e5b4f0"
       },
-      "artifactSha256": "e479c08debbf0399a8e3eaed57add952bcc1848c78eed3104bea775ae9128a77",
+      "artifactSha256": "31f24132b7362df8e87e199bf542ba6c62bd01a2e32ab7247058ee5662a91891",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-12",
-      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-blastem) with the EmuFusion-renamed recipe; byte-identical to the previously proven artifact (Two clean builds at different isolated source/build paths with the frame-end rebase hang fix; host-verified freeze removal, not new gameplay qualification); not new gameplay qualification.",
-      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
+      "proofDate": "2026-11-05",
+      "proofScope": "2 consecutive clean builds at one root with the Widescreen Hack patch; byte-identical; not new gameplay qualification.",
+      "evidence": "docs/widescreen/WIDESCREEN-HACK-PLAN.md"
     },
     {
       "id": "mupen64plus-next",

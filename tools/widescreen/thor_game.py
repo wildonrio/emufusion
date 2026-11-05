@@ -13,6 +13,7 @@ Script steps (whitespace separated):
   swipe:X1,Y1,X2,Y2    swipe on the top panel
 usage: thor_game.py OUT SYSTEM ENGINE ROM_PATH SCRIPT
 """
+import os
 import re
 import subprocess
 import sys
@@ -24,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] /
 import thor_smoke as smoke
 
 ADB = ['/tmp/claude-501/thor']
+LOCK = '/tmp/claude-501/thor.lock'
 TOP = '4630946441858561667'
 PAD = '/dev/input/event9'
 ACTIVITY = 'com.thorium.preview/org.pegasus_frontend.android.MainActivity'
@@ -63,6 +65,8 @@ def wait_log(log, pattern, seconds):
 def main():
     out, system, engine, rom, script = Path(sys.argv[1]), *sys.argv[2:6]
     out.mkdir(parents=True, exist_ok=True)
+    take_thor()
+    shell('settings put global emufusion_qa_widescreen_all 1')
     shell('input keyevent KEYCODE_WAKEUP')
     subprocess.run(ADB + ['logcat', '-c'], timeout=30)
     log = out / 'runtime.log'
@@ -102,7 +106,26 @@ def main():
               'anr', len(re.findall(r'ANR in com\.thorium', text)))
         for line in re.findall(r'Widescreen[^\n]*', text)[:12]:
             print(line[:150])
+        shell('settings delete global emufusion_qa_widescreen_all')
+        release_thor()
     return 0
+
+
+def take_thor():
+    """The frame-generation work shares this device; one user at a time."""
+    while True:
+        try:
+            os.mkdir(LOCK)
+            return
+        except FileExistsError:
+            time.sleep(10)
+
+
+def release_thor():
+    try:
+        os.rmdir(LOCK)
+    except OSError:
+        pass
 
 
 def leave(log):

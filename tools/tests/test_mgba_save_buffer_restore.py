@@ -19,6 +19,7 @@ public class CartridgeRestore {
     static class Entry {String id; Entry(String id){this.id=id;}}
     final Entry entry;
     CartridgeRestore(String engine){entry=new Entry(engine);}
+    boolean carrySaveRamAcrossEngines(LibretroHost active,File file,byte[] value,byte[] current){return false;}
     static class Log {static void w(String t,String m){} static void i(String t,String m){}}
     static class DurableBlobStore {
         static byte[] value;

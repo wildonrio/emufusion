@@ -14,7 +14,7 @@ Script, one step per whitespace-separated token (read from --play or a file):
   opt:KEY=VALUE   change a core option live (the host reports the variable update)
   save:SLOT       snapshot the emulator in memory; load:SLOT restores it
   savefile:PATH   write a save state to disk; loadfile:PATH restores one
-  ram:NAME        dump the console's main RAM to NAME.ram in --out
+  ram:NAME        dump the console's main RAM to NAME.ram in --out; vram:NAME video RAM
 Buttons: B Y SELECT START UP DOWN LEFT RIGHT A X L R L2 R2 L3 R3.
 """
 import argparse
@@ -300,13 +300,26 @@ class Player:
                 size = self.lib.retro_get_memory_size(2)
                 with open(os.path.join(out, rest + '.ram'), 'wb') as dump:
                     dump.write(C.string_at(self.lib.retro_get_memory_data(2), size))
+            elif kind == 'vram':
+                self.lib.retro_get_memory_data.restype = C.c_void_p
+                self.lib.retro_get_memory_size.restype = C.c_size_t
+                size = self.lib.retro_get_memory_size(3)
+                with open(os.path.join(out, rest + '.vram'), 'wb') as dump:
+                    dump.write(C.string_at(self.lib.retro_get_memory_data(3), size))
+            elif kind == 'oam':
+                self.lib.retro_get_memory_data.restype = C.c_void_p
+                self.lib.retro_get_memory_size.restype = C.c_size_t
+                size = self.lib.retro_get_memory_size(4)
+                with open(os.path.join(out, rest + '.oam'), 'wb') as dump:
+                    dump.write(C.string_at(self.lib.retro_get_memory_data(4), size))
             elif kind == 'savefile':
                 self.save('_file')
                 os.makedirs(os.path.dirname(rest) or '.', exist_ok=True)
                 with open(rest, 'wb') as state:
                     state.write(self.slots['_file'].raw)
             elif kind == 'loadfile':
-                self.slots['_file'] = C.create_string_buffer(open(rest, 'rb').read())
+                state = open(rest, 'rb').read()
+                self.slots['_file'] = C.create_string_buffer(state, len(state))
                 self.load('_file')
             else:
                 raise SystemExit('unknown step ' + token)

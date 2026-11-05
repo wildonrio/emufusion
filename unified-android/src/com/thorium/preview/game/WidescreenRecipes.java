@@ -27,6 +27,8 @@ public final class WidescreenRecipes {
     private static final String TAG = "WidescreenRecipes";
     static final String ASSET = "widescreen-recipes.json";
     private static final String STRATEGY_WIDEN = "widen";
+    private static final String FALLBACK_KEY = "*";
+    private static final String QA_ALL_SYSTEMS_GLOBAL = "emufusion_qa_widescreen_all";
     private static volatile Map<String, Recipe> table;
 
     /** How one game is widened. */
@@ -36,6 +38,8 @@ public final class WidescreenRecipes {
         public final String engine;
         /** The option carrying the picture width; 0 means the original picture. */
         public final String widthOption;
+        /** The option takes the picture's aspect x 1000: the engine's width depends on its video mode. */
+        public final boolean widthIsAspect;
         public final int baseWidth;
         public final int height;
         public final float pixelAspect;
@@ -43,12 +47,14 @@ public final class WidescreenRecipes {
         /** Core options applied at launch, on or off: scene and HUD rules live here. */
         public final Map<String, String> options;
 
-        Recipe(String system, String key, String engine, String widthOption, int baseWidth,
-               int height, float pixelAspect, float maxAspect, Map<String, String> options) {
+        Recipe(String system, String key, String engine, String widthOption, boolean widthIsAspect,
+               int baseWidth, int height, float pixelAspect, float maxAspect,
+               Map<String, String> options) {
             this.system = system;
             this.key = key;
             this.engine = engine;
             this.widthOption = widthOption;
+            this.widthIsAspect = widthIsAspect;
             this.baseWidth = baseWidth;
             this.height = height;
             this.pixelAspect = pixelAspect;
@@ -63,6 +69,7 @@ public final class WidescreenRecipes {
         public int widthFor(int surfaceWidth, int surfaceHeight) {
             if (surfaceWidth <= 0 || surfaceHeight <= 0) return 0;
             float aspect = Math.min((float) surfaceWidth / surfaceHeight, maxAspect);
+            if (widthIsAspect) return aspect > originalAspect() ? Math.round(aspect * 1000f) : 0;
             int width = Math.round(height * aspect / pixelAspect) & ~1;
             return width > baseWidth ? width : 0;
         }
@@ -73,7 +80,11 @@ public final class WidescreenRecipes {
     /** The recipe for this game, or null when it must not be touched. */
     public static Recipe find(Context context, String systemId, String gameName) {
         if (context == null || systemId == null || gameName == null) return null;
-        return table(context).get(systemId + "/" + TitleMatcher.normalize(gameName));
+        Map<String, Recipe> recipes = table(context);
+        String key = systemId + "/" + TitleMatcher.normalize(gameName);
+        if (recipes.containsKey(key)) return recipes.get(key);
+        // No entry of its own: the system's recipe for the rest of its library, if it has one.
+        return recipes.get(systemId + "/" + FALLBACK_KEY);
     }
 
     private static Map<String, Recipe> table(Context context) {
@@ -87,11 +98,13 @@ public final class WidescreenRecipes {
 
     private static Map<String, Recipe> load(Context context) {
         Map<String, Recipe> result = new HashMap<>();
+        boolean qaAll = android.provider.Settings.Global.getInt(
+                context.getContentResolver(), QA_ALL_SYSTEMS_GLOBAL, 0) != 0;
         try (InputStream input = context.getAssets().open(ASSET)) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             byte[] buffer = new byte[16384];
             for (int read; (read = input.read(buffer)) > 0; ) bytes.write(buffer, 0, read);
-            parse(new JSONObject(new String(bytes.toByteArray(), StandardCharsets.UTF_8)), result);
+            parse(new JSONObject(new String(bytes.toByteArray(), StandardCharsets.UTF_8)), result, qaAll);
         } catch (Exception unreadable) {
             // A damaged table leaves every game as it was.
             Log.w(TAG, "Widescreen recipes unavailable", unreadable);
@@ -99,29 +112,40 @@ public final class WidescreenRecipes {
         return Collections.unmodifiableMap(result);
     }
 
-    static void parse(JSONObject root, Map<String, Recipe> into) throws Exception {
+    static void parse(JSONObject root, Map<String, Recipe> into, boolean qaAll) throws Exception {
         JSONObject systems = root.getJSONObject("systems");
         for (Iterator<String> names = systems.keys(); names.hasNext(); ) {
             String system = names.next();
             JSONObject entry = systems.getJSONObject(system);
+            // A system reaches players only once it has passed on a real device.
+            if (!entry.optBoolean("release", false) && !qaAll) continue;
             JSONObject games = entry.getJSONObject("games");
             for (Iterator<String> keys = games.keys(); keys.hasNext(); ) {
                 String title = keys.next();
                 JSONObject game = games.getJSONObject(title);
-                if (!STRATEGY_WIDEN.equals(game.optString("strategy"))) continue;
-                Map<String, String> options = new LinkedHashMap<>();
-                copyStrings(entry.optJSONObject("options"), options);
-                copyStrings(game.optJSONObject("options"), options);
                 String key = TitleMatcher.normalize(title);
-                into.put(system + "/" + key, new Recipe(system, key,
-                        game.optString("engine", entry.getString("engine")),
-                        entry.getString("widthOption"),
-                        entry.getInt("baseWidth"), entry.getInt("height"),
-                        (float) entry.getDouble("pixelAspect"),
-                        (float) game.optDouble("maxAspect", entry.optDouble("maxAspect", 2.4)),
-                        options));
+                // Tested and left alone: keep the key, so the system's fallback can't take it.
+                into.put(system + "/" + key, STRATEGY_WIDEN.equals(game.optString("strategy"))
+                        ? recipe(system, key, entry, game) : null);
             }
+            JSONObject fallback = entry.optJSONObject("fallback");
+            if (fallback != null && STRATEGY_WIDEN.equals(fallback.optString("strategy")))
+                into.put(system + "/" + FALLBACK_KEY, recipe(system, FALLBACK_KEY, entry, fallback));
         }
+    }
+
+    private static Recipe recipe(String system, String key, JSONObject entry, JSONObject game)
+            throws Exception {
+        Map<String, String> options = new LinkedHashMap<>();
+        copyStrings(entry.optJSONObject("options"), options);
+        copyStrings(game.optJSONObject("options"), options);
+        return new Recipe(system, key,
+                game.optString("engine", entry.getString("engine")),
+                entry.getString("widthOption"), entry.optBoolean("widthIsAspect", false),
+                entry.getInt("baseWidth"), entry.getInt("height"),
+                (float) entry.getDouble("pixelAspect"),
+                (float) game.optDouble("maxAspect", entry.optDouble("maxAspect", 2.4)),
+                options);
     }
 
     private static void copyStrings(JSONObject from, Map<String, String> into) throws Exception {

@@ -42,8 +42,8 @@ class RecipeTableTest(unittest.TestCase):
                                      {k.rstrip('s') for k in known}, title)
 
     def test_scene_and_hud_rules_parse(self):
-        scene_term = re.compile(r'^(bgmode|[0-9A-F]{6}(/[0-9A-F]{2})?)!?=[0-9A-F]+$')
-        hud_rule = re.compile(r'^(bg[1-4]|obj):\d+-\d+:-?\d+-\d+:-?1(:[0-9a-f]+-[0-9a-f]+)?$')
+        scene_term = re.compile(r'^(bgmode|[0-9A-F]{4,6}(/[0-9A-F]{2})?)!?=[0-9A-F]+$')
+        hud_rule = re.compile(r'^(bg[1-4]|obj):\d+-\d+:-?\d+-\d+:-?1(:[0-9a-fA-F]+-[0-9a-fA-F]+)?$')
         for system in RECIPES['systems'].values():
             for title, game in system['games'].items():
                 options = game.get('options', {})
@@ -55,6 +55,11 @@ class RecipeTableTest(unittest.TestCase):
 
 
 class PlumbingTest(unittest.TestCase):
+    def test_a_system_reaches_players_only_after_a_device_pass(self):
+        recipes = (GAME / 'WidescreenRecipes.java').read_text()
+        self.assertIn('if (!entry.optBoolean("release", false) && !qaAll) continue;', recipes)
+        self.assertIn('"emufusion_qa_widescreen_all"', recipes)
+
     def test_host_reports_live_option_changes_to_the_core(self):
         host = (ROOT / 'unified-android/native/emufusion_libretro_host.c').read_text()
         self.assertIn('*(bool *)data = active_host->core_variables_updated;', host)
@@ -82,6 +87,11 @@ class PlumbingTest(unittest.TestCase):
         self.assertIn('following = session.isEnabled() ? atEdge :', overlay)
         self.assertIn('inBar(downX) && (!touchControlsShown || promptShowing());', overlay)
         self.assertIn('setSystemGestureExclusionRects(edges);', overlay)
+
+    def test_save_of_another_size_is_carried_across_and_kept(self):
+        session = (GAME / 'LibretroEngineSession.java').read_text()
+        self.assertIn('if (attempt == 3 && carrySaveRamAcrossEngines(active, file, value, current)) return;', session)
+        self.assertIn('if (!original.exists()) DurableBlobStore.write(original, value, MAX_SAVE_RAM_BYTES);', session)
 
     def test_saves_are_keyed_by_rom_so_engine_changes_keep_them(self):
         session = (GAME / 'LibretroEngineSession.java').read_text()

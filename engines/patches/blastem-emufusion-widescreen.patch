@@ -1,0 +1,586 @@
+diff --git a/ef_wide.h b/ef_wide.h
+new file mode 100644
+index 0000000..2e6cc1b
+--- /dev/null
++++ b/ef_wide.h
+@@ -0,0 +1,23 @@
++#ifndef EF_WIDE_H_
++#define EF_WIDE_H_
++// EmuFusion Widescreen Hack. BlastEm's renderer still draws the original 320 or 256
++// columns exactly as before; ef_wide_line then draws the new columns beside them from
++// the same VDP state, once the line is finished. Options, set through libretro variables:
++// emufusion_ws_aspect  target picture aspect x 1000, 0 = original picture
++// emufusion_ws_strict  planes showing only tiles written for that world position, "a,b",
++//                      with "center" trusting a bulk load only on the original screen
++// emufusion_ws_scene   when to widen: OR of AND terms of RAM tests, "FFF600=0C,FFF601!=1|..."
++// emufusion_ws_hud     moves HUD sprites to the new edges: "obj:y0-y1:x0-x1:dir[:t0-t1];..."
++#include <stdint.h>
++#define EF_WIDE_MAX_EXT 136
++#define EF_WIDE_FB_WIDTH (320 + 2 * EF_WIDE_MAX_EXT)
++extern uint32_t ef_wide_fb[EF_WIDE_FB_WIDTH * 294];
++void ef_wide_set_aspect(const char *value);
++void ef_wide_set_strict(const char *value);
++void ef_wide_set_scene(const char *value);
++void ef_wide_set_hud(const char *value);
++void ef_wide_set_ram(const uint8_t *work_ram);
++int ef_wide_on(void);
++int ef_wide_ext(int base_width);
++void ef_wide_forget_tags(void);
++#endif
+diff --git a/ef_wide.inc b/ef_wide.inc
+new file mode 100644
+index 0000000..6ae4e61
+--- /dev/null
++++ b/ef_wide.inc
+@@ -0,0 +1,391 @@
++// Included at the end of vdp.c; uses its static helpers.
++#include "ef_wide.h"
++uint32_t ef_wide_fb[EF_WIDE_FB_WIDTH * 294];
++static int ef_milli;
++static const uint8_t *ef_ram;
++static uint8_t ef_scene_wide = 1;
++
++enum { EF_TAG_NEVER = 0xFFFF, EF_TAG_BLANK = 0xFFFE };
++static uint16_t ef_tags[0x8000];
++static uint8_t ef_tags_ready, ef_blank_pending, ef_center_only;
++static uint8_t ef_strict_a, ef_strict_b, ef_blank_center;
++
++#define EF_MAX_TERMS 32
++typedef struct { int group; uint32_t addr; uint32_t mask, value; uint8_t negate; } ef_term;
++static ef_term ef_terms[EF_MAX_TERMS];
++static int ef_term_count;
++
++#define EF_MAX_RULES 32
++typedef struct { int y0, y1, x0, x1, dir, t0, t1; } ef_rule;
++static ef_rule ef_rules[EF_MAX_RULES];
++static int ef_rule_count;
++
++void ef_wide_set_aspect(const char *value) { ef_milli = value ? atoi(value) : 0; }
++void ef_wide_set_ram(const uint8_t *work_ram) { ef_ram = work_ram; }
++int ef_wide_on(void) { return ef_milli > 1000; }
++
++// Picture stays 4:3 at the base width, so the same aspect gives the same world on both.
++int ef_wide_ext(int base_width)
++{
++	int width = (ef_milli * (base_width * 3 / 4) / 1000) & ~1;
++	int ext = (width - base_width) / 2;
++	if (ext < 0) ext = 0;
++	if (ext > EF_WIDE_MAX_EXT) ext = EF_WIDE_MAX_EXT;
++	return ext;
++}
++
++void ef_wide_set_strict(const char *value)
++{
++	ef_strict_a = 0;
++	ef_strict_b = 0;
++	ef_blank_center = 0;
++	if (value) {
++		char copy[64];
++		strncpy(copy, value, sizeof(copy) - 1);
++		copy[sizeof(copy) - 1] = 0;
++		for (char *part = strtok(copy, ","); part; part = strtok(NULL, ",")) {
++			if (!strcmp(part, "a")) ef_strict_a = 1;
++			else if (!strcmp(part, "b")) ef_strict_b = 1;
++			else if (!strcmp(part, "center")) ef_blank_center = 1;
++		}
++	}
++	if ((ef_strict_a || ef_strict_b) && !ef_tags_ready) {
++		for (int i = 0; i < 0x8000; i++) ef_tags[i] = EF_TAG_NEVER;
++		ef_tags_ready = 1;
++	}
++}
++
++void ef_wide_set_scene(const char *value)
++{
++	ef_term_count = 0;
++	ef_scene_wide = 1;
++	if (!value) return;
++	int group = 0;
++	const char *cursor = value;
++	while (*cursor && ef_term_count < EF_MAX_TERMS) {
++		char text[32] = {0};
++		size_t length = strcspn(cursor, ",|");
++		if (length && length < sizeof(text)) {
++			memcpy(text, cursor, length);
++			const char *equals = strchr(text, '=');
++			if (equals && equals != text) {
++				ef_term *term = ef_terms + ef_term_count++;
++				char *end;
++				term->group = group;
++				term->negate = equals[-1] == '!';
++				term->addr = strtoul(text, &end, 16);
++				term->mask = *end == '/' ? strtoul(end + 1, NULL, 16) : 0xFF;
++				term->value = strtoul(equals + 1, NULL, 16);
++			}
++		}
++		if (cursor[length] == '|') group++;
++		cursor += length + (cursor[length] ? 1 : 0);
++	}
++}
++
++void ef_wide_set_hud(const char *value)
++{
++	ef_rule_count = 0;
++	if (!value) return;
++	const char *cursor = value;
++	while (*cursor && ef_rule_count < EF_MAX_RULES) {
++		char text[48] = {0};
++		size_t length = strcspn(cursor, ";");
++		if (length && length < sizeof(text)) {
++			memcpy(text, cursor, length);
++			ef_rule rule = {0};
++			rule.t1 = 0x7FF;
++			int fields = sscanf(text, "obj:%d-%d:%d-%d:%d:%x-%x", &rule.y0, &rule.y1, &rule.x0, &rule.x1,
++				&rule.dir, &rule.t0, &rule.t1);
++			if (fields >= 5 && rule.dir) ef_rules[ef_rule_count++] = rule;
++		}
++		cursor += length + (cursor[length] ? 1 : 0);
++	}
++}
++
++static void ef_evaluate_scene(void)
++{
++	if (!ef_term_count || !ef_ram) {
++		ef_scene_wide = 1;
++		return;
++	}
++	uint8_t any = 0;
++	for (int index = 0; index < ef_term_count && !any;) {
++		int group = ef_terms[index].group;
++		uint8_t all = 1;
++		for (; index < ef_term_count && ef_terms[index].group == group; index++) {
++			ef_term *term = ef_terms + index;
++			// 68000 byte order on a little-endian host: work RAM is an array of words.
++			uint32_t actual = ef_ram[(term->addr & 0xFFFF) ^ 1] & term->mask;
++			all = all && ((actual == term->value) != term->negate);
++		}
++		any = all;
++	}
++	ef_scene_wide = any;
++}
++
++static inline uint16_t ef_word(vdp_context *c, uint32_t address)
++{
++	return c->vdpmem[address & 0xFFFF] << 8 | c->vdpmem[(address + 1) & 0xFFFF];
++}
++
++static uint16_t ef_hscroll(vdp_context *c, uint32_t line, uint32_t plane)
++{
++	uint32_t table = (c->regs[REG_HSCROLL] & 0x3F) << 10;
++	uint32_t mode = c->regs[REG_MODE_3] & 3;
++	uint32_t index = mode == 0 ? 0 : mode == 1 ? (line & 7) : mode == 2 ? (line & ~7u) : line;
++	return ef_word(c, table + index * 4 + plane * 2) & 0x3FF;
++}
++
++static uint32_t ef_plane_base(vdp_context *c, uint32_t plane)
++{
++	return plane ? (c->regs[REG_SCROLL_B] & 0x7) << 13 : (c->regs[REG_SCROLL_A] & 0x38) << 10;
++}
++
++static uint32_t ef_plane_cols(vdp_context *c)
++{
++	static const uint8_t sizes[] = {32, 64, 32, 128};
++	return sizes[c->regs[REG_SCROLL] & 3];
++}
++
++static uint32_t ef_plane_rows(vdp_context *c)
++{
++	static const uint8_t sizes[] = {32, 64, 32, 128};
++	return sizes[c->regs[REG_SCROLL] >> 4 & 3];
++}
++
++static uint16_t ef_tag_for(vdp_context *c, uint32_t plane, uint32_t col, uint32_t row)
++{
++	uint32_t cols = ef_plane_cols(c), rows = ef_plane_rows(c);
++	int camera = (-(int)ef_hscroll(c, 100, plane)) & 0x3FF;
++	int center_x = (camera + 160) >> 3;
++	int center_y = ((c->vsram[plane] & 0x3FF) + 112) >> 3;
++	int world_x = center_x + ((((int)col - center_x + (int)cols / 2) & ((int)cols - 1)) - (int)cols / 2);
++	int world_y = center_y + ((((int)row - center_y + (int)rows / 2) & ((int)rows - 1)) - (int)rows / 2);
++	return (world_x & 0x7F) | (world_y & 0x7F) << 8;
++}
++
++// A tilemap word changed: note which world position it now shows.
++static void ef_tag_write(vdp_context *c, uint32_t address)
++{
++	uint32_t word = address >> 1 & 0x7FFF;
++	if (!(c->regs[REG_MODE_2] & BIT_DISP_EN)) {
++		ef_tags[word] = EF_TAG_BLANK;
++		ef_blank_pending = 1;
++		return;
++	}
++	uint32_t cols = ef_plane_cols(c), rows = ef_plane_rows(c);
++	for (uint32_t plane = 0; plane < 2; plane++) {
++		if (!(plane ? ef_strict_b : ef_strict_a)) continue;
++		uint32_t offset = ((address & ~1u) - ef_plane_base(c, plane)) & 0xFFFF;
++		if (offset >= (cols * rows * 2 > 0x2000 ? 0x2000 : cols * rows * 2)) continue;
++		ef_tags[word] = ef_tag_for(c, plane, (offset / 2) % cols, (offset / 2) / cols);
++		return;
++	}
++	ef_tags[word] = EF_TAG_NEVER;
++}
++
++// Cells loaded while the display was off take the scroll the picture first appears with.
++static void ef_sweep_blank(vdp_context *c)
++{
++	uint32_t cols = ef_plane_cols(c), rows = ef_plane_rows(c);
++	uint8_t center = ef_center_only || ef_blank_center;
++	for (uint32_t plane = 0; plane < 2; plane++) {
++		if (!(plane ? ef_strict_b : ef_strict_a)) continue;
++		uint32_t base = ef_plane_base(c, plane);
++		int camera = (-(int)ef_hscroll(c, 100, plane)) & 0x3FF;
++		for (uint32_t row = 0; row < rows; row++) {
++			for (uint32_t col = 0; col < cols; col++) {
++				uint32_t offset = (row * cols + col) * 2;
++				if (offset >= 0x2000) continue;
++				uint32_t word = (base + offset) >> 1 & 0x7FFF;
++				if (ef_tags[word] != EF_TAG_BLANK) continue;
++				ef_tags[word] = ef_tag_for(c, plane, col, row);
++				if (center) {
++					int distance = ((int)(col * 8) - camera - 160) & (int)(cols * 8 - 1);
++					if (distance >= (int)cols * 4) distance -= cols * 8;
++					if (distance < -160 || distance >= 160) ef_tags[word] = EF_TAG_NEVER;
++				}
++			}
++		}
++	}
++	ef_center_only = 0;
++	ef_blank_pending = 0;
++}
++
++void ef_wide_forget_tags(void)
++{
++	if (!ef_tags_ready) return;
++	for (int i = 0; i < 0x8000; i++) ef_tags[i] = EF_TAG_BLANK;
++	ef_blank_pending = 1;
++	ef_center_only = 1;
++}
++
++// One plane pixel at screen position x of this line, 0 when transparent, else the same
++// byte the renderer's scroll buffers hold: palette, colour and priority.
++static uint8_t ef_plane_pixel(vdp_context *c, uint32_t plane, int x, uint32_t line, uint16_t hscroll, uint16_t vscroll)
++{
++	uint32_t cols = ef_plane_cols(c);
++	uint32_t vmask = 0xFF | (c->regs[REG_SCROLL] & 0x30) << 4;
++	int world = x - (int)hscroll;
++	uint32_t col = (uint32_t)(world >> 3) & (cols - 1);
++	uint32_t y = (vscroll + line) & vmask;
++	uint32_t row = y >> 3;
++	uint32_t offset = (row * cols + col) * 2;
++	uint32_t address = (ef_plane_base(c, plane) + (offset & 0x1FFF)) & 0xFFFE;
++	if (plane ? ef_strict_b : ef_strict_a) {
++		// Current against the frame's camera, so per-line parallax scroll cannot fail it, and
++		// not a wrapped repeat of a map too narrow to reach this far.
++		int half_screen = (c->regs[REG_MODE_4] & BIT_H40 ? 320 : 256) / 2;
++		int from_center = x - half_screen;
++		if (from_center < 0) from_center = -from_center;
++		if (from_center >= (int)cols * 4) return 0;
++		if (ef_tags[address >> 1 & 0x7FFF] != ef_tag_for(c, plane, col, row)) return 0;
++	}
++	uint16_t entry = ef_word(c, address);
++	uint32_t fine_y = y & 7;
++	uint32_t fine_x = world & 7;
++	if (entry & MAP_BIT_V_FLIP) fine_y = 7 - fine_y;
++	if (entry & MAP_BIT_H_FLIP) fine_x = 7 - fine_x;
++	uint8_t byte = c->vdpmem[(((entry & 0x7FF) << 5) + fine_y * 4 + (fine_x >> 1)) & 0xFFFF];
++	uint8_t color = fine_x & 1 ? byte & 0xF : byte >> 4;
++	if (!color) return 0;
++	return color | (entry >> 9 & 0x70);
++}
++
++static int ef_moved_x(uint32_t line, int x, uint32_t tile, int amount)
++{
++	for (int i = 0; i < ef_rule_count; i++) {
++		ef_rule *rule = ef_rules + i;
++		if ((int)line >= rule->y0 && (int)line <= rule->y1 && x >= rule->x0 && x <= rule->x1 &&
++				(int)tile >= rule->t0 && (int)tile <= rule->t1) return x + rule->dir * amount;
++	}
++	return x;
++}
++
++// Sprites over the whole wide line, in table order: the first one drawn wins, as on the VDP.
++static void ef_sprites(vdp_context *c, uint32_t line, int ext, int base_width, uint8_t *wide, uint8_t *hud)
++{
++	uint32_t y_line = (line + 1 + 128) & 0x1FF;
++	uint32_t table = mode5_sat_address(c);
++	uint32_t limit = c->regs[REG_MODE_4] & BIT_H40 ? MAX_SPRITES_FRAME : MAX_SPRITES_FRAME_H32;
++	uint32_t index = 0;
++	uint8_t seen_any = 0;
++	for (uint32_t count = 0; count < limit; count++) {
++		uint32_t cache = index * 4;
++		uint32_t y = (c->sat_cache[cache] << 8 | c->sat_cache[cache + 1]) & 0x1FF;
++		uint8_t size = c->sat_cache[cache + 2];
++		uint32_t next = c->sat_cache[cache + 3] & 0x7F;
++		uint32_t height = ((size & 3) + 1) * 8;
++		uint32_t width = ((size >> 2 & 3) + 1) * 8;
++		if (y <= y_line && y_line < y + height) {
++			uint32_t att = table + index * 8 + 4;
++			uint16_t tileinfo = ef_word(c, att);
++			uint32_t x_pos = ef_word(c, att + 2) & 0x1FF;
++			if (!x_pos) {
++				if (seen_any) break;  // the VDP's sprite mask
++			} else {
++				seen_any = 1;
++				uint32_t tile = tileinfo & 0x7FF;
++				int x = (int)x_pos - 128;
++				int moved = ef_rule_count ? ef_moved_x(line, x, tile, ext) : x;
++				uint8_t *target = moved != x ? hud : wide;
++				uint8_t pal_priority = tileinfo >> 9 & 0x70;
++				uint32_t row = y_line - y;
++				if (tileinfo & MAP_BIT_V_FLIP) row = height - 1 - row;
++				for (uint32_t px = 0; px < width; px++) {
++					int sx = moved + (int)(tileinfo & MAP_BIT_H_FLIP ? width - 1 - px : px) + ext;
++					if (sx < 0 || sx >= base_width + 2 * ext) continue;
++					if (target == wide && sx >= ext && sx < ext + base_width) continue;  // the renderer drew those
++					if (target[sx] & 0xF) continue;
++					uint32_t cell = px / 8;
++					uint32_t address = ((tile + cell * (height / 8) + row / 8) << 5) + (row & 7) * 4 + (px & 7) / 2;
++					uint8_t byte = c->vdpmem[address & 0xFFFF];
++					uint8_t color = px & 1 ? byte & 0xF : byte >> 4;
++					if (color) target[sx] = color | pal_priority;
++				}
++			}
++		}
++		index = next;
++		if (!index || index >= limit) break;
++	}
++}
++
++// A sprite the rules move must not also appear where the game put it.
++static uint16_t ef_hide_moved_sprite(vdp_context *c, uint32_t line, uint16_t x_pos, uint16_t tileinfo)
++{
++	if (!ef_rule_count || !ef_wide_on() || !ef_scene_wide || !x_pos) return x_pos;
++	int x = (int)x_pos - 128;
++	if (ef_moved_x(line, x, tileinfo & 0x7FF, 1) != x) return 1;
++	return x_pos;
++}
++
++// The line just finished in the original columns: copy it and draw the new columns beside it.
++static void ef_wide_line(vdp_context *c, pixel_t *source)
++{
++	if (!ef_wide_on() || c->double_res || !(c->regs[REG_MODE_2] & BIT_MODE_5) || c->s32x_vid) return;
++	uint32_t row = (uint32_t)(((char *)source - (char *)c->fb) / c->output_pitch);
++	if (row >= 294) return;
++	uint32_t line = (c->vcounter - 1) & 0x1FF;
++	uint32_t active = line < c->inactive_start;
++	if (active && line == 0) {
++		ef_evaluate_scene();
++		if (ef_blank_pending && (ef_strict_a || ef_strict_b) && (c->regs[REG_MODE_2] & BIT_DISP_EN))
++			ef_sweep_blank(c);
++	}
++	int base_width = c->regs[REG_MODE_4] & BIT_H40 ? 320 : 256;
++	int ext = ef_wide_ext(base_width);
++	pixel_t *out = ef_wide_fb + row * EF_WIDE_FB_WIDTH;
++	memcpy(out + ext, source + BORDER_LEFT, base_width * sizeof(pixel_t));
++	pixel_t back = active && ef_scene_wide ? c->colors[c->regs[REG_BG_COLOR] & 0x3F] : 0;
++	if (!active || !(c->regs[REG_MODE_2] & BIT_DISP_EN) || !ef_scene_wide) {
++		for (int i = 0; i < ext; i++) {
++			out[i] = back;
++			out[ext + base_width + i] = back;
++		}
++		return;
++	}
++	static uint8_t sprite_line[EF_WIDE_FB_WIDTH], hud_line[EF_WIDE_FB_WIDTH];
++	memset(sprite_line, 0, base_width + 2 * ext);
++	memset(hud_line, 0, base_width + 2 * ext);
++	ef_sprites(c, line, ext, base_width, sprite_line, hud_line);
++	uint16_t hs_a = ef_hscroll(c, line, 0), hs_b = ef_hscroll(c, line, 1);
++	uint8_t column_scroll = c->regs[REG_MODE_3] & BIT_VSCROLL;
++	uint32_t last_column = base_width == 320 ? 38 : 30;
++	uint8_t shadow_mode = c->regs[REG_MODE_4] & BIT_HILIGHT;
++	uint8_t bg_index = c->regs[REG_BG_COLOR] & 0x3F;
++	// The window plane replaces plane A: whole lines, or everything on one side.
++	uint32_t top = c->window_v_latch & WINDOW_DOWN ? (c->window_v_latch & 0x1F) * 8 : 0;
++	uint32_t bottom = c->window_v_latch & WINDOW_DOWN ? 512 : (c->window_v_latch & 0x1F) * 8;
++	uint8_t window_line = line >= top && line < bottom;
++	uint8_t window_left = window_line || (!(c->window_h_latch & WINDOW_RIGHT) && (c->window_h_latch & 0x1F));
++	uint8_t window_right = window_line || ((c->window_h_latch & WINDOW_RIGHT) != 0);
++	uint8_t debug;
++	for (int side = 0; side < 2; side++) {
++		uint32_t column = side ? last_column : 0;
++		uint16_t vs_a = (column_scroll ? c->vsram[column] : c->vsram[0]) & 0x3FF;
++		uint16_t vs_b = (column_scroll ? c->vsram[column + 1] : c->vsram[1]) & 0x3FF;
++		uint8_t no_a = side ? window_right : window_left;
++		for (int i = 0; i < ext; i++) {
++			int x = side ? base_width + i : i - ext;
++			int sx = x + ext;
++			uint8_t a = no_a ? 0 : ef_plane_pixel(c, 0, x, line, hs_a, vs_a);
++			uint8_t b = ef_plane_pixel(c, 1, x, line, hs_b, vs_b);
++			uint8_t pixel;
++			if (shadow_mode) {
++				sh_pixel shaded = composite_highlight(c, &debug, sprite_line[sx], a, b, bg_index);
++				if (shaded.intensity == BUF_BIT_PRIORITY << 1) pixel = (shaded.index & 0x3F) + HIGHLIGHT_OFFSET;
++				else if (shaded.intensity) pixel = shaded.index & 0x3F;
++				else pixel = (shaded.index & 0x3F) + SHADOW_OFFSET;
++				out[sx] = c->colors[pixel];
++			} else {
++				pixel = composite_normal(c, &debug, sprite_line[sx], a, b, bg_index);
++				out[sx] = c->colors[pixel & 0x3F];
++			}
++		}
++	}
++	if (ef_rule_count) {
++		for (int sx = 0; sx < base_width + 2 * ext; sx++)
++			if (hud_line[sx] & 0xF) out[sx] = c->colors[hud_line[sx] & 0x3F];
++	}
++}
+diff --git a/libblastem.c b/libblastem.c
+index c239267..5882105 100644
+--- a/libblastem.c
++++ b/libblastem.c
+@@ -7,6 +7,7 @@
+ #include "paths.h"
+ #include "vdp.h"
+ #include "render.h"
++#include "ef_wide.h"
+ #include "io.h"
+ #include "genesis.h"
+ #include "sms.h"
+@@ -308,6 +309,7 @@ RETRO_API bool retro_unserialize(const void *data, size_t size)
+ {
+ 	const size_t *buffer = data;
+ 	current_system->deserialize(current_system, (uint8_t *)(buffer + 1), *buffer);
++	ef_wide_forget_tags();
+ 	return 1;
+ }
+ 
+@@ -473,6 +475,35 @@ void render_destroy_window(uint8_t which)
+ 	//not supported in lib build
+ }
+ 
++static uint8_t ef_touched;
++static void ef_read_option(const char *key, void (*apply)(const char *))
++{
++	struct retro_variable var = {.key = key, .value = NULL};
++	apply(retro_environment(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++}
++
++// The recipe's options, at load and whenever the frontend says they changed.
++static void ef_read_options(void)
++{
++	static uint8_t loaded;
++	uint8_t updated = 0;
++	retro_environment(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated);
++	if (loaded && !updated) return;
++	loaded = 1;
++	ef_read_option("emufusion_ws_strict", ef_wide_set_strict);
++	ef_read_option("emufusion_ws_scene", ef_wide_set_scene);
++	ef_read_option("emufusion_ws_hud", ef_wide_set_hud);
++	ef_read_option("emufusion_ws_aspect", ef_wide_set_aspect);
++	if (ef_wide_on()) ef_touched = 1;
++	if (stype == SYSTEM_GENESIS || stype == SYSTEM_SEGACD)
++		ef_wide_set_ram((const uint8_t *)((genesis_context *)current_system)->work_ram);
++}
++
++static int ef_interlaced(void)
++{
++	return (stype == SYSTEM_GENESIS || stype == SYSTEM_SEGACD) && ((genesis_context *)current_system)->vdp->double_res;
++}
++
+ static uint32_t fb[LINEBUF_SIZE * 294 * 2];
+ static uint8_t last_fb;
+ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
+@@ -494,6 +525,25 @@ void render_framebuffer_updated(uint8_t which, int width)
+ 	unsigned height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
+ 	width -= (overscan_left + overscan_right);
+ 	unsigned base_height = height;
++	ef_read_options();
++	if (ef_wide_on() && which == FRAMEBUFFER_ODD && !ef_interlaced()) {
++		int ext = ef_wide_ext(width);
++		int wide = width + 2 * ext;
++		if (wide != last_width || height != last_height) {
++			struct retro_game_geometry geometry = {
++				.base_width = wide,
++				.base_height = height,
++				.aspect_ratio = 4.0f / 3.0f * wide / width
++			};
++			retro_environment(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
++			last_width = wide;
++			last_height = height;
++		}
++		retro_video_refresh(ef_wide_fb + EF_WIDE_FB_WIDTH * overscan_top, wide, height, EF_WIDE_FB_WIDTH * sizeof(uint32_t));
++		frame_presented = 1;
++		system_request_exit(current_system, 0);
++		return;
++	}
+ 	if (which != last_fb) {
+ 		height *= 2;
+ 		last_fb = which;
+@@ -502,7 +552,7 @@ void render_framebuffer_updated(uint8_t which, int width)
+ 		struct retro_game_geometry geometry = {
+ 			.base_width = width,
+ 			.base_height = height,
+-			.aspect_ratio = (float)LINEBUF_SIZE / base_height
++			.aspect_ratio = ef_touched ? 4.0f / 3.0f : (float)LINEBUF_SIZE / base_height
+ 		};
+ 		retro_environment(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
+ 		last_width = width;
+diff --git a/vdp.c b/vdp.c
+index a8247ce..3934b4d 100644
+--- a/vdp.c
++++ b/vdp.c
+@@ -398,12 +398,16 @@ void vdp_check_update_sat_byte(vdp_context *context, uint32_t address, uint8_t v
+ 	}
+ }
+ 
++static void ef_tag_write(vdp_context *c, uint32_t address);
++#define EF_TAG(c, address) do { if (ef_tracking()) ef_tag_write(c, address); } while (0)
++static uint8_t ef_tracking(void);
+ static void write_vram_word(vdp_context *context, uint32_t address, uint16_t value)
+ {
+ 	address = (address & 0x3FC) | (address >> 1 & 0xFC01) | (address >> 9 & 0x2);
+ 	address ^= 1;
+ 	//TODO: Support an option to actually have 128KB of VRAM
+ 	context->vdpmem[address] = value;
++	EF_TAG(context, address);
+ }
+ 
+ static void write_vram_byte(vdp_context *context, uint32_t address, uint8_t value)
+@@ -414,6 +418,7 @@ static void write_vram_byte(vdp_context *context, uint32_t address, uint8_t valu
+ 		address = mode4_address_map[address & 0x3FFF];
+ 	}
+ 	context->vdpmem[address] = value;
++	EF_TAG(context, address);
+ }
+ 
+ #define VSRAM_DIRTY_BITS 0xF800
+@@ -1060,6 +1065,7 @@ static void scan_sprite_table_mode4(vdp_context * context)
+ 	}
+ }
+ 
++static uint16_t ef_hide_moved_sprite(vdp_context *c, uint32_t line, uint16_t x_pos, uint16_t tileinfo);
+ static void read_sprite_x(uint32_t line, vdp_context * context)
+ {
+ 	if (context->cur_slot == context->max_sprites_line) {
+@@ -1112,6 +1118,7 @@ static void read_sprite_x(uint32_t line, vdp_context * context)
+ 			}
+ 			context->sprite_draws--;
+ 			context->sprite_draw_list[context->sprite_draws].x_pos = ((context->vdpmem[att_addr+ 2] & 0x3) << 8 | context->vdpmem[att_addr + 3]) & 0x1FF;
++			context->sprite_draw_list[context->sprite_draws].x_pos = ef_hide_moved_sprite(context, context->vcounter & 0x1FF, context->sprite_draw_list[context->sprite_draws].x_pos, tileinfo);
+ 			context->sprite_draw_list[context->sprite_draws].address = address;
+ 			context->sprite_draw_list[context->sprite_draws].pal_priority = pal_priority;
+ 			context->sprite_draw_list[context->sprite_draws].h_flip = (tileinfo & MAP_BIT_H_FLIP) ? 1 : 0;
+@@ -3050,6 +3057,8 @@ void vdp_force_update_framebuffer(vdp_context *context)
+ 	vdp_update_per_frame_debug(context);
+ }
+ 
++static void ef_wide_line(vdp_context *c, pixel_t *source);
++static uint16_t ef_hide_moved_sprite(vdp_context *c, uint32_t line, uint16_t x_pos, uint16_t tileinfo);
+ static void advance_output_line(vdp_context *context)
+ {
+ 	//This function is kind of gross because of the need to deal with vertical border busting via mode changes
+@@ -3059,6 +3068,7 @@ static void advance_output_line(vdp_context *context)
+ 		//vcounter increment occurs much later in Mode 4
+ 		output_line++;
+ 	}
++	if (context->output && context->fb) ef_wide_line(context, context->output);
+ 	if (context->s32x_vid && context->output) {
+ 		//vcounter advances before output line does in Mode 5, so temporarily back it up here
+ 		output_line--;
+@@ -6903,3 +6913,6 @@ void vdp_replay_event(vdp_context *context, uint8_t event, event_reader *reader)
+ 		break;
+ 	}
+ }
++
++#include "ef_wide.inc"
++static uint8_t ef_tracking(void) { return ef_strict_a || ef_strict_b; }

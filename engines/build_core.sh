@@ -609,7 +609,7 @@ case "$ENGINE" in
         # Widescreen Hack: exact picture width, per-game scene and HUD rules.
         apply_locked_patch "$staged_source" \
             engines/patches/bsnes-hd-emufusion-widescreen.patch \
-            a172181951c33aea9786ccc32193690af913094fd5d63c69e84da61853a12c29
+            dd0f796bb2faf4ad05d014f6786abfcebd6d9afdff5a8876a15617172cf4d927
         "$NDK_DIR/ndk-build" -C "$staged_source/bsnes/target-libretro/jni" \
             NDK_PROJECT_PATH="$staged_source/bsnes/target-libretro" \
             APP_BUILD_SCRIPT="$staged_source/bsnes/target-libretro/jni/Android.mk" \
@@ -688,6 +688,17 @@ case "$ENGINE" in
                 ;;
         esac
         source=$(fetch_source "$ENGINE" "$commit" "$expected_sha" "$repository")
+        if [ "$ENGINE" = gearsystem ]; then
+            # Widescreen Hack: the Game Gear VDP already draws 256 columns; show more of them.
+            build="$BUILD_ROOT/work/gearsystem-$ABI"
+            rm -rf "$build"
+            mkdir -p "$build"
+            cp -R "$source/." "$build/"
+            apply_locked_patch "$build" \
+                engines/patches/gearsystem-emufusion-widescreen.patch \
+                f6636b23b3c9ee27f991739c775bf7f774602436ba03519ac7a258186b8759e2
+            source="$build"
+        fi
         if [ "$ENGINE" = gearcoleco ]; then
             build="$BUILD_ROOT/work/gearcoleco-$ABI"
             rm -rf "$build"
@@ -766,6 +777,10 @@ case "$ENGINE" in
         apply_locked_patch "$source" \
             engines/patches/blastem-new-core-frame-end-rebase-hang.patch \
             d899b13fe0728e5e927e30736e1c1c7c57d2906a6814c6150823e911cc73686c
+        # Widescreen Hack: new columns drawn beside the untouched original picture.
+        apply_locked_patch "$source" \
+            engines/patches/blastem-emufusion-widescreen.patch \
+            f88a5af0115348463534edd9f95695a3d9a9f7c8a9706c145df70b4352e5b4f0
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'BlastEm recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;

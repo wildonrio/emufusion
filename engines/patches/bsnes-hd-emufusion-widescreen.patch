@@ -1,9 +1,9 @@
 diff --git a/bsnes/emulator/efwide.hpp b/bsnes/emulator/efwide.hpp
 new file mode 100644
-index 0000000..9013a6e
+index 0000000..4b5f7f2
 --- /dev/null
 +++ b/bsnes/emulator/efwide.hpp
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,58 @@
 +#pragma once
 +// EmuFusion Widescreen Hack: per-game state set by the recipe through core options.
 +// emufusion_ws_width  total picture width in pixels (0 = original 256)
@@ -14,6 +14,9 @@ index 0000000..9013a6e
 +// emufusion_ws_bounds the world's limits, "7E00E2:7E0604,7E0606+100": the camera's left edge,
 +//                     then the left and right world edges, 16-bit RAM values with a hex offset;
 +//                     wide areas outside them are black, as they would be on any fixed screen
++// emufusion_ws_map    the game keeps its whole map in RAM: draw wide areas straight from it, so
++//                     they are right everywhere, in every direction, from the first frame.
++//                     Names a decoder written for that game's engine, "ff6"
 +// emufusion_ws_strict layers whose wide areas show only tiles written for that world
 +//                     position, "bg1,bg2": no stale or wrapped tilemap, never-loaded VRAM;
 +//                     with "center", a tile loaded during forced blank counts only near the
@@ -45,6 +48,12 @@ index 0000000..9013a6e
 +  unsigned long saveRamSize();
 +  void *systemRamData();
 +  void setStrict(const char *value);
++  void setMap(const char *value);
++  // The tilemap word for this cell of a layer, or -1 when this game has no decoder for it.
++  // tileX, tileY: 8x8 cells from the top-left cell the screen shows, may be negative.
++  enum : int { MapNothing = -2 };
++  int mapCell(int layer, int cellX, int cellY);
++  extern int mapGame;
 +  void setBounds(const char *value);
 +  bool outside(int x);
 +  extern bool bounded;
@@ -54,7 +63,7 @@ index 0000000..9013a6e
 +  int moved(int layer, int y, int x, int tile, int amount);
 +}
 diff --git a/bsnes/sfc/ppu-fast/background.cpp b/bsnes/sfc/ppu-fast/background.cpp
-index 4eac82f..8b73dfc 100644
+index 4eac82f..0d4ba8a 100644
 --- a/bsnes/sfc/ppu-fast/background.cpp
 +++ b/bsnes/sfc/ppu-fast/background.cpp
 @@ -29,6 +29,10 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
@@ -68,29 +77,55 @@ index 4eac82f..8b73dfc 100644
    bool windowAbove[1024];
    bool windowBelow[1024];
    renderWindow(self.window, self.window.aboveEnable, windowAbove,
-@@ -72,10 +76,20 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -72,10 +76,24 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
  
    auto luma = ppu.lightTable[io.displayBrightness];
    bool lastCropped = false;
 -  int x = 0 - (hscroll & 7) - ws;
 +  int x = 0 - (hscroll & 7) - (ws > 0 ? (ws + 7 & ~7) : ws);
++  bool useMap = ws > 0 && !hudLine && !hires && !offsetPerTileMode && EfWide::mapGame;
 +  bool strict = ws > 0 && !hudLine && !hires && !offsetPerTileMode && (EfWide::strictLayers >> hudLayer & 1);
 +  bool bounded = ws > 0 && !hudLine && EfWide::bounded;
 +  uint strictShift = 3 + self.tileSize;
-+  uint strictMask = (1024 >> strictShift) - 1;
    while(x < (width + ws)) {
      uint hoffset = x + hscroll;
      uint voffset = y + vscroll;
 +    bool stale = false;
 +    if(strict && (x < 0 || x + 8 > 256)) {
 +      uint tag = EfWide::tags[getTileAddress(self, hoffset & hmask, voffset & vmask)];
-+      uint want = ((int)hoffset >> strictShift & strictMask) | ((int)voffset >> strictShift & strictMask) << 8;
-+      stale = tag != want;
++      uint columns = (hmask + 1) >> strictShift;
++      uint rows = (vmask + 1) >> strictShift;
++      int fromCenter = x + 4 - 128;
++      if(fromCenter < 0) fromCenter = -fromCenter;
++      stale = fromCenter >= (int)((columns << strictShift) / 2) ||
++              tag != ppufast.efTagNow(hudLayer, (hoffset & hmask) >> strictShift, (voffset & vmask) >> strictShift, columns, rows, strictShift);
 +    }
      if(offsetPerTileMode) {
        uint validBit = 0x2000 << source;
        uint offsetX = x + (hscroll & 7);
-@@ -125,6 +139,8 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -104,6 +122,21 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+     voffset &= vmask;
+ 
+     uint tileNumber = getTile(self, hoffset, voffset);
++    bool fromMap = false;
++    if(useMap && (x < 0 || x + 8 > 256)) {
++      // Cells counted from the top-left one on screen. A 16x16 map tile starts on an even cell
++      // of the scroll, which the game keeps tile-aligned with its $0541 counter.
++      int cellX = (x + (int)(hscroll & 15)) >> 3;
++      int cellY = ((int)y + (int)(vscroll & 15)) >> 3;
++      int word = EfWide::mapCell(hudLayer, cellX, cellY);
++      if(word >= 0) {
++        tileNumber = word;
++        fromMap = true;
++        stale = false;
++      } else if(word == EfWide::MapNothing) {
++        stale = true;
++      }
++    }
+     uint mirrorY = tileNumber & 0x8000 ? 7 : 0;
+     uint mirrorX = tileNumber & 0x4000 ? 7 : 0;
+     uint8 tilePriority = self.priority[bool(tileNumber & 0x2000)];
+@@ -125,6 +158,8 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
  
      for(uint tileX = 0; tileX < 8; tileX++, x++) {
        if(x < -ws || x >= width + ws) continue;   //if(x & width) continue;  //x < 0 || x >= width
@@ -99,7 +134,7 @@ index 4eac82f..8b73dfc 100644
        if(--mosaicCounter == 0) {
          uint color, shift = mirrorX ? tileX : 7 - tileX;
        /*if(self.tileMode >= TileMode::BPP2)*/ {
-@@ -156,6 +172,13 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -156,6 +191,13 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
  
        uint32 mctc = luma[mosaicColor];
  
@@ -113,7 +148,7 @@ index 4eac82f..8b73dfc 100644
        if(!hires) {
          if(ppufast.hires() && ppufast.hd()) {
            // In hires mode non-hires backgrounds seem to be rendered on every second pixel (see water in Kirby)
-@@ -185,6 +208,15 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -185,6 +227,15 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
    }
  }
  
@@ -131,10 +166,10 @@ index 4eac82f..8b73dfc 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..9b88d48
+index 0000000..bd5d906
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,258 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -249,6 +284,75 @@ index 0000000..9b88d48
 +      }
 +      cursor += length + (cursor[length] ? 1 : 0);
 +    }
++  }
++
++  int mapGame = 0;
++  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3 };
++
++  void setMap(const char *value) {
++    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : MapNone;
++  }
++
++  // Super Mario World, horizontal levels: layer 1 is 16x16 tiles, their numbers at 7E:C800 (low)
++  // and 7F:C800 (high), 16 wide by 27 tall per screen. $0FBE gives each number's four 8x8 words in
++  // bank 0D. $1A/$1C are the camera, $5D the number of screens, bit 0 of $5B a vertical level.
++  static int mapCellSMW(int layer, int cellX, int cellY) {
++    if(layer != 0 || !wram || (wram[0x5B] & 1)) return -1;
++    auto word = [](unsigned address) { return wram[address] | wram[address + 1] << 8; };
++    int tileX = (word(0x1A) >> 4) + (cellX >> 1);
++    int tileY = (word(0x1C) >> 4) + (cellY >> 1);
++    int screens = wram[0x5D];
++    if(tileX < 0 || (tileX >> 4) >= screens || tileY < 0 || tileY >= 27) return MapNothing;
++    unsigned index = (tileX >> 4) * 0x1B0 + tileY * 16 + (tileX & 15);
++    unsigned number = wram[0xC800 + index] | wram[0x1C800 + index] << 8;
++    unsigned pointer = word(0x0FBE + (number & 0x3FF) * 2);
++    auto &rom = SuperFamicom::cartridge.rom;
++    unsigned entry = (0x0D << 15 | (pointer & 0x7FFF)) + ((cellX & 1) ? 4 : 0) + ((cellY & 1) ? 2 : 0);
++    if(entry + 1 >= rom.size()) return MapNothing;
++    return rom.data()[entry] | rom.data()[entry + 1] << 8;
++  }
++
++  // A Link to the Past's overworld: background 2 is 16x16 tiles, their ids at 7E:2000 in rows of
++  // 64 from the area's corner, each with four 8x8 words in the ROM table at 0F:8000. $E2/$E8 are
++  // the camera; $0604/$0600 the area's corner, $0606 the last camera position to its right.
++  static int mapCellLttP(int layer, int cellX, int cellY) {
++    if(layer != 1 || !wram) return -1;
++    auto word = [](unsigned address) { return wram[address] | wram[address + 1] << 8; };
++    // Moving between areas: the map in RAM is about to change under the picture.
++    if(wram[0x11] != 0) return MapNothing;
++    int originX = word(0x604), originY = word(0x600);
++    int tileX = (word(0xE2) >> 4) + (cellX >> 1) - (originX >> 4);
++    int tileY = (word(0xE8) >> 4) + (cellY >> 1) - (originY >> 4);
++    int tilesWide = (word(0x606) + 0x100 - originX) >> 4;
++    if(tileX < 0 || tileX >= tilesWide || tileY < 0 || tileY >= 64) return MapNothing;
++    unsigned id = word(0x2000 + tileY * 0x80 + tileX * 2);
++    auto &rom = SuperFamicom::cartridge.rom;
++    unsigned entry = 0x78000 + id * 8 + ((cellY & 1) ? 4 : 0) + ((cellX & 1) ? 2 : 0);
++    if(entry + 1 >= rom.size()) return MapNothing;
++    return rom.data()[entry] | rom.data()[entry + 1] << 8;
++  }
++
++  // Final Fantasy VI (C0:2210, C0:2397): a layer's 16x16 tile ids live at 7F:(layer page)(y)(x),
++  // its four 8x8 words in four tables indexed by id. $0541+2n/$0542+2n hold the tile at the middle
++  // of the screen, seven tiles right of the first one shown; $86+2n/$87+2n are the map's size masks.
++  static int mapCellFF6(int layer, int cellX, int cellY) {
++    if(layer > 1 || !wram) return -1;
++    int maskX = wram[0x86 + layer * 2];
++    int maskY = wram[0x87 + layer * 2];
++    int tileX = wram[0x541 + layer * 2] - 7 + (cellX >> 1);
++    int tileY = (wram[0x542 + layer * 2] - 7 + (cellY >> 1)) & maskY;
++    // Past the map's left or right edge: nothing there.
++    if(tileX < 0 || tileX > maskX) return MapNothing;
++    unsigned id = wram[0x10000 + (layer << 14) + (tileY << 8) + tileX];
++    unsigned table = 0x1C000 + (layer << 11) + ((cellY & 1) ? 0x200 : 0) + ((cellX & 1) ? 0x400 : 0) + id * 2;
++    return wram[table] | wram[table + 1] << 8;
++  }
++
++  int mapCell(int layer, int cellX, int cellY) {
++    if(mapGame == MapFF6) return mapCellFF6(layer, cellX, cellY);
++    if(mapGame == MapLttP) return mapCellLttP(layer, cellX, cellY);
++    if(mapGame == MapSMW) return mapCellSMW(layer, cellX, cellY);
++    return -1;
 +  }
 +
 +  void setStrict(const char *value) {
@@ -412,7 +516,7 @@ index 1fc167a..0d7e7b2 100644
      
      if(ppufast.hires() && ppufast.hd()) {
 diff --git a/bsnes/sfc/ppu-fast/ppu.cpp b/bsnes/sfc/ppu-fast/ppu.cpp
-index d7260af..6ef86b0 100644
+index d7260af..575b328 100644
 --- a/bsnes/sfc/ppu-fast/ppu.cpp
 +++ b/bsnes/sfc/ppu-fast/ppu.cpp
 @@ -1,4 +1,7 @@
@@ -423,7 +527,7 @@ index d7260af..6ef86b0 100644
  
  namespace SuperFamicom {
  
-@@ -28,6 +31,69 @@ auto PPU::hdScale() const -> uint { return configuration.hacks.ppu.mode7.scale;
+@@ -28,6 +31,74 @@ auto PPU::hdScale() const -> uint { return configuration.hacks.ppu.mode7.scale;
  auto PPU::hdPerspective() const -> uint { return configuration.hacks.ppu.mode7.perspective; }
  auto PPU::hdSupersample() const -> uint { return configuration.hacks.ppu.mode7.supersample; }
  auto PPU::hdMosaic() const -> uint { return configuration.hacks.ppu.mode7.mosaic; }
@@ -436,6 +540,11 @@ index d7260af..6ef86b0 100644
 +  int worldY = centerY + ((((int)tileY - centerY + (int)rows / 2) & ((int)rows - 1)) - (int)rows / 2);
 +  uint mask = (1024 >> shift) - 1;
 +  return (worldX & mask) | (worldY & mask) << 8;
++}
++
++// The tag a cell should carry under this frame's camera. Per-line scroll cannot fail it.
++auto PPU::efTagNow(uint layer, uint tileX, uint tileY, uint columns, uint rows, uint shift) -> uint16 {
++  return efTag(tileX, tileY, columns, rows, efRefH[layer], efRefV[layer], shift);
 +}
 +
 +auto PPU::efTagWrite(uint address) -> void {
@@ -493,7 +602,16 @@ index d7260af..6ef86b0 100644
  auto PPU::widescreen() const -> uint { return wsExt; }
  auto PPU::widescreenRaw() const -> uint { return !hd() || configuration.hacks.ppu.mode7.wsMode == 0 ? 0 : configuration.hacks.ppu.mode7.widescreen; }
  auto PPU::wsbg(uint bg) const -> uint {
-@@ -52,7 +118,10 @@ auto PPU::vramExt(uint addr) const -> uint { return addr & configuration.hacks.p
+@@ -38,6 +109,8 @@ auto PPU::wsbg(uint bg) const -> uint {
+   return 0; }
+ auto PPU::wsobj() const -> uint { return configuration.hacks.ppu.mode7.wsobj; }
+ auto PPU::winXad(uint x, bool bel) const -> uint {
++  // "all" means the new columns; the original ones keep the game's window effects.
++  if(configuration.hacks.ppu.mode7.igwin >= 3 && (int)x >= 0 && (int)x < 256) return x + widescreen();
+   return ((configuration.hacks.ppu.mode7.igwin != 0 && (configuration.hacks.ppu.mode7.igwin >= 3
+        || configuration.hacks.ppu.mode7.igwin >= 2 && ((bel ? io.col.window.belowMask : io.col.window.aboveMask) == 0)
+        || configuration.hacks.ppu.mode7.igwin >= 1 && ((bel ? io.col.window.belowMask : io.col.window.aboveMask) == 2)))
+@@ -52,7 +125,10 @@ auto PPU::vramExt(uint addr) const -> uint { return addr & configuration.hacks.p
  auto PPU::bgGrad() const -> uint { return !hd() ? 0 : configuration.hacks.ppu.mode7.bgGrad; }
  auto PPU::windRad() const -> uint { return !hd() ? 0 : configuration.hacks.ppu.mode7.windRad; }
  auto PPU::wsOverrideCandidate() const -> bool { return configuration.hacks.ppu.mode7.wsMode == 1; }
@@ -505,7 +623,7 @@ index d7260af..6ef86b0 100644
  auto PPU::wsBgCol() const -> bool { return configuration.hacks.ppu.mode7.wsBgCol == 2
                                              || configuration.hacks.ppu.mode7.wsBgCol == 1 && wsOverride(); }
  auto PPU::wsMarker() const -> uint { return configuration.hacks.ppu.mode7.wsMarker; }
-@@ -147,6 +216,21 @@ auto PPU::scanline() -> void {
+@@ -147,6 +223,29 @@ auto PPU::scanline() -> void {
    if(vcounter() == 240) {
      Line::flush();
    }
@@ -513,6 +631,14 @@ index d7260af..6ef86b0 100644
 +  if(vcounter() == 0) {
 +    EfWide::wram = cpu.wram;
 +    EfWide::evaluate(io.bgMode, io.bgMode == 7);
++    if(EfWide::strictLayers) {
++      Line::flush();
++      const IO::Background *layers[4] = {&io.bg1, &io.bg2, &io.bg3, &io.bg4};
++      for(uint layer : range(4)) {
++        efRefH[layer] = layers[layer]->hoffset;
++        efRefV[layer] = layers[layer]->voffset;
++      }
++    }
 +    // A layer moved to another tilemap: cells loaded before the move belong to it now.
 +    uint mapKey = io.bg1.screenAddress ^ io.bg1.screenSize << 1 ^ (uint)io.bg2.screenAddress << 8 ^ (uint)io.bg2.screenSize << 9;
 +    if(mapKey != efMapKey) {
@@ -528,20 +654,23 @@ index d7260af..6ef86b0 100644
  
  auto PPU::refresh() -> void {
 diff --git a/bsnes/sfc/ppu-fast/ppu.hpp b/bsnes/sfc/ppu-fast/ppu.hpp
-index b4a71c0..d2008ab 100644
+index b4a71c0..a534aca 100644
 --- a/bsnes/sfc/ppu-fast/ppu.hpp
 +++ b/bsnes/sfc/ppu-fast/ppu.hpp
-@@ -20,6 +20,9 @@ struct PPU : PPUcounter {
+@@ -20,6 +20,12 @@ struct PPU : PPUcounter {
    alwaysinline auto widescreen() const -> uint;
    alwaysinline auto widescreenRaw() const -> uint;
    alwaysinline auto wsbg(uint bg) const -> uint;
 +  auto efTagWrite(uint address) -> void;
 +  auto efSweepBlank() -> void;
 +  uint efMapKey = 0;
++  uint efRefH[4] = {};
++  uint efRefV[4] = {};
++  auto efTagNow(uint layer, uint tileX, uint tileY, uint columns, uint rows, uint shift) -> uint16;
    alwaysinline auto wsobj() const -> uint;
    alwaysinline auto winXad(uint x, bool bel) const -> uint;
    alwaysinline auto winXadHd(uint x, bool bel) const -> uint;
-@@ -323,6 +326,7 @@ public:
+@@ -323,6 +329,7 @@ public:
      //background.cpp
      auto renderBackground(PPU::IO::Background&, uint8 source) -> void;
      alwaysinline auto getTile(PPU::IO::Background&, uint hoffset, uint voffset) -> uint;
@@ -585,7 +714,7 @@ index da07e7c..0113ab6 100644
  LOCAL_CPP_FEATURES := exceptions rtti
  include $(BUILD_SHARED_LIBRARY)
 diff --git a/bsnes/target-libretro/libretro.cpp b/bsnes/target-libretro/libretro.cpp
-index 8a50f53..8e28d3d 100644
+index 8a50f53..a559b08 100644
 --- a/bsnes/target-libretro/libretro.cpp
 +++ b/bsnes/target-libretro/libretro.cpp
 @@ -2,6 +2,7 @@
@@ -596,7 +725,7 @@ index 8a50f53..8e28d3d 100644
  
  static retro_environment_t environ_cb;
  static retro_video_refresh_t video_cb;
-@@ -652,6 +653,22 @@ static bool update_variables() // returns whether video dimensions have changed
+@@ -652,6 +653,25 @@ static bool update_variables() // returns whether video dimensions have changed
  	vc = vc | program->scale != scale; // scale changed
  	program->scale = scale;
  	ws = HdToolkit::determineWsExt(ws, overscan, aspectcorrection);
@@ -609,6 +738,9 @@ index 8a50f53..8e28d3d 100644
 +	var.key = "emufusion_ws_strict";
 +	var.value = NULL;
 +	EfWide::setStrict(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_map";
++	var.value = NULL;
++	EfWide::setMap(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
 +	var.key = "emufusion_ws_bounds";
 +	var.value = NULL;
 +	EfWide::setBounds(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -619,7 +751,7 @@ index 8a50f53..8e28d3d 100644
  	vc = vc | program->ws != ws; // widescreen AR changed
  	program->ws = ws;
  	return vc; // returns whether video dimensions have changed (overscan, aspectcorrection scale or widescreen AR)
-@@ -1129,10 +1146,14 @@ unsigned retro_get_region()
+@@ -1129,10 +1149,14 @@ unsigned retro_get_region()
  // Rely on higan to load and save SRAM until there is really compelling reason not to.
  void *retro_get_memory_data(unsigned id)
  {

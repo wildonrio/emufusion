@@ -18,11 +18,13 @@ public final class WidescreenSession {
     // Frame thread only.
     private int appliedWidth = -1;
 
-    WidescreenSession(Context context, WidescreenRecipes.Recipe recipe, String qualificationSession) {
+    WidescreenSession(Context context, WidescreenRecipes.Recipe recipe, String gameTitle,
+                      String qualificationSession) {
         this.recipe = recipe;
         prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         prefKey = (qualificationSession == null || qualificationSession.isEmpty()
-                ? "" : "qa:" + qualificationSession + ":") + recipe.system + "/" + recipe.key;
+                ? "" : "qa:" + qualificationSession + ":") + recipe.system + "/" +
+                com.thorium.emufusion.metadata.TitleMatcher.normalize(gameTitle);
         enabled = prefs.getBoolean(prefKey, false);
     }
 

@@ -1,0 +1,227 @@
+diff --git a/platforms/libretro/libretro.cpp b/platforms/libretro/libretro.cpp
+index c1ad656..a68aad4 100644
+--- a/platforms/libretro/libretro.cpp
++++ b/platforms/libretro/libretro.cpp
+@@ -72,6 +72,62 @@ static bool libretro_supports_bitmasks = false;
+ static bool categories_supported = false;
+ static float aspect_ratio = 0.0f;
+ static int current_screen_width = 0;
++static int ef_wide_ext = 0;
++static bool ef_was_wide = false;
++
++// emufusion_ws_scene: when to widen, OR of AND terms of RAM tests, "C200=0C,C201!=1|C300/F0=10".
++struct EfTerm { int group; unsigned addr, mask, value; bool negate; };
++static EfTerm ef_terms[32];
++static int ef_term_count = 0;
++
++static void ef_set_scene(const char* value)
++{
++    ef_term_count = 0;
++    if (!value) return;
++    int group = 0;
++    const char* cursor = value;
++    while (*cursor && ef_term_count < 32)
++    {
++        char text[32] = {0};
++        size_t length = strcspn(cursor, ",|");
++        if (length && length < sizeof(text))
++        {
++            memcpy(text, cursor, length);
++            const char* equals = strchr(text, '=');
++            if (equals && equals != text)
++            {
++                EfTerm& term = ef_terms[ef_term_count++];
++                char* end;
++                term.group = group;
++                term.negate = equals[-1] == '!';
++                term.addr = strtoul(text, &end, 16);
++                term.mask = *end == '/' ? strtoul(end + 1, NULL, 16) : 0xFF;
++                term.value = strtoul(equals + 1, NULL, 16);
++            }
++        }
++        if (cursor[length] == '|') group++;
++        cursor += length + (cursor[length] ? 1 : 0);
++    }
++}
++
++static bool ef_scene_wide(GearsystemCore* core)
++{
++    if (!ef_term_count) return true;
++    u8* ram = core->GetMemory()->GetMemoryMap();
++    for (int index = 0; index < ef_term_count;)
++    {
++        int group = ef_terms[index].group;
++        bool all = true;
++        for (; index < ef_term_count && ef_terms[index].group == group; index++)
++        {
++            const EfTerm& term = ef_terms[index];
++            unsigned actual = ram[term.addr & 0xFFFF] & term.mask;
++            all = all && ((actual == term.value) != term.negate);
++        }
++        if (all) return true;
++    }
++    return false;
++}
+ static int current_screen_height = 0;
+ static float current_aspect_ratio = 0;
+ 
+@@ -268,6 +324,7 @@ void retro_run(void)
+     update_input();
+ 
+     audio_sample_count = 0;
++    if (ef_wide_ext) core->GetVideo()->SetWideScene(ef_scene_wide(core));
+     core->RunToVBlank(frame_buffer, audio_buf, &audio_sample_count);
+ 
+     GS_RuntimeInfo runtime_info;
+@@ -286,7 +343,8 @@ void retro_run(void)
+         info.geometry.base_height  = runtime_info.screen_height;
+         info.geometry.max_width    = GS_RESOLUTION_MAX_WIDTH_WITH_OVERSCAN;
+         info.geometry.max_height   = GS_RESOLUTION_MAX_HEIGHT_WITH_OVERSCAN;
+-        info.geometry.aspect_ratio = aspect_ratio;
++        info.geometry.aspect_ratio = ef_wide_ext || ef_was_wide ? (float)runtime_info.screen_width / runtime_info.screen_height : aspect_ratio;
++        ef_was_wide = ef_was_wide || ef_wide_ext;
+ 
+         environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info.geometry);
+     }
+@@ -892,6 +950,20 @@ static void check_variables(void)
+ {
+     struct retro_variable var = {0};
+ 
++    // EmuFusion Widescreen Hack: target picture aspect x 1000, 0 = the original screen.
++    var.key = "emufusion_ws_scene";
++    var.value = NULL;
++    ef_set_scene(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++
++    var.key = "emufusion_ws_aspect";
++    var.value = NULL;
++    {
++        int milli = environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? atoi(var.value) : 0;
++        int ext = milli > 1000 ? (milli * GS_RESOLUTION_GG_HEIGHT / 1000 - GS_RESOLUTION_GG_WIDTH) / 2 : 0;
++        core->GetVideo()->SetWideExt(ext);
++        ef_wide_ext = core->GetVideo()->GetWideExt();
++    }
++
+     var.key = "gearsystem_up_down_allowed";
+     var.value = NULL;
+ 
+diff --git a/src/GearsystemCore.cpp b/src/GearsystemCore.cpp
+index e2475ca..cb3d3a2 100644
+--- a/src/GearsystemCore.cpp
++++ b/src/GearsystemCore.cpp
+@@ -351,7 +351,7 @@ bool GearsystemCore::GetRuntimeInfo(GS_RuntimeInfo& runtime_info)
+     {
+         if (m_pCartridge->IsGameGear() && !m_pCartridge->IsGameGearInSMSMode())
+         {
+-            runtime_info.screen_width = GS_RESOLUTION_GG_WIDTH;
++            runtime_info.screen_width = GS_RESOLUTION_GG_WIDTH + 2 * m_pVideo->GetWideExt();
+             runtime_info.screen_height = GS_RESOLUTION_GG_HEIGHT;
+         }
+         else
+diff --git a/src/Video.cpp b/src/Video.cpp
+index 18f0c16..5faaa2c 100644
+--- a/src/Video.cpp
++++ b/src/Video.cpp
+@@ -121,6 +121,16 @@ void Video::SetNoSpriteLimit(bool noSpriteLimit)
+     m_bNoSpriteLimit = noSpriteLimit;
+ }
+ 
++// EmuFusion Widescreen Hack: the Game Gear VDP already draws 256 columns; show more of them.
++void Video::SetWideExt(int ext)
++{
++    if (ext < 0) ext = 0;
++    if (ext > GS_RESOLUTION_GG_X_OFFSET) ext = GS_RESOLUTION_GG_X_OFFSET;
++    m_iWideExt = ext;
++    if (m_bGameGear && !m_bGameGearSMSMode)
++        m_iScreenWidth = GS_RESOLUTION_GG_WIDTH + 2 * m_iWideExt;
++}
++
+ void Video::Reset(bool bGameGear, bool bPAL, int iGGASIC, bool bGameGearSMSMode)
+ {
+     m_bGameGear = bGameGear;
+@@ -187,7 +197,7 @@ void Video::Reset(bool bGameGear, bool bPAL, int iGGASIC, bool bGameGearSMSMode)
+     m_iVdpRegister10Counter = m_VdpRegister[10];
+     m_iRenderLine = 0;
+ 
+-    m_iScreenWidth = (m_bGameGear && !m_bGameGearSMSMode) ? GS_RESOLUTION_GG_WIDTH : GS_RESOLUTION_SMS_WIDTH;
++    m_iScreenWidth = (m_bGameGear && !m_bGameGearSMSMode) ? GS_RESOLUTION_GG_WIDTH + 2 * m_iWideExt : GS_RESOLUTION_SMS_WIDTH;
+ 
+     m_bTMS9918 = false;
+     m_iTMS9918Mode = 0;
+@@ -761,7 +771,7 @@ void Video::RenderBackgroundSMSGG(int line)
+ 
+     int palette_color = 0;
+ 
+-    int scx_begin = (m_bGameGear && !m_bGameGearSMSMode) ? GS_RESOLUTION_GG_X_OFFSET : m_iHideLeftBarOffset;
++    int scx_begin = (m_bGameGear && !m_bGameGearSMSMode) ? GS_RESOLUTION_GG_X_OFFSET - m_iWideExt : m_iHideLeftBarOffset;
+     int scx_end = scx_begin + m_iScreenWidth - m_iHideLeftBarOffset;
+ 
+     int max_height = m_bExtendedMode224 ? 224 : 192;
+@@ -772,6 +782,15 @@ void Video::RenderBackgroundSMSGG(int line)
+         int pixel_screen = line_width_screen + scx_diff;
+         int pixel_info = line_width_info + scx_diff;
+ 
++        // A scene the recipe keeps narrow, and columns the console always hid: black bars.
++        if (m_iWideExt && !m_bWideScene && (scx < GS_RESOLUTION_GG_X_OFFSET || scx >= GS_RESOLUTION_GG_X_OFFSET + GS_RESOLUTION_GG_WIDTH))
++        {
++            if ((line >= y_offset) && (line < (y_offset + GS_RESOLUTION_GG_HEIGHT)))
++                m_pFrameBuffer[pixel_screen] = 0;
++            m_pInfoBuffer[pixel_info] = 0;
++            continue;
++        }
++
+         if (line < max_height)
+         {
+             if (IsSetBit(m_VdpRegister[0], 5) && scx < 8)
+@@ -916,7 +935,7 @@ void Video::RenderSpritesSMSGG(int line)
+ 
+     int render_sprite_count = m_bNoSpriteLimit ? 64 : 8;
+ 
+-    int scx_begin = (m_bGameGear && !m_bGameGearSMSMode) ? GS_RESOLUTION_GG_X_OFFSET : m_iHideLeftBarOffset;
++    int scx_begin = (m_bGameGear && !m_bGameGearSMSMode) ? GS_RESOLUTION_GG_X_OFFSET - m_iWideExt : m_iHideLeftBarOffset;
+     int scx_end = scx_begin + (m_iScreenWidth - m_iHideLeftBarOffset);
+ 
+     for (int i = render_sprite_count - 1; i >= 0; i--)
+@@ -953,6 +972,8 @@ void Video::RenderSpritesSMSGG(int line)
+                 continue;
+             if (IsSetBit(m_VdpRegister[0], 5) && (sprite_pixel_x < 8))
+                 continue;
++            if (m_iWideExt && !m_bWideScene && (sprite_pixel_x < GS_RESOLUTION_GG_X_OFFSET || sprite_pixel_x >= GS_RESOLUTION_GG_X_OFFSET + GS_RESOLUTION_GG_WIDTH))
++                continue;
+ 
+             int x_diff = sprite_pixel_x - scx_begin;
+             int pixel_screen = line_width_screen + x_diff;
+@@ -988,7 +1009,10 @@ void Video::RenderSpritesSMSGG(int line)
+ 
+             if ((m_pInfoBuffer[pixel_info] & 0x01) != 0)
+             {
+-                if (!sprite_collision)
++                // Columns the wide picture adds were never visible on the console: the
++                // game must see the collisions it always saw, no more.
++                if (!sprite_collision && (!m_iWideExt || (sprite_pixel_x >= GS_RESOLUTION_GG_X_OFFSET &&
++                        sprite_pixel_x < GS_RESOLUTION_GG_X_OFFSET + GS_RESOLUTION_GG_WIDTH)))
+                 {
+                     sprite_collision = true;
+                     sprite_collision_x = sprite_pixel_x;
+diff --git a/src/Video.h b/src/Video.h
+index 79880c1..c850d46 100644
+--- a/src/Video.h
++++ b/src/Video.h
+@@ -87,6 +87,9 @@ public:
+     int GetTMS9918Mode();
+     u16 ColorFromPalette(int palette_color);
+     u16* GetFrameBuffer();
++    void SetWideExt(int ext);
++    void SetWideScene(bool wide) { m_bWideScene = wide; }
++    int GetWideExt() const { return m_iWideExt; }
+     void Render32bit(u16* srcFrameBuffer, u8* dstFrameBuffer, GS_Color_Format pixelFormat, int size, bool overscan = false);
+     void Render16bit(u16* srcFrameBuffer, u8* dstFrameBuffer, GS_Color_Format pixelFormat, int size, bool overscan = false);
+     void SetOverscan(Overscan overscan);
+@@ -169,6 +172,8 @@ private:
+ 
+     int m_iRenderLine;
+     int m_iScreenWidth;
++    int m_iWideExt = 0;
++    bool m_bWideScene = true;
+     bool m_bTMS9918;
+     int m_iTMS9918Mode;
+ 

@@ -144,3 +144,70 @@ General technique that came out of it:
 | Super Mario RPG | not yet | Same; not played past the name screen. |
 | Mortal Kombat II | not yet | Fights stay inside the original view, arena is not loaded beyond it. |
 | ISS Deluxe | not yet | Not played past the menu. |
+
+## Mega Drive (first pass, 2026-11-05, Mac harness; engine BlastEm)
+
+Technique: `engines/patches/blastem-emufusion-widescreen.patch`. BlastEm's cycle-accurate renderer
+still draws the original 320 or 256 columns untouched; at the end of each line `ef_wide_line`
+draws the new columns beside them from the same VDP state (planes, window, sprites, priorities,
+shadow/highlight). Timing and game behaviour cannot change. Interlaced modes and 32X stay narrow.
+
+The Mega Drive turned out much easier than the SNES. Planes are usually 64 cells wide and games
+load well past the edge, so most games need nothing per-game. Tile tracking (`emufusion_ws_strict`)
+is off by default here because it hides more than it helps; it stays available per game.
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Sonic & Knuckles, Sonic (this library's file is Sonic 2) | widen | Score, time, rings and lives moved to the corners by sprite tile range. |
+| Disney's Aladdin, Ristar | widen | HUD moved to the corners. |
+| Gunstar Heroes, Flashback, Lightening Force, Castle of Illusion, Shinobi III, Contra Hard Corps, Desert Strike, Jungle Strike, Madden 92, Monster World IV | widen | HUDs still where the game puts them. Gunstar's weapon menu wraps. |
+| NHL 94, NHL 96, NHL Hockey, NBA Jam TE | widen | Scene rule from RAM: gameplay wide, menus and pause keep bars. NHL Hockey shows stale ice past the crowd near the rink ends. |
+| PGA Tour Golf III | left alone | Bitmap views; nothing beyond the picture. |
+| Shining Force II | not yet | Only the intro played. |
+
+The rest of the library uses a fallback recipe (widen, no per-game rule).
+
+## Game Gear (first pass, 2026-11-05, Mac harness; engine Gearsystem)
+
+The VDP already draws 256 columns and the handheld shows the middle 160, so the picture at 16:9
+(256x144, square pixels) is exactly what the console drew. Sprite collisions outside the old window
+are ignored, so game logic sees what it always saw. `emufusion_ws_scene` keeps a scene narrow.
+
+All played games look right except Triple Trouble's title (hidden columns hold junk; not added,
+no gameplay reached yet). Mean Bean Machine and Chessmaster are left alone. The rest of the library
+uses a fallback recipe.
+
+## NES, Game Boy, GBA and 3D systems: blocked 2026-11-05
+
+The Thor left USB partway through, so no ROMs can be pulled and no 3D engine can be tried. An NES
+prototype is in `~/.cache/emufusion-widescreen/host-build/mesen`, not yet run on a game.
+Expected NES limit: sprite X is 8 bits, so enemies cannot be drawn in the new columns.
+
+## The map reader (2026-11-05)
+
+Tile tracking removes wrong tiles but cannot show tiles a game has not loaded yet, so a side
+scroller has a thin unloaded band at the leading edge and an RPG shows nothing at all. Most of
+these games keep their whole map in RAM, though. `emufusion_ws_map` names a decoder, a few lines
+written per game engine, that fetches each wide-area cell from the game's own map. No game code
+runs differently; wide areas are right from the first frame, in every direction.
+
+How a decoder is found: `tools/widescreen/snes_disasm.py` plus the trace core (`EF_WATCH`, `EF_READ`,
+`EF_VRAM` in `~/.cache/emufusion-widescreen/host-build/bsnes-trace`) locate the routine that fills
+the column buffer; it shows the map address and tile table. Check against VRAM before trusting it.
+A Link to the Past matched 192 of 192 visible tiles.
+
+| Game | Decoder | Map | Tile words |
+| --- | --- | --- | --- |
+| Final Fantasy III | `ff6` | 7F:0000 and 7F:4000, 256 per row | 7F:C000 tables, one per corner |
+| A Link to the Past | `lttp` | 7E:2000, 64 per row from the area's corner | ROM 0F:8000 |
+| Super Mario World | `smw` | 7E:C800 and 7F:C800, 27 rows per screen | $0FBE pointers into bank 0D |
+
+Not done yet: Chrono Trigger, Star Ocean, Live A Live, Super Mario RPG. Chrono Trigger's play
+script doesn't get out of Crono's room yet. Dungeons and houses in A Link to the Past keep bars.
+
+## Release gate
+
+Each system in the recipe table has `"release"`. Nothing shows to players until it is true, which
+happens only after that system passes on a real device, because frame-generation releases carry
+this branch. `settings put global emufusion_qa_widescreen_all 1` turns everything on for testing
+(`thor_game.py` does this and clears it afterwards; the recipe table is read once per app process).

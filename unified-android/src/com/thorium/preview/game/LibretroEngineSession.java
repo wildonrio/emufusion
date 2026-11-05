@@ -478,7 +478,7 @@ public final class LibretroEngineSession implements EngineSession,
                             WidescreenRecipes.find(appContext, launch.systemId, launch.gameTitle);
                     if (widescreenRecipe != null && widescreenRecipe.engine.equals(entry.id))
                         widescreen = new WidescreenSession(appContext, widescreenRecipe,
-                                launch.qualificationSession);
+                                launch.gameTitle, launch.qualificationSession);
                     double synchronizedVideoHz =
                             DisplaySyncPolicy.synchronizedSourceHz(av.framesPerSecond);
                     if (synchronizedVideoHz > 1.0 && synchronizedVideoHz < 1000.0)
@@ -3004,6 +3004,20 @@ public final class LibretroEngineSession implements EngineSession,
         return false;
     }
 
+    // A game a recipe moved here may report another size than the engine that wrote its save.
+    // Carry the bytes across and keep the original, so it never starts empty and overwrites it.
+    private boolean carrySaveRamAcrossEngines(LibretroHost active, File file, byte[] value,
+                                              byte[] current) throws Exception {
+        if (!"bsnes-hd".equals(entry.id) || current == null || current.length == 0) return false;
+        File original = new File(file.getParentFile(), file.getName() + ".before-" + entry.id);
+        if (!original.exists()) DurableBlobStore.write(original, value, MAX_SAVE_RAM_BYTES);
+        System.arraycopy(value, 0, current, 0, Math.min(value.length, current.length));
+        active.writeSaveRam(current);
+        Log.i(TAG, "Carried save RAM across engines storedBytes=" + value.length +
+                " engineBytes=" + current.length);
+        return true;
+    }
+
     private void restoreSaveRam(LibretroHost active, File file) throws Exception {
         byte[] value = DurableBlobStore.read(file, MAX_SAVE_RAM_BYTES);
         if (value == null) return;
@@ -3035,6 +3049,7 @@ public final class LibretroEngineSession implements EngineSession,
                         value.length + " bufferBytes=" + current.length);
                 return;
             }
+            if (attempt == 3 && carrySaveRamAcrossEngines(active, file, value, current)) return;
             active.runFrame();
         }
         Log.w(TAG, "Retaining save RAM for a future compatible core size; " +
