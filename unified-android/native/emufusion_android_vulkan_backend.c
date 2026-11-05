@@ -17,6 +17,19 @@
 #include <string.h>
 #include <time.h>
 #include <android/log.h>
+#include <stdlib.h>
+#include <sys/system_properties.h>
+
+/* The Thor's vendor libgui (libpenguin_impl.so, vendor.perf.framepacing.enable=1)
+ * sleeps inside queueBuffer until a fixed vsync phase unless the buffer's
+ * timestamp is still in the future there. QA: debug.emufusion.stamp_ahead_ms starts
+ * the stamps that far ahead of the clock; only their spacing is ever used. */
+static int64_t emufusion_stamp_ahead_ns(void) {
+    char value[PROP_VALUE_MAX] = {0};
+    if (__system_property_get("debug.emufusion.stamp_ahead_ms", value) <= 0) return 0;
+    const long ms = atol(value);
+    return ms > 0 && ms <= 600000 ? (int64_t)ms * 1000000LL : 0;
+}
 
 #define EMUFUSION_VK_MAX_IMAGES 8u
 #define EMUFUSION_VK_MAX_WAIT_SEMAPHORES 8u
@@ -1298,7 +1311,7 @@ static bool stamp_core_frame_timestamp(
                     (period_ns > 0 ? period_ns : 1);
         } else if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
             backend->timestamp_base_ns =
-                    (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
+                    (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec + emufusion_stamp_ahead_ns();
         } else {
             backend->timestamp_base_ns = 1000000000LL;
         }

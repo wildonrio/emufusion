@@ -31,7 +31,7 @@ public final class TimelineFrameSchedulerTest {
         readinessFollowsIrregularSpans();
         readinessUndoesHeldLatency();
         arrivalPacingShowsEachImageAsItArrives();
-        withheldGeneratedImageIsNotShownLater();
+        lateImagesRealFollowsAtTheNextCallback();
         arrivalPacingKeepsLatencyAtHalfTheSpan();
         arrivalPacingAtSixtyFps();
         arrivalPacingCatchesUpAtSixtyFps();
@@ -501,30 +501,24 @@ public final class TimelineFrameSchedulerTest {
         check(off.scheduler.keepAlives() == 0L, "off");
     }
 
-    private static void withheldGeneratedImageIsNotShownLater() {
-        // A generated image that stays out of its latch (UnfinishedFrameGate):
-        // the real image comes at its own time, not a scan later behind it.
-        long panel = 8_333_333L, span = 2 * panel, t = 1_000_000_000L;
+    private static void lateImagesRealFollowsAtTheNextCallback() {
+        // An image 5 ms late (Eden): its span is 21.6 ms, half of it 10.8 ms. Holding
+        // the real image past the next callback left a second two-scan interval.
+        long panel = 8_333_333L, t = 1_000_000_000L, late = 21_600_000L;
         TimelineFrameScheduler scheduler = new TimelineFrameScheduler();
-        scheduler.configure(panel, span);
+        scheduler.configure(panel, 2 * panel);
         scheduler.setArrivalPacing(true, panel);
-        long second = t + span;
+        long second = t + late;
         check(scheduler.select(second, 1L, t, 2L, second, true) == TimelineFrameScheduler.REAL_LEFT,
                 "prime");
         scheduler.commit(true);
         long now = second + panel;
         check(scheduler.select(now, 1L, t, 2L, second, true) == TimelineFrameScheduler.GENERATED,
-                "the pair's generated image first");
-        scheduler.withhold();
-        check(scheduler.pendingKind() == TimelineFrameScheduler.NONE, "nothing pending");
-        now += panel;
-        check(scheduler.select(now, 1L, t, 2L, second, true) == TimelineFrameScheduler.REAL_RIGHT,
-                "the real image on time, without the generated one");
+                "the late image's generated image");
         scheduler.commit(true);
         now += panel;
-        long third = second + span;
-        check(scheduler.select(now, 2L, second, 3L, third, true) == TimelineFrameScheduler.GENERATED,
-                "the next pair is unaffected");
+        check(scheduler.select(now, 1L, t, 2L, second, true) == TimelineFrameScheduler.REAL_RIGHT,
+                "its real image at the next callback");
     }
 
     private static void arrivalPacingShowsEachImageAsItArrives() {

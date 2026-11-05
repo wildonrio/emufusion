@@ -283,31 +283,6 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         verdictWait = verdict;
-        boolean swapGpu = false;
-        try {
-            if (context != null) swapGpu = Settings.Global.getInt(
-                    context.getContentResolver(), SWAP_AFTER_GPU_GLOBAL, 0) != 0;
-        } catch (RuntimeException ignored) {
-            // Unreadable settings keep the default.
-        }
-        swapAfterGpu = swapGpu;
-        boolean drain = false;
-        try {
-            if (context != null) drain = Settings.Global.getInt(
-                    context.getContentResolver(), PIPELINED_DRAIN_GLOBAL, 0) != 0;
-        } catch (RuntimeException ignored) {
-            // Unreadable settings keep the default.
-        }
-        pipelinedDrain = drain;
-        int predraw = 0;
-        try {
-            if (context != null) predraw = Settings.Global.getInt(
-                    context.getContentResolver(), REAL_PREDRAW_GLOBAL, 0);
-        } catch (RuntimeException ignored) {
-            // Unreadable settings keep the default.
-        }
-        realPredraw = predraw >= 1;
-        generatedPredraw = predraw >= 2;
         boolean pixel = false;
         try {
             if (context != null) pixel = Settings.Global.getInt(
@@ -335,15 +310,23 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         pixelInputSize = pixelInput;
-        pixelModeLead = lead;
-        boolean late = false;
+        boolean flush = false;
         try {
-            if (context != null) late = Settings.Global.getInt(
-                    context.getContentResolver(), LATE_LATCH_GLOBAL, 0) != 0;
+            if (context != null) flush = Settings.Global.getInt(
+                    context.getContentResolver(), MID_FLUSH_GLOBAL, 0) != 0;
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
-        lateLatch = late;
+        midFlush = flush;
+        long phaseWaitUs = 3250L;
+        try {
+            if (context != null) phaseWaitUs = Settings.Global.getLong(
+                    context.getContentResolver(), SWITCH_PHASE_WAIT_GLOBAL, phaseWaitUs);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        switchPhaseWaitNs = phaseWaitUs * 1000L;
+        pixelModeLead = lead;
         boolean fast = true;
         try {
             if (context != null) fast = Settings.Global.getInt(
@@ -676,40 +659,8 @@ public final class TimelineSchedulerSwitch {
 
     static boolean verdictWait() { return verdictWait; }
 
-    /**
-     * In the compositor's fast state a frame is queued once its GPU work is
-     * done, and one that is not done by its latch stays out of it
-     * (UnfinishedFrameGate). QA: emufusion_framegen_swap_after_gpu=0 queues
-     * every frame at once, for paired comparisons.
-     */
-    static final String SWAP_AFTER_GPU_GLOBAL = "emufusion_framegen_swap_after_gpu";
-    private static volatile boolean swapAfterGpu = false;
 
-    static boolean swapAfterGpu() { return swapAfterGpu; }
 
-    /**
-     * After 2 s in the compositor's pipelined state one generated frame stays
-     * out, at most every 16 s (UnfinishedFrameGate.drain). QA:
-     * emufusion_framegen_pipelined_drain=0.
-     */
-    static final String PIPELINED_DRAIN_GLOBAL = "emufusion_framegen_pipelined_drain";
-    private static volatile boolean pipelinedDrain = false;
-
-    static boolean pipelinedDrain() { return pipelinedDrain; }
-
-    /**
-     * QA (emufusion_framegen_real_predraw): 1, a pair's real image is drawn
-     * into the back buffer right after its generated image's swap, so its own
-     * callback only swaps it; 2, a prepared generated image likewise as soon
-     * as it is ready.
-     */
-    static final String REAL_PREDRAW_GLOBAL = "emufusion_framegen_real_predraw";
-    private static volatile boolean realPredraw = false;
-    private static volatile boolean generatedPredraw = false;
-
-    static boolean realPredraw() { return realPredraw; }
-
-    static boolean generatedPredraw() { return generatedPredraw; }
 
     /**
      * Pixel art's generate pass reads a field chosen per pixel from the local
@@ -742,15 +693,19 @@ public final class TimelineSchedulerSwitch {
     /** QA: pixel art's prepared generated image at the source's size (preparedAtInputSize). */
     static boolean pixelInputSize() { return pixelInputSize; }
 
-    /**
-     * A phase-locked core's generated image goes to the compositor as soon as
-     * it is finished, not at the next callback (LateLatchPolicy). QA:
-     * emufusion_framegen_late_latch=1.
-     */
-    static final String LATE_LATCH_GLOBAL = "emufusion_framegen_late_latch";
-    private static volatile boolean lateLatch = false;
+    static final String MID_FLUSH_GLOBAL = "emufusion_framegen_mid_flush";
+    private static volatile boolean midFlush = false;
 
-    static boolean lateLatch() { return lateLatch; }
+    /** QA: the pair solve's GPU work starts while the CPU still encodes the rest. */
+    static boolean midFlush() { return midFlush; }
+
+
+    static final String SWITCH_PHASE_WAIT_GLOBAL = "emufusion_framegen_switch_phase_wait_us";
+    private static volatile long switchPhaseWaitNs = 3_250_000L;
+
+    /** QA: the source phase lock's wait before Eden's images reach a callback, before jitter. */
+    static long switchPhaseWaitNs() { return switchPhaseWaitNs; }
+
 
     /**
      * The frame thread runs only on CPUs outside the lowest-clocked cluster

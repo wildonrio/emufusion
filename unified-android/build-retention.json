@@ -1381,6 +1381,50 @@
     "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-d50f0ef6a8face2cde6d2baedbc51bd6c2c5ba9d632112ccfecc840b9cc977b4.apk": {
       "sha256": "d50f0ef6a8face2cde6d2baedbc51bd6c2c5ba9d632112ccfecc840b9cc977b4",
       "reason": "Superseded frame-generation trial builds of 2026-11-05 (compositor gate work); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-c4f691102e3031f9e1506897ede7418304d21a016781d4b03bdfc2b9d4213d29.apk": {
+      "sha256": "c4f691102e3031f9e1506897ede7418304d21a016781d4b03bdfc2b9d4213d29",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-3069c4dd3bff29d37c7fcdb3fe2565104e517a623d73c967d3f710cd5cc03dbe.apk": {
+      "sha256": "3069c4dd3bff29d37c7fcdb3fe2565104e517a623d73c967d3f710cd5cc03dbe",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-f5c717e4281f0c06f27f06221dc2e6eaf052cd0d6d617b539b04a7888bd2d4e5.apk": {
+      "sha256": "f5c717e4281f0c06f27f06221dc2e6eaf052cd0d6d617b539b04a7888bd2d4e5",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-9c41e8aea7cee66647628d75ef20f8432762d4271b7b45e375c6f3c2f5057cd0.apk": {
+      "sha256": "9c41e8aea7cee66647628d75ef20f8432762d4271b7b45e375c6f3c2f5057cd0",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-7bb146bcc2b8767468c0c91372b7fd5ce7e8195bdb047e23e18f72c67f3fe45a.apk": {
+      "sha256": "7bb146bcc2b8767468c0c91372b7fd5ce7e8195bdb047e23e18f72c67f3fe45a",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-6fc3af26f2d248c27a55d2b29fc020bf5a1a5b18cd7c4e16dcaefcc0da7f4fc9.apk": {
+      "sha256": "6fc3af26f2d248c27a55d2b29fc020bf5a1a5b18cd7c4e16dcaefcc0da7f4fc9",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-4a51904c5c74b9c733fd16bc284f8d7337b9b2d6ca6c6b7407b8d523d0043f69.apk": {
+      "sha256": "4a51904c5c74b9c733fd16bc284f8d7337b9b2d6ca6c6b7407b8d523d0043f69",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-9bb498b83f0dd5b80973ab3b5257e84ebbfc712df8826fc9c4244ece7a1c4697.apk": {
+      "sha256": "9bb498b83f0dd5b80973ab3b5257e84ebbfc712df8826fc9c4244ece7a1c4697",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-99cfb20abddf3ec9fc81226c448897b6b3ca9f78aad726c4f4f82378951e7da0.apk": {
+      "sha256": "99cfb20abddf3ec9fc81226c448897b6b3ca9f78aad726c4f4f82378951e7da0",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden stamps, late latch); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-58630bc945f700ff1e3f2a867df68fd575d8f21ac044c98920c8269e6c548bbe.apk": {
+      "sha256": "58630bc945f700ff1e3f2a867df68fd575d8f21ac044c98920c8269e6c548bbe",
+      "reason": "Superseded Widescreen Hack device-test build of 2026-11-05; its receipts stay in the build survey"
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-91b5bfb284a49c9cad64d9fe57ce2969c1e15008857e723c2b0ad5385c8e66e5.apk": {
+      "sha256": "91b5bfb284a49c9cad64d9fe57ce2969c1e15008857e723c2b0ad5385c8e66e5",
+      "reason": "Superseded Widescreen Hack device-test build of 2026-11-05; its receipts stay in the build survey"
     }
   }
 }

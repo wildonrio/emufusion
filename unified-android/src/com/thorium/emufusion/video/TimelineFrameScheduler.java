@@ -462,7 +462,10 @@ public final class TimelineFrameScheduler {
             pendingIdealNs = pendingTargetNs;
             return kind;
         }
-        if (displayNs + panel / 4L >= arrivalRealDueNs) {
+        // The nearest callback, not the first after a quarter scan: a late image's span
+        // is long (Eden, 21.6 ms against 16.7), and holding its real image past the
+        // next callback makes one late image two two-scan intervals, not one.
+        if (displayNs + panel / 2L >= arrivalRealDueNs) {
             ++real;
             int kind = propose(REAL_RIGHT, 1f, rightTimestampNs, 0L, rightSequence, false, 0L, 0L);
             pendingSpanNs = span;
@@ -895,16 +898,6 @@ public final class TimelineFrameScheduler {
     }
 
     public void abort() { clearPending(); }
-
-    /**
-     * The pending output never reached the compositor and will not be shown
-     * later either. A generated image stays skipped: the real image comes at
-     * its own time rather than a scan later behind that generated image.
-     */
-    public void withhold() {
-        if (pendingKind == GENERATED && arrivalPacing) arrivalGeneratedShown = true;
-        clearPending();
-    }
 
     private void clearPending() {
         pendingKind = NONE;

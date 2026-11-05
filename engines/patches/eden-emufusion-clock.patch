@@ -572,13 +572,17 @@ index c51f8ed77..c96c50f60 100644
  
  } // namespace Vulkan
 diff --git a/src/video_core/renderer_vulkan/vk_swapchain.cpp b/src/video_core/renderer_vulkan/vk_swapchain.cpp
-index fdbad1672..ec7affd97 100644
+index fdbad1672..f9ce14807 100644
 --- a/src/video_core/renderer_vulkan/vk_swapchain.cpp
 +++ b/src/video_core/renderer_vulkan/vk_swapchain.cpp
-@@ -4,7 +4,11 @@
+@@ -4,7 +4,15 @@
  // SPDX-FileCopyrightText: Copyright 2019 yuzu Emulator Project
  // SPDX-License-Identifier: GPL-2.0-or-later
  
++#ifdef __ANDROID__
++#include <cstdlib>
++#include <sys/system_properties.h>
++#endif
 +#include "common/emufusion_pacing.h"
 +#include "common/emufusion_source_image.h"
  #include <algorithm>
@@ -587,7 +591,7 @@ index fdbad1672..ec7affd97 100644
  #include <array>
  #include <limits>
  #include <vector>
-@@ -143,7 +147,9 @@ void Swapchain::Create(
+@@ -143,7 +151,9 @@ void Swapchain::Create(
      const auto physical_device = device.GetPhysical();
      const auto capabilities{physical_device.GetSurfaceCapabilitiesKHR(VkSurfaceKHR(surface))};
      if (capabilities.maxImageExtent.width == 0 || capabilities.maxImageExtent.height == 0) {
@@ -598,7 +602,7 @@ index fdbad1672..ec7affd97 100644
      }
  
      Destroy();
-@@ -151,11 +157,28 @@ void Swapchain::Create(
+@@ -151,11 +161,28 @@ void Swapchain::Create(
      CreateSwapchain(capabilities);
      CreateSemaphores();
  
@@ -627,7 +631,7 @@ index fdbad1672..ec7affd97 100644
      const VkResult result = device.GetLogical().AcquireNextImageKHR(
          *swapchain, (std::numeric_limits<u64>::max)(), *present_semaphores[frame_index],
          VK_NULL_HANDLE, &image_index);
-@@ -167,12 +190,13 @@ bool Swapchain::AcquireNextImage() {
+@@ -167,12 +194,13 @@ bool Swapchain::AcquireNextImage() {
          break;
      case VK_ERROR_OUT_OF_DATE_KHR:
          is_outdated = true;
@@ -642,7 +646,7 @@ index fdbad1672..ec7affd97 100644
          break;
      }
  
-@@ -197,25 +221,91 @@ bool Swapchain::AcquireNextImage() {
+@@ -197,25 +225,104 @@ bool Swapchain::AcquireNextImage() {
      };
  
  #ifdef __ANDROID__
@@ -685,7 +689,20 @@ index fdbad1672..ec7affd97 100644
 +    // or image identity. Quantizing wall time onto 60-Hz slots manufactures
 +    // cadence when rendering stalls; preserve the actual submission time.
 +    const auto submission_sequence = EmuFusion::RecordSubmissionAttempt();
-+    const auto now_ns = EmuFusion::SourceMonotonicNs();
++    // The Thor's vendor libgui (libpenguin_impl.so, vendor.perf.framepacing.enable=1)
++    // sleeps inside queueBuffer until a fixed vsync phase, unless the buffer carries a
++    // timestamp still in the future there. That pinned every image 4 ms after the frame
++    // generator's callback whatever the VI phase. The host uses only the stamps' spacing.
++    // QA: setprop debug.emufusion.eden_stamp_ahead_us 0 stamps the submission time.
++    static const std::int64_t emufusion_stamp_ahead_ns = [] {
++        char value[PROP_VALUE_MAX]{};
++        const int length = __system_property_get("debug.emufusion.eden_stamp_ahead_us", value);
++        const long us = length > 0 ? std::atol(value) : 10000L;
++        return us > 0 && us <= 100000 ? static_cast<std::int64_t>(us) * 1000 : std::int64_t{0};
++    }();
++    const auto now_ns = EmuFusion::UsesFgPresentation()
++                            ? EmuFusion::SourceMonotonicNs() + emufusion_stamp_ahead_ns
++                            : EmuFusion::SourceMonotonicNs();
 +    VkPresentTimesInfoGOOGLE emufusion_present_times{};
 +    VkPresentTimeGOOGLE emufusion_present_time{};
 +    if (device.HasEmuFusionDisplayTiming() && EmuFusion::UsesFgPresentation()) {
@@ -737,7 +754,7 @@ index fdbad1672..ec7affd97 100644
          .waitSemaphoreCount = render_semaphore ? 1U : 0U,
          .pWaitSemaphores = &render_semaphore,
          .swapchainCount = 1,
-@@ -224,7 +314,26 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
+@@ -224,7 +331,26 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
          .pResults = nullptr,
      };
      std::scoped_lock lock{scheduler.submit_mutex};
@@ -765,7 +782,7 @@ index fdbad1672..ec7affd97 100644
      case VK_SUCCESS:
          break;
      case VK_SUBOPTIMAL_KHR:
-@@ -238,6 +347,9 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
+@@ -238,6 +364,9 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
          break;
      default:
          LOG_CRITICAL(Render_Vulkan, "Failed to present with error {}", string_VkResult(result));
@@ -775,7 +792,7 @@ index fdbad1672..ec7affd97 100644
          break;
      }
      ++frame_index;
-@@ -362,6 +474,13 @@ void Swapchain::Destroy() {
+@@ -362,6 +491,13 @@ void Swapchain::Destroy() {
      swapchain.reset();
  }
  
