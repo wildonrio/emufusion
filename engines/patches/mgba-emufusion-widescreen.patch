@@ -1,0 +1,367 @@
+diff --git a/src/gba/renderers/ef_wide.h b/src/gba/renderers/ef_wide.h
+new file mode 100644
+index 0000000..d747ce0
+--- /dev/null
++++ b/src/gba/renderers/ef_wide.h
+@@ -0,0 +1,14 @@
++#ifndef EF_WIDE_H_
++#define EF_WIDE_H_
++// EmuFusion Widescreen Hack. The renderer still draws the original 240 columns exactly as before;
++// ef_wide_line then draws the new columns beside them from the same state, once the line is done.
++#include <mgba-util/image.h>
++#include <stdbool.h>
++#define EF_WIDE_MAX_EXT 64
++#define EF_WIDE_WIDTH (240 + 2 * EF_WIDE_MAX_EXT)
++void ef_wide_set_aspect(const char* value);
++void ef_wide_set_scene_wide(bool wide);
++int ef_wide_ext(void);
++int ef_wide_milli(void);
++const mColor* ef_wide_compose(const mColor* picture, int stride, int* width);
++#endif
+diff --git a/src/gba/renderers/ef_wide.inc b/src/gba/renderers/ef_wide.inc
+new file mode 100644
+index 0000000..02306bb
+--- /dev/null
++++ b/src/gba/renderers/ef_wide.inc
+@@ -0,0 +1,180 @@
++// Included at the end of video-software.c.
++static mColor ef_fb[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
++static int ef_ext, ef_milli;
++static bool ef_scene_wide = true;
++
++void ef_wide_set_aspect(const char* value) {
++	ef_milli = value ? atoi(value) : 0;
++	int ext = ef_milli > 1000 ? (ef_milli * GBA_VIDEO_VERTICAL_PIXELS / 1000 - GBA_VIDEO_HORIZONTAL_PIXELS) / 2 : 0;
++	ef_ext = ext < 0 ? 0 : ext > EF_WIDE_MAX_EXT ? EF_WIDE_MAX_EXT : ext;
++}
++
++void ef_wide_set_scene_wide(bool wide) { ef_scene_wide = wide; }
++int ef_wide_ext(void) { return ef_ext; }
++int ef_wide_milli(void) { return ef_milli; }
++
++const mColor* ef_wide_compose(const mColor* picture, int stride, int* width) {
++	*width = GBA_VIDEO_HORIZONTAL_PIXELS + 2 * ef_ext;
++	for (int y = 0; y < GBA_VIDEO_VERTICAL_PIXELS; ++y) {
++		memcpy(ef_fb + y * *width + ef_ext, picture + y * stride, GBA_VIDEO_HORIZONTAL_PIXELS * sizeof(mColor));
++	}
++	return ef_fb;
++}
++
++// A text background's palette index at screen column x, 0 when transparent.
++static int ef_text_pixel(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, int x, int y) {
++	const uint8_t* vram = (const uint8_t*) r->d.vram;
++	int width = bg->size & 1 ? 512 : 256;
++	int height = bg->size & 2 ? 512 : 256;
++	int localX = (x + bg->x) & (width - 1);
++	int localY = (y + bg->y) & (height - 1);
++	uint32_t block = bg->screenBase;
++	if (localY >= 256) {
++		block += width == 512 ? 0x1000 : 0x800;
++	}
++	if (localX >= 256) {
++		block += 0x800;
++	}
++	uint32_t address = (block + ((localY >> 3) & 31) * 64 + ((localX >> 3) & 31) * 2) & 0x1FFFF;
++	uint16_t entry = vram[address] | vram[address + 1] << 8;
++	int fineX = entry & 0x400 ? 7 - (localX & 7) : localX & 7;
++	int fineY = entry & 0x800 ? 7 - (localY & 7) : localY & 7;
++	if (bg->multipalette) {
++		return vram[(bg->charBase + (entry & 0x3FF) * 64 + fineY * 8 + fineX) & 0xFFFF];
++	}
++	uint8_t byte = vram[(bg->charBase + (entry & 0x3FF) * 32 + fineY * 4 + (fineX >> 1)) & 0xFFFF];
++	int color = fineX & 1 ? byte >> 4 : byte & 0xF;
++	return color ? color | (entry >> 12) << 4 : 0;
++}
++
++static int ef_affine_pixel(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, int x) {
++	const uint8_t* vram = (const uint8_t*) r->d.vram;
++	int size = 128 << bg->size;
++	int localX = (bg->sx + bg->dx * x) >> 8;
++	int localY = (bg->sy + bg->dy * x) >> 8;
++	if (bg->overflow) {
++		localX &= size - 1;
++		localY &= size - 1;
++	} else if (localX < 0 || localY < 0 || localX >= size || localY >= size) {
++		return 0;
++	}
++	uint8_t tile = vram[(bg->screenBase + (localY >> 3) * (size >> 3) + (localX >> 3)) & 0xFFFF];
++	return vram[(bg->charBase + tile * 64 + (localY & 7) * 8 + (localX & 7)) & 0xFFFF];
++}
++
++// Plain sprites over the wide line; x_pos is 9 bits, so they really do reach the new columns.
++static void ef_sprites(const struct GBAVideoSoftwareRenderer* r, int y, int16_t* colors, int8_t* priorities, int width) {
++	const uint8_t* vram = (const uint8_t*) r->d.vram;
++	bool oneDimensional = GBARegisterDISPCNTIsObjCharacterMapping(r->dispcnt);
++	for (int index = 127; index >= 0; --index) {
++		const struct GBAObj* obj = &r->d.oam->obj[index];
++		if (GBAObjAttributesAIsTransformed(obj->a) || GBAObjAttributesAIsDisable(obj->a)) {
++			continue;
++		}
++		int mode = GBAObjAttributesAGetMode(obj->a);
++		if (mode == OBJ_MODE_OBJWIN) {
++			continue;
++		}
++		int shape = GBAObjAttributesAGetShape(obj->a) * 4 + GBAObjAttributesBGetSize(obj->b);
++		int sw = GBAVideoObjSizes[shape][0], sh = GBAVideoObjSizes[shape][1];
++		int top = GBAObjAttributesAGetY(obj->a);
++		if (top >= GBA_VIDEO_VERTICAL_PIXELS) {
++			top -= 256;
++		}
++		if (y < top || y >= top + sh) {
++			continue;
++		}
++		int left = GBAObjAttributesBGetX(obj->b);
++		if (left >= 256) {
++			left -= 512;
++		}
++		int row = GBAObjAttributesBIsVFlip(obj->b) ? sh - 1 - (y - top) : y - top;
++		bool color256 = GBAObjAttributesAIs256Color(obj->a);
++		int tile = GBAObjAttributesCGetTile(obj->c);
++		int palette = GBAObjAttributesCGetPalette(obj->c);
++		for (int px = 0; px < sw; ++px) {
++			int sx = left + (GBAObjAttributesBIsHFlip(obj->b) ? sw - 1 - px : px) + ef_ext;
++			if (sx < 0 || sx >= width) {
++				continue;
++			}
++			if (sx >= ef_ext && sx < ef_ext + GBA_VIDEO_HORIZONTAL_PIXELS) {
++				continue;
++			}
++			int cellX = px >> 3, cellY = row >> 3, id;
++			if (color256) {
++				id = oneDimensional ? tile + (cellY * (sw >> 3) + cellX) * 2 : (tile & ~1) + cellY * 32 + cellX * 2;
++			} else {
++				id = oneDimensional ? tile + cellY * (sw >> 3) + cellX : tile + cellY * 32 + cellX;
++			}
++			int value;
++			if (color256) {
++				value = vram[0x10000 + ((id & 0x3FF) * 32 + (row & 7) * 8 + (px & 7))];
++			} else {
++				uint8_t byte = vram[0x10000 + ((id & 0x3FF) * 32 + (row & 7) * 4 + ((px & 7) >> 1))];
++				value = px & 1 ? byte >> 4 : byte & 0xF;
++				if (value) {
++					value |= palette << 4;
++				}
++			}
++			if (value) {
++				colors[sx] = value;
++				priorities[sx] = GBAObjAttributesCGetPriority(obj->c);
++			}
++		}
++	}
++}
++
++static void ef_wide_line(struct GBAVideoSoftwareRenderer* r, int y) {
++	if (!ef_ext) {
++		return;
++	}
++	int width = GBA_VIDEO_HORIZONTAL_PIXELS + 2 * ef_ext;
++	mColor* out = ef_fb + y * width;
++	int mode = GBARegisterDISPCNTGetMode(r->dispcnt);
++	bool wider_map = false;
++	for (int i = 0; i < 4; ++i) {
++		const struct GBAVideoSoftwareBackground* bg = &r->bg[i];
++		if (bg->enabled && ((mode == 0 && (bg->size & 1)) || (mode == 1 && ((i < 2 && (bg->size & 1)) || i == 2)) || (mode == 2 && i >= 2))) {
++			wider_map = true;
++		}
++	}
++	// With maps no wider than 256 the new columns would only repeat the far side of the screen.
++	if (!ef_scene_wide || mode > 2 || !wider_map || GBARegisterDISPCNTIsForcedBlank(r->dispcnt)) {
++		for (int i = 0; i < ef_ext; ++i) {
++			out[i] = out[ef_ext + GBA_VIDEO_HORIZONTAL_PIXELS + i] = 0;
++		}
++		return;
++	}
++	static int16_t sprite_color[EF_WIDE_WIDTH];
++	static int8_t sprite_priority[EF_WIDE_WIDTH];
++	memset(sprite_color, 0, width * sizeof(int16_t));
++	if (GBARegisterDISPCNTIsObjEnable(r->dispcnt)) {
++		ef_sprites(r, y, sprite_color, sprite_priority, width);
++	}
++	const mColor* palette = r->blendEffect == BLEND_BRIGHTEN || r->blendEffect == BLEND_DARKEN ? r->variantPalette : r->normalPalette;
++	for (int side = 0; side < 2; ++side) {
++		for (int i = 0; i < ef_ext; ++i) {
++			int x = side ? GBA_VIDEO_HORIZONTAL_PIXELS + i : i - ef_ext;
++			int sx = x + ef_ext;
++			int index = 0;
++			for (int priority = 0; priority < 4 && !index; ++priority) {
++				if (sprite_color[sx] && sprite_priority[sx] == priority) {
++					index = 256 + sprite_color[sx];
++					break;
++				}
++				for (int b = 0; b < 4 && !index; ++b) {
++					const struct GBAVideoSoftwareBackground* bg = &r->bg[b];
++					if (!bg->enabled || (int) bg->priority != priority) {
++						continue;
++					}
++					if (mode == 0 || (mode == 1 && b < 2)) {
++						index = ef_text_pixel(r, bg, x, y);
++					} else if ((mode == 1 && b == 2) || (mode == 2 && b >= 2)) {
++						index = ef_affine_pixel(r, bg, x);
++					}
++				}
++			}
++			out[sx] = palette[index];
++		}
++	}
++}
+diff --git a/src/gba/renderers/video-software.c b/src/gba/renderers/video-software.c
+index c5bc37b..0704fe1 100644
+--- a/src/gba/renderers/video-software.c
++++ b/src/gba/renderers/video-software.c
+@@ -27,6 +27,7 @@ static void GBAVideoSoftwareRendererWriteOAM(struct GBAVideoRenderer* renderer,
+ static void GBAVideoSoftwareRendererWritePalette(struct GBAVideoRenderer* renderer, uint32_t address, uint16_t value);
+ static uint16_t GBAVideoSoftwareRendererWriteVideoRegister(struct GBAVideoRenderer* renderer, uint32_t address, uint16_t value);
+ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* renderer, int y);
++static void ef_wide_line(struct GBAVideoSoftwareRenderer* r, int y);
+ static void GBAVideoSoftwareRendererFinishFrame(struct GBAVideoRenderer* renderer);
+ static void GBAVideoSoftwareRendererGetPixels(struct GBAVideoRenderer* renderer, size_t* stride, const void** pixels);
+ static void GBAVideoSoftwareRendererPutPixels(struct GBAVideoRenderer* renderer, size_t stride, const void* pixels);
+@@ -675,6 +676,7 @@ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* render
+ 	}
+ 
+ 	GBAVideoSoftwareRendererPostprocessBuffer(softwareRenderer);
++	ef_wide_line(softwareRenderer, y);
+ 
+ 	if (GBARegisterDISPCNTGetMode(softwareRenderer->dispcnt) != 0) {
+ 		if (softwareRenderer->bg[2].enabled == ENABLED_MAX) {
+@@ -1115,3 +1117,6 @@ void _updateFlags(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoft
+ 	background->objwinFlags = objwinFlags;
+ 	background->variant = background->target1 && GBAWindowControlIsBlendEnable(renderer->currentWindow.packed) && (renderer->blendEffect == BLEND_BRIGHTEN || renderer->blendEffect == BLEND_DARKEN);
+ }
++
++#include "ef_wide.h"
++#include "ef_wide.inc"
+diff --git a/src/platform/libretro/libretro.c b/src/platform/libretro/libretro.c
+index 12e7913..6eaba69 100644
+--- a/src/platform/libretro/libretro.c
++++ b/src/platform/libretro/libretro.c
+@@ -4,6 +4,7 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ #include "libretro.h"
++#include "gba/renderers/ef_wide.h"
+ 
+ #include <mgba-util/common.h>
+ 
+@@ -246,6 +247,71 @@ static void _updateGbPal(void) {
+ }
+ #endif
+ 
++// EmuFusion Widescreen Hack: target picture aspect x 1000, and when to widen: OR of AND terms of
++// memory tests, "2000100=01,2000101!=02|3000000/F0=10".
++#define EF_MAX_TERMS 32
++struct EfTerm { int group; uint32_t addr; uint8_t mask, value, negate; };
++static struct EfTerm efTerms[EF_MAX_TERMS];
++static int efTermCount;
++
++static void ef_set_scene(const char* value) {
++	efTermCount = 0;
++	if (!value) {
++		return;
++	}
++	int group = 0;
++	const char* cursor = value;
++	while (*cursor && efTermCount < EF_MAX_TERMS) {
++		char text[32] = {0};
++		size_t length = strcspn(cursor, ",|");
++		if (length && length < sizeof(text)) {
++			memcpy(text, cursor, length);
++			const char* equals = strchr(text, '=');
++			if (equals && equals != text) {
++				struct EfTerm* term = &efTerms[efTermCount++];
++				char* end;
++				term->group = group;
++				term->negate = equals[-1] == '!';
++				term->addr = strtoul(text, &end, 16);
++				term->mask = *end == '/' ? strtoul(end + 1, NULL, 16) : 0xFF;
++				term->value = strtoul(equals + 1, NULL, 16);
++			}
++		}
++		if (cursor[length] == '|') {
++			group++;
++		}
++		cursor += length + (cursor[length] ? 1 : 0);
++	}
++}
++
++static void ef_evaluate_scene(void) {
++	bool any = efTermCount == 0;
++	for (int index = 0; index < efTermCount && !any;) {
++		int group = efTerms[index].group;
++		bool all = true;
++		for (; index < efTermCount && efTerms[index].group == group; ++index) {
++			const struct EfTerm* term = &efTerms[index];
++			all = all && (((core->rawRead8(core, term->addr, -1) & term->mask) == term->value) != term->negate);
++		}
++		any = all;
++	}
++	ef_wide_set_scene_wide(any);
++}
++
++static void ef_read_options(void) {
++	struct retro_variable var = { .key = "emufusion_ws_scene", .value = NULL };
++	ef_set_scene(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_aspect";
++	var.value = NULL;
++	int before = ef_wide_ext();
++	ef_wide_set_aspect(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	if (core && ef_wide_ext() != before) {
++		struct retro_system_av_info info;
++		retro_get_system_av_info(&info);
++		environCallback(RETRO_ENVIRONMENT_SET_GEOMETRY, &info.geometry);
++	}
++}
++
+ static void _reloadSettings(void) {
+ 	struct mCoreOptions opts = {
+ 		.useBios = true,
+@@ -418,9 +484,13 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
+ 	info->geometry.base_width = width;
+ 	info->geometry.base_height = height;
+ 	info->geometry.aspect_ratio = width / (double) height;
++	if (ef_wide_ext() && width == GBA_VIDEO_HORIZONTAL_PIXELS) {
++		info->geometry.base_width = width + 2 * ef_wide_ext();
++		info->geometry.aspect_ratio = ef_wide_milli() / 1000.0;
++	}
+ 
+ 	core->baseVideoSize(core, &width, &height);
+-	info->geometry.max_width = width;
++	info->geometry.max_width = width + 2 * EF_WIDE_MAX_EXT;
+ 	info->geometry.max_height = height;
+ 
+ 	info->timing.fps = core->frequency(core) / (float) core->frameCycles(core);
+@@ -552,6 +622,7 @@ void retro_run(void) {
+ 
+ 	bool updated = false;
+ 	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
++		ef_read_options();
+ 		envVarsUpdated = true;
+ 
+ 		struct retro_variable var = {
+@@ -612,10 +683,17 @@ void retro_run(void) {
+ 		}
+ 	}
+ 
++	ef_evaluate_scene();
+ 	core->runFrame(core);
+ 	unsigned width, height;
+ 	core->currentVideoSize(core, &width, &height);
+-	videoCallback(outputBuffer, width, height, BYTES_PER_PIXEL * 256);
++	if (ef_wide_ext() && width == GBA_VIDEO_HORIZONTAL_PIXELS) {
++		int wide;
++		const mColor* picture = ef_wide_compose(outputBuffer, 256, &wide);
++		videoCallback(picture, wide, height, BYTES_PER_PIXEL * wide);
++	} else {
++		videoCallback(outputBuffer, width, height, BYTES_PER_PIXEL * 256);
++	}
+ 
+ #ifdef M_CORE_GBA
+ 	if (core->platform(core) == mPLATFORM_GBA) {
+@@ -988,6 +1066,7 @@ bool retro_load_game(const struct retro_game_info* game) {
+ 	}
+ #endif
+ 
++	ef_read_options();
+ 	core->reset(core);
+ 	_setupMaps(core);
+ 

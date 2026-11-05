@@ -523,6 +523,15 @@ case "$ENGINE" in
         source=$(fetch_source mgba "$commit" \
             f996cbd5971acacff4227761bf01ac3d0f0ac30796bcb0bfbd1cc9a8f3fd6e93 \
             https://github.com/mgba-emu/mgba)
+        # Widescreen Hack: new columns drawn beside the untouched original picture.
+        patched="$BUILD_ROOT/work/mgba-source-$ABI"
+        rm -rf "$patched"
+        mkdir -p "$patched"
+        cp -R "$source/." "$patched/"
+        apply_locked_patch "$patched" \
+            engines/patches/mgba-emufusion-widescreen.patch \
+            da0896f6cd1cbbdcd1600352304eb1a0e257c438320c23c9e983660b454b62c5
+        source="$patched"
         build="$BUILD_ROOT/work/mgba-$ABI"
         rm -rf "$build"
         # Keep source-location strings stable across clean build roots. Archive
@@ -549,6 +558,15 @@ case "$ENGINE" in
         source=$(fetch_source mesen "$commit" \
             360f97e907ada9b8e28a95652aa1d07656340e1d84ff868312745a566b250e01 \
             https://github.com/libretro/Mesen)
+        # Widescreen Hack: new columns drawn beside the untouched original picture.
+        build="$BUILD_ROOT/work/mesen-$ABI"
+        rm -rf "$build"
+        mkdir -p "$build"
+        cp -R "$source/." "$build/"
+        apply_locked_patch "$build" \
+            engines/patches/mesen-emufusion-widescreen.patch \
+            b2705679cfea52025dabebfa56fce7a2df982d2b87c2be93f5ef42ca4236ac36
+        source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'Mesen recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;
@@ -635,6 +653,10 @@ case "$ENGINE" in
         apply_locked_patch "$build" \
             engines/patches/sameboy-libretro-cheat-support.patch \
             4ba8e12e0d6e6fec7991ebbcb0239952cc81d6ad5d1ec8149436d4d294d24e7a
+        # Widescreen Hack: new columns drawn beside the untouched original picture.
+        apply_locked_patch "$build" \
+            engines/patches/sameboy-emufusion-widescreen.patch \
+            a747ed872a5bf0cf936792d608be04b5365e09e1fe00286f08a997a809f065fb
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -780,7 +802,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$source" \
             engines/patches/blastem-emufusion-widescreen.patch \
-            f88a5af0115348463534edd9f95695a3d9a9f7c8a9706c145df70b4352e5b4f0
+            6004791973499f5300e294412721b7a41ba3aef117b8642c55070bb25df18423
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'BlastEm recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;

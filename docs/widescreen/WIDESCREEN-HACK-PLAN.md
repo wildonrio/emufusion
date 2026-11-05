@@ -203,11 +203,43 @@ is still part of the pass. Shinobi II's level start flags it too, a true edge pa
 Host rebuilds after changing a Gearsystem header need `make clean`: the makefile does not track
 headers, and stale objects allocate the old `Video` size (random crashes in `Sms_Apu::volume`).
 
-## NES, Game Boy, GBA and 3D systems: blocked 2026-11-05
+## On the Thor (2026-11-05)
 
-The Thor left USB partway through, so no ROMs can be pulled and no 3D engine can be tried. An NES
-prototype is in `~/.cache/emufusion-widescreen/host-build/mesen`, not yet run on a game.
-Expected NES limit: sprite X is 8 bits, so enemies cannot be drawn in the new columns.
+Sonic 2 (Mega Drive) and Sonic (Game Gear) ran on the Thor with frame generation at 60 to 120: prompt,
+tap, wide play with the HUD in the corners, swipe back to bars, tap back to wide, no crashes. The
+Mega Drive core reported 1.549 until a game was first widened, stretching every normal Mega Drive
+picture about 16% and leaving side bars too thin for the prompt; it now reports 4:3 throughout.
+
+Testing note: Quick Resume restores the last state in a QA namespace too. A run that ends paused
+starts paused, so a script's START presses toggle pause and the game looks frozen.
+
+## NES, Game Boy, Game Boy Color and GBA (first pass, 2026-11-05, Mac harness)
+
+All four use the Game Gear and Mega Drive method: the engine's renderer is untouched, and a new
+function draws the extra columns beside each finished line from the same video state, so timing
+cannot change. Nothing runs when the width option is 0. Engines: Mesen, SameBoy, mGBA, each the
+system's normal engine. None of them has passed on the Thor yet.
+
+**The rule that decides most games: can the map hold more than the old screen?** A map only one
+screen wide can only repeat the far side, and that looks plausible while lying about the level
+(Flashback's "extra" columns were 99% identical to the far side). The engines now read the map size
+every frame and stay narrow when there is nothing more to show, also in unknown games.
+
+| System | Map | Picture at 16:9 | Top-20 status |
+| --- | --- | --- | --- |
+| NES | 1 or 2 screens, read from the memory pages | 372x240 | Widen: Contra, Castlevania III, Tecmo Super Bowl, Life Force. One-screen rooms that need a map reader: SMB3, Kirby, Mega Man 3, Ninja Gaiden II, Super Mario Bros 2 |
+| Game Boy, Color | 256 wide on a 160 screen | 240x144 (see Game Gear) | Widen: Castlevania II, Mario Deluxe, Donkey Kong Country. Stale: Donkey Kong Land. Rooms: the Zelda games. Fixed: Tetris, Donkey Kong |
+| GBA | 256 or 512 wide on 240 | 284x160 | Widen: Metroid Fusion, Zero Mission, Mario Kart. One-screen maps: Alien Hominid |
+
+NES sprites have an 8-bit X, so enemies cannot be drawn in the new columns: they appear at the old
+screen edge. GBA sprites have a 9-bit X and do reach them. Game Boy sprites can only reach the first
+8 columns past each edge, enough that nothing is cut off at the old edge.
+
+Game Boy menus often hold junk in the hidden map, so these systems have no fallback recipe: a title
+without an entry is not offered widening until it has been played. The remaining titles still need
+per-game routes past their name-entry screens. Stray HUD digits at Mario Kart's top edges are open.
+
+3D systems (N64, PS1, Dreamcast, GC, PS2, Wii) are not started.
 
 ## The map reader (2026-11-05)
 

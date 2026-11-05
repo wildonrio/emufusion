@@ -29,10 +29,10 @@ index 0000000..2e6cc1b
 +#endif
 diff --git a/ef_wide.inc b/ef_wide.inc
 new file mode 100644
-index 0000000..6ae4e61
+index 0000000..864121a
 --- /dev/null
 +++ b/ef_wide.inc
-@@ -0,0 +1,391 @@
+@@ -0,0 +1,394 @@
 +// Included at the end of vdp.c; uses its static helpers.
 +#include "ef_wide.h"
 +uint32_t ef_wide_fb[EF_WIDE_FB_WIDTH * 294];
@@ -365,6 +365,9 @@ index 0000000..6ae4e61
 +	uint32_t active = line < c->inactive_start;
 +	if (active && line == 0) {
 +		ef_evaluate_scene();
++		// A map plane no wider than the picture has nothing more to show: new columns would
++		// only repeat the far side of the screen, so the game stays at its own width.
++		if (ef_plane_cols(c) * 8 <= (c->regs[REG_MODE_4] & BIT_H40 ? 320u : 256u)) ef_scene_wide = 0;
 +		if (ef_blank_pending && (ef_strict_a || ef_strict_b) && (c->regs[REG_MODE_2] & BIT_DISP_EN))
 +			ef_sweep_blank(c);
 +	}
@@ -425,7 +428,7 @@ index 0000000..6ae4e61
 +	}
 +}
 diff --git a/libblastem.c b/libblastem.c
-index c239267..5882105 100644
+index c239267..b6bf600 100644
 --- a/libblastem.c
 +++ b/libblastem.c
 @@ -7,6 +7,7 @@
@@ -436,7 +439,17 @@ index c239267..5882105 100644
  #include "io.h"
  #include "genesis.h"
  #include "sms.h"
-@@ -308,6 +309,7 @@ RETRO_API bool retro_unserialize(const void *data, size_t size)
+@@ -220,7 +221,8 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
+ 	info->geometry.base_height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
+ 	last_height = info->geometry.base_height;
+ 	info->geometry.max_height = info->geometry.base_height * 2;
+-	info->geometry.aspect_ratio = 0;
++	// The console's picture is 4:3 in both of its widths, whatever the frame's pixel count.
++	info->geometry.aspect_ratio = 4.0f / 3.0f;
+ 	double master_clock = video_standard == VID_NTSC ? 53693175 : 53203395;
+ 	double lines = video_standard == VID_NTSC ? 262 : 313;
+ 	info->timing.fps = master_clock / (3420.0 * lines);
+@@ -308,6 +310,7 @@ RETRO_API bool retro_unserialize(const void *data, size_t size)
  {
  	const size_t *buffer = data;
  	current_system->deserialize(current_system, (uint8_t *)(buffer + 1), *buffer);
@@ -444,11 +457,28 @@ index c239267..5882105 100644
  	return 1;
  }
  
-@@ -473,6 +475,35 @@ void render_destroy_window(uint8_t which)
+@@ -402,6 +405,8 @@ RETRO_API unsigned retro_get_region(void)
+ /* Gets region of memory. */
+ RETRO_API void *retro_get_memory_data(unsigned id)
+ {
++	if (id == RETRO_MEMORY_VIDEO_RAM && (stype == SYSTEM_GENESIS || stype == SYSTEM_SEGACD))
++		return ((genesis_context *)current_system)->vdp->vdpmem;
+ 	switch (id) {
+ 	case RETRO_MEMORY_SYSTEM_RAM:
+ 		switch (stype) {
+@@ -432,6 +437,8 @@ RETRO_API void *retro_get_memory_data(unsigned id)
+ 
+ RETRO_API size_t retro_get_memory_size(unsigned id)
+ {
++	if (id == RETRO_MEMORY_VIDEO_RAM && (stype == SYSTEM_GENESIS || stype == SYSTEM_SEGACD))
++		return VRAM_SIZE;
+ 	switch (id) {
+ 	case RETRO_MEMORY_SYSTEM_RAM:
+ 		switch (stype) {
+@@ -473,6 +480,33 @@ void render_destroy_window(uint8_t which)
  	//not supported in lib build
  }
  
-+static uint8_t ef_touched;
 +static void ef_read_option(const char *key, void (*apply)(const char *))
 +{
 +	struct retro_variable var = {.key = key, .value = NULL};
@@ -467,7 +497,6 @@ index c239267..5882105 100644
 +	ef_read_option("emufusion_ws_scene", ef_wide_set_scene);
 +	ef_read_option("emufusion_ws_hud", ef_wide_set_hud);
 +	ef_read_option("emufusion_ws_aspect", ef_wide_set_aspect);
-+	if (ef_wide_on()) ef_touched = 1;
 +	if (stype == SYSTEM_GENESIS || stype == SYSTEM_SEGACD)
 +		ef_wide_set_ram((const uint8_t *)((genesis_context *)current_system)->work_ram);
 +}
@@ -480,7 +509,7 @@ index c239267..5882105 100644
  static uint32_t fb[LINEBUF_SIZE * 294 * 2];
  static uint8_t last_fb;
  uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
-@@ -494,6 +525,25 @@ void render_framebuffer_updated(uint8_t which, int width)
+@@ -494,6 +528,25 @@ void render_framebuffer_updated(uint8_t which, int width)
  	unsigned height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
  	width -= (overscan_left + overscan_right);
  	unsigned base_height = height;
@@ -506,12 +535,12 @@ index c239267..5882105 100644
  	if (which != last_fb) {
  		height *= 2;
  		last_fb = which;
-@@ -502,7 +552,7 @@ void render_framebuffer_updated(uint8_t which, int width)
+@@ -502,7 +555,7 @@ void render_framebuffer_updated(uint8_t which, int width)
  		struct retro_game_geometry geometry = {
  			.base_width = width,
  			.base_height = height,
 -			.aspect_ratio = (float)LINEBUF_SIZE / base_height
-+			.aspect_ratio = ef_touched ? 4.0f / 3.0f : (float)LINEBUF_SIZE / base_height
++			.aspect_ratio = 4.0f / 3.0f
  		};
  		retro_environment(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
  		last_width = width;

@@ -1,0 +1,249 @@
+diff --git a/Core/display.c b/Core/display.c
+index 5eff0cd..ca5f2f8 100644
+--- a/Core/display.c
++++ b/Core/display.c
+@@ -1530,6 +1530,7 @@ static void update_frame_parity(GB_gameboy_t *gb)
+  TODO: It seems that the STAT register's mode bits are always "late" by 4 T-cycles.
+        The PPU logic can be greatly simplified if that delay is simply emulated.
+  */
++static void ef_wide_line(GB_gameboy_t *gb);
+ void GB_display_run(GB_gameboy_t *gb, unsigned cycles, bool force)
+ {
+     if (gb->wy_triggered) {
+@@ -2087,6 +2088,7 @@ skip_slow_mode_3:
+             }
+             /* } */
+             
++            ef_wide_line(gb);
+             if (!gb->cgb_double_speed) {
+                 gb->io_registers[GB_IO_STAT] &= ~3;
+                 gb->mode_for_interrupt = 0;
+@@ -2496,3 +2498,5 @@ void GB_set_enable_skipped_frame_vblank_callbacks(GB_gameboy_t *gb, bool enable)
+ {
+     gb->enable_skipped_frame_vblank_callbacks = enable;
+ }
++
++#include "ef_wide.inc"
+diff --git a/Core/ef_wide.h b/Core/ef_wide.h
+new file mode 100644
+index 0000000..e6297a5
+--- /dev/null
++++ b/Core/ef_wide.h
+@@ -0,0 +1,15 @@
++#ifndef EF_WIDE_H_
++#define EF_WIDE_H_
++// EmuFusion Widescreen Hack. The background map is 256 pixels wide and the handheld shows 160
++// of them. SameBoy's renderer draws those 160 as before; ef_wide_line then draws the new columns
++// beside them from the same state, once the line has finished, so timing does not change.
++// The picture stops at 240: a ring of exactly 256 shows one column at both ends, and one is wrong.
++#include <stdint.h>
++#define EF_WIDE_MAX_EXT 40
++#define EF_WIDE_WIDTH (160 + 2 * EF_WIDE_MAX_EXT)
++void ef_wide_set_aspect(const char *value);
++void ef_wide_set_scene(const char *value);
++int ef_wide_ext(void);
++int ef_wide_milli(void);
++const uint32_t *ef_wide_compose(const uint32_t *picture);
++#endif
+diff --git a/Core/ef_wide.inc b/Core/ef_wide.inc
+new file mode 100644
+index 0000000..b1e0934
+--- /dev/null
++++ b/Core/ef_wide.inc
+@@ -0,0 +1,144 @@
++// Included at the end of display.c.
++#include "ef_wide.h"
++static uint32_t ef_fb[EF_WIDE_WIDTH * LINES];
++static int ef_ext, ef_milli;
++static uint8_t ef_scene_wide = 1;
++
++#define EF_MAX_TERMS 32
++typedef struct { int group; uint16_t addr; uint8_t mask, value, negate; } ef_term;
++static ef_term ef_terms[EF_MAX_TERMS];
++static int ef_term_count;
++
++void ef_wide_set_aspect(const char *value)
++{
++    ef_milli = value ? atoi(value) : 0;
++    int ext = ef_milli > 1000 ? (ef_milli * LINES / 1000 - 160) / 2 : 0;
++    ef_ext = ext < 0 ? 0 : ext > EF_WIDE_MAX_EXT ? EF_WIDE_MAX_EXT : ext;
++}
++
++int ef_wide_ext(void) { return ef_ext; }
++int ef_wide_milli(void) { return ef_milli; }
++
++// When to widen: OR of AND terms of memory tests, "C0A0=01,C0A1!=02|D000/F0=10".
++void ef_wide_set_scene(const char *value)
++{
++    ef_term_count = 0;
++    ef_scene_wide = 1;
++    if (!value) return;
++    int group = 0;
++    const char *cursor = value;
++    while (*cursor && ef_term_count < EF_MAX_TERMS) {
++        char text[32] = {0};
++        size_t length = strcspn(cursor, ",|");
++        if (length && length < sizeof(text)) {
++            memcpy(text, cursor, length);
++            const char *equals = strchr(text, '=');
++            if (equals && equals != text) {
++                ef_term *term = ef_terms + ef_term_count++;
++                char *end;
++                term->group = group;
++                term->negate = equals[-1] == '!';
++                term->addr = strtoul(text, &end, 16);
++                term->mask = *end == '/' ? strtoul(end + 1, NULL, 16) : 0xFF;
++                term->value = strtoul(equals + 1, NULL, 16);
++            }
++        }
++        if (cursor[length] == '|') group++;
++        cursor += length + (cursor[length] ? 1 : 0);
++    }
++}
++
++static void ef_evaluate_scene(GB_gameboy_t *gb)
++{
++    if (!ef_term_count) {
++        ef_scene_wide = 1;
++        return;
++    }
++    uint8_t any = 0;
++    for (int index = 0; index < ef_term_count && !any;) {
++        int group = ef_terms[index].group;
++        uint8_t all = 1;
++        for (; index < ef_term_count && ef_terms[index].group == group; index++) {
++            ef_term *term = ef_terms + index;
++            all = all && (((GB_safe_read_memory(gb, term->addr) & term->mask) == term->value) != term->negate);
++        }
++        any = all;
++    }
++    ef_scene_wide = any;
++}
++
++// The background's colour number at screen column x of this line, with its attributes.
++static uint8_t ef_bg_pixel(GB_gameboy_t *gb, int x, uint8_t *attributes)
++{
++    uint8_t lcdc = gb->io_registers[GB_IO_LCDC];
++    *attributes = 0;
++    if (!gb->cgb_mode && !(lcdc & GB_LCDC_BG_EN)) return 0;
++    uint8_t scrolled_x = (uint8_t)(x + gb->io_registers[GB_IO_SCX]);
++    uint8_t y = gb->current_line + gb->io_registers[GB_IO_SCY];
++    uint16_t cell = (lcdc & GB_LCDC_BG_MAP ? 0x1C00 : 0x1800) + (y >> 3) * 32 + (scrolled_x >> 3);
++    uint8_t tile = gb->vram[cell];
++    if (gb->cgb_mode) *attributes = gb->vram[cell + 0x2000];
++    uint16_t address = lcdc & GB_LCDC_TILE_SEL ? tile * 16 : 0x1000 + (int8_t)tile * 16;
++    if (*attributes & 8) address += 0x2000;
++    uint8_t fine_y = *attributes & 0x40 ? 7 - (y & 7) : y & 7;
++    uint8_t fine_x = *attributes & 0x20 ? scrolled_x & 7 : 7 - (scrolled_x & 7);
++    return (gb->vram[address + fine_y * 2] >> fine_x & 1) | (gb->vram[address + fine_y * 2 + 1] >> fine_x & 1) << 1;
++}
++
++// The line just finished in the original columns: draw the new ones beside it.
++static void ef_wide_line(GB_gameboy_t *gb)
++{
++    if (!ef_ext || gb->current_line >= LINES || gb->sgb) return;
++    if (gb->current_line == 0) ef_evaluate_scene(gb);
++    uint8_t line = gb->current_line;
++    uint32_t *out = ef_fb + line * (160 + 2 * ef_ext);
++    uint8_t lcdc = gb->io_registers[GB_IO_LCDC];
++    uint32_t blank = gb->rgb_encode_callback ? gb->rgb_encode_callback(gb, 0, 0, 0) : 0;
++    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE)) {
++        for (int i = 0; i < ef_ext; i++) out[i] = out[ef_ext + 160 + i] = blank;
++        return;
++    }
++    uint8_t bgp = gb->io_registers[GB_IO_BGP];
++    uint8_t window_line = (lcdc & GB_LCDC_WIN_ENABLE) && line >= gb->io_registers[GB_IO_WY] &&
++                          gb->io_registers[GB_IO_WX] < 167;
++    uint8_t height = lcdc & GB_LCDC_OBJ_SIZE ? 16 : 8;
++    for (int side = 0; side < 2; side++) {
++        // The window runs to the right edge, and from the left edge when it starts there. Its
++        // own map holds no more columns, so the bar carries on in the colour of its edge.
++        uint8_t covered = window_line && (side || gb->io_registers[GB_IO_WX] <= 7);
++        uint32_t edge = gb->screen ? gb->screen[line * 160 + (side ? 159 : 0)] : blank;
++        for (int i = 0; i < ef_ext; i++) {
++            int x = side ? 160 + i : i - ef_ext;
++            uint8_t attributes = 0, bg = covered ? 0 : ef_bg_pixel(gb, x, &attributes);
++            uint32_t color = covered ? edge
++                : gb->cgb_mode ? gb->background_palettes_rgb[(attributes & 7) * 4 + bg]
++                : gb->background_palettes_rgb[bgp >> (bg * 2) & 3];
++            if ((lcdc & GB_LCDC_OBJ_EN) && !covered) {
++                for (int index = 0; index < 40; index++) {
++                    const uint8_t *object = gb->oam + index * 4;
++                    int top = object[0] - 16, left = object[1] - 8;
++                    if (line < top || line >= top + height || x < left || x >= left + 8) continue;
++                    uint8_t flags = object[3], row = line - top;
++                    if (flags & 0x40) row = height - 1 - row;
++                    uint8_t tile = height == 16 ? object[2] & 0xFE : object[2];
++                    uint16_t address = tile * 16 + row * 2 + (gb->cgb_mode && flags & 8 ? 0x2000 : 0);
++                    uint8_t bit = flags & 0x20 ? x - left : 7 - (x - left);
++                    uint8_t pixel = (gb->vram[address] >> bit & 1) | (gb->vram[address + 1] >> bit & 1) << 1;
++                    if (!pixel) continue;
++                    if ((flags & 0x80 || attributes & 0x80) && bg && (!gb->cgb_mode || (lcdc & GB_LCDC_BG_EN))) break;
++                    color = gb->cgb_mode ? gb->object_palettes_rgb[(flags & 7) * 4 + pixel]
++                        : gb->object_palettes_rgb[((flags & 0x10 ? 4 : 0)) + (gb->io_registers[flags & 0x10 ? GB_IO_OBP1 : GB_IO_OBP0] >> (pixel * 2) & 3)];
++                    break;
++                }
++            }
++            out[side ? ef_ext + 160 + i : i] = color;
++        }
++    }
++}
++
++const uint32_t *ef_wide_compose(const uint32_t *picture)
++{
++    int width = 160 + 2 * ef_ext;
++    for (int y = 0; y < LINES; y++) memcpy(ef_fb + y * width + ef_ext, picture + y * 160, 160 * sizeof(uint32_t));
++    return ef_fb;
++}
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index bb298ff..7a78628 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -18,6 +18,7 @@
+ 
+ #include <Core/gb.h>
+ #include "libretro.h"
++#include <Core/ef_wide.h>
+ #include "libretro_core_options.inc"
+ 
+ #ifdef _WIN32
+@@ -750,6 +751,17 @@ static GB_model_t string_to_model(const char *string)
+ 
+ static void check_variables()
+ {
++    {
++        // EmuFusion Widescreen Hack: target picture aspect x 1000, and when to widen.
++        struct retro_variable ef_var = {"emufusion_ws_scene", NULL};
++        ef_wide_set_scene(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
++        ef_var.key = "emufusion_ws_aspect";
++        ef_var.value = NULL;
++        int before = ef_wide_ext();
++        ef_wide_set_aspect(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
++        if (ef_wide_ext() != before) geometry_updated = true;
++    }
++
+     struct retro_variable var = {0};
+     if (emulated_devices == 1) {
+ 
+@@ -1296,6 +1308,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
+         geom.base_width = GB_get_screen_width(&gameboy[0]);
+         geom.base_height = GB_get_screen_height(&gameboy[0]);
+         geom.aspect_ratio = (double)GB_get_screen_width(&gameboy[0]) / GB_get_screen_height(&gameboy[0]);
++        if (ef_wide_ext() && GB_get_screen_width(&gameboy[0]) == 160) {
++            geom.base_width = 160 + 2 * ef_wide_ext();
++            geom.aspect_ratio = ef_wide_milli() / 1000.0;
++        }
+     }
+ 
+     geom.max_width = MAX_VIDEO_WIDTH * emulated_devices;
+@@ -1436,6 +1452,10 @@ void retro_run(void)
+             video_cb(frame_buf_copy, GB_get_screen_width(&gameboy[0]) * emulated_devices, GB_get_screen_height(&gameboy[0]), GB_get_screen_width(&gameboy[0]) * emulated_devices * sizeof(uint32_t));
+         }
+     }
++    else if (ef_wide_ext() && GB_get_screen_width(&gameboy[0]) == 160) {
++        int ef_width = 160 + 2 * ef_wide_ext();
++        video_cb(ef_wide_compose(frame_buf), ef_width, GB_get_screen_height(&gameboy[0]), ef_width * sizeof(uint32_t));
++    }
+     else {
+         video_cb(frame_buf,
+                  GB_get_screen_width(&gameboy[0]),

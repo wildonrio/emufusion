@@ -110,17 +110,17 @@
       "id": "blastem",
       "sourceCommit": "84e567e17b6fb3cea23146c4209c18d50d46cbf0",
       "sourceArchiveSha256": "7bf9a28959fbced50479e59b7832bf9b2a9746bb06620bdd5c28c89d205e8fc7",
-      "recipeSha256": "7388b12baa126c44ce5b2f42caa63ebfcdccb2eec520e0e12f0a3a0438a5fa91",
+      "recipeSha256": "4c63890ed4102efa693358119a88eec3587ed98176cb8b39ed38ba623e50557d",
       "patches": {
         "engines/patches/blastem-libretro-android-portability.patch": "4966522359464467f8b9f150356fdc03ba7f056a12f24ca822f71a9c8b173eed",
         "engines/patches/blastem-new-core-frame-end-rebase-hang.patch": "d899b13fe0728e5e927e30736e1c1c7c57d2906a6814c6150823e911cc73686c",
-        "engines/patches/blastem-emufusion-widescreen.patch": "f88a5af0115348463534edd9f95695a3d9a9f7c8a9706c145df70b4352e5b4f0"
+        "engines/patches/blastem-emufusion-widescreen.patch": "6004791973499f5300e294412721b7a41ba3aef117b8642c55070bb25df18423"
       },
-      "artifactSha256": "31f24132b7362df8e87e199bf542ba6c62bd01a2e32ab7247058ee5662a91891",
+      "artifactSha256": "29c7c17e6cfdec4c46119a6414525209b05f3d9a646c347047ffd8355b00fb19",
       "independentBuilds": 2,
       "byteIdentical": true,
       "proofDate": "2026-11-05",
-      "proofScope": "2 consecutive clean builds at one root with the Widescreen Hack patch; byte-identical; not new gameplay qualification.",
+      "proofScope": "2 consecutive clean builds at one root with the Widescreen Hack patch; byte-identical; not new gameplay qualification",
       "evidence": "docs/widescreen/WIDESCREEN-HACK-PLAN.md"
     },
     {

@@ -223,9 +223,9 @@
           "tested": "2026-11-05 host: first stage"
         },
         "Flashback: The Quest for Identity": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: title and jungle"
+          "tested": "2026-11-05 host: jungle played; its map plane is one screen wide, so new columns only repeat the far side (99% identical). Rooms flip, there is nothing more to reveal"
         },
         "Lightening Force: Quest for the Darkstar": {
           "strategy": "widen",
@@ -290,9 +290,9 @@
         "NHL 94": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_scene": "FFB029=01"
+            "emufusion_ws_scene": "FFB029=01|FFB029=1E"
           },
-          "tested": "2026-11-05 host: faceoff, play, pause menu keeps bars"
+          "tested": "2026-11-05 host: faceoff and play, also after pause and resume; pause menu keeps bars"
         },
         "NBA Jam Tournament Edition": {
           "strategy": "widen",
@@ -304,7 +304,7 @@
         "NHL 96": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_scene": "FFFCC1=04"
+            "emufusion_ws_scene": "FFB016!=00,FFB018!=00"
           },
           "tested": "2026-11-05 host: faceoff; pause and setup keep bars"
         },
@@ -450,6 +450,381 @@
       },
       "release": false,
       "exactBase": true
+    },
+    "nes": {
+      "engine": "mesen",
+      "widthOption": "emufusion_ws_aspect",
+      "widthIsAspect": true,
+      "baseWidth": 256,
+      "height": 240,
+      "pixelAspect": 1.142857,
+      "maxAspect": 1.778,
+      "options": {},
+      "games": {
+        "Contra": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: first stage played from the start past the first bridge; jungle and mountains run to both edges. Sprites stay inside the old screen, a console limit"
+        },
+        "Life Force": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: first stage flying; the star field reaches both edges"
+        },
+        "Super Mario Bros. 3": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: world map is one screen wide, its columns would repeat. Levels need a map reader, untested"
+        },
+        "Kirby's Adventure": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms use a one-screen map. Needs a map reader"
+        },
+        "Mega Man 3": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: first stage uses a one-screen map. Needs a map reader"
+        },
+        "Castlevania III: Dracula's Curse": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: first stage played, the ruins carry on into the new columns; black left of the level start. Its cartridge maps memory itself, so the map layout is read from the memory pages"
+        },
+        "Ninja Gaiden II: The Dark Sword of Chaos": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: first stage uses a one-screen map. Needs a map reader"
+        },
+        "Tecmo Super Bowl": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: kickoff and plays, the field runs edge to edge; the top banner stays where it is"
+        },
+        "Mike Tyson's Punch-Out!!": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: the ring is one screen, the sides only add empty blue"
+        },
+        "Adventures of Lolo 3": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: world map: side columns show unrelated tiles"
+        },
+        "Crisis Force": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: vertical shooter on a one-screen map"
+        },
+        "Tetris": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: fixed playfield, nothing to reveal"
+        },
+        "Super Mario Bros": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: this library file is Super Mario Bros 2 (USA): rooms use a one-screen map. Needs a map reader"
+        },
+        "The Legend of Zelda": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: title and file screens only so far; rooms are one screen"
+        }
+      },
+      "release": false
+    },
+    "gb": {
+      "engine": "sameboy",
+      "widthOption": "emufusion_ws_aspect",
+      "widthIsAspect": true,
+      "baseWidth": 160,
+      "height": 144,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "options": {},
+      "games": {
+        "Castlevania II: Belmont's Revenge": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: Crystal Castle stage played; the columns are real scenery"
+        },
+        "Donkey Kong Land": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rows and columns refresh only across the old screen, sides show black and old tiles. Needs a map reader"
+        },
+        "The Legend of Zelda: Link's Awakening": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms are one screen, the sides show unrelated tiles"
+        },
+        "Tetris": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: fixed playfield, nothing to reveal"
+        },
+        "Donkey Kong": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: fixed single-screen stages, nothing to reveal"
+        },
+        "Parodius": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: first stage flown, star field and enemies reach both edges"
+        },
+        "Tiny Toon Adventures: Babs' Big Break": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: first stage played, trees and platforms reach both edges"
+        },
+        "Wario Land: Super Mario Land 3": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: first level start, walls and floor carry on; deeper play still to do"
+        },
+        "Wario Land II": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: castle opening; deeper play still to do"
+        },
+        "Pokémon Red Version": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms load only around the old screen, sides show black and white blocks"
+        },
+        "Pokémon Blue Version": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms load only around the old screen, sides show black and white blocks"
+        },
+        "Pokémon Yellow Version: Special Pikachu Edition": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms load only around the old screen, sides show black and white blocks"
+        },
+        "Battle Arena Toshinden": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: arena sides show stale diagonal slices"
+        },
+        "Final Fantasy Legend II": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: battle and menu screens show unrelated side blocks"
+        },
+        "Kwirk": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: puzzle rooms fill their own screen; side columns repeat the wall pattern"
+        },
+        "Mole Mania": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: item and menu screens seen; rooms are one screen"
+        },
+        "Monster Max": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: fixed isometric rooms inside black, nothing to reveal"
+        },
+        "Tetris Attack": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: fixed playfield, side columns only repeat a pattern"
+        }
+      },
+      "release": false,
+      "exactBase": true
+    },
+    "gbc": {
+      "engine": "sameboy",
+      "widthOption": "emufusion_ws_aspect",
+      "widthIsAspect": true,
+      "baseWidth": 160,
+      "height": 144,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "options": {},
+      "games": {
+        "Super Mario Bros. Deluxe": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: 1-1 played, the level reaches both edges; world card keeps its own black sides"
+        },
+        "Donkey Kong Country": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: Jungle Hijinxs played, the jungle reaches both edges"
+        },
+        "The Legend of Zelda: Oracle of Ages": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms are one screen, the sides show unrelated tiles"
+        },
+        "The Legend of Zelda: Oracle of Seasons": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms are one screen, the sides show unrelated tiles"
+        },
+        "The Legend of Zelda: Link's Awakening DX": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms are one screen, the sides show unrelated tiles"
+        },
+        "Metal Gear Solid": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: story scenes show unrelated side blocks; play not reached yet"
+        },
+        "Survival Kids": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: first island played, ground and shore reach both edges"
+        },
+        "Dragon Warrior III": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: field scene with flat colour blocks at the sides"
+        },
+        "Magical Tetris Challenge": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: fixed playfield, side columns only repeat a pattern"
+        },
+        "Mario Golf": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms show stale tiles at the sides; menus junk"
+        },
+        "Mario Tennis": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: character select repeats its pattern, play not reached yet"
+        },
+        "Mickey's Racing Adventure": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: town map shows scrambled tiles at the sides"
+        },
+        "Pokémon Gold Version": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms load only around the old screen"
+        },
+        "Pokémon Silver Version": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: rooms load only around the old screen"
+        },
+        "Pokémon Puzzle Challenge": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: fixed playfield, nothing to reveal"
+        }
+      },
+      "release": false,
+      "exactBase": true
+    },
+    "gba": {
+      "engine": "mgba",
+      "widthOption": "emufusion_ws_aspect",
+      "widthIsAspect": true,
+      "baseWidth": 240,
+      "height": 160,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "exactBase": true,
+      "options": {},
+      "games": {
+        "Metroid Fusion": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: first area played, cave and enemies reach both edges"
+        },
+        "Metroid: Zero Mission": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: Brinstar start played"
+        },
+        "Mario Kart: Super Circuit": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: race start, the road and scenery extend. Stray HUD digits at the top edges still to fix"
+        },
+        "Alien Hominid": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: maps are one screen wide, new columns would repeat"
+        },
+        "Advance Wars": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Advance Wars 2: Black Hole Rising": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Castlevania: Aria of Sorrow": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Castlevania: Circle of the Moon": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Final Fantasy VI Advance": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Fire Emblem": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Golden Sun": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "The Legend of Zelda: The Minish Cap": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Tony Hawk's Pro Skater 3": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Tony Hawk's Underground": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "Ultimate Card Games": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "WarioWare: Twisted!": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        },
+        "WarioWare, Inc.: Mega Microgame$!": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+        }
+      },
+      "release": false
     }
   }
 }

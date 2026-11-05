@@ -67,6 +67,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     take_thor()
     shell('settings put global emufusion_qa_widescreen_all 1')
+    # The recipe table is cached per app process, so a running app would not see the setting.
+    shell('am force-stop com.thorium.preview')
     shell('input keyevent KEYCODE_WAKEUP')
     subprocess.run(ADB + ['logcat', '-c'], timeout=30)
     log = out / 'runtime.log'
@@ -118,7 +120,7 @@ def take_thor():
             os.mkdir(LOCK)
             return
         except FileExistsError:
-            time.sleep(10)
+            time.sleep(2)
 
 
 def release_thor():
