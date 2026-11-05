@@ -1,9 +1,9 @@
 diff --git a/bsnes/emulator/efwide.hpp b/bsnes/emulator/efwide.hpp
 new file mode 100644
-index 0000000..a5ed1f7
+index 0000000..9013a6e
 --- /dev/null
 +++ b/bsnes/emulator/efwide.hpp
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,49 @@
 +#pragma once
 +// EmuFusion Widescreen Hack: per-game state set by the recipe through core options.
 +// emufusion_ws_width  total picture width in pixels (0 = original 256)
@@ -11,6 +11,13 @@ index 0000000..a5ed1f7
 +//                     (a term may mask, 7E0100/F0=10); empty = bsnes-hd's own wsMode
 +// emufusion_ws_hud    moves a HUD out to the new edges: "layer:y0-y1:x0-x1:dir[:t0-t1];..."
 +//                     layer bg1..bg4 or obj, dir -1 left or +1 right, t0-t1 sprite tiles
++// emufusion_ws_bounds the world's limits, "7E00E2:7E0604,7E0606+100": the camera's left edge,
++//                     then the left and right world edges, 16-bit RAM values with a hex offset;
++//                     wide areas outside them are black, as they would be on any fixed screen
++// emufusion_ws_strict layers whose wide areas show only tiles written for that world
++//                     position, "bg1,bg2": no stale or wrapped tilemap, never-loaded VRAM;
++//                     with "center", a tile loaded during forced blank counts only near the
++//                     original screen, for games that keep other data beside the tilemap
 +namespace EfWide {
 +  enum : int { MaxRules = 48, MaxTerms = 48 };
 +  struct Rule { int layer, y0, y1, x0, x1, dir, tile0, tile1; };
@@ -23,16 +30,31 @@ index 0000000..a5ed1f7
 +  extern int termCount;
 +  extern bool sceneWide;
 +  extern const unsigned char *wram;
++  extern int strictLayers;  // bit per BG layer
++  enum : unsigned short { TagNever = 0xffff, TagBlank = 0xfffe };
++  extern unsigned short tags[0x10000];
++  extern bool blankPending;
++  extern bool blankCenterOnly;
++  extern bool centerOnly;  // the next sweep trusts only cells on the original screen
 +
 +  void setWidth(const char *value);
 +  void setScene(const char *value);
 +  void setHud(const char *value);
++  // The cartridge's battery RAM and the console's work RAM, for the host's saves and tools.
++  void *saveRamData();
++  unsigned long saveRamSize();
++  void *systemRamData();
++  void setStrict(const char *value);
++  void setBounds(const char *value);
++  bool outside(int x);
++  extern bool bounded;
++  void forgetTags();
 +  void evaluate(int bgMode, bool mode7);
 +  bool anyRule(int layer, int y);
 +  int moved(int layer, int y, int x, int tile, int amount);
 +}
 diff --git a/bsnes/sfc/ppu-fast/background.cpp b/bsnes/sfc/ppu-fast/background.cpp
-index 4eac82f..38b8a25 100644
+index 4eac82f..8b73dfc 100644
 --- a/bsnes/sfc/ppu-fast/background.cpp
 +++ b/bsnes/sfc/ppu-fast/background.cpp
 @@ -29,6 +29,10 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
@@ -46,16 +68,38 @@ index 4eac82f..38b8a25 100644
    bool windowAbove[1024];
    bool windowBelow[1024];
    renderWindow(self.window, self.window.aboveEnable, windowAbove,
-@@ -72,7 +76,7 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -72,10 +76,20 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
  
    auto luma = ppu.lightTable[io.displayBrightness];
    bool lastCropped = false;
 -  int x = 0 - (hscroll & 7) - ws;
 +  int x = 0 - (hscroll & 7) - (ws > 0 ? (ws + 7 & ~7) : ws);
++  bool strict = ws > 0 && !hudLine && !hires && !offsetPerTileMode && (EfWide::strictLayers >> hudLayer & 1);
++  bool bounded = ws > 0 && !hudLine && EfWide::bounded;
++  uint strictShift = 3 + self.tileSize;
++  uint strictMask = (1024 >> strictShift) - 1;
    while(x < (width + ws)) {
      uint hoffset = x + hscroll;
      uint voffset = y + vscroll;
-@@ -156,6 +160,13 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
++    bool stale = false;
++    if(strict && (x < 0 || x + 8 > 256)) {
++      uint tag = EfWide::tags[getTileAddress(self, hoffset & hmask, voffset & vmask)];
++      uint want = ((int)hoffset >> strictShift & strictMask) | ((int)voffset >> strictShift & strictMask) << 8;
++      stale = tag != want;
++    }
+     if(offsetPerTileMode) {
+       uint validBit = 0x2000 << source;
+       uint offsetX = x + (hscroll & 7);
+@@ -125,6 +139,8 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+ 
+     for(uint tileX = 0; tileX < 8; tileX++, x++) {
+       if(x < -ws || x >= width + ws) continue;   //if(x & width) continue;  //x < 0 || x >= width
++      if(stale && (x < 0 || x >= 256)) continue;
++      if(bounded && (x < 0 || x >= 256) && EfWide::outside(x)) continue;
+       if(--mosaicCounter == 0) {
+         uint color, shift = mirrorX ? tileX : 7 - tileX;
+       /*if(self.tileMode >= TileMode::BPP2)*/ {
+@@ -156,6 +172,13 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
  
        uint32 mctc = luma[mosaicColor];
  
@@ -69,12 +113,28 @@ index 4eac82f..38b8a25 100644
        if(!hires) {
          if(ppufast.hires() && ppufast.hd()) {
            // In hires mode non-hires backgrounds seem to be rendered on every second pixel (see water in Kirby)
+@@ -185,6 +208,15 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+   }
+ }
+ 
++auto PPU::Line::getTileAddress(PPU::IO::Background& self, uint hoffset, uint voffset) -> uint {
++  uint tileX = hoffset >> 3 + self.tileSize;
++  uint tileY = voffset >> 3 + self.tileSize;
++  uint offset = (tileY & 0x1f) << 5 | (tileX & 0x1f);
++  if(tileX & 0x20 && self.screenSize & 1) offset += 32 << 5;
++  if(tileY & 0x20 && self.screenSize & 2) offset += 32 << 5 + (self.screenSize & 1);
++  return ppu.vramExt(self.screenAddress + offset);
++}
++
+ auto PPU::Line::getTile(PPU::IO::Background& self, uint hoffset, uint voffset) -> uint {
+   bool hires = io.bgMode == 5 || io.bgMode == 6;
+   uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..e60042f
+index 0000000..9b88d48
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,189 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -87,6 +147,38 @@ index 0000000..e60042f
 +  int termCount = 0;
 +  bool sceneWide = true;
 +  const unsigned char *wram = nullptr;
++  int strictLayers = 0;
++  unsigned short tags[0x10000];
++  bool blankPending = false;
++  bool centerOnly = false;
++  bool blankCenterOnly = false;
++  bool bounded = false;
++  static unsigned boundsCamera, boundsLeft, boundsRight;
++  static int offsetLeft, offsetRight;
++  static int camera, edgeLeft, edgeRight;
++  static bool tagsReady = false;
++
++  static SuperFamicom::Memory *saveMemory() {
++    using namespace SuperFamicom;
++    if(cartridge.has.SA1 && sa1.bwram.size()) return &sa1.bwram;
++    if(cartridge.has.SuperFX && superfx.ram.size()) return &superfx.ram;
++    if(cartridge.has.SPC7110 && spc7110.ram.size()) return &spc7110.ram;
++    if(cartridge.has.OBC1 && obc1.ram.size()) return &obc1.ram;
++    if(cartridge.has.HitachiDSP && hitachidsp.ram.size()) return &hitachidsp.ram;
++    return cartridge.ram.size() ? &cartridge.ram : nullptr;
++  }
++
++  void *saveRamData() {
++    auto *memory = saveMemory();
++    return memory ? memory->data() : nullptr;
++  }
++
++  unsigned long saveRamSize() {
++    auto *memory = saveMemory();
++    return memory ? memory->size() : 0;
++  }
++
++  void *systemRamData() { return SuperFamicom::cpu.wram; }
 +
 +  void setWidth(const char *value) {
 +    if(!value || !*value) { ext = -1; return; }
@@ -159,7 +251,48 @@ index 0000000..e60042f
 +    }
 +  }
 +
++  void setStrict(const char *value) {
++    strictLayers = 0;
++    blankCenterOnly = value && strstr(value, "center");
++    if(!value) return;
++    for(int layer = 0; layer < 4; layer++) {
++      char name[4] = {'b', 'g', char('1' + layer), 0};
++      if(strstr(value, name)) strictLayers |= 1 << layer;
++    }
++    if(strictLayers && !tagsReady) {
++      for(auto &tag : tags) tag = TagNever;
++      tagsReady = true;
++    }
++  }
++
++  void setBounds(const char *value) {
++    bounded = false;
++    if(!value) return;
++    offsetLeft = offsetRight = 0;
++    bounded = sscanf(value, "%x:%x+%x,%x+%x", &boundsCamera, &boundsLeft, &offsetLeft, &boundsRight, &offsetRight) == 5 ||
++              sscanf(value, "%x:%x,%x+%x", &boundsCamera, &boundsLeft, &boundsRight, &offsetRight) >= 3;
++  }
++
++  bool outside(int x) {
++    int world = camera + x;
++    return world < edgeLeft || world >= edgeRight;
++  }
++
++  // After a state load the tags describe another moment: trust the tilemap as it stands.
++  void forgetTags() {
++    if(!tagsReady) return;
++    for(auto &tag : tags) tag = TagBlank;
++    blankPending = true;
++    centerOnly = true;
++  }
++
 +  void evaluate(int bgMode, bool mode7) {
++    if(bounded && wram) {
++      auto word = [](unsigned address) { return wram[address & 0x1ffff] | wram[(address + 1) & 0x1ffff] << 8; };
++      camera = word(boundsCamera);
++      edgeLeft = word(boundsLeft) + offsetLeft;
++      edgeRight = word(boundsRight) + offsetRight;
++    }
 +    if(!termCount || !wram) { sceneWide = true; return; }
 +    bool any = false;
 +    int index = 0;
@@ -191,8 +324,20 @@ index 0000000..e60042f
 +    return x;
 +  }
 +}
+diff --git a/bsnes/sfc/ppu-fast/io.cpp b/bsnes/sfc/ppu-fast/io.cpp
+index 24843e9..a488c17 100644
+--- a/bsnes/sfc/ppu-fast/io.cpp
++++ b/bsnes/sfc/ppu-fast/io.cpp
+@@ -32,6 +32,7 @@ auto PPU::writeVRAM(uint8 data) -> void {
+   if(!io.displayDisable && cpu.vcounter() < vdisp() && !noVRAMBlocking()) return;
+   Line::flush();
+   auto address = vramAddress();
++  if(EfWide::strictLayers) efTagWrite(address);
+   if constexpr(Byte == 0) {
+     vram[address] = vram[address] & 0xff00 | data << 0;
+   }
 diff --git a/bsnes/sfc/ppu-fast/line.cpp b/bsnes/sfc/ppu-fast/line.cpp
-index 551430c..1bc588d 100644
+index 551430c..7bdd569 100644
 --- a/bsnes/sfc/ppu-fast/line.cpp
 +++ b/bsnes/sfc/ppu-fast/line.cpp
 @@ -6,6 +6,7 @@ auto PPU::Line::flush() -> void {
@@ -203,6 +348,21 @@ index 551430c..1bc588d 100644
  
    if (ppu.luminance != configuration.video.luminance ||
          ppu.saturation != configuration.video.saturation ||
+@@ -211,7 +212,14 @@ auto PPU::Line::render(bool fieldID) -> void {
+       }
+     }
+   } else {
++    bool bounded = ppu.widescreen() > 0 && EfWide::bounded;
+     for(uint x = xa; x < xb; x++) {
++      int screenX = (int)(x / scale) - (int)ppu.widescreen();
++      if(bounded && (screenX < 0 || screenX >= 256) && EfWide::outside(screenX)) {
++        above[x] = {Source::COL, 0, 0};
++        below[x] = {Source::COL, 0, 0};
++        continue;
++      }
+       above[x] = {Source::COL, 0, aboveColor};
+       below[x] = {Source::COL, 0, belowColors[x / ((256+2*ppufast.widescreen()) * scale)]};
+     }
 diff --git a/bsnes/sfc/ppu-fast/mode7hd.cpp b/bsnes/sfc/ppu-fast/mode7hd.cpp
 index 8fd6f4e..e52874a 100644
 --- a/bsnes/sfc/ppu-fast/mode7hd.cpp
@@ -216,7 +376,7 @@ index 8fd6f4e..e52874a 100644
        bool doBelow = self.belowEnable && !windowBelow[ppufast.winXad(x, true)];
  
 diff --git a/bsnes/sfc/ppu-fast/object.cpp b/bsnes/sfc/ppu-fast/object.cpp
-index 1fc167a..2f623b6 100644
+index 1fc167a..0d7e7b2 100644
 --- a/bsnes/sfc/ppu-fast/object.cpp
 +++ b/bsnes/sfc/ppu-fast/object.cpp
 @@ -50,6 +50,11 @@ auto PPU::Line::renderObject(PPU::IO::Object& self) -> void {
@@ -231,7 +391,15 @@ index 1fc167a..2f623b6 100644
      int y = this->y - object.y & 0xff;
      if(self.interlace) y <<= 1;
  
-@@ -132,7 +137,7 @@ auto PPU::Line::renderObject(PPU::IO::Object& self) -> void {
+@@ -125,6 +130,7 @@ auto PPU::Line::renderObject(PPU::IO::Object& self) -> void {
+     }
+   }
+ 
++  bool bounded = ppufast.widescreen() > 0 && !ppufast.wsOverride() && EfWide::bounded && !EfWide::ruleCount;
+   auto luma = ppu.lightTable[io.displayBrightness];
+   int wsl = -((int)ppufast.widescreen());
+   int wsr = 256 + ((int)ppufast.widescreen());
+@@ -132,9 +138,10 @@ auto PPU::Line::renderObject(PPU::IO::Object& self) -> void {
      if(!priority[x]) continue;
      uint8 source = palette[x] < 192 ? Source::OBJ1 : Source::OBJ2;
      int xc = x;//
@@ -239,9 +407,12 @@ index 1fc167a..2f623b6 100644
 +    if(xc >= wsr) xc -= 512;
      if(xc < wsl || xc >= wsr || (wsobj == 3 && (xc < 0 || xc >= 256))) continue;
  
++    if(bounded && (xc < 0 || xc >= 256) && EfWide::outside(xc)) continue;
      uint32 mctc = luma[cgram[palette[x]]];
+     
+     if(ppufast.hires() && ppufast.hd()) {
 diff --git a/bsnes/sfc/ppu-fast/ppu.cpp b/bsnes/sfc/ppu-fast/ppu.cpp
-index d7260af..f10ecef 100644
+index d7260af..6ef86b0 100644
 --- a/bsnes/sfc/ppu-fast/ppu.cpp
 +++ b/bsnes/sfc/ppu-fast/ppu.cpp
 @@ -1,4 +1,7 @@
@@ -252,7 +423,77 @@ index d7260af..f10ecef 100644
  
  namespace SuperFamicom {
  
-@@ -52,7 +55,10 @@ auto PPU::vramExt(uint addr) const -> uint { return addr & configuration.hacks.p
+@@ -28,6 +31,69 @@ auto PPU::hdScale() const -> uint { return configuration.hacks.ppu.mode7.scale;
+ auto PPU::hdPerspective() const -> uint { return configuration.hacks.ppu.mode7.perspective; }
+ auto PPU::hdSupersample() const -> uint { return configuration.hacks.ppu.mode7.supersample; }
+ auto PPU::hdMosaic() const -> uint { return configuration.hacks.ppu.mode7.mosaic; }
++// Which world tile a tilemap cell was last written for, taken from the scroll at the time:
++// the cell's map position nearest the middle of the screen. Modulo the 1024-pixel scroll range.
++static auto efTag(uint tileX, uint tileY, uint columns, uint rows, uint hoffset, uint voffset, uint shift) -> uint16 {
++  int centerX = (hoffset + 128) >> shift;
++  int centerY = (voffset + 112) >> shift;
++  int worldX = centerX + ((((int)tileX - centerX + (int)columns / 2) & ((int)columns - 1)) - (int)columns / 2);
++  int worldY = centerY + ((((int)tileY - centerY + (int)rows / 2) & ((int)rows - 1)) - (int)rows / 2);
++  uint mask = (1024 >> shift) - 1;
++  return (worldX & mask) | (worldY & mask) << 8;
++}
++
++auto PPU::efTagWrite(uint address) -> void {
++  // A faded-out screen loads the way a blanked one does: whole maps, not moving columns.
++  if(io.displayDisable || io.displayBrightness == 0) {
++    EfWide::tags[address] = EfWide::TagBlank;
++    EfWide::blankPending = true;
++    return;
++  }
++  const IO::Background *layers[4] = {&io.bg1, &io.bg2, &io.bg3, &io.bg4};
++  for(uint layer : range(4)) {
++    if(!(EfWide::strictLayers >> layer & 1)) continue;
++    const auto &bg = *layers[layer];
++    uint offset = (address - bg.screenAddress) & 0xffff;
++    uint pages = bg.screenSize == 0 ? 1 : bg.screenSize == 3 ? 4 : 2;
++    if(offset >= pages << 10) continue;
++    uint page = offset >> 10;
++    uint tileX = (offset & 31) + ((bg.screenSize == 1 || bg.screenSize == 3) && (page & 1) ? 32 : 0);
++    uint tileY = (offset >> 5 & 31) + (bg.screenSize == 2 ? page * 32 : bg.screenSize == 3 && (page & 2) ? 32 : 0);
++    EfWide::tags[address] = efTag(tileX, tileY, bg.screenSize & 1 ? 64 : 32, bg.screenSize & 2 ? 64 : 32,
++                                  bg.hoffset, bg.voffset, 3 + bg.tileSize);
++    return;
++  }
++  EfWide::tags[address] = EfWide::TagNever;
++}
++
++// Cells written during forced blank take the scroll the picture first appears with.
++auto PPU::efSweepBlank() -> void {
++  EfWide::blankPending = false;
++  const IO::Background *layers[4] = {&io.bg1, &io.bg2, &io.bg3, &io.bg4};
++  for(uint layer : range(4)) {
++    if(!(EfWide::strictLayers >> layer & 1)) continue;
++    const auto &bg = *layers[layer];
++    uint columns = bg.screenSize & 1 ? 64 : 32;
++    uint rows = bg.screenSize & 2 ? 64 : 32;
++    for(uint tileY : range(rows)) for(uint tileX : range(columns)) {
++      uint offset = (tileY & 31) << 5 | (tileX & 31);
++      if(tileX & 32) offset += 32 << 5;
++      if(tileY & 32) offset += 32 << 5 + (bg.screenSize & 1);
++      uint address = vramExt(bg.screenAddress + offset);
++      if(EfWide::tags[address] == EfWide::TagBlank) {
++        EfWide::tags[address] = efTag(tileX, tileY, columns, rows, bg.hoffset, bg.voffset, 3 + bg.tileSize);
++        if(EfWide::centerOnly || EfWide::blankCenterOnly) {
++          uint shift = 3 + bg.tileSize;
++          int distance = (((int)(tileX << shift) - (int)bg.hoffset - 128) & ((columns << shift) - 1));
++          if(distance >= (int)(columns << shift) / 2) distance -= columns << shift;
++          if(distance < -128 || distance >= 128) EfWide::tags[address] = EfWide::TagNever;
++        }
++      }
++    }
++  }
++  EfWide::centerOnly = false;
++}
++
+ auto PPU::widescreen() const -> uint { return wsExt; }
+ auto PPU::widescreenRaw() const -> uint { return !hd() || configuration.hacks.ppu.mode7.wsMode == 0 ? 0 : configuration.hacks.ppu.mode7.widescreen; }
+ auto PPU::wsbg(uint bg) const -> uint {
+@@ -52,7 +118,10 @@ auto PPU::vramExt(uint addr) const -> uint { return addr & configuration.hacks.p
  auto PPU::bgGrad() const -> uint { return !hd() ? 0 : configuration.hacks.ppu.mode7.bgGrad; }
  auto PPU::windRad() const -> uint { return !hd() ? 0 : configuration.hacks.ppu.mode7.windRad; }
  auto PPU::wsOverrideCandidate() const -> bool { return configuration.hacks.ppu.mode7.wsMode == 1; }
@@ -264,7 +505,7 @@ index d7260af..f10ecef 100644
  auto PPU::wsBgCol() const -> bool { return configuration.hacks.ppu.mode7.wsBgCol == 2
                                              || configuration.hacks.ppu.mode7.wsBgCol == 1 && wsOverride(); }
  auto PPU::wsMarker() const -> uint { return configuration.hacks.ppu.mode7.wsMarker; }
-@@ -147,6 +153,11 @@ auto PPU::scanline() -> void {
+@@ -147,6 +216,21 @@ auto PPU::scanline() -> void {
    if(vcounter() == 240) {
      Line::flush();
    }
@@ -272,10 +513,54 @@ index d7260af..f10ecef 100644
 +  if(vcounter() == 0) {
 +    EfWide::wram = cpu.wram;
 +    EfWide::evaluate(io.bgMode, io.bgMode == 7);
++    // A layer moved to another tilemap: cells loaded before the move belong to it now.
++    uint mapKey = io.bg1.screenAddress ^ io.bg1.screenSize << 1 ^ (uint)io.bg2.screenAddress << 8 ^ (uint)io.bg2.screenSize << 9;
++    if(mapKey != efMapKey) {
++      efMapKey = mapKey;
++      EfWide::blankPending = true;
++    }
++    if(EfWide::blankPending && EfWide::strictLayers && !io.displayDisable && io.displayBrightness > 0) {
++      Line::flush();
++      efSweepBlank();
++    }
 +  }
  }
  
  auto PPU::refresh() -> void {
+diff --git a/bsnes/sfc/ppu-fast/ppu.hpp b/bsnes/sfc/ppu-fast/ppu.hpp
+index b4a71c0..d2008ab 100644
+--- a/bsnes/sfc/ppu-fast/ppu.hpp
++++ b/bsnes/sfc/ppu-fast/ppu.hpp
+@@ -20,6 +20,9 @@ struct PPU : PPUcounter {
+   alwaysinline auto widescreen() const -> uint;
+   alwaysinline auto widescreenRaw() const -> uint;
+   alwaysinline auto wsbg(uint bg) const -> uint;
++  auto efTagWrite(uint address) -> void;
++  auto efSweepBlank() -> void;
++  uint efMapKey = 0;
+   alwaysinline auto wsobj() const -> uint;
+   alwaysinline auto winXad(uint x, bool bel) const -> uint;
+   alwaysinline auto winXadHd(uint x, bool bel) const -> uint;
+@@ -323,6 +326,7 @@ public:
+     //background.cpp
+     auto renderBackground(PPU::IO::Background&, uint8 source) -> void;
+     alwaysinline auto getTile(PPU::IO::Background&, uint hoffset, uint voffset) -> uint;
++    auto getTileAddress(PPU::IO::Background&, uint hoffset, uint voffset) -> uint;
+ 
+     //mode7.cpp
+     auto renderMode7(PPU::IO::Background&, uint8 source) -> void;
+diff --git a/bsnes/sfc/ppu-fast/serialization.cpp b/bsnes/sfc/ppu-fast/serialization.cpp
+index ff6b417..e395866 100644
+--- a/bsnes/sfc/ppu-fast/serialization.cpp
++++ b/bsnes/sfc/ppu-fast/serialization.cpp
+@@ -10,6 +10,7 @@ auto PPU::serialize(serializer& s) -> void {
+ 
+   Line::start = 0;
+   Line::count = 0;
++  if(s.mode() == serializer::Load) EfWide::forgetTags();
+ }
+ 
+ auto PPU::Latch::serialize(serializer& s) -> void {
 diff --git a/bsnes/target-libretro/jni/Android.mk b/bsnes/target-libretro/jni/Android.mk
 index da07e7c..0113ab6 100644
 --- a/bsnes/target-libretro/jni/Android.mk
@@ -300,7 +585,7 @@ index da07e7c..0113ab6 100644
  LOCAL_CPP_FEATURES := exceptions rtti
  include $(BUILD_SHARED_LIBRARY)
 diff --git a/bsnes/target-libretro/libretro.cpp b/bsnes/target-libretro/libretro.cpp
-index 8a50f53..e147ebb 100644
+index 8a50f53..8e28d3d 100644
 --- a/bsnes/target-libretro/libretro.cpp
 +++ b/bsnes/target-libretro/libretro.cpp
 @@ -2,6 +2,7 @@
@@ -311,7 +596,7 @@ index 8a50f53..e147ebb 100644
  
  static retro_environment_t environ_cb;
  static retro_video_refresh_t video_cb;
-@@ -652,6 +653,16 @@ static bool update_variables() // returns whether video dimensions have changed
+@@ -652,6 +653,22 @@ static bool update_variables() // returns whether video dimensions have changed
  	vc = vc | program->scale != scale; // scale changed
  	program->scale = scale;
  	ws = HdToolkit::determineWsExt(ws, overscan, aspectcorrection);
@@ -321,6 +606,12 @@ index 8a50f53..e147ebb 100644
 +	var.key = "emufusion_ws_hud";
 +	var.value = NULL;
 +	EfWide::setHud(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_strict";
++	var.value = NULL;
++	EfWide::setStrict(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_bounds";
++	var.value = NULL;
++	EfWide::setBounds(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
 +	var.key = "emufusion_ws_width";
 +	var.value = NULL;
 +	EfWide::setWidth(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -328,3 +619,18 @@ index 8a50f53..e147ebb 100644
  	vc = vc | program->ws != ws; // widescreen AR changed
  	program->ws = ws;
  	return vc; // returns whether video dimensions have changed (overscan, aspectcorrection scale or widescreen AR)
+@@ -1129,10 +1146,14 @@ unsigned retro_get_region()
+ // Rely on higan to load and save SRAM until there is really compelling reason not to.
+ void *retro_get_memory_data(unsigned id)
+ {
++	if (id == RETRO_MEMORY_SAVE_RAM) return EfWide::saveRamData();
++	if (id == RETRO_MEMORY_SYSTEM_RAM) return EfWide::systemRamData();
+ 	return nullptr;
+ }
+ 
+ size_t retro_get_memory_size(unsigned id)
+ {
++	if (id == RETRO_MEMORY_SAVE_RAM) return EfWide::saveRamSize();
++	if (id == RETRO_MEMORY_SYSTEM_RAM) return 128 * 1024;
+ 	return 0;
+ }

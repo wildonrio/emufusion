@@ -31,9 +31,67 @@
             "bsnes_mode7_wsobj": "unsafe",
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
-            "bsnes_mode7_wsbg3": "off"
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1"
           },
           "tested": "2026-11-04 host: Yoshi's Island 2; level widens, HUD moved to the corners, map keeps bars"
+        },
+        "Donkey Kong Country": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2"
+          },
+          "tested": "2026-11-04 host: menus, map, Jungle Hijinxs"
+        },
+        "Donkey Kong Country 2: Diddy's Kong Quest": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1"
+          },
+          "tested": "2026-11-04 host: menus, Pirate Panic"
+        },
+        "Super Mario World 2: Yoshi's Island": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-04 host: title, intro, 1-1"
+        },
+        "Super Metroid": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2",
+            "emufusion_ws_scene": "7E0998=08",
+            "emufusion_ws_hud": "bg3:0-31:0-100:-1;bg3:0-31:180-255:1"
+          },
+          "tested": "2026-11-04 host: Ceres"
+        },
+        "Super Mario All-Stars": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-04 host: select screen, SMB 1-1"
         }
       }
     }

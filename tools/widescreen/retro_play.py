@@ -19,6 +19,7 @@ Buttons: B Y SELECT START UP DOWN LEFT RIGHT A X L R L2 R2 L3 R3.
 """
 import argparse
 import ctypes as C
+import json
 import os
 import struct
 import sys
@@ -318,9 +319,20 @@ def main():
     parser.add_argument('--out', required=True)
     parser.add_argument('--play', default='', help='script text, or @file')
     parser.add_argument('--opt', action='append', default=[], help='KEY=VALUE at load')
+    parser.add_argument('--recipe', help='SYSTEM/TITLE from the shipped table, widened to --width')
+    parser.add_argument('--width', type=int, default=348, help='picture width with --recipe')
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    options = dict(pair.split('=', 1) for pair in args.opt)
+    options = {}
+    if args.recipe:
+        system, title = args.recipe.split('/', 1)
+        table = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             '../../engines/widescreen/widescreen-recipes.json')
+        entry = json.load(open(table))['systems'][system]
+        options.update(entry['options'])
+        options.update(entry['games'][title].get('options', {}))
+        options[entry['widthOption']] = str(args.width)
+    options.update(dict(pair.split('=', 1) for pair in args.opt))
     player = Player(os.path.abspath(args.core), args.rom, options, os.path.join(args.out, '.system'))
     text = args.play
     if text.startswith('@'):
