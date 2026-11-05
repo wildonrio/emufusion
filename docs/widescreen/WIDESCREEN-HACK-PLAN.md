@@ -201,9 +201,10 @@ A Link to the Past matched 192 of 192 visible tiles.
 | Final Fantasy III | `ff6` | 7F:0000 and 7F:4000, 256 per row | 7F:C000 tables, one per corner |
 | A Link to the Past | `lttp` | 7E:2000, 64 per row from the area's corner | ROM 0F:8000 |
 | Super Mario World | `smw` | 7E:C800 and 7F:C800, 27 rows per screen | $0FBE pointers into bank 0D |
+| Chrono Trigger, world map | `ct` | 7E:4000 and 7E:5800, 96 per row, wraps | 7E:3000 and 7E:3800, 8 bytes per tile |
 
-Not done yet: Chrono Trigger, Star Ocean, Live A Live, Super Mario RPG. Chrono Trigger's play
-script doesn't get out of Crono's room yet. Dungeons and houses in A Link to the Past keep bars.
+Not done yet: Star Ocean, Live A Live, Super Mario RPG. Towns and rooms in Chrono Trigger, houses
+and dungeons in A Link to the Past keep bars until they get decoders of their own.
 
 ## Release gate
 

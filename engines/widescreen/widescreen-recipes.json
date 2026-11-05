@@ -177,6 +177,18 @@
             "bsnes_mode7_wsbg3": "off"
           },
           "tested": "2026-11-05 host: rainy overworld around Link's house; map from RAM, HUD in corners, black at the area edge; houses and dungeons keep bars"
+        },
+        "Chrono Trigger": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "ct",
+            "emufusion_ws_scene": "7E001D=0F",
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "on"
+          },
+          "tested": "2026-11-05 host: world map around Truce drawn from the game's map, clouds cross the whole picture; towns and rooms keep bars until they get a decoder"
         }
       },
       "release": false

@@ -166,10 +166,10 @@ index 4eac82f..0d4ba8a 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..bd5d906
+index 0000000..f3b2ef1
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,258 @@
+@@ -0,0 +1,270 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -287,10 +287,10 @@ index 0000000..bd5d906
 +  }
 +
 +  int mapGame = 0;
-+  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3 };
++  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3, MapCT = 4 };
 +
 +  void setMap(const char *value) {
-+    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : MapNone;
++    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : !strcmp(value, "ct") ? MapCT : MapNone;
 +  }
 +
 +  // Super Mario World, horizontal levels: layer 1 is 16x16 tiles, their numbers at 7E:C800 (low)
@@ -310,6 +310,17 @@ index 0000000..bd5d906
 +    unsigned entry = (0x0D << 15 | (pointer & 0x7FFF)) + ((cellX & 1) ? 4 : 0) + ((cellY & 1) ? 2 : 0);
 +    if(entry + 1 >= rom.size()) return MapNothing;
 +    return rom.data()[entry] | rom.data()[entry + 1] << 8;
++  }
++
++  // Chrono Trigger's world map (C2:0776): 96x64 tile ids at 7E:4000 and 7E:5800, each with four
++  // 8x8 words at 7E:3000 and 7E:3800. The world wraps. $20/$26 are layer 1's scroll, $22/$28 layer 2's.
++  static int mapCellCT(int layer, int cellX, int cellY) {
++    if(layer > 1 || !wram) return -1;
++    auto word = [](unsigned address) { return wram[address] | wram[address + 1] << 8; };
++    int tileX = ((word(0x20 + layer * 2) >> 4) + (cellX >> 1) + 96) % 96;
++    int tileY = ((word(0x26 + layer * 2) >> 4) + (cellY >> 1) + 64) % 64;
++    unsigned id = wram[0x4000 + layer * 0x1800 + tileY * 96 + tileX];
++    return word(0x3000 + layer * 0x800 + id * 8 + ((cellX & 1) ? 2 : 0) + ((cellY & 1) ? 4 : 0));
 +  }
 +
 +  // A Link to the Past's overworld: background 2 is 16x16 tiles, their ids at 7E:2000 in rows of
@@ -352,6 +363,7 @@ index 0000000..bd5d906
 +    if(mapGame == MapFF6) return mapCellFF6(layer, cellX, cellY);
 +    if(mapGame == MapLttP) return mapCellLttP(layer, cellX, cellY);
 +    if(mapGame == MapSMW) return mapCellSMW(layer, cellX, cellY);
++    if(mapGame == MapCT) return mapCellCT(layer, cellX, cellY);
 +    return -1;
 +  }
 +
