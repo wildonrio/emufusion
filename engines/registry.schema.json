@@ -29,6 +29,7 @@
         "phase": { "const": 1 },
         "tier": { "enum": ["1A", "1B"] },
         "displayName": { "type": "string", "minLength": 1 },
+        "alternateEngine": { "type": "boolean" },
         "systems": {
           "type": "array",
           "minItems": 1,

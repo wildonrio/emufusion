@@ -33,6 +33,7 @@ public class BootReadyHost {
     Root root=new Root(); View launchCurtain, launchSpinner;
     Request request=new Request(); boolean gameplayPresented; int idleUpdates;
     void updateGameplayScreenOn() { ++idleUpdates; }
+    void startWidescreenPrompt() {}
     void attach() {
         launchCurtain=new View(); launchCurtain.parent=root;
         launchSpinner=new View(); launchSpinner.parent=root;

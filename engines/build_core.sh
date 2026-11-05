@@ -593,6 +593,33 @@ case "$ENGINE" in
             LDFLAGS='-static-libstdc++ -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384'
         cp "$source/Libretro/mesen-s_libretro.so" "$OUTPUT_DIR/mesen-s_libretro.so"
         ;;
+    bsnes-hd)
+        commit=fc26b25ea236f0f877f0265d2a2c37dfd93dfde9
+        source=$(fetch_source bsnes-hd "$commit" \
+            0cf48d8ef4846ce2b0b26fac4068cfbe2ab4c90794ede1af66c343fbfe079b2f \
+            https://github.com/DerKoun/bsnes-hd)
+        case "$ABI" in
+            arm64-v8a) ;;
+            *) printf 'bsnes-hd recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;
+        esac
+        staged_source="$BUILD_ROOT/work/bsnes-hd-$ABI"
+        rm -rf "$staged_source"
+        mkdir -p "$staged_source"
+        cp -R "$source/." "$staged_source/"
+        # Widescreen Hack: exact picture width, per-game scene and HUD rules.
+        apply_locked_patch "$staged_source" \
+            engines/patches/bsnes-hd-emufusion-widescreen.patch \
+            9c4445f6be547428bfd44d79f8435224953bf49ef2a30fd67146f4ad840aad55
+        "$NDK_DIR/ndk-build" -C "$staged_source/bsnes/target-libretro/jni" \
+            NDK_PROJECT_PATH="$staged_source/bsnes/target-libretro" \
+            APP_BUILD_SCRIPT="$staged_source/bsnes/target-libretro/jni/Android.mk" \
+            NDK_APPLICATION_MK="$staged_source/bsnes/target-libretro/jni/Application.mk" \
+            APP_ABI="$ABI" APP_PLATFORM="android-$API" \
+            -j"${EMUFUSION_BUILD_JOBS:-4}"
+        cp "$staged_source/bsnes/target-libretro/libs/$ABI/libretro.so" \
+            "$OUTPUT_DIR/bsnes-hd_libretro.so"
+        cp "$staged_source/LICENSE" "$OUTPUT_DIR/bsnes-hd-LICENSE.txt"
+        ;;
     sameboy)
         commit=213a12ce93d66b105a113debd9396306066a7cfc
         source=$(fetch_source sameboy "$commit" \

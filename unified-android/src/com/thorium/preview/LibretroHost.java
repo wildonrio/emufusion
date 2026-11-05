@@ -369,6 +369,12 @@ public final class LibretroHost implements Closeable {
         return nativeDrainAudio(handle, maxFrames);
     }
 
+    /** Changes a core option during play; the core reads it on its next frame. */
+    public synchronized boolean setCoreOption(String key, String value) {
+        checkOpen();
+        return nativeSetCoreOption(handle, key, value);
+    }
+
     public synchronized AvInfo avInfo() {
         checkOpen();
         double[] info = nativeAvInfo(handle);
@@ -461,6 +467,7 @@ public final class LibretroHost implements Closeable {
     private static native boolean nativeCopyVideoFrameInto(long handle, byte[] destination);
     private static native short[] nativeDrainAudio(long handle, int maxFrames);
     private static native double[] nativeAvInfo(long handle);
+    private static native boolean nativeSetCoreOption(long handle, String key, String value);
     private static native void nativeSetSynchronizedVideoRate(
             long handle, double declaredHz, double synchronizedHz);
     private static native byte[] nativeSerialize(long handle);

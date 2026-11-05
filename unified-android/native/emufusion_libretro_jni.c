@@ -258,6 +258,23 @@ Java_com_thorium_preview_LibretroHost_nativeDrainAudio(
     return result;
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_LibretroHost_nativeSetCoreOption(
+        JNIEnv *env, jclass type, jlong handle, jstring key, jstring value) {
+    (void)type;
+    const char *key_chars;
+    const char *value_chars;
+    jboolean set;
+    if (!key || !value) return JNI_FALSE;
+    key_chars = (*env)->GetStringUTFChars(env, key, NULL);
+    value_chars = (*env)->GetStringUTFChars(env, value, NULL);
+    set = key_chars && value_chars && emufusion_retro_set_core_option(
+            from_handle(handle), key_chars, value_chars);
+    if (key_chars) (*env)->ReleaseStringUTFChars(env, key, key_chars);
+    if (value_chars) (*env)->ReleaseStringUTFChars(env, value, value_chars);
+    return set;
+}
+
 JNIEXPORT jdoubleArray JNICALL
 Java_com_thorium_preview_LibretroHost_nativeAvInfo(
         JNIEnv *env, jclass type, jlong handle) {

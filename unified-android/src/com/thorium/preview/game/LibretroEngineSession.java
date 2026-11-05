@@ -249,6 +249,9 @@ public final class LibretroEngineSession implements EngineSession,
     private volatile long directSecondarySurfaceEpoch;
     /** The core's reported display aspect, or 0 when it reported none. */
     private volatile float displayAspect;
+    private volatile WidescreenSession widescreen;
+    // Frame thread only: the width whose display aspect is current.
+    private int widescreenFrameWidth;
     private volatile int surfaceWidth;
     private volatile int surfaceHeight;
     private volatile Surface secondarySurface;
@@ -392,6 +395,8 @@ public final class LibretroEngineSession implements EngineSession,
                 });
     }
 
+    @Override public WidescreenSession widescreen() { return widescreen; }
+
     @Override public void prepare(GameLaunchRequest launch, Listener callback) {
         if (launch == null || callback == null) throw new IllegalArgumentException("launch required");
         listener = callback;
@@ -469,6 +474,11 @@ public final class LibretroEngineSession implements EngineSession,
                     // behaviour and correct for the square-pixel systems.
                     displayAspect = av.aspectRatio > 0.1f && av.aspectRatio < 10f
                             ? av.aspectRatio : 0f;
+                    WidescreenRecipes.Recipe widescreenRecipe =
+                            WidescreenRecipes.find(appContext, launch.systemId, launch.gameTitle);
+                    if (widescreenRecipe != null && widescreenRecipe.engine.equals(entry.id))
+                        widescreen = new WidescreenSession(appContext, widescreenRecipe,
+                                launch.qualificationSession);
                     double synchronizedVideoHz =
                             DisplaySyncPolicy.synchronizedSourceHz(av.framesPerSecond);
                     if (synchronizedVideoHz > 1.0 && synchronizedVideoHz < 1000.0)
@@ -1499,6 +1509,8 @@ public final class LibretroEngineSession implements EngineSession,
                                     ? displayDueNs : pacer.deadlineNanos();
                             long workStartNs = System.nanoTime();
                             evidenceCoreStartNs = workStartNs;
+                            WidescreenSession widen = widescreen;
+                            if (widen != null) widen.applyBeforeFrame(active, surfaceWidth, surfaceHeight);
                             active.runFrame();
                             evidenceCoreEndNs = System.nanoTime();
                             recordFrameWork(workStartNs, evidenceCoreEndNs);
@@ -1508,6 +1520,12 @@ public final class LibretroEngineSession implements EngineSession,
                             // an obsolete visual frame instead of slowing the game.
                             newest = active.latestVideoFrame();
                             if (newest != null) newest.producerTimestampNs = scheduledNs;
+                            if (newest != null && widen != null && newest.width != widescreenFrameWidth) {
+                                // The core changed its picture width; its aspect changed with it.
+                                widescreenFrameWidth = newest.width;
+                                float aspect = active.avInfo().aspectRatio;
+                                if (aspect > 0.1f && aspect < 10f) displayAspect = aspect;
+                            }
                             evidenceVideoEndNs = System.nanoTime();
                             // Drain on every core frame, even while AudioTrack still
                             // owns a partial prior block. Otherwise the native ring
@@ -2858,6 +2876,7 @@ public final class LibretroEngineSession implements EngineSession,
         // the ABI as an empty compatibility stub; listing their database rows
         // would make the switch move while doing nothing in the game.
         return "mesen".equals(engineId) || "mesen-s".equals(engineId) ||
+                "bsnes-hd".equals(engineId) ||
                 "sameboy".equals(engineId) || "mgba".equals(engineId) ||
                 "gearsystem".equals(engineId) || "swanstation".equals(engineId) ||
                 "melonds-ds".equals(engineId) || "fuse".equals(engineId) ||

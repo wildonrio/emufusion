@@ -93,6 +93,9 @@ public interface EngineSession {
         return quiesceForPresentationRecovery();
     }
 
+    /** This game's Widescreen Hack, or null when it has no recipe that widens it. */
+    default WidescreenSession widescreen() { return null; }
+
     /** Returns true when the engine displayed its EmuFusion-owned remapping UI. */
     boolean openControls();
 

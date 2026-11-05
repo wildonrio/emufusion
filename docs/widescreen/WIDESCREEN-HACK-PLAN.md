@@ -100,3 +100,18 @@ with recipes.
 ## Status
 
 See the per-system sections below as they are added.
+
+### Foundation (2026-11-04)
+
+- **Engine:** bsnes-hd at a pinned commit plus `engines/patches/bsnes-hd-emufusion-widescreen.patch`:
+  exact picture width, per-game scene rule from RAM (`emufusion_ws_scene`), HUD pieces moved
+  to the new corners (`emufusion_ws_hud`). Registered as an alternate engine, so Mesen-S stays
+  the default for SNES games with no recipe.
+- **App:** `WidescreenRecipes` (table: `engines/widescreen/widescreen-recipes.json`),
+  `WidescreenSession` (choice remembered per game), `WidescreenOverlayView` (prompts and gestures).
+- **Tools:** `tools/widescreen/retro_play.py` plays a core on the Mac from a button script
+  and saves screenshots, `contact_sheet.py` tiles them, `ram_scene.py` finds the RAM byte that
+  tells gameplay from menus, `thor_game.py` runs the same on the Thor with real touches and pad.
+- **Proven on the Thor (3.2.154 test build, frame generation on, 60 to 120):** Super Mario World:
+  glowing prompt, tap to widen, hint, HUD in the corners, overworld keeps its bars, swipe in
+  from the edge to turn off, tap to turn back on.

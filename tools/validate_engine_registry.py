@@ -28,7 +28,8 @@ STATE_REQUIRED = {"capability", "compatibilityVersion", "qualified"}
 FIRMWARE_REQUIRED = {"required", "acceptedHashes"}
 BUILD_REQUIRED = {"recipe", "reproducible", "todo"}
 PHASE_ONE_IDS = {
-    "mesen", "mesen-s", "sameboy", "mgba", "gearsystem", "gearcoleco",
+    "mesen", "mesen-s",
+    "bsnes-hd", "sameboy", "mgba", "gearsystem", "gearcoleco",
     "freeintv", "swanstation", "melonds-ds", "fuse", "mame",
     "stella-2023", "atari800", "prosystem", "caprice32", "hatari",
     "beetle-pce-fast", "blastem", "picodrive", "beetle-neopop", "beetle-cygne",
@@ -83,6 +84,9 @@ def validate(path: Path) -> list[str]:
             for system in systems:
                 if not isinstance(system, str) or not ID_RE.fullmatch(system):
                     errors.append(f"{engine_id}: invalid system id {system!r}")
+                elif engine.get("alternateEngine") is True:
+                    # Chosen per game by a recipe; never a system's default route.
+                    continue
                 elif system in seen_systems:
                     errors.append(
                         f"system {system} assigned to both {seen_systems[system]} and {engine_id}"

@@ -208,6 +208,8 @@ bool emufusion_retro_copy_video_frame(const emufusion_retro_host *host, void *bu
                                    size_t size);
 size_t emufusion_retro_drain_audio(emufusion_retro_host *host, int16_t *samples,
                                 size_t max_frames);
+bool emufusion_retro_set_core_option(emufusion_retro_host *host, const char *key,
+                                  const char *value);
 bool emufusion_retro_get_av_info(emufusion_retro_host *host,
                               emufusion_retro_av_info *info);
 /* Paces a near-standard console clock at an exact panel divisor and applies

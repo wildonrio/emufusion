@@ -34,14 +34,14 @@ class PhaseOneReleaseGateTest(unittest.TestCase):
         self.assertIn("INCLUDE_EXPERIMENTAL_CORES=${EMUFUSION_INCLUDE_EXPERIMENTAL_CORES:-0}", BUILD)
         self.assertIn("AUTOSELECT_EXPERIMENTAL_CORES=${EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES:-0}", BUILD)
         qualified = {
-            "mesen", "mesen-s", "sameboy", "mgba", "gearsystem",
+            "mesen", "mesen-s", "bsnes-hd", "sameboy", "mgba", "gearsystem",
             "swanstation", "melonds-ds", "fuse", "mame", "dosbox-pure",
             "prosystem", "beetle-pce-fast", "beetle-neopop", "beetle-cygne",
             "blastem", "mupen64plus-next",
         }
         self.assertEqual(qualified, {row["id"] for row in OPT_IN["engines"]})
         self.assertIn(
-            "for qualification_core in mesen mesen-s sameboy mgba gearsystem "
+            "for qualification_core in mesen mesen-s bsnes-hd sameboy mgba gearsystem "
             "swanstation melonds-ds fuse mame dosbox-pure prosystem "
             "beetle-pce-fast beetle-neopop beetle-cygne blastem "
             "mupen64plus-next; do",

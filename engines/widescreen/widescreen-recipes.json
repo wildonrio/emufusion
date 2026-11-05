@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "systems": {
+    "snes": {
+      "engine": "bsnes-hd",
+      "widthOption": "emufusion_ws_width",
+      "baseWidth": 256,
+      "height": 224,
+      "pixelAspect": 1.142857,
+      "maxAspect": 2.4,
+      "options": {
+        "bsnes_mode7_scale": "1x",
+        "bsnes_ppu_show_overscan": "ON",
+        "bsnes_video_aspectcorrection": "ON",
+        "bsnes_mode7_wsMode": "all"
+      },
+      "games": {
+        "Super Mario Kart": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_scene": "bgmode=7",
+            "bsnes_mode7_wsobj": "unsafe"
+          },
+          "tested": "2026-11-04 host: Mushroom Cup round 1; race and map widen, menus keep bars"
+        },
+        "Super Mario World": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_scene": "7E0100=14",
+            "emufusion_ws_hud": "bg3:0-38:0-111:-1;bg3:0-38:144-255:1",
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off"
+          },
+          "tested": "2026-11-04 host: Yoshi's Island 2; level widens, HUD moved to the corners, map keeps bars"
+        }
+      }
+    }
+  }
+}

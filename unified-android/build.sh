@@ -12,8 +12,8 @@ JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents
 APKTOOL=${APKTOOL:-/opt/homebrew/bin/apktool}
 BUILD_DIR="$PROJECT_DIR/build"
 BUILD_LOCK="$BUILD_DIR/.emufusion-build-lock"
-VERSION_NAME=3.2.153
-VERSION_CODE=227
+VERSION_NAME=3.2.154
+VERSION_CODE=228
 
 case "${EMUFUSION_REQUIRE_PORTABLE_BUNDLE:-0}" in
     0|1) ;;
@@ -389,7 +389,7 @@ fi
 if [ "$INCLUDE_EXPERIMENTAL_CORES" = 1 ]; then
     # Qualification-only APKs may opt into the pinned Phase 1A source builds. They
     # remain disabled in the default/release path and are not auto-selected.
-    for qualification_core in mesen mesen-s sameboy mgba gearsystem swanstation melonds-ds fuse mame dosbox-pure prosystem beetle-pce-fast beetle-neopop beetle-cygne blastem mupen64plus-next; do
+    for qualification_core in mesen mesen-s bsnes-hd sameboy mgba gearsystem swanstation melonds-ds fuse mame dosbox-pure prosystem beetle-pce-fast beetle-neopop beetle-cygne blastem mupen64plus-next; do
         if [ "$REUSE_QUALIFICATION_CORES" = 1 ] &&
                 [ -f "$ROOT_DIR/engines/build/arm64-v8a/${qualification_core}_libretro.so" ]; then
             continue
@@ -603,6 +603,8 @@ cp "$APP_ICON_SOURCE" "$DECODED/res/drawable/emufusion_icon.png"
 cp "$THEME_ARCHIVE" "$THEME_FINGERPRINT" \
     "$ROOT_DIR/android-companion/assets/emufusion-version.txt" \
     "$DECODED/assets/"
+# Widescreen Hack recipes. Data, not code: WidescreenRecipes reads them at launch.
+cp "$ROOT_DIR/engines/widescreen/widescreen-recipes.json" "$DECODED/assets/"
 # Cheat catalogue. Data, not code: CheatCatalog reads it at launch and a user
 # file under files/cheats/ overrides any game in it.
 mkdir -p "$DECODED/assets/cheats"
@@ -734,7 +736,7 @@ PHASE1_STAGED_CORE_COUNT=0
 PHASE2_STAGED_CORE_COUNT=0
 PHASE3_STAGED_ADAPTER_COUNT=0
 if [ "$INCLUDE_EXPERIMENTAL_CORES" = 1 ]; then
-    for qualification_core in mesen mesen-s sameboy mgba gearsystem swanstation melonds-ds fuse mame dosbox-pure prosystem beetle-pce-fast beetle-neopop beetle-cygne blastem mupen64plus-next; do
+    for qualification_core in mesen mesen-s bsnes-hd sameboy mgba gearsystem swanstation melonds-ds fuse mame dosbox-pure prosystem beetle-pce-fast beetle-neopop beetle-cygne blastem mupen64plus-next; do
         normalized_core=$(printf '%s' "$qualification_core" | tr '-' '_')
         cp "$ROOT_DIR/engines/build/arm64-v8a/${qualification_core}_libretro.so" \
             "$DECODED/lib/arm64-v8a/libemufusion_core_${normalized_core}.so"

@@ -24,6 +24,14 @@
       "firmware": {"required": false, "acceptedHashes": []}, "renderer": "software", "build": {"recipe": "engines/build_core.sh mesen-s", "reproducible": false, "todo": "A clean Android ARM64 compile passed 2026-08-06; build twice in CI, compare stripped ELF build IDs, compare with bsnes, and qualify states."}, "shipped": false
     },
     {
+      "id": "bsnes-hd", "phase": 1, "tier": "1A", "displayName": "bsnes-hd", "alternateEngine": true,
+      "systems": ["snes"], "status": "experimental", "statusReason": "Pinned source plus the EmuFusion widescreen patch compiled for Android ARM64 on 2026-11-04; runs SNES games that have a Widescreen Hack recipe.",
+      "source": {"repository": "https://github.com/DerKoun/bsnes-hd", "commit": "fc26b25ea236f0f877f0265d2a2c37dfd93dfde9", "archive": "https://github.com/DerKoun/bsnes-hd/archive/fc26b25ea236f0f877f0265d2a2c37dfd93dfde9.tar.gz", "archiveSha256": "0cf48d8ef4846ce2b0b26fac4068cfbe2ab4c90794ede1af66c343fbfe079b2f", "verifiedAt": "2026-11-04"},
+      "license": {"spdx": "GPL-3.0-only", "distributionGate": "compatible-candidate", "auditNote": "Full transitive dependency and corresponding-source audit remains required."},
+      "android": {"abis": ["arm64-v8a"], "minApi": 23}, "state": {"capability": "unverified", "compatibilityVersion": 1, "qualified": false},
+      "firmware": {"required": false, "acceptedHashes": []}, "renderer": "software", "build": {"recipe": "engines/build_core.sh bsnes-hd", "reproducible": false, "todo": "Prove two byte-identical clean builds; qualify states."}, "shipped": false
+    },
+    {
       "id": "sameboy", "phase": 1, "tier": "1A", "displayName": "SameBoy",
       "systems": ["gb", "gbc"], "status": "experimental", "statusReason": "Pinned source and pinned RGBDS tools compiled successfully for Android ARM64 on 2026-08-06; reproducibility, state, performance, and device qualification remain.",
       "source": {"repository": "https://github.com/LIJI32/SameBoy", "commit": "213a12ce93d66b105a113debd9396306066a7cfc", "archive": "https://github.com/LIJI32/SameBoy/archive/213a12ce93d66b105a113debd9396306066a7cfc.tar.gz", "archiveSha256": "21f5f230268808d9a2d17d1a8e01d3763891a2a8240b9459fa61e005fff56aa1", "verifiedAt": "2026-08-06"},

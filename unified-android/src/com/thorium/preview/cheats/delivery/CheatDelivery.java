@@ -18,7 +18,7 @@ import java.util.Set;
  */
 public final class CheatDelivery {
     private static final Set<String> LIVE_ENGINES = new HashSet<>(Arrays.asList(
-            "mesen", "mesen-s", "sameboy", "mgba", "gearsystem", "swanstation",
+            "mesen", "mesen-s", "bsnes-hd", "sameboy", "mgba", "gearsystem", "swanstation",
             "melonds-ds", "fuse", "virtualjaguar",
             "mupen64plus-next", "dolphin", "flycast"));
     // ppsspp is boot-only: its libretro retro_cheat_set rewrites the cheat

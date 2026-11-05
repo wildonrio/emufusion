@@ -19,6 +19,11 @@
       "libraryName": "libemufusion_core_mesen_s.so"
     },
     {
+      "id": "bsnes-hd",
+      "commit": "fc26b25ea236f0f877f0265d2a2c37dfd93dfde9",
+      "libraryName": "libemufusion_core_bsnes_hd.so"
+    },
+    {
       "id": "sameboy",
       "commit": "213a12ce93d66b105a113debd9396306066a7cfc",
       "libraryName": "libemufusion_core_sameboy.so"

@@ -384,6 +384,7 @@ public final class InWindowGameHost
      * the TextureView route, which never punches anything.
      */
     private View launchCurtain;
+    private WidescreenOverlayView widescreenOverlay;
     /** Delayed-only feedback; fast launches reach a frame before it appears. */
     private ProgressBar launchSpinner;
     private final Runnable revealLaunchSpinner = () -> {
@@ -804,6 +805,16 @@ public final class InWindowGameHost
         // Every engine, the in-process native adapters included, presents
         // through the generator when frame generation is on.
         FrameGenerationSettings.Mode launchMode = FrameGenerationSettings.mode(activity);
+        // A game with a widescreen recipe runs on the engine that can widen it. Its saves
+        // follow, being keyed by the ROM rather than the engine.
+        WidescreenRecipes.Recipe widescreenRecipe = WidescreenRecipes.find(activity, system, title);
+        InternalEngineCatalog.Entry defaultEngine =
+                InternalEngineCatalog.availableForSystem(activity, system);
+        if (widescreenRecipe != null && defaultEngine != null && engine.equals(defaultEngine.id)) {
+            InternalEngineCatalog.Entry widening =
+                    InternalEngineCatalog.byId(activity, widescreenRecipe.engine);
+            if (widening != null && widening.supports(system)) engine = widening.id;
+        }
         GameLaunchRequest request = new GameLaunchRequest(engine, system, gameId,
                 title, uri, SessionReturnState.from(source), qualificationSession,
                 launchMode);
@@ -1103,6 +1114,8 @@ public final class InWindowGameHost
             }
         });
         root.addView(touchControls, match());
+        widescreenOverlay = new WidescreenOverlayView(activity);
+        root.addView(widescreenOverlay, match());
         frameRateBadge = new TextView(activity);
         frameRateBadge.setTextColor(Color.argb(0xE6, 0xFF, 0xFF, 0xFF));
         frameRateBadge.setBackgroundColor(Color.argb(0x80, 0x00, 0x00, 0x00));
@@ -1395,7 +1408,14 @@ public final class InWindowGameHost
             if (spinner != null && spinner.getParent() == root) root.removeView(spinner);
             Log.i(TAG, "Gameplay layer presenting; launch curtain removed engine=" +
                     request.engineId + " system=" + request.systemId);
+            startWidescreenPrompt();
         });
+    }
+
+    private void startWidescreenPrompt() {
+        if (widescreenOverlay != null && session != null)
+            widescreenOverlay.gameStarted(session.widescreen(),
+                    touchControls != null && touchControls.getVisibility() == View.VISIBLE);
     }
 
     private FrameLayout createPauseOverlay() {
@@ -3095,6 +3115,8 @@ public final class InWindowGameHost
                 touchControls.setAnalogStickCount(session.virtualAnalogStickCount());
                 touchControls.setVisibility(session.shouldShowOnScreenControls()
                         ? View.VISIBLE : View.GONE);
+                if (widescreenOverlay != null) widescreenOverlay.setTouchControlsShown(
+                        touchControls.getVisibility() == View.VISIBLE);
             }
             // The catalogue is only consulted once the core has loaded the
             // content, so this is the first moment the menu can say whether

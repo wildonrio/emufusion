@@ -166,6 +166,8 @@ public final class InternalEngineCatalog {
                 Entry entry = approvedEntry(context, row, optIns.get(id), artifacts.get(id));
                 if (entry == null || byId.containsKey(entry.id)) continue;
                 byId.put(entry.id, entry);
+                // An alternate engine is reached only through a game's recipe.
+                if (row.optBoolean("alternateEngine", false)) continue;
                 for (String system : entry.systems) if (entry.autoSelect &&
                         !bySystem.containsKey(system))
                     bySystem.put(system, entry);

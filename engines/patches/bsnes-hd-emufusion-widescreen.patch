@@ -1,0 +1,330 @@
+diff --git a/bsnes/emulator/efwide.hpp b/bsnes/emulator/efwide.hpp
+new file mode 100644
+index 0000000..a5ed1f7
+--- /dev/null
++++ b/bsnes/emulator/efwide.hpp
+@@ -0,0 +1,27 @@
++#pragma once
++// EmuFusion Widescreen Hack: per-game state set by the recipe through core options.
++// emufusion_ws_width  total picture width in pixels (0 = original 256)
++// emufusion_ws_scene  when to widen: OR of AND terms, "7E0100=14,7E0D9B!=1|bgmode=7"
++//                     (a term may mask, 7E0100/F0=10); empty = bsnes-hd's own wsMode
++// emufusion_ws_hud    moves a HUD out to the new edges: "layer:y0-y1:x0-x1:dir[:t0-t1];..."
++//                     layer bg1..bg4 or obj, dir -1 left or +1 right, t0-t1 sprite tiles
++namespace EfWide {
++  enum : int { MaxRules = 48, MaxTerms = 48 };
++  struct Rule { int layer, y0, y1, x0, x1, dir, tile0, tile1; };
++  struct Term { int group, kind; unsigned addr, mask, value; bool negate; };
++
++  extern int ext;          // pixels added per side, -1 = bsnes-hd's own setting
++  extern Rule rules[MaxRules];
++  extern int ruleCount;
++  extern Term terms[MaxTerms];
++  extern int termCount;
++  extern bool sceneWide;
++  extern const unsigned char *wram;
++
++  void setWidth(const char *value);
++  void setScene(const char *value);
++  void setHud(const char *value);
++  void evaluate(int bgMode, bool mode7);
++  bool anyRule(int layer, int y);
++  int moved(int layer, int y, int x, int tile, int amount);
++}
+diff --git a/bsnes/sfc/ppu-fast/background.cpp b/bsnes/sfc/ppu-fast/background.cpp
+index 4eac82f..38b8a25 100644
+--- a/bsnes/sfc/ppu-fast/background.cpp
++++ b/bsnes/sfc/ppu-fast/background.cpp
+@@ -29,6 +29,10 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+     }
+   } 
+ 
++  int hudLayer = source == Source::BG1 ? 0 : source == Source::BG2 ? 1 : source == Source::BG3 ? 2 : 3;
++  bool hudLine = ppufast.widescreen() > 0 && !ppufast.wsOverride() && EfWide::anyRule(hudLayer, this->y - 1);
++  if(hudLine) ws = 0;
++
+   bool windowAbove[1024];
+   bool windowBelow[1024];
+   renderWindow(self.window, self.window.aboveEnable, windowAbove,
+@@ -72,7 +76,7 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+ 
+   auto luma = ppu.lightTable[io.displayBrightness];
+   bool lastCropped = false;
+-  int x = 0 - (hscroll & 7) - ws;
++  int x = 0 - (hscroll & 7) - (ws > 0 ? (ws + 7 & ~7) : ws);
+   while(x < (width + ws)) {
+     uint hoffset = x + hscroll;
+     uint voffset = y + vscroll;
+@@ -156,6 +160,13 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+ 
+       uint32 mctc = luma[mosaicColor];
+ 
++      if(hudLine && !hires) {
++        int moved = EfWide::moved(hudLayer, this->y - 1, x, 0, ppufast.widescreen());
++        if(self.aboveEnable && !windowAbove[ppufast.winXad(x, false)]) plotAbove(moved, source, mosaicPriority, mctc);
++        if(self.belowEnable && !windowBelow[ppufast.winXad(x, true)]) plotBelow(moved, source, mosaicPriority, mctc);
++        continue;
++      }
++
+       if(!hires) {
+         if(ppufast.hires() && ppufast.hd()) {
+           // In hires mode non-hires backgrounds seem to be rendered on every second pixel (see water in Kirby)
+diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
+new file mode 100644
+index 0000000..e60042f
+--- /dev/null
++++ b/bsnes/sfc/ppu-fast/efwide.cpp
+@@ -0,0 +1,116 @@
++#include <emulator/efwide.hpp>
++#include <cstdlib>
++#include <cstring>
++
++namespace EfWide {
++  int ext = -1;
++  Rule rules[MaxRules];
++  int ruleCount = 0;
++  Term terms[MaxTerms];
++  int termCount = 0;
++  bool sceneWide = true;
++  const unsigned char *wram = nullptr;
++
++  void setWidth(const char *value) {
++    if(!value || !*value) { ext = -1; return; }
++    int width = atoi(value);
++    ext = width <= 256 ? 0 : (width - 256) / 2;
++  }
++
++  // Parses one "ADDR[/MASK]=VV", "ADDR[/MASK]!=VV", "bgmode=N" or "bgmode!=N" term.
++  static bool parseTerm(const char *text, Term &term) {
++    const char *equals = strchr(text, '=');
++    if(!equals || equals == text) return false;
++    term.negate = equals[-1] == '!';
++    term.mask = 0xff;
++    if(!strncmp(text, "bgmode", 6)) {
++      term.kind = 1;
++      term.addr = 0;
++    } else {
++      char *end = nullptr;
++      term.kind = 0;
++      term.addr = (unsigned)strtoul(text, &end, 16) & 0x1ffff;
++      if(*end == '/') term.mask = (unsigned)strtoul(end + 1, nullptr, 16);
++    }
++    term.value = (unsigned)strtoul(equals + 1, nullptr, term.kind ? 10 : 16);
++    return true;
++  }
++
++  void setScene(const char *value) {
++    termCount = 0;
++    sceneWide = true;
++    if(!value) return;
++    int group = 0;
++    const char *cursor = value;
++    while(*cursor && termCount < MaxTerms) {
++      char text[32] = {};
++      size_t length = strcspn(cursor, ",|");
++      if(length && length < sizeof(text)) {
++        memcpy(text, cursor, length);
++        Term term = {};
++        if(parseTerm(text, term)) {
++          term.group = group;
++          terms[termCount++] = term;
++        }
++      }
++      if(cursor[length] == '|') group++;
++      cursor += length + (cursor[length] ? 1 : 0);
++    }
++  }
++
++  void setHud(const char *value) {
++    ruleCount = 0;
++    if(!value) return;
++    const char *cursor = value;
++    while(*cursor && ruleCount < MaxRules) {
++      char text[48] = {};
++      size_t length = strcspn(cursor, ";");
++      if(length && length < sizeof(text)) {
++        memcpy(text, cursor, length);
++        Rule rule = {};
++        char layer[8] = {};
++        int dir = 0;
++        rule.tile0 = 0;
++        rule.tile1 = 0x1ff;
++        int fields = sscanf(text, "%7[a-z0-9]:%d-%d:%d-%d:%d:%x-%x", layer, &rule.y0, &rule.y1,
++                            &rule.x0, &rule.x1, &dir, &rule.tile0, &rule.tile1);
++        rule.layer = !strcmp(layer, "obj") ? 4 : (layer[0] == 'b' && layer[1] == 'g' ? layer[2] - '1' : -1);
++        rule.dir = dir;
++        if(fields >= 6 && rule.layer >= 0 && rule.layer <= 4 && dir) rules[ruleCount++] = rule;
++      }
++      cursor += length + (cursor[length] ? 1 : 0);
++    }
++  }
++
++  void evaluate(int bgMode, bool mode7) {
++    if(!termCount || !wram) { sceneWide = true; return; }
++    bool any = false;
++    int index = 0;
++    while(index < termCount && !any) {
++      int group = terms[index].group;
++      bool all = true;
++      for(; index < termCount && terms[index].group == group; index++) {
++        const Term &term = terms[index];
++        unsigned actual = term.kind ? (unsigned)bgMode : (wram[term.addr] & term.mask);
++        all = all && ((actual == term.value) != term.negate);
++      }
++      any = all;
++    }
++    sceneWide = any;
++  }
++
++  bool anyRule(int layer, int y) {
++    for(int i = 0; i < ruleCount; i++)
++      if(rules[i].layer == layer && y >= rules[i].y0 && y <= rules[i].y1) return true;
++    return false;
++  }
++
++  int moved(int layer, int y, int x, int tile, int amount) {
++    for(int i = 0; i < ruleCount; i++) {
++      const Rule &rule = rules[i];
++      if(rule.layer == layer && y >= rule.y0 && y <= rule.y1 && x >= rule.x0 && x <= rule.x1 &&
++         tile >= rule.tile0 && tile <= rule.tile1) return x + rule.dir * amount;
++    }
++    return x;
++  }
++}
+diff --git a/bsnes/sfc/ppu-fast/line.cpp b/bsnes/sfc/ppu-fast/line.cpp
+index 551430c..1bc588d 100644
+--- a/bsnes/sfc/ppu-fast/line.cpp
++++ b/bsnes/sfc/ppu-fast/line.cpp
+@@ -6,6 +6,7 @@ auto PPU::Line::flush() -> void {
+ 
+   ppu.wsExt = HdToolkit::determineWsExt(ppu.widescreenRaw(),
+         configuration.video.overscan, configuration.video.aspectCorrection);
++  if(EfWide::ext >= 0) ppu.wsExt = ppu.widescreenRaw() ? EfWide::ext : 0;
+ 
+   if (ppu.luminance != configuration.video.luminance ||
+         ppu.saturation != configuration.video.saturation ||
+diff --git a/bsnes/sfc/ppu-fast/mode7hd.cpp b/bsnes/sfc/ppu-fast/mode7hd.cpp
+index 8fd6f4e..e52874a 100644
+--- a/bsnes/sfc/ppu-fast/mode7hd.cpp
++++ b/bsnes/sfc/ppu-fast/mode7hd.cpp
+@@ -182,6 +182,7 @@ auto PPU::Line::renderMode7HD(PPU::IO::Background& self, uint8 source) -> void {
+     int pixelXp = INT_MIN;
+     for(int x : range(256+2*ppufast.widescreen())) {
+       x -= ppufast.widescreen();
++      if(ppufast.wsOverride() && EfWide::termCount && (x < 0 || x >= 256)) continue;
+       bool doAbove = self.aboveEnable && !windowAbove[ppufast.winXad(x, false)];
+       bool doBelow = self.belowEnable && !windowBelow[ppufast.winXad(x, true)];
+ 
+diff --git a/bsnes/sfc/ppu-fast/object.cpp b/bsnes/sfc/ppu-fast/object.cpp
+index 1fc167a..2f623b6 100644
+--- a/bsnes/sfc/ppu-fast/object.cpp
++++ b/bsnes/sfc/ppu-fast/object.cpp
+@@ -50,6 +50,11 @@ auto PPU::Line::renderObject(PPU::IO::Object& self) -> void {
+     const auto& object = ppu.objects[item.index];
+     uint tileWidth = item.width >> 3;
+     int x = object.x;
++    if(EfWide::ruleCount && ppufast.widescreen() > 0 && !ppufast.wsOverride()) {
++      int signedX = x >= 352 ? x - 512 : x;
++      int tile = object.character | object.nameselect << 8;
++      x = EfWide::moved(4, this->y - 1, signedX, tile, ppufast.widescreen()) & 511;
++    }
+     int y = this->y - object.y & 0xff;
+     if(self.interlace) y <<= 1;
+ 
+@@ -132,7 +137,7 @@ auto PPU::Line::renderObject(PPU::IO::Object& self) -> void {
+     if(!priority[x]) continue;
+     uint8 source = palette[x] < 192 ? Source::OBJ1 : Source::OBJ2;
+     int xc = x;//
+-    if(xc > 352) xc -= 512;
++    if(xc >= wsr) xc -= 512;
+     if(xc < wsl || xc >= wsr || (wsobj == 3 && (xc < 0 || xc >= 256))) continue;
+ 
+     uint32 mctc = luma[cgram[palette[x]]];
+diff --git a/bsnes/sfc/ppu-fast/ppu.cpp b/bsnes/sfc/ppu-fast/ppu.cpp
+index d7260af..f10ecef 100644
+--- a/bsnes/sfc/ppu-fast/ppu.cpp
++++ b/bsnes/sfc/ppu-fast/ppu.cpp
+@@ -1,4 +1,7 @@
+ #include <sfc/sfc.hpp>
++#include <cstdio>
++#include <emulator/efwide.hpp>
++#include "efwide.cpp"
+ 
+ namespace SuperFamicom {
+ 
+@@ -52,7 +55,10 @@ auto PPU::vramExt(uint addr) const -> uint { return addr & configuration.hacks.p
+ auto PPU::bgGrad() const -> uint { return !hd() ? 0 : configuration.hacks.ppu.mode7.bgGrad; }
+ auto PPU::windRad() const -> uint { return !hd() ? 0 : configuration.hacks.ppu.mode7.windRad; }
+ auto PPU::wsOverrideCandidate() const -> bool { return configuration.hacks.ppu.mode7.wsMode == 1; }
+-auto PPU::wsOverride() const -> bool { return mode7LineGroups.count < 1 && wsOverrideCandidate(); }
++auto PPU::wsOverride() const -> bool {
++  if(EfWide::termCount) return !EfWide::sceneWide;
++  return mode7LineGroups.count < 1 && wsOverrideCandidate();
++}
+ auto PPU::wsBgCol() const -> bool { return configuration.hacks.ppu.mode7.wsBgCol == 2
+                                             || configuration.hacks.ppu.mode7.wsBgCol == 1 && wsOverride(); }
+ auto PPU::wsMarker() const -> uint { return configuration.hacks.ppu.mode7.wsMarker; }
+@@ -147,6 +153,11 @@ auto PPU::scanline() -> void {
+   if(vcounter() == 240) {
+     Line::flush();
+   }
++
++  if(vcounter() == 0) {
++    EfWide::wram = cpu.wram;
++    EfWide::evaluate(io.bgMode, io.bgMode == 7);
++  }
+ }
+ 
+ auto PPU::refresh() -> void {
+diff --git a/bsnes/target-libretro/jni/Android.mk b/bsnes/target-libretro/jni/Android.mk
+index da07e7c..0113ab6 100644
+--- a/bsnes/target-libretro/jni/Android.mk
++++ b/bsnes/target-libretro/jni/Android.mk
+@@ -6,10 +6,6 @@ INCFLAGS  := -I$(SRCDIR) -I$(SRCDIR)/bsnes
+ COREFLAGS := -fomit-frame-pointer -ffast-math -D__LIBRETRO__ $(INCFLAGS)
+ COREFLAGS += -DGB_INTERNAL -DDISABLE_DEBUGGER -DPLATFORM_ANDROID
+ 
+-GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
+-ifneq ($(GIT_VERSION)," unknown")
+-  COREFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
+-endif
+ 
+ SRCFILES := $(SRCDIR)/bsnes/target-libretro/libretro.cpp \
+ 				$(SRCDIR)/bsnes/emulator/emulator.cpp \
+@@ -53,6 +49,6 @@ LOCAL_MODULE       := retro
+ LOCAL_SRC_FILES    := $(SRCFILES)
+ LOCAL_CPPFLAGS     := -std=c++17 $(COREFLAGS)
+ LOCAL_CFLAGS       := $(COREFLAGS)
+-LOCAL_LDFLAGS      := -Wl,-version-script=$(SRCDIR)/bsnes/target-libretro/link.T
++LOCAL_LDFLAGS      := -Wl,-version-script=$(SRCDIR)/bsnes/target-libretro/link.T -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,--build-id=none -static-libstdc++
+ LOCAL_CPP_FEATURES := exceptions rtti
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/bsnes/target-libretro/libretro.cpp b/bsnes/target-libretro/libretro.cpp
+index 8a50f53..e147ebb 100644
+--- a/bsnes/target-libretro/libretro.cpp
++++ b/bsnes/target-libretro/libretro.cpp
+@@ -2,6 +2,7 @@
+ #include "libretro.h"
+ #include "libretro_core_options.h"
+ #include <emulator/hdtoolkit.hpp>
++#include <emulator/efwide.hpp>
+ 
+ static retro_environment_t environ_cb;
+ static retro_video_refresh_t video_cb;
+@@ -652,6 +653,16 @@ static bool update_variables() // returns whether video dimensions have changed
+ 	vc = vc | program->scale != scale; // scale changed
+ 	program->scale = scale;
+ 	ws = HdToolkit::determineWsExt(ws, overscan, aspectcorrection);
++	var.key = "emufusion_ws_scene";
++	var.value = NULL;
++	EfWide::setScene(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_hud";
++	var.value = NULL;
++	EfWide::setHud(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_width";
++	var.value = NULL;
++	EfWide::setWidth(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	if (EfWide::ext >= 0) ws = EfWide::ext;
+ 	vc = vc | program->ws != ws; // widescreen AR changed
+ 	program->ws = ws;
+ 	return vc; // returns whether video dimensions have changed (overscan, aspectcorrection scale or widescreen AR)

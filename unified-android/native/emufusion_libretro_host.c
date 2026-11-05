@@ -209,6 +209,7 @@ struct emufusion_retro_host {
     size_t core_variable_count;
     emufusion_core_variable core_overrides[MAX_CORE_OVERRIDES];
     size_t core_override_count;
+    bool core_variables_updated;
 
     fn_void init;
     fn_void deinit;
@@ -472,6 +473,11 @@ static const char *find_core_variable(const emufusion_retro_host *host,
     for (index = 0; index < host->core_variable_count; index++)
         if (strcmp(host->core_variables[index].key, key) == 0)
             return host->core_variables[index].value;
+    /* EmuFusion's own patched-core options are never declared by the core. */
+    if (strncmp(key, "emufusion_", 10) == 0)
+        for (index = 0; index < host->core_override_count; index++)
+            if (strcmp(host->core_overrides[index].key, key) == 0)
+                return host->core_overrides[index].value;
     return NULL;
 }
 
@@ -1067,7 +1073,8 @@ static bool environment_callback(unsigned command, void *data) {
                     active_host, ((struct retro_variable *)data)->key);
             return true;
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-            *(bool *)data = false;
+            *(bool *)data = active_host->core_variables_updated;
+            active_host->core_variables_updated = false;
             return true;
         case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
             *(unsigned *)data = 0;
@@ -2451,6 +2458,42 @@ size_t emufusion_retro_drain_audio(emufusion_retro_host *host, int16_t *samples,
     }
     host->audio_count -= available_samples;
     RETURN_UNLOCKED(available_samples / 2);
+}
+
+/* Replaces one option's value while the game runs (the widescreen toggle). The core
+ * sees it through GET_VARIABLE_UPDATE on its next frame; the host lock keeps this
+ * off the core's own calls. */
+bool emufusion_retro_set_core_option(emufusion_retro_host *host, const char *key,
+                                  const char *value) {
+    emufusion_core_variable *entry = NULL;
+    char *copy;
+    size_t index;
+    size_t size;
+    lock_host();
+    if (!host || !key || !value) RETURN_UNLOCKED(false);
+    size = strlen(key);
+    if (!core_override_key_is_valid(key, size)) RETURN_UNLOCKED(false);
+    for (index = 0; index < host->core_variable_count && !entry; index++)
+        if (strcmp(host->core_variables[index].key, key) == 0)
+            entry = &host->core_variables[index];
+    for (index = 0; index < host->core_override_count && !entry; index++)
+        if (strcmp(host->core_overrides[index].key, key) == 0)
+            entry = &host->core_overrides[index];
+    if (!entry) {
+        if (strncmp(key, "emufusion_", 10) != 0 ||
+                host->core_override_count >= MAX_CORE_OVERRIDES) RETURN_UNLOCKED(false);
+        entry = &host->core_overrides[host->core_override_count];
+        entry->key = strdup(key);
+        entry->value = NULL;
+        if (!entry->key) RETURN_UNLOCKED(false);
+        host->core_override_count++;
+    }
+    copy = strdup(value);
+    if (!copy) RETURN_UNLOCKED(false);
+    free(entry->value);
+    entry->value = copy;
+    host->core_variables_updated = true;
+    RETURN_UNLOCKED(true);
 }
 
 bool emufusion_retro_get_av_info(emufusion_retro_host *host,

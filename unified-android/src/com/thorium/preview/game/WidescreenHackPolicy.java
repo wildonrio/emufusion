@@ -125,6 +125,12 @@ public final class WidescreenHackPolicy {
         overrides.putAll(RenderResolutionPolicy.coreOptionOverrides(context, engine));
         // ...and without emulator-side shader stutter.
         overrides.putAll(SmoothnessPolicy.coreOptionOverrides(engine));
+        // A game with a recipe starts narrow; the session widens it once it knows the screen.
+        WidescreenRecipes.Recipe recipe = WidescreenRecipes.find(context, system, request.gameTitle);
+        if (recipe != null && recipe.engine.equals(engine)) {
+            overrides.putAll(recipe.options);
+            overrides.put(recipe.widthOption, "0");
+        }
         overrides.putAll(qaCoreOptionOverrides(context));
         File file = CoreOptionOverrideFile.in(root);
         try {
