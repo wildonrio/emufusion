@@ -169,12 +169,12 @@ The rest of the library uses a fallback recipe (widen, no per-game rule).
 
 ## Game Gear (played, 2026-11-05, Mac harness; engine Gearsystem)
 
-The VDP already draws 256 columns and the handheld shows the middle 160. The picture stops at 240:
-the map ring is exactly 256 wide, so a scrolled picture shows one column at both ends and one copy
-is wrong. 240 columns reach 16:9 with pixels 6.7% wider than square, still narrower than the
-handheld's own LCD pixels. Sprite collisions outside the old window are ignored, so game logic sees
-what it always saw. `emufusion_ws_scene` keeps a scene narrow; `emufusion_ws_hud` moves sprites out
-by the added width, with an exact row and tile range so game objects are left alone.
+The VDP already draws 256 columns and the handheld shows the middle 160. The picture stops at 248:
+the map ring is exactly 256 wide, so a scrolled picture any wider shows one column at both ends and
+one copy is wrong. At 16:9 that leaves about 30 black pixels on each side of a 1920 screen, because
+pixels stay square. Sprite collisions outside the old window are ignored, so game logic sees what it
+always saw. `emufusion_ws_scene` keeps a scene narrow; `emufusion_ws_hud` moves sprites out by the
+added width, with an exact row and tile range so game objects are left alone.
 
 Playing past the menus changed the first-pass answers. The first pass called 16 games clean, and 8
 of those had only been seen at a title or menu. In play:
@@ -202,6 +202,19 @@ is still part of the pass. Shinobi II's level start flags it too, a true edge pa
 
 Host rebuilds after changing a Gearsystem header need `make clean`: the makefile does not track
 headers, and stale objects allocate the old `Video` size (random crashes in `Sms_Apu::volume`).
+
+## No stretching, ever (owner, 2026-11-05)
+
+"NO STRETCHING ANY IMAGES, you are adding additional viewing area organically." A pixel keeps its
+shape narrow and wide on every engine, for every image including logos and HUDs. Black bars beat any
+stretch. `tools/widescreen/par_check.py` proves it for the 2D engines; run it after any engine change.
+
+The 3D engines' generic hacks are where this bites:
+- PS1 (Swanstation `GPU_WidescreenHack` with a 16:9 display) widens only 3D that goes through the GTE,
+  and 2D logos, HUDs and menus stretch 33%. No PS1 recipes until 2D stays undistorted.
+- N64 (GLideN64 `16:9 adjusted`) scales 2D back: Ocarina's title logo is the same width narrow and wide.
+  Each game still needs that compared, because some draw 2D as polygons.
+- GameCube and Dreamcast: not evaluated yet, and a generic hack is only acceptable under the same test.
 
 ## On the Thor (2026-11-05)
 
@@ -232,7 +245,7 @@ every frame and stay narrow when there is nothing more to show, also in unknown 
 | System | Map | Picture at 16:9 | Top-20 status |
 | --- | --- | --- | --- |
 | NES | 1 or 2 screens, read from the memory pages | 372x240 | Widen: Contra, Castlevania III, Tecmo Super Bowl, Life Force. One-screen rooms that need a map reader: SMB3, Kirby, Mega Man 3, Ninja Gaiden II, Super Mario Bros 2 |
-| Game Boy, Color | 256 wide on a 160 screen | 240x144 (see Game Gear) | Widen: Castlevania II, Mario Deluxe, Donkey Kong Country. Stale: Donkey Kong Land. Rooms: the Zelda games. Fixed: Tetris, Donkey Kong |
+| Game Boy, Color | 256 wide on a 160 screen | 248x144 (see Game Gear) | Widen: Castlevania II, Mario Deluxe, Donkey Kong Country. Stale: Donkey Kong Land. Rooms: the Zelda games. Fixed: Tetris, Donkey Kong |
 | GBA | 256 or 512 wide on 240 | 284x160 | Widen: Metroid Fusion, Zero Mission, Mario Kart. One-screen maps: Alien Hominid |
 
 NES sprites have an 8-bit X, so enemies cannot be drawn in the new columns: they appear at the old

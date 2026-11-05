@@ -344,10 +344,10 @@ index 4ed0c1a..d704ca3 100644
  	GetScreenSize(screenSize, true);
  	
 diff --git a/Libretro/libretro.cpp b/Libretro/libretro.cpp
-index 48fa641..42681d9 100644
+index 48fa641..8d77400 100644
 --- a/Libretro/libretro.cpp
 +++ b/Libretro/libretro.cpp
-@@ -322,6 +322,45 @@ extern "C" {
+@@ -322,6 +322,46 @@ extern "C" {
  		}
  	}
  
@@ -359,8 +359,9 @@ index 48fa641..42681d9 100644
 +		PPU* ppu = _console ? _console->GetPpu() : nullptr;
 +		if(avInfo.geometry.max_width < 256 + 2 * PPU::EfMaxExt) avInfo.geometry.max_width = 256 + 2 * PPU::EfMaxExt;
 +		if(ppu && ppu->EfExt() && efMilli > 1000) {
++			// Pixels keep their shape: only the column count changes, never a stretch.
++			avInfo.geometry.aspect_ratio *= (256.0f + 2 * ppu->EfExt()) / avInfo.geometry.base_width;
 +			avInfo.geometry.base_width = 256 + 2 * ppu->EfExt();
-+			avInfo.geometry.aspect_ratio = efMilli / 1000.0f;
 +		}
 +	}
 +
@@ -393,7 +394,7 @@ index 48fa641..42681d9 100644
  	void update_settings()
  	{
  		struct retro_variable var = { };
-@@ -447,6 +486,8 @@ extern "C" {
+@@ -447,6 +487,8 @@ extern "C" {
  			readOverscanValue(MesenOverscanBottom)
  		);
  
@@ -402,7 +403,7 @@ index 48fa641..42681d9 100644
  		if(readVariable(MesenAspectRatio, var)) {
  			string value = string(var.value);
  			if(value == "Auto") {
-@@ -641,7 +682,8 @@ extern "C" {
+@@ -641,7 +683,8 @@ extern "C" {
  
  		retro_system_av_info avInfo = {};
  		_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -412,7 +413,7 @@ index 48fa641..42681d9 100644
  	}
  
  	RETRO_API void retro_run()
-@@ -676,6 +718,7 @@ extern "C" {
+@@ -676,6 +719,7 @@ extern "C" {
  			//Update geometry after running the frame, in case the console's region changed (affects "auto" aspect ratio)
  			retro_system_av_info avInfo = {};
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -420,7 +421,7 @@ index 48fa641..42681d9 100644
  			env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &avInfo);
  		}
  
-@@ -1123,6 +1166,7 @@ extern "C" {
+@@ -1123,6 +1167,7 @@ extern "C" {
  				default: _console->GetSettings()->SetDipSwitches(0); break;
  			}
  
@@ -428,7 +429,7 @@ index 48fa641..42681d9 100644
  			update_core_controllers();
  			update_input_descriptors();
  
-@@ -1190,6 +1234,7 @@ extern "C" {
+@@ -1190,6 +1235,7 @@ extern "C" {
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, NES_NTSC_OUT_WIDTH(256), 240 * vscale);
  		else
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, 256 * hscale, 240 * vscale);
@@ -436,7 +437,7 @@ index 48fa641..42681d9 100644
  	}
  
  	RETRO_API void *retro_get_memory_data(unsigned id)
-@@ -1198,6 +1243,10 @@ extern "C" {
+@@ -1198,6 +1244,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetSaveRam();
  			case RETRO_MEMORY_SYSTEM_RAM: return _console->GetMemoryManager()->GetInternalRAM();
@@ -447,7 +448,7 @@ index 48fa641..42681d9 100644
  		}
  		return nullptr;
  	}
-@@ -1208,6 +1257,10 @@ extern "C" {
+@@ -1208,6 +1258,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetMemorySize(DebugMemoryType::SaveRam);
  			case RETRO_MEMORY_SYSTEM_RAM: return MemoryManager::InternalRAMSize;

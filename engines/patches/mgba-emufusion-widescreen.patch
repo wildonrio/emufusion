@@ -232,7 +232,7 @@ index c5bc37b..0704fe1 100644
 +#include "ef_wide.h"
 +#include "ef_wide.inc"
 diff --git a/src/platform/libretro/libretro.c b/src/platform/libretro/libretro.c
-index 12e7913..6eaba69 100644
+index 12e7913..fb70b09 100644
 --- a/src/platform/libretro/libretro.c
 +++ b/src/platform/libretro/libretro.c
 @@ -4,6 +4,7 @@
@@ -315,13 +315,14 @@ index 12e7913..6eaba69 100644
  static void _reloadSettings(void) {
  	struct mCoreOptions opts = {
  		.useBios = true,
-@@ -418,9 +484,13 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
+@@ -418,9 +484,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
  	info->geometry.base_width = width;
  	info->geometry.base_height = height;
  	info->geometry.aspect_ratio = width / (double) height;
 +	if (ef_wide_ext() && width == GBA_VIDEO_HORIZONTAL_PIXELS) {
 +		info->geometry.base_width = width + 2 * ef_wide_ext();
-+		info->geometry.aspect_ratio = ef_wide_milli() / 1000.0;
++		// Pixels keep their shape: only the column count changes, never a stretch.
++		info->geometry.aspect_ratio = info->geometry.base_width / (double) height;
 +	}
  
  	core->baseVideoSize(core, &width, &height);
@@ -330,7 +331,7 @@ index 12e7913..6eaba69 100644
  	info->geometry.max_height = height;
  
  	info->timing.fps = core->frequency(core) / (float) core->frameCycles(core);
-@@ -552,6 +622,7 @@ void retro_run(void) {
+@@ -552,6 +623,7 @@ void retro_run(void) {
  
  	bool updated = false;
  	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
@@ -338,7 +339,7 @@ index 12e7913..6eaba69 100644
  		envVarsUpdated = true;
  
  		struct retro_variable var = {
-@@ -612,10 +683,17 @@ void retro_run(void) {
+@@ -612,10 +684,17 @@ void retro_run(void) {
  		}
  	}
  
@@ -357,7 +358,7 @@ index 12e7913..6eaba69 100644
  
  #ifdef M_CORE_GBA
  	if (core->platform(core) == mPLATFORM_GBA) {
-@@ -988,6 +1066,7 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -988,6 +1067,7 @@ bool retro_load_game(const struct retro_game_info* game) {
  	}
  #endif
  

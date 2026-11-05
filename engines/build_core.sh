@@ -530,7 +530,7 @@ case "$ENGINE" in
         cp -R "$source/." "$patched/"
         apply_locked_patch "$patched" \
             engines/patches/mgba-emufusion-widescreen.patch \
-            da0896f6cd1cbbdcd1600352304eb1a0e257c438320c23c9e983660b454b62c5
+            a9d2f73d8c4fd8889b02517001bac5cd9e86ad6fb0fbc1e4a7b5078d57ca042d
         source="$patched"
         build="$BUILD_ROOT/work/mgba-$ABI"
         rm -rf "$build"
@@ -565,7 +565,7 @@ case "$ENGINE" in
         cp -R "$source/." "$build/"
         apply_locked_patch "$build" \
             engines/patches/mesen-emufusion-widescreen.patch \
-            e452103d4e2da8e9d9066cfa167d014d7c8a2767fb191f4dae37fd1ba4b8dc56
+            ab7a2f13ea88810d02b5e6c69da20218b1f565d34449440cf74d25a6c05b84f8
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -656,7 +656,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$build" \
             engines/patches/sameboy-emufusion-widescreen.patch \
-            a747ed872a5bf0cf936792d608be04b5365e09e1fe00286f08a997a809f065fb
+            1db44b1d5bc714cdeb9b55da971b7d3f7eccef659211ced344fa54a7936c9be1
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -718,7 +718,7 @@ case "$ENGINE" in
             cp -R "$source/." "$build/"
             apply_locked_patch "$build" \
                 engines/patches/gearsystem-emufusion-widescreen.patch \
-                30b6d1e11ea643eb3d0892c5923c0796a26c6c469165c10c7b42b98f4ca61f17
+                60b0a7944c2cc978022ebdefdf543cbee82763aaaf5e447d0ba6e6c502c2db42
             source="$build"
         fi
         if [ "$ENGINE" = gearcoleco ]; then

@@ -26,18 +26,19 @@ index 5eff0cd..ca5f2f8 100644
 +#include "ef_wide.inc"
 diff --git a/Core/ef_wide.h b/Core/ef_wide.h
 new file mode 100644
-index 0000000..e6297a5
+index 0000000..b7e30b7
 --- /dev/null
 +++ b/Core/ef_wide.h
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,16 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. The background map is 256 pixels wide and the handheld shows 160
 +// of them. SameBoy's renderer draws those 160 as before; ef_wide_line then draws the new columns
 +// beside them from the same state, once the line has finished, so timing does not change.
-+// The picture stops at 240: a ring of exactly 256 shows one column at both ends, and one is wrong.
++// The picture stops at 248: a ring of exactly 256 shows one column at both ends past that, and one
++// is wrong. Pixels stay square, so widening adds columns and never stretches.
 +#include <stdint.h>
-+#define EF_WIDE_MAX_EXT 40
++#define EF_WIDE_MAX_EXT 44
 +#define EF_WIDE_WIDTH (160 + 2 * EF_WIDE_MAX_EXT)
 +void ef_wide_set_aspect(const char *value);
 +void ef_wide_set_scene(const char *value);
@@ -196,7 +197,7 @@ index 0000000..b1e0934
 +    return ef_fb;
 +}
 diff --git a/libretro/libretro.c b/libretro/libretro.c
-index bb298ff..7a78628 100644
+index bb298ff..1686ab4 100644
 --- a/libretro/libretro.c
 +++ b/libretro/libretro.c
 @@ -18,6 +18,7 @@
@@ -231,7 +232,7 @@ index bb298ff..7a78628 100644
          geom.aspect_ratio = (double)GB_get_screen_width(&gameboy[0]) / GB_get_screen_height(&gameboy[0]);
 +        if (ef_wide_ext() && GB_get_screen_width(&gameboy[0]) == 160) {
 +            geom.base_width = 160 + 2 * ef_wide_ext();
-+            geom.aspect_ratio = ef_wide_milli() / 1000.0;
++            geom.aspect_ratio = (double)geom.base_width / GB_get_screen_height(&gameboy[0]);
 +        }
      }
  

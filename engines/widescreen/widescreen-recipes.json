@@ -876,31 +876,86 @@
           "strategy": "widen",
           "options": {},
           "tested": "2026-11-05 Thor: intro and title; one intro transition frame looked broken, to check"
-        }
-      },
-      "release": false
-    },
-    "psx": {
-      "engine": "swanstation",
-      "relaunch": true,
-      "baseWidth": 320,
-      "height": 240,
-      "pixelAspect": 1.0,
-      "maxAspect": 1.778,
-      "options": {},
-      "onOptions": {
-        "swanstation_GPU_WidescreenHack": "true",
-        "swanstation_Display_AspectRatio": "16:9"
-      },
-      "offOptions": {
-        "swanstation_GPU_WidescreenHack": "false",
-        "swanstation_Display_AspectRatio": "4:3"
-      },
-      "games": {
-        "Wipeout XL": {
+        },
+        "Super Mario 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: loading screen and intro video only; play not reached"
+          "tested": "2026-11-05 Thor: title, Peach's letter, castle grounds and water in 3D at 16:9; a star course not played yet"
+        },
+        "Banjo-Tooie": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: title and intro cutscene in 3D at 16:9; a world not played yet"
+        },
+        "Blast Corps": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: attract and mission scene at 16:9; not driven yet"
+        },
+        "Conker's Bad Fur Day": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: intro scenes at 16:9; play not reached"
+        },
+        "Diddy Kong Racing": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: title and player select fill the screen; a race not played yet"
+        },
+        "Excitebike 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: title and menus; a race not played yet"
+        },
+        "Rayman 2: The Great Escape": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: intro scenes in 3D at 16:9; play not reached"
+        },
+        "Star Fox 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: menus and briefing at 16:9; a mission not flown yet"
+        },
+        "Turok 2: Seeds of Evil": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: intro and menus; play not reached"
+        },
+        "1080° Snowboarding": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: title and rider select at 16:9; a run not played yet"
+        },
+        "The Legend of Zelda: Majora's Mask": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: file select only; play not reached"
+        },
+        "Perfect Dark": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: menus over a wide 3D background; a mission not played yet"
+        },
+        "International Superstar Soccer '98": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 Thor: intro and title; a match not played yet"
+        },
+        "Tony Hawk's Pro Skater": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 Thor: play stays inside a 4:3 window with black sides, nothing gained"
+        },
+        "Paper Mario": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 Thor: stage and file screens show white gaps beside their 2D art"
+        },
+        "GoldenEye 007": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 Thor: folder menus sit inside bars; missions not reached, it stays narrow until they are"
         }
       },
       "release": false

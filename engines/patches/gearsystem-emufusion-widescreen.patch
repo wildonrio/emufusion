@@ -1,13 +1,12 @@
 diff --git a/platforms/libretro/libretro.cpp b/platforms/libretro/libretro.cpp
-index c1ad656..5265b64 100644
+index c1ad656..ac2ab48 100644
 --- a/platforms/libretro/libretro.cpp
 +++ b/platforms/libretro/libretro.cpp
-@@ -72,6 +72,87 @@ static bool libretro_supports_bitmasks = false;
+@@ -72,6 +72,86 @@ static bool libretro_supports_bitmasks = false;
  static bool categories_supported = false;
  static float aspect_ratio = 0.0f;
  static int current_screen_width = 0;
 +static int ef_wide_ext = 0;
-+static int ef_wide_milli = 0;
 +static bool ef_was_wide = false;
 +
 +// emufusion_ws_scene: when to widen, OR of AND terms of RAM tests, "C200=0C,C201!=1|C300/F0=10".
@@ -90,7 +89,7 @@ index c1ad656..5265b64 100644
  static int current_screen_height = 0;
  static float current_aspect_ratio = 0;
  
-@@ -268,6 +349,7 @@ void retro_run(void)
+@@ -268,6 +348,7 @@ void retro_run(void)
      update_input();
  
      audio_sample_count = 0;
@@ -98,20 +97,19 @@ index c1ad656..5265b64 100644
      core->RunToVBlank(frame_buffer, audio_buf, &audio_sample_count);
  
      GS_RuntimeInfo runtime_info;
-@@ -286,7 +368,11 @@ void retro_run(void)
+@@ -286,7 +367,10 @@ void retro_run(void)
          info.geometry.base_height  = runtime_info.screen_height;
          info.geometry.max_width    = GS_RESOLUTION_MAX_WIDTH_WITH_OVERSCAN;
          info.geometry.max_height   = GS_RESOLUTION_MAX_HEIGHT_WITH_OVERSCAN;
 -        info.geometry.aspect_ratio = aspect_ratio;
-+        // Widened, the picture fills the aspect asked for: 240 columns at 16:9 are a touch
-+        // wider than square, still narrower than the handheld's own pixels.
-+        info.geometry.aspect_ratio = ef_wide_ext ? ef_wide_milli / 1000.0f
-+            : ef_was_wide ? (float)runtime_info.screen_width / runtime_info.screen_height : aspect_ratio;
++        // Pixels keep their shape widened: only the column count changes, never a stretch.
++        info.geometry.aspect_ratio = ef_wide_ext || ef_was_wide
++            ? (float)runtime_info.screen_width / runtime_info.screen_height : aspect_ratio;
 +        ef_was_wide = ef_was_wide || ef_wide_ext;
  
          environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info.geometry);
      }
-@@ -437,6 +523,8 @@ void *retro_get_memory_data(unsigned id)
+@@ -437,6 +521,8 @@ void *retro_get_memory_data(unsigned id)
              return core->GetMemory()->GetCurrentRule()->GetRamBanks();
          case RETRO_MEMORY_SYSTEM_RAM:
              return core->GetMemory()->GetMemoryMap() + 0xC000;
@@ -120,7 +118,7 @@ index c1ad656..5265b64 100644
      }
  
      return NULL;
-@@ -450,6 +538,8 @@ size_t retro_get_memory_size(unsigned id)
+@@ -450,6 +536,8 @@ size_t retro_get_memory_size(unsigned id)
              return core->GetMemory()->GetCurrentRule()->GetRamSize();
          case RETRO_MEMORY_SYSTEM_RAM:
              return 0x2000;
@@ -129,7 +127,7 @@ index c1ad656..5265b64 100644
      }
  
      return 0;
-@@ -892,6 +982,25 @@ static void check_variables(void)
+@@ -892,6 +980,24 @@ static void check_variables(void)
  {
      struct retro_variable var = {0};
  
@@ -149,7 +147,6 @@ index c1ad656..5265b64 100644
 +        int ext = milli > 1000 ? (milli * GS_RESOLUTION_GG_HEIGHT / 1000 - GS_RESOLUTION_GG_WIDTH) / 2 : 0;
 +        core->GetVideo()->SetWideExt(ext);
 +        ef_wide_ext = core->GetVideo()->GetWideExt();
-+        ef_wide_milli = milli;
 +    }
 +
      var.key = "gearsystem_up_down_allowed";
@@ -169,7 +166,7 @@ index e2475ca..cb3d3a2 100644
          }
          else
 diff --git a/src/Video.cpp b/src/Video.cpp
-index 18f0c16..cb47324 100644
+index 18f0c16..7d21b51 100644
 --- a/src/Video.cpp
 +++ b/src/Video.cpp
 @@ -121,6 +121,25 @@ void Video::SetNoSpriteLimit(bool noSpriteLimit)
@@ -180,9 +177,9 @@ index 18f0c16..cb47324 100644
 +void Video::SetWideExt(int ext)
 +{
 +    if (ext < 0) ext = 0;
-+    // The map ring is exactly 256 wide, so a scrolled picture shows one column at both ends
-+    // and one copy is wrong. 240 columns never reach it.
-+    if (ext > GS_RESOLUTION_GG_X_OFFSET - 8) ext = GS_RESOLUTION_GG_X_OFFSET - 8;
++    // The map ring is exactly 256 wide, so a scrolled picture wider than 248 shows one column at
++    // both ends and one copy is wrong. 248 columns never do.
++    if (ext > GS_RESOLUTION_GG_X_OFFSET - 4) ext = GS_RESOLUTION_GG_X_OFFSET - 4;
 +    m_iWideExt = ext;
 +    if (m_bGameGear && !m_bGameGearSMSMode)
 +        m_iScreenWidth = GS_RESOLUTION_GG_WIDTH + 2 * m_iWideExt;
