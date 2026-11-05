@@ -9,7 +9,8 @@ with the upper panel's 1080x1920 mode, so its framebuffer and display space are
 onto 1240 rows (1240/1920 = 0.646). ADB screenshots show the logical composition
 and look correct; the defect is only visible in `dumpsys SurfaceFlinger`
 (RenderSurface size, FramebufferSurface buffers, SDM Dst Rect) or on the panel.
-A reboot clears it; --repair clears it without a reboot.
+A reboot clears it; --repair clears it without a reboot. The cause and the daemon that
+applies this repair by itself are described in thor_lower_display_guard.py.
 
 Repair (shell uid, no root, nothing installed): set SurfaceFlinger's size for the
 lower display back to its mode resolution, then show a 2x2 2%-alpha blur layer

@@ -27,7 +27,7 @@ public class SfLowerDisplay {
         }
     }
 
-    private static void setSize(long physicalId, int width, int height) throws Exception {
+    static void setSize(long physicalId, int width, int height) throws Exception {
         Method get = SurfaceControl.class.getMethod("getPhysicalDisplayToken", long.class);
         IBinder token = (IBinder) get.invoke(null, physicalId);
         if (token == null) throw new IllegalStateException("no display token for " + physicalId);
@@ -39,7 +39,7 @@ public class SfLowerDisplay {
         System.out.println("display size " + physicalId + " " + width + "x" + height);
     }
 
-    private static void clientFrame(int layerStack, long holdMs) throws Exception {
+    static void clientFrame(int layerStack, long holdMs) throws Exception {
         SurfaceControl.Builder builder =
                 new SurfaceControl.Builder().setName("emufusion-lower-display-repair");
         Method effect;
