@@ -279,6 +279,16 @@ and dungeons in A Link to the Past keep bars until they get decoders of their ow
 ## Release gate
 
 Each system in the recipe table has `"release"`. Nothing shows to players until it is true, which
-happens only after that system passes on a real device, because frame-generation releases carry
-this branch. `settings put global emufusion_qa_widescreen_all 1` turns everything on for testing
-(`thor_game.py` does this and clears it afterwards; the recipe table is read once per app process).
+needs a system's games to have run on the Thor in real play.
+
+On since 2026-11-05: Mega Drive, Game Gear, NES, SNES, Game Boy Color, GBA. Each has at least one
+game played on the Thor, with frame generation on, and Sonic & Knuckles and Contra also with it off.
+Game Boy stays off until one of its games is played there. `settings put global
+emufusion_qa_widescreen_all 1` still enables everything for testing.
+
+Only Mega Drive has a fallback for titles without their own entry. A map no wider than the picture
+stays narrow by itself there. Game Gear's was removed: 7 of its 19 top games could not widen
+cleanly, so unlisted titles are not offered widening until the rest of the library is triaged.
+
+Most recipes have only been played on the Mac. A device pass here means the engine, prompts and
+toggle work on the Thor, not that each listed game has been seen there.
