@@ -336,48 +336,56 @@
       "games": {
         "Sonic the Hedgehog": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: title, map"
+          "options": {
+            "emufusion_ws_hud": "obj:25-25:40-90:-1:80-B1;obj:41-41:44-84:-1:80-B1;obj:152-152:44-74:-1:80-B1"
+          },
+          "tested": "2026-11-05 host: Green Hill played through scrolling, enemies and rings; ring, time and lives counters move out"
         },
         "Shinobi II: The Silent Fury": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: title, round select"
+          "options": {
+            "emufusion_ws_hud": "obj:24-32:48-48:-1:10-1F"
+          },
+          "tested": "2026-11-05 host: Building round played, fights in the new columns; the energy bar moves out. Level start shows the backdrop past its left end"
         },
         "Streets of Rage 2": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: first stage fight"
+          "tested": "2026-11-05 host: first stage fight, enemies walk in through the new columns; the status bar is drawn in the map and stays centred"
         },
         "Cool Spot": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: title"
+          "tested": "2026-11-05 host: beach level: map rows are refreshed only across the old screen, so revealed columns show old tiles. Needs a map reader to widen"
         },
         "Micro Machines 2: Turbo Tournament": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: menus, first race"
+          "options": {
+            "emufusion_ws_hud": "obj:28-88:52-60:-1:97-A2"
+          },
+          "tested": "2026-11-05 host: first race; the race order moves out"
         },
         "Ecco the Dolphin": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: first bay"
+          "tested": "2026-11-05 host: first bay: rows refresh only across the old screen, rock slices hang in the revealed columns. Needs a map reader to widen"
         },
         "Fatal Fury Special": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: first fight, arena extends"
+          "tested": "2026-11-05 host: first fight, arena extends; the bottom bar is drawn in the map and stays centred"
         },
         "Road Rash": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: menus, first race"
+          "options": {
+            "emufusion_ws_scene": "C025!=67|C026!=10"
+          },
+          "tested": "2026-11-05 host: Sierra Nevada race, scenery extends; the panel is drawn in the map and stays centred; the title stays narrow"
         },
         "Lucky Dime Caper starring Donald Duck": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: title, map"
+          "tested": "2026-11-05 host: first forest stage played; no HUD on screen"
         },
         "Dr. Robotnik's Mean Bean Machine": {
           "strategy": "fixed-screen",
@@ -385,50 +393,63 @@
         },
         "Bram Stoker's Dracula": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: first stage forest"
+          "options": {
+            "emufusion_ws_hud": "obj:24-24:44-84:-1:A0-C0;obj:40-40:44-84:-1:A0-C0;obj:152-152:44-64:-1:A0-C0"
+          },
+          "tested": "2026-11-05 host: first stage forest played; energy, lives and weapon move out"
         },
         "Prince of Persia": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: intro"
+          "tested": "2026-11-05 host: runs in Master System mode at 256x192: it already shows everything the console draws"
         },
         "Micro Machines": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: menus, head to head"
+          "options": {
+            "emufusion_ws_hud": "obj:40-90:52-68:-1:94-A7"
+          },
+          "tested": "2026-11-05 host: powerboat race; the race order moves out"
         },
         "Lemmings": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: first level"
+          "tested": "2026-11-05 host: first level: the level is only built inside the old screen, revealed columns show junk"
         },
         "GP Rider": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: menus, track data"
+          "tested": "2026-11-05 host: race driven with crashes and traffic; the top HUD is spread across the old screen and stays"
         },
         "Pete Sampras Tennis": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: menus"
+          "tested": "2026-11-05 host: first match, stadium and crowd extend; menus fill with their own green"
         },
         "Ernie Els Golf": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: language menu"
+          "tested": "2026-11-05 host: hole view is a fixed 160-wide picture with a checker pattern beside it"
         },
         "Chessmaster": {
           "strategy": "fixed-screen",
           "tested": "2026-11-05 host: board game, nothing more to show"
+        },
+        "Sonic the Hedgehog: Triple Trouble": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_scene": "D143!=02",
+            "emufusion_ws_hud": "obj:25-25:44-84:-1:10-60;obj:41-41:44-84:-1:10-60;obj:57-57:44-84:-1:10-60"
+          },
+          "tested": "2026-11-05 host: Great Turquoise played; rings, time and lives move out; the title stays narrow"
         }
       },
       "fallback": {
         "strategy": "widen",
         "options": {},
-        "tested": "2026-11-05: the console already draws these columns; 16 of 20 top games clean with no per-game rule"
+        "tested": "2026-11-05: of 19 top games played, 12 widen, 3 are fixed pictures, 1 is Master System mode (never offered, exactBase), 3 refresh only the old screen. Triage the rest with seam_check.py"
       },
-      "release": false
+      "release": false,
+      "exactBase": true
     }
   }
 }

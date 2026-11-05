@@ -55,6 +55,13 @@ class RecipeTableTest(unittest.TestCase):
 
 
 class PlumbingTest(unittest.TestCase):
+    def test_a_game_gear_cart_in_master_system_mode_is_never_offered_widening(self):
+        self.assertTrue(RECIPES['systems']['gamegear']['exactBase'])
+        recipes = (GAME / 'WidescreenRecipes.java').read_text()
+        self.assertIn('return !exactBase || (coreWidth == baseWidth && coreHeight == height);', recipes)
+        session = (GAME / 'LibretroEngineSession.java').read_text()
+        self.assertIn('widescreenRecipe.fitsCore(av.baseWidth, av.baseHeight)', session)
+
     def test_a_system_reaches_players_only_after_a_device_pass(self):
         recipes = (GAME / 'WidescreenRecipes.java').read_text()
         self.assertIn('if (!entry.optBoolean("release", false) && !qaAll) continue;', recipes)

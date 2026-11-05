@@ -476,7 +476,8 @@ public final class LibretroEngineSession implements EngineSession,
                             ? av.aspectRatio : 0f;
                     WidescreenRecipes.Recipe widescreenRecipe =
                             WidescreenRecipes.find(appContext, launch.systemId, launch.gameTitle);
-                    if (widescreenRecipe != null && widescreenRecipe.engine.equals(entry.id))
+                    if (widescreenRecipe != null && widescreenRecipe.engine.equals(entry.id) &&
+                            widescreenRecipe.fitsCore(av.baseWidth, av.baseHeight))
                         widescreen = new WidescreenSession(appContext, widescreenRecipe,
                                 launch.gameTitle, launch.qualificationSession);
                     double synchronizedVideoHz =

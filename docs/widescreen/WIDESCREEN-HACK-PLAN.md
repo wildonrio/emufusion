@@ -167,15 +167,41 @@ is off by default here because it hides more than it helps; it stays available p
 
 The rest of the library uses a fallback recipe (widen, no per-game rule).
 
-## Game Gear (first pass, 2026-11-05, Mac harness; engine Gearsystem)
+## Game Gear (played, 2026-11-05, Mac harness; engine Gearsystem)
 
-The VDP already draws 256 columns and the handheld shows the middle 160, so the picture at 16:9
-(256x144, square pixels) is exactly what the console drew. Sprite collisions outside the old window
-are ignored, so game logic sees what it always saw. `emufusion_ws_scene` keeps a scene narrow.
+The VDP already draws 256 columns and the handheld shows the middle 160. The picture stops at 240:
+the map ring is exactly 256 wide, so a scrolled picture shows one column at both ends and one copy
+is wrong. 240 columns reach 16:9 with pixels 6.7% wider than square, still narrower than the
+handheld's own LCD pixels. Sprite collisions outside the old window are ignored, so game logic sees
+what it always saw. `emufusion_ws_scene` keeps a scene narrow; `emufusion_ws_hud` moves sprites out
+by the added width, with an exact row and tile range so game objects are left alone.
 
-All played games look right except Triple Trouble's title (hidden columns hold junk; not added,
-no gameplay reached yet). Mean Bean Machine and Chessmaster are left alone. The rest of the library
-uses a fallback recipe.
+Playing past the menus changed the first-pass answers. The first pass called 16 games clean, and 8
+of those had only been seen at a title or menu. In play:
+
+| Result | Games |
+| --- | --- |
+| Widen, HUD moved to the corners | Sonic, Triple Trouble, Dracula, Shinobi II, Micro Machines, Micro Machines 2 |
+| Widen, HUD in the map stays centred | Streets of Rage 2, Fatal Fury Special, Road Rash, GP Rider |
+| Widen, no corner HUD | Lucky Dime Caper, Pete Sampras Tennis |
+| Narrow: rows refresh only across the old screen | Cool Spot, Ecco the Dolphin (a map reader could widen them) |
+| Narrow: level built only inside the old screen | Lemmings |
+| Narrow: fixed pictures | Ernie Els Golf, Mean Bean Machine, Chessmaster |
+| Never offered: Master System mode, 256x192 | Prince of Persia |
+
+Road Rash's and Triple Trouble's titles stay narrow by a scene rule, their hidden columns hold junk.
+
+**The rest of the library.** Master System mode cartridges are refused whatever their title: the
+recipe sets `exactBase`, and the core reports them at 256x192. A runtime check for stale columns
+does not work: the share of map writes to far columns does not separate good games from bad
+(Dracula 54%, Ecco 43%, Cool Spot 18%, Triple Trouble 19%). So the fallback stays `widen` until the
+remaining titles are triaged offline: `tools/widescreen/seam_check.py` over frames of each title
+finds Cool Spot's seam on 21 of 24 frames and none on most good games, then failures get
+`fixed-screen`. It misses joins that are not long straight lines (Ecco, Lemmings), so a zoomed look
+is still part of the pass. Shinobi II's level start flags it too, a true edge past the map's end.
+
+Host rebuilds after changing a Gearsystem header need `make clean`: the makefile does not track
+headers, and stale objects allocate the old `Video` size (random crashes in `Sms_Apu::volume`).
 
 ## NES, Game Boy, GBA and 3D systems: blocked 2026-11-05
 

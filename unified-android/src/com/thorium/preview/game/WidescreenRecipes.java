@@ -44,11 +44,14 @@ public final class WidescreenRecipes {
         public final int height;
         public final float pixelAspect;
         public final float maxAspect;
+        /** Only a game the core reports at exactly baseWidth x height can widen: a Game Gear
+         * cartridge in Master System mode already shows all the console draws. */
+        public final boolean exactBase;
         /** Core options applied at launch, on or off: scene and HUD rules live here. */
         public final Map<String, String> options;
 
         Recipe(String system, String key, String engine, String widthOption, boolean widthIsAspect,
-               int baseWidth, int height, float pixelAspect, float maxAspect,
+               int baseWidth, int height, float pixelAspect, float maxAspect, boolean exactBase,
                Map<String, String> options) {
             this.system = system;
             this.key = key;
@@ -59,7 +62,13 @@ public final class WidescreenRecipes {
             this.height = height;
             this.pixelAspect = pixelAspect;
             this.maxAspect = maxAspect;
+            this.exactBase = exactBase;
             this.options = Collections.unmodifiableMap(options);
+        }
+
+        /** Whether this recipe can widen a game the core reports at this size. */
+        public boolean fitsCore(int coreWidth, int coreHeight) {
+            return !exactBase || (coreWidth == baseWidth && coreHeight == height);
         }
 
         /** The picture's aspect with widescreen off. */
@@ -145,6 +154,7 @@ public final class WidescreenRecipes {
                 entry.getInt("baseWidth"), entry.getInt("height"),
                 (float) entry.getDouble("pixelAspect"),
                 (float) game.optDouble("maxAspect", entry.optDouble("maxAspect", 2.4)),
+                entry.optBoolean("exactBase", false),
                 options);
     }
 
