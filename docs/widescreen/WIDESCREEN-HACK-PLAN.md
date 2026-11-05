@@ -115,3 +115,32 @@ See the per-system sections below as they are added.
 - **Proven on the Thor (3.2.154 test build, frame generation on, 60 to 120):** Super Mario World:
   glowing prompt, tap to widen, hint, HUD in the corners, overworld keeps its bars, swipe in
   from the edge to turn off, tap to turn back on.
+
+## SNES (first pass, 2026-11-04, all on the Mac harness unless noted; engine bsnes-hd)
+
+General technique that came out of it:
+
+- `emufusion_ws_strict`: the core tags each tilemap cell with the world position it was written
+  for, and hides wide-area pixels of any cell that is not this position's. This removes wrapped
+  maps, stale columns and never-loaded VRAM without per-game work, and most menus go clean by
+  themselves. Parallax layers with per-line scroll must stay out of it (DKC2's sky), because a
+  cell's tag cannot match every line.
+- `emufusion_ws_scene`: RAM test for gameplay; other scenes keep their bars.
+- `emufusion_ws_hud`: moves HUD pieces to the corners, per layer, scanline range and column range.
+- `emufusion_ws_bounds`: world limits from RAM; outside them the wide area is black.
+- Save RAM is exposed to the host (bsnes-hd returned nothing before), so saves carry over.
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Super Mario World | widen, Thor pass | Gameplay only; HUD in corners; map keeps bars. Pop-in at the far edge when reversing. |
+| Super Mario Kart | widen | Mode 7 scenes only. HUD not moved yet. |
+| Donkey Kong Country | widen, Thor pass | Thin unloaded band at the leading edge while running. |
+| DKC 2 | widen | Foreground only in strict; small parked-sprite artifact at bottom right to remove. |
+| Yoshi's Island | widen | `center`: VRAM beside the tilemap is junk. First screen of a level is narrow until it scrolls. |
+| Super Metroid | widen | Gameplay only, HUD in corners. Only Ceres tested; Zebes to check. |
+| Super Mario All-Stars | widen | SMB 1-1 tested; SMB2, SMB3, Lost Levels to check. |
+| NHL '94, Madden 95, Jimmy Connors, NBA Jam, NBA Live 95 | widen | Field and court extend. |
+| Final Fantasy III, Chrono Trigger, A Link to the Past, Star Ocean, Live A Live | not yet | Map engines load only at the screen edge, so strict shows bars and non-strict shows stale tiles. Needs a per-game patch to load further out. No prompt until then. |
+| Super Mario RPG | not yet | Same; not played past the name screen. |
+| Mortal Kombat II | not yet | Fights stay inside the original view, arena is not loaded beyond it. |
+| ISS Deluxe | not yet | Not played past the menu. |
