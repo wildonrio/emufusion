@@ -45,6 +45,24 @@ reviewed before this revision; its work was not discarded.
 
 The 3-D failures are fast near objects: Double Dash's karts tear at their edges, and the per-phase field is 1/8 of a 1080p picture.
 
+**Status, November 5 (Thor, 3.2.153 plus the unreleased Eden candidate; 16-s windows scaled to 30 s; see the November 5 entries).**
+
+| System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content |
+| --- | --- | --- | --- |
+| NES | 99.9%, 2 | 9.3-11.1 / 17.6-19.4 ms | 0% |
+| Mega Drive | not re-measured | not re-measured | 46% |
+| SNES | not re-measured | not re-measured | 0-14% |
+| Star Fox 64, Ocarina eval | not re-measured | not re-measured | 4% |
+| Ocarina of Time (20 fps) | 94.4%, 66 | 11.2 / 36.2 ms (real minimum 33.3) | 0-4% |
+| Double Dash | 99.8%, 6 | 11.3 / 19.6 (14.0 / 22.4) ms | 19% |
+| NSMBU Deluxe, stock stamps | 99.7-99.9%, 4-9 | 11.2 / 19.5 (12.2-16.0 / 20.5-24.3) ms | world map 11% |
+| NSMBU Deluxe, candidate | 99.8%, 4-7 | 10.7-11.3 / 19.0-19.6 (11.5-15.9 / 19.8-24.3) ms | world map 11% |
+| Link's Awakening | not re-measured | not re-measured | 6% full size |
+| Wind Waker HD | older: 76%, 30 fps source | older: ~37 ms real | 21% |
+| SM3DW | older: 95.2% | older: 19.1 / 28.3 ms | 0% |
+
+The candidate's real gain is not in this measure: stock arrival is stamped after the firmware's 2-ms sleep.
+
 **10/10 targets, per tested system in gameplay (loads and keep-alive frames excluded):**
 - **Smoothness:** at least 99.5% of output intervals at the intended cadence, and at most 5 Present-rhythm hitches per 30 s.
 - **Latency:** arrival to screen within 2 ms of the structural minimum: arrival + half a source period + one scan for the real image, arrival + one scan for the generated one.
