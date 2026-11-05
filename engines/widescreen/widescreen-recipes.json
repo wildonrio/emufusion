@@ -472,9 +472,12 @@
           "tested": "2026-11-05 host: first stage flying; the star field reaches both edges"
         },
         "Super Mario Bros. 3": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: world map is one screen wide, its columns would repeat. Levels need a map reader, untested"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "smb3",
+            "emufusion_ws_lines": "0-193"
+          },
+          "tested": "2026-11-05 host: World 1-1 played; the level comes from its own map in cartridge RAM, right from the first frame. World map stays narrow. Vertical levels stay narrow, not yet reached in play"
         },
         "Kirby's Adventure": {
           "strategy": "fixed-screen",
@@ -522,9 +525,9 @@
           "tested": "2026-11-05 host: fixed playfield, nothing to reveal"
         },
         "Super Mario Bros": {
-          "strategy": "fixed-screen",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: this library file is Super Mario Bros 2 (USA): rooms use a one-screen map. Needs a map reader"
+          "tested": "2026-11-05 host: World 1-1 played, ground, hills, blocks and pipes run edge to edge with no map reader. Enemies appear at the old screen edge. A library file named this that really holds Mario 2 stays narrow by itself: one-screen rooms"
         },
         "The Legend of Zelda": {
           "strategy": "fixed-screen",

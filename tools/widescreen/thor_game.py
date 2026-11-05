@@ -29,6 +29,8 @@ LOCK = '/tmp/claude-501/thor.lock'
 TOP = '4630946441858561667'
 PAD = '/dev/input/event9'
 ACTIVITY = 'com.thorium.preview/org.pegasus_frontend.android.MainActivity'
+# A QA save namespace; another one starts with no Quick Resume state to restore.
+SESSION = os.environ.get('THOR_QA_SESSION', 'qa-7769646573637265656e000000000000')
 KEYS = {'south': 304, 'east': 305, 'north': 308, 'west': 307, 'start': 315, 'select': 314,
         'l': 310, 'r': 311, 'up': 544, 'down': 545, 'left': 546, 'right': 547, 'back': 158}
 
@@ -68,16 +70,20 @@ def main():
     take_thor()
     shell('settings put global emufusion_qa_widescreen_all 1')
     # The recipe table is cached per app process, so a running app would not see the setting.
-    shell('am force-stop com.thorium.preview')
+    # Wake first and let it settle: the firmware rebuilds the lower display at the upper panel's
+    # size if an app's display mode change lands just before a wake (thor-lower-panel-squeeze).
     shell('input keyevent KEYCODE_WAKEUP')
+    time.sleep(2)
+    shell('am force-stop com.thorium.preview')
     subprocess.run(ADB + ['logcat', '-c'], timeout=30)
     log = out / 'runtime.log'
     logger = subprocess.Popen(ADB + ['logcat', '-v', 'threadtime'], stdout=log.open('wb'),
                               stderr=subprocess.DEVNULL)
     try:
-        shell(f"am start -a com.thorium.preview.LAUNCH_INTERNAL_GAME -n {ACTIVITY} --es path '{rom}' "
+        quoted = rom.replace("'", "'\\''")
+        shell(f"am start -a com.thorium.preview.LAUNCH_INTERNAL_GAME -n {ACTIVITY} --es path '{quoted}' "
               f"--es system {system} --es engine_id {engine} --ez qualification_only true "
-              f"--es qualification_session qa-7769646573637265656e000000000000")
+              f"--es qualification_session {SESSION}")
         if not wait_log(log, r'Gameplay layer presenting', 120):
             screen(out / 'no-present.png')
             print('NO_PRESENT')

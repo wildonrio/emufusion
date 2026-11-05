@@ -210,6 +210,10 @@ tap, wide play with the HUD in the corners, swipe back to bars, tap back to wide
 Mega Drive core reported 1.549 until a game was first widened, stretching every normal Mega Drive
 picture about 16% and leaving side bars too thin for the prompt; it now reports 4:3 throughout.
 
+Later the same day, also on the Thor: Contra, Metroid Zero Mission, Super Mario Bros. Deluxe, Road Rash
+(title narrow, race wide) and Super Mario Bros. 3 with its map reader, all with frame generation on and
+no crashes. Open: Chrono Trigger shows black on the Thor though it renders on the Mac.
+
 Testing note: Quick Resume restores the last state in a QA namespace too. A run that ends paused
 starts paused, so a script's START presses toggle pause and the game looks frozen.
 
@@ -242,6 +246,14 @@ per-game routes past their name-entry screens. Stray HUD digits at Mario Kart's 
 3D systems (N64, PS1, Dreamcast, GC, PS2, Wii) are not started.
 
 ## The map reader (2026-11-05)
+
+NES too: Super Mario Bros. 3 keeps its level in cartridge RAM, so its one-screen map ring is no limit.
+Blocks are at 0x1B0 per screen, 16 columns by 27 rows; each tileset's bank opens with four 256-byte
+lists (top left, bottom left, top right, bottom right); a block's palette is its top two bits. The
+tileset-to-bank table is found by searching the ROM, so other revisions of the game still work. The
+reader also fills the 8 columns NES games blank at the left, which sit mid-picture once widened.
+`tools/widescreen/nes_map_find.py` looks for such maps in other games, but memory that barely repeats
+matches by chance, so read its hits with care.
 
 Tile tracking removes wrong tiles but cannot show tiles a game has not loaded yet, so a side
 scroller has a thin unloaded band at the leading edge and an RPG shows nothing at all. Most of

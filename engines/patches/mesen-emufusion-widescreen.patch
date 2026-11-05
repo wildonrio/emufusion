@@ -1,19 +1,21 @@
 diff --git a/Core/BaseMapper.h b/Core/BaseMapper.h
-index 96b488c..d49579c 100644
+index 96b488c..b982dfd 100644
 --- a/Core/BaseMapper.h
 +++ b/Core/BaseMapper.h
-@@ -153,6 +153,9 @@ protected:
+@@ -153,6 +153,11 @@ protected:
  	uint8_t InternalReadVRAM(uint16_t addr);
  
  public:
 +	// Columns in the map ring: two screens unless $2000 and $2400 are the same memory.
 +	uint8_t* EfNametableRam() { return _nametableRam; }
++	const uint8_t* EfPrg() { return _prgRom; }
++	uint32_t EfPrgSize() { return _prgSize; }
 +	int EfColumns() { return _chrPages[0x20] != _chrPages[0x24] ? 64 : 32; }
  	static constexpr uint32_t NametableCount = 0x10;
  	static constexpr uint32_t NametableSize = 0x400;
  	
 diff --git a/Core/PPU.cpp b/Core/PPU.cpp
-index 3692210..76c11e3 100644
+index 3692210..ed5669c 100644
 --- a/Core/PPU.cpp
 +++ b/Core/PPU.cpp
 @@ -451,6 +451,7 @@ void PPU::WriteRAM(uint16_t addr, uint8_t value)
@@ -24,7 +26,7 @@ index 3692210..76c11e3 100644
  					_console->GetMapper()->WriteVRAM(_ppuBusAddress & 0x3FFF, value);
  				} else {
  					//During rendering, the value written is ignored, and instead the address' LSB is used (not confirmed, based on Visual NES)
-@@ -922,9 +923,135 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
+@@ -922,9 +923,219 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
  	UpdateColorBitMasks();
  }
  
@@ -79,17 +81,99 @@ index 3692210..76c11e3 100644
 +	}
 +}
 +
++// Super Mario Bros. 3 keeps its whole level in cartridge RAM: 16 columns and 27 rows of 16-pixel
++// blocks per screen. Each tileset's bank starts with four lists mapping a block to its top left,
++// bottom left, top right and bottom right tiles; a block's palette is its top two bits.
++bool PPU::EfSmb3Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette)
++{
++	BaseMapper *mapper = _console->GetMapper();
++	const uint8_t *prg = mapper->EfPrg();
++	const uint8_t *wram = mapper->GetWorkRam();
++	if(!_efMapSearched) {
++		// The tileset-to-bank table, wherever this revision of the game keeps it.
++		static const uint8_t needle[] = { 0x0F, 0x15, 0x10, 0x11, 0x13, 0x12, 0x12, 0x12, 0x14, 0x17 };
++		_efMapSearched = true;
++		uint32_t size = mapper->EfPrgSize();
++		for(uint32_t i = 1; prg && i + sizeof(needle) < size; i++) {
++			if(!memcmp(prg + i, needle, sizeof(needle))) {
++				_efTilesetBanks = prg + i - 1;
++				break;
++			}
++		}
++	}
++	if(!_efTilesetBanks || !wram) return false;
++	uint8_t *ram = _console->GetMemoryManager()->GetInternalRAM();
++	uint8_t tileset = ram[0x70A];
++	// Nothing lies left of the level's start, and no one can go there: its first column carries on.
++	if(worldX < 0) worldX &= 15;
++	if(worldY < 0 || (worldX >> 8) >= 15 || (worldY >> 4) >= 27 || tileset >= 19) return false;
++	uint8_t block = wram[(worldX >> 8) * 0x1B0 + (worldY >> 4) * 16 + ((worldX >> 4) & 15)];
++	uint32_t list = ((worldY >> 3) & 1) | (((worldX >> 3) & 1) << 1);
++	tile = prg[(uint32_t)_efTilesetBanks[tileset] * 0x2000 + list * 0x100 + block];
++	palette = block >> 6;
++	return true;
++}
++
++bool PPU::EfDrawLineSmb3(int line)
++{
++	uint8_t *ram = _console->GetMemoryManager()->GetInternalRAM();
++	// Tileset 0 is the world map and title.
++	if(ram[0x70A] == 0) return false;
++	BaseMapper *mapper = _console->GetMapper();
++	// Side-scrolling levels use a one-screen map ring; a vertical level, the other kind, lays
++	// its map out differently and has no more columns to show.
++	if(mapper->EfColumns() != 32) {
++		for(int i = 0; i < _efExt; i++) _efLeft[line][i] = _efRight[line][i] = (uint16_t)0x0F;
++		return true;
++	}
++	bool clip = !_flags.BackgroundMask;
++	_efFillClip[line] = clip;
++	int cameraX = ram[0xFD] | ram[0x12] << 8;
++	int cameraY = ram[0x543] | ram[0x542] << 8;
++	for(int side = 0; side < 2; side++) {
++		uint16_t *out = side ? _efRight[line] : _efLeft[line];
++		int lastCell = 0x7FFFFFFF;
++		uint8_t low = 0, high = 0, palette = 0;
++		bool known = false;
++		int count = _efExt + (!side && clip ? 8 : 0);
++		for(int i = 0; i < count; i++) {
++			int x = side ? 256 + i : i - _efExt;
++			int worldX = cameraX + x, worldY = cameraY + line;
++			int cell = worldX >> 3;
++			if(cell != lastCell) {
++				lastCell = cell;
++				uint8_t tile = 0;
++				known = EfSmb3Tile(worldX, worldY, tile, palette);
++				uint16_t pattern = _flags.BackgroundPatternAddr + tile * 16 + (worldY & 7);
++				low = known ? mapper->DebugReadVRAM(pattern) : 0;
++				high = known ? mapper->DebugReadVRAM(pattern + 8) : 0;
++			}
++			int bit = 7 - (worldX & 7);
++			int color = ((low >> bit) & 1) | (((high >> bit) & 1) << 1);
++			out[i] = ((color ? _paletteRAM[(palette << 2) | color] : _paletteRAM[0]) & _paletteRamMask) | _intensifyColorBits;
++		}
++	}
++	return true;
++}
++
 +// The line is finished: draw the columns beside it from the same nametables and CHR banks.
 +void PPU::EfDrawLine()
 +{
 +	int line = _scanline;
 +	if(line < 0 || line >= 240) return;
 +	uint16_t backdrop = (_paletteRAM[0] & _paletteRamMask) | _intensifyColorBits;
++	_efFillClip[line] = false;
++	bool clip = IsRenderingEnabled() && !_flags.BackgroundMask;
 +	if(!IsRenderingEnabled() || line < _efLineFrom || line >= _efLineTo) {
 +		uint16_t fill = line < _efLineFrom || line >= _efLineTo ? (uint16_t)0x0F : backdrop;
 +		for(int i = 0; i < _efExt; i++) _efLeft[line][i] = _efRight[line][i] = fill;
++		if(clip) {
++			for(int i = 0; i < 8; i++) _efLeft[line][_efExt + i] = fill;
++			_efFillClip[line] = true;
++		}
 +		return;
 +	}
++	if(_efMap == EfMap::Smb3 && EfDrawLineSmb3(line)) return;
 +	BaseMapper *mapper = _console->GetMapper();
 +	int columns = mapper->EfColumns();
 +	// A map only one screen wide has nothing more to show: new columns would repeat the far
@@ -98,6 +182,7 @@ index 3692210..76c11e3 100644
 +		for(int i = 0; i < _efExt; i++) _efLeft[line][i] = _efRight[line][i] = (uint16_t)0x0F;
 +		return;
 +	}
++	_efFillClip[line] = clip;
 +	uint16_t v = _efLineV;
 +	int startColumn = (v & 0x1F) + ((v >> 10) & 1) * 32 - 2;
 +	int fineY = (v >> 12) & 7;
@@ -108,7 +193,8 @@ index 3692210..76c11e3 100644
 +		int lastColumn = 0x7FFFFFFF;
 +		uint8_t low = 0, high = 0, palette = 0;
 +		bool hidden = false;
-+		for(int i = 0; i < _efExt; i++) {
++		int count = _efExt + (!side && clip ? 8 : 0);
++		for(int i = 0; i < count; i++) {
 +			int x = side ? 256 + i : i - _efExt;
 +			int px = x + _efLineFineX;
 +			int column = startColumn + (px >> 3);
@@ -161,25 +247,29 @@ index 3692210..76c11e3 100644
  		LoadTileInfo();
  
 diff --git a/Core/PPU.h b/Core/PPU.h
-index 55c3182..03c9649 100644
+index 55c3182..130f697 100644
 --- a/Core/PPU.h
 +++ b/Core/PPU.h
-@@ -28,6 +28,9 @@ enum PPURegisters
+@@ -28,6 +28,11 @@ enum PPURegisters
  
  class PPU : public IMemoryHandler, public Snapshotable
  {
 +	public:
 +		static constexpr int EfMaxExt = 96;
++		// A decoder per game engine: draws the new columns from the game's own level map.
++		enum class EfMap { None, Smb3 };
 +	protected:
  	protected:
  		std::shared_ptr<Console> _console;
  		EmulationSettings* _settings;
-@@ -61,6 +64,24 @@ class PPU : public IMemoryHandler, public Snapshotable
+@@ -61,6 +66,31 @@ class PPU : public IMemoryHandler, public Snapshotable
  		PPUControlFlags _flags;
  		PPUStatusFlags _statusFlags;
  
 +		// EmuFusion Widescreen Hack: background columns beside the original 256.
-+		uint16_t _efLeft[240][EfMaxExt];
++		uint16_t _efLeft[240][EfMaxExt + 8];
++		// The game blanked its first 8 columns; widened, they are in mid picture: fill them.
++		bool _efFillClip[240];
 +		uint16_t _efRight[240][EfMaxExt];
 +		uint16_t _efTags[0x1000];
 +		bool _efBlankWrites[0x1000];
@@ -192,6 +282,11 @@ index 55c3182..03c9649 100644
 +		int _efLineTo = 240;
 +		bool _efStrict = true;
 +		bool _efBlankPending = false;
++		EfMap _efMap = EfMap::None;
++		const uint8_t* _efTilesetBanks = nullptr;
++		bool _efMapSearched = false;
++		bool EfSmb3Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
++		bool EfDrawLineSmb3(int line);
 +		void EfDrawLine();
 +		void EfTagWrite(uint16_t addr);
 +		void EfSweepBlank();
@@ -199,22 +294,24 @@ index 55c3182..03c9649 100644
  		uint16_t _intensifyColorBits;
  		uint8_t _paletteRamMask;
  		int32_t _lastUpdatedPixel;
-@@ -205,6 +226,10 @@ class PPU : public IMemoryHandler, public Snapshotable
+@@ -205,6 +235,12 @@ class PPU : public IMemoryHandler, public Snapshotable
  		uint8_t PeekRAM(uint16_t addr) override;
  		void WriteRAM(uint16_t addr, uint8_t value) override;
  
 +		void EfConfigure(int ext, int lineFrom, int lineTo, bool strict);
++		void EfSetMap(EfMap map) { _efMap = map; _efTilesetBanks = nullptr; _efMapSearched = false; }
 +		int EfExt() const { return _efExt; }
 +		const uint16_t* EfLeft(int line) const { return _efLeft[line]; }
 +		const uint16_t* EfRight(int line) const { return _efRight[line]; }
++		bool EfFillClip(int line) const { return _efFillClip[line]; }
  		void SetNesModel(NesModel model);
  		double GetOverclockRate();
  		
 diff --git a/Core/VideoDecoder.cpp b/Core/VideoDecoder.cpp
-index 4ed0c1a..09c2ec7 100644
+index 4ed0c1a..d704ca3 100644
 --- a/Core/VideoDecoder.cpp
 +++ b/Core/VideoDecoder.cpp
-@@ -108,6 +108,28 @@ void VideoDecoder::DecodeFrame()
+@@ -108,6 +108,31 @@ void VideoDecoder::DecodeFrame()
  		frameInfo = _scaleFilter->GetFrameInfo(frameInfo);
  	}
  
@@ -235,6 +332,9 @@ index 4ed0c1a..09c2ec7 100644
 +				out[ext + 256 + i] = palette[right[i] & 0x1FF];
 +			}
 +			memcpy(out + ext, outputBuffer + y * 256, 256 * sizeof(uint32_t));
++			if(efPpu->EfFillClip(y + top)) {
++				for(int i = 0; i < 8; i++) out[ext + i] = palette[left[ext + i] & 0x1FF];
++			}
 +		}
 +		outputBuffer = wide;
 +		frameInfo.Width = width;
@@ -244,10 +344,10 @@ index 4ed0c1a..09c2ec7 100644
  	GetScreenSize(screenSize, true);
  	
 diff --git a/Libretro/libretro.cpp b/Libretro/libretro.cpp
-index 48fa641..c1f0863 100644
+index 48fa641..42681d9 100644
 --- a/Libretro/libretro.cpp
 +++ b/Libretro/libretro.cpp
-@@ -322,6 +322,39 @@ extern "C" {
+@@ -322,6 +322,45 @@ extern "C" {
  		}
  	}
  
@@ -282,12 +382,18 @@ index 48fa641..c1f0863 100644
 +		if(env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value) strict = strcmp(efVar.value, "on") == 0;
 +		int ext = milli > 1000 ? (milli * 210 / 1000 - 256) / 2 : 0;
 +		if(_console->GetPpu()) _console->GetPpu()->EfConfigure(ext, lineFrom, lineTo, strict);
++		efVar.key = "emufusion_ws_map";
++		efVar.value = nullptr;
++		if(_console->GetPpu()) {
++			bool smb3 = env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value && !strcmp(efVar.value, "smb3");
++			_console->GetPpu()->EfSetMap(smb3 ? PPU::EfMap::Smb3 : PPU::EfMap::None);
++		}
 +	}
 +
  	void update_settings()
  	{
  		struct retro_variable var = { };
-@@ -447,6 +480,8 @@ extern "C" {
+@@ -447,6 +486,8 @@ extern "C" {
  			readOverscanValue(MesenOverscanBottom)
  		);
  
@@ -296,7 +402,7 @@ index 48fa641..c1f0863 100644
  		if(readVariable(MesenAspectRatio, var)) {
  			string value = string(var.value);
  			if(value == "Auto") {
-@@ -641,7 +676,8 @@ extern "C" {
+@@ -641,7 +682,8 @@ extern "C" {
  
  		retro_system_av_info avInfo = {};
  		_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -306,7 +412,7 @@ index 48fa641..c1f0863 100644
  	}
  
  	RETRO_API void retro_run()
-@@ -676,6 +712,7 @@ extern "C" {
+@@ -676,6 +718,7 @@ extern "C" {
  			//Update geometry after running the frame, in case the console's region changed (affects "auto" aspect ratio)
  			retro_system_av_info avInfo = {};
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -314,7 +420,7 @@ index 48fa641..c1f0863 100644
  			env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &avInfo);
  		}
  
-@@ -1123,6 +1160,7 @@ extern "C" {
+@@ -1123,6 +1166,7 @@ extern "C" {
  				default: _console->GetSettings()->SetDipSwitches(0); break;
  			}
  
@@ -322,7 +428,7 @@ index 48fa641..c1f0863 100644
  			update_core_controllers();
  			update_input_descriptors();
  
-@@ -1190,6 +1228,7 @@ extern "C" {
+@@ -1190,6 +1234,7 @@ extern "C" {
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, NES_NTSC_OUT_WIDTH(256), 240 * vscale);
  		else
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, 256 * hscale, 240 * vscale);
@@ -330,7 +436,7 @@ index 48fa641..c1f0863 100644
  	}
  
  	RETRO_API void *retro_get_memory_data(unsigned id)
-@@ -1198,6 +1237,10 @@ extern "C" {
+@@ -1198,6 +1243,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetSaveRam();
  			case RETRO_MEMORY_SYSTEM_RAM: return _console->GetMemoryManager()->GetInternalRAM();
@@ -341,7 +447,7 @@ index 48fa641..c1f0863 100644
  		}
  		return nullptr;
  	}
-@@ -1208,6 +1251,10 @@ extern "C" {
+@@ -1208,6 +1257,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetMemorySize(DebugMemoryType::SaveRam);
  			case RETRO_MEMORY_SYSTEM_RAM: return MemoryManager::InternalRAMSize;

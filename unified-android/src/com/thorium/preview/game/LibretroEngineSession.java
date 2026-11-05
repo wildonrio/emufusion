@@ -252,6 +252,7 @@ public final class LibretroEngineSession implements EngineSession,
     private volatile WidescreenSession widescreen;
     // Frame thread only: the width whose display aspect is current.
     private int widescreenFrameWidth;
+    private int widescreenAspectChecks;
     private volatile int surfaceWidth;
     private volatile int surfaceHeight;
     private volatile Surface secondarySurface;
@@ -1521,8 +1522,12 @@ public final class LibretroEngineSession implements EngineSession,
                             // an obsolete visual frame instead of slowing the game.
                             newest = active.latestVideoFrame();
                             if (newest != null) newest.producerTimestampNs = scheduledNs;
-                            if (newest != null && widen != null && newest.width != widescreenFrameWidth) {
+                            if (newest != null && widen != null && (newest.width != widescreenFrameWidth ||
+                                    widescreenAspectChecks > 0)) {
                                 // The core changed its picture width; its aspect changed with it.
+                                // Some cores publish the new aspect a frame after the new width.
+                                widescreenAspectChecks = newest.width != widescreenFrameWidth
+                                        ? 10 : widescreenAspectChecks - 1;
                                 widescreenFrameWidth = newest.width;
                                 float aspect = active.avInfo().aspectRatio;
                                 if (aspect > 0.1f && aspect < 10f) displayAspect = aspect;
