@@ -249,7 +249,19 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 4 (latest) **— 3.2.153 (227, `1393683a`): Switch (Eden) sessions also search from C's flow per phase.**
+November 5 (latest) **— Picture-edge warp variants on the replay bench: none helps; not adopted.**
+
+- **Variants of the generate pass near the picture edge** (each a working-tree dex on the Thor's bench, panels off, paired by triplet against the 3.2.153 tree, sub-pixel measure, 14 sets): the warp sample that falls outside the picture replaced by the inside one (`outside`), the sample further from the edge within 16 px where the warps disagree (`onesided`), and a fade to the nearer real frame there (`hold`).
+
+  | Variant | Sum of excess area | Worse | Hold-out |
+  | --- | --- | --- | --- |
+  | `outside` | +0.019 | Star Fox 64 frames with invented content 4 -> 17% (area 0.023 -> 0.035%), Link's Awakening full 0.013 -> 0.016% | within 0.009, Link's Awakening full 0.564 -> 0.555 |
+  | `onesided` | +0.030 | Mega Drive 0.232 -> 0.257%, Star Fox 64 4 -> 9% of frames | NSMBU map 0.971 -> 0.986 |
+  | `hold` | +0.046 | Double Dash 0.060 -> 0.073% (19 -> 23% of frames), Star Fox 64 4 -> 13%, Link's Awakening full 0.012 -> 0.025% | within 0.010 |
+
+- None was better on any set beyond noise, so the picture edge stays as it is. Link's Awakening's edge strip (0047) needs content that is not in either frame; no single-frame rule fixes it.
+
+November 4 **— 3.2.153 (227, `1393683a`): Switch (Eden) sessions also search from C's flow per phase.**
 
 - **Change.** The per-phase search starts each patch also from C's flow (negated) 8 and 16 analysis pixels away, the candidates of `PHASE_PROPAGATE_CA` behind a `uPropagateCa` uniform (`PHASE_PROPAGATE_CA_SWITCH`). The host sets it for Eden sessions (`GameSurfaceView.setSwitchContent`), the replay bench for captures recorded on the Switch; every other system runs the same search as before. QA `emufusion_framegen_switch_reverse_candidates=0` leaves it out.
 - **Device replay bench, paired against the installed 3.2.150:** Link's Awakening full size invented area 0.024 -> 0.012%, NSMBU Deluxe map 0.039 -> 0.036%, hold-out error within 0.001; Star Fox 64 (not a Switch capture) byte-identical on all 24 triplets.
