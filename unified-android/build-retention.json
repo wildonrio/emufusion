@@ -1425,6 +1425,26 @@
     "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-91b5bfb284a49c9cad64d9fe57ce2969c1e15008857e723c2b0ad5385c8e66e5.apk": {
       "sha256": "91b5bfb284a49c9cad64d9fe57ce2969c1e15008857e723c2b0ad5385c8e66e5",
       "reason": "Superseded Widescreen Hack device-test build of 2026-11-05; its receipts stay in the build survey"
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-b34bacf87df886eb0b60b3141b516707252fdcef76b55f629c303354aecf5d87.apk": {
+      "sha256": "b34bacf87df886eb0b60b3141b516707252fdcef76b55f629c303354aecf5d87",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden flush size, prepared gate); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-074f0a3dc365acf6f0b70ece0ad147fb19c644964832bcf948ecaeefa9c8cf5b.apk": {
+      "sha256": "074f0a3dc365acf6f0b70ece0ad147fb19c644964832bcf948ecaeefa9c8cf5b",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden flush size, prepared gate); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-16d14f01a16fe8f533a79ae8250904db85a1f83bb628af12896815fbb2643b66.apk": {
+      "sha256": "16d14f01a16fe8f533a79ae8250904db85a1f83bb628af12896815fbb2643b66",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden flush size, prepared gate); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-99de32f10347a4a6a5d7e22306ad242031ebc0c241a2bf34edd091d11a34cc26.apk": {
+      "sha256": "99de32f10347a4a6a5d7e22306ad242031ebc0c241a2bf34edd091d11a34cc26",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden flush size, prepared gate); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-df911cd69f57a59663456960eb120a2fe5b1eca5ad9e95a4509c112066ec3183.apk": {
+      "sha256": "df911cd69f57a59663456960eb120a2fe5b1eca5ad9e95a4509c112066ec3183",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (Eden flush size, prepared gate); no device result depends on these packages."
     }
   }
 }
