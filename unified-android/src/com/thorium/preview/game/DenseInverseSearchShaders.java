@@ -78,6 +78,14 @@ final class DenseInverseSearchShaders {
             .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uQuietRows;\nlayout(location=0) out vec4 o0;\nvoid main(){float n=0.0;for(int y=0;y<90;++y)n+=texelFetch(uQuietRows,ivec2(0,y),0).r;\n if(n>72.0)discard;o0=vec4(1.0);}\n")
             .toString();
 
+    static final String PHASE_MODE = new StringBuilder(626)
+            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uPhaseFlow;uniform ivec2 uSize;uniform vec2 uHistorySize;\nlayout(location=0) out vec4 o0;\nvoid main(){ivec2 c=ivec2(gl_FragCoord.xy)*4+2;vec2 s[25];int n=0;vec2 fs=vec2(uSize);\n for(int y=-2;y<=2;++y)for(int x=-2;x<=2;++x){ivec2 p=c+ivec2(x,y)*4;\n  if(p.x>=0&&p.y>=0&&p.x<uSize.x&&p.y<uSize.y){s[n]=floor(texelFetch(uPhaseFlow,p,0).xy/fs*uHistorySize+0.5);++n;}}\n int best=0,most=0;for(int i=0;i<n;++i){int k=0;for(int j=0;j<n;++j)if(s[j]==s[i])++k;if(k>most){most=k;best=i;}}\n o0=vec4(s[best]/uHistorySize*fs,0.0,1.0);}\n")
+            .toString();
+
+    static final String PHASE_CHOICE = new StringBuilder(864)
+            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uFrameA,uFrameC,uPhaseFlow,uPhaseMode;uniform ivec2 uSize;uniform vec2 uHistorySize;uniform float uT;\nlayout(location=0) out vec4 o0;\nfloat md(vec3 x){return max(max(x.r,x.g),x.b);}\nfloat wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\nfloat wc5(vec2 u,vec2 k){vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n return 0.2*(wc(u,k)+wc(u+dx,k)+wc(u-dx,k)+wc(u+dy,k)+wc(u-dy,k));}\nvoid main(){ivec2 p=ivec2(gl_FragCoord.xy);vec2 fs=vec2(uSize),u=(vec2(p)+0.5)/fs;\n vec2 own=texelFetch(uPhaseFlow,p,0).zw/fs,bv=texelFetch(uPhaseMode,p/4,0).xy/fs;\n float be=wc5(u,bv),e=wc5(u,own)+12.0/255.0;if(e<be){be=e;bv=own;}\n e=wc5(u,vec2(0.0))+12.0/255.0;if(e<be)bv=vec2(0.0);\n bv*=fs;o0=vec4(bv,bv);}\n")
+            .toString();
+
     static final String STATIC_COUNT = new StringBuilder(391)
             .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uFrameA,uFrameC,uCount;\nlayout(location=0) out vec4 o0;\nvoid main(){ivec2 p=ivec2(gl_FragCoord.xy);vec3 e=abs(texelFetch(uFrameA,p,0).rgb-texelFetch(uFrameC,p,0).rgb);\n float n=texelFetch(uCount,p,0).r;\n o0=vec4(step(max(max(e.r,e.g),e.b),1.5/255.0)*min(n+1.0/255.0,1.0),0.0,0.0,1.0);}\n")
             .toString();

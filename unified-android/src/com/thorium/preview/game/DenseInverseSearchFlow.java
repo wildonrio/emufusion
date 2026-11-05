@@ -47,6 +47,11 @@ final class DenseInverseSearchFlow {
     // QA synthesis 24: per-phase symmetric refinement of the DIS motion.
     private int phaseSearch, phaseDensify, generatePhase;
     private int phasePatches, phaseFlow, phaseLevel = -1;
+    // Pixel art: the local mode of the whole-pixel motion per cell, and the
+    // field the generate pass reads, chosen per field pixel (dis_gles.py PHASE_MODE).
+    private int phaseModeProgram, phaseChoiceProgram, phaseMode, phaseChoice, phaseChoiceLevel = -1;
+    private long phaseChoiceKeyA, phaseChoiceKeyB;
+    private float phaseChoiceValue = -1f;
     // Cut/fade verdict of the last estimate (1x1 RGBA8: r cut evidence, g fade).
     private int cutProgram, cut;
     // The frame-level verdict after the per-phase field (dis_gles.LATE_SHARE),
@@ -477,6 +482,60 @@ final class DenseInverseSearchFlow {
 
     void setPropagateCa(boolean value) { propagateCa = value; }
 
+    /** The field for pixel art's generate pass: once per pair and phase. */
+    private int pixelArtField(int frameA, int frameC, float t) {
+        if (phaseModeProgram == 0) {
+            String v = DenseInverseSearchShaders.VERTEX;
+            phaseModeProgram = link(v, DenseInverseSearchShaders.PHASE_MODE);
+            phaseChoiceProgram = link(v, DenseInverseSearchShaders.PHASE_CHOICE);
+            passNames.put(phaseModeProgram, "PHASE_MODE");
+            passNames.put(phaseChoiceProgram, "PHASE_CHOICE");
+        }
+        int w = sizes[used][0], h = sizes[used][1];
+        if (phaseChoiceLevel != used) {
+            if (phaseChoice != 0) {
+                GLES20.glDeleteTextures(2, new int[] {phaseMode, phaseChoice}, 0);
+                owned.remove(Integer.valueOf(phaseMode));
+                owned.remove(Integer.valueOf(phaseChoice));
+                verifiedTargets.remove(phaseMode);
+                verifiedTargets.remove(phaseChoice);
+            }
+            int cell = 4;  // dis_gles.py PHASE_MODE_CELL
+            phaseMode = texture((w + cell - 1) / cell, (h + cell - 1) / cell, true);
+            phaseChoice = texture(w, h, true);
+            // Each field pixel keeps its own whole-pixel motion on a larger output.
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+            phaseChoiceLevel = used;
+            phaseChoiceValue = -1f;
+        }
+        if (phaseKeyA != phaseChoiceKeyA || phaseKeyB != phaseChoiceKeyB || t != phaseChoiceValue) {
+            saveState();
+            try {
+                begin(phaseModeProgram, (w + 3) / 4, (h + 3) / 4, phaseMode);
+                bind(phaseModeProgram, "uPhaseFlow", phaseFlow, 0);
+                GLES30.glUniform2i(location(phaseModeProgram, "uSize"), w, h);
+                GLES20.glUniform2f(location(phaseModeProgram, "uHistorySize"), historyWidth, historyHeight);
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+                begin(phaseChoiceProgram, w, h, phaseChoice);
+                bind(phaseChoiceProgram, "uFrameA", frameA, 0);
+                bind(phaseChoiceProgram, "uFrameC", frameC, 1);
+                bind(phaseChoiceProgram, "uPhaseFlow", phaseFlow, 2);
+                bind(phaseChoiceProgram, "uPhaseMode", phaseMode, 3);
+                GLES30.glUniform2i(location(phaseChoiceProgram, "uSize"), w, h);
+                GLES20.glUniform2f(location(phaseChoiceProgram, "uHistorySize"), historyWidth, historyHeight);
+                GLES20.glUniform1f(location(phaseChoiceProgram, "uT"), t);
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            } finally {
+                restoreState();
+            }
+            phaseChoiceKeyA = phaseKeyA;
+            phaseChoiceKeyB = phaseKeyB;
+            phaseChoiceValue = t;
+        }
+        return phaseChoice;
+    }
+
     /**
      * structureMask 0: none. Otherwise synthesis 15's static-structure mask,
      * applied under warps of minMotionPx or more.
@@ -529,6 +588,8 @@ final class DenseInverseSearchFlow {
             staticKeyA = phaseKeyA;
             staticKeyB = phaseKeyB;
         }
+        int generateField = discrete && TimelineSchedulerSwitch.pixelMode() ?
+                pixelArtField(frameA, frameC, t) : phaseFlow;
         GLES20.glUseProgram(generatePhase);
         bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);
         bind(generatePhase, "uStatic", overlay ? staticCounts[staticIndex] : zeroField, 9);
@@ -546,7 +607,7 @@ final class DenseInverseSearchFlow {
                 TimelineSchedulerSwitch.fieldDetail() ? FIELD_CHOICE_SPREAD : 0f);
         bind(generatePhase, "uFrameA", frameA, 0);
         bind(generatePhase, "uFrameC", frameC, 1);
-        bind(generatePhase, "uPhaseFlow", phaseFlow, 2);
+        bind(generatePhase, "uPhaseFlow", generateField, 2);
         // Endpoint flows for the occlusion side choice, and the picture
         // rectangle for content bounds (each unused unless generated in).
         bind(generatePhase, "uFlowAC", flows[0][used], 5);
@@ -830,6 +891,10 @@ final class DenseInverseSearchFlow {
         java.util.Arrays.fill(motionFill, 0);
         motionWidth = motionHeight = 0;
         phasePatches = phaseFlow = cut = late = lateRows = bounds = 0;
+        phaseMode = phaseChoice = 0;
+        phaseChoiceLevel = -1;
+        phaseChoiceKeyA = phaseChoiceKeyB = 0L;
+        phaseChoiceValue = -1f;
         quietRows = quiet = 0;
         quietKeyA = quietKeyB = 0L;
         staticCounts[0] = staticCounts[1] = 0;
@@ -851,12 +916,13 @@ final class DenseInverseSearchFlow {
         releaseTextures();
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
                 phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram,
-                quietRowsProgram, quietSumProgram, boundsProgram, selectFeatures, selectC1,
+                quietRowsProgram, quietSumProgram, boundsProgram, phaseModeProgram, phaseChoiceProgram, selectFeatures, selectC1,
                 selectC2, selectC3, selectOut, selectGenerate})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
         phaseSearch = phaseDensify = generatePhase = cutProgram = lateProgram = lateRowsProgram = boundsProgram = 0;
         staticCountProgram = quietRowsProgram = quietSumProgram = 0;
+        phaseModeProgram = phaseChoiceProgram = 0;
         if (quietQuery[0] != 0) GLES30.glDeleteQueries(2, quietQuery, 0);
         quietQuery[0] = quietQuery[1] = 0;
         quietPending[0] = quietPending[1] = false;

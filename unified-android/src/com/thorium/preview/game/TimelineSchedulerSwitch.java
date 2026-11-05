@@ -283,6 +283,47 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         verdictWait = verdict;
+        boolean swapGpu = false;
+        try {
+            if (context != null) swapGpu = Settings.Global.getInt(
+                    context.getContentResolver(), SWAP_AFTER_GPU_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        swapAfterGpu = swapGpu;
+        boolean drain = false;
+        try {
+            if (context != null) drain = Settings.Global.getInt(
+                    context.getContentResolver(), PIPELINED_DRAIN_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        pipelinedDrain = drain;
+        int predraw = 0;
+        try {
+            if (context != null) predraw = Settings.Global.getInt(
+                    context.getContentResolver(), REAL_PREDRAW_GLOBAL, 0);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        realPredraw = predraw >= 1;
+        generatedPredraw = predraw >= 2;
+        boolean pixel = false;
+        try {
+            if (context != null) pixel = Settings.Global.getInt(
+                    context.getContentResolver(), PIXEL_MODE_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        pixelMode = pixel;
+        boolean late = false;
+        try {
+            if (context != null) late = Settings.Global.getInt(
+                    context.getContentResolver(), LATE_LATCH_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        lateLatch = late;
         boolean fast = true;
         try {
             if (context != null) fast = Settings.Global.getInt(
@@ -614,6 +655,61 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean verdictWait = true;
 
     static boolean verdictWait() { return verdictWait; }
+
+    /**
+     * In the compositor's fast state a frame is queued once its GPU work is
+     * done, and one that is not done by its latch stays out of it
+     * (UnfinishedFrameGate). QA: emufusion_framegen_swap_after_gpu=0 queues
+     * every frame at once, for paired comparisons.
+     */
+    static final String SWAP_AFTER_GPU_GLOBAL = "emufusion_framegen_swap_after_gpu";
+    private static volatile boolean swapAfterGpu = false;
+
+    static boolean swapAfterGpu() { return swapAfterGpu; }
+
+    /**
+     * After 2 s in the compositor's pipelined state one generated frame stays
+     * out, at most every 16 s (UnfinishedFrameGate.drain). QA:
+     * emufusion_framegen_pipelined_drain=0.
+     */
+    static final String PIPELINED_DRAIN_GLOBAL = "emufusion_framegen_pipelined_drain";
+    private static volatile boolean pipelinedDrain = false;
+
+    static boolean pipelinedDrain() { return pipelinedDrain; }
+
+    /**
+     * QA (emufusion_framegen_real_predraw): 1, a pair's real image is drawn
+     * into the back buffer right after its generated image's swap, so its own
+     * callback only swaps it; 2, a prepared generated image likewise as soon
+     * as it is ready.
+     */
+    static final String REAL_PREDRAW_GLOBAL = "emufusion_framegen_real_predraw";
+    private static volatile boolean realPredraw = false;
+    private static volatile boolean generatedPredraw = false;
+
+    static boolean realPredraw() { return realPredraw; }
+
+    static boolean generatedPredraw() { return generatedPredraw; }
+
+    /**
+     * Pixel art's generate pass reads a field chosen per pixel from the local
+     * mode of the whole-pixel motion, the pixel's own vector and zero (dis_gles.py
+     * PHASE_MODE). QA: emufusion_framegen_pixel_mode=0 reads the field directly.
+     */
+    static final String PIXEL_MODE_GLOBAL = "emufusion_framegen_pixel_mode";
+    private static volatile boolean pixelMode = false;
+
+    static boolean pixelMode() { return pixelMode; }
+
+    /**
+     * A phase-locked core's generated image goes to the compositor as soon as
+     * it is finished, not at the next callback (LateLatchPolicy). QA:
+     * emufusion_framegen_late_latch=1.
+     */
+    static final String LATE_LATCH_GLOBAL = "emufusion_framegen_late_latch";
+    private static volatile boolean lateLatch = false;
+
+    static boolean lateLatch() { return lateLatch; }
 
     /**
      * The frame thread runs only on CPUs outside the lowest-clocked cluster

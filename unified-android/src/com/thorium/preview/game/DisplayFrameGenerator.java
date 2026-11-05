@@ -5599,7 +5599,44 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // Start the solve now rather than at the callback's swap.
             GLES20.glFlush();
             if (physicalTraceEnabled) traceConsumeEndNs = System.nanoTime();
+            if (lateLatchActive()) presentGeneratedOnArrival();
         }
+    }
+
+    private final com.thorium.emufusion.video.LateLatchPolicy lateLatchPolicy =
+            new com.thorium.emufusion.video.LateLatchPolicy();
+    private boolean onArrivalPresent;
+
+    private boolean lateLatchActive() {
+        return TimelineSchedulerSwitch.lateLatch() && sourcePhaseLockConsumer &&
+                !sourcePhaseLock.abandoned() && TimelineSchedulerSwitch.sourcePhaseLock() &&
+                unfinishedFrameGate.fast() && TimelineSchedulerSwitch.swapAfterGpu();
+    }
+
+    /** The pair just formed: its generated image to the next latch, without waiting for a callback. */
+    private void presentGeneratedOnArrival() {
+        if (!preparedFrameValid || activePairSyntheticCommitted || lastCallbackFrameTimeNs == 0L) return;
+        long nowNs = System.nanoTime();
+        long arrivedNs = arrivalNs(activeRightSubmission);
+        long latchNs = nextLatchNs(nowNs);
+        if (latchNs == 0L || !lateLatchPolicy.present(nowNs, arrivedNs, lastCallbackFrameTimeNs, latchNs,
+                frameRate.panelPeriodNs())) return;
+        PhysicalPresentationDeadline deadline = nextBuiltInDeadline(lastCallbackFrameTimeNs, nowNs);
+        if (!deadline.valid() || deadline.skippedPanelScans() != 0) return;
+        int presentation = selectTimelinePresentation(lastCallbackFrameTimeNs);
+        if (presentation != AdaptiveFrameRateController.PRESENT_SYNTHETIC) {
+            timeline.abort();
+            return;
+        }
+        long swapsBefore = presents;
+        onArrivalPresent = true;
+        try {
+            presentTimelineSelection(phaseLockedTimelineDeadline(deadline), null, presentation);
+        } finally {
+            onArrivalPresent = false;
+        }
+        if (presents != swapsBefore) lateLatchPolicy.presented();
+        else lateLatchPolicy.missed();
     }
 
     private void pollSignatureOnVsync() {
@@ -7347,6 +7384,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 (result.supportedMask & GpuPhysicalHeadroomLedger.RENDER_COMPLETE) != 0;
         boolean latchKnown = result.latchNs > 0L &&
                 (result.supportedMask & GpuPhysicalHeadroomLedger.COMPOSITION_LATCH) != 0;
+        if (latchKnown) unfinishedFrameGate.observe(result.latchNs, result.actualNs, result.panelPeriodNs);
         if (TimelineSchedulerSwitch.earliestLatch() && builtinQueueReserve.extraScans() == 0)
             builtinBacklogCatchUp.observe(result.desiredNs, result.actualNs, result.panelPeriodNs,
                     result.actualNs);
@@ -9095,11 +9133,43 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             preparedFrameAspect = presentationAspect;
             preparedFrameValid = true;
             ++preparedFrameRenders;
+            if (TimelineSchedulerSwitch.generatedPredraw()) predrawGeneratedImage();
         } finally {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, preparedFrameState[0]);
             GLES20.glViewport(preparedFrameState[1], preparedFrameState[2],
                     preparedFrameState[3], preparedFrameState[4]);
         }
+    }
+
+    private boolean predrawnGenerated;
+
+    /** The prepared image in the back buffer, as its callback would draw it. */
+    private void predrawGeneratedImage() {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        GLES20.glClearColor(0f, 0f, 0f, 1f);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        if (preparedAtInputSize()) setPresentationViewport();
+        drawTexture2d(preparedFrameTexture);
+        FrameRateOverlay overlay = frameRateOverlay;
+        drawFrameRateOverlay();
+        GLES20.glFlush();
+        predrawnReal = false;
+        predrawnGenerated = true;
+        predrawnRealAspect = presentationAspect;
+        predrawnRealOverlay = overlay != null ? overlay.image : null;
+        ++realPredraws;
+    }
+
+    /** Whether the back buffer already holds the generated image the callback would draw. */
+    private boolean generatedPredrawnFor(float phase) {
+        if (!predrawnGenerated || !preparedFrameValid || phase != TimelineFrameScheduler.ARRIVAL_PHASE)
+            return false;
+        FrameRateOverlay overlay = frameRateOverlay;
+        return preparedFrameKeyA == historyFrameKey(previousIndex) &&
+                preparedFrameKeyB == historyFrameKey(currentIndex) &&
+                predrawnRealAspect == presentationAspect &&
+                predrawnRealOverlay == (overlay != null ? overlay.image : null);
     }
 
     /**
@@ -9114,8 +9184,17 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 inputWidth < outputWidth && inputHeight < outputHeight;
     }
 
+    private boolean generatedInBackBuffer;
+
+    private boolean denseSceneCutPossible() { return densePairMeanDifference > .18f; }
+
     /** The callback's generated image: the prepared copy when it is this pair's, else rendered now. */
     private void drawPreparedOrMotionFrame(float phase) {
+        if (generatedInBackBuffer) {
+            ++preparedFrameHits;
+            realPredrawHits += 1;
+            return;
+        }
         boolean atInput = preparedAtInputSize();
         if (preparedFrameValid && preparedFrameTexture != 0 &&
                 phase == TimelineFrameScheduler.ARRIVAL_PHASE &&
@@ -9137,6 +9216,96 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         if (TimelineSchedulerSwitch.preparedFrame() && !holdoutMode) ++preparedFrameMisses;
         drawMotionFrame(phase);
+    }
+
+    private boolean predrawnReal;
+    private long predrawnRealKey, realPredraws, realPredrawHits;
+    private float predrawnRealAspect;
+    private FrameRateOverlay.Image predrawnRealOverlay;
+
+    /**
+     * The pair's real image goes into the back buffer right after its
+     * generated image's swap: nothing is left for the GPU at that image's own
+     * callback, half a source period later, so sharing the GPU with the
+     * engine cannot make it late.
+     */
+    private void predrawRealImage() {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        GLES20.glClearColor(0f, 0f, 0f, 1f);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        setPresentationViewport();
+        drawTexture2d(historyTextures[currentIndex]);
+        FrameRateOverlay overlay = frameRateOverlay;
+        drawFrameRateOverlay();
+        GLES20.glFlush();
+        predrawnReal = true;
+        predrawnRealKey = historyFrameKey(currentIndex);
+        predrawnRealAspect = presentationAspect;
+        predrawnRealOverlay = overlay != null ? overlay.image : null;
+        ++realPredraws;
+    }
+
+    private boolean realPredrawnFor(float selectedPhase) {
+        if (!predrawnReal || selectedPhase < 1f) return false;
+        FrameRateOverlay overlay = frameRateOverlay;
+        return predrawnRealKey == historyFrameKey(currentIndex) &&
+                predrawnRealAspect == presentationAspect &&
+                predrawnRealOverlay == (overlay != null ? overlay.image : null);
+    }
+
+    private final com.thorium.emufusion.video.UnfinishedFrameGate unfinishedFrameGate =
+            new com.thorium.emufusion.video.UnfinishedFrameGate();
+    private long swapGpuWaits, swapGpuWaitSumUs, swapGpuWaitMaxUs;
+    /** The swap's own cost before the compositor can see the frame. */
+    private static final long SWAP_HANDOFF_NS = 300_000L;
+
+    /** The compositor's next latch after {@code nowNs}, or 0 without a plan from its timing. */
+    private long nextLatchNs(long nowNs) {
+        if (builtinPlanIntervalNs <= 0L || builtinPlanCompositeDeadlineNs <= 0L) return 0L;
+        return nowNs <= builtinPlanCompositeDeadlineNs ? builtinPlanCompositeDeadlineNs :
+                builtinPlanCompositeDeadlineNs + builtinPlanIntervalNs *
+                        ((nowNs - builtinPlanCompositeDeadlineNs) / builtinPlanIntervalNs + 1L);
+    }
+
+    /**
+     * While the compositor is in its fast state, waits for this frame's GPU
+     * work until just before the next latch (UnfinishedFrameGate).
+     * @return false when the frame stays out of that latch
+     */
+    private boolean finishedForNextLatch(boolean generated) {
+        if (!TimelineSchedulerSwitch.swapAfterGpu() || externalTransport != null || !timelineActive) return true;
+        if (!unfinishedFrameGate.fast()) {
+            // Only a generated frame: the real image follows it on time.
+            return !(generated && TimelineSchedulerSwitch.pipelinedDrain() &&
+                    unfinishedFrameGate.drain(System.nanoTime()));
+        }
+        long startedNs = System.nanoTime();
+        long latchNs = nextLatchNs(startedNs);
+        if (latchNs == 0L) return true;
+        long fence = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (fence == 0L) return true;
+        boolean finished;
+        android.os.Trace.beginSection("EmuFusion.swapGpuWait");
+        try {
+            int result = GLES30.glClientWaitSync(fence, GLES30.GL_SYNC_FLUSH_COMMANDS_BIT,
+                    Math.max(0L, latchNs - SWAP_HANDOFF_NS - startedNs));
+            finished = result == GLES30.GL_ALREADY_SIGNALED ||
+                    result == GLES30.GL_CONDITION_SATISFIED || result == GLES30.GL_WAIT_FAILED;
+        } finally {
+            GLES30.glDeleteSync(fence);
+            android.os.Trace.endSection();
+        }
+        long nowNs = System.nanoTime();
+        long waitedUs = (nowNs - startedNs) / 1000L;
+        if (finished && generated) {
+            long arrived = arrivalNs(activeRightSubmission);
+            if (arrived > 0L) lateLatchPolicy.observeWork(nowNs - arrived);
+        }
+        ++swapGpuWaits;
+        swapGpuWaitSumUs += waitedUs;
+        swapGpuWaitMaxUs = Math.max(swapGpuWaitMaxUs, waitedUs);
+        return finished || !unfinishedFrameGate.withhold(nowNs);
     }
 
     /** Draws the Vulkan-produced app-owned image with the required Y-origin conversion. */
@@ -9650,6 +9819,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             long arrived = arrivalNs(activeRightSubmission);
             if (arrived > 0L) {
                 long waitNs = System.nanoTime() - arrived;
+                if (TimelineSchedulerSwitch.lateLatch() && sourcePhaseLockConsumer) {
+                    // The lock holds the wait for the latch instead of the callback.
+                    long latch = nextLatchNs(arrived);
+                    if (latch != 0L) {
+                        waitNs = latch - arrived;
+                        sourcePhaseLock.setTargetWaitNs(lateLatchPolicy.targetWaitNs());
+                    }
+                }
                 sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);
                 sourcePhaseLock.observe(waitNs, panelPeriodNs);
             }
@@ -9855,10 +10032,19 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // above could reject; a rejection here already invalidated the pair.
         boolean rejectedAfterSelection =
                 denseEnabledAtSelection && !densePyramidEnabled;
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
-        GLES20.glViewport(0, 0, outputWidth, outputHeight);
-        GLES20.glClearColor(0f, 0f, 0f, 1f);
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        boolean realPredrawn = realThisTick && realPredrawnFor(selectedPhase);
+        predrawnReal = false;
+        generatedInBackBuffer = !realThisTick && !denseSceneCutPossible() && densePyramidEnabled &&
+                generatedPredrawnFor(selectedPhase);
+        predrawnGenerated = false;
+        if (!realPredrawn && !generatedInBackBuffer) {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            GLES20.glClearColor(0f, 0f, 0f, 1f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        } else {
+            ++realPredrawHits;
+        }
         // densePairMeanDifference is never measured in the cadence path (the
         // synchronous proof readbacks were removed), so this Java hold never
         // fires; the hard-cut hold lives in the interpolate shader
@@ -9870,9 +10056,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // the retained left, while a late physical callback may land on
             // phase1 and consume the retained right. Neither path reads the
             // producer's overwriteable latest texture.
-            setPresentationViewport();
-            drawTexture2d(historyTextures[selectedPhase >= 1f ?
-                    currentIndex : previousIndex]);
+            if (!realPredrawn) {
+                setPresentationViewport();
+                drawTexture2d(historyTextures[selectedPhase >= 1f ?
+                        currentIndex : previousIndex]);
+            }
         } else if (denseSceneCut) {
             // There is no physical intermediate across a hard scene cut.
             // Hold the left endpoint until the rational source timeline
@@ -10028,7 +10216,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             return;
         }
         beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);
-        drawFrameRateOverlay();
+        if (!realPredrawn && !generatedInBackBuffer) drawFrameRateOverlay();
+        if (!finishedForNextLatch(renderedSynthetic)) {
+            discardFullImageCapture();
+            if (physicalFramePrepared) physicalTracker.cancelPrepared();
+            timeline.withhold();
+            return;
+        }
         long denseSwapEnteredNs = densePyramidEnabled ? System.nanoTime() : 0L;
         if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
             discardFullImageCapture();
@@ -10219,6 +10413,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 invalidateBufferedPairForReprime();
             }
         }
+        if (renderedSynthetic && TimelineSchedulerSwitch.realPredraw() && timelineActive &&
+                externalTransport == null && activeRightSequence > 0L) predrawRealImage();
         long presentationEpochAfterAdvance = schedulerPresentationEpoch();
         refreshProofEvidencePresentationEpoch();
         // Until dense interpolation is armed, try twice a second instead of
@@ -14891,6 +15087,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " signatureEarlyCommits=" + signatureEarlyCommits +
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
+                " swapGpuWaits=" + swapGpuWaits + "/" + swapGpuWaitSumUs + "/" + swapGpuWaitMaxUs +
+                " unfinishedWithheld=" + unfinishedFrameGate.withheld() + "/" +
+                        unfinishedFrameGate.refused() + "/" + unfinishedFrameGate.drains() +
+                " realPredraws=" + realPredraws + "/" + realPredrawHits +
+                " lateLatch=" + lateLatchPolicy.presents() + "/" + lateLatchPolicy.misses() + "/" +
+                        lateLatchPolicy.workNs() / 1000L + "/" + lateLatchPolicy.targetWaitNs() / 1000L +
                 " fastCores=0x" + Long.toHexString(fastCoreMask) +
                 " arrivalPassedReals=" + arrivalPassedReals +
                 " disPrecomputeHits=" + disPrecomputeHits +

@@ -896,6 +896,16 @@ public final class TimelineFrameScheduler {
 
     public void abort() { clearPending(); }
 
+    /**
+     * The pending output never reached the compositor and will not be shown
+     * later either. A generated image stays skipped: the real image comes at
+     * its own time rather than a scan later behind that generated image.
+     */
+    public void withhold() {
+        if (pendingKind == GENERATED && arrivalPacing) arrivalGeneratedShown = true;
+        clearPending();
+    }
+
     private void clearPending() {
         pendingKind = NONE;
         pendingKeepAlive = false;

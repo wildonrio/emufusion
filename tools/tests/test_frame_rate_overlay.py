@@ -12,8 +12,8 @@ class FrameRateOverlayTest(unittest.TestCase):
     def test_generator_draws_it_last_before_the_swap(self):
         generator = (GAME / 'DisplayFrameGenerator.java').read_text()
         self.assertIn('beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);\n'
-                      '        drawFrameRateOverlay();\n'
-                      '        long denseSwapEnteredNs', generator)
+                      '        if (!realPredrawn && !generatedInBackBuffer) drawFrameRateOverlay();\n'
+                      '        if (!finishedForNextLatch(renderedSynthetic)) {', generator)
         draw = method(generator, '    private void drawFrameRateOverlay(')
         # Uploaded once per new image (premultiplied RGBA, rows in GL order).
         self.assertIn('if (image != uploadedOverlayImage) {', draw)

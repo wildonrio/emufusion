@@ -31,6 +31,7 @@ public final class TimelineFrameSchedulerTest {
         readinessFollowsIrregularSpans();
         readinessUndoesHeldLatency();
         arrivalPacingShowsEachImageAsItArrives();
+        withheldGeneratedImageIsNotShownLater();
         arrivalPacingKeepsLatencyAtHalfTheSpan();
         arrivalPacingAtSixtyFps();
         arrivalPacingCatchesUpAtSixtyFps();
@@ -498,6 +499,32 @@ public final class TimelineFrameSchedulerTest {
             off.vsync(off.now);
         }
         check(off.scheduler.keepAlives() == 0L, "off");
+    }
+
+    private static void withheldGeneratedImageIsNotShownLater() {
+        // A generated image that stays out of its latch (UnfinishedFrameGate):
+        // the real image comes at its own time, not a scan later behind it.
+        long panel = 8_333_333L, span = 2 * panel, t = 1_000_000_000L;
+        TimelineFrameScheduler scheduler = new TimelineFrameScheduler();
+        scheduler.configure(panel, span);
+        scheduler.setArrivalPacing(true, panel);
+        long second = t + span;
+        check(scheduler.select(second, 1L, t, 2L, second, true) == TimelineFrameScheduler.REAL_LEFT,
+                "prime");
+        scheduler.commit(true);
+        long now = second + panel;
+        check(scheduler.select(now, 1L, t, 2L, second, true) == TimelineFrameScheduler.GENERATED,
+                "the pair's generated image first");
+        scheduler.withhold();
+        check(scheduler.pendingKind() == TimelineFrameScheduler.NONE, "nothing pending");
+        now += panel;
+        check(scheduler.select(now, 1L, t, 2L, second, true) == TimelineFrameScheduler.REAL_RIGHT,
+                "the real image on time, without the generated one");
+        scheduler.commit(true);
+        now += panel;
+        long third = second + span;
+        check(scheduler.select(now, 2L, second, 3L, third, true) == TimelineFrameScheduler.GENERATED,
+                "the next pair is unaffected");
     }
 
     private static void arrivalPacingShowsEachImageAsItArrives() {

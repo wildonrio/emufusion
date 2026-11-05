@@ -164,6 +164,10 @@ SOURCES="$SOURCES $PROJECT_DIR/src/com/thorium/preview/game/GpuDriverTable.java"
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.emufusion.video.CompositorBacklogCatchUpTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.emufusion.video.UnfinishedFrameGateTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
+    com.thorium.emufusion.video.LateLatchPolicyTest
+"$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.emufusion.video.PresentRhythmTest
 "$JAVA_HOME/bin/java" -cp "$TEST_BUILD" \
     com.thorium.emufusion.video.BurnInShiftTest

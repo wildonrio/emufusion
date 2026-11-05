@@ -54,6 +54,7 @@ public final class SourcePhaseLock {
     /** Frames without a nudge before arrival jitter is measured. */
     public static final int STEADY_FRAMES = 8;
 
+    private long targetWaitNs = TARGET_WAIT_NS;
     private double errorEma, jitterEma, waitEma;
     private int observed;
     private int framesSinceNudge = STEADY_FRAMES;
@@ -63,6 +64,9 @@ public final class SourcePhaseLock {
     private long nudgedSinceCheckNs;
     private double errorAtCheck = Double.NaN;
     private long nudges, nudgedTotalNs;
+
+    /** The wait to hold, before the jitter margin (LateLatchPolicy; the default is a callback's). */
+    public synchronized void setTargetWaitNs(long ns) { targetWaitNs = ns; }
 
     /** One newly taken-up image: arrival to the callback that took it up. */
     public synchronized void observe(long waitNs, long panelPeriodNs) {
@@ -88,7 +92,7 @@ public final class SourcePhaseLock {
                 waitEma = wait;
             }
         }
-        double target = TARGET_WAIT_NS + JITTER_MARGIN * jitterEma;
+        double target = targetWaitNs + JITTER_MARGIN * jitterEma;
         double error = waitNs - target;
         if (observed == 0) {
             // Just after a callback: late by the rest of the scan, not early.

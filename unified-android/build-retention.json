@@ -1357,6 +1357,30 @@
     "unified-android/build/emufusion-3.2.149-phase2-phase3-qualification.apk": {
       "sha256": "ecbffa4b12f485e2c392338eead6fa38920ecf5df04662c13b5504b2c8048373",
       "reason": "Superseded rollback 3.2.149 (223); 3.2.150 is the rollback for 3.2.153, 2026-11-04."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-73561904d3d85a6df2ca96d5c9208e6db4cacff4e44f4c3493f55e6e5267dbf3.apk": {
+      "sha256": "73561904d3d85a6df2ca96d5c9208e6db4cacff4e44f4c3493f55e6e5267dbf3",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (compositor gate work); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-92bed00de152e46f847484cf8ce65fb78bb713e0f9ef37cd2a19d0aa800117be.apk": {
+      "sha256": "92bed00de152e46f847484cf8ce65fb78bb713e0f9ef37cd2a19d0aa800117be",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (compositor gate work); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-c30d18be9edc4d7a3a9eb57caa570413c1fb6d91e95073dafc83e5064af05b4a.apk": {
+      "sha256": "c30d18be9edc4d7a3a9eb57caa570413c1fb6d91e95073dafc83e5064af05b4a",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (compositor gate work); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-da6a1fe0dbca41f2f77f2ab14bdde7aabf73a6c7394dda26dd371d94914bd29f.apk": {
+      "sha256": "da6a1fe0dbca41f2f77f2ab14bdde7aabf73a6c7394dda26dd371d94914bd29f",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (compositor gate work); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-e191c89d4b005a22c48d47d15516c71dc71dea41da305cdff34ea8416bd20e8e.apk": {
+      "sha256": "e191c89d4b005a22c48d47d15516c71dc71dea41da305cdff34ea8416bd20e8e",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (compositor gate work); no device result depends on these packages."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-d50f0ef6a8face2cde6d2baedbc51bd6c2c5ba9d632112ccfecc840b9cc977b4.apk": {
+      "sha256": "d50f0ef6a8face2cde6d2baedbc51bd6c2c5ba9d632112ccfecc840b9cc977b4",
+      "reason": "Superseded frame-generation trial builds of 2026-11-05 (compositor gate work); no device result depends on these packages."
     }
   }
 }

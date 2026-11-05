@@ -1120,6 +1120,48 @@ def bounds_shader():
     " o0=vec4(float(l)/float(uSize.x),float(r+1)/float(uSize.x),float(b)/float(uSize.y),float(t+1)/float(uSize.y));}\n")
 
 
+# Pixel art moves in rigid whole-pixel layers, but the field's vectors wobble
+# by a pixel from patch to patch and fade where animation explains nothing, so
+# a scrolling picture tears along the patches (Sonic 2's rotating bumpers,
+# windows and lettering; Mega Drive 46% of frames with invented content). Per
+# cell of PHASE_MODE_CELL field pixels, the most frequent whole-pixel vector
+# among (2r+1)^2 samples PHASE_MODE_WINDOW = (r, apart) field pixels apart. Per
+# field pixel, that vector unless the pixel's own vector or zero motion match
+# better by PHASE_MODE_LEAD grey levels (five taps of both warps).
+PHASE_MODE_WINDOW = (2, 4)
+PHASE_MODE_CELL = 4
+PHASE_MODE_LEAD = 12.0
+
+
+def phase_mode_shader():
+    r, apart = PHASE_MODE_WINDOW
+    n = (2 * r + 1) ** 2
+    return (HEADER +
+    "uniform sampler2D uPhaseFlow;uniform ivec2 uSize;uniform vec2 uHistorySize;\n"
+    "layout(location=0) out vec4 o0;\n"
+    f"void main(){{ivec2 c=ivec2(gl_FragCoord.xy)*{PHASE_MODE_CELL}+{PHASE_MODE_CELL // 2};vec2 s[{n}];int n=0;vec2 fs=vec2(uSize);\n"
+    f" for(int y=-{r};y<={r};++y)for(int x=-{r};x<={r};++x){{ivec2 p=c+ivec2(x,y)*{apart};\n"
+    "  if(p.x>=0&&p.y>=0&&p.x<uSize.x&&p.y<uSize.y){s[n]=floor(texelFetch(uPhaseFlow,p,0).xy/fs*uHistorySize+0.5);++n;}}\n"
+    " int best=0,most=0;for(int i=0;i<n;++i){int k=0;for(int j=0;j<n;++j)if(s[j]==s[i])++k;if(k>most){most=k;best=i;}}\n"
+    " o0=vec4(s[best]/uHistorySize*fs,0.0,1.0);}\n")
+
+
+def phase_choice_shader():
+    lead = f"{float(PHASE_MODE_LEAD)}/255.0"
+    return (HEADER +
+    "uniform sampler2D uFrameA,uFrameC,uPhaseFlow,uPhaseMode;uniform ivec2 uSize;uniform vec2 uHistorySize;uniform float uT;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
+    "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
+    "float wc5(vec2 u,vec2 k){vec2 dx=vec2(1.0/uHistorySize.x,0.0),dy=vec2(0.0,1.0/uHistorySize.y);\n"
+    " return 0.2*(wc(u,k)+wc(u+dx,k)+wc(u-dx,k)+wc(u+dy,k)+wc(u-dy,k));}\n"
+    "void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec2 fs=vec2(uSize),u=(vec2(p)+0.5)/fs;\n"
+    f" vec2 own=texelFetch(uPhaseFlow,p,0).zw/fs,bv=texelFetch(uPhaseMode,p/{PHASE_MODE_CELL},0).xy/fs;\n"
+    f" float be=wc5(u,bv),e=wc5(u,own)+{lead};if(e<be){{be=e;bv=own;}}\n"
+    f" e=wc5(u,vec2(0.0))+{lead};if(e<be)bv=vec2(0.0);\n"
+    " bv*=fs;o0=vec4(bv,bv);}\n")
+
+
 def generate_phase_shader():
     text = _generate_phase_shader_text()
     if PHASE_DENSIFY_DISCRETE_FADE is not None:
@@ -1233,6 +1275,7 @@ def shaders():
             'TO_RAW': TO_RAW, 'PHASE_SEARCH': phase_search_shader(), 'PHASE_DENSIFY': phase_densify_shader(), 'PHASE_SMOOTH': phase_smooth_shader(), 'GRAY_CLAMP': GRAY_CLAMP, 'BOUNDS_ANY': bounds_shader(),
             'GENERATE_PHASE': generate_phase_shader(), 'CUT': cut_shader(), 'LATE_VERDICT': late_verdict_shader(), 'LATE_ROWS': late_rows_shader(),
             'QUIET_ROWS': quiet_rows_shader(), 'QUIET_SUM': quiet_sum_shader(),
+            'PHASE_MODE': phase_mode_shader(), 'PHASE_CHOICE': phase_choice_shader(),
             'STATIC_COUNT': STATIC_COUNT,
             'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader(),
             'PATCH_PROPAGATE': patch_propagate_shader()}
