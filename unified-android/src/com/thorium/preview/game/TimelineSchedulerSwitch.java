@@ -316,6 +316,26 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         pixelMode = pixel;
+        boolean mode3 = false;
+        float lead = 12f;
+        try {
+            if (context != null) {
+                mode3 = Settings.Global.getInt(context.getContentResolver(), MODE_3D_GLOBAL, 0) != 0;
+                lead = Settings.Global.getFloat(context.getContentResolver(), PIXEL_MODE_LEAD_GLOBAL, 12f);
+            }
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the defaults.
+        }
+        mode3d = mode3;
+        boolean pixelInput = false;
+        try {
+            if (context != null) pixelInput = Settings.Global.getInt(
+                    context.getContentResolver(), PIXEL_INPUT_SIZE_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        pixelInputSize = pixelInput;
+        pixelModeLead = lead;
         boolean late = false;
         try {
             if (context != null) late = Settings.Global.getInt(
@@ -700,6 +720,27 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean pixelMode = false;
 
     static boolean pixelMode() { return pixelMode; }
+
+    static final String PIXEL_MODE_LEAD_GLOBAL = "emufusion_framegen_pixel_mode_lead";
+    private static volatile float pixelModeLead = 12f;
+
+    /** Grey levels the pixel's own vector or zero motion must win by (dis_gles.py PHASE_MODE). */
+    static float pixelModeLead() { return pixelModeLead; }
+
+    /**
+     * QA (emufusion_framegen_mode_3d=1): the local mode as a candidate on the
+     * 3-D path too, per field pixel.
+     */
+    static final String MODE_3D_GLOBAL = "emufusion_framegen_mode_3d";
+    private static volatile boolean mode3d = false;
+
+    static boolean mode3d() { return mode3d; }
+
+    static final String PIXEL_INPUT_SIZE_GLOBAL = "emufusion_framegen_pixel_input_size";
+    private static volatile boolean pixelInputSize = false;
+
+    /** QA: pixel art's prepared generated image at the source's size (preparedAtInputSize). */
+    static boolean pixelInputSize() { return pixelInputSize; }
 
     /**
      * A phase-locked core's generated image goes to the compositor as soon as

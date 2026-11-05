@@ -9177,10 +9177,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * engine presenting its own, smaller picture (Eden's 1280x720 on a 1080p
      * panel) has every pass and the generate draw at its own pixels, and the
      * callback scales the image once, as it does real images (3.2.136).
-     * Pixel art keeps the output size: its whole-pixel warp is the upscale.
+     * Pixel art keeps the output size, its whole-pixel warp being the upscale,
+     * unless QA emufusion_framegen_pixel_input_size=1: then the generated image
+     * is scaled as real images are, at a fraction of the generate pass's cost.
      */
     private boolean preparedAtInputSize() {
-        return !discreteContent && historyWidth == inputWidth && historyHeight == inputHeight &&
+        return (!discreteContent || TimelineSchedulerSwitch.pixelInputSize()) &&
+                historyWidth == inputWidth && historyHeight == inputHeight &&
                 inputWidth < outputWidth && inputHeight < outputHeight;
     }
 

@@ -51,6 +51,7 @@ final class DenseInverseSearchFlow {
     // field the generate pass reads, chosen per field pixel (dis_gles.py PHASE_MODE).
     private int phaseModeProgram, phaseChoiceProgram, phaseMode, phaseChoice, phaseChoiceLevel = -1;
     private long phaseChoiceKeyA, phaseChoiceKeyB;
+    private boolean phaseChoiceDiscrete;
     private float phaseChoiceValue = -1f;
     // Cut/fade verdict of the last estimate (1x1 RGBA8: r cut evidence, g fade).
     private int cutProgram, cut;
@@ -482,8 +483,8 @@ final class DenseInverseSearchFlow {
 
     void setPropagateCa(boolean value) { propagateCa = value; }
 
-    /** The field for pixel art's generate pass: once per pair and phase. */
-    private int pixelArtField(int frameA, int frameC, float t) {
+    /** The field the generate pass reads, chosen with the local mode: once per pair and phase. */
+    private int modeChoiceField(int frameA, int frameC, float t) {
         if (phaseModeProgram == 0) {
             String v = DenseInverseSearchShaders.VERTEX;
             phaseModeProgram = link(v, DenseInverseSearchShaders.PHASE_MODE);
@@ -492,7 +493,10 @@ final class DenseInverseSearchFlow {
             passNames.put(phaseChoiceProgram, "PHASE_CHOICE");
         }
         int w = sizes[used][0], h = sizes[used][1];
-        if (phaseChoiceLevel != used) {
+        // dis_gles.py PHASE_MODE_*: pixel art's whole-pixel layers, 3-D's finer field.
+        int cell = discrete ? 4 : 2, apart = cell;
+        float quant = 1f;
+        if (phaseChoiceLevel != used || phaseChoiceDiscrete != discrete) {
             if (phaseChoice != 0) {
                 GLES20.glDeleteTextures(2, new int[] {phaseMode, phaseChoice}, 0);
                 owned.remove(Integer.valueOf(phaseMode));
@@ -500,22 +504,27 @@ final class DenseInverseSearchFlow {
                 verifiedTargets.remove(phaseMode);
                 verifiedTargets.remove(phaseChoice);
             }
-            int cell = 4;  // dis_gles.py PHASE_MODE_CELL
             phaseMode = texture((w + cell - 1) / cell, (h + cell - 1) / cell, true);
             phaseChoice = texture(w, h, true);
-            // Each field pixel keeps its own whole-pixel motion on a larger output.
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+            if (discrete) {
+                // Each field pixel keeps its own whole-pixel motion on a larger output.
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+            }
             phaseChoiceLevel = used;
+            phaseChoiceDiscrete = discrete;
             phaseChoiceValue = -1f;
         }
         if (phaseKeyA != phaseChoiceKeyA || phaseKeyB != phaseChoiceKeyB || t != phaseChoiceValue) {
             saveState();
             try {
-                begin(phaseModeProgram, (w + 3) / 4, (h + 3) / 4, phaseMode);
+                begin(phaseModeProgram, (w + cell - 1) / cell, (h + cell - 1) / cell, phaseMode);
                 bind(phaseModeProgram, "uPhaseFlow", phaseFlow, 0);
                 GLES30.glUniform2i(location(phaseModeProgram, "uSize"), w, h);
                 GLES20.glUniform2f(location(phaseModeProgram, "uHistorySize"), historyWidth, historyHeight);
+                GLES30.glUniform1i(location(phaseModeProgram, "uCell"), cell);
+                GLES30.glUniform1i(location(phaseModeProgram, "uApart"), apart);
+                GLES20.glUniform1f(location(phaseModeProgram, "uQuant"), quant);
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
                 begin(phaseChoiceProgram, w, h, phaseChoice);
                 bind(phaseChoiceProgram, "uFrameA", frameA, 0);
@@ -525,6 +534,9 @@ final class DenseInverseSearchFlow {
                 GLES30.glUniform2i(location(phaseChoiceProgram, "uSize"), w, h);
                 GLES20.glUniform2f(location(phaseChoiceProgram, "uHistorySize"), historyWidth, historyHeight);
                 GLES20.glUniform1f(location(phaseChoiceProgram, "uT"), t);
+                GLES20.glUniform1f(location(phaseChoiceProgram, "uDiscrete"), discrete ? 1f : 0f);
+                GLES20.glUniform1f(location(phaseChoiceProgram, "uLead"), TimelineSchedulerSwitch.pixelModeLead());
+                GLES30.glUniform1i(location(phaseChoiceProgram, "uCell"), cell);
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
             } finally {
                 restoreState();
@@ -588,8 +600,8 @@ final class DenseInverseSearchFlow {
             staticKeyA = phaseKeyA;
             staticKeyB = phaseKeyB;
         }
-        int generateField = discrete && TimelineSchedulerSwitch.pixelMode() ?
-                pixelArtField(frameA, frameC, t) : phaseFlow;
+        int generateField = (discrete ? TimelineSchedulerSwitch.pixelMode() : TimelineSchedulerSwitch.mode3d()) ?
+                modeChoiceField(frameA, frameC, t) : phaseFlow;
         GLES20.glUseProgram(generatePhase);
         bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);
         bind(generatePhase, "uStatic", overlay ? staticCounts[staticIndex] : zeroField, 9);
