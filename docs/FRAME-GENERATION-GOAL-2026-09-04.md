@@ -249,7 +249,31 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 5 (latest) **— Why one late frame leaves Eden a scan behind: the Thor's compositor latches unfinished buffers. Trials ready (QA opt-in); the Thor left adb at 09:44 before they could run.**
+November 5 (latest) **— The Thor's firmware sleeps every engine inside queueBuffer; a future timestamp skips it. Eden's images no longer sit pinned 4 ms before our callback, and the phase lock finally works on them.**
+
+- **Evidence (system trace, NSMBU Deluxe in play).** Eden's `QueuePresentKHR` starts 1.7-2.3 ms after our callback and ends at 4.03 ms ± 0.05, with the thread asleep about 1.9 ms inside libgui's `queueBuffer`, woken by a timer interrupt. Our own `queueBuffer` takes 0.2 ms.
+- **Cause.** `vendor.perf.framepacing.enable=1`: the vendor libgui calls `penguinQueueBuffer` in `/system_ext/lib64/libpenguin_impl.so` (Qualcomm "Penguin" frame pacing; decompiled with Ghidra), which `usleep`s producers to a fixed vsync phase (tunables `vendor.perf.framepacing.tunable.{min,max}_offset_to_vsync`, 2 ms by default). It tracks layers named `SurfaceTexture-*` and `SurfaceView*`, which covers every engine feeding our input Surface. This is why image arrival sat 4.0-4.3 ms before the callback on Eden and on other hardware engines, whatever their clock phase, and why Eden's phase lock moved nothing (November 2).
+- **The way out.** `penguinQueueBuffer` drops a buffer from its tracking when its timestamp is explicit and still in the future at queue time. We only use the spacing of these stamps. Eden stamped `now + 10 ms` (`setprop debug.emufusion.eden_stamp_ahead_us 10000`): the sleep is gone, `vkQueuePresentKHR` averages 0.14 ms, and the lock now moves Eden's images.
+- **NSMBU Deluxe in play, pacing trial off, one row per run:**
+
+  | Build | Wait before callback | First generated / real, median (mean) | Two-scan intervals, 16 s | Fast mode |
+  | --- | --- | --- | --- | --- |
+  | stock stamps | 4.3 ms | 19.2 / 27.4 (16.0 / 24.3) | 5 | 42% |
+  | stock stamps | 4.3 ms | 11.2 / 19.5 (12.2 / 20.5) | 2 | 89% |
+  | stock stamps | 4.3 ms | 11.2 / 19.5 (13.5 / 21.9) | 3 | 73% |
+  | future stamps, lock's usual target | 2.3 ms | 8.1 / 16.5 (8.8 / 16.9) | 39 | 99% |
+  | same | 2.3 ms | 8.3 / 16.6 (9.0 / 17.0) | 39 | 98% |
+  | future stamps, target 3.25 ms | 3.9 ms | 10.7 / 19.0 (11.5 / 19.8) | 3 | 90% |
+
+  Real images at 16.5 ms reach the structural minimum. But Penguin was also hiding Eden's jitter: arrival lateness p90 0.28 ms, p99 2.7 ms, 8 frames in 1,000 over 3 ms. An image past its callback costs a two-scan interval, so the lock's target has to cover that.
+- **Our GPU work waits for Eden's: this GPU has no preemption.** `/sys/class/kgsl/kgsl-3d0/preemption` reads 0 (root-only). Eden flushes every 512 draws (`debug.emufusion.eden_flush_draws`). At 128 draws, late generated frames fell (done after the latch 2, 19, 0 against 9, 10, 4; plan to GPU done p90 2.4-3.0 ms against 3.7-4.0 ms) and the fast mode held at 100% in all three runs, but two-scan intervals rose to 4, 16, 8 against 5, 2, 3: Eden's own images come late more often. With future stamps it was worse (19-22). Not adopted. Serial submits with 128 draws were much worse (839 two-scan intervals).
+- **Tried and not adopted.**
+  - Withholding a frame still on the GPU at its latch (`UnfinishedFrameGate`, QA `swap_after_gpu=1`): most such frames would have finished before the scan anyway (18 after the latch, 1 after the scan), so it costs more hitches than the flips it prevents: 9-18 two-scan intervals against 2-5.
+  - The real image drawn ahead of its callback (QA `real_predraw=1`): real images stop being late (0 after the latch), but with withholding on it did not improve rhythm in the one run measured.
+  - Rescuing an image that arrives after its callback at that callback's latch (QA `late_latch=2`): on Eden an image needs 5.5 ms from arrival to GPU done (2.4 ms of CPU, then the GPU behind Eden's batches), and no frame made it.
+  - Pixel-art local mode (QA `pixel_mode=1`): device bench on 30 pinned triplets: Mega Drive better (offline 50 -> 38% of frames, area 0.200 -> 0.114%), NES flat, SNES worse (14 -> 33-40%, area 0.059 -> 0.077-0.093%, error 0.500 -> 0.546): small sprites with their own motion lose to the background's. Box-filtered decisions narrow the gap (Mega Drive 31%, SNES 24%) without closing it.
+
+November 5 **— Why one late frame leaves Eden a scan behind: the Thor's compositor latches unfinished buffers. Trials ready (QA opt-in); the Thor left adb at 09:44 before they could run.**
 
 - **Mechanism.** The Thor sets `debug.sf.latch_unsignaled=1`: SurfaceFlinger takes a buffer at its latch whether or not the GPU has finished it, and the display's commit waits on the fence. In the fast state a commit at latch L is on the panel at L + 1.8 ms. A frame still on the GPU after that makes the commit miss its scan, and every later commit then queues behind the pending one: the pipelined state, +8.3 ms, until a refresh passes with nothing new. That matches November 4's trace: each stretch starts at one frame whose GPU work ended 2.3-5.4 ms after the latch. A frame queued after the latch instead is harmless to the state, but the next frame supersedes it at the following latch.
 - **First trial, unbounded fence wait before every swap (NSMBU Deluxe in play, one run each, same APK).** With it, 100% of frames in the fast state, real image 19.5 ms instead of 27.8 ms. But that run fell inside a content-time pacing trial, where pairs form in their callback: generated frames finished after the latch, so every one was superseded (923 two-scan intervals in 1,047). The wait must end at the latch and be spaced. Hence `UnfinishedFrameGate`.
