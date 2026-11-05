@@ -249,7 +249,37 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 5 (latest) **— The Thor's firmware sleeps every engine inside queueBuffer; a future timestamp skips it. Eden's images no longer sit pinned 4 ms before our callback, and the phase lock finally works on them.**
+November 5 (latest) **— Candidate for 3.2.155: Eden's future stamp and a wider phase target. More trials around the compositor's two states, none adopted. The Thor left adb again at 16:58, so the candidate has not run yet.**
+
+- **In the tree, on by default (commit `4e4814c`):**
+  - Eden stamps its presents 10 ms ahead under frame generation (`vk_swapchain.cpp`; QA `setprop debug.emufusion.eden_stamp_ahead_us 0` for stock stamps).
+  - The phase lock holds Eden's images 3.25 ms plus 3x jitter before the callback, about 3.9 ms (QA `emufusion_framegen_switch_phase_wait_us`).
+  - A real image goes at the nearest callback, not the first one a quarter scan past due. One late image's span is about 21.6 ms; its real image used to wait past the next callback, so each late image cost two two-scan intervals. Host test `lateImagesRealFollowsAtTheNextCallback`; not yet run on the Thor.
+- **Why this target (NSMBU Deluxe in play, same APK family, pacing trial off, two-scan intervals per 16 s):**
+
+  | Target (wait measured) | Generated / real, median | Two-scan intervals | Fast mode |
+  | --- | --- | --- | --- |
+  | 1.5 ms (2.3 ms) | 8.2 / 16.5 | 39, 39 | 98-99% |
+  | 2.75 ms (3.4 ms) | 10.3 / 18.6 in the fast mode | 6, 8 | 38, 73% |
+  | 3.25 ms (3.9 ms) | 10.7 / 19.0 in the fast mode | 3, 3, 2, 4 | 90, 52, 36, 61% |
+  | stock stamps (4.3 ms) | 11.2 / 19.5 in the fast mode | 5, 2, 3 | 42, 89, 73% |
+
+  The stock row hides about 2 ms more: its arrival stamp comes after the firmware's sleep. Measured from the frame's completion, the candidate is about 2.5 ms sooner with the same rhythm.
+- **Eden's flush every 512 draws, retried with future stamps.** 256 draws: 100, 94, 100% fast mode, 0-2 mode changes, mean generated / real 11.1 / 19.4 ms against 13.9-15.9 / 22.2-24.3 ms at 512, but 11, 9, 10 two-scan intervals against 2-4. 128 draws: 19-22. Late-arriving images are not more frequent (over 2 ms late: 7 against 14 per 1,000), so the cost is elsewhere. Half of those intervals are the second interval now removed by the nearest-callback change, so 256 draws is worth one more test on the candidate. The flush-size option is not in the candidate.
+- **Tried, not adopted (one to three runs each):**
+  - Holding Eden's next batch 3 or 5 ms after each present, so our work starts on an idle GPU: arrival to generated image done stays about 5.6 ms, because most of it is ours: 2.4 ms on the CPU (consuming the image, the check, encoding the solve), then about 3 ms of GPU work that starts only at the flush after encoding.
+  - Withholding only a frame whose prepared image is still on the GPU at its latch: 5-6 withheld per run; fast mode 79-85%, one run 92% on cadence.
+  - The real and generated images drawn ahead of their callbacks: real images stop being late, fast mode unchanged (25-73%).
+  - One generated frame left out after 2 s in the pipelined state, at most every 16 s: flips come every 3-5 s, so the fast mode stayed low (13% in one run).
+  - Future stamps on Dolphin and N64 (`debug.emufusion.stamp_ahead_ms`), which have no per-frame phase lock: Double Dash 99.8 -> 98.9% (3 -> 21 two-scan intervals), Ocarina 94.4 -> 88.0%. Those engines need the lock wired first.
+  - Late latch on the retro cores (generated image presented as soon as ready, in time for the latch after the last callback): NES also takes about 5.5 ms from arrival to done, so it leaves no time before that latch. It needs the work cut first. Generating pixel art at source size (`pixel_input_size=1`) cuts the callback's copy; NES 9.3 / 17.6 ms, 99.8%.
+- **Next.**
+  - Run the candidate: NSMBU Deluxe twice, then Link's Awakening, NES, Double Dash and a Wii U game on the defaults. Release if it holds.
+  - 256 draws on the candidate.
+  - Cemu: the same future stamp, with a phase nudge first (its images are pinned the same way).
+  - Cut arrival-to-done: flush during the solve (`mid_flush=1`, built, not run); per-pass timing on NES.
+
+November 5 **— The Thor's firmware sleeps every engine inside queueBuffer; a future timestamp skips it. Eden's images no longer sit pinned 4 ms before our callback, and the phase lock finally works on them.**
 
 - **Evidence (system trace, NSMBU Deluxe in play).** Eden's `QueuePresentKHR` starts 1.7-2.3 ms after our callback and ends at 4.03 ms ± 0.05, with the thread asleep about 1.9 ms inside libgui's `queueBuffer`, woken by a timer interrupt. Our own `queueBuffer` takes 0.2 ms.
 - **Cause.** `vendor.perf.framepacing.enable=1`: the vendor libgui calls `penguinQueueBuffer` in `/system_ext/lib64/libpenguin_impl.so` (Qualcomm "Penguin" frame pacing; decompiled with Ghidra), which `usleep`s producers to a fixed vsync phase (tunables `vendor.perf.framepacing.tunable.{min,max}_offset_to_vsync`, 2 ms by default). It tracks layers named `SurfaceTexture-*` and `SurfaceView*`, which covers every engine feeding our input Surface. This is why image arrival sat 4.0-4.3 ms before the callback on Eden and on other hardware engines, whatever their clock phase, and why Eden's phase lock moved nothing (November 2).
