@@ -35,6 +35,10 @@ SESSION = os.environ.get('THOR_QA_SESSION', 'qa-7769646573637265656e000000000000
 START_BOARD_C, START_BATTERY_C = 60, 38
 ABORT_GPU_C, ABORT_BOARD_C, ABORT_BATTERY_C = 90, 72, 42
 HEAT_CHECK_SECONDS = 5
+# Frame-generation runs need a cooler start than these, so they would never get a turn otherwise. While
+# one waits to cool its runner keeps this file; one left behind by a crash stops counting after a while.
+FG_COOLING = '/tmp/claude-501/thor.fg-cooling'
+FG_COOLING_MAX_SECONDS = 12 * 60
 KEYS = {'south': 304, 'east': 305, 'north': 308, 'west': 307, 'start': 315, 'select': 314,
         'l': 310, 'r': 311, 'up': 544, 'down': 545, 'left': 546, 'right': 547, 'back': 158}
 
@@ -179,13 +183,20 @@ def take_thor():
             time.sleep(2)
 
 
+def fg_run_is_cooling():
+    try:
+        return time.time() - os.path.getmtime(FG_COOLING) < FG_COOLING_MAX_SECONDS
+    except OSError:
+        return False
+
+
 def take_cool_thor():
     """Wait for the device to cool with the lock free, so the other work can still use it."""
     while True:
-        while not cool_enough_to_start():
-            time.sleep(30)
+        while fg_run_is_cooling() or not cool_enough_to_start():
+            time.sleep(10)
         take_thor()
-        if cool_enough_to_start():
+        if not fg_run_is_cooling() and cool_enough_to_start():
             return
         release_thor()
 
