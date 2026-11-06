@@ -1127,7 +1127,7 @@
         "Rayman 2: The Great Escape": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: name screen, 3D wide behind 2D text that keeps its shape. Play not reached"
         },
         "Sonic Adventure": {
           "strategy": "widen",
@@ -1147,7 +1147,7 @@
         "Skies of Arcadia": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: title logo keeps its shape; its plate stops at the old edges while clouds run on. Play not reached"
         },
         "Marvel vs. Capcom 2": {
           "strategy": "fixed-screen",
@@ -1157,12 +1157,12 @@
         "Shenmue": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: opening scene in 3D at 16:9. Play not reached"
         },
         "Legacy of Kain: Soul Reaver": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: only the opening movie, 4:3 in bars. Play not reached"
         },
         "MDK 2": {
           "strategy": "widen",
@@ -1177,7 +1177,7 @@
         "Ecco the Dolphin: Defender of the Future": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: menus keep their shape over a wide 3D sea. Play not reached"
         },
         "Hydro Thunder": {
           "strategy": "fixed-screen",
@@ -1187,22 +1187,22 @@
         "Star Wars: Episode I: Racer": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: only the opening movie, 4:3 in bars. Play not reached"
         },
         "Mortal Kombat Gold": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: no picture within two minutes of launch, not judged"
         },
         "Fighting Force 2": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: title and attract at 16:9, text keeps its shape. Play not reached"
         },
         "South Park Rally": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: no picture within two minutes of launch, not judged"
         }
       },
       "release": false
