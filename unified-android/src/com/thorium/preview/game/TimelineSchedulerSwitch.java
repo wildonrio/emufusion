@@ -326,10 +326,10 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         fastPath = handOver;
-        boolean stateDrain = false;
+        boolean stateDrain = true;
         try {
             if (context != null) stateDrain = Settings.Global.getInt(
-                    context.getContentResolver(), COMPOSITOR_DRAIN_GLOBAL, 0) != 0;
+                    context.getContentResolver(), COMPOSITOR_DRAIN_GLOBAL, 1) != 0;
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
@@ -735,12 +735,13 @@ public final class TimelineSchedulerSwitch {
     static boolean fastPath() { return fastPath; }
 
     /**
-     * QA (emufusion_framegen_compositor_drain=1): a generated frame is left out
-     * when that ends the compositor's pipelined state for long enough
-     * (CompositorStateDrain).
+     * A generated frame is left out when that ends the compositor's pipelined
+     * state for long enough (CompositorStateDrain). Thor, 2026-11-06: NES and Mega
+     * Drive no longer sit 8 ms late for a whole run; NSMBU Deluxe backs off after
+     * two tries. QA: emufusion_framegen_compositor_drain=0.
      */
     static final String COMPOSITOR_DRAIN_GLOBAL = "emufusion_framegen_compositor_drain";
-    private static volatile boolean compositorDrain = false;
+    private static volatile boolean compositorDrain = true;
 
     static boolean compositorDrain() { return compositorDrain; }
 
