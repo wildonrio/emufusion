@@ -55,11 +55,11 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
 | GBA (drain trial) | 99.8%, 5.5 | 9.0 / 17.3 ms | not re-measured |
 | Star Fox 64 | not re-measured | not re-measured | 4%, 4% |
 | Ocarina of Time (20 fps) | 99.3%, 9.7 (one run, retry-415) | 11.1 / 36.1 ms (real minimum 33.3) | 0-4%, not on the device bench |
-| Double Dash | 99.8%, 7.3 (0-130 by its phase) | 18.1 / 26.6 (14.8 / 23.1) ms | 17%, 7% |
+| Double Dash | 99.8%, 7.3 (0-168 by where its stamps sit against the clock, see the November 6 entry) | 18.1 / 26.6 (14.8 / 23.1) ms | 17%, 7% |
 | NSMBU Deluxe | 99.7%, 10.9 (0-20 over 9 runs on 3.2.156 and 3.2.157 builds) | 18.8 / 27.1 (16.3 / 24.6) ms | world map 14%, 7% |
 | Link's Awakening (beach scene, one run, retry-418; the older 94.3% was its intro movie) | 98.3%, 59 | 24.0 / 32.6 (24.9 / 34.3) ms | 6%, 11% |
 | Wind Waker HD (title flight, 30 fps source, two runs, retry-418; 87-91% with this table's QA options, see the November 6 entry) | 76.7%, 418; 47.5%, 929 | 27.6 / 44.3 (23.2 / 40.0), 19.3 / 36.1 (19.3 / 37.3) ms | 11%, 0% |
-| SM3DW (3.2.156) | 93.7% in its play window | 12.0 / 21.0 ms | 0%, not on the device bench |
+| SM3DW (3.2.156; 94.7% with the QA options on retry-421) | 93.7% in its play window | 12.0 / 21.0 ms | 0%, not on the device bench |
 
 Nothing is at 10/10 on all three measures yet. Whether a run reaches the compositor's fast state is close to chance, and it is worth about 8 ms.
 
