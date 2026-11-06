@@ -502,14 +502,20 @@
           "tested": "2026-11-05 host: World 1-1 played; the level comes from its own map in cartridge RAM, right from the first frame. World map stays narrow. Vertical levels stay narrow, not yet reached in play"
         },
         "Kirby's Adventure": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: rooms use a one-screen map. Needs a map reader"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "kirby",
+            "emufusion_ws_lines": "0-175",
+            "emufusion_ws_hud": "edge"
+          },
+          "tested": "2026-11-05 host: Vegetable Valley played past the first enemies; the level from cartridge RAM fills both sides and the status panel's border carries on to the edges. Vertical rooms not yet reached"
         },
         "Mega Man 3": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: first stage uses a one-screen map. Needs a map reader"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "mm3"
+          },
+          "tested": "2026-11-05 host: all eight stages played; each stage's real level from the ROM fills both sides, room ends carry on, vertical room changes slide with it; title and stage select stay narrow"
         },
         "Castlevania III: Dracula's Curse": {
           "strategy": "widen",
@@ -555,6 +561,26 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-05 host: title and file screens only so far; rooms are one screen"
+        },
+        "Mega Man 2": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: all eight stages played; a two-screen map shows the level to both edges with no map reader"
+        },
+        "Megaman II": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-05 host: all eight stages played; a two-screen map shows the level to both edges with no map reader"
+        },
+        "Baseball Stars": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: title and field views use a two-screen map holding other panels; side columns show unrelated parts"
+        },
+        "Baseball Stars II": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: menus and field panels; side columns show unrelated parts"
         }
       },
       "release": true

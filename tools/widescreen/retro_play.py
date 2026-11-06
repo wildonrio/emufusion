@@ -14,7 +14,9 @@ Script, one step per whitespace-separated token (read from --play or a file):
   opt:KEY=VALUE   change a core option live (the host reports the variable update)
   save:SLOT       snapshot the emulator in memory; load:SLOT restores it
   savefile:PATH   write a save state to disk; loadfile:PATH restores one
-  ram:NAME        dump the console's main RAM to NAME.ram in --out; vram:NAME video RAM
+  ram:NAME        dump the console's main RAM to NAME.ram in --out; vram:NAME video RAM;
+                  saveram:NAME battery RAM
+  poke:ADDR=VALUE set a main RAM byte (hex), to reach a test case without playing there
 Buttons: B Y SELECT START UP DOWN LEFT RIGHT A X L R L2 R2 L3 R3.
 """
 import argparse
@@ -294,6 +296,10 @@ class Player:
                 self.save(rest)
             elif kind == 'load':
                 self.load(rest)
+            elif kind == 'poke':
+                self.lib.retro_get_memory_data.restype = C.c_void_p
+                where, value = rest.split('=')
+                C.memset(self.lib.retro_get_memory_data(2) + int(where, 16), int(value, 16), 1)
             elif kind == 'ram':
                 self.lib.retro_get_memory_data.restype = C.c_void_p
                 self.lib.retro_get_memory_size.restype = C.c_size_t
@@ -306,6 +312,12 @@ class Player:
                 size = self.lib.retro_get_memory_size(3)
                 with open(os.path.join(out, rest + '.vram'), 'wb') as dump:
                     dump.write(C.string_at(self.lib.retro_get_memory_data(3), size))
+            elif kind == 'saveram':
+                self.lib.retro_get_memory_data.restype = C.c_void_p
+                self.lib.retro_get_memory_size.restype = C.c_size_t
+                size = self.lib.retro_get_memory_size(0)
+                with open(os.path.join(out, rest + '.sav'), 'wb') as dump:
+                    dump.write(C.string_at(self.lib.retro_get_memory_data(0), size))
             elif kind == 'oam':
                 self.lib.retro_get_memory_data.restype = C.c_void_p
                 self.lib.retro_get_memory_size.restype = C.c_size_t

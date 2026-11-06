@@ -43,7 +43,7 @@ class RecipeTableTest(unittest.TestCase):
 
     def test_scene_and_hud_rules_parse(self):
         scene_term = re.compile(r'^(bgmode|[0-9A-F]{4,6}(/[0-9A-F]{2})?)!?=[0-9A-F]+$')
-        hud_rule = re.compile(r'^(bg[1-4]|obj):\d+-\d+:-?\d+-\d+:-?1(:[0-9a-fA-F]+-[0-9a-fA-F]+)?$')
+        hud_rule = re.compile(r'^(edge|(bg[1-4]|obj):\d+-\d+:-?\d+-\d+:-?1(:[0-9a-fA-F]+-[0-9a-fA-F]+)?)$')
         for system in RECIPES['systems'].values():
             for title, game in system['games'].items():
                 options = game.get('options', {})
@@ -52,6 +52,19 @@ class RecipeTableTest(unittest.TestCase):
                         self.assertRegex(term, scene_term, title)
                 for rule in filter(None, options.get('emufusion_ws_hud', '').split(';')):
                     self.assertRegex(rule, hud_rule, title)
+
+
+    def test_every_nes_map_reader_named_by_a_recipe_is_in_the_locked_patch(self):
+        patch = (ROOT / 'engines/patches/mesen-emufusion-widescreen.patch').read_text()
+        for title, game in RECIPES['systems']['nes']['games'].items():
+            name = game.get('options', {}).get('emufusion_ws_map')
+            if name:
+                self.assertIn(f'!strcmp(efVar.value, "{name}")', patch, title)
+
+    def test_a_map_reader_draws_only_while_it_matches_the_real_picture(self):
+        patch = (ROOT / 'engines/patches/mesen-emufusion-widescreen.patch').read_text()
+        self.assertIn('_efMapMatched * 10 >= _efMapChecked * 7', patch)
+        self.assertIn('if(_efExt && _efMap != EfMap::None) EfLatchCamera();', patch)
 
 
 class PlumbingTest(unittest.TestCase):
