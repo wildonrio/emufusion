@@ -65,10 +65,10 @@ index 1a67ddf..02d9388 100644
  		(static_cast<float>(src_rect.height()) / static_cast<float>(src_size.y));
  
 diff --git a/pcsx2/GS/Renderers/HW/GSRendererHW.cpp b/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
-index 0d41abf..31d66eb 100644
+index 0d41abf..470a641 100644
 --- a/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
 +++ b/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
-@@ -108,8 +108,98 @@ void GSRendererHW::UpdateSettings(const Pcsx2Config::GSOptions& old_config)
+@@ -108,8 +108,103 @@ void GSRendererHW::UpdateSettings(const Pcsx2Config::GSOptions& old_config)
  	SetTCOffset();
  }
  
@@ -124,9 +124,14 @@ index 0d41abf..31d66eb 100644
 +							 static_cast<s64>(c.XYZ.X - a.XYZ.X) * (b.XYZ.Y - a.XYZ.Y)) / 2;
 +		}
 +	}
-+	const s64 screen = static_cast<s64>(resolution.x) * resolution.y * 256;
-+	if (area * 10 >= screen * 6)
++	// In pixels: the area is in the vertices' sixteenths, and a game may copy one field, half the height.
++	const float span_x = m_vt.m_max.p.x - m_vt.m_min.p.x;
++	const float span_y = m_vt.m_max.p.y - m_vt.m_min.p.y;
++	if (span_x >= static_cast<float>(resolution.x) * 0.9f && span_y >= static_cast<float>(resolution.y) * 0.4f &&
++		static_cast<float>(area) / 256.0f >= span_x * span_y * 0.6f)
++	{
 +		return;
++	}
 +
 +	const int centre = m_context->XYOFFSET.OFX + resolution.x * 8;
 +	for (u32 i = 0; i < m_vertex->tail; i++)
@@ -167,7 +172,7 @@ index 0d41abf..31d66eb 100644
  	// Retire whatever the GPU finished since the last frame. Runs unconditionally: after the
  	// mode is switched off there can still be a tail of queued downloads to drain.
  	g_texture_cache->ProcessPendingDownloads();
-@@ -2910,6 +3000,8 @@ void GSRendererHW::Draw()
+@@ -2910,6 +3005,8 @@ void GSRendererHW::Draw()
  		return;
  	}
  

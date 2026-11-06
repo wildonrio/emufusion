@@ -28,7 +28,7 @@ ARMSX2_PATCHES = [
     {"path": "engines/patches/armsx2-libretro-input-attachment.patch",
      "sha256": "0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4"},
     {"path": "engines/patches/armsx2-emufusion-keep-2d.patch",
-     "sha256": "a0db3a18b136431e74f2ee92d546ac22b6f6b77f576a83753e1b910a09a65d4d"},
+     "sha256": "ed703ddb8495661ab769d4cd76dc20bc46f5136462aeb72be0091d4afeea6231"},
 ]
 AZAHAR_LOCK = "assets/phase2-azahar-source-lock.json"
 DOLPHIN_LOCK = "assets/phase2-dolphin-source-lock.json"

@@ -971,7 +971,7 @@ case "$ENGINE" in
             0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4
         apply_locked_patch "$staged_source" \
             engines/patches/armsx2-emufusion-keep-2d.patch \
-            a0db3a18b136431e74f2ee92d546ac22b6f6b77f576a83753e1b910a09a65d4d
+            ed703ddb8495661ab769d4cd76dc20bc46f5136462aeb72be0091d4afeea6231
 
         armsx2_ndk_dir="$SDK_DIR/ndk/27.0.12077973"
         armsx2_cmake="$SDK_DIR/cmake/3.31.6/bin/cmake"
