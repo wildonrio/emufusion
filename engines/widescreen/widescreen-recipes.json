@@ -2214,6 +2214,16 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-05 Thor: folder menus sit inside bars; missions not reached, it stays narrow until they are"
+        },
+        "Wave Race 64": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "International Superstar Soccer 64": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
         }
       },
       "release": true
@@ -2296,6 +2306,16 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-06 Thor: no picture within two minutes; the 105 MB file may be a truncated copy"
+        },
+        "The Legend of Zelda: Twilight Princess": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "The Legend of Zelda: Ocarina of Time: Master Quest": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
         }
       },
       "release": true
@@ -2453,6 +2473,46 @@
           "strategy": "widen",
           "options": {},
           "tested": "2026-11-06 Thor: a real fight at 60 to 117, arena to both edges, health bars, faces and logo in shape, no stale sides. The run ended early on heat, after the title and one fight"
+        },
+        "God of War": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "God of War II": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "Grand Theft Auto III": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "Grand Theft Auto: Vice City": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "Prince of Persia: The Sands of Time": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "Shadow of the Colossus": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "Tekken 5": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+        },
+        "Soulcalibur III": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: being tried on the Thor; not offered to players"
         }
       }
     },
