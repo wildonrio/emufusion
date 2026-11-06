@@ -1593,6 +1593,14 @@
     "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-9753d2592ec617176cb43f2436a84c25f089e7b1c3e18f8f50eba82d55b27a59.apk": {
       "sha256": "9753d2592ec617176cb43f2436a84c25f089e7b1c3e18f8f50eba82d55b27a59",
       "reason": "Retry-420: never installed; superseded by retry-421, which adds Cemu's 5.5-ms wait."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-9dd4b99c55614d22fb2dc6ded4558a2e36845adea040c3221c0ee657a12fd233.apk": {
+      "sha256": "9dd4b99c55614d22fb2dc6ded4558a2e36845adea040c3221c0ee657a12fd233",
+      "reason": "Retry-418 and -419: QA trial builds, superseded by retry-421."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-c2c4444715bf13bc628269ee444b826c66a004f2f2adf976d84415e98ec6001a.apk": {
+      "sha256": "c2c4444715bf13bc628269ee444b826c66a004f2f2adf976d84415e98ec6001a",
+      "reason": "Retry-418 and -419: QA trial builds, superseded by retry-421."
     }
   }
 }
