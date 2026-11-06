@@ -349,6 +349,40 @@ games where only a title or intro was captured, and any with visible junk at the
 the picture off, so title screens and menus stay narrow in games nobody has played through. Being unplayed, they
 may still show something wrong deeper in; the owner asked for a cursory pass here, not a deep one.
 
+The first version counted blank and striped frames as scrolling, because they match themselves at every shift. The best
+shift now has to stand out, and each game keeps the two frames that proved it, which are what the sheets show. Every
+shortlist was checked again that way on 2026-11-06:
+
+| System | Checked | Shortlisted | Still pass | Recipes now | Notes |
+| --- | --- | --- | --- | --- | --- |
+| NES | 1,030 | 139 | 77 of the 92 with recipes | 11 dropped, 4 keep their status panel in the middle | stale columns: Cobra Command, Urban Strike, Red Pig, TaleSpin and others |
+| Game Boy | 524 | 141 | 74 | 35 added | |
+| Game Boy Color | 450 | 67 | 29 | 11 added | Shantae fell from 100% to 31%: it was blank frames |
+| Game Gear | 201 | 34 | 16 | 11 added, after adding the gate to Gearsystem | |
+
+A low score alone does not drop a game: sprites and animation cost some, so near misses that looked clean stayed.
+
+## GBA map reader (2026-11-06)
+
+Many GBA games keep the whole level in memory as a grid of block numbers, with a table of blocks of four map entries,
+and copy only what is near the screen into the 256-wide video map. `emufusion_ws_map=grid:...` gives the new columns the
+same grid, so a further game needs its addresses in the recipe and no new code:
+
+`grid:table=2020000,planes=2014000+201C000,cell=4,stride=200,cols=80,rows=80,mask=3FFF` (Golden Sun)
+`grid:planes=200B654:2012654+2025EB4:202CEB4,cell=2,stride=80,cols=40,rows=40,width=3000C0E,height=3000C10` (Minish Cap)
+
+Each frame, each background compares samples of the video map with the grid. The scroll registers say little about the
+world position and a game may start a block on either tile row, so finding a place tries every one, drawn tiles first so
+most fail at once. Only a search that has already matched runs every frame; an unmatched one looks every eighth frame. A
+background that matches nothing, a menu for instance, draws nothing in the new columns. A sparse layer such as tree tops
+cannot be found alone, so it takes the place of a layer moving with it. `width=`/`height=` name where the game keeps the
+room's size, because the cells past it are left over from the last room. Out on the black around a room, sprites are not
+drawn. `tools/widescreen/retro_play.py` has `iwram:NAME` for the fast work RAM these searches need.
+
+Finding a game's addresses: `gbagrid.py` in the session notes looks for the video map's 2x2 groups in memory, then for a
+grid whose differences match. Aria of Sorrow, Circle of the Moon, Advance Wars and Final Fantasy VI Advance store their
+blocks differently, or build them in code, and still need their own look.
+
 ## Release gate
 
 Each system in the recipe table has `"release"`. Nothing shows to players until it is true, which

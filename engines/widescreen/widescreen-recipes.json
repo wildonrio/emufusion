@@ -683,13 +683,6 @@
           },
           "tested": "2026-11-06 host: library check, 96% of side columns arrived in the picture over 67 scrolling frame pairs; two frames looked at, not played through"
         },
-        "Amagon": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 90% of side columns arrived in the picture over 34 scrolling frame pairs; two frames looked at, not played through"
-        },
         "Batman: The Video Game": {
           "strategy": "widen",
           "options": {
@@ -746,13 +739,6 @@
           },
           "tested": "2026-11-06 host: library check, 92% of side columns arrived in the picture over 38 scrolling frame pairs; two frames looked at, not played through"
         },
-        "Cobra Command": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 58 scrolling frame pairs; two frames looked at, not played through"
-        },
         "Cross Fire 2": {
           "strategy": "widen",
           "options": {
@@ -766,13 +752,6 @@
             "emufusion_ws_gate": "scroll"
           },
           "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 43 scrolling frame pairs; two frames looked at, not played through"
-        },
-        "Defender II": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 98% of side columns arrived in the picture over 35 scrolling frame pairs; two frames looked at, not played through"
         },
         "Dr. Jekyll and Mr. Hyde": {
           "strategy": "widen",
@@ -984,13 +963,6 @@
           },
           "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 16 scrolling frame pairs; two frames looked at, not played through"
         },
-        "Motor City Patrol": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 93% of side columns arrived in the picture over 13 scrolling frame pairs; two frames looked at, not played through"
-        },
         "Ninja Crusaders": {
           "strategy": "widen",
           "options": {
@@ -1019,26 +991,14 @@
           },
           "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 13 scrolling frame pairs; two frames looked at, not played through"
         },
-        "Red Pig": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 96% of side columns arrived in the picture over 39 scrolling frame pairs; two frames looked at, not played through"
-        },
-        "Rescue: The Embassy Mission": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 14 scrolling frame pairs; two frames looked at, not played through"
-        },
         "River City Ransom": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_gate": "scroll"
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_lines": "32-192",
+            "emufusion_ws_hud": "edge"
           },
-          "tested": "2026-11-06 host: library check, 93% of side columns arrived in the picture over 27 scrolling frame pairs; two frames looked at, not played through"
+          "tested": "2026-11-06 host: library check, 93% of side columns arrived in the picture over 27 scrolling frame pairs; two frames looked at, not played through. 2026-11-06: the status panel stays in the middle, its border carried to the sides, instead of wrapping"
         },
         "RoboCop 2": {
           "strategy": "widen",
@@ -1085,9 +1045,11 @@
         "Silk Worm": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_gate": "scroll"
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_lines": "32-240",
+            "emufusion_ws_hud": "edge"
           },
-          "tested": "2026-11-06 host: library check, 98% of side columns arrived in the picture over 65 scrolling frame pairs; two frames looked at, not played through"
+          "tested": "2026-11-06 host: library check, 98% of side columns arrived in the picture over 65 scrolling frame pairs; two frames looked at, not played through. 2026-11-06: the status panel stays in the middle, its border carried to the sides, instead of wrapping"
         },
         "Sky Kid": {
           "strategy": "widen",
@@ -1123,13 +1085,6 @@
             "emufusion_ws_gate": "scroll"
           },
           "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 20 scrolling frame pairs; two frames looked at, not played through"
-        },
-        "Stunt Kids": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 14 scrolling frame pairs; two frames looked at, not played through"
         },
         "Super C": {
           "strategy": "widen",
@@ -1173,13 +1128,6 @@
           },
           "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 42 scrolling frame pairs; two frames looked at, not played through"
         },
-        "TaleSpin": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 46 scrolling frame pairs; two frames looked at, not played through"
-        },
         "Tashiro Masashi no Princess ga Ippai": {
           "strategy": "widen",
           "options": {
@@ -1218,30 +1166,20 @@
         "Treasure Master": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_gate": "scroll"
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_lines": "0-192",
+            "emufusion_ws_hud": "edge"
           },
-          "tested": "2026-11-06 host: library check, 94% of side columns arrived in the picture over 20 scrolling frame pairs; two frames looked at, not played through"
-        },
-        "Twin Cobra": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 11 scrolling frame pairs; two frames looked at, not played through"
+          "tested": "2026-11-06 host: library check, 94% of side columns arrived in the picture over 20 scrolling frame pairs; two frames looked at, not played through. 2026-11-06: the status panel stays in the middle, its border carried to the sides, instead of wrapping"
         },
         "Urban Champion": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_gate": "scroll"
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_lines": "0-170",
+            "emufusion_ws_hud": "edge"
           },
-          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 17 scrolling frame pairs; two frames looked at, not played through"
-        },
-        "Urban Strike": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 56 scrolling frame pairs; two frames looked at, not played through"
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 17 scrolling frame pairs; two frames looked at, not played through. 2026-11-06: the status panel stays in the middle, its border carried to the sides, instead of wrapping"
         },
         "Volleyball": {
           "strategy": "widen",
@@ -1284,13 +1222,6 @@
             "emufusion_ws_gate": "scroll"
           },
           "tested": "2026-11-06 host: library check, 86% of side columns arrived in the picture over 47 scrolling frame pairs, under the bar; two frames looked clean, not played through"
-        },
-        "Chubby Cherub": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host: library check, 80% of side columns arrived in the picture over 24 scrolling frame pairs, under the bar; two frames looked clean, not played through"
         },
         "Hudson's Adventure Island IV": {
           "strategy": "widen",
