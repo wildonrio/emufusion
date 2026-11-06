@@ -498,7 +498,7 @@ case "$ENGINE" in
             < "$ROOT/engines/patches/swanstation-disable-forced-ipo.patch"
         apply_locked_patch "$staged_source" \
             engines/patches/swanstation-emufusion-keep-2d.patch \
-            25fdaedce03d879f5fdf14bd577e05365bcb0356feeb6ba39e4dbb9933887e2d
+            ffa2ce3f0940d3bd16e54c5de68f0e9bba2603aa2f66a5d1c0c8422c3beb1636
         source="$staged_source"
         # CMake exposes its binary directory through generated code. Resolve
         # macOS's /tmp -> /private/tmp alias, then canonicalize both source and
@@ -971,7 +971,7 @@ case "$ENGINE" in
             0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4
         apply_locked_patch "$staged_source" \
             engines/patches/armsx2-emufusion-keep-2d.patch \
-            ed703ddb8495661ab769d4cd76dc20bc46f5136462aeb72be0091d4afeea6231
+            eacccbc89124e96f8bf3105e13d4f2b8c85bbbf59b690468c9c888af31f47783
 
         armsx2_ndk_dir="$SDK_DIR/ndk/27.0.12077973"
         armsx2_cmake="$SDK_DIR/cmake/3.31.6/bin/cmake"

@@ -1,5 +1,5 @@
 diff --git a/src/core/gpu_hw.cpp b/src/core/gpu_hw.cpp
-index 99582d7..5551424 100644
+index 99582d7..22c4905 100644
 --- a/src/core/gpu_hw.cpp
 +++ b/src/core/gpu_hw.cpp
 @@ -694,6 +694,7 @@ void GPU_HW::LoadVertices()
@@ -10,7 +10,7 @@ index 99582d7..5551424 100644
        for (uint32_t i = 0; i < num_vertices; i++)
        {
          const uint32_t color = (shaded && i > 0) ? (FifoPop() & UINT32_C(0x00FFFFFF)) : first_color;
-@@ -710,9 +711,35 @@ void GPU_HW::LoadVertices()
+@@ -710,9 +711,36 @@ void GPU_HW::LoadVertices()
  
          if (pgxp)
          {
@@ -28,6 +28,7 @@ index 99582d7..5551424 100644
 +        // One vertex from the GTE is enough: a polygon the game clipped itself keeps the others.
 +        if (emufusion_gte_vertices > 0)
 +        {
++          EmufusionClip2D(false);
 +          EmufusionNote3D();
 +        }
 +        else
@@ -47,7 +48,7 @@ index 99582d7..5551424 100644
          }
        }
        if (pgxp)
-@@ -869,6 +896,8 @@ void GPU_HW::LoadVertices()
+@@ -869,6 +897,8 @@ void GPU_HW::LoadVertices()
        if (m_batch.use_depth_buffer)
          SetBatchDepthBuffer(false);
  
@@ -56,7 +57,7 @@ index 99582d7..5551424 100644
        // Split the rectangle into multiple quads if it's greater than 256x256, as the texture page should repeat.
        uint16_t tex_top = orig_tex_top;
        for (int32_t y_offset = 0; y_offset < rectangle_height;)
-@@ -882,8 +911,13 @@ void GPU_HW::LoadVertices()
+@@ -882,8 +912,13 @@ void GPU_HW::LoadVertices()
          for (int32_t x_offset = 0; x_offset < rectangle_width;)
          {
            const int32_t quad_width = std::min<int32_t>(rectangle_width - x_offset, TEXTURE_PAGE_HEIGHT - tex_left);
@@ -72,7 +73,7 @@ index 99582d7..5551424 100644
            const uint16_t tex_right = tex_left + static_cast<uint16_t>(quad_width);
            const uint32_t uv_limits = BatchVertex::PackUVLimits(tex_left, tex_right - 1, tex_top, tex_bottom - 1);
  
-@@ -973,7 +1007,10 @@ void GPU_HW::LoadVertices()
+@@ -973,7 +1008,10 @@ void GPU_HW::LoadVertices()
          AddDrawLineTicks(clip_right - clip_left, clip_bottom - clip_top, rc.shading_enable);
  
          // TODO: Should we do a PGXP lookup here? Most lines are 2D.
@@ -84,7 +85,7 @@ index 99582d7..5551424 100644
                   static_cast<float>(end_y), end_color, depth);
  
          if (m_sw_renderer)
-@@ -1038,7 +1075,10 @@ void GPU_HW::LoadVertices()
+@@ -1038,7 +1076,10 @@ void GPU_HW::LoadVertices()
              AddDrawLineTicks(clip_right - clip_left, clip_bottom - clip_top, rc.shading_enable);
  
              // TODO: Should we do a PGXP lookup here? Most lines are 2D.
@@ -96,7 +97,20 @@ index 99582d7..5551424 100644
                       static_cast<float>(end_y), end_color, depth);
            }
  
-@@ -1317,8 +1357,74 @@ void GPU_HW::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, u
+@@ -1067,6 +1108,12 @@ void GPU_HW::CalcScissorRect(int* left, int* top, int* right, int* bottom)
+   *right = std::max<uint32_t>((m_drawing_area.right + 1) * m_resolution_scale, *left + 1);
+   *top = m_drawing_area.top * m_resolution_scale;
+   *bottom = std::max<uint32_t>((m_drawing_area.bottom + 1) * m_resolution_scale, *top + 1);
++  if (m_emufusion_clip_2d)
++  {
++    const int middle = (*left + *right) / 2;
++    *left = middle + static_cast<int>(static_cast<float>(*left - middle) * m_emufusion_scale);
++    *right = middle + static_cast<int>(static_cast<float>(*right - middle) * m_emufusion_scale);
++  }
+ }
+ 
+ GPU_HW::VRAMFillUBOData GPU_HW::GetVRAMFillUBOData(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) const
+@@ -1317,8 +1364,94 @@ void GPU_HW::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, u
      Common::Rectangle<uint32_t>::FromExtents(x, y, width, height).Clamped(0, 0, VRAM_WIDTH, VRAM_HEIGHT));
  }
  
@@ -107,16 +121,35 @@ index 99582d7..5551424 100644
 +
 +  m_emufusion_other_draws++;
 +  if (!m_emufusion_scene_3d)
++  {
++    EmufusionClip2D(false);
 +    return false;
++  }
 +
 +  // A smaller drawing area is a texture being drawn. A fade or backdrop covers the picture as it is.
 +  const int32_t area = static_cast<int32_t>(m_drawing_area.right) - static_cast<int32_t>(m_drawing_area.left) + 1;
 +  if (area + 16 < static_cast<int32_t>(m_crtc_state.display_vram_width) || span * 10 >= area * 9)
++  {
++    EmufusionClip2D(false);
 +    return false;
++  }
 +
 +  // The draw lands away from its own coordinates, which is all the caller tells the dirty rectangle.
 +  m_vram_dirty_rect.Include(m_drawing_area.left, m_drawing_area.right + 1u, m_drawing_area.top, m_drawing_area.bottom + 1u);
++  EmufusionClip2D(true);
 +  return true;
++}
++
++// What the game drew past the screen's edge, a panel sliding in say, must not land in the new columns.
++void GPU_HW::EmufusionClip2D(bool narrow)
++{
++  if (m_emufusion_clip_2d == narrow)
++    return;
++
++  FlushRender();
++  m_emufusion_clip_2d = narrow;
++  SetScissorFromDrawingArea();
++  EnsureVertexBufferSpaceForCurrentCommand();
 +}
 +
 +void GPU_HW::EmufusionNoteBlit(uint32_t width, uint32_t height)
@@ -137,6 +170,7 @@ index 99582d7..5551424 100644
 +    g_settings.gpu_emufusion_keep_2d && g_settings.gpu_widescreen_hack && g_settings.gpu_pgxp_enable && aspect > 4.0f / 3.0f;
 +  if (!m_emufusion_keep_2d)
 +  {
++    m_emufusion_clip_2d = false;
 +    m_host_display->SetEmufusionPictureWidth(1.0f);
 +    return;
 +  }
@@ -171,7 +205,7 @@ index 99582d7..5551424 100644
    IncludeVRAMDirtyRectangle(Common::Rectangle<uint32_t>::FromExtents(x, y, width, height));
  
    if (check_mask)
-@@ -1330,6 +1436,7 @@ void GPU_HW::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+@@ -1330,6 +1463,7 @@ void GPU_HW::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height,
  
  void GPU_HW::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height)
  {
@@ -180,7 +214,7 @@ index 99582d7..5551424 100644
      Common::Rectangle<uint32_t>::FromExtents(dst_x, dst_y, width, height).Clamped(0, 0, VRAM_WIDTH, VRAM_HEIGHT));
  
 diff --git a/src/core/gpu_hw.h b/src/core/gpu_hw.h
-index 3741e75..ff2e1b4 100644
+index 3741e75..086a977 100644
 --- a/src/core/gpu_hw.h
 +++ b/src/core/gpu_hw.h
 @@ -299,6 +299,8 @@ protected:
@@ -192,7 +226,7 @@ index 3741e75..ff2e1b4 100644
    virtual void UpdateVRAMReadTexture();
    virtual void UpdateDepthBufferFromMaskBit() = 0;
    virtual void ClearDepthBuffer() = 0;
-@@ -308,6 +310,24 @@ protected:
+@@ -308,6 +310,25 @@ protected:
    virtual void UploadUniformBuffer(const void* uniforms, uint32_t uniforms_size) = 0;
    virtual void DrawBatchVertices(BatchRenderMode render_mode, uint32_t base_vertex, uint32_t num_vertices) = 0;
  
@@ -206,6 +240,7 @@ index 3741e75..ff2e1b4 100644
 +      m_emufusion_scene_3d = true;
 +  }
 +  bool EmufusionNote2D(int32_t span);
++  void EmufusionClip2D(bool narrow);
 +  void EmufusionNoteBlit(uint32_t width, uint32_t height);
 +  void EmufusionEndFrame();
 +  ALWAYS_INLINE float EmufusionX(float x) const
@@ -217,7 +252,7 @@ index 3741e75..ff2e1b4 100644
    uint32_t CalculateResolutionScale() const;
    GPUDownsampleMode GetDownsampleMode(uint32_t resolution_scale) const;
  
-@@ -578,4 +598,14 @@ private:
+@@ -578,4 +599,15 @@ private:
      m_batch_current_vertex_ptr->Set(std::forward<Args>(args)...);
      m_batch_current_vertex_ptr++;
    }
@@ -231,6 +266,7 @@ index 3741e75..ff2e1b4 100644
 +  float m_emufusion_scale = 1.0f;
 +  bool m_emufusion_keep_2d = false;
 +  bool m_emufusion_scene_3d = false;
++  bool m_emufusion_clip_2d = false;
  };
 diff --git a/src/core/host_display.cpp b/src/core/host_display.cpp
 index 3807fc4..cfd4f0d 100644

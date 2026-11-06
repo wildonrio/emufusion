@@ -65,10 +65,10 @@ index 1a67ddf..02d9388 100644
  		(static_cast<float>(src_rect.height()) / static_cast<float>(src_size.y));
  
 diff --git a/pcsx2/GS/Renderers/HW/GSRendererHW.cpp b/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
-index 0d41abf..470a641 100644
+index 0d41abf..6c8ddf0 100644
 --- a/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
 +++ b/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
-@@ -108,8 +108,103 @@ void GSRendererHW::UpdateSettings(const Pcsx2Config::GSOptions& old_config)
+@@ -108,8 +108,117 @@ void GSRendererHW::UpdateSettings(const Pcsx2Config::GSOptions& old_config)
  	SetTCOffset();
  }
  
@@ -80,6 +80,13 @@ index 0d41abf..470a641 100644
 +	const float scale = g_emufusion_keep_2d_scale;
 +	if (scale >= 1.0f)
 +		return;
++
++	// The last narrowed draw's clip; the context works its scissor out again from the game's register.
++	if (m_emufusion_clipped_context)
++	{
++		m_emufusion_clipped_context->UpdateScissor();
++		m_emufusion_clipped_context = nullptr;
++	}
 +
 +	const GSVector2i resolution = PCRTCDisplays.GetResolution();
 +	// A narrower target is a texture or a reduced copy being drawn, not the picture.
@@ -142,6 +149,13 @@ index 0d41abf..470a641 100644
 +	const float middle = static_cast<float>(resolution.x) * 0.5f;
 +	m_vt.m_min.p.x = middle + (m_vt.m_min.p.x - middle) * scale;
 +	m_vt.m_max.p.x = middle + (m_vt.m_max.p.x - middle) * scale;
++
++	// What the game drew past the screen's edge, a panel sliding in say, must not land in the new columns.
++	const int clip_left = static_cast<int>(middle - middle * scale);
++	const int clip_right = static_cast<int>(middle + middle * scale);
++	m_context->scissor.in.x = std::max(m_context->scissor.in.x, clip_left);
++	m_context->scissor.in.z = std::min(m_context->scissor.in.z, clip_right);
++	m_emufusion_clipped_context = m_context;
 +}
 +
 +void GSRendererHW::EmufusionEndFrame()
@@ -172,7 +186,7 @@ index 0d41abf..470a641 100644
  	// Retire whatever the GPU finished since the last frame. Runs unconditionally: after the
  	// mode is switched off there can still be a tail of queued downloads to drain.
  	g_texture_cache->ProcessPendingDownloads();
-@@ -2910,6 +3005,8 @@ void GSRendererHW::Draw()
+@@ -2910,6 +3019,8 @@ void GSRendererHW::Draw()
  		return;
  	}
  
@@ -182,10 +196,10 @@ index 0d41abf..470a641 100644
  	// which can cause invalid targets to be created, so might as well skip it.
  	if (GSVector4i(m_vt.m_min.p.xyxy(m_vt.m_max.p)).eq(GSVector4i::zero()) && m_vt.m_eq.rgba == 0xffff && 
 diff --git a/pcsx2/GS/Renderers/HW/GSRendererHW.h b/pcsx2/GS/Renderers/HW/GSRendererHW.h
-index 5046775..a011e69 100644
+index 5046775..e6275c5 100644
 --- a/pcsx2/GS/Renderers/HW/GSRendererHW.h
 +++ b/pcsx2/GS/Renderers/HW/GSRendererHW.h
-@@ -32,6 +32,18 @@ public:
+@@ -32,6 +32,19 @@ public:
  	static constexpr int MAX_FRAMEBUFFER_HEIGHT = 1280;
  
  private:
@@ -200,6 +214,7 @@ index 5046775..a011e69 100644
 +	u32 m_emufusion_other_draws = 0;
 +	u32 m_emufusion_frames_without_3d = 0;
 +	bool m_emufusion_scene_3d = false;
++	GSDrawingContext* m_emufusion_clipped_context = nullptr;
 +
  	static constexpr float SSR_UV_TOLERANCE = 1.0f;
  

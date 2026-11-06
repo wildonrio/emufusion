@@ -56,12 +56,12 @@
       "id": "swanstation",
       "sourceCommit": "5430a4a53b89fa5827c97b84ada29d23317245bc",
       "sourceArchiveSha256": "df747c49b9038499b8d8762cd2662f0b8c128ee3999b74b19979e5ab20dd622d",
-      "recipeSha256": "419fde62fcb2f425a84038f37c5aa8693c3949f23e3b21a4fc087baf2b740d3d",
+      "recipeSha256": "d8f5ee38a255290628047bfacdab6d09606fe7194bdf6554cc05456c0785150d",
       "patches": {
         "engines/patches/swanstation-disable-forced-ipo.patch": "8d312fb06736b0577d05e0b0694592112632f3a659c247f801185f9acbbb881f",
-        "engines/patches/swanstation-emufusion-keep-2d.patch": "25fdaedce03d879f5fdf14bd577e05365bcb0356feeb6ba39e4dbb9933887e2d"
+        "engines/patches/swanstation-emufusion-keep-2d.patch": "ffa2ce3f0940d3bd16e54c5de68f0e9bba2603aa2f66a5d1c0c8422c3beb1636"
       },
-      "artifactSha256": "2bf0c73a84308d6418185614a485326b4f0f4bdf996b5d211db7f5fa6f8fbafa",
+      "artifactSha256": "addfa1a8f5357066edf755125643820f634076ca239d498adebc37eb1cfe8e7c",
       "independentBuilds": 2,
       "byteIdentical": true,
       "proofDate": "2026-11-06",
