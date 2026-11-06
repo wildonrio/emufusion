@@ -1988,9 +1988,11 @@
           "tested": "2026-11-06 host: opening story and first tall rooms played; real level to both edges, status menu stays narrow. HUD stays in its place"
         },
         "Final Fantasy VI Advance": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "grid:cell=1,stride=100,cols=100,rows=100,split=200,step=100,planes=2010000:201C000+2014000:201C800,front=2020000+2020400"
+          },
+          "tested": "2026-11-06 host: Narshe walked in every direction; town to both edges, roofs still pass in front of the party, main menu stays narrow. Battles and the world map not reached"
         },
         "Fire Emblem": {
           "strategy": "fixed-screen",

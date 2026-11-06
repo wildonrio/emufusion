@@ -25,10 +25,10 @@ index 0000000..acb6278
 +#endif
 diff --git a/src/gba/renderers/ef_wide.inc b/src/gba/renderers/ef_wide.inc
 new file mode 100644
-index 0000000..44dabb2
+index 0000000..5861a17
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.inc
-@@ -0,0 +1,658 @@
+@@ -0,0 +1,687 @@
 +// Included at the end of video-software.c.
 +static mColor ef_fb[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
 +static int ef_ext, ef_milli;
@@ -86,6 +86,8 @@ index 0000000..44dabb2
 +	int rooms;
 +	bool edge;
 +	unsigned ring;
++	int split, step;
++	uint32_t front[2];
 +} ef_grid;
 +struct EfGridPlace {
 +	bool locked;
@@ -111,6 +113,7 @@ index 0000000..44dabb2
 +	ef_grid.cols = ef_grid.rows = 128;
 +	ef_grid.mask = 0xFFFF;
 +	ef_grid.unit = 8;
++	ef_grid.step = 8;
 +	for (const char* cursor = value + 5; *cursor;) {
 +		char* end;
 +		if (!strncmp(cursor, "table=", 6)) {
@@ -141,6 +144,13 @@ index 0000000..44dabb2
 +			ef_grid.edge = strtoul(cursor + 5, &end, 16) != 0;
 +		} else if (!strncmp(cursor, "ring=", 5)) {
 +			ef_grid.ring = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "split=", 6)) {
++			ef_grid.split = strtoul(cursor + 6, &end, 16);
++		} else if (!strncmp(cursor, "step=", 5)) {
++			ef_grid.step = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "front=", 6)) {
++			ef_grid.front[0] = strtoul(cursor + 6, &end, 16);
++			ef_grid.front[1] = *end == '+' ? strtoul(end + 1, &end, 16) : 0;
 +		} else if (!strncmp(cursor, "planes=", 7)) {
 +			end = (char*) cursor + 6;
 +			while (*end == '=' || *end == '+') {
@@ -245,6 +255,22 @@ index 0000000..44dabb2
 +	if (ef_grid.rooms) {
 +		return ef_room_entry(plane, x, y, entry);
 +	}
++	if (plane >= ef_grid.plane_count) {
++		// A background of just the tiles a list marks as in front of sprites, from either map, the first first.
++		*entry = 0;
++		for (int source = 0; source < 2 && !*entry; ++source) {
++			const uint8_t* cell = ef_bus(ef_grid.planes[source] + ((y >> 4) & (ef_grid.rows - 1)) * ef_grid.stride + ((x >> 4) & (ef_grid.cols - 1)), 1);
++			uint16_t tile;
++			if (!cell || !ef_grid_entry(source, x, y, &tile) || !(tile & 0x3FF)) {
++				continue;
++			}
++			const uint8_t* mark = ef_bus(ef_grid.front[source] + ((y >> 3) & 1) * 0x200 + ((x >> 3) & 1) * 0x100 + *cell, 1);
++			if (mark && *mark) {
++				*entry = tile;
++			}
++		}
++		return true;
++	}
 +	int gridX = (x >> 4) & (ef_grid.cols - 1);
 +	int gridY = (y >> 4) & (ef_grid.rows - 1);
 +	if (gridX >= ef_grid.room_cols || gridY >= ef_grid.room_rows) {
@@ -256,7 +282,10 @@ index 0000000..44dabb2
 +	}
 +	uint32_t number = (cell[0] | (ef_grid.cell > 1 ? cell[1] << 8 : 0)) & ef_grid.mask;
 +	uint32_t table = ef_grid.tables[plane] ? ef_grid.tables[plane] : ef_grid.table;
-+	const uint8_t* block = ef_bus(table + number * ef_grid.unit + ((y >> 3) & 1) * 4 + ((x >> 3) & 1) * 2, 2);
++	// Corners side by side in one list, or a list per corner.
++	const uint8_t* block = ef_bus(ef_grid.split
++		? table + number * 2 + (((y >> 3) & 1) * 2 + ((x >> 3) & 1)) * ef_grid.split
++		: table + number * ef_grid.unit + ((y >> 3) & 1) * 4 + ((x >> 3) & 1) * 2, 2);
 +	if (!block) {
 +		return false;
 +	}
@@ -409,9 +438,9 @@ index 0000000..44dabb2
 +		} else if (distinct >= 3 && samples[b].drawn >= 8 && (place->locked || !(ef_grid_tick & 7))) {
 +			// The video scroll says little about the world position, so every place is tried, and
 +			// the game may start a block on either of its two tile rows and columns.
-+			for (int plane = 0; plane < ef_grid.plane_count && !found; ++plane) {
-+				for (int y = 0; y < ef_grid.rows * 16 && !found; y += 8) {
-+					for (int x = 0; x < ef_grid.cols * 16 && !found; x += 8) {
++			for (int plane = 0; plane < ef_grid.plane_count + (ef_grid.front[0] != 0) && !found; ++plane) {
++				for (int y = 0; y < ef_grid.rows * 16 && !found; y += ef_grid.step) {
++					for (int x = 0; x < ef_grid.cols * 16 && !found; x += ef_grid.step) {
 +						if (ef_grid_fits(&samples[b], plane, x, y, 8)) {
 +							place->locked = true;
 +							place->misses = 0;

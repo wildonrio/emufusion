@@ -533,7 +533,7 @@ case "$ENGINE" in
         cp -R "$source/." "$patched/"
         apply_locked_patch "$patched" \
             engines/patches/mgba-emufusion-widescreen.patch \
-            0a177b697cdb7338611a13ba4814bcae9412773775d1112624e4a51ae802af89
+            57cff41c1c05305f3e209b26b679cf65253aef0398f8fca72c73968b028d7654
         source="$patched"
         build="$BUILD_ROOT/work/mgba-$ABI"
         rm -rf "$build"
