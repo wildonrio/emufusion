@@ -1850,7 +1850,7 @@
           "options": {
             "emufusion_ws_scene": "C0BE=B0|C0BD=83,C0BE=00|C0BD=86,C0BE=C0|C0BD=87,C0BE=C0"
           },
-          "tested": "2026-11-06 host: singles, doubles and a mini-game played: the whole court and its surroundings fill the wide picture; menus stay narrow"
+          "tested": "2026-11-06 host: singles, doubles and a mini-game played: the whole court and its surroundings fill the wide picture; menus stay narrow. Thor: a match at 60 to 120, swipe and tap in play"
         },
         "Mickey's Racing Adventure": {
           "strategy": "fixed-screen",
@@ -2009,7 +2009,7 @@
           "options": {
             "emufusion_ws_hud": "obj:-8-24:0-119:-1:040-0FF;obj:-8-24:120-239:1:040-0FF"
           },
-          "tested": "2026-11-05 host: Brinstar start played; energy and minimap moved to the corners, room art shows where they were"
+          "tested": "2026-11-05 host: Brinstar start played; energy and minimap moved to the corners, room art shows where they were. Thor: 60 to 120, meters in the corners, swipe and tap in play"
         },
         "Mario Kart: Super Circuit": {
           "strategy": "widen",
@@ -2018,7 +2018,7 @@
             "emufusion_ws_scene": "30016E0=01,300040E=18",
             "emufusion_ws_hud": "bg0:0-159:0-103:-1;bg0:0-159:144-239:1;obj:90-135:170-239:1:118-118"
           },
-          "tested": "2026-11-06 host and Thor: race played; road and scenery extend, the status layer no longer wraps to the edges, the horizon blends across the new columns, 60 to 120. Rank, lap, time and track map moved to the corners, item box stays centred; menus and pause stay narrow"
+          "tested": "2026-11-06 host and Thor: race played; road and scenery extend, the status layer no longer wraps to the edges, the horizon blends across the new columns, 60 to 120. Rank, lap, time and track map moved to the corners, item box stays centred; menus and pause stay narrow. Thor: 60 to 120 with the meters moved, swipe and tap in a race"
         },
         "Alien Hominid": {
           "strategy": "fixed-screen",
