@@ -45,22 +45,22 @@ reviewed before this revision; its work was not discarded.
 
 The 3-D failures are fast near objects: Double Dash's karts tear at their edges, and the per-phase field is 1/8 of a 1080p picture.
 
-**Status, November 5 (Thor, 3.2.155 from a cool start, 16-s windows scaled to 30 s, one run each unless noted; see the November 5 entries).**
+**Status, November 6 (Thor, 3.2.156 from a cool start, 16-s windows scaled to 30 s, one run each unless noted; see the November 6 entries).**
 
-| System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content, replay bench: now, with the image check (QA) |
+| System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content, replay bench: now, with the 160-wide image check (QA) |
 | --- | --- | --- | --- |
-| NES | 99.9%, 2 | 9.1 / 17.4 (10.6 / 18.9) ms | 0%, not tried |
+| NES | 99.9%, 2 | 9.2 / 17.5 (11.3 / 19.7) ms | 0%, stays off |
 | Mega Drive | not re-measured | not re-measured | 46%, stays off |
 | SNES | not re-measured | not re-measured | 0-14%, stays off |
-| Star Fox 64 | not re-measured | not re-measured | 4%, 0% |
-| Ocarina of Time (20 fps) | older: 94.4%, 66 | older: 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench (port 0%) |
-| Double Dash | 99.8%, 6 | 13.0 / 21.4 (15.2 / 23.6) ms | 14%, 7% |
-| NSMBU Deluxe, two runs | 100.0%, 0; 99.9%, 4 | 19.4 / 27.7, 19.3 / 27.6 (19.3 / 27.7, 17.7 / 26.1) ms | world map 13%, 3% |
-| Link's Awakening | 95.5%, about 150 | 20.6 / 29.5 (23.4 / 32.9) ms | 6%, 6% |
+| Star Fox 64 | not re-measured | not re-measured | 4%, 4% |
+| Ocarina of Time (20 fps) | older: 94.4%, 66 | older: 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench |
+| Double Dash | 100.0%, 0 | 19.8 / 28.1 (19.8 / 28.2) ms | 17%, 7% |
+| NSMBU Deluxe, three runs | 99.4%, 20; 100.0%, 0; 99.5%, 16 | 14.8 / 23.3, 19.6 / 27.9, 18.4 / 26.7 (16.6 / 25.0, 19.4 / 27.7, 15.5 / 23.9) ms | world map 14%, 7% |
+| Link's Awakening | 94.3%, 192 | 21.8 / 37.1 (24.6 / 34.5) ms | 6%, 11% |
 | Wind Waker HD | older: 76%, 30 fps source | older: ~37 ms real | 11%, 0% |
-| SM3DW | 98.3% in its play window | 12.1 / 21.7 ms | 0%, not on the device bench (port 0%) |
+| SM3DW | 93.7% in its play window | 12.0 / 21.0 ms | 0%, not on the device bench |
 
-Nothing is at 10/10 on all three measures yet. NSMBU Deluxe stayed in the compositor's pipelined state in these runs (0, 3 and 22% fast mode), about 8 ms over the structural minimum.
+Nothing is at 10/10 on all three measures yet. The compositor's pipelined state costs about 8 ms wherever a run stays in it (Double Dash here, NSMBU Deluxe's second run), and NSMBU Deluxe's hitches vary widely between runs.
 
 **10/10 targets, per tested system in gameplay (loads and keep-alive frames excluded):**
 - **Smoothness:** at least 99.5% of output intervals at the intended cadence, and at most 5 Present-rhythm hitches per 30 s.
@@ -266,7 +266,27 @@ Nothing is at 10/10 on all three measures yet. NSMBU Deluxe stayed in the compos
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 6 (latest) **— The compositor's slower state decides latency, and a smooth run never leaves it. The pacing trial's start-of-game switch accounts for part of it; a drain gets NES out of it. Fast path, flush during the solve and 256 draws show no clear gain.**
+November 6 (latest) **— 3.2.156 (230, `dc4f4948`, retry-403) released for the widescreen systems. Frame generation is 3.2.155 plus code that is off by default. NSMBU Deluxe's hitches varied widely in the gate, so its spread is being measured.**
+
+- **What ships:** widescreen for Nintendo 64, GameCube, Dreamcast and Game Boy joins the six earlier systems, and NES goes from 19 to 110 games. PS2 stays off. In the APK and off by default: the compositor drain, the 160-wide image check, the fast path. Built with plain `build.py` from the tree at `717da0a` plus the version bump; later commits are not in it. All 406 Python test files and the Java host tests pass. Rollback: 3.2.155.
+- **Thor, retry-403, default settings, each run started at xo-therm 45-53 C:**
+
+  | Game | On cadence | Two-scan or longer in the window | Hitches per 30 s | Fast mode | First generated / real, median (mean) |
+  | --- | --- | --- | --- | --- | --- |
+  | NSMBU Deluxe (first run after the install) | 99.4% | 11 in 16 s | 20 | 49% | 14.8 / 23.3 (16.6 / 25.0) ms |
+  | NSMBU Deluxe | 100.0% | 0 | 0 | 100%, see below | 19.6 / 27.9 (19.4 / 27.7) ms |
+  | NSMBU Deluxe | 99.5% | 9 in 16 s | 16 | 39% | 18.4 / 26.7 (15.5 / 23.9) ms |
+  | Link's Awakening | 94.3% | 113 in 18 s | 192 | 29% | 21.8 / 37.1 (24.6 / 34.5) ms |
+  | NES | 99.9% | 1 in 16 s | 1.8 | 72% | 9.2 / 17.5 (11.3 / 19.7) ms |
+  | Double Dash | 100.0% | 0 | 0 | 0% | 19.8 / 28.1 (19.8 / 28.2) ms |
+  | SM3DW | 93.7% (PACE window; on intended 97.5%; the whole 43-s trace, which includes a load, scores 56.4%) | 75 in about 10 s | not comparable | 82% | 12.0 / 21.0 ms |
+
+  The second NSMBU run's fast-mode figure is the scoring script's latch-to-present test; at 19.6 / 27.9 ms it was not in the low-latency state.
+- **The gate was not clean, and the release went out on the owner's request for widescreen.** Two of three NSMBU runs have 16-20 hitches per 30 s against 0-5.5 in the 3.2.155 gate; SM3DW's cadence is down from 98.3% and Link's Awakening's from 95.5%. By the code, the default path differs from 3.2.155 only by one state update per presented frame (the drain's `observe`) and Eden's one-time prop read. That is an argument, not a measurement. No side-by-side was run: a downgrade install risks saves.
+- **Rejected: a whole-frame fallback for pixel art.** On 72 Mega Drive triplets from the device bench (33% over 0.1%, area 0.299%), holding the nearer real frame whenever the check flags a share of the frame: 0.25% of the frame gives 6% over 0.1%, but holds 60% of all frames and 48% of the clean ones, error 0.684 -> 0.883; 1% gives 25%, holding 35% of frames and 40% of the clean ones. The flag does not separate the failing frames, so this would mostly remove frame generation from Mega Drive.
+- **Next:** three more NSMBU Deluxe runs at default settings, spaced over cool starts. If two of three show 16-20 hitches per 30 s, treat it as a regression and look in the drain and Eden prop changes.
+
+November 6 **— The compositor's slower state decides latency, and a smooth run never leaves it. The pacing trial's start-of-game switch accounts for part of it; a drain gets NES out of it. Fast path, flush during the solve and 256 draws show no clear gain.**
 
 - **Runs:** Thor, cool starts (xo-therm about 53 C), 16-s windows, one run per row unless noted, retry-399 or retry-400 (same Java). Default-setting comparison: `g1`, `g2` on NSMBU Deluxe, `g4` on NES, from the release entry.
 
