@@ -457,6 +457,11 @@
             "emufusion_ws_strict": "a,b"
           },
           "tested": "2026-11-05 host: play; pause keeps bars. Stale ice beyond the crowd near the rink end still to fix"
+        },
+        "Shining Force II": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host: house and town map reached; the map stops at the old edge and the trees are cut off beside black, so widening shows nothing. Needs a map reader"
         }
       },
       "fallback": {
