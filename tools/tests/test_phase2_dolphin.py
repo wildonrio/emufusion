@@ -160,7 +160,7 @@ class DolphinCompilerProofTests(unittest.TestCase):
         self.assertTrue((ROOT / path).is_file())
         self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), expected_sha)
         self.assertIn('PATH="$dolphin_git_path:$PATH"', dolphin_recipe)
-        self.assertEqual(len(self.lock["patches"]), 4)
+        self.assertEqual(len(self.lock["patches"]), 5)
         for row in self.lock["patches"]:
             self.assertEqual(hashlib.sha256((ROOT / row["path"]).read_bytes()).hexdigest(), row["sha256"])
             self.assertIn(row["path"], dolphin_recipe)

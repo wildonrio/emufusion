@@ -793,6 +793,21 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-05 host: fixed playfield, nothing to reveal"
+        },
+        "Wario Land 3": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: first cave played; the sides stay black, nothing gained without a map reader"
+        },
+        "Wario Land II": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: first room played; the sides are a flat colour band, nothing gained without a map reader"
+        },
+        "Micro Machines V3": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-05 host: a race played; the sides show stale pieces of other track until they refresh"
         }
       },
       "release": true,
@@ -926,7 +941,7 @@
         "Super Mario 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title, Peach's letter, castle grounds and water in 3D at 16:9; a star course not played yet"
+          "tested": "2026-11-05 Thor: castle grounds and Lakitu intro compared narrow and wide; HUD and text the same width, world extends, Mario keeps his shape"
         },
         "Banjo-Tooie": {
           "strategy": "widen",
@@ -946,7 +961,7 @@
         "Diddy Kong Racing": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title and player select fill the screen; a race not played yet"
+          "tested": "2026-11-05 Thor: menus compared narrow and wide, GAME SELECT and its panels the same width; sky and flyby run to the edges. A race not played yet"
         },
         "Excitebike 64": {
           "strategy": "widen",
@@ -1106,6 +1121,76 @@
           "strategy": "widen",
           "options": {},
           "tested": "2026-11-05 Thor: demo play in 3D at 16:9, Press Start Button keeps its shape; movie and title stay 4:3 with bars, correct"
+        },
+        "Soul Calibur": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Resident Evil: Code Veronica": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Skies of Arcadia": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Marvel vs. Capcom 2": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Shenmue": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Legacy of Kain: Soul Reaver": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "MDK 2": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Sonic Adventure 2": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Ecco the Dolphin: Defender of the Future": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Hydro Thunder": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Star Wars: Episode I: Racer": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Mortal Kombat Gold": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Fighting Force 2": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "South Park Rally": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
         }
       },
       "release": false

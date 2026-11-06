@@ -1,0 +1,207 @@
+diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
+index f7ba162..f942762 100644
+--- a/Source/Core/DolphinLibretro/Main.cpp
++++ b/Source/Core/DolphinLibretro/Main.cpp
+@@ -224,6 +224,14 @@ void retro_run(void)
+     Config::SetCurrent(Config::MAIN_OVERCLOCK_ENABLE, cpuClock != 1.0);
+   }
+ 
++  {
++    retro_variable emufusion_2d{"emufusion_ws_2d", nullptr};
++    g_Config.fEmufusion2DScale =
++        Libretro::environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &emufusion_2d) && emufusion_2d.value ?
++            static_cast<float>(atof(emufusion_2d.value)) :
++            1.0f;
++  }
++
+   if (Libretro::Options::IsUpdated(Libretro::Options::gfx_settings::WIDESCREEN_HACK))
+   {
+     g_Config.bWidescreenHack = Libretro::Options::GetCached<bool>(
+diff --git a/Source/Core/VideoCommon/BPStructs.cpp b/Source/Core/VideoCommon/BPStructs.cpp
+index 180bc86..b297d38 100644
+--- a/Source/Core/VideoCommon/BPStructs.cpp
++++ b/Source/Core/VideoCommon/BPStructs.cpp
+@@ -36,6 +36,7 @@
+ #include "VideoCommon/TextureCacheBase.h"
+ #include "VideoCommon/TextureDecoder.h"
+ #include "VideoCommon/VideoBackendBase.h"
++#include "VideoCommon/VertexManagerBase.h"
+ #include "VideoCommon/VideoCommon.h"
+ #include "VideoCommon/VideoConfig.h"
+ #include "VideoCommon/VideoEvents.h"
+@@ -303,6 +304,7 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager&
+       // Check if we are to copy from the EFB or draw to the XFB
+       if (PE_copy.copy_to_xfb == 0)
+       {
++        g_vertex_manager->EmufusionNoteEfbCopy();
+         // bpmem.zcontrol.pixel_format to PixelFormat::Z24 is when the game wants to copy from
+         // ZBuffer (Zbuffer uses 24-bit Format)
+         bool is_depth_copy = bpmem.zcontrol.pixel_format == PixelFormat::Z24;
+diff --git a/Source/Core/VideoCommon/VertexManagerBase.cpp b/Source/Core/VideoCommon/VertexManagerBase.cpp
+index 2bc6d58..388e412 100644
+--- a/Source/Core/VideoCommon/VertexManagerBase.cpp
++++ b/Source/Core/VideoCommon/VertexManagerBase.cpp
+@@ -3,6 +3,9 @@
+ 
+ #include "VideoCommon/VertexManagerBase.h"
+ 
++#include <algorithm>
++#include <cstring>
++
+ #include <array>
+ #include <cmath>
+ #include <memory>
+@@ -29,6 +32,7 @@
+ #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionData.h"
+ #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
+ #include "VideoCommon/IndexGenerator.h"
++#include "VideoCommon/CPMemory.h"
+ #include "VideoCommon/NativeVertexFormat.h"
+ #include "VideoCommon/OpcodeDecoding.h"
+ #include "VideoCommon/PerfQueryBase.h"
+@@ -323,10 +327,69 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
+   }
+ }
+ 
++// EmuFusion: the 3D is wider, the picture is shown wider, and 2D must keep its shape. So 2D is drawn
++// narrower by the same amount. Not all of it: a full-screen quad in a 3D frame is a fade or the frame
++// itself going through an effect, and what a game draws before copying the frame to a texture is
++// the input of an effect. A frame with no 3D at all is a 2D screen: it keeps its shape, with bars.
++bool VertexManagerBase::EmufusionBatchCoversScreen() const
++{
++  const NativeVertexFormat* format = VertexLoaderManager::GetCurrentVertexFormat();
++  const PortableVertexDeclaration& declaration = format->GetVertexDeclaration();
++  const u32 stride = declaration.stride;
++  const u32 vertices = m_index_generator.GetNumVerts();
++  if (!declaration.position.enable || vertices > 12 || stride == 0)
++    return false;
++  const auto& projection = xfmem.projection.rawProjection;
++  float low = 1e9f, high = -1e9f;
++  for (u32 i = 0; i < vertices; i++)
++  {
++    const u8* vertex = m_base_buffer_pointer + i * stride;
++    float position[3] = {};
++    std::memcpy(position, vertex + declaration.position.offset,
++                sizeof(float) * std::min<u32>(declaration.position.components, 3));
++    const u32 index = declaration.posmtx.enable ? vertex[declaration.posmtx.offset] :
++                                                  g_main_cp_state.matrix_index_a.PosNormalMtxIdx;
++    const float* matrix = &xfmem.posMatrices[(index & 0x3F) * 4];
++    const float x = matrix[0] * position[0] + matrix[1] * position[1] + matrix[2] * position[2] + matrix[3];
++    const float clip = projection[0] * x + projection[1];
++    low = std::min(low, clip);
++    high = std::max(high, clip);
++  }
++  return high - low >= 1.8f;
++}
++
++void VertexManagerBase::EmufusionPlace2D()
++{
++  const float narrower = g_ActiveConfig.fEmufusion2DScale;
++  if (narrower >= 1.0f)
++    return;
++  float wanted = 1.0f;
++  if (xfmem.projection.type == ProjectionType::Perspective)
++  {
++    m_emufusion_saw_3d = true;
++  }
++  else if (m_emufusion_2d_batches++ >= m_emufusion_2d_effects &&
++           !(m_emufusion_scene_3d && EmufusionBatchCoversScreen()))
++  {
++    wanted = narrower;
++  }
++  auto& system = Core::System::GetInstance();
++  auto& shader_manager = system.GetVertexShaderManager();
++  if (shader_manager.emufusion_2d_scale != wanted)
++  {
++    shader_manager.emufusion_2d_scale = wanted;
++    system.GetXFStateManager().SetProjectionChanged();
++  }
++}
++
+ auto VertexManagerBase::ResetFlushAspectRatioCount() -> FlushStatistics
+ {
+   const auto result = m_flush_statistics;
+   m_flush_statistics = {};
++  m_emufusion_2d_effects = m_emufusion_2d_before_copy;
++  m_emufusion_2d_batches = m_emufusion_2d_before_copy = 0;
++  m_emufusion_scene_3d = m_emufusion_saw_3d;
++  m_emufusion_saw_3d = false;
+   return result;
+ }
+ 
+@@ -596,6 +659,7 @@ void VertexManagerBase::Flush()
+       }
+     }
+   }
++  EmufusionPlace2D();
+   vertex_shader_manager.SetConstants(texture_names, xf_state_manager);
+   if (!bpmem.genMode.zfreeze)
+   {
+diff --git a/Source/Core/VideoCommon/VertexManagerBase.h b/Source/Core/VideoCommon/VertexManagerBase.h
+index 715dbee..77dc23f 100644
+--- a/Source/Core/VideoCommon/VertexManagerBase.h
++++ b/Source/Core/VideoCommon/VertexManagerBase.h
+@@ -124,6 +124,7 @@ public:
+   void DoState(PointerWrap& p);
+ 
+   FlushStatistics ResetFlushAspectRatioCount();
++  void EmufusionNoteEfbCopy() { m_emufusion_2d_before_copy = m_emufusion_2d_batches; }
+ 
+   // State setters, called from register update functions.
+   void SetRasterizationStateChanged() { m_rasterization_state_changed = true; }
+@@ -196,6 +197,13 @@ protected:
+ 
+   BitSet32 UsedTextures() const;
+ 
++  void EmufusionPlace2D();
++  bool EmufusionBatchCoversScreen() const;
++  u32 m_emufusion_2d_batches = 0;
++  u32 m_emufusion_2d_before_copy = 0;
++  u32 m_emufusion_2d_effects = 0;
++  bool m_emufusion_saw_3d = false;
++  bool m_emufusion_scene_3d = false;
+   u8* m_cur_buffer_pointer = nullptr;
+   u8* m_base_buffer_pointer = nullptr;
+   u8* m_end_buffer_pointer = nullptr;
+diff --git a/Source/Core/VideoCommon/VertexShaderManager.cpp b/Source/Core/VideoCommon/VertexShaderManager.cpp
+index 6d69803..2cce4ee 100644
+--- a/Source/Core/VideoCommon/VertexShaderManager.cpp
++++ b/Source/Core/VideoCommon/VertexShaderManager.cpp
+@@ -76,10 +76,10 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
+ 
+   case ProjectionType::Orthographic:
+   {
+-    m_projection_matrix[0] = rawProjection[0];
++    m_projection_matrix[0] = rawProjection[0] * emufusion_2d_scale;
+     m_projection_matrix[1] = 0.0f;
+     m_projection_matrix[2] = 0.0f;
+-    m_projection_matrix[3] = rawProjection[1];
++    m_projection_matrix[3] = rawProjection[1] * emufusion_2d_scale;
+ 
+     m_projection_matrix[4] = 0.0f;
+     m_projection_matrix[5] = rawProjection[2];
+diff --git a/Source/Core/VideoCommon/VertexShaderManager.h b/Source/Core/VideoCommon/VertexShaderManager.h
+index 600ba3b..57cb66f 100644
+--- a/Source/Core/VideoCommon/VertexShaderManager.h
++++ b/Source/Core/VideoCommon/VertexShaderManager.h
+@@ -20,6 +20,7 @@ class XFStateManager;
+ class alignas(16) VertexShaderManager
+ {
+ public:
++  float emufusion_2d_scale = 1.0f;
+   void Init();
+   void DoState(PointerWrap& p);
+ 
+diff --git a/Source/Core/VideoCommon/VideoConfig.h b/Source/Core/VideoCommon/VideoConfig.h
+index ec06f4a..57cee1c 100644
+--- a/Source/Core/VideoCommon/VideoConfig.h
++++ b/Source/Core/VideoCommon/VideoConfig.h
+@@ -198,6 +198,8 @@ struct VideoConfig final
+   bool bVSync = false;
+   bool bVSyncActive = false;
+   bool bWidescreenHack = false;
++  // EmuFusion: how much narrower 2D is drawn when the picture is shown wider than the game drew it.
++  float fEmufusion2DScale = 1.0f;
+   AspectMode aspect_mode{};
+   int custom_aspect_width = 1;
+   int custom_aspect_height = 1;

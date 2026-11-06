@@ -1441,6 +1441,9 @@ case "$ENGINE" in
         apply_locked_patch "$staged_source" \
             engines/patches/dolphin-libretro-low-queue-priority.patch \
             bb52313363b569cf87ad57eb8673d76bc7a8290b68b75eb94f3b41292c593624
+        apply_locked_patch "$staged_source" \
+            engines/patches/dolphin-emufusion-keep-2d-shape.patch \
+            18debebff6a698c046d6b443f6658560b6e84c0a22b6b26784491b1a3b4d751b
 
         while IFS='|' read -r dep_path dep_repository dep_commit dep_sha; do
             [ -n "$dep_path" ] || continue
@@ -1528,7 +1531,7 @@ DOLPHIN_DEPENDENCIES
         rm -f "$stripped_core"
         normalized_sha=$(shasum -a 256 "$normalized_core" | awk '{print $1}')
         if [ "$normalized_sha" != \
-                96871332be655a77d8dbbc08f59a9628c4d02ca632320303559a94b114b20953 ]; then
+                04c613f75ae2d1b8f5c5821ef343f5dfd94b1a8a9731da19a52401e8a5b9abe3 ]; then
             printf 'Normalized Dolphin core checksum mismatch: %s\n' \
                 "$normalized_sha" >&2
             rm -rf "$candidate_dir"

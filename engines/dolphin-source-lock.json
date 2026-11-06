@@ -26,7 +26,7 @@
     "ENABLE_QT": false,
     "androidMaxPageSize": 16384,
     "normalizedByRemovingSection": ".note.gnu.build-id",
-    "normalizedArtifactSha256": "96871332be655a77d8dbbc08f59a9628c4d02ca632320303559a94b114b20953",
+    "normalizedArtifactSha256": "04c613f75ae2d1b8f5c5821ef343f5dfd94b1a8a9731da19a52401e8a5b9abe3",
     "rawBuildIds": [
       "c4d6d4b8f59d7b0da24455612c1299b07dec195b"
     ]
@@ -51,6 +51,11 @@
       "path": "engines/patches/dolphin-libretro-low-queue-priority.patch",
       "sha256": "bb52313363b569cf87ad57eb8673d76bc7a8290b68b75eb94f3b41292c593624",
       "purpose": "Request low Vulkan queue global priority (VK_KHR/EXT_global_priority; default on refusal or with setprop debug.emufusion.engine_queue_priority default) so the in-process frame generator presents first on the shared GPU. Local patch, host GPU scheduling only; never submitted upstream."
+    },
+    {
+      "path": "engines/patches/dolphin-emufusion-keep-2d-shape.patch",
+      "sha256": "18debebff6a698c046d6b443f6658560b6e84c0a22b6b26784491b1a3b4d751b",
+      "purpose": "Widescreen Hack: when the picture is shown wider than the game drew it, draw 2D narrower by the same amount so it keeps its shape. Off unless the emufusion_ws_2d option is set."
     }
   ],
   "dependencies": [
