@@ -1803,8 +1803,10 @@
         },
         "Mario Kart: Super Circuit": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: race start, the road and scenery extend. Stray HUD digits at the top edges still to fix"
+          "options": {
+            "emufusion_ws_skip": "1"
+          },
+          "tested": "2026-11-06 host: race played; road and scenery extend, the status layer no longer wraps to the edges, and the horizon blends across the new columns"
         },
         "Alien Hominid": {
           "strategy": "fixed-screen",

@@ -1,9 +1,9 @@
 diff --git a/src/gba/renderers/ef_wide.h b/src/gba/renderers/ef_wide.h
 new file mode 100644
-index 0000000..ec128cd
+index 0000000..31fd280
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.h
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,18 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. The renderer still draws the original 240 columns exactly as before;
@@ -16,6 +16,7 @@ index 0000000..ec128cd
 +void ef_wide_set_aspect(const char* value);
 +void ef_wide_set_scene_wide(bool wide);
 +void ef_wide_set_map(const char* value);
++void ef_wide_set_skip(const char* value);
 +void ef_wide_set_memory(const void* wram, const void* iwram, const void* rom, size_t rom_size);
 +int ef_wide_ext(void);
 +int ef_wide_milli(void);
@@ -23,10 +24,10 @@ index 0000000..ec128cd
 +#endif
 diff --git a/src/gba/renderers/ef_wide.inc b/src/gba/renderers/ef_wide.inc
 new file mode 100644
-index 0000000..cc062be
+index 0000000..fd74f12
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.inc
-@@ -0,0 +1,474 @@
+@@ -0,0 +1,528 @@
 +// Included at the end of video-software.c.
 +static mColor ef_fb[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
 +static int ef_ext, ef_milli;
@@ -39,6 +40,11 @@ index 0000000..cc062be
 +}
 +
 +void ef_wide_set_scene_wide(bool wide) { ef_scene_wide = wide; }
++
++// emufusion_ws_skip: layers left out of the new columns, as a bit mask. A status layer that never
++// scrolls holds the far side of the screen there, which reads as stray digits at the edges.
++static unsigned ef_skip_layers;
++void ef_wide_set_skip(const char* value) { ef_skip_layers = value ? strtoul(value, NULL, 16) : 0; }
 +int ef_wide_ext(void) { return ef_ext; }
 +int ef_wide_milli(void) { return ef_milli; }
 +
@@ -53,6 +59,9 @@ index 0000000..cc062be
 +// emufusion_ws_map=grid:table=2020000,planes=2014000+201C000,cell=4,stride=200,cols=80,rows=80,mask=3FFF
 +// A plane with its own table says so: planes=200B654:2012654+2025EB4:202CEB4. width= and height=
 +// name where the game keeps the room's size in pixels; the cells past it are left over from before.
++// Or size=2001000: two bytes there give the map's columns and rows, and the rows sit one after another.
++// unit=2: a cell holds a byte offset in steps of that many bytes, not a block number (8).
++// add=6000: added to each table entry, for a game that moves its palettes when it copies them.
 +// Many games keep the whole level in memory as a grid of block numbers, with a table of blocks of
 +// four map entries, and copy only what is near the screen into the video map. The new columns read
 +// the same grid. Each background finds its plane and place by comparing the grid with the video map
@@ -70,8 +79,9 @@ index 0000000..cc062be
 +	uint32_t planes[4];
 +	uint32_t tables[4];
 +	int plane_count, cell, stride, cols, rows, mask;
-+	uint32_t width_at, height_at;
-+	int room_cols, room_rows;
++	uint32_t width_at, height_at, size_at;
++	int room_cols, room_rows, unit;
++	uint16_t add;
 +} ef_grid;
 +struct EfGridPlace {
 +	bool locked;
@@ -96,6 +106,7 @@ index 0000000..cc062be
 +	ef_grid.cell = 2;
 +	ef_grid.cols = ef_grid.rows = 128;
 +	ef_grid.mask = 0xFFFF;
++	ef_grid.unit = 8;
 +	for (const char* cursor = value + 5; *cursor;) {
 +		char* end;
 +		if (!strncmp(cursor, "table=", 6)) {
@@ -112,6 +123,12 @@ index 0000000..cc062be
 +			ef_grid.width_at = strtoul(cursor + 6, &end, 16);
 +		} else if (!strncmp(cursor, "height=", 7)) {
 +			ef_grid.height_at = strtoul(cursor + 7, &end, 16);
++		} else if (!strncmp(cursor, "size=", 5)) {
++			ef_grid.size_at = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "unit=", 5)) {
++			ef_grid.unit = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "add=", 4)) {
++			ef_grid.add = strtoul(cursor + 4, &end, 16);
 +		} else if (!strncmp(cursor, "mask=", 5)) {
 +			ef_grid.mask = strtoul(cursor + 5, &end, 16);
 +		} else if (!strncmp(cursor, "planes=", 7)) {
@@ -164,11 +181,11 @@ index 0000000..cc062be
 +	}
 +	uint32_t number = (cell[0] | (ef_grid.cell > 1 ? cell[1] << 8 : 0)) & ef_grid.mask;
 +	uint32_t table = ef_grid.tables[plane] ? ef_grid.tables[plane] : ef_grid.table;
-+	const uint8_t* block = ef_bus(table + number * 8 + ((y >> 3) & 1) * 4 + ((x >> 3) & 1) * 2, 2);
++	const uint8_t* block = ef_bus(table + number * ef_grid.unit + ((y >> 3) & 1) * 4 + ((x >> 3) & 1) * 2, 2);
 +	if (!block) {
 +		return false;
 +	}
-+	*entry = block[0] | block[1] << 8;
++	*entry = (block[0] | block[1] << 8) + ef_grid.add;
 +	return true;
 +}
 +
@@ -262,6 +279,12 @@ index 0000000..cc062be
 +	const uint8_t* height = ef_grid.height_at ? ef_bus(ef_grid.height_at, 2) : NULL;
 +	ef_grid.room_cols = width ? (width[0] | width[1] << 8) >> 4 : ef_grid.cols;
 +	ef_grid.room_rows = height ? (height[0] | height[1] << 8) >> 4 : ef_grid.rows;
++	const uint8_t* size = ef_grid.size_at ? ef_bus(ef_grid.size_at, 2) : NULL;
++	if (size) {
++		ef_grid.room_cols = size[0];
++		ef_grid.room_rows = size[1];
++		ef_grid.stride = size[0] * ef_grid.cell;
++	}
 +	struct EfGridSamples samples[4];
 +	for (int b = 0; b < 4; ++b) {
 +		const struct GBAVideoSoftwareBackground* bg = &r->bg[b];
@@ -436,6 +459,19 @@ index 0000000..cc062be
 +	}
 +}
 +
++#define EF_LAYER_OBJ 4
++#define EF_LAYER_BACKDROP 5
++
++static bool ef_is_target(const struct GBAVideoSoftwareRenderer* r, int layer, bool first) {
++	if (layer == EF_LAYER_OBJ) {
++		return first ? r->target1Obj : r->target2Obj;
++	}
++	if (layer == EF_LAYER_BACKDROP) {
++		return first ? r->target1Bd : r->target2Bd;
++	}
++	return first ? r->bg[layer].target1 : r->bg[layer].target2;
++}
++
 +static void ef_wide_line(struct GBAVideoSoftwareRenderer* r, int y) {
 +	if (!ef_ext) {
 +		return;
@@ -480,24 +516,43 @@ index 0000000..cc062be
 +					sprite = r->bg[b].enabled && ef_grid_bg[b].locked && ef_text_pixel(r, &r->bg[b], x, y);
 +				}
 +			}
-+			for (int priority = 0; priority < 4 && !index; ++priority) {
++			// The two topmost layers here, the way the picture blends a see-through layer on the one below.
++			int under = 0, top_layer = EF_LAYER_BACKDROP, under_layer = EF_LAYER_BACKDROP;
++			bool found_under = false;
++			for (int priority = 0; priority < 4 && !found_under; ++priority) {
 +				if (sprite && sprite_priority[sx] == priority) {
 +					index = 256 + sprite_color[sx];
-+					break;
++					top_layer = EF_LAYER_OBJ;
 +				}
-+				for (int b = 0; b < 4 && !index; ++b) {
++				for (int b = 0; b < 4 && !found_under; ++b) {
 +					const struct GBAVideoSoftwareBackground* bg = &r->bg[b];
-+					if (!bg->enabled || (int) bg->priority != priority) {
++					if (!bg->enabled || (int) bg->priority != priority || (ef_skip_layers >> b & 1)) {
 +						continue;
 +					}
++					int pixel = 0;
 +					if (mode == 0 || (mode == 1 && b < 2)) {
-+						index = ef_text_pixel(r, bg, x, y);
++						pixel = ef_text_pixel(r, bg, x, y);
 +					} else if ((mode == 1 && b == 2) || (mode == 2 && b >= 2)) {
-+						index = ef_affine_pixel(r, bg, x);
++						pixel = ef_affine_pixel(r, bg, x);
++					}
++					if (!pixel) {
++						continue;
++					}
++					if (!index) {
++						index = pixel;
++						top_layer = b;
++					} else {
++						under = pixel;
++						under_layer = b;
++						found_under = true;
 +					}
 +				}
 +			}
-+			out[sx] = palette[index];
++			mColor color = palette[index];
++			if (r->blendEffect == BLEND_ALPHA && ef_is_target(r, top_layer, true) && ef_is_target(r, under_layer, false)) {
++				color = mColorMix5Bit(r->blda, palette[index], r->bldb, palette[under]);
++			}
++			out[sx] = color;
 +		}
 +	}
 +}
@@ -529,7 +584,7 @@ index c5bc37b..0704fe1 100644
 +#include "ef_wide.h"
 +#include "ef_wide.inc"
 diff --git a/src/platform/libretro/libretro.c b/src/platform/libretro/libretro.c
-index 12e7913..c94ccd4 100644
+index 12e7913..ce1f52c 100644
 --- a/src/platform/libretro/libretro.c
 +++ b/src/platform/libretro/libretro.c
 @@ -4,6 +4,8 @@
@@ -541,7 +596,7 @@ index 12e7913..c94ccd4 100644
  
  #include <mgba-util/common.h>
  
-@@ -246,6 +248,78 @@ static void _updateGbPal(void) {
+@@ -246,6 +248,81 @@ static void _updateGbPal(void) {
  }
  #endif
  
@@ -599,6 +654,9 @@ index 12e7913..c94ccd4 100644
 +static void ef_read_options(void) {
 +	struct retro_variable var = { .key = "emufusion_ws_scene", .value = NULL };
 +	ef_set_scene(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_skip";
++	var.value = NULL;
++	ef_wide_set_skip(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
 +	var.key = "emufusion_ws_map";
 +	var.value = NULL;
 +	ef_wide_set_map(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -620,7 +678,7 @@ index 12e7913..c94ccd4 100644
  static void _reloadSettings(void) {
  	struct mCoreOptions opts = {
  		.useBios = true,
-@@ -418,9 +492,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
+@@ -418,9 +495,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
  	info->geometry.base_width = width;
  	info->geometry.base_height = height;
  	info->geometry.aspect_ratio = width / (double) height;
@@ -636,7 +694,7 @@ index 12e7913..c94ccd4 100644
  	info->geometry.max_height = height;
  
  	info->timing.fps = core->frequency(core) / (float) core->frameCycles(core);
-@@ -552,6 +631,7 @@ void retro_run(void) {
+@@ -552,6 +634,7 @@ void retro_run(void) {
  
  	bool updated = false;
  	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
@@ -644,7 +702,7 @@ index 12e7913..c94ccd4 100644
  		envVarsUpdated = true;
  
  		struct retro_variable var = {
-@@ -612,10 +692,17 @@ void retro_run(void) {
+@@ -612,10 +695,17 @@ void retro_run(void) {
  		}
  	}
  
@@ -663,7 +721,7 @@ index 12e7913..c94ccd4 100644
  
  #ifdef M_CORE_GBA
  	if (core->platform(core) == mPLATFORM_GBA) {
-@@ -988,6 +1075,7 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -988,6 +1078,7 @@ bool retro_load_game(const struct retro_game_info* game) {
  	}
  #endif
  
