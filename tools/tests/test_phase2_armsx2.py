@@ -52,6 +52,9 @@ class PhaseTwoArmsx2Test(unittest.TestCase):
         }, {
             "path": VALIDATOR.ARMSX2_INPUT_ATTACHMENT_PATCH,
             "sha256": VALIDATOR.ARMSX2_INPUT_ATTACHMENT_PATCH_SHA,
+        }, {
+            "path": VALIDATOR.ARMSX2_KEEP_2D_PATCH,
+            "sha256": VALIDATOR.ARMSX2_KEEP_2D_PATCH_SHA,
         }], self.lock["patches"])
         self.assertEqual(VALIDATOR.ARMSX2_PATCH_SHA, sha256(PATCH_PATH))
         self.assertIn(VALIDATOR.ARMSX2_PATCH_SHA, self.recipe)

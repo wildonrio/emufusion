@@ -47,7 +47,10 @@ class FrontendClockTest(unittest.TestCase):
             'pcsx2/VMManager.cpp', 'pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp',
             'pcsx2/GS/Renderers/Vulkan/VKLibretro.h',
             'pcsx2/GS/Renderers/Vulkan/GSDeviceVK.cpp',
-            'pcsx2/GS/Renderers/Vulkan/GSDeviceVK.h'}
+            'pcsx2/GS/Renderers/Vulkan/GSDeviceVK.h',
+            'pcsx2/GS/Renderers/Common/GSRenderer.cpp',
+            'pcsx2/GS/Renderers/HW/GSRendererHW.cpp',
+            'pcsx2/GS/Renderers/HW/GSRendererHW.h'}
         with tarfile.open(archive, 'r:gz') as bundle:
             for member in bundle:
                 relative = member.name.partition('/')[2]
