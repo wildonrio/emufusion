@@ -305,12 +305,19 @@ Game Boy, in `Core/ef_wide.inc` of the SameBoy patch:
 | Pokemon Red, Blue | `pokemon1` | Work RAM $C6E8: 32-pixel blocks with a 3-block border; size $D368-9, position $D361-2; 16-tile block lists from bank $D52B at $D52C |
 | Pokemon Yellow | `pokemon1y` | The same, every variable one byte lower |
 | Pokemon Gold, Silver | `pokemon2` | Work RAM $C700; size $D087-8, position $DA02-3; block lists from bank $D0C5 at $D0C6; each tile's colour in a 4-bit list in bank 2 at the address in $D0CF |
+| Wario Land II (Color) | `wl2` | Battery RAM bank 1, a byte for each 16-pixel block, 256 to a row. Tiles at $C400 + block x 4 + corner, colours the same in work RAM bank 4 at $D400. A block number's top bit is dropped, as in the game's own sum |
+| Wario Land 3 | `wl3` | The same in battery RAM bank 2, tiles at $C600, colours in work RAM bank 3 at $D300 |
 
 The player stands still on screen and the map scrolls 16 pixels a step. The game's position changes when
 a step begins, so the reader tries the positions a step could be at and keeps the one that explains the
 picture. That check also keeps menus and battles narrow. Rooms sit in the map's own border colour.
 
+The Wario games have no position to read: the level and the video scroll differ only by whole turns of the 256-pixel
+ring, so the reader tries those and keeps the one that explains the picture. Donkey Kong Land and its sequel swap tile
+graphics as they scroll, so their map numbers do not match the picture, and they stay narrow.
+
 Tools: `~/.cache/emufusion-widescreen/host-build/mesen-trace` logs every CPU read and write with
+(`host-build/sameboy-trace` does the same for Game Boy: it logs the code and data banks with each access.)
 `EF_TRACE_FILE`, `EF_TRACE_FROM`, `EF_TRACE_COUNT`. `retro_play.py` gained `poke:ADDR=VALUE` to reach a test
 case without playing there and `saveram:NAME` for battery RAM. All host-only so far; on the Thor next.
 

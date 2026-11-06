@@ -1388,7 +1388,7 @@
         "Donkey Kong Land": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: rows and columns refresh only across the old screen, sides show black and old tiles. Needs a map reader"
+          "tested": "2026-11-06 host: played; the new columns would show stale pieces, and the game swaps tile graphics as it scrolls, so its map numbers do not match the picture and a reader cannot help without decoding that"
         },
         "The Legend of Zelda: Link's Awakening": {
           "strategy": "fixed-screen",
@@ -1729,7 +1729,7 @@
         "Donkey Kong Land III": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06 host: same engine as Donkey Kong Land, whose rows and columns refresh only across the old screen; 70% match. Needs a map reader"
+          "tested": "2026-11-06 host: played; the new columns would show stale pieces, and the game swaps tile graphics as it scrolls, so its map numbers do not match the picture and a reader cannot help without decoding that"
         }
       },
       "release": true,
@@ -1965,7 +1965,7 @@
         "Alien Hominid": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: maps are one screen wide, new columns would repeat"
+          "tested": "2026-11-06 host: played; the game loads tile graphics only for what is on screen, so the art for the new columns is not in video memory"
         },
         "Advance Wars": {
           "strategy": "fixed-screen",
@@ -2020,12 +2020,12 @@
         "Tony Hawk's Pro Skater 3": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+          "tested": "2026-11-06 host: played; the game loads tile graphics only for what is on screen, so the art for the new columns is not in video memory"
         },
         "Tony Hawk's Underground": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+          "tested": "2026-11-06 host: played; the game loads tile graphics only for what is on screen, so the art for the new columns is not in video memory"
         },
         "Ultimate Card Games": {
           "strategy": "fixed-screen",
