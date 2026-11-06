@@ -36,6 +36,8 @@ SYSTEMS = {
                 base=240, buttons='A', suffixes=('.gba',)),
     'gamegear': dict(core=BUILD / 'gearsystem/platforms/libretro/gearsystem_libretro.dylib',
                      option='emufusion_ws_aspect=1778', base=160, buttons='A', suffixes=('.gg',)),
+    'megadrive': dict(core=BUILD / 'blastem/blastem_libretro.so', option='emufusion_ws_aspect=1778',
+                      base=320, buttons='B', suffixes=('.md', '.gen', '.bin', '.smd')),
     'snes': dict(core=BUILD / 'bsnes-hd/bsnes/out/bsnes_hd_beta_libretro.dylib', option='emufusion_ws_width=348',
                  base=256, buttons='B', suffixes=('.sfc', '.smc'),
                  more=('bsnes_mode7_scale=1x', 'bsnes_ppu_show_overscan=ON', 'bsnes_video_aspectcorrection=ON',

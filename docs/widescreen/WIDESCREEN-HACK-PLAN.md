@@ -452,6 +452,14 @@ Land 3 and Final Fantasy VI Advance have been played on the Mac only.
 A game started over an open one is refused unless it needs a different kind of session, and the first game keeps running, so nothing
 is lost.
 
+### Turning widescreen off and on in play (2026-11-06)
+
+Systems that restart their engine on a toggle were tried in live play on the Thor. N64 (Super Mario 64), Dreamcast (Jet Grind Radio) and
+GameCube (Double Dash) each logged a Quick Resume commit and restore every time; Mario 64 came back at the same spot, Jet Grind Radio
+kept playing its attract loop and Double Dash stayed on its opening menu. PS1 does too since its sessions were joined. One thing to
+look at: Double Dash's card prompt changed after the first restore to "No Memory Card found", so a restore may make Dolphin's card look
+missing for a moment. PS2 is the exception, below.
+
 ### PS2 stays hidden: its toggle restarts the game (2026-11-06)
 
 Quick Resume is deliberately off for ARMSX2, because a restored state can run on with only black frames and no way to detect it
@@ -459,6 +467,8 @@ Quick Resume is deliberately off for ARMSX2, because a restored state can run on
 in the street landed on the Rockstar logo. Memory-card saves survive, unsaved progress does not. Good PS2 pictures are not enough until
 this is solved. The likely way is to boot these games wide always and make off a live crop of the middle 3/4 of the picture, so neither
 direction restarts anything; the widening keeps vertical view, so the crop should match the game's own 4:3 framing.
+The core side is small: crop `CalculateDrawSrcRect`'s middle 3/4 when a scene is 3D, and its aspect sum keeps the pixel shape. The hardware
+session has no way to change a core option while running, though, so it needs a new call through the native host first.
 
 ### More PS2, N64 and GameCube first looks (2026-11-06)
 
