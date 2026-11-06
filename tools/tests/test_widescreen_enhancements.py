@@ -71,7 +71,8 @@ class WidescreenEnhancementsTest(unittest.TestCase):
         session = self.read(
             "unified-android/src/com/thorium/preview/game/PpssppGlesEngineSession.java")
         self.assertIn('request.systemId, av.aspectRatio', session)
-        self.assertIn('loop.setPresentationAspect(presentationAspect)', session)
+        self.assertIn('loop.setPresentationAspect(widescreen != null && widescreen.isEnabled()', session)
+        self.assertIn(': presentationAspect);', session)
 
     def test_every_internal_libretro_route_captures_one_launch_value(self):
         software = self.read(

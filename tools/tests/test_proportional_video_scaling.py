@@ -245,8 +245,10 @@ class ProportionalVideoScalingTest(unittest.TestCase):
         loop = HARDWARE_LOOP.read_text(encoding="utf-8")
         self.assertIn("PresentationGeometry.resolveAspect(", session)
         self.assertIn("request.systemId, av.aspectRatio", session)
-        self.assertIn("loop.setPresentationAspect(presentationAspect);", session)
-        self.assertLess(session.index("loop.setPresentationAspect(presentationAspect);"),
+        # The resolved aspect, unless a picture widened at startup is presented at its own width.
+        self.assertIn("loop.setPresentationAspect(widescreen != null && widescreen.isEnabled()", session)
+        self.assertIn(": presentationAspect);", session)
+        self.assertLess(session.index("loop.setPresentationAspect("),
                         session.index("renderLoop = loop;"),
                         "aspect must reach native code before a Surface can attach")
         self.assertGreaterEqual(loop.count("nativeHost.setPresentationAspect(aspect);"), 2,
