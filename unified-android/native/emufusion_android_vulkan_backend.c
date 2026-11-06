@@ -28,7 +28,8 @@ static int64_t emufusion_stamp_ahead_ns(int64_t requested_ns) {
     char value[PROP_VALUE_MAX] = {0};
     if (__system_property_get("debug.emufusion.stamp_ahead_ms", value) <= 0) return requested_ns;
     const long ms = atol(value);
-    return ms > 0 && ms <= 600000 ? (int64_t)ms * 1000000LL : 0;
+    /* Negative: start behind the clock, so the firmware always paces the core. */
+    return ms >= -600000 && ms <= 600000 ? (int64_t)ms * 1000000LL : 0;
 }
 
 #define EMUFUSION_VK_MAX_IMAGES 8u
