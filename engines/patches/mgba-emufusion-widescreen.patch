@@ -1,29 +1,32 @@
 diff --git a/src/gba/renderers/ef_wide.h b/src/gba/renderers/ef_wide.h
 new file mode 100644
-index 0000000..d747ce0
+index 0000000..ec128cd
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.h
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,17 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. The renderer still draws the original 240 columns exactly as before;
 +// ef_wide_line then draws the new columns beside them from the same state, once the line is done.
 +#include <mgba-util/image.h>
 +#include <stdbool.h>
++#include <stddef.h>
 +#define EF_WIDE_MAX_EXT 64
 +#define EF_WIDE_WIDTH (240 + 2 * EF_WIDE_MAX_EXT)
 +void ef_wide_set_aspect(const char* value);
 +void ef_wide_set_scene_wide(bool wide);
++void ef_wide_set_map(const char* value);
++void ef_wide_set_memory(const void* wram, const void* iwram, const void* rom, size_t rom_size);
 +int ef_wide_ext(void);
 +int ef_wide_milli(void);
 +const mColor* ef_wide_compose(const mColor* picture, int stride, int* width);
 +#endif
 diff --git a/src/gba/renderers/ef_wide.inc b/src/gba/renderers/ef_wide.inc
 new file mode 100644
-index 0000000..02306bb
+index 0000000..cc062be
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.inc
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,474 @@
 +// Included at the end of video-software.c.
 +static mColor ef_fb[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
 +static int ef_ext, ef_milli;
@@ -47,13 +50,134 @@ index 0000000..02306bb
 +	return ef_fb;
 +}
 +
-+// A text background's palette index at screen column x, 0 when transparent.
-+static int ef_text_pixel(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, int x, int y) {
++// emufusion_ws_map=grid:table=2020000,planes=2014000+201C000,cell=4,stride=200,cols=80,rows=80,mask=3FFF
++// A plane with its own table says so: planes=200B654:2012654+2025EB4:202CEB4. width= and height=
++// name where the game keeps the room's size in pixels; the cells past it are left over from before.
++// Many games keep the whole level in memory as a grid of block numbers, with a table of blocks of
++// four map entries, and copy only what is near the screen into the video map. The new columns read
++// the same grid. Each background finds its plane and place by comparing the grid with the video map
++// every frame, so a background that matches nothing, a menu say, draws nothing in the new columns.
++#define EF_GRID_SAMPLES 32
++#define EF_GRID_DRAWN 24
++#define EF_GRID_MISSES_TO_UNLOCK 3
++static const uint8_t* ef_wram;
++static const uint8_t* ef_iwram;
++static const uint8_t* ef_rom;
++static size_t ef_rom_size;
++static struct EfGrid {
++	bool on;
++	uint32_t table;
++	uint32_t planes[4];
++	uint32_t tables[4];
++	int plane_count, cell, stride, cols, rows, mask;
++	uint32_t width_at, height_at;
++	int room_cols, room_rows;
++} ef_grid;
++struct EfGridPlace {
++	bool locked;
++	uint8_t misses;
++	int plane, x, y;
++};
++static struct EfGridPlace ef_grid_bg[4];
++
++void ef_wide_set_memory(const void* wram, const void* iwram, const void* rom, size_t rom_size) {
++	ef_wram = wram;
++	ef_iwram = iwram;
++	ef_rom = rom;
++	ef_rom_size = rom_size;
++}
++
++void ef_wide_set_map(const char* value) {
++	memset(&ef_grid, 0, sizeof(ef_grid));
++	memset(ef_grid_bg, 0, sizeof(ef_grid_bg));
++	if (!value || strncmp(value, "grid:", 5)) {
++		return;
++	}
++	ef_grid.cell = 2;
++	ef_grid.cols = ef_grid.rows = 128;
++	ef_grid.mask = 0xFFFF;
++	for (const char* cursor = value + 5; *cursor;) {
++		char* end;
++		if (!strncmp(cursor, "table=", 6)) {
++			ef_grid.table = strtoul(cursor + 6, &end, 16);
++		} else if (!strncmp(cursor, "cell=", 5)) {
++			ef_grid.cell = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "stride=", 7)) {
++			ef_grid.stride = strtoul(cursor + 7, &end, 16);
++		} else if (!strncmp(cursor, "cols=", 5)) {
++			ef_grid.cols = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "rows=", 5)) {
++			ef_grid.rows = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "width=", 6)) {
++			ef_grid.width_at = strtoul(cursor + 6, &end, 16);
++		} else if (!strncmp(cursor, "height=", 7)) {
++			ef_grid.height_at = strtoul(cursor + 7, &end, 16);
++		} else if (!strncmp(cursor, "mask=", 5)) {
++			ef_grid.mask = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "planes=", 7)) {
++			end = (char*) cursor + 6;
++			while (*end == '=' || *end == '+') {
++				uint32_t plane = strtoul(end + 1, &end, 16);
++				uint32_t table = *end == ':' ? strtoul(end + 1, &end, 16) : 0;
++				if (ef_grid.plane_count < 4) {
++					ef_grid.tables[ef_grid.plane_count] = table;
++					ef_grid.planes[ef_grid.plane_count++] = plane;
++				}
++			}
++		} else {
++			return;
++		}
++		cursor = *end == ',' ? end + 1 : end;
++		if (cursor == end && *end) {
++			return;
++		}
++	}
++	if (!ef_grid.stride) {
++		ef_grid.stride = ef_grid.cols * ef_grid.cell;
++	}
++	ef_grid.on = ef_grid.plane_count > 0;
++}
++
++static const uint8_t* ef_bus(uint32_t address, size_t bytes) {
++	size_t offset = address & 0xFFFFFF;
++	switch (address >> 24) {
++	case 2:
++		return ef_wram && offset + bytes <= 0x40000 ? ef_wram + offset : NULL;
++	case 3:
++		return ef_iwram && offset + bytes <= 0x8000 ? ef_iwram + offset : NULL;
++	case 8:
++		return ef_rom && offset + bytes <= ef_rom_size ? ef_rom + offset : NULL;
++	}
++	return NULL;
++}
++
++// The map entry the grid holds at pixel x, y of the world.
++static bool ef_grid_entry(int plane, int x, int y, uint16_t* entry) {
++	int gridX = (x >> 4) & (ef_grid.cols - 1);
++	int gridY = (y >> 4) & (ef_grid.rows - 1);
++	if (gridX >= ef_grid.room_cols || gridY >= ef_grid.room_rows) {
++		return false;
++	}
++	const uint8_t* cell = ef_bus(ef_grid.planes[plane] + gridY * ef_grid.stride + gridX * ef_grid.cell, 2);
++	if (!cell) {
++		return false;
++	}
++	uint32_t number = (cell[0] | (ef_grid.cell > 1 ? cell[1] << 8 : 0)) & ef_grid.mask;
++	uint32_t table = ef_grid.tables[plane] ? ef_grid.tables[plane] : ef_grid.table;
++	const uint8_t* block = ef_bus(table + number * 8 + ((y >> 3) & 1) * 4 + ((x >> 3) & 1) * 2, 2);
++	if (!block) {
++		return false;
++	}
++	*entry = block[0] | block[1] << 8;
++	return true;
++}
++
++static uint16_t ef_ring_entry(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, int x, int y) {
 +	const uint8_t* vram = (const uint8_t*) r->d.vram;
 +	int width = bg->size & 1 ? 512 : 256;
 +	int height = bg->size & 2 ? 512 : 256;
-+	int localX = (x + bg->x) & (width - 1);
-+	int localY = (y + bg->y) & (height - 1);
++	int localX = x & (width - 1);
++	int localY = y & (height - 1);
 +	uint32_t block = bg->screenBase;
 +	if (localY >= 256) {
 +		block += width == 512 ? 0x1000 : 0x800;
@@ -62,7 +186,169 @@ index 0000000..02306bb
 +		block += 0x800;
 +	}
 +	uint32_t address = (block + ((localY >> 3) & 31) * 64 + ((localX >> 3) & 31) * 2) & 0x1FFFF;
-+	uint16_t entry = vram[address] | vram[address + 1] << 8;
++	return vram[address] | vram[address + 1] << 8;
++}
++
++static uint32_t ef_grid_tick;
++
++struct EfGridSample {
++	int x, y;
++	uint16_t entry;
++};
++
++struct EfGridSamples {
++	struct EfGridSample at[EF_GRID_SAMPLES];
++	int drawn, blank;
++};
++
++// Drawn tiles first, evenly from the whole picture: they are what tells one place from another,
++// and a layer of tree tops may have only a few among many empty cells.
++static void ef_grid_collect(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, struct EfGridSamples* out) {
++	int nonzero = 0;
++	for (int y = 0; y < 20; ++y) {
++		for (int x = 0; x < 30; ++x) {
++			nonzero += ef_ring_entry(r, bg, bg->x + x * 8, bg->y + y * 8) != 0;
++		}
++	}
++	int zero = 600 - nonzero;
++	int drawn_step = nonzero > EF_GRID_DRAWN ? nonzero / EF_GRID_DRAWN : 1;
++	int blank_step = zero > EF_GRID_SAMPLES - EF_GRID_DRAWN ? zero / (EF_GRID_SAMPLES - EF_GRID_DRAWN) : 1;
++	int seen_drawn = 0, seen_blank = 0;
++	out->drawn = out->blank = 0;
++	struct EfGridSample blank[EF_GRID_SAMPLES - EF_GRID_DRAWN];
++	for (int y = 0; y < 20; ++y) {
++		for (int x = 0; x < 30; ++x) {
++			struct EfGridSample sample = { bg->x + x * 8, bg->y + y * 8, 0 };
++			sample.entry = ef_ring_entry(r, bg, sample.x, sample.y);
++			if (sample.entry) {
++				if (!(seen_drawn++ % drawn_step) && out->drawn < EF_GRID_DRAWN) {
++					out->at[out->drawn++] = sample;
++				}
++			} else if (!(seen_blank++ % blank_step) && out->blank < EF_GRID_SAMPLES - EF_GRID_DRAWN) {
++				blank[out->blank++] = sample;
++			}
++		}
++	}
++	for (int s = 0; s < out->blank; ++s) {
++		out->at[out->drawn + s] = blank[s];
++	}
++}
++
++static bool ef_grid_fits(const struct EfGridSamples* samples, int plane, int offsetX, int offsetY, int drawn_share) {
++	int allowed = samples->drawn / drawn_share;
++	for (int s = 0; s < samples->drawn; ++s) {
++		const struct EfGridSample* sample = &samples->at[s];
++		uint16_t entry;
++		if ((!ef_grid_entry(plane, sample->x + offsetX, sample->y + offsetY, &entry) || entry != sample->entry) && --allowed < 0) {
++			return false;
++		}
++	}
++	allowed = samples->blank / 4;
++	for (int s = samples->drawn; s < samples->drawn + samples->blank; ++s) {
++		const struct EfGridSample* sample = &samples->at[s];
++		uint16_t entry;
++		// A cell past the room's edge is as empty as an empty one.
++		if (ef_grid_entry(plane, sample->x + offsetX, sample->y + offsetY, &entry) && entry && --allowed < 0) {
++			return false;
++		}
++	}
++	return true;
++}
++
++static void ef_grid_frame(const struct GBAVideoSoftwareRenderer* r) {
++	int mode = GBARegisterDISPCNTGetMode(r->dispcnt);
++	++ef_grid_tick;
++	const uint8_t* width = ef_grid.width_at ? ef_bus(ef_grid.width_at, 2) : NULL;
++	const uint8_t* height = ef_grid.height_at ? ef_bus(ef_grid.height_at, 2) : NULL;
++	ef_grid.room_cols = width ? (width[0] | width[1] << 8) >> 4 : ef_grid.cols;
++	ef_grid.room_rows = height ? (height[0] | height[1] << 8) >> 4 : ef_grid.rows;
++	struct EfGridSamples samples[4];
++	for (int b = 0; b < 4; ++b) {
++		const struct GBAVideoSoftwareBackground* bg = &r->bg[b];
++		struct EfGridPlace* place = &ef_grid_bg[b];
++		samples[b].drawn = samples[b].blank = 0;
++		if (!bg->enabled || mode > 1 || (mode == 1 && b >= 2)) {
++			place->locked = false;
++			continue;
++		}
++		ef_grid_collect(r, bg, &samples[b]);
++		if (place->locked && ef_grid_fits(&samples[b], place->plane, place->x, place->y, 4)) {
++			place->misses = 0;
++			continue;
++		}
++		int distinct = 0;
++		for (int s = 0; s < samples[b].drawn; ++s) {
++			bool seen = false;
++			for (int t = 0; t < s && !seen; ++t) {
++				seen = samples[b].at[t].entry == samples[b].at[s].entry;
++			}
++			distinct += !seen;
++		}
++		// The search is the costly part, so a background that has never matched looks less often.
++		bool found = false;
++		if (distinct >= 3 && samples[b].drawn >= 8 && (place->locked || !(ef_grid_tick & 7))) {
++			// The video scroll says little about the world position, so every place is tried, and
++			// the game may start a block on either of its two tile rows and columns.
++			for (int plane = 0; plane < ef_grid.plane_count && !found; ++plane) {
++				for (int y = 0; y < ef_grid.rows * 16 && !found; y += 8) {
++					for (int x = 0; x < ef_grid.cols * 16 && !found; x += 8) {
++						if (ef_grid_fits(&samples[b], plane, x, y, 8)) {
++							place->locked = true;
++							place->misses = 0;
++							place->plane = plane;
++							place->x = x;
++							place->y = y;
++							found = true;
++						}
++					}
++				}
++			}
++		}
++		if (!found && place->locked && ++place->misses >= EF_GRID_MISSES_TO_UNLOCK) {
++			place->locked = false;
++		}
++	}
++	// A layer with little or nothing drawn yet cannot be found alone. It usually moves with another
++	// on the plane that one is not using, and may be about to show tree tops in the new columns.
++	for (int b = 0; b < 4; ++b) {
++		struct EfGridPlace* place = &ef_grid_bg[b];
++		if (place->locked || !r->bg[b].enabled || mode > 1 || (mode == 1 && b >= 2) || samples[b].drawn >= 8) {
++			continue;
++		}
++		for (int peer = 0; peer < 4 && !place->locked; ++peer) {
++			const struct EfGridPlace* other = &ef_grid_bg[peer];
++			if (peer == b || !other->locked || r->bg[peer].x != r->bg[b].x || r->bg[peer].y != r->bg[b].y) {
++				continue;
++			}
++			for (int plane = 0; plane < ef_grid.plane_count && !place->locked; ++plane) {
++				if (plane != other->plane && ef_grid_fits(&samples[b], plane, other->x, other->y, 8)) {
++					place->locked = true;
++					place->misses = 0;
++					place->plane = plane;
++					place->x = other->x;
++					place->y = other->y;
++				}
++			}
++		}
++	}
++}
++
++// A text background's palette index at screen column x, 0 when transparent.
++static int ef_text_pixel(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, int x, int y) {
++	const uint8_t* vram = (const uint8_t*) r->d.vram;
++	int localX = x + bg->x;
++	int localY = y + bg->y;
++	uint16_t entry;
++	if (ef_grid.on) {
++		const struct EfGridPlace* place = &ef_grid_bg[bg->index];
++		if (!place->locked || !ef_grid_entry(place->plane, localX + place->x, localY + place->y, &entry)) {
++			return 0;
++		}
++	} else {
++		entry = ef_ring_entry(r, bg, localX, localY);
++	}
++	localX &= 511;
++	localY &= 511;
 +	int fineX = entry & 0x400 ? 7 - (localX & 7) : localX & 7;
 +	int fineY = entry & 0x800 ? 7 - (localY & 7) : localY & 7;
 +	if (bg->multipalette) {
@@ -154,13 +440,16 @@ index 0000000..02306bb
 +	if (!ef_ext) {
 +		return;
 +	}
++	if (y == 0 && ef_grid.on) {
++		ef_grid_frame(r);
++	}
 +	int width = GBA_VIDEO_HORIZONTAL_PIXELS + 2 * ef_ext;
 +	mColor* out = ef_fb + y * width;
 +	int mode = GBARegisterDISPCNTGetMode(r->dispcnt);
-+	bool wider_map = false;
++	bool wider_map = ef_grid.on && (ef_grid_bg[0].locked || ef_grid_bg[1].locked || ef_grid_bg[2].locked || ef_grid_bg[3].locked);
 +	for (int i = 0; i < 4; ++i) {
 +		const struct GBAVideoSoftwareBackground* bg = &r->bg[i];
-+		if (bg->enabled && ((mode == 0 && (bg->size & 1)) || (mode == 1 && ((i < 2 && (bg->size & 1)) || i == 2)) || (mode == 2 && i >= 2))) {
++		if (!ef_grid.on && bg->enabled && ((mode == 0 && (bg->size & 1)) || (mode == 1 && ((i < 2 && (bg->size & 1)) || i == 2)) || (mode == 2 && i >= 2))) {
 +			wider_map = true;
 +		}
 +	}
@@ -183,8 +472,16 @@ index 0000000..02306bb
 +			int x = side ? GBA_VIDEO_HORIZONTAL_PIXELS + i : i - ef_ext;
 +			int sx = x + ef_ext;
 +			int index = 0;
++			bool sprite = sprite_color[sx] != 0;
++			if (sprite && ef_grid.on) {
++				// Out on the black around a room a sprite is somewhere the game would not show it.
++				sprite = false;
++				for (int b = 0; b < 4 && !sprite; ++b) {
++					sprite = r->bg[b].enabled && ef_grid_bg[b].locked && ef_text_pixel(r, &r->bg[b], x, y);
++				}
++			}
 +			for (int priority = 0; priority < 4 && !index; ++priority) {
-+				if (sprite_color[sx] && sprite_priority[sx] == priority) {
++				if (sprite && sprite_priority[sx] == priority) {
 +					index = 256 + sprite_color[sx];
 +					break;
 +				}
@@ -232,18 +529,19 @@ index c5bc37b..0704fe1 100644
 +#include "ef_wide.h"
 +#include "ef_wide.inc"
 diff --git a/src/platform/libretro/libretro.c b/src/platform/libretro/libretro.c
-index 12e7913..fb70b09 100644
+index 12e7913..c94ccd4 100644
 --- a/src/platform/libretro/libretro.c
 +++ b/src/platform/libretro/libretro.c
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,8 @@
   * License, v. 2.0. If a copy of the MPL was not distributed with this
   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
  #include "libretro.h"
 +#include "gba/renderers/ef_wide.h"
++#include <mgba/internal/gba/gba.h>
  
  #include <mgba-util/common.h>
  
-@@ -246,6 +247,71 @@ static void _updateGbPal(void) {
+@@ -246,6 +248,78 @@ static void _updateGbPal(void) {
  }
  #endif
  
@@ -301,6 +599,13 @@ index 12e7913..fb70b09 100644
 +static void ef_read_options(void) {
 +	struct retro_variable var = { .key = "emufusion_ws_scene", .value = NULL };
 +	ef_set_scene(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_map";
++	var.value = NULL;
++	ef_wide_set_map(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	if (core && core->platform(core) == mPLATFORM_GBA) {
++		struct GBA* gba = core->board;
++		ef_wide_set_memory(gba->memory.wram, gba->memory.iwram, gba->memory.rom, gba->memory.romSize);
++	}
 +	var.key = "emufusion_ws_aspect";
 +	var.value = NULL;
 +	int before = ef_wide_ext();
@@ -315,7 +620,7 @@ index 12e7913..fb70b09 100644
  static void _reloadSettings(void) {
  	struct mCoreOptions opts = {
  		.useBios = true,
-@@ -418,9 +484,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
+@@ -418,9 +492,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
  	info->geometry.base_width = width;
  	info->geometry.base_height = height;
  	info->geometry.aspect_ratio = width / (double) height;
@@ -331,7 +636,7 @@ index 12e7913..fb70b09 100644
  	info->geometry.max_height = height;
  
  	info->timing.fps = core->frequency(core) / (float) core->frameCycles(core);
-@@ -552,6 +623,7 @@ void retro_run(void) {
+@@ -552,6 +631,7 @@ void retro_run(void) {
  
  	bool updated = false;
  	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
@@ -339,7 +644,7 @@ index 12e7913..fb70b09 100644
  		envVarsUpdated = true;
  
  		struct retro_variable var = {
-@@ -612,10 +684,17 @@ void retro_run(void) {
+@@ -612,10 +692,17 @@ void retro_run(void) {
  		}
  	}
  
@@ -358,7 +663,7 @@ index 12e7913..fb70b09 100644
  
  #ifdef M_CORE_GBA
  	if (core->platform(core) == mPLATFORM_GBA) {
-@@ -988,6 +1067,7 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -988,6 +1075,7 @@ bool retro_load_game(const struct retro_game_info* game) {
  	}
  #endif
  

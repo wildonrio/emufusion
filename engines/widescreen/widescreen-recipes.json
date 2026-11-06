@@ -468,6 +468,83 @@
             "emufusion_ws_hud": "obj:25-25:44-84:-1:10-60;obj:41-41:44-84:-1:10-60;obj:57-57:44-84:-1:10-60"
           },
           "tested": "2026-11-05 host: Great Turquoise played; rings, time and lives move out; the title stays narrow"
+        },
+        "Aerial Assault": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Ariel - The Little Mermaid": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Berenstain Bears - Camping Adventure": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Incredible Hulk": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Revenge of Drancon": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Shinobi II - The Silent Fury": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Taz in Escape from Mars": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Tom and Jerry - The Movie": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Wonder Boy": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "FIFA International Soccer": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Ultimate Soccer": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
         }
       },
       "release": true,
