@@ -338,6 +338,16 @@ November 6 **— The compositor's slower state decides latency, and a smooth run
   | Double Dash | 99.9% | 3.6 | 46% | 19.5 / 27.9 (15.7 / 24.1) ms |
 
   NES, which stayed in the slower state for a whole run without it, now reaches the structural minimum within a ms on the median. NSMBU Deluxe's fast state lasts 0.2-4 s, so it should not be paying for drains. At the moves back to pipelined the last frames were finished about 6 ms before their scan on NES and in most NSMBU cases, so late GPU work does not explain all of them; the compositor's own commit may be what misses (not established). The spacing is now 15 s at minimum, doubling only when the fast state lasted under half of it, so a full cycle costs at most four hitches in 30 s.
+- **The tuned drain on pixel art** (15-s minimum spacing, retry-406 and 407, one run each; `iv.py` splits the two-scan intervals):
+
+  | Run | On cadence | Hitches per 30 s (planned gaps / compositor moves in the window) | Fast mode | First generated / real, median (mean) |
+  | --- | --- | --- | --- | --- |
+  | NES, drain | 99.9% | 1.8 | 88% | 9.4 / 17.8 (10.4 / 18.7) ms |
+  | Mega Drive, drain | 99.6% | 14.5 (6 / 2) | 92% | 9.0 / 17.4 (9.6 / 17.9) ms |
+  | Mega Drive, off | 99.9% | 1.8 (0 / 1) | 3% | 17.3 / 25.6 (16.9 / 25.3) ms |
+  | SNES, drain | 99.9% | 1.8 (0 / 1) | 6% | 17.7 / 26.1 (17.3 / 25.6) ms |
+
+  Mega Drive gains 8 ms, reaching the structural minimum within a ms. Its 8 intervals against 1 are mostly planned gaps rather than the drain's moves (one 12-scan real image among them), and whether the fast state causes those gaps is not known. SNES does not gain: three drains, spacing already 120 s, and the fast state does not last. Why it differs from NES is not known.
 - **The 160-wide check on the device replay bench**, frames with invented content, area, hold-out error: Wind Waker HD 11 -> 0%, 0.032 -> 0.008%, 0.512 -> 0.524; NSMBU map 14 -> 7%, 0.047 -> 0.012%, 0.959 -> 0.971; Double Dash 17 -> 7%, 0.046 -> 0.029%, 0.611 -> 0.625; Star Fox 64 4 -> 4%, 0.018 -> 0.011%, 0.719 -> 0.722; Link's Awakening 6 -> 11%, 0.012 -> 0.034%, 0.578 -> 0.581. Weaker than 320 wide, and Link's Awakening gets worse.
 - **Next:** NES, Mega Drive, NSMBU Deluxe and Double Dash on the next shared APK with the tuned drain, then decide its default.
 
