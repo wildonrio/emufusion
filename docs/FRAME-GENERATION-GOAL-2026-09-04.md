@@ -293,7 +293,16 @@ November 6 (latest) **— 3.2.156 (230, `dc4f4948`, retry-403) released for the 
   | retry-406 `143226d7` | 99.7% | 9.1 | 52% | 11.2 / 19.5 (14.6 / 22.9) ms |
 
   This does not settle it. Over all six default-setting runs on these builds the hitches are 20, 0, 16, 3.7, 16.4 and 9.1 per 30 s; the three on 3.2.155's builds were 0, 3.7 and 5.5. No side-by-side has been run. What the runs do show is two regimes. Runs that sit in the pipelined state (fast mode 22% or less, and the 100.0% run whose 19.6 / 27.9 ms shows the same state) have 0-5.5 hitches and about 18-20 / 26-28 ms on average; runs at 39-52% have 9-20 hitches and about 15-17 / 23-25 ms. The 3.2.155 runs were all in the first. The two trial-off runs do not fit this cleanly: 48-49% fast mode with 5.5-7.3 hitches, so the trial's switch inside the window may add to the count. Each move between the states is a hitch, so the count follows how often a run moves.
-- **What makes the moves (`flips.py`, 8 NSMBU Deluxe runs).** All 33 moves to the slower state are a generated frame finishing after the scan it missed, most by under 1 ms (-0.1 to -1.0 ms typically, -2.8 at worst; a few land within 0.1 ms before it). So the fast state on Eden is a fraction of a millisecond short: the late-frame explanation holds, and a little more lead for the solve may remove most moves. On NES the moves are real frames finishing 6 ms early (3 of 3 not late, one generated at +3.8), so something else moves it there. Next: phase target 4.25 and 5.25 ms on NSMBU Deluxe.
+- **What makes the moves (`flips.py`, 8 NSMBU Deluxe runs).** All 33 moves to the slower state are a generated frame finishing after the scan it missed, most by under 1 ms (-0.1 to -1.0 ms typically, -2.8 at worst; a few land within 0.1 ms before it). So the fast state on Eden is a fraction of a millisecond short: the late-frame explanation holds, and a little more lead for the solve may remove most moves. On NES the moves are frames finishing 4-6 ms early, so something else moves it there.
+- **More lead for the solve does not help, because the state has a second cause.** NSMBU Deluxe, retry-407, tuned drain on, one run each (a phase target of 4.25 ms without the drain stayed in the slower state for the whole window, 100.0%, 20.7 / 29.1 ms):
+
+  | Phase target | On cadence | Hitches per 30 s | Fast mode | Fast stays | First generated / real, mean |
+  | --- | --- | --- | --- | --- | --- |
+  | 3.25 ms | 99.9% | 3.7 | 8% | 0.0, 1.3 s | 19.0 / 27.4 ms |
+  | 4.25 ms | 99.9% | 1.8 | 4% | 0.7 s | 20.3 / 28.7 ms |
+  | 5.25 ms | 99.9% | 1.8 | 8% | 1.3 s | 20.6 / 29.0 ms |
+
+  With more lead the move came from a real frame finished 6 ms early instead of a generated frame just past its scan. In the one I read, every frame's GPU work was in time and the frame was latched 1.59 ms before its scan instead of the usual 1.7-1.8 ms, then shown a scan late. So the compositor's own commit appears to miss too: it has about 1.8 ms from latch to scan in the fast state, and a fraction of a millisecond late is enough. That is one trace, and its cause is outside the app. The phase target stays at 3.25 ms. The drain backs off quickly on this game (spacing 30-60 s after two tries).
 
 November 6 **— The compositor's slower state decides latency, and a smooth run never leaves it. The pacing trial's start-of-game switch accounts for part of it; a drain gets NES out of it. Fast path, flush during the solve and 256 draws show no clear gain.**
 
