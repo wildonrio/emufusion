@@ -9185,6 +9185,42 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     /** The callback's generated image: the prepared copy when it is this pair's, else rendered now. */
+    private boolean predrawnReal;
+    private long predrawnRealKey, realPredraws, realPredrawHits;
+    private float predrawnRealAspect;
+    private FrameRateOverlay.Image predrawnRealOverlay;
+
+    /**
+     * The pair's real image goes into the back buffer right after its
+     * generated image's swap: nothing is left for the GPU at that image's own
+     * callback, half a source period later, so sharing the GPU with the
+     * engine cannot make it late.
+     */
+    private void predrawRealImage() {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        GLES20.glClearColor(0f, 0f, 0f, 1f);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        setPresentationViewport();
+        drawTexture2d(historyTextures[currentIndex]);
+        FrameRateOverlay overlay = frameRateOverlay;
+        drawFrameRateOverlay();
+        GLES20.glFlush();
+        predrawnReal = true;
+        predrawnRealKey = historyFrameKey(currentIndex);
+        predrawnRealAspect = presentationAspect;
+        predrawnRealOverlay = overlay != null ? overlay.image : null;
+        ++realPredraws;
+    }
+
+    private boolean realPredrawnFor(float selectedPhase) {
+        if (!predrawnReal || selectedPhase < 1f) return false;
+        FrameRateOverlay overlay = frameRateOverlay;
+        return predrawnRealKey == historyFrameKey(currentIndex) &&
+                predrawnRealAspect == presentationAspect &&
+                predrawnRealOverlay == (overlay != null ? overlay.image : null);
+    }
+
     private void drawPreparedOrMotionFrame(float phase) {
         boolean atInput = preparedAtInputSize();
         if (preparedFrameValid && preparedFrameTexture != 0 &&
@@ -9934,10 +9970,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // above could reject; a rejection here already invalidated the pair.
         boolean rejectedAfterSelection =
                 denseEnabledAtSelection && !densePyramidEnabled;
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
-        GLES20.glViewport(0, 0, outputWidth, outputHeight);
-        GLES20.glClearColor(0f, 0f, 0f, 1f);
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        boolean realPredrawn = realThisTick && realPredrawnFor(selectedPhase);
+        predrawnReal = false;
+        if (realPredrawn) {
+            ++realPredrawHits;
+        } else {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            GLES20.glClearColor(0f, 0f, 0f, 1f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        }
         // densePairMeanDifference is never measured in the cadence path (the
         // synchronous proof readbacks were removed), so this Java hold never
         // fires; the hard-cut hold lives in the interpolate shader
@@ -9949,9 +9991,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // the retained left, while a late physical callback may land on
             // phase1 and consume the retained right. Neither path reads the
             // producer's overwriteable latest texture.
-            setPresentationViewport();
-            drawTexture2d(historyTextures[selectedPhase >= 1f ?
-                    currentIndex : previousIndex]);
+            if (!realPredrawn) {
+                setPresentationViewport();
+                drawTexture2d(historyTextures[selectedPhase >= 1f ?
+                        currentIndex : previousIndex]);
+            }
         } else if (denseSceneCut) {
             // There is no physical intermediate across a hard scene cut.
             // Hold the left endpoint until the rational source timeline
@@ -10116,7 +10160,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             return;
         }
         beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);
-        drawFrameRateOverlay();
+        if (!realPredrawn) drawFrameRateOverlay();
         long denseSwapEnteredNs = densePyramidEnabled ? System.nanoTime() : 0L;
         if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
             discardFullImageCapture();
@@ -10307,6 +10351,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 invalidateBufferedPairForReprime();
             }
         }
+        if (renderedSynthetic && TimelineSchedulerSwitch.realPredraw() && timelineActive &&
+                externalTransport == null && activeRightSequence > 0L) predrawRealImage();
         long presentationEpochAfterAdvance = schedulerPresentationEpoch();
         refreshProofEvidencePresentationEpoch();
         // Until dense interpolation is armed, try twice a second instead of
@@ -14981,6 +15027,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " signatureEarlyCommits=" + signatureEarlyCommits +
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
+                " realPredraws=" + realPredraws + "/" + realPredrawHits +
                 " compositorDrains=" + compositorStateDrain.drains() + "/" +
                         compositorStateDrain.spacingNs() / 1_000_000_000L +
                 " fastCores=0x" + Long.toHexString(fastCoreMask) +

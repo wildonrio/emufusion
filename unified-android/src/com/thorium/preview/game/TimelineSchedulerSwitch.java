@@ -342,6 +342,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         hardwarePhaseLock = hardwareLock;
+        boolean predraw = false;
+        try {
+            if (context != null) predraw = Settings.Global.getInt(
+                    context.getContentResolver(), REAL_PREDRAW_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        realPredraw = predraw;
         int check = 0;
         try {
             if (context != null) check = Settings.Global.getInt(
@@ -763,6 +771,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean hardwarePhaseLock = false;
 
     static boolean hardwarePhaseLock() { return hardwarePhaseLock; }
+
+    /**
+     * QA emufusion_framegen_real_predraw=1: a pair's real image is drawn into
+     * the back buffer right after its generated image's swap, so its own
+     * callback only swaps it. Wind Waker HD's real images finish 3 ms after
+     * their scan behind Cemu's GPU work, one scan late every time (Thor, 2026-11-06).
+     */
+    static final String REAL_PREDRAW_GLOBAL = "emufusion_framegen_real_predraw";
+    private static volatile boolean realPredraw = false;
+
+    static boolean realPredraw() { return realPredraw; }
 
     /**
      * QA emufusion_framegen_image_check: a preview of each generated image is
