@@ -367,9 +367,19 @@ shortlist was checked again that way on 2026-11-06:
 | Game Boy Color | 450 | 67 | 29 | 11 added | Shantae fell from 100% to 31%: it was blank frames |
 | Game Gear | 201 | 34 | 16 | 11 added, after adding the gate to Gearsystem | |
 | GBA | 957 | 145 scrolled | see recipes | added after looking at two frames of each | uses the explorer instead of fixed routes |
-| SNES | see the top lists | | | nine added to the top games on 2026-11-06 | mostly `emufusion_ws_strict`, stale cells stay black |
+| SNES | 853 | 107 scrolled and scored 55% or more | see below | the whole library by default | `emufusion_ws_strict`, stale cells stay black, plus the scroll rule |
 
 A low score alone does not drop a game: sprites and animation cost some, so near misses that looked clean stayed.
+
+SNES, 2026-11-06: the engine gained the same scroll rule as the others (`emufusion_ws_gate=scroll`). With it and strict tiles, two
+frames of each of the 107 games that scrolled showed titles and menus narrow, and gameplay either wide and clean or narrow and clean.
+Six showed junk, mostly in an intro or a menu, and have narrow entries: Spider-Man & Venom, Fever Pitch Soccer, Rocko's Modern Life,
+Mecarobot Golf, Waterworld and Tom & Jerry 2. So the SNES now has a fallback for every title without its own entry. A game that
+loads nothing past the old screen simply stays black at the sides, and the player can swipe it off. Most of these games have not been
+played through. A mode 7 game whose ordinary scroll registers do not move stays narrow until it has an entry of its own.
+
+Mega Drive, 2026-11-06: the first 182 of 750 files checked before the Thor dropped off USB. 10 pass, and Blaster Master 2, Caesars
+Palace and Bugs Bunny in Double Trouble score low. Most of the rest did not scroll in the automatic run, so they say little.
 
 ## GBA map reader (2026-11-06)
 
@@ -425,8 +435,15 @@ of wide for a few frames while a reader finds its place, the meter stays put rat
 | Minish Cap | Hearts left; item buttons and rupees right | Background 0 and sprites |
 | Mario Kart: Super Circuit | Rank, lap, coins and speed left; time and track map right; item box stays centred | Background 0, map dots in sprites. Also a race rule, `30016E0=01,300040E=18`: the first byte alone blips for single frames on menus. Menus and the pause screen now stay narrow |
 
-Seen on the Mac only so far. Super Mario Advance 4's status bar is a panel across the bottom and stays where it is. Golden Sun, Final
-Fantasy VI Advance and Tactics Advance show no meters during play.
+Mario Kart ran this way on the Thor at 60 to 120, with the toggle in mid-race. The others have been seen on the Mac so far. Super Mario
+Advance 4's status bar is a panel across the bottom and stays where it is. Golden Sun, Final Fantasy VI Advance and Tactics Advance
+show no meters during play.
+
+The NES has the same kind of rule for sprites, `obj:y0-y1:x0-x1:dir:t0-t1`. A moved sprite still counts for sprite zero, so timing is
+unchanged; it only stops being drawn in its old place. Mega Man 2 and 3's energy bars and Contra's lives use it. Status panels drawn in
+the background, as in Castlevania III and Ninja Gaiden II, stay where they are. On the Mega Drive the meters of the top games left
+(Gunstar Heroes, Contra: Hard Corps, Castle of Illusion, Monster World IV, Lightening Force) are panels in the window plane, so they
+stay too.
 
 ### Top games looked at again (2026-11-06)
 
@@ -440,6 +457,7 @@ Several narrow top games had been judged from menus. Playing them changed one an
 | Cannon Fodder | Narrow | The first mission's sides show stale pieces and checker junk |
 | Mario Golf | Narrow | The shot view's sides are half course and half unrelated tiles |
 | Mole Mania | Narrow | Each room is one screen inside black |
+| Advance Wars | Narrow | The first versus maps fit the screen exactly, and larger maps are locked behind the campaign |
 
 ## PS1 (2026-11-06)
 
@@ -526,8 +544,8 @@ game played on the Thor, with frame generation on, and Sonic & Knuckles and Cont
 `settings put global
 emufusion_qa_widescreen_all 1` still enables everything for testing.
 
-Only Mega Drive has a fallback for titles without their own entry. A map no wider than the picture
-stays narrow by itself there. Game Gear's was removed: 7 of its 19 top games could not widen
+Mega Drive and SNES have a fallback for titles without their own entry. A map no wider than the picture
+stays narrow by itself on the Mega Drive, and the scroll rule and strict tiles do that job on the SNES. Game Gear's was removed: 7 of its 19 top games could not widen
 cleanly, so unlisted titles are not offered widening until the rest of the library is triaged.
 
 Most recipes have only been played on the Mac. A device pass here means the engine, prompts and

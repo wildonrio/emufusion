@@ -568,7 +568,7 @@ case "$ENGINE" in
         cp -R "$source/." "$build/"
         apply_locked_patch "$build" \
             engines/patches/mesen-emufusion-widescreen.patch \
-            ac7f5fabb74d297e10585ef868635045796dad4d0c002e2af0f168cfaa765bcc
+            a8131929ee18795ded19424e0be9bd7f051ef17eb074014c03593f9384d72072
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -630,7 +630,7 @@ case "$ENGINE" in
         # Widescreen Hack: exact picture width, per-game scene and HUD rules.
         apply_locked_patch "$staged_source" \
             engines/patches/bsnes-hd-emufusion-widescreen.patch \
-            d89917b2e89d6f1fa080bb3d889ed0546ae896fbba2181bf8af1ba0569739076
+            0233e744cdeb8698e25cabf50158cb0a1d67f1aa0161ddb6ab5e9e0454363d45
         "$NDK_DIR/ndk-build" -C "$staged_source/bsnes/target-libretro/jni" \
             NDK_PROJECT_PATH="$staged_source/bsnes/target-libretro" \
             APP_BUILD_SCRIPT="$staged_source/bsnes/target-libretro/jni/Android.mk" \

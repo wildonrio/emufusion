@@ -1,9 +1,9 @@
 diff --git a/bsnes/emulator/efwide.hpp b/bsnes/emulator/efwide.hpp
 new file mode 100644
-index 0000000..4b5f7f2
+index 0000000..a5ee7b3
 --- /dev/null
 +++ b/bsnes/emulator/efwide.hpp
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,64 @@
 +#pragma once
 +// EmuFusion Widescreen Hack: per-game state set by the recipe through core options.
 +// emufusion_ws_width  total picture width in pixels (0 = original 256)
@@ -21,6 +21,9 @@ index 0000000..4b5f7f2
 +//                     position, "bg1,bg2": no stale or wrapped tilemap, never-loaded VRAM;
 +//                     with "center", a tile loaded during forced blank counts only near the
 +//                     original screen, for games that keep other data beside the tilemap
++// emufusion_ws_gate   "scroll", for games nobody has played through: the wide areas stay closed
++//                     until the scene has scrolled far enough to fill them, and close again on
++//                     a cut or a blank screen, so titles and menus keep their bars
 +namespace EfWide {
 +  enum : int { MaxRules = 48, MaxTerms = 48 };
 +  struct Rule { int layer, y0, y1, x0, x1, dir, tile0, tile1; };
@@ -32,6 +35,7 @@ index 0000000..4b5f7f2
 +  extern Term terms[MaxTerms];
 +  extern int termCount;
 +  extern bool sceneWide;
++  extern bool scrollGate;
 +  extern const unsigned char *wram;
 +  extern int strictLayers;  // bit per BG layer
 +  enum : unsigned short { TagNever = 0xffff, TagBlank = 0xfffe };
@@ -41,6 +45,8 @@ index 0000000..4b5f7f2
 +  extern bool centerOnly;  // the next sweep trusts only cells on the original screen
 +
 +  void setWidth(const char *value);
++  void setGate(const char *value);
++  void gateFrame(const unsigned *scroll, const bool *enabled, bool blank);
 +  void setScene(const char *value);
 +  void setHud(const char *value);
 +  // The cartridge's battery RAM and the console's work RAM, for the host's saves and tools.
@@ -166,10 +172,10 @@ index 4eac82f..0d4ba8a 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..f3b2ef1
+index 0000000..ce88061
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,297 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -214,6 +220,33 @@ index 0000000..f3b2ef1
 +  }
 +
 +  void *systemRamData() { return SuperFamicom::cpu.wram; }
++
++  bool scrollGate = false;
++  static int gateTravel = 0, gateBlanked = 0;
++  static unsigned gateLast[4];
++
++  void setGate(const char *value) {
++    scrollGate = value && !strcmp(value, "scroll");
++    gateTravel = 0;
++  }
++
++  void gateFrame(const unsigned *scroll, const bool *enabled, bool blank) {
++    int moved = 0;
++    bool cut = false;
++    for(int layer = 0; layer < 4; layer++) {
++      // The scroll is ten bits: a step across its wrap is still a small one.
++      int step = (int)((scroll[layer] - gateLast[layer] + 512) & 1023) - 512;
++      gateLast[layer] = scroll[layer];
++      if(!enabled[layer]) continue;
++      if(step < 0) step = -step;
++      // A camera that jumps has cut to another scene; one that scrolls moves a few pixels.
++      if(step > 24) cut = true;
++      if(step > moved) moved = step;
++    }
++    gateBlanked = blank ? gateBlanked + 1 : 0;
++    gateTravel = cut || gateBlanked > 2 ? 0 : gateTravel + moved;
++    if(gateTravel < ext + 16) sceneWide = false;
++  }
 +
 +  void setWidth(const char *value) {
 +    if(!value || !*value) { ext = -1; return; }
@@ -528,7 +561,7 @@ index 1fc167a..0d7e7b2 100644
      
      if(ppufast.hires() && ppufast.hd()) {
 diff --git a/bsnes/sfc/ppu-fast/ppu.cpp b/bsnes/sfc/ppu-fast/ppu.cpp
-index d7260af..575b328 100644
+index d7260af..f2924bc 100644
 --- a/bsnes/sfc/ppu-fast/ppu.cpp
 +++ b/bsnes/sfc/ppu-fast/ppu.cpp
 @@ -1,4 +1,7 @@
@@ -629,13 +662,13 @@ index d7260af..575b328 100644
  auto PPU::wsOverrideCandidate() const -> bool { return configuration.hacks.ppu.mode7.wsMode == 1; }
 -auto PPU::wsOverride() const -> bool { return mode7LineGroups.count < 1 && wsOverrideCandidate(); }
 +auto PPU::wsOverride() const -> bool {
-+  if(EfWide::termCount) return !EfWide::sceneWide;
++  if(EfWide::termCount || EfWide::scrollGate) return !EfWide::sceneWide;
 +  return mode7LineGroups.count < 1 && wsOverrideCandidate();
 +}
  auto PPU::wsBgCol() const -> bool { return configuration.hacks.ppu.mode7.wsBgCol == 2
                                              || configuration.hacks.ppu.mode7.wsBgCol == 1 && wsOverride(); }
  auto PPU::wsMarker() const -> uint { return configuration.hacks.ppu.mode7.wsMarker; }
-@@ -147,6 +223,29 @@ auto PPU::scanline() -> void {
+@@ -147,6 +223,39 @@ auto PPU::scanline() -> void {
    if(vcounter() == 240) {
      Line::flush();
    }
@@ -643,6 +676,16 @@ index d7260af..575b328 100644
 +  if(vcounter() == 0) {
 +    EfWide::wram = cpu.wram;
 +    EfWide::evaluate(io.bgMode, io.bgMode == 7);
++    if(EfWide::scrollGate) {
++      const IO::Background *layers[4] = {&io.bg1, &io.bg2, &io.bg3, &io.bg4};
++      unsigned scroll[4];
++      bool enabled[4];
++      for(uint layer : range(4)) {
++        scroll[layer] = layers[layer]->hoffset;
++        enabled[layer] = layers[layer]->aboveEnable || layers[layer]->belowEnable;
++      }
++      EfWide::gateFrame(scroll, enabled, io.displayDisable);
++    }
 +    if(EfWide::strictLayers) {
 +      Line::flush();
 +      const IO::Background *layers[4] = {&io.bg1, &io.bg2, &io.bg3, &io.bg4};
@@ -726,7 +769,7 @@ index da07e7c..0113ab6 100644
  LOCAL_CPP_FEATURES := exceptions rtti
  include $(BUILD_SHARED_LIBRARY)
 diff --git a/bsnes/target-libretro/libretro.cpp b/bsnes/target-libretro/libretro.cpp
-index 8a50f53..a559b08 100644
+index 8a50f53..1aa1c09 100644
 --- a/bsnes/target-libretro/libretro.cpp
 +++ b/bsnes/target-libretro/libretro.cpp
 @@ -2,6 +2,7 @@
@@ -737,7 +780,7 @@ index 8a50f53..a559b08 100644
  
  static retro_environment_t environ_cb;
  static retro_video_refresh_t video_cb;
-@@ -652,6 +653,25 @@ static bool update_variables() // returns whether video dimensions have changed
+@@ -652,6 +653,28 @@ static bool update_variables() // returns whether video dimensions have changed
  	vc = vc | program->scale != scale; // scale changed
  	program->scale = scale;
  	ws = HdToolkit::determineWsExt(ws, overscan, aspectcorrection);
@@ -747,6 +790,9 @@ index 8a50f53..a559b08 100644
 +	var.key = "emufusion_ws_hud";
 +	var.value = NULL;
 +	EfWide::setHud(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_gate";
++	var.value = NULL;
++	EfWide::setGate(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
 +	var.key = "emufusion_ws_strict";
 +	var.value = NULL;
 +	EfWide::setStrict(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -763,7 +809,7 @@ index 8a50f53..a559b08 100644
  	vc = vc | program->ws != ws; // widescreen AR changed
  	program->ws = ws;
  	return vc; // returns whether video dimensions have changed (overscan, aspectcorrection scale or widescreen AR)
-@@ -1129,10 +1149,14 @@ unsigned retro_get_region()
+@@ -1129,10 +1152,14 @@ unsigned retro_get_region()
  // Rely on higan to load and save SRAM until there is really compelling reason not to.
  void *retro_get_memory_data(unsigned id)
  {
