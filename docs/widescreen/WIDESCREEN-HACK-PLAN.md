@@ -359,6 +359,8 @@ shortlist was checked again that way on 2026-11-06:
 | Game Boy | 524 | 141 | 74 | 35 added | |
 | Game Boy Color | 450 | 67 | 29 | 11 added | Shantae fell from 100% to 31%: it was blank frames |
 | Game Gear | 201 | 34 | 16 | 11 added, after adding the gate to Gearsystem | |
+| GBA | 957 | 145 scrolled | see recipes | added after looking at two frames of each | uses the explorer instead of fixed routes |
+| SNES | see the top lists | | | nine added to the top games on 2026-11-06 | mostly `emufusion_ws_strict`, stale cells stay black |
 
 A low score alone does not drop a game: sprites and animation cost some, so near misses that looked clean stayed.
 
@@ -380,8 +382,25 @@ room's size, because the cells past it are left over from the last room. Out on 
 drawn. `tools/widescreen/retro_play.py` has `iwram:NAME` for the fast work RAM these searches need.
 
 Finding a game's addresses: `gbagrid.py` in the session notes looks for the video map's 2x2 groups in memory, then for a
-grid whose differences match. Aria of Sorrow, Circle of the Moon, Advance Wars and Final Fantasy VI Advance store their
-blocks differently, or build them in code, and still need their own look.
+grid whose differences match. For the games it could not place, a trace core (`host-build/mgba-trace`, `EF_TRACE_FILE`, now
+logging fast work RAM too) shows the routine that loads a column as the camera moves.
+
+| Game | Form | Where the level is |
+| --- | --- | --- |
+| Aria of Sorrow | `rooms=1,edge=1,ring=8,planes=200A094:200A108+200A0B0:200C0EC` | Each layer has a record (room pointer, camera at +4 and +8, 16.16). The room header gives width and height in 256-pixel screens, a tile list and a block list: blocks of 4x4 tiles, top two bits flip the block. Second table in RAM when the header's flag 2 is set |
+| Harmony of Dissonance | `rooms=1,edge=1,ring=C,planes=200A440:200A494` | The same engine at other addresses. Its first table is 0x54 past the record, not 0x74 |
+| Circle of the Moon | `rooms=2,edge=1,planes=20230F0+2023130+2023170+20231B0` | A record per background: tile table +4, RAM block grid +C, columns +10, rows +12, camera +18 and +1C. No flip bits |
+| Final Fantasy VI Advance | `cell=1,stride=100,cols=100,rows=100,split=200,step=100,planes=2010000:201C000+2014000:201C800,front=2020000+2020400` | Two maps, one byte a block, 256 per row. A tile list per corner, 0x200 apart. Tiles in front of sprites form a background of their own, built from either map and a list of marks |
+
+Rules these add. A room's header with no second pointer is a menu, so menus and maps keep their bars. A room's last block repeats
+past its end (`edge`). `ring` names backgrounds drawn from the video map as they are, for backdrops that repeat at 256 anyway.
+`step` limits the search when the world and the video scroll differ only by a multiple of 256.
+
+Staying narrow, and why: Tony Hawk's Pro Skater 3, Tony Hawk's Underground and Alien Hominid load tile graphics only for what is
+on screen, so the art for the new columns is not in video memory. WarioWare and Ultimate Card Games have no scrolling world.
+Advance Wars and Fire Emblem open on maps that fit the screen, and their larger maps are behind long campaigns, so their readers
+have not been tried. Mario & Luigi draws rooms on black and looks right in Mario's house, but its plain backdrop shows beside
+some rooms and no outdoor area has been reached yet.
 
 ## PS1 (2026-11-06)
 
@@ -399,6 +418,12 @@ always did. Resolution scale 4 makes a 2D pixel exactly 3 pixels wide before pre
 The library has 13 PS1 games, 8 of them 3D. Tekken 2 played: right. Spyro's opening right, level not played. WipEout (USA)
 stops at its Designers Republic screen in both renderers, still to explain. HUDs stay in the middle for now: moving them
 to the corners needs a per-game rule, because splitting by screen side would break centred text like GAME OVER.
+
+## Game files that are not there
+
+Many top-rated files on the Thor are 4 to 7 MB stubs, which the app refuses. They cannot be played, so they have no recipe:
+GameCube's Burnout 2, F-Zero GX, Luigi's Mansion, Metroid Prime 2, Mega Man X Collection, SoulCalibur II, Zelda Collector's
+Edition and Four Swords Adventures; PS2's Katamari Damacy, Half-Life, Resident Evil 2 and The Simpsons: Hit & Run.
 
 ## Release gate
 
