@@ -1589,6 +1589,10 @@
     "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-4076a6e61bd9024256672b980e557620b8ea0aad3dfcd75fc2ab9dcaf535d096.apk": {
       "sha256": "4076a6e61bd9024256672b980e557620b8ea0aad3dfcd75fc2ab9dcaf535d096",
       "reason": "Retry-415: hardware lock trial closed; superseded by retry-417 and later."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-9753d2592ec617176cb43f2436a84c25f089e7b1c3e18f8f50eba82d55b27a59.apk": {
+      "sha256": "9753d2592ec617176cb43f2436a84c25f089e7b1c3e18f8f50eba82d55b27a59",
+      "reason": "Retry-420: never installed; superseded by retry-421, which adds Cemu's 5.5-ms wait."
     }
   }
 }
