@@ -266,7 +266,32 @@ Nothing is at 10/10 on all three measures yet. NSMBU Deluxe stayed in the compos
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 5 (latest) **— 3.2.155 (229, `d33d4e01`, retry-395) released: Switch images skip the firmware's sleep, and widescreen for six systems. Smoothness holds from a cool start; NSMBU Deluxe's latency does not improve in these runs.**
+November 6 (latest) **— The compositor's slower state decides latency, and a smooth run never leaves it. The pacing trial's start-of-game switch accounts for part of it; a drain is built, not yet run. Fast path, flush during the solve and 256 draws show no clear gain.**
+
+- **Runs:** Thor, cool starts (xo-therm about 53 C), 16-s windows, one run per row unless noted, retry-399 or retry-400 (same Java). Default-setting comparison: `g1`, `g2` on NSMBU Deluxe, `g4` on NES, from the release entry.
+
+  | Run | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean | Generated plan to done, median / p90 / p99 |
+  | --- | --- | --- | --- | --- | --- |
+  | NSMBU, default, two runs | 100.0, 99.9% | 0, 3.7 | 0, 22% | 19.3 / 27.7, 17.7 / 26.1 ms | 1.8 / 4.9 / 8.1, 1.6 / 5.0 / 6.5 |
+  | NSMBU, pacing trial off, two runs | 99.8, 99.8% | 7.3, 5.5 | 49, 48% | 15.0 / 23.3, 15.4 / 23.8 ms | 1.6 / 3.1 / 5.4, 1.1 / 3.3 / 5.2 |
+  | NSMBU, fast path and flush during the solve | 99.9% | 1.8 | 2% | 20.2 / 28.6 ms | 2.2 / 5.4 / 8.1 |
+  | NSMBU, Eden flush every 256 draws | 99.9% | 1.8 | 0% | 19.5 / 27.9 ms | 2.7 / 5.0 / 6.9 |
+  | NSMBU, image check, 320 wide | 97.9% | 73.8 | 38% | 17.2 / 25.5 ms | 4.7 / 6.9 / 7.9 |
+  | NSMBU, image check, 160 wide | 99.7% | 9.1 | 20% | 17.5 / 25.8 ms | 2.0 / 3.5 / 5.8 |
+  | NES, default | 99.9% | 1.8 | 81% | 10.6 / 18.9 ms | 3.2 / 3.8 / 4.2 |
+  | NES, fast path and flush during the solve | 100.0% | 0 | 0% | 17.3 / 25.6 ms | 2.9 / 3.6 / 3.9 |
+
+- **Reading these.**
+  - The trial-off rows repeat. With the trial on, it starts during the game's start (arrival holds 122-147 per 1000), keeps the content-time timeline for about a minute, and rechecks arrival pacing 2-4 s into the window. Turned off: fast mode about 48% against 0-22%, about 2-4 ms sooner on average, hitches a little over the target of 5.
+  - NES shows the trap most plainly. The same game sits at 10.6 / 18.9 ms or 17.3 / 25.6 ms depending on the state a run happens to reach; its frames are done well before their scan in both. The fast-path row's latency is that state, not the fast path. Its plan-to-done is 0.3 ms better at the median, one run.
+  - 256 draws does not repeat yesterday's 94-100% fast mode (0% here, trial on). The two are not directly comparable, since yesterday's ran with the trial off.
+  - The 160-wide check's run stayed on arrival pacing (its trial was not kept), so `t3` and `t4` are its closer comparison: 5 two-scan intervals in 16 s against 3-4, plan-to-done about the same. Bench per pass, net of the drain: preview about 0.34 ms, check about 0.25 ms. One run; its device replay score is not measured yet. Still off.
+- **Pixel art stays off.** Level 2 of the 160-wide check on the device bench: hold-out error SNES 0.389 -> 0.626, NES 0.262 -> 0.498, Mega Drive 0.520 -> 0.573, on 2-6 triplets each.
+- **Fast path:** same invented area and hold-out error as off on the replay bench (NES, Double Dash); scores, not a pixel comparison.
+- **Invalid runs, dropped:** `c5` and `t1` ran with display callbacks at exactly 60 Hz, and `t1` generated nothing. Cause not established. `c5` followed a lower-display repair by one second and overlapped a large `adb pull`. My runner now marks such runs.
+- **Built, not run: `CompositorStateDrain` (`emufusion_framegen_compositor_drain=1`).** After 2 s in the pipelined state one generated frame stays out, so a refresh passes with nothing new. The spacing starts at 10 s, at most three in 30 s, doubles when the fast state did not last that long, and halves when it did. November 5's fixed version spent hitches on NSMBU Deluxe; this one should stop trying there. Next, on the next shared APK: NES, NSMBU Deluxe and Double Dash with it on.
+
+November 5 **— 3.2.155 (229, `d33d4e01`, retry-395) released: Switch images skip the firmware's sleep, and widescreen for six systems. Smoothness holds from a cool start; NSMBU Deluxe's latency does not improve in these runs.**
 
 - **What ships:** Eden's future stamp and 3.25-ms phase target, a late image's real at the nearest callback, and the widescreen work for Mega Drive, Game Gear, NES, SNES, Game Boy Color and GBA. The image check and the fast path are in the APK, off by default. Built with plain `build.py` from the tree at `9069c36`; the reproducibility check passed. Later commits change tools, tests, docs and unreleased GameCube recipes. All 406 Python test files and the Java host tests pass. Rollback: 3.2.153.
 - **Thor, retry-395, each run started at xo-therm about 53 C:**
