@@ -5193,6 +5193,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         nativeSourceImageObserver.classifyCandidate(completedCandidate);
                 }
                 long sequence = ++denseSignatureSequence;
+                latestHandedToCandidate = -1;
                 retainSignatureCandidate(sequence, currentTimestampNs,
                         completedCandidate, pixelsChanged);
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer);
@@ -5228,6 +5229,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 if (externalSignatureTimer != null)
                     throw new IllegalStateException(
                             "external asynchronous signature failed closed", failure);
+                if (latestHandedToCandidate >= 0) {
+                    // The synchronous fallback below reads this image from latest.
+                    int image = signatureCandidateTextures[latestHandedToCandidate];
+                    signatureCandidateTextures[latestHandedToCandidate] = latestTexture;
+                    latestTexture = image;
+                    latestHandedToCandidate = -1;
+                }
                 rejectDense("async-signature-failure", failure);
                 clearSignatureCandidates();
                 clearNativeClassifiedObservation();
@@ -5703,6 +5711,36 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return false;
     }
 
+    /**
+     * The input-to-history chain moves texture names, not pixels: every texture in
+     * it has one size and one sampler state, and GPU commands stay in submission order.
+     * Hold-out scoring and the external transport keep their copies.
+     */
+    private boolean handsTexturesOver() {
+        return TimelineSchedulerSwitch.fastPath() && !holdoutMode && externalTransport == null;
+    }
+
+    private int latestHandedToCandidate = -1;
+
+    private void moveIntoEndpointFifo(int sourceTexture, int slot) {
+        if (handsTexturesOver()) {
+            int free = endpointFifoTextures[slot];
+            if (sourceTexture == latestTexture) {
+                latestTexture = free;
+                endpointFifoTextures[slot] = sourceTexture;
+                return;
+            }
+            for (int index = 0; index < signatureCandidateTextures.length; ++index) {
+                if (signatureCandidateTextures[index] == sourceTexture) {
+                    signatureCandidateTextures[index] = free;
+                    endpointFifoTextures[slot] = sourceTexture;
+                    return;
+                }
+            }
+        }
+        copyTexture(sourceTexture, endpointFifoTextures[slot]);
+    }
+
     private void retainSignatureCandidate(long sequence, long timestampNs,
                                           int reservedSlot, boolean pixelsChanged) {
         int slot = -1;
@@ -5716,7 +5754,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             ++endpointCandidateUnavailable;
             throw new IllegalStateException("signature endpoint texture ring full");
         }
-        copyTexture(latestTexture, signatureCandidateTextures[slot]);
+        if (handsTexturesOver()) {
+            int free = signatureCandidateTextures[slot];
+            signatureCandidateTextures[slot] = latestTexture;
+            latestTexture = free;
+            latestHandedToCandidate = slot;
+        } else {
+            copyTexture(latestTexture, signatureCandidateTextures[slot]);
+        }
         if (nativeSourceImageObserver != null)
             nativeSourceImageObserver.retainCandidate(slot);
         signatureCandidateSequence[slot] = sequence;
@@ -5883,7 +5928,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 releaseNativeEndpointProvenance(retired);
             slot = 0;
         }
-        copyTexture(sourceTexture, endpointFifoTextures[slot]);
+        moveIntoEndpointFifo(sourceTexture, slot);
         copyNativeEndpointProvenance(NATIVE_ADMISSION_SLOT, slot);
         endpointFifoSequence[slot] = endpointSequence;
         endpointFifoTimestampNs[slot] = timestampNs;
@@ -6076,7 +6121,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             throw new IllegalStateException("endpoint FIFO sequence missing");
         if (timestampNs <= 0L)
             throw new IllegalStateException("endpoint FIFO timestamp missing");
-        writeHistory(endpointFifoTextures[slot], historyIndex);
+        if (handsTexturesOver()) {
+            int free = historyTextures[historyIndex];
+            historyTextures[historyIndex] = endpointFifoTextures[slot];
+            endpointFifoTextures[slot] = free;
+            ++historyWrites[historyIndex];
+        } else {
+            writeHistory(endpointFifoTextures[slot], historyIndex);
+        }
         copyNativeEndpointProvenance(slot, NATIVE_HISTORY_BASE + historyIndex);
         releaseNativeEndpointProvenance(slot);
         endpointFifoSequence[slot] = 0L;
@@ -9263,6 +9315,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 bounds.width(), bounds.height());
     }
 
+    private static final int[] COLOR_ATTACHMENT0_ONLY = {GLES20.GL_COLOR_ATTACHMENT0};
+
     private void copyExternalTo(int destinationTexture) {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer);
         GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
@@ -9270,6 +9324,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
                 GLES20.GL_FRAMEBUFFER_COMPLETE) fail("history framebuffer incomplete");
         GLES20.glViewport(0, 0, inputWidth, inputHeight);
+        if (TimelineSchedulerSwitch.fastPath())
+            GLES30.glInvalidateFramebuffer(GLES20.GL_FRAMEBUFFER, 1, COLOR_ATTACHMENT0_ONLY, 0);
         GLES20.glUseProgram(copyProgram);
         bindQuad(copyProgram);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);

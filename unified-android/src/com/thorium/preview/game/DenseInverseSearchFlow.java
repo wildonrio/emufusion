@@ -378,8 +378,8 @@ final class DenseInverseSearchFlow {
                     GLES20.glDeleteTextures(2, new int[] {phasePatches, phaseFlow}, 0);
                     owned.remove(Integer.valueOf(phasePatches));
                     owned.remove(Integer.valueOf(phaseFlow));
-                    verifiedTargets.remove(phasePatches);
-                    verifiedTargets.remove(phaseFlow);
+                    forgetTarget(phasePatches);
+                    forgetTarget(phaseFlow);
                 }
                 phasePatches = texture(grids[used][0], grids[used][1], true);
                 phaseFlow = texture(sizes[used][0], sizes[used][1], true);
@@ -501,8 +501,8 @@ final class DenseInverseSearchFlow {
                 GLES20.glDeleteTextures(2, new int[] {phaseMode, phaseChoice}, 0);
                 owned.remove(Integer.valueOf(phaseMode));
                 owned.remove(Integer.valueOf(phaseChoice));
-                verifiedTargets.remove(phaseMode);
-                verifiedTargets.remove(phaseChoice);
+                forgetTarget(phaseMode);
+                forgetTarget(phaseChoice);
             }
             phaseMode = texture((w + cell - 1) / cell, (h + cell - 1) / cell, true);
             phaseChoice = texture(w, h, true);
@@ -766,17 +766,49 @@ final class DenseInverseSearchFlow {
         }
     }
 
+    private static final int[] COLOR_ATTACHMENT0_ONLY = {GLES20.GL_COLOR_ATTACHMENT0};
+    private final Map<Integer, Integer> targetFramebuffers = new HashMap<>();
+
+    /** A target texture is going away: its framebuffer goes with it. */
+    private void forgetTarget(int target) {
+        verifiedTargets.remove(target);
+        Integer framebufferOfTarget = targetFramebuffers.remove(target);
+        if (framebufferOfTarget != null)
+            GLES20.glDeleteFramebuffers(1, new int[] {framebufferOfTarget}, 0);
+    }
+
     private void begin(int program, int width, int height, int target) {
         if (PASS_TIMING) {
             String name = passNames.get(program);
             markPass((name != null ? name : "P" + program) + "@" + width + "x" + height);
         }
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffer);
-        GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
-                GLES20.GL_TEXTURE_2D, target, 0);
-        if (verifiedTargets.add(target) && GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
-                GLES20.GL_FRAMEBUFFER_COMPLETE)
-            throw new IllegalStateException("DIS framebuffer incomplete");
+        if (TimelineSchedulerSwitch.fastPath()) {
+            // One framebuffer per target: re-attaching makes the driver validate
+            // the framebuffer again on every pass. Every pass overwrites its whole
+            // target, so nothing need be loaded back into tile memory.
+            Integer existing = targetFramebuffers.get(target);
+            if (existing != null) {
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, existing);
+            } else {
+                int[] id = new int[1];
+                GLES20.glGenFramebuffers(1, id, 0);
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, id[0]);
+                GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                        GLES20.GL_TEXTURE_2D, target, 0);
+                if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                        GLES20.GL_FRAMEBUFFER_COMPLETE)
+                    throw new IllegalStateException("DIS framebuffer incomplete");
+                targetFramebuffers.put(target, id[0]);
+            }
+            GLES30.glInvalidateFramebuffer(GLES20.GL_FRAMEBUFFER, 1, COLOR_ATTACHMENT0_ONLY, 0);
+        } else {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffer);
+            GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                    GLES20.GL_TEXTURE_2D, target, 0);
+            if (verifiedTargets.add(target) && GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) !=
+                    GLES20.GL_FRAMEBUFFER_COMPLETE)
+                throw new IllegalStateException("DIS framebuffer incomplete");
+        }
         GLES20.glViewport(0, 0, width, height);
         GLES20.glUseProgram(program);
     }
@@ -898,6 +930,9 @@ final class DenseInverseSearchFlow {
             owned.clear();
         }
         verifiedTargets.clear();
+        for (int framebufferOfTarget : targetFramebuffers.values())
+            GLES20.glDeleteFramebuffers(1, new int[] {framebufferOfTarget}, 0);
+        targetFramebuffers.clear();
         java.util.Arrays.fill(motionRaw, 0);
         java.util.Arrays.fill(motionValidated, 0);
         java.util.Arrays.fill(motionFill, 0);

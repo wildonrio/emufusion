@@ -318,6 +318,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         midFlush = flush;
+        boolean handOver = false;
+        try {
+            if (context != null) handOver = Settings.Global.getInt(
+                    context.getContentResolver(), FAST_PATH_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        fastPath = handOver;
         long phaseWaitUs = 3250L;
         try {
             if (context != null) phaseWaitUs = Settings.Global.getLong(
@@ -698,6 +706,17 @@ public final class TimelineSchedulerSwitch {
 
     /** QA: the pair solve's GPU work starts while the CPU still encodes the rest. */
     static boolean midFlush() { return midFlush; }
+
+    /**
+     * QA (emufusion_framegen_fast_path=1): each image's textures change hands
+     * instead of being copied three times on their way from the input to the
+     * pair's history, and the motion passes keep one framebuffer per target and
+     * tell the GPU their targets' old contents are not needed.
+     */
+    static final String FAST_PATH_GLOBAL = "emufusion_framegen_fast_path";
+    private static volatile boolean fastPath = false;
+
+    static boolean fastPath() { return fastPath; }
 
 
     static final String SWITCH_PHASE_WAIT_GLOBAL = "emufusion_framegen_switch_phase_wait_us";
