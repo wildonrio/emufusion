@@ -343,14 +343,6 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         hardwarePhaseLock = hardwareLock;
-        boolean takeUpLate = false;
-        try {
-            if (context != null) takeUpLate = Settings.Global.getInt(
-                    context.getContentResolver(), LATE_TAKE_UP_GLOBAL, 0) != 0;
-        } catch (RuntimeException ignored) {
-            // Unreadable settings keep the default.
-        }
-        lateTakeUp = takeUpLate;
         int cemuWaitUs = 5_500;
         try {
             if (context != null) cemuWaitUs = Settings.Global.getInt(
@@ -809,12 +801,6 @@ public final class TimelineSchedulerSwitch {
     static boolean hardwareStampBehind(boolean pinnedByDefault) {
         return hardwarePhaseLock < 0 && pinnedByDefault;
     }
-
-    /** QA emufusion_framegen_late_take_up=1: a pair formed just after its callback still takes that callback's slot. */
-    static final String LATE_TAKE_UP_GLOBAL = "emufusion_framegen_late_take_up";
-    private static volatile boolean lateTakeUp = false;
-
-    static boolean lateTakeUp() { return lateTakeUp; }
 
     /** QA emufusion_framegen_cemu_phase_wait_us: the wait Cemu's phase lock holds (its nudge is QA too). */
     static final String CEMU_PHASE_WAIT_GLOBAL = "emufusion_framegen_cemu_phase_wait_us";
