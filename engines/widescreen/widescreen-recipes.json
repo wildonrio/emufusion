@@ -820,7 +820,7 @@
           "options": {
             "emufusion_ws_hud": "obj:16-80:16-16:-1:80-8F;obj:16-80:24-24:-1:80-8F;obj:16-80:40-40:-1:80-8F"
           },
-          "tested": "2026-11-05 host: all eight stages played; a two-screen map shows the level to both edges with no map reader. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac Energy bars moved to the corner."
+          "tested": "2026-11-05 host: all eight stages played; a two-screen map shows the level to both edges with no map reader. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac Energy bars moved to the corner. Thor: first stage, bar in the corner, 60 to 120, swipe and tap in play."
         },
         "Baseball Stars": {
           "strategy": "fixed-screen",
@@ -2329,11 +2329,9 @@
           "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
         },
         "F-Zero: Maximum Velocity": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor: a race played; the sky stops short of the new corners"
         },
         "FIFA 06": {
           "strategy": "widen",
@@ -2669,7 +2667,7 @@
           "options": {
             "emufusion_ws_gate": "scroll"
           },
-          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through. Thor: a fight at 60 to 120, swipe and tap in play"
         },
         "Super Street Fighter II Turbo: Revival": {
           "strategy": "widen",
@@ -2957,6 +2955,86 @@
           "strategy": "widen",
           "options": {},
           "tested": "2026-11-06 Thor: attract match wide with players in shape; title and menus keep their shape in bars. A match of my own not played"
+        },
+        "Mario Kart 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture, meters where the game puts them. Not played through"
+        },
+        "Mario Golf": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: attract play and a shot; the course fills the wide picture. Not played through"
+        },
+        "Pokémon Snap": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the first course; 3D is wide and 2D scenes keep their shape in the middle. Not played through"
+        },
+        "Mario Tennis": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: attract match; the court fills the wide picture. Not played through"
+        },
+        "Kirby 64: The Crystal Shards": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the tutorial; the stage fills the wide picture and 2D keeps its shape. Not played through"
+        },
+        "Castlevania": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the opening scene; 3D is wide and 2D keeps its shape. Not played through"
+        },
+        "Doom 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: attract and a level view; 3D is wide. Not played through"
+        },
+        "Harvest Moon 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the opening scene; the town fills the wide picture. Not played through"
+        },
+        "Ogre Battle 64: Person of Lordly Caliber": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: opening and first scene; 3D is wide, text boxes keep their shape. Not played through"
+        },
+        "Turok: Dinosaur Hunter": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: first level; the jungle fills the wide picture. Not played through"
+        },
+        "Yoshi's Story": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: first stage; the stage fills the wide picture. Not played through"
+        },
+        "Donkey Kong 64": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the game draws inside its own small window, and stale pieces show beside its menus"
+        },
+        "Jet Force Gemini": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: stray pieces beside the title; play not reached"
+        },
+        "Pilotwings 64": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: black gaps run down both sides of the picture"
+        },
+        "F-Zero X": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: on some courses the sky stops short of the new corners"
+        },
+        "Body Harvest": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: play stays inside a narrow box with black sides"
         }
       },
       "release": true
