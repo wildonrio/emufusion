@@ -244,7 +244,7 @@ every frame and stay narrow when there is nothing more to show, also in unknown 
 
 | System | Map | Picture at 16:9 | Top-20 status |
 | --- | --- | --- | --- |
-| NES | 1 or 2 screens, read from the memory pages | 372x240 | Widen: Contra, Castlevania III, Tecmo Super Bowl, Life Force. One-screen rooms that need a map reader: SMB3, Kirby, Mega Man 3, Ninja Gaiden II, Super Mario Bros 2 |
+| NES | 1 or 2 screens, read from the memory pages | 372x240 | Widen: Contra, Castlevania III, Tecmo Super Bowl, Life Force, Mega Man 2, Super Mario Bros. With a map reader: SMB3, Mega Man 3, Kirby, Ninja Gaiden II, Bionic Commando. Open: Final Fantasy III, Zelda rooms |
 | Game Boy, Color | 256 wide on a 160 screen | 248x144 (see Game Gear) | Widen: Castlevania II, Mario Deluxe, Donkey Kong Country. Stale: Donkey Kong Land. Rooms: the Zelda games. Fixed: Tetris, Donkey Kong |
 | GBA | 256 or 512 wide on 240 | 284x160 | Widen: Metroid Fusion, Zero Mission, Mario Kart. One-screen maps: Alien Hominid |
 
@@ -267,6 +267,33 @@ tileset-to-bank table is found by searching the ROM, so other revisions of the g
 reader also fills the 8 columns NES games blank at the left, which sit mid-picture once widened.
 `tools/widescreen/nes_map_find.py` looks for such maps in other games, but memory that barely repeats
 matches by chance, so read its hits with care.
+
+NES readers added the same day, each worked out from a CPU trace of the game loading a column:
+
+| Game | Reader | Where the level is |
+| --- | --- | --- |
+| Mega Man 3 | `mm3` | ROM bank = stage ($22): screen list $AA00, room list $AA40, screens $AF00 (8x8), blocks $B700, tiles $BB00-$BE00, palette $BF00. Camera $FC, $F9 |
+| Kirby's Adventure | `kirby` | Battery RAM: size $67EE-F, page list $67F6, pages $68C8 (12 rows of 16), tiles $7A00-$7D00, palette $7E00. Camera $DD-E, $E0-1 |
+| Ninja Gaiden II | `ng2` | ROM: running column pointer $86 (6 blocks a column), blocks $69, tiles $6B, colours $6D. Scroll read per line, it changes after the status panel |
+| Bionic Commando | `bionic` | ROM banks named in $F0-$F7: screen list, screens (8x8), blocks 7 bytes each. Screen index comes from the game's column loader ($98, $99) |
+
+Rules these share, all in `Core/PPU.cpp` of the Mesen patch:
+
+- **A reader only draws while it is right.** Each frame it predicts 32 tiles in the middle of the real
+  picture and compares. Under 70% for three frames in a row, the sides go black, so title screens, menus
+  and briefings stay narrow with no per-screen rules.
+- **The camera is read at vertical blank**, when the game commits its frame. Read mid-frame, a game's
+  own sums show up as dashed lines in the new columns. The scroll registers then correct any lag.
+- **A room's edge carries on.** Past a room's end the next page is often above or below, not beside it,
+  so the last 16 pixels repeat. Walls continue as walls.
+- **Room changes slide.** In Mega Man 3 both rooms are drawn beside the sliding picture.
+- `emufusion_ws_hud=edge` carries a status panel's own border to the sides (Kirby).
+
+Mega Man 2 needs no reader: its two-screen map shows all eight stages correctly.
+
+Tools: `~/.cache/emufusion-widescreen/host-build/mesen-trace` logs every CPU read and write with
+`EF_TRACE_FILE`, `EF_TRACE_FROM`, `EF_TRACE_COUNT`. `retro_play.py` gained `poke:ADDR=VALUE` to reach a test
+case without playing there and `saveram:NAME` for battery RAM. All host-only so far; on the Thor next.
 
 Tile tracking removes wrong tiles but cannot show tiles a game has not loaded yet, so a side
 scroller has a thin unloaded band at the leading edge and an RPG shows nothing at all. Most of
