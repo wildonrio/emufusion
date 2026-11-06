@@ -651,19 +651,25 @@
           "tested": "2026-11-05 host: castle opening; deeper play still to do"
         },
         "Pokémon Red Version": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: rooms load only around the old screen, sides show black and white blocks"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "pokemon1"
+          },
+          "tested": "2026-11-05 host: bedroom, house and Pallet Town walked; the map from work RAM reaches both edges, rooms sit in black, opening and menus stay narrow"
         },
         "Pokémon Blue Version": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: rooms load only around the old screen, sides show black and white blocks"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "pokemon1"
+          },
+          "tested": "2026-11-05 host: bedroom, house and Pallet Town walked; the map from work RAM reaches both edges, rooms sit in black, opening and menus stay narrow"
         },
         "Pokémon Yellow Version: Special Pikachu Edition": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: rooms load only around the old screen, sides show black and white blocks"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "pokemon1y"
+          },
+          "tested": "2026-11-05 host: bedroom, house and Pallet Town walked; the map from work RAM reaches both edges, rooms sit in black, opening and menus stay narrow"
         },
         "Battle Arena Toshinden": {
           "strategy": "fixed-screen",
@@ -1012,52 +1018,52 @@
         "Super Smash Bros. Melee": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "Metroid Prime": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "Super Mario Sunshine": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "The Legend of Zelda: The Wind Waker": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "Resident Evil 4": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "Eternal Darkness: Sanity's Requiem": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "Mario Kart: Double Dash!!": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "Donkey Kong Jungle Beat": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "Star Fox Adventures": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         },
         "Wave Race: Blue Storm": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
         }
       },
       "release": false
@@ -1076,12 +1082,12 @@
         "Crazy Taxi": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: attract mode; PRESS START same width narrow and wide, the city extends, no stretch. Real play still to do"
         },
         "Jet Grind Radio": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: attract mode; logo and text keep their shape, the city extends. Real play still to do"
         },
         "Rayman 2: The Great Escape": {
           "strategy": "widen",
@@ -1091,7 +1097,7 @@
         "Sonic Adventure": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05: added for a Thor comparison of narrow against wide, not yet judged"
+          "tested": "2026-11-05 Thor: movie and title stay 4:3 with bars, correct. Real play still to do"
         }
       },
       "release": false

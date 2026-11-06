@@ -26,10 +26,10 @@ index 5eff0cd..ca5f2f8 100644
 +#include "ef_wide.inc"
 diff --git a/Core/ef_wide.h b/Core/ef_wide.h
 new file mode 100644
-index 0000000..b7e30b7
+index 0000000..69733d3
 --- /dev/null
 +++ b/Core/ef_wide.h
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,17 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. The background map is 256 pixels wide and the handheld shows 160
@@ -42,16 +42,17 @@ index 0000000..b7e30b7
 +#define EF_WIDE_WIDTH (160 + 2 * EF_WIDE_MAX_EXT)
 +void ef_wide_set_aspect(const char *value);
 +void ef_wide_set_scene(const char *value);
++void ef_wide_set_map(const char *value);
 +int ef_wide_ext(void);
 +int ef_wide_milli(void);
 +const uint32_t *ef_wide_compose(const uint32_t *picture);
 +#endif
 diff --git a/Core/ef_wide.inc b/Core/ef_wide.inc
 new file mode 100644
-index 0000000..b1e0934
+index 0000000..d6f3fff
 --- /dev/null
 +++ b/Core/ef_wide.inc
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,223 @@
 +// Included at the end of display.c.
 +#include "ef_wide.h"
 +static uint32_t ef_fb[EF_WIDE_WIDTH * LINES];
@@ -121,6 +122,82 @@ index 0000000..b1e0934
 +    ef_scene_wide = any;
 +}
 +
++// A map reader fetches each new column from the game's own map, so a room's far side is right even
++// though the game has not loaded it into video memory.
++static int ef_map_shift;
++static uint8_t ef_map_on, ef_map_matches, ef_map_misses;
++static int ef_map_x, ef_map_y;
++
++void ef_wide_set_map(const char *value)
++{
++    // Pokemon Yellow keeps the same variables one byte lower than Red and Blue.
++    ef_map_on = value && (!strcmp(value, "pokemon1") || !strcmp(value, "pokemon1y"));
++    ef_map_shift = value && !strcmp(value, "pokemon1y") ? -1 : 0;
++    ef_map_matches = ef_map_misses = 0;
++}
++
++// Pokemon Red, Blue and Yellow: the map sits in work RAM as 32-pixel blocks with a 3-block border
++// holding the neighbouring maps' edges; each block is 16 tiles from a list in the tileset's bank.
++static uint8_t ef_pokemon_tile(GB_gameboy_t *gb, int world_x, int world_y)
++{
++    int width = GB_safe_read_memory(gb, 0xD369 + ef_map_shift), height = GB_safe_read_memory(gb, 0xD368 + ef_map_shift);
++    int block_x = world_x >> 5, block_y = world_y >> 5;
++    block_x = block_x < -3 ? -3 : block_x > width + 2 ? width + 2 : block_x;
++    block_y = block_y < -3 ? -3 : block_y > height + 2 ? height + 2 : block_y;
++    uint8_t block = GB_safe_read_memory(gb, 0xC6E8 + (block_y + 3) * (width + 6) + block_x + 3);
++    uint32_t list = GB_safe_read_memory(gb, 0xD52C + ef_map_shift) | GB_safe_read_memory(gb, 0xD52D + ef_map_shift) << 8;
++    uint32_t bank = GB_safe_read_memory(gb, 0xD52B + ef_map_shift);
++    uint32_t address = bank * 0x4000 + ((list - 0x4000) & 0x3FFF) + block * 16 + ((world_y >> 3) & 3) * 4 + ((world_x >> 3) & 3);
++    return address < gb->rom_size ? gb->rom[address] : 0;
++}
++
++// How well a camera position explains the middle of the real picture, out of 40.
++static int ef_map_score(GB_gameboy_t *gb, int camera_x, int camera_y)
++{
++    uint8_t scx = gb->io_registers[GB_IO_SCX], scy = gb->io_registers[GB_IO_SCY];
++    uint16_t base = gb->io_registers[GB_IO_LCDC] & GB_LCDC_BG_MAP ? 0x1C00 : 0x1800;
++    int score = 0;
++    for (int y = 16; y < 96; y += 16) {
++        for (int x = 24; x < 136; x += 16) {
++            uint8_t ring_x = x + scx, ring_y = y + scy;
++            if (gb->vram[base + (ring_y >> 3) * 32 + (ring_x >> 3)] == ef_pokemon_tile(gb, camera_x + x, camera_y + y)) score++;
++        }
++    }
++    return score;
++}
++
++// The player stands at a fixed place on screen, and the map scrolls 16 pixels a step. The game's
++// position changes when a step begins, so mid-step the picture is up to a step behind it. Rather
++// than track the walking direction, take the position that explains the picture.
++static void ef_map_frame(GB_gameboy_t *gb)
++{
++    int home_x = GB_safe_read_memory(gb, 0xD362 + ef_map_shift) * 16 - 64;
++    int home_y = GB_safe_read_memory(gb, 0xD361 + ef_map_shift) * 16 - 64;
++    int phase_x = gb->io_registers[GB_IO_SCX] & 15, phase_y = gb->io_registers[GB_IO_SCY] & 15;
++    int xs[3] = { home_x + phase_x, home_x + phase_x - 16, home_x + 16 };
++    int ys[3] = { home_y + phase_y, home_y + phase_y - 16, home_y + 16 };
++    int best = -1;
++    for (int j = 0; j < 3; j++) {
++        for (int i = 0; i < 3; i++) {
++            int score = ef_map_score(gb, xs[i], ys[j]);
++            if (score > best) { best = score; ef_map_x = xs[i]; ef_map_y = ys[j]; }
++        }
++    }
++    // A text box covers part of the picture; a full-screen menu covers it all. One odd frame is neither.
++    ef_map_misses = best * 10 >= 42 * 6 ? 0 : ef_map_misses + 1;
++    if (!ef_map_misses) ef_map_matches = 1;
++    else if (ef_map_misses >= 3) ef_map_matches = 0;
++}
++
++static uint8_t ef_map_pixel(GB_gameboy_t *gb, int x, int line)
++{
++    int world_x = ef_map_x + x, world_y = ef_map_y + line;
++    uint8_t tile = ef_pokemon_tile(gb, world_x, world_y);
++    uint16_t address = gb->io_registers[GB_IO_LCDC] & GB_LCDC_TILE_SEL ? tile * 16 : 0x1000 + (int8_t)tile * 16;
++    int bit = 7 - (world_x & 7);
++    return (gb->vram[address + (world_y & 7) * 2] >> bit & 1) | (gb->vram[address + (world_y & 7) * 2 + 1] >> bit & 1) << 1;
++}
++
 +// The background's colour number at screen column x of this line, with its attributes.
 +static uint8_t ef_bg_pixel(GB_gameboy_t *gb, int x, uint8_t *attributes)
 +{
@@ -143,12 +220,15 @@ index 0000000..b1e0934
 +static void ef_wide_line(GB_gameboy_t *gb)
 +{
 +    if (!ef_ext || gb->current_line >= LINES || gb->sgb) return;
-+    if (gb->current_line == 0) ef_evaluate_scene(gb);
++    if (gb->current_line == 0) {
++        ef_evaluate_scene(gb);
++        if (ef_map_on) ef_map_frame(gb);
++    }
 +    uint8_t line = gb->current_line;
 +    uint32_t *out = ef_fb + line * (160 + 2 * ef_ext);
 +    uint8_t lcdc = gb->io_registers[GB_IO_LCDC];
 +    uint32_t blank = gb->rgb_encode_callback ? gb->rgb_encode_callback(gb, 0, 0, 0) : 0;
-+    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE)) {
++    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE) || (ef_map_on && !ef_map_matches)) {
 +        for (int i = 0; i < ef_ext; i++) out[i] = out[ef_ext + 160 + i] = blank;
 +        return;
 +    }
@@ -159,11 +239,11 @@ index 0000000..b1e0934
 +    for (int side = 0; side < 2; side++) {
 +        // The window runs to the right edge, and from the left edge when it starts there. Its
 +        // own map holds no more columns, so the bar carries on in the colour of its edge.
-+        uint8_t covered = window_line && (side || gb->io_registers[GB_IO_WX] <= 7);
++        uint8_t covered = !ef_map_on && window_line && (side || gb->io_registers[GB_IO_WX] <= 7);
 +        uint32_t edge = gb->screen ? gb->screen[line * 160 + (side ? 159 : 0)] : blank;
 +        for (int i = 0; i < ef_ext; i++) {
 +            int x = side ? 160 + i : i - ef_ext;
-+            uint8_t attributes = 0, bg = covered ? 0 : ef_bg_pixel(gb, x, &attributes);
++            uint8_t attributes = 0, bg = covered ? 0 : ef_map_on ? ef_map_pixel(gb, x, line) : ef_bg_pixel(gb, x, &attributes);
 +            uint32_t color = covered ? edge
 +                : gb->cgb_mode ? gb->background_palettes_rgb[(attributes & 7) * 4 + bg]
 +                : gb->background_palettes_rgb[bgp >> (bg * 2) & 3];
@@ -197,7 +277,7 @@ index 0000000..b1e0934
 +    return ef_fb;
 +}
 diff --git a/libretro/libretro.c b/libretro/libretro.c
-index bb298ff..1686ab4 100644
+index bb298ff..65a6b87 100644
 --- a/libretro/libretro.c
 +++ b/libretro/libretro.c
 @@ -18,6 +18,7 @@
@@ -208,7 +288,7 @@ index bb298ff..1686ab4 100644
  #include "libretro_core_options.inc"
  
  #ifdef _WIN32
-@@ -750,6 +751,17 @@ static GB_model_t string_to_model(const char *string)
+@@ -750,6 +751,20 @@ static GB_model_t string_to_model(const char *string)
  
  static void check_variables()
  {
@@ -216,6 +296,9 @@ index bb298ff..1686ab4 100644
 +        // EmuFusion Widescreen Hack: target picture aspect x 1000, and when to widen.
 +        struct retro_variable ef_var = {"emufusion_ws_scene", NULL};
 +        ef_wide_set_scene(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
++        ef_var.key = "emufusion_ws_map";
++        ef_var.value = NULL;
++        ef_wide_set_map(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
 +        ef_var.key = "emufusion_ws_aspect";
 +        ef_var.value = NULL;
 +        int before = ef_wide_ext();
@@ -226,7 +309,7 @@ index bb298ff..1686ab4 100644
      struct retro_variable var = {0};
      if (emulated_devices == 1) {
  
-@@ -1296,6 +1308,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
+@@ -1296,6 +1311,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
          geom.base_width = GB_get_screen_width(&gameboy[0]);
          geom.base_height = GB_get_screen_height(&gameboy[0]);
          geom.aspect_ratio = (double)GB_get_screen_width(&gameboy[0]) / GB_get_screen_height(&gameboy[0]);
@@ -237,7 +320,7 @@ index bb298ff..1686ab4 100644
      }
  
      geom.max_width = MAX_VIDEO_WIDTH * emulated_devices;
-@@ -1436,6 +1452,10 @@ void retro_run(void)
+@@ -1436,6 +1455,10 @@ void retro_run(void)
              video_cb(frame_buf_copy, GB_get_screen_width(&gameboy[0]) * emulated_devices, GB_get_screen_height(&gameboy[0]), GB_get_screen_width(&gameboy[0]) * emulated_devices * sizeof(uint32_t));
          }
      }

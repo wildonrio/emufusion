@@ -61,6 +61,14 @@ class RecipeTableTest(unittest.TestCase):
             if name:
                 self.assertIn(f'!strcmp(efVar.value, "{name}")', patch, title)
 
+    def test_game_boy_map_readers_named_by_recipes_are_in_the_locked_patch(self):
+        patch = (ROOT / 'engines/patches/sameboy-emufusion-widescreen.patch').read_text()
+        for system in ('gb', 'gbc'):
+            for title, game in RECIPES['systems'][system]['games'].items():
+                name = game.get('options', {}).get('emufusion_ws_map')
+                if name:
+                    self.assertIn(f'!strcmp(value, "{name}")', patch, title)
+
     def test_a_map_reader_draws_only_while_it_matches_the_real_picture(self):
         patch = (ROOT / 'engines/patches/mesen-emufusion-widescreen.patch').read_text()
         self.assertIn('_efMapMatched * 10 >= _efMapChecked * 7', patch)
