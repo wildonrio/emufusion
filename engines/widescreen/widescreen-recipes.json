@@ -776,14 +776,18 @@
           "tested": "2026-11-05 host: town map shows scrambled tiles at the sides"
         },
         "Pokémon Gold Version": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: rooms load only around the old screen"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "pokemon2"
+          },
+          "tested": "2026-11-05 host: Gold's bedroom and house walked; the map and each tile's colour come from the game's own tables, rooms sit inside the map border, menus stay narrow. Outdoors still to walk"
         },
         "Pokémon Silver Version": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: rooms load only around the old screen"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "pokemon2"
+          },
+          "tested": "2026-11-05 host: Gold's bedroom and house walked; the map and each tile's colour come from the game's own tables, rooms sit inside the map border, menus stay narrow. Outdoors still to walk"
         },
         "Pokémon Puzzle Challenge": {
           "strategy": "fixed-screen",

@@ -49,10 +49,10 @@ index 0000000..69733d3
 +#endif
 diff --git a/Core/ef_wide.inc b/Core/ef_wide.inc
 new file mode 100644
-index 0000000..d6f3fff
+index 0000000..98ea6a2
 --- /dev/null
 +++ b/Core/ef_wide.inc
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,243 @@
 +// Included at the end of display.c.
 +#include "ef_wide.h"
 +static uint32_t ef_fb[EF_WIDE_WIDTH * LINES];
@@ -124,30 +124,42 @@ index 0000000..d6f3fff
 +
 +// A map reader fetches each new column from the game's own map, so a room's far side is right even
 +// though the game has not loaded it into video memory.
-+static int ef_map_shift;
-+static uint8_t ef_map_on, ef_map_matches, ef_map_misses;
++typedef struct {
++    uint16_t map, x, y, width, height, bank, list, palettes;
++} ef_map_layout;
++static const ef_map_layout ef_pokemon1 = {0xC6E8, 0xD362, 0xD361, 0xD369, 0xD368, 0xD52B, 0xD52C, 0};
++// Pokemon Yellow keeps the same variables one byte lower than Red and Blue.
++static const ef_map_layout ef_pokemon1y = {0xC6E8, 0xD361, 0xD360, 0xD368, 0xD367, 0xD52A, 0xD52B, 0};
++// Gold and Silver: also a colour for each tile, four bits in a list in ROM bank 2.
++static const ef_map_layout ef_pokemon2 = {0xC700, 0xDA03, 0xDA02, 0xD088, 0xD087, 0xD0C5, 0xD0C6, 0xD0CF};
++static const ef_map_layout *ef_map;
++static uint8_t ef_map_matches, ef_map_misses;
 +static int ef_map_x, ef_map_y;
 +
 +void ef_wide_set_map(const char *value)
 +{
-+    // Pokemon Yellow keeps the same variables one byte lower than Red and Blue.
-+    ef_map_on = value && (!strcmp(value, "pokemon1") || !strcmp(value, "pokemon1y"));
-+    ef_map_shift = value && !strcmp(value, "pokemon1y") ? -1 : 0;
++    ef_map = !value ? NULL : !strcmp(value, "pokemon1") ? &ef_pokemon1 :
++        !strcmp(value, "pokemon1y") ? &ef_pokemon1y : !strcmp(value, "pokemon2") ? &ef_pokemon2 : NULL;
 +    ef_map_matches = ef_map_misses = 0;
 +}
 +
-+// Pokemon Red, Blue and Yellow: the map sits in work RAM as 32-pixel blocks with a 3-block border
-+// holding the neighbouring maps' edges; each block is 16 tiles from a list in the tileset's bank.
++// These variables stay in work RAM bank 1 whatever bank the game has switched to for the moment.
++static uint8_t ef_ram(GB_gameboy_t *gb, uint16_t address)
++{
++    return gb->ram[address >= 0xD000 ? 0x1000 + address - 0xD000 : address - 0xC000];
++}
++
++// Pokemon: the map sits in work RAM as 32-pixel blocks with a 3-block border holding the
++// neighbouring maps' edges; each block is 16 tiles from a list in the tileset's bank.
 +static uint8_t ef_pokemon_tile(GB_gameboy_t *gb, int world_x, int world_y)
 +{
-+    int width = GB_safe_read_memory(gb, 0xD369 + ef_map_shift), height = GB_safe_read_memory(gb, 0xD368 + ef_map_shift);
++    int width = ef_ram(gb, ef_map->width), height = ef_ram(gb, ef_map->height);
 +    int block_x = world_x >> 5, block_y = world_y >> 5;
 +    block_x = block_x < -3 ? -3 : block_x > width + 2 ? width + 2 : block_x;
 +    block_y = block_y < -3 ? -3 : block_y > height + 2 ? height + 2 : block_y;
-+    uint8_t block = GB_safe_read_memory(gb, 0xC6E8 + (block_y + 3) * (width + 6) + block_x + 3);
-+    uint32_t list = GB_safe_read_memory(gb, 0xD52C + ef_map_shift) | GB_safe_read_memory(gb, 0xD52D + ef_map_shift) << 8;
-+    uint32_t bank = GB_safe_read_memory(gb, 0xD52B + ef_map_shift);
-+    uint32_t address = bank * 0x4000 + ((list - 0x4000) & 0x3FFF) + block * 16 + ((world_y >> 3) & 3) * 4 + ((world_x >> 3) & 3);
++    uint8_t block = ef_ram(gb, ef_map->map + (block_y + 3) * (width + 6) + block_x + 3);
++    uint32_t list = ef_ram(gb, ef_map->list) | ef_ram(gb, ef_map->list + 1) << 8;
++    uint32_t address = ef_ram(gb, ef_map->bank) * 0x4000 + ((list - 0x4000) & 0x3FFF) + block * 16 + ((world_y >> 3) & 3) * 4 + ((world_x >> 3) & 3);
 +    return address < gb->rom_size ? gb->rom[address] : 0;
 +}
 +
@@ -171,8 +183,8 @@ index 0000000..d6f3fff
 +// than track the walking direction, take the position that explains the picture.
 +static void ef_map_frame(GB_gameboy_t *gb)
 +{
-+    int home_x = GB_safe_read_memory(gb, 0xD362 + ef_map_shift) * 16 - 64;
-+    int home_y = GB_safe_read_memory(gb, 0xD361 + ef_map_shift) * 16 - 64;
++    int home_x = ef_ram(gb, ef_map->x) * 16 - 64;
++    int home_y = ef_ram(gb, ef_map->y) * 16 - 64;
 +    int phase_x = gb->io_registers[GB_IO_SCX] & 15, phase_y = gb->io_registers[GB_IO_SCY] & 15;
 +    int xs[3] = { home_x + phase_x, home_x + phase_x - 16, home_x + 16 };
 +    int ys[3] = { home_y + phase_y, home_y + phase_y - 16, home_y + 16 };
@@ -189,11 +201,19 @@ index 0000000..d6f3fff
 +    else if (ef_map_misses >= 3) ef_map_matches = 0;
 +}
 +
-+static uint8_t ef_map_pixel(GB_gameboy_t *gb, int x, int line)
++static uint8_t ef_map_pixel(GB_gameboy_t *gb, int x, int line, uint8_t *attributes)
 +{
 +    int world_x = ef_map_x + x, world_y = ef_map_y + line;
 +    uint8_t tile = ef_pokemon_tile(gb, world_x, world_y);
 +    uint16_t address = gb->io_registers[GB_IO_LCDC] & GB_LCDC_TILE_SEL ? tile * 16 : 0x1000 + (int8_t)tile * 16;
++    if (ef_map->palettes) {
++        // Tiles from 0x80 are the second video bank's; the text tiles between take no list entries.
++        uint32_t list = ef_ram(gb, ef_map->palettes) | ef_ram(gb, ef_map->palettes + 1) << 8;
++        uint8_t entry = tile >= 0x60 ? tile - 0x20 : tile;
++        uint8_t packed = gb->rom[0x8000 + ((list - 0x4000) & 0x3FFF) + entry / 2];
++        *attributes = (entry & 1 ? packed >> 4 : packed) & 15;
++        if (*attributes & 8) address += 0x2000;
++    }
 +    int bit = 7 - (world_x & 7);
 +    return (gb->vram[address + (world_y & 7) * 2] >> bit & 1) | (gb->vram[address + (world_y & 7) * 2 + 1] >> bit & 1) << 1;
 +}
@@ -222,13 +242,13 @@ index 0000000..d6f3fff
 +    if (!ef_ext || gb->current_line >= LINES || gb->sgb) return;
 +    if (gb->current_line == 0) {
 +        ef_evaluate_scene(gb);
-+        if (ef_map_on) ef_map_frame(gb);
++        if (ef_map) ef_map_frame(gb);
 +    }
 +    uint8_t line = gb->current_line;
 +    uint32_t *out = ef_fb + line * (160 + 2 * ef_ext);
 +    uint8_t lcdc = gb->io_registers[GB_IO_LCDC];
 +    uint32_t blank = gb->rgb_encode_callback ? gb->rgb_encode_callback(gb, 0, 0, 0) : 0;
-+    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE) || (ef_map_on && !ef_map_matches)) {
++    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE) || (ef_map && !ef_map_matches)) {
 +        for (int i = 0; i < ef_ext; i++) out[i] = out[ef_ext + 160 + i] = blank;
 +        return;
 +    }
@@ -239,11 +259,11 @@ index 0000000..d6f3fff
 +    for (int side = 0; side < 2; side++) {
 +        // The window runs to the right edge, and from the left edge when it starts there. Its
 +        // own map holds no more columns, so the bar carries on in the colour of its edge.
-+        uint8_t covered = !ef_map_on && window_line && (side || gb->io_registers[GB_IO_WX] <= 7);
++        uint8_t covered = !ef_map && window_line && (side || gb->io_registers[GB_IO_WX] <= 7);
 +        uint32_t edge = gb->screen ? gb->screen[line * 160 + (side ? 159 : 0)] : blank;
 +        for (int i = 0; i < ef_ext; i++) {
 +            int x = side ? 160 + i : i - ef_ext;
-+            uint8_t attributes = 0, bg = covered ? 0 : ef_map_on ? ef_map_pixel(gb, x, line) : ef_bg_pixel(gb, x, &attributes);
++            uint8_t attributes = 0, bg = covered ? 0 : ef_map ? ef_map_pixel(gb, x, line, &attributes) : ef_bg_pixel(gb, x, &attributes);
 +            uint32_t color = covered ? edge
 +                : gb->cgb_mode ? gb->background_palettes_rgb[(attributes & 7) * 4 + bg]
 +                : gb->background_palettes_rgb[bgp >> (bg * 2) & 3];
