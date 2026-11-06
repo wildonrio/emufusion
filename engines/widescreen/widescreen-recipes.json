@@ -523,9 +523,12 @@
           "tested": "2026-11-05 host: first stage played, the ruins carry on into the new columns; black left of the level start. Its cartridge maps memory itself, so the map layout is read from the memory pages"
         },
         "Ninja Gaiden II: The Dark Sword of Chaos": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: first stage uses a one-screen map. Needs a map reader"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "ng2",
+            "emufusion_ws_lines": "48-240"
+          },
+          "tested": "2026-11-05 host: stage 1-1 played repeatedly; rooftops and city from the ROM reach both edges, the status panel keeps its place. Later stages not yet reached"
         },
         "Tecmo Super Bowl": {
           "strategy": "widen",
@@ -581,6 +584,13 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-05 host: menus and field panels; side columns show unrelated parts"
+        },
+        "Bionic Commando": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "bionic"
+          },
+          "tested": "2026-11-05 host: first area on foot; the level from the ROM fills both sides, area map and briefings stay narrow. Vertical parts not yet reached"
         }
       },
       "release": true

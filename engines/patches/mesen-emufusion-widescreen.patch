@@ -16,7 +16,7 @@ index 96b488c..7b1683a 100644
  	static constexpr uint32_t NametableSize = 0x400;
  	
 diff --git a/Core/PPU.cpp b/Core/PPU.cpp
-index 3692210..ca93eaf 100644
+index 3692210..23d4ccb 100644
 --- a/Core/PPU.cpp
 +++ b/Core/PPU.cpp
 @@ -451,6 +451,7 @@ void PPU::WriteRAM(uint16_t addr, uint8_t value)
@@ -27,7 +27,7 @@ index 3692210..ca93eaf 100644
  					_console->GetMapper()->WriteVRAM(_ppuBusAddress & 0x3FFF, value);
  				} else {
  					//During rendering, the value written is ignored, and instead the address' LSB is used (not confirmed, based on Visual NES)
-@@ -922,9 +923,361 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
+@@ -922,9 +923,417 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
  	UpdateColorBitMasks();
  }
  
@@ -175,11 +175,54 @@ index 3692210..ca93eaf 100644
 +	return true;
 +}
 +
++// Ninja Gaiden II lays a stage out as six 32-pixel blocks per column in ROM, and keeps a running
++// pointer to the column it will load next. Blocks hold four 16-pixel blocks, those four tiles.
++bool PPU::EfNg2Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette)
++{
++	const uint8_t *prg = _console->GetMapper()->EfPrg();
++	uint8_t *ram = _console->GetMemoryManager()->GetInternalRAM();
++	if(!prg || worldY < 0 || worldY >= 192) return false;
++	int column = _efMapColumnsAt + ((worldX >> 5) - (ram[0x3A] >> 5)) * 6;
++	if(column < 0x8000 || column >= 0xC000) return false;
++	uint8_t big = prg[column - 0x8000 + (worldY >> 5)];
++	int table = ram[0x69] | ram[0x6A] << 8;
++	int quad = ((worldY >> 4) & 1) * 2 + ((worldX >> 4) & 1);
++	uint8_t block = prg[table - 0x4000 + big * 4 + quad];
++	tile = prg[(ram[0x6B] | ram[0x6C] << 8) - 0x4000 + block * 4 + ((worldY >> 3) & 1) * 2 + ((worldX >> 3) & 1)];
++	palette = (prg[(ram[0x6D] | ram[0x6E] << 8) - 0x4000 + big] >> (quad * 2)) & 3;
++	return true;
++}
++
++// Bionic Commando: a list of screens per area, each 8x8 32-pixel blocks, in ROM banks the game names
++// in zero page. A block holds a tile group for each quarter and its colour byte.
++bool PPU::EfBionicTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette)
++{
++	const uint8_t *prg = _console->GetMapper()->EfPrg();
++	uint8_t *ram = _console->GetMemoryManager()->GetInternalRAM();
++	if(!prg || worldY < 0 || worldY >= 240) return false;
++	auto at = [&](uint32_t bank, uint32_t address) { return prg[bank * 0x4000 + ((address - 0x8000) & 0x3FFF)]; };
++	// The game's right-hand column loader says which screen in the list lies where.
++	if(worldX < 0) worldX &= 15;
++	int page = ((_efMapColumnsAt + 4) >> 3) + (worldX >> 8);
++	uint8_t screen = at(2, (ram[0xF0] | ram[0xF1] << 8) + page);
++	uint32_t table = (ram[0xF2] | ram[0xF3] << 8) + screen * 2;
++	uint8_t low = at(0, table), high = at(0, table + 1);
++	uint32_t layout = low | (high & 0xBF) << 8;
++	uint8_t big = at((high >> 6) & 1, layout + (worldY >> 5) * 8 + ((worldX >> 5) & 7));
++	uint32_t info = (ram[0xF4] | ram[0xF5] << 8) + big * 7;
++	uint8_t group = at(ram[0xF6], info + ((worldX >> 4) & 1) * 2 + ((worldY >> 4) & 1));
++	tile = group + ((worldX >> 3) & 1) * 2 + ((worldY >> 3) & 1);
++	palette = (at(ram[0xF6], info + 4) >> ((((worldY >> 4) & 1) * 2 + ((worldX >> 4) & 1)) * 2)) & 3;
++	return true;
++}
++
 +bool PPU::EfMapTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette)
 +{
 +	switch(_efMap) {
 +		case EfMap::Smb3: return EfSmb3Tile(worldX, worldY, tile, palette);
 +		case EfMap::Mm3: return EfMm3Tile(worldX, worldY, tile, palette);
++		case EfMap::Ng2: return EfNg2Tile(worldX, worldY, tile, palette);
++		case EfMap::Bionic: return EfBionicTile(worldX, worldY, tile, palette);
 +		default: return EfKirbyTile(worldX, worldY, tile, palette);
 +	}
 +}
@@ -193,6 +236,11 @@ index 3692210..ca93eaf 100644
 +		case EfMap::Smb3:
 +			_efMapCameraX = ram[0xFD] | ram[0x12] << 8;
 +			_efMapCameraY = ram[0x543] | ram[0x542] << 8;
++			break;
++		case EfMap::Bionic:
++			_efMapCameraX = ram[0xB7] | ram[0xB8] << 8;
++			_efMapCameraY = ram[0xBA];
++			_efMapColumnsAt = ram[0x98] * 8 + ram[0x99] - (_efMapCameraX >> 5) - 8;
 +			break;
 +		case EfMap::Kirby:
 +			_efMapCameraX = ram[0xDD] | ram[0xDE] << 8;
@@ -211,6 +259,14 @@ index 3692210..ca93eaf 100644
 +	cameraY = _efMapCameraY;
 +	if(_efMap == EfMap::Mm3) {
 +		_efMapRise = cameraY = ((((_efLineV >> 5) & 0x1F) * 8 + ((_efLineV >> 12) & 7) - _scanline) % 240 + 240) % 240;
++	}
++	if(_efMap == EfMap::Ng2) {
++		// Its scroll changes after the status panel, mid-frame, so it is read as the line starts.
++		// Only the distance from the camera matters: the pointer says where this column is.
++		uint8_t *ram = _console->GetMemoryManager()->GetInternalRAM();
++		cameraX = ram[0x3A];
++		cameraY = ((_efLineV >> 5) & 0x1F) * 8 + ((_efLineV >> 12) & 7) - _scanline;
++		_efMapColumnsAt = (ram[0x86] | ram[0x87] << 8) + ((ram[0x3D] & 0x80) ? 7 : -9) * 6;
 +	}
 +	// A game that runs late has not moved the picture yet. The scroll registers say where this line is.
 +	int shown = (((_efLineV & 0x1F) - 2) * 8 + _efLineFineX) & 255;
@@ -389,7 +445,7 @@ index 3692210..ca93eaf 100644
  	if(_cycle <= 256) {
  		LoadTileInfo();
  
-@@ -1166,6 +1519,7 @@ void PPU::SendFrame()
+@@ -1166,6 +1575,7 @@ void PPU::SendFrame()
  
  void PPU::BeginVBlank()
  {
@@ -398,7 +454,7 @@ index 3692210..ca93eaf 100644
  }
  
 diff --git a/Core/PPU.h b/Core/PPU.h
-index 55c3182..5f85c53 100644
+index 55c3182..2353f0b 100644
 --- a/Core/PPU.h
 +++ b/Core/PPU.h
 @@ -28,6 +28,11 @@ enum PPURegisters
@@ -408,12 +464,12 @@ index 55c3182..5f85c53 100644
 +	public:
 +		static constexpr int EfMaxExt = 96;
 +		// A decoder per game engine: draws the new columns from the game's own level map.
-+		enum class EfMap { None, Smb3, Mm3, Kirby };
++		enum class EfMap { None, Smb3, Mm3, Kirby, Ng2, Bionic };
 +	protected:
  	protected:
  		std::shared_ptr<Console> _console;
  		EmulationSettings* _settings;
-@@ -61,6 +66,45 @@ class PPU : public IMemoryHandler, public Snapshotable
+@@ -61,6 +66,48 @@ class PPU : public IMemoryHandler, public Snapshotable
  		PPUControlFlags _flags;
  		PPUStatusFlags _statusFlags;
  
@@ -445,6 +501,9 @@ index 55c3182..5f85c53 100644
 +		bool EfSmb3Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
 +		bool EfMm3Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
 +		bool EfKirbyTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
++		bool EfNg2Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
++		bool EfBionicTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
++		int _efMapColumnsAt = 0;
 +		bool EfMapTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
 +		void EfMapCamera(int &cameraX, int &cameraY);
 +		void EfLatchCamera();
@@ -459,7 +518,7 @@ index 55c3182..5f85c53 100644
  		uint16_t _intensifyColorBits;
  		uint8_t _paletteRamMask;
  		int32_t _lastUpdatedPixel;
-@@ -205,6 +249,13 @@ class PPU : public IMemoryHandler, public Snapshotable
+@@ -205,6 +252,13 @@ class PPU : public IMemoryHandler, public Snapshotable
  		uint8_t PeekRAM(uint16_t addr) override;
  		void WriteRAM(uint16_t addr, uint8_t value) override;
  
@@ -510,10 +569,10 @@ index 4ed0c1a..d704ca3 100644
  	GetScreenSize(screenSize, true);
  	
 diff --git a/Libretro/libretro.cpp b/Libretro/libretro.cpp
-index 48fa641..7264a93 100644
+index 48fa641..bfdc6e2 100644
 --- a/Libretro/libretro.cpp
 +++ b/Libretro/libretro.cpp
-@@ -322,6 +322,52 @@ extern "C" {
+@@ -322,6 +322,54 @@ extern "C" {
  		}
  	}
  
@@ -559,14 +618,16 @@ index 48fa641..7264a93 100644
 +			bool known = env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value;
 +			_console->GetPpu()->EfSetMap(known && !strcmp(efVar.value, "smb3") ? PPU::EfMap::Smb3 :
 +				known && !strcmp(efVar.value, "mm3") ? PPU::EfMap::Mm3 :
-+				known && !strcmp(efVar.value, "kirby") ? PPU::EfMap::Kirby : PPU::EfMap::None);
++				known && !strcmp(efVar.value, "kirby") ? PPU::EfMap::Kirby :
++				known && !strcmp(efVar.value, "ng2") ? PPU::EfMap::Ng2 :
++				known && !strcmp(efVar.value, "bionic") ? PPU::EfMap::Bionic : PPU::EfMap::None);
 +		}
 +	}
 +
  	void update_settings()
  	{
  		struct retro_variable var = { };
-@@ -447,6 +493,8 @@ extern "C" {
+@@ -447,6 +495,8 @@ extern "C" {
  			readOverscanValue(MesenOverscanBottom)
  		);
  
@@ -575,7 +636,7 @@ index 48fa641..7264a93 100644
  		if(readVariable(MesenAspectRatio, var)) {
  			string value = string(var.value);
  			if(value == "Auto") {
-@@ -641,7 +689,8 @@ extern "C" {
+@@ -641,7 +691,8 @@ extern "C" {
  
  		retro_system_av_info avInfo = {};
  		_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -585,7 +646,7 @@ index 48fa641..7264a93 100644
  	}
  
  	RETRO_API void retro_run()
-@@ -676,6 +725,7 @@ extern "C" {
+@@ -676,6 +727,7 @@ extern "C" {
  			//Update geometry after running the frame, in case the console's region changed (affects "auto" aspect ratio)
  			retro_system_av_info avInfo = {};
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -593,7 +654,7 @@ index 48fa641..7264a93 100644
  			env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &avInfo);
  		}
  
-@@ -1123,6 +1173,7 @@ extern "C" {
+@@ -1123,6 +1175,7 @@ extern "C" {
  				default: _console->GetSettings()->SetDipSwitches(0); break;
  			}
  
@@ -601,7 +662,7 @@ index 48fa641..7264a93 100644
  			update_core_controllers();
  			update_input_descriptors();
  
-@@ -1190,6 +1241,7 @@ extern "C" {
+@@ -1190,6 +1243,7 @@ extern "C" {
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, NES_NTSC_OUT_WIDTH(256), 240 * vscale);
  		else
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, 256 * hscale, 240 * vscale);
@@ -609,7 +670,7 @@ index 48fa641..7264a93 100644
  	}
  
  	RETRO_API void *retro_get_memory_data(unsigned id)
-@@ -1198,6 +1250,10 @@ extern "C" {
+@@ -1198,6 +1252,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetSaveRam();
  			case RETRO_MEMORY_SYSTEM_RAM: return _console->GetMemoryManager()->GetInternalRAM();
@@ -620,7 +681,7 @@ index 48fa641..7264a93 100644
  		}
  		return nullptr;
  	}
-@@ -1208,6 +1264,10 @@ extern "C" {
+@@ -1208,6 +1266,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetMemorySize(DebugMemoryType::SaveRam);
  			case RETRO_MEMORY_SYSTEM_RAM: return MemoryManager::InternalRAMSize;
