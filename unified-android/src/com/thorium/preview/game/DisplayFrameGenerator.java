@@ -11202,6 +11202,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         try {
             if (generated && !midpointPairBudget.admit(request))
                 throw new IllegalStateException("app-owned midpoint admission rejected");
+            predrawnReal = false;  // this draw replaces whatever the back buffer holds
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
             GLES20.glViewport(0, 0, outputWidth, outputHeight);
             GLES20.glClearColor(0f, 0f, 0f, 1f);

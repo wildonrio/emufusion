@@ -112,6 +112,7 @@ public final class BuiltinQueueReserve {
     private long changedAtNs, deepenedAtNs, guardAtNs;
     private int earlierFrames;
     private int recoveryFrames = RECOVERY_FRAMES;
+    private boolean latchesUnfinished;
     private long recoveredAtNs;
     private int windowFrames, earlyFrames, earlySwitches;
     private boolean previousEarly;
@@ -178,6 +179,8 @@ public final class BuiltinQueueReserve {
         long nowNs = actualNs > 0L ? actualNs : desiredNs;
         if (actualNs > 0L && !within(changedAtNs, nowNs))
             recordSlot(Math.abs(actualNs - desiredNs) < panelPeriodNs / 2L);
+        if (!late && actualNs > 0L && latchNs > 0L && renderCompleteNs > latchNs &&
+                Math.abs(actualNs - desiredNs) < panelPeriodNs / 2L) latchesUnfinished = true;
         if (extraScans > 0 && !within(changedAtNs, nowNs)) {
             if (++windowFrames > EARLY_WINDOW) {
                 windowFrames = 1;
@@ -285,8 +288,12 @@ public final class BuiltinQueueReserve {
             return Change.NONE;
         }
         boolean timestamps = renderCompleteNs > 0L && latchNs > 0L;
-        boolean earlierScanMet = !timestamps ||
-                latchNs - panelPeriodNs - renderCompleteNs >= EARLY_MARGIN_NS;
+        // A compositor that latches unfinished frames shows them if they finish
+        // before the scan. Wind Waker HD (Thor, 2026-11-06): a startup burst left a
+        // run a scan deeper for all of its 33 s, its generated images finishing 2 ms
+        // before the earlier scan but 0.3 ms before that scan's latch.
+        long earlierDeadlineNs = (latchesUnfinished && actualNs > 0L ? actualNs : latchNs) - panelPeriodNs;
+        boolean earlierScanMet = !timestamps || earlierDeadlineNs - renderCompleteNs >= EARLY_MARGIN_NS;
         if (!earlierScanMet) {
             earlierFrames = 0;
             return Change.NONE;

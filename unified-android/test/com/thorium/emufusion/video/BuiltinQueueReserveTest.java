@@ -11,6 +11,7 @@ public final class BuiltinQueueReserveTest {
         compositorMissesDoNotCount();
         framesReadyForAnEarlierLatchDoNotCount();
         recorderBurstGivesTheScanBackOnceFramesFitEarlier();
+        anUnfinishedLatchMakesTheEarlierScanTheDeadline();
         recoveryNeedsUnbrokenEvidence();
         failedRecoveryRestoresAtOnceAndBacksOff();
         recoveryThatHoldsResetsTheBackoff();
@@ -192,6 +193,31 @@ public final class BuiltinQueueReserveTest {
         eq(1L, r.recoveries(), "one recovery");
         for (int i = 0; i < 2000; ++i)
             check(onTime(r, clock, 3_000_000L) == BuiltinQueueReserve.Change.NONE, "nothing below the earliest scan");
+    }
+
+    private static void anUnfinishedLatchMakesTheEarlierScanTheDeadline() {
+        // Finished 0.3 ms before the earlier latch: too close while the compositor waits for its fence.
+        BuiltinQueueReserve waits = new BuiltinQueueReserve();
+        long[] clock = {5_000_000_000L};
+        burst(waits, clock);
+        for (int i = 0; i < 1000; ++i)
+            check(onTime(waits, clock, PERIOD + 300_000L) != BuiltinQueueReserve.Change.RECOVERED,
+                    "a compositor that waits keeps the depth");
+        // The same frames once a frame finished after its latch has made its slot.
+        BuiltinQueueReserve latches = new BuiltinQueueReserve();
+        clock[0] = 5_000_000_000L;
+        onTime(latches, clock, -500_000L);
+        advance(clock, 3_000_000_000L);
+        burst(latches, clock);
+        BuiltinQueueReserve.Change last = BuiltinQueueReserve.Change.NONE;
+        int frames = 0;
+        while (last != BuiltinQueueReserve.Change.RECOVERED && frames < 1000) {
+            last = onTime(latches, clock, PERIOD + 300_000L);
+            ++frames;
+        }
+        int settle = (int) (BuiltinQueueReserve.SETTLE_NS / PERIOD);
+        check(frames <= BuiltinQueueReserve.RECOVERY_FRAMES + settle + 1, "the scan comes back: " + frames);
+        eq(0L, latches.extraScans(), "given back");
     }
 
     private static void recoveryNeedsUnbrokenEvidence() {
