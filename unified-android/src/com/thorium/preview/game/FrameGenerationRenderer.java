@@ -93,6 +93,9 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default long takeHardwareSourcePhaseNudgeNs(boolean lockedByDefault) { return 0L; }
 
+    /** The wait before the panel callback the source's phase lock should hold, or zero for its own. */
+    default void setSourcePhaseWaitNs(long ns) {}
+
     /** How far ahead a hardware core should stamp its images (the firmware's pacing skips those). */
     default long hardwareStampAheadNs(boolean lockedByDefault) { return 0L; }
 

@@ -342,6 +342,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         hardwarePhaseLock = hardwareLock;
+        int cemuWaitUs = 5_500;
+        try {
+            if (context != null) cemuWaitUs = Settings.Global.getInt(
+                    context.getContentResolver(), CEMU_PHASE_WAIT_GLOBAL, cemuWaitUs);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        cemuPhaseWaitNs = cemuWaitUs * 1000L;
         boolean pairArrivalSpan = false;
         try {
             if (context != null) pairArrivalSpan = Settings.Global.getInt(
@@ -784,6 +792,12 @@ public final class TimelineSchedulerSwitch {
         final int level = hardwarePhaseLock;
         return level > 0 || (level < 0 && lockedByDefault);
     }
+
+    /** QA emufusion_framegen_cemu_phase_wait_us: the wait Cemu's phase lock holds (its nudge is QA too). */
+    static final String CEMU_PHASE_WAIT_GLOBAL = "emufusion_framegen_cemu_phase_wait_us";
+    private static volatile long cemuPhaseWaitNs = 5_500_000L;
+
+    static long cemuPhaseWaitNs() { return cemuPhaseWaitNs; }
 
     /**
      * QA emufusion_framegen_arrival_span=1: arrival pacing places a pair's real

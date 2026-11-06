@@ -3075,6 +3075,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private volatile boolean hardwarePhaseSource;
+    private volatile long sourcePhaseWaitNs;
+
+    @Override public void setSourcePhaseWaitNs(long ns) { sourcePhaseWaitNs = ns; }
 
     @Override public long hardwareStampAheadNs(boolean lockedByDefault) {
         return TimelineSchedulerSwitch.hardwarePhaseLock(lockedByDefault) ? 10_000_000L : 0L;
@@ -9770,6 +9773,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // them per 16 s missed their callback, at 3.9 ms 3.
                 if (switchContent || hardwarePhaseSource)
                     sourcePhaseLock.setTargetWaitNs(TimelineSchedulerSwitch.switchPhaseWaitNs());
+                if (sourcePhaseWaitNs > 0L) sourcePhaseLock.setTargetWaitNs(sourcePhaseWaitNs);
                 sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);
                 sourcePhaseLock.observe(waitNs, panelPeriodNs);
             }
