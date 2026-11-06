@@ -1016,8 +1016,12 @@
       "options": {
         "dolphin_widescreen_hack": "disabled"
       },
-      "onOptions": {},
-      "offOptions": {},
+      "onOptions": {
+        "emufusion_ws_2d": "0.75"
+      },
+      "offOptions": {
+        "emufusion_ws_2d": "1"
+      },
       "games": {
         "Super Smash Bros. Melee": {
           "strategy": "widen",
@@ -1086,12 +1090,12 @@
         "Crazy Taxi": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: attract mode; PRESS START same width narrow and wide, the city extends, no stretch. Real play still to do"
+          "tested": "2026-11-05 Thor: a real fare driven at 16:9; the city extends, PRESS START keeps its width, HUD holds its shape"
         },
         "Jet Grind Radio": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: attract mode; logo and text keep their shape, the city extends. Real play still to do"
+          "tested": "2026-11-05 Thor: attract and comic intro; logo and text keep their shape, the city extends. Real play still to do"
         },
         "Rayman 2: The Great Escape": {
           "strategy": "widen",
@@ -1101,7 +1105,7 @@
         "Sonic Adventure": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: movie and title stay 4:3 with bars, correct. Real play still to do"
+          "tested": "2026-11-05 Thor: demo play in 3D at 16:9, Press Start Button keeps its shape; movie and title stay 4:3 with bars, correct"
         }
       },
       "release": false
