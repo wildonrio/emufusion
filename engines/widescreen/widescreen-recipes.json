@@ -936,7 +936,7 @@
         "Banjo-Kazooie": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro and title; one intro transition frame looked broken, to check"
+          "tested": "2026-11-05 Thor: title compared narrow and wide; logo the same width, world extends. A jigsaw-shaped wipe looks odd on black, to compare with narrow"
         },
         "Super Mario 64": {
           "strategy": "widen",
@@ -964,9 +964,9 @@
           "tested": "2026-11-05 Thor: menus compared narrow and wide, GAME SELECT and its panels the same width; sky and flyby run to the edges. A race not played yet"
         },
         "Excitebike 64": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 Thor: title and menus; a race not played yet"
+          "tested": "2026-11-05 Thor: compared narrow and wide; title logo holds but menu panels drawn as polygons stretch by a third or more, so it stays narrow"
         },
         "Rayman 2: The Great Escape": {
           "strategy": "widen",
@@ -976,12 +976,12 @@
         "Star Fox 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: menus and briefing at 16:9; a mission not flown yet"
+          "tested": "2026-11-05 Thor: intro compared narrow and wide; text the same width. First wide frame showed a noise band at the top and sides, not seen again; a mission not flown yet"
         },
         "Turok 2: Seeds of Evil": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro and menus; play not reached"
+          "tested": "2026-11-05 Thor: intro compared narrow and wide; logo the same width, jungle extends inside its own letterbox. Play not reached"
         },
         "1080° Snowboarding": {
           "strategy": "widen",
