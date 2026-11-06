@@ -279,12 +279,20 @@ November 6 (latest) **— 3.2.156 (230, `dc4f4948`, retry-403) released for the 
   | Link's Awakening | 94.3% | 113 in 18 s | 192 | 29% | 21.8 / 37.1 (24.6 / 34.5) ms |
   | NES | 99.9% | 1 in 16 s | 1.8 | 72% | 9.2 / 17.5 (11.3 / 19.7) ms |
   | Double Dash | 100.0% | 0 | 0 | 0% | 19.8 / 28.1 (19.8 / 28.2) ms |
-  | SM3DW | 93.7% (PACE window; on intended 97.5%; the whole 43-s trace, which includes a load, scores 56.4%) | 75 in about 10 s | not comparable | 82% | 12.0 / 21.0 ms |
+  | SM3DW | 93.7% (PACE window; on intended 97.5%; the whole 43-s trace, which includes a load, scores 56.4%) | 74 in about 10 s | not comparable | 82% | 12.0 / 21.0 ms |
 
   The second NSMBU run's fast-mode figure is the scoring script's latch-to-present test; at 19.6 / 27.9 ms it was not in the low-latency state.
 - **The gate was not clean, and the release went out on the owner's request for widescreen.** Two of three NSMBU runs have 16-20 hitches per 30 s against 0-5.5 in the 3.2.155 gate; SM3DW's cadence is down from 98.3% and Link's Awakening's from 95.5%. By the code, the default path differs from 3.2.155 only by one state update per presented frame (the drain's `observe`) and Eden's one-time prop read. That is an argument, not a measurement. No side-by-side was run: a downgrade install risks saves.
 - **Rejected: a whole-frame fallback for pixel art.** On 72 Mega Drive triplets from the device bench (33% over 0.1%, area 0.299%), holding the nearer real frame whenever the check flags a share of the frame: 0.25% of the frame gives 6% over 0.1%, but holds 60% of all frames and 48% of the clean ones, error 0.684 -> 0.883; 1% gives 25%, holding 35% of frames and 40% of the clean ones. The flag does not separate the failing frames, so this would mostly remove frame generation from Mega Drive.
-- **Next:** three more NSMBU Deluxe runs at default settings, spaced over cool starts. If two of three show 16-20 hitches per 30 s, treat it as a regression and look in the drain and Eden prop changes.
+- **NSMBU Deluxe repeated at default settings, cool starts, to measure the spread.** Frame generation code is the same in these builds. Rule set beforehand: two of three runs at 16-20 hitches per 30 s means a regression. One of three did, so the rule did not fire.
+
+  | Build | On cadence | Hitches per 30 s | Fast mode | First generated / real, median (mean) |
+  | --- | --- | --- | --- | --- |
+  | 3.2.156 retry-403 `dc4f4948` | 99.9% | 3.7 | 17% | 19.1 / 27.4 (17.8 / 26.1) ms |
+  | retry-406 `143226d7` | 99.5% | 16.4 | 46% | 18.7 / 27.1 (15.4 / 23.8) ms |
+  | retry-406 `143226d7` | 99.7% | 9.1 | 52% | 11.2 / 19.5 (14.6 / 22.9) ms |
+
+  This does not settle it. Over all six default-setting runs on these builds the hitches are 20, 0, 16, 3.7, 16.4 and 9.1 per 30 s; the three on 3.2.155's builds were 0, 3.7 and 5.5. No side-by-side has been run. What the runs do show is two regimes. Runs that sit in the pipelined state (fast mode 22% or less, and the 100.0% run whose 19.6 / 27.9 ms shows the same state) have 0-5.5 hitches and about 18-20 / 26-28 ms on average; runs at 39-52% have 9-20 hitches and about 15-17 / 23-25 ms. The 3.2.155 runs were all in the first. The two trial-off runs do not fit this cleanly: 48-49% fast mode with 5.5-7.3 hitches, so the trial's switch inside the window may add to the count. Each move between the states is a hitch, so the count follows how often a run moves.
 
 November 6 **— The compositor's slower state decides latency, and a smooth run never leaves it. The pacing trial's start-of-game switch accounts for part of it; a drain gets NES out of it. Fast path, flush during the solve and 256 draws show no clear gain.**
 
