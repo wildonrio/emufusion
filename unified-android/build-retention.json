@@ -1585,6 +1585,10 @@
     "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-bfde1e78f12a81cea915ba2effdfc6c1148d72d9acccaae01d29ec5b1f63619f.apk": {
       "sha256": "bfde1e78f12a81cea915ba2effdfc6c1148d72d9acccaae01d29ec5b1f63619f",
       "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-4076a6e61bd9024256672b980e557620b8ea0aad3dfcd75fc2ab9dcaf535d096.apk": {
+      "sha256": "4076a6e61bd9024256672b980e557620b8ea0aad3dfcd75fc2ab9dcaf535d096",
+      "reason": "Retry-415: hardware lock trial closed; superseded by retry-417 and later."
     }
   }
 }
