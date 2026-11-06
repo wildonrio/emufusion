@@ -1609,6 +1609,10 @@
     "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-262990245506f4cd36a25afa2cd0c8adfdf75b5effcce319f95a93877a8f8a09.apk": {
       "sha256": "262990245506f4cd36a25afa2cd0c8adfdf75b5effcce319f95a93877a8f8a09",
       "reason": "Closed shared widescreen trial, superseded by later builds on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-0d491f6119055c65ecd84fe58f8aeb64d7a225d59d16943907bbee8bfb29f179.apk": {
+      "sha256": "0d491f6119055c65ecd84fe58f8aeb64d7a225d59d16943907bbee8bfb29f179",
+      "reason": "Retry-421: QA trial build, superseded by retry-424."
     }
   }
 }
