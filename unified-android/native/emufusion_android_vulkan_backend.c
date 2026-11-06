@@ -1118,7 +1118,7 @@ bool emufusion_android_vulkan_set_stamp_ahead(
         set_error(error, error_size, "Vulkan backend is required");
         return false;
     }
-    backend->stamp_ahead_ns = ahead_ns > 0 ? ahead_ns : 0;
+    backend->stamp_ahead_ns = ahead_ns;
     backend->timestamp_lead_ns = emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);
     /* Takes effect with the next timeline, which the following binding starts. */
     backend->timestamp_timeline_ready = false;

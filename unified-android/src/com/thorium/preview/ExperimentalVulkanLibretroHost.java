@@ -15,7 +15,7 @@ public final class ExperimentalVulkanLibretroHost implements Closeable {
     }
 
     private long handle;
-    private final boolean phaseLockedByDefault;
+    private final boolean stampBehindByDefault;
 
     public ExperimentalVulkanLibretroHost(File core, File trustedCoreDirectory,
                                           File systemDirectory,
@@ -43,7 +43,7 @@ public final class ExperimentalVulkanLibretroHost implements Closeable {
             throw new IOException("cannot create system directory");
         if (!saveDirectory.isDirectory() && !saveDirectory.mkdirs())
             throw new IOException("cannot create save directory");
-        phaseLockedByDefault = FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());
+        stampBehindByDefault = FrameGenerationRendererRegistry.stampBehindByDefault(core.getName());
         handle = nativeCreateVulkan(canonicalCore.getPath(),
                 canonicalRoot.getPath(), systemDirectory.getCanonicalPath(),
                 saveDirectory.getCanonicalPath(), widescreenEnhancementsEnabled);
@@ -111,7 +111,7 @@ public final class ExperimentalVulkanLibretroHost implements Closeable {
 
     private void configureFgTimestamp(Surface surface, boolean secondary) {
         if (!secondary) nativeSetStampAheadVulkan(handle,
-                FrameGenerationRendererRegistry.hardwareStampAheadNs(surface, phaseLockedByDefault));
+                FrameGenerationRendererRegistry.hardwareStampAheadNs(surface, stampBehindByDefault));
         nativeSetFgTimestampVulkan(handle, secondary,
                 FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }

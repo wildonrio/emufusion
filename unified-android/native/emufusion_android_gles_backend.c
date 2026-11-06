@@ -167,7 +167,7 @@ bool emufusion_android_gles_set_stamp_ahead(
         emufusion_android_gles_backend *backend, int64_t ahead_ns,
         char *error, size_t error_size) {
     if (!claim_render_thread(backend, error, error_size)) return false;
-    backend->stamp_ahead_ns = ahead_ns > 0 ? ahead_ns : 0;
+    backend->stamp_ahead_ns = ahead_ns;
     backend->timestamp_lead_ns = emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);
     /* Takes effect with the next timeline, which the following binding starts. */
     backend->timestamp_timeline_ready = false;

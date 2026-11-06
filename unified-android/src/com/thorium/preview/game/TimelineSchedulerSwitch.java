@@ -784,19 +784,22 @@ public final class TimelineSchedulerSwitch {
     static boolean compositorDrainAllSources() { return compositorDrainAllSources; }
 
     /**
-     * A hardware core the host names (Dolphin) is held to the phase lock frame
-     * by frame, at Eden's wait, and stamps its images ahead so the firmware's
-     * pacing leaves them alone. Double Dash ranged from 0 to 168 hitches per
-     * 30 s by where its phase landed; with both, 0 to 20 (Thor, 2026-11-06).
-     * Ocarina of Time, a steady source, is no better, so other cores stay out.
-     * QA emufusion_framegen_hardware_phase_lock: 0 none, 1 every hardware core.
+     * A hardware core's stamps follow its run sequence, so a burst leaves them
+     * ahead of the clock and a stall behind it. Only stamps behind it get the
+     * firmware's pacing, which pins arrival before the panel callback; ahead, the
+     * core runs free. Double Dash ranged from 1.8 to 168 hitches per 30 s by that
+     * alone (Thor, 2026-11-06). So the host's named cores (Dolphin) start their
+     * stamps a second behind (stampBehindByDefault).
+     * QA emufusion_framegen_hardware_phase_lock: 0 stamps as they fall, 1 every
+     * hardware core held by the phase lock instead, with its stamps kept ahead.
      */
     static final String HARDWARE_PHASE_LOCK_GLOBAL = "emufusion_framegen_hardware_phase_lock";
     private static volatile int hardwarePhaseLock = -1;
 
-    static boolean hardwarePhaseLock(boolean lockedByDefault) {
-        final int level = hardwarePhaseLock;
-        return level > 0 || (level < 0 && lockedByDefault);
+    static boolean hardwarePhaseLock() { return hardwarePhaseLock > 0; }
+
+    static boolean hardwareStampBehind(boolean pinnedByDefault) {
+        return hardwarePhaseLock < 0 && pinnedByDefault;
     }
 
     /** QA emufusion_framegen_cemu_phase_wait_us: the wait Cemu's phase lock holds (its nudge is QA too). */

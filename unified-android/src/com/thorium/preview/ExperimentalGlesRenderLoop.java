@@ -56,8 +56,6 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
         default boolean supportsPresentationRecovery() { return false; }
         /** Recover bounded clock debt while still presenting every guest frame. */
         default boolean retainsFrameDebt() { return false; }
-        /** The frame generator's phase lock holds this core unless QA says otherwise. */
-        default boolean phaseLockedByDefault() { return false; }
         default void runWithoutPresent() {
             throw new UnsupportedOperationException("presentation recovery unavailable");
         }
@@ -252,9 +250,6 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                 @Override public void resize(Surface surface) {
                     nativeHost.surfaceResized();
                 }
-                @Override public boolean phaseLockedByDefault() {
-                    return FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());
-                }
                 @Override public boolean runAndPresent() {
                     return nativeHost.runFrameAndPresent();
                 }
@@ -376,9 +371,6 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                 }
                 @Override public boolean retainsFrameDebt() {
                     return retainsVulkanFrameDebt(core.getName());
-                }
-                @Override public boolean phaseLockedByDefault() {
-                    return FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());
                 }
                 @Override public void detach() { nativeHost.detachSurface(); }
                 @Override public void attachSecondary(Surface surface) {
@@ -1119,10 +1111,9 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                     nextFrameDeadlineNanos += phaseDelayNs;
                     Log.i(TAG, "Source phase moved hardware core delayUs=" + phaseDelayNs / 1000L);
                 }
-                // And held there, frame by frame (SourcePhaseLock), for the cores that gain from it.
+                // And held there, frame by frame (SourcePhaseLock), when QA asks for it.
                 long phaseNudgeNs = pacedCoreHz > 0.0 ?
-                        FrameGenerationRendererRegistry.takeHardwareSourcePhaseNudgeNs(attachedSurface,
-                                host.phaseLockedByDefault()) : 0L;
+                        FrameGenerationRendererRegistry.takeHardwareSourcePhaseNudgeNs(attachedSurface) : 0L;
                 if (phaseNudgeNs != 0L) nextFrameDeadlineNanos += phaseNudgeNs;
             }
             scheduleFrame();

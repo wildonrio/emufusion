@@ -219,7 +219,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
     }
 
     private final Bindings bindings;
-    private final boolean phaseLockedByDefault;
+    private final boolean stampBehindByDefault;
     private long handle;
     private boolean lastFrameExecuted;
 
@@ -306,7 +306,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
                         SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS)) != 0)
             throw new IllegalArgumentException("unknown source timeline policy");
         this.bindings = bindings;
-        phaseLockedByDefault = FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());
+        stampBehindByDefault = FrameGenerationRendererRegistry.stampBehindByDefault(core.getName());
         File canonicalCore = core.getCanonicalFile();
         File canonicalRoot = trustedCoreDirectory.getCanonicalFile();
         if (!canonicalCore.getPath().startsWith(canonicalRoot.getPath() + File.separator))
@@ -377,7 +377,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
             throw new IllegalArgumentException("valid Android Surface is required");
         bindings.attach(handle, surface);
         bindings.setStampAhead(handle, FrameGenerationRendererRegistry.hardwareStampAheadNs(surface,
-                phaseLockedByDefault));
+                stampBehindByDefault));
         bindings.setFgTimestamp(handle,
                 FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }
@@ -390,7 +390,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         bindings.recreate(handle, surface);
         // Native recreation detaches first, clearing the previous ownership.
         bindings.setStampAhead(handle, FrameGenerationRendererRegistry.hardwareStampAheadNs(surface,
-                phaseLockedByDefault));
+                stampBehindByDefault));
         bindings.setFgTimestamp(handle,
                 FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }

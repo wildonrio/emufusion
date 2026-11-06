@@ -1,8 +1,9 @@
-"""Dolphin's images are held to the phase lock and stamped ahead by default (2026-11-06).
+"""Dolphin's stamps start behind the clock, so the firmware always paces it (2026-11-06).
 
-Double Dash ranged from 0 to 168 hitches per 30 s by where its phase landed; with
-the lock and the stamp, 0 to 20. Ocarina of Time, on the same render loop, is no
-better held, so other hardware cores stay on the advisor unless QA asks."""
+A hardware core's stamps follow its run sequence: a burst leaves them ahead of the
+clock, a stall behind it. Only stamps behind it get the firmware's pacing. Double
+Dash ranged from 1.8 to 168 hitches per 30 s by that alone. Other hardware cores
+stay as they are unless QA asks; the phase lock is QA only."""
 from pathlib import Path
 import unittest
 
@@ -11,40 +12,43 @@ PREVIEW = ROOT / 'unified-android/src/com/thorium/preview'
 GAME = PREVIEW / 'game'
 
 
-class DolphinPhaseLockTest(unittest.TestCase):
-    def test_only_dolphin_is_locked_by_default(self):
-        loop = (PREVIEW / 'ExperimentalGlesRenderLoop.java').read_text()
+class DolphinStampTest(unittest.TestCase):
+    def test_only_dolphin_starts_behind_by_default(self):
         registry = (GAME / 'FrameGenerationRendererRegistry.java').read_text()
-        self.assertIn('public static boolean phaseLockedByDefault(String coreFileName) {', registry)
+        self.assertIn('public static boolean stampBehindByDefault(String coreFileName) {', registry)
         self.assertIn('return "libemufusion_core_dolphin.so".equals(coreFileName);', registry)
+
+    def test_both_hosts_ask_for_it(self):
         # Both runtimes: Dolphin on GameCube and Wii runs the Vulkan host.
-        self.assertEqual(loop.count('return FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());'), 2)
-        self.assertIn('default boolean phaseLockedByDefault() { return false; }', loop)
+        for name in ('ExperimentalGlesLibretroHost.java', 'ExperimentalVulkanLibretroHost.java'):
+            host = (PREVIEW / name).read_text()
+            self.assertIn('stampBehindByDefault = FrameGenerationRendererRegistry.stampBehindByDefault(core.getName());',
+                          host)
+            self.assertIn('stampBehindByDefault)', host)
+            self.assertIn('hardwareStampAheadNs(surface,', host)
 
-    def test_the_lock_and_the_stamp_share_one_decision(self):
-        loop = (PREVIEW / 'ExperimentalGlesRenderLoop.java').read_text()
-        self.assertIn('takeHardwareSourcePhaseNudgeNs(attachedSurface,\n'
-                      '                                host.phaseLockedByDefault())', loop)
-        host = (PREVIEW / 'ExperimentalGlesLibretroHost.java').read_text()
-        self.assertIn('phaseLockedByDefault = FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());', host)
-        vulkan = (PREVIEW / 'ExperimentalVulkanLibretroHost.java').read_text()
-        self.assertIn('phaseLockedByDefault = FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());', vulkan)
-        self.assertIn('FrameGenerationRendererRegistry.hardwareStampAheadNs(surface, phaseLockedByDefault)', vulkan)
-        for name in ('emufusion_android_vulkan_backend.c', 'emufusion_android_gles_backend.c'):
-            native = (ROOT / 'unified-android/native' / name).read_text()
-            self.assertIn('backend->timestamp_lead_ns = emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);', native)
-            # A stall does not use up the lead: the timeline moves on with the clock.
-            self.assertIn('backend->timestamp_base_ns += floor_ns - timestamp;', native)
-        self.assertEqual(host.count('hardwareStampAheadNs(surface,\n                phaseLockedByDefault)'), 2)
+    def test_the_generator_chooses_the_stamp_and_drains_a_pinned_core(self):
         generator = (GAME / 'DisplayFrameGenerator.java').read_text()
-        self.assertIn('TimelineSchedulerSwitch.hardwarePhaseLock(lockedByDefault) ? 10_000_000L : 0L', generator)
-        self.assertIn('if (!TimelineSchedulerSwitch.hardwarePhaseLock(lockedByDefault)) return 0L;', generator)
+        self.assertIn('if (TimelineSchedulerSwitch.hardwarePhaseLock()) return 10_000_000L;', generator)
+        self.assertIn('firmwarePacedSource = TimelineSchedulerSwitch.hardwareStampBehind(pinnedByDefault);', generator)
+        self.assertIn('-1_000_000_000L', generator)
+        self.assertIn('TimelineSchedulerSwitch.compositorDrainAllSources() || firmwarePacedSource ||', generator)
 
-    def test_qa_reaches_every_hardware_core_or_none(self):
+    def test_qa_chooses_the_lock_or_neither(self):
         switch = (GAME / 'TimelineSchedulerSwitch.java').read_text()
         self.assertIn('HARDWARE_PHASE_LOCK_GLOBAL = "emufusion_framegen_hardware_phase_lock"', switch)
         self.assertIn('private static volatile int hardwarePhaseLock = -1;', switch)
-        self.assertIn('return level > 0 || (level < 0 && lockedByDefault);', switch)
+        self.assertIn('static boolean hardwarePhaseLock() { return hardwarePhaseLock > 0; }', switch)
+        self.assertIn('return hardwarePhaseLock < 0 && pinnedByDefault;', switch)
+
+    def test_native_stamps_take_a_lead_or_a_lag(self):
+        for name in ('emufusion_android_vulkan_backend.c', 'emufusion_android_gles_backend.c'):
+            native = (ROOT / 'unified-android/native' / name).read_text()
+            self.assertIn('backend->stamp_ahead_ns = ahead_ns;', native)
+            self.assertIn('backend->timestamp_lead_ns = emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);', native)
+            # A lead survives a stall; a lag has no floor to hold.
+            self.assertIn('if (backend->timestamp_lead_ns > 0) {', native)
+            self.assertIn('backend->timestamp_base_ns += floor_ns - timestamp;', native)
 
 
 if __name__ == '__main__':

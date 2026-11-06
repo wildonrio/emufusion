@@ -3075,16 +3075,20 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private volatile boolean hardwarePhaseSource;
+    // Its stamps start behind the clock: the firmware's pacing holds its phase, so a drain can hold too.
+    private volatile boolean firmwarePacedSource;
     private volatile long sourcePhaseWaitNs;
 
     @Override public void setSourcePhaseWaitNs(long ns) { sourcePhaseWaitNs = ns; }
 
-    @Override public long hardwareStampAheadNs(boolean lockedByDefault) {
-        return TimelineSchedulerSwitch.hardwarePhaseLock(lockedByDefault) ? 10_000_000L : 0L;
+    @Override public long hardwareStampAheadNs(boolean pinnedByDefault) {
+        if (TimelineSchedulerSwitch.hardwarePhaseLock()) return 10_000_000L;
+        firmwarePacedSource = TimelineSchedulerSwitch.hardwareStampBehind(pinnedByDefault);
+        return firmwarePacedSource ? -1_000_000_000L : 0L;
     }
 
-    @Override public long takeHardwareSourcePhaseNudgeNs(boolean lockedByDefault) {
-        if (!TimelineSchedulerSwitch.hardwarePhaseLock(lockedByDefault)) return 0L;
+    @Override public long takeHardwareSourcePhaseNudgeNs() {
+        if (!TimelineSchedulerSwitch.hardwarePhaseLock()) return 0L;
         hardwarePhaseSource = true;
         return takeSourcePhaseNudgeNs();
     }
@@ -10163,7 +10167,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // image in the fast state (Thor, 2026-11-06: 40-70 two-scan intervals in 16 s at a 2-3-ms wait).
         if (renderedSynthetic && TimelineSchedulerSwitch.compositorDrain() && timelineActive &&
                 externalTransport == null && timeline.arrivalPacing() &&
-                (TimelineSchedulerSwitch.compositorDrainAllSources() ||
+                (TimelineSchedulerSwitch.compositorDrainAllSources() || firmwarePacedSource ||
                         (sourcePhaseLockConsumer && !sourcePhaseLock.abandoned())) &&
                 compositorStateDrain.drain(System.nanoTime())) {
             if (physicalFramePrepared) physicalTracker.cancelPrepared();

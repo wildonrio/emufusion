@@ -25,24 +25,24 @@ public final class FrameGenerationRendererRegistry {
     }
 
     /**
-     * Whether the frame generator's phase lock and future stamp hold this core unless QA says otherwise.
-     * Double Dash swings from clean to over 100 hitches per 30 s by where its phase lands.
-     * Ocarina of Time, on the same loop, is no better held.
+     * Whether this core's stamps start behind the clock unless QA says otherwise, so the firmware
+     * always paces it. Double Dash swings from clean to over 100 hitches per 30 s by where its
+     * stamps fall.
      */
-    public static boolean phaseLockedByDefault(String coreFileName) {
+    public static boolean stampBehindByDefault(String coreFileName) {
         return "libemufusion_core_dolphin.so".equals(coreFileName);
     }
 
     /** How far ahead a hardware core feeding this Surface should stamp its images, or zero. */
-    public static long hardwareStampAheadNs(Surface surface, boolean lockedByDefault) {
+    public static long hardwareStampAheadNs(Surface surface, boolean pinnedByDefault) {
         FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
-        return renderer == null ? 0L : renderer.hardwareStampAheadNs(lockedByDefault);
+        return renderer == null ? 0L : renderer.hardwareStampAheadNs(pinnedByDefault);
     }
 
     /** The renderer's phase-lock step for a hardware core feeding this Surface, or zero. */
-    public static long takeHardwareSourcePhaseNudgeNs(Surface surface, boolean lockedByDefault) {
+    public static long takeHardwareSourcePhaseNudgeNs(Surface surface) {
         FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
-        return renderer == null ? 0L : renderer.takeHardwareSourcePhaseNudgeNs(lockedByDefault);
+        return renderer == null ? 0L : renderer.takeHardwareSourcePhaseNudgeNs();
     }
 
     static void register(FrameGenerationRenderer renderer) {
