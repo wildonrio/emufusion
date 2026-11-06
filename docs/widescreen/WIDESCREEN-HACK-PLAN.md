@@ -452,6 +452,13 @@ Land 3 and Final Fantasy VI Advance have been played on the Mac only.
 A game started over an open one is refused unless it needs a different kind of session, and the first game keeps running, so nothing
 is lost.
 
+### More PS2, N64 and GameCube first looks (2026-11-06)
+
+GTA III and Shadow of the Colossus play right. God of War I and II and Prince of Persia: The Sands of Time do not survive keeping 2D in
+shape: full-screen passes they draw in many strips or through their own filters come out striped or hazed, so they stay narrow.
+International Superstar Soccer 64's attract match is right. Still to see in real play: Vice City, Tekken 5, Soulcalibur III, Wave Race 64
+and Twilight Princess. Both copies of Ocarina of Time: Master Quest on the Thor are truncated (397 MB of 935 MB).
+
 ## Game files that are not there
 
 Many top-rated files on the Thor are 4 to 7 MB stubs, which the app refuses. They cannot be played, so they have no recipe:

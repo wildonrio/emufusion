@@ -2221,9 +2221,9 @@
           "tested": "2026-11-06: being tried on the Thor; not offered to players"
         },
         "International Superstar Soccer 64": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: attract match wide with players in shape; title and menus keep their shape in bars. A match of my own not played"
         }
       },
       "release": true
@@ -2313,9 +2313,9 @@
           "tested": "2026-11-06: being tried on the Thor; not offered to players"
         },
         "The Legend of Zelda: Ocarina of Time: Master Quest": {
-          "strategy": "testing",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: the file is damaged (RVZ declares 935 MB, 397 MB present) and the app refuses it; nothing to judge"
         }
       },
       "release": true
@@ -2475,19 +2475,19 @@
           "tested": "2026-11-06 Thor: a real fight at 60 to 117, arena to both edges, health bars, faces and logo in shape, no stale sides. The run ended early on heat, after the title and one fight"
         },
         "God of War": {
-          "strategy": "testing",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: keeping 2D in shape corrupts the picture (blue stripes through the title and wild colours in play), so it stays narrow. The game's own display settings have not been tried"
         },
         "God of War II": {
-          "strategy": "testing",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: keeping 2D in shape corrupts the picture (coloured stripes through the title and first scene), so it stays narrow. The game's own display settings have not been tried"
         },
         "Grand Theft Auto III": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: walked the street at 60 to 120; city to both edges, HUD and radar in shape in the middle, film bars full width, loading art keeps its shape"
         },
         "Grand Theft Auto: Vice City": {
           "strategy": "testing",
@@ -2495,14 +2495,14 @@
           "tested": "2026-11-06: being tried on the Thor; not offered to players"
         },
         "Prince of Persia: The Sands of Time": {
-          "strategy": "testing",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: keeping 2D in shape corrupts the picture (a yellow haze over everything after the title), so it stays narrow. The game's own display settings have not been tried"
         },
         "Shadow of the Colossus": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: opening film, title and the first play at 30 to 60; world to both edges, film bars full width. The run stopped on heat before leaving the shrine"
         },
         "Tekken 5": {
           "strategy": "testing",
