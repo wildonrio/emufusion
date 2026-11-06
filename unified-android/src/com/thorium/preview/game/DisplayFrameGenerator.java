@@ -3620,10 +3620,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             consumeExternalPresentationDiscontinuities();
             consumeExternalEndpointDiscontinuities();
             pollPhysicalPresentations();
-            if (externalTransport == null) {
-                pollSignatureOnVsync();
-                if (TimelineSchedulerSwitch.assumeUnique()) assumePendingSignatureUnique();
-            }
+            if (externalTransport == null) pollSignatureOnVsync();
+            if (externalTransport == null && TimelineSchedulerSwitch.assumeUnique())
+                assumePendingSignatureUnique();
             if (externalTransport == null) {
                 frameRate.setGenerationAvailable(builtinClockAdmissionReady(
                         densePyramidEnabled, densePyramidUnavailable, displayId,
