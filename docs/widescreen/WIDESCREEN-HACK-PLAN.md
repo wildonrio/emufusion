@@ -256,7 +256,11 @@ Game Boy menus often hold junk in the hidden map, so these systems have no fallb
 without an entry is not offered widening until it has been played. The remaining titles still need
 per-game routes past their name-entry screens. Stray HUD digits at Mario Kart's top edges are open.
 
-3D systems (N64, PS1, Dreamcast, GC, PS2, Wii) are not started.
+3D systems were started the same day; see "No stretching, ever" and the recipe table's `tested` notes.
+GameCube's 16:9 codes widen the 3D but stretch 2D by a third (Wind Waker's logo measured on the Thor), so
+`engines/patches/dolphin-emufusion-keep-2d-shape.patch` draws 2D narrower by the same amount, leaving out
+full-screen quads in 3D frames and whatever is drawn before an EFB copy to a texture. Dreamcast keeps 2D's
+shape as it is: Crazy Taxi's PRESS START is the same width narrow and wide.
 
 ## The map reader (2026-11-05)
 
@@ -290,6 +294,18 @@ Rules these share, all in `Core/PPU.cpp` of the Mesen patch:
 - `emufusion_ws_hud=edge` carries a status panel's own border to the sides (Kirby).
 
 Mega Man 2 needs no reader: its two-screen map shows all eight stages correctly.
+
+Game Boy, in `Core/ef_wide.inc` of the SameBoy patch:
+
+| Game | Reader | Where the map is |
+| --- | --- | --- |
+| Pokemon Red, Blue | `pokemon1` | Work RAM $C6E8: 32-pixel blocks with a 3-block border; size $D368-9, position $D361-2; 16-tile block lists from bank $D52B at $D52C |
+| Pokemon Yellow | `pokemon1y` | The same, every variable one byte lower |
+| Pokemon Gold, Silver | `pokemon2` | Work RAM $C700; size $D087-8, position $DA02-3; block lists from bank $D0C5 at $D0C6; each tile's colour in a 4-bit list in bank 2 at the address in $D0CF |
+
+The player stands still on screen and the map scrolls 16 pixels a step. The game's position changes when
+a step begins, so the reader tries the positions a step could be at and keeps the one that explains the
+picture. That check also keeps menus and battles narrow. Rooms sit in the map's own border colour.
 
 Tools: `~/.cache/emufusion-widescreen/host-build/mesen-trace` logs every CPU read and write with
 `EF_TRACE_FILE`, `EF_TRACE_FROM`, `EF_TRACE_COUNT`. `retro_play.py` gained `poke:ADDR=VALUE` to reach a test
