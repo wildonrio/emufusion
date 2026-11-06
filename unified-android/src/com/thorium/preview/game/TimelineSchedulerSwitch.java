@@ -334,14 +334,6 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         compositorDrain = stateDrain;
-        long queueOnArrivalUs = 0L;
-        try {
-            if (context != null) queueOnArrivalUs = Settings.Global.getLong(
-                    context.getContentResolver(), ARRIVAL_QUEUE_GLOBAL, 0L);
-        } catch (RuntimeException ignored) {
-            // Unreadable settings keep the default.
-        }
-        arrivalQueueWaitNs = queueOnArrivalUs * 1000L;
         int check = 0;
         try {
             if (context != null) check = Settings.Global.getInt(
@@ -751,18 +743,6 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean compositorDrain = false;
 
     static boolean compositorDrain() { return compositorDrain; }
-
-    /**
-     * QA (emufusion_framegen_arrival_queue=N): a phase-locked source's generated
-     * image is queued as soon as its pair forms, for the latch after the last
-     * callback, without waiting for the GPU (ArrivalQueuePolicy). The source is
-     * held to arrive N microseconds before that latch; 0 is off.
-     */
-    static final String ARRIVAL_QUEUE_GLOBAL = "emufusion_framegen_arrival_queue";
-    private static volatile long arrivalQueueWaitNs = 0L;
-
-    static boolean arrivalQueue() { return arrivalQueueWaitNs > 0L; }
-    static long arrivalQueueWaitNs() { return arrivalQueueWaitNs; }
 
     /**
      * QA emufusion_framegen_image_check: a preview of each generated image is
