@@ -216,6 +216,105 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-05 host: first castle rooms fit their own black void, and the sides show a stale sliver. Field maps not reached"
+        },
+        "Addams Family, The": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
+        },
+        "Natsume Championship Wrestling": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
+        },
+        "Power Piggs of the Dark Age": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
+        },
+        "Super Ghouls'n Ghosts": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
+        },
+        "Jikkyou Oshaberi Parodius": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
+        },
+        "Gokujou Parodius": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
+        },
+        "The Jetsons: Invasion of the Planet Pirates": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
+        },
+        "Earth Defense Force": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
+        },
+        "Sunset Riders": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_strict": "bg1,bg2,center"
+          },
+          "tested": "2026-11-06 host, library pass: side columns arrive in the picture and looked clean, tiles left over from another scene stay black; not played through"
         }
       },
       "release": true
