@@ -1205,7 +1205,7 @@
           "tested": "2026-11-05 Thor: no picture within two minutes of launch, not judged"
         }
       },
-      "release": false
+      "release": true
     }
   }
 }
