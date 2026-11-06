@@ -1,7 +1,9 @@
 package com.thorium.nxnative;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.os.Bundle;
 import android.view.InputDevice;
@@ -12,7 +14,12 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.File;
+import java.io.FileInputStream;
+import java.util.Locale;
 
 /**
  * One game, one process: the Activity runs in a process of its own and leaving the game ends that process.
@@ -25,6 +32,9 @@ public final class NxActivity extends Activity implements SurfaceHolder.Callback
     private static final int STICK = 32767;
 
     private String pack;
+    private String language;   // the game's language: null until it is known (asked once when the game has several)
+    private SurfaceHolder holder;
+    private int surfaceWidth, surfaceHeight;
     private long keys, hat, triggers;
     private int lx, ly, rx, ry;
 
@@ -45,15 +55,49 @@ public final class NxActivity extends Activity implements SurfaceHolder.Callback
         setContentView(view);
         view.requestFocus();
         view.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        chooseLanguage(intent.getStringExtra("lang"));
+    }
+
+    /** The language the pack was built with, the one chosen before, or the player's choice among the game's when it has several and none was chosen yet. */
+    private void chooseLanguage(String asked) {
+        if (asked != null) { language = asked; return; }
+        String packed = "en-US", title = new File(pack).getName(); String[] codes = new String[0];
+        try (FileInputStream in = new FileInputStream(new File(pack, "manifest.json"))) {
+            byte[] raw = new byte[(int) new File(pack, "manifest.json").length()];
+            int got = 0, n; while (got < raw.length && (n = in.read(raw, got, raw.length - got)) > 0) got += n;
+            JSONObject m = new JSONObject(new String(raw, 0, got, "UTF-8"));
+            packed = m.optString("language", packed);
+            JSONArray list = m.optJSONArray("languages");
+            if (list != null) { codes = new String[list.length()]; for (int i = 0; i < codes.length; i++) codes[i] = list.getString(i); }
+        } catch (Exception unreadable) { /* a pack without a manifest plays in the default language */ }
+        final SharedPreferences prefs = getSharedPreferences("nxnative", MODE_PRIVATE);
+        final String key = "language." + title;
+        String kept = prefs.getString(key, null);
+        if (kept != null) { language = kept; return; }
+        if (codes.length < 2) { language = packed; return; }
+        final String[] choices = codes; final String fallback = packed;
+        String[] names = new String[choices.length];
+        for (int i = 0; i < names.length; i++) names[i] = Locale.forLanguageTag(choices[i]).getDisplayName();
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Game language")
+                .setItems(names, (dialog, which) -> { prefs.edit().putString(key, choices[which]).apply(); language = choices[which]; start(); })
+                .setOnCancelListener(dialog -> { language = fallback; start(); })
+                .show();
+    }
+
+    private void start() {
+        if (language == null || holder == null) return;
+        File data = new File(getFilesDir(), "nx/" + new File(pack).getName());
+        new File(data, "save").mkdirs();
+        new File(data, "temp").mkdirs();
+        NxNative.nativeStart(holder.getSurface(), pack, data.getPath(), language, surfaceWidth, surfaceHeight);
     }
 
     @Override public void surfaceCreated(SurfaceHolder holder) {}
 
-    @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        File data = new File(getFilesDir(), "nx/" + new File(pack).getName());
-        new File(data, "save").mkdirs();
-        new File(data, "temp").mkdirs();
-        NxNative.nativeStart(holder.getSurface(), pack, data.getPath(), "en-US", width, height);
+    @Override public void surfaceChanged(SurfaceHolder surface, int format, int width, int height) {
+        holder = surface; surfaceWidth = width; surfaceHeight = height;
+        start();
     }
 
     @Override public void surfaceDestroyed(SurfaceHolder holder) {}

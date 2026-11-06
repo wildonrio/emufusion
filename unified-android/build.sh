@@ -115,11 +115,13 @@ PHASE3_EDEN_MAIN_HOOK="$ROOT_DIR/engines/build/arm64-v8a/libmain_hook.so"
 # driver and plain-dlopens libvulkan otherwise. It also needs no keys, no
 # firmware, and no Java shim classes, so this is just the adapter.
 INCLUDE_PHASE3_CEMU=${EMUFUSION_INCLUDE_PHASE3_CEMU:-0}
-# Switch (Native): the host library built in the nxnative-android repository
-# (dm/android/build_host.py), staged here. Off by default; the Activity and the
-# system's route exist only in a build that bundles it.
-INCLUDE_NXNATIVE=${EMUFUSION_INCLUDE_NXNATIVE:-0}
-NXNATIVE_HOST="$ROOT_DIR/engines/build/arm64-v8a/libdmhost.so"
+# Switch (Native) and Switch 2: the host library, staged from the commit that
+# engines/nxnative-source-lock.json pins by tools/stage_nxnative_host.py, which builds
+# it only when the staged copy is absent and refuses bytes that differ from the lock.
+# Part of the normal build. EMUFUSION_INCLUDE_NXNATIVE=0 leaves out the Activity, the
+# library and both systems' routes, for a deliberately reduced diagnostic.
+INCLUDE_NXNATIVE=${EMUFUSION_INCLUDE_NXNATIVE:-1}
+NXNATIVE_HOST="$ROOT_DIR/engines/build/nxnative/libdmhost.so"
 NXNATIVE_LICENSE="$ROOT_DIR/engines/compliance/nxnative/LICENSE"
 PHASE3_CEMU_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/libemufusion_native_adapter_cemu.so"
 # PS3 is a built-in EmuFusion system, not an external-app fallback. The pinned,
@@ -274,9 +276,8 @@ case "$INCLUDE_NXNATIVE" in
     0|1) ;;
     *) printf 'EMUFUSION_INCLUDE_NXNATIVE must be 0 or 1\n' >&2; exit 1 ;;
 esac
-if [ "$INCLUDE_NXNATIVE" = 1 ] && [ ! -f "$NXNATIVE_HOST" ]; then
-    printf 'EMUFUSION_INCLUDE_NXNATIVE=1 requires the staged host library: %s\n' "$NXNATIVE_HOST" >&2
-    exit 1
+if [ "$INCLUDE_NXNATIVE" = 1 ]; then
+    python3 "$PROJECT_DIR/tools/stage_nxnative_host.py"
 fi
 case "$INCLUDE_PHASE3_CEMU" in
     0|1) ;;
@@ -592,6 +593,7 @@ printf '%s\n' \
     > "$MANIFEST_COMPONENTS"
 if [ "$INCLUDE_NXNATIVE" = 1 ]; then
     # Its own process: the host's threads and global state end only with the process.
+    # Non-exported: only this package's library launch can start it.
     printf '%s\n' \
 '        <activity android:name="com.thorium.nxnative.NxActivity" android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" android:excludeFromRecents="true" android:exported="false" android:launchMode="singleTask" android:process=":nxnative" android:screenOrientation="sensorLandscape" android:taskAffinity="com.thorium.preview.nxnative" android:theme="@android:style/Theme.NoTitleBar.Fullscreen"/>' \
         >> "$MANIFEST_COMPONENTS"

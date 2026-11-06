@@ -28,15 +28,16 @@ public final class GameLaunchRouter {
     }
 
     private static boolean isSwitchNative(String system) {
-        return "switchnative".equals(EngineSystemIdResolver.canonical(system));
+        String canonical = EngineSystemIdResolver.canonical(system);
+        return "switchnative".equals(canonical) || "switch2".equals(canonical);
     }
 
     /**
      * The one route that does not follow the same-window contract above. The Switch
-     * (Native) host runs the game's own threads and global state and can only end by
-     * ending its process, so it has an Activity in a process of its own; it is still
-     * inside this package and starts no other app. It is present only in a build made
-     * with EMUFUSION_INCLUDE_NXNATIVE=1, which declares the Activity.
+     * (Native) and Switch 2 systems' host runs the game's own threads and global state
+     * and can only end by ending its process, so it has an Activity in a process of its
+     * own; it is still inside this package and starts no other app. A build made with
+     * EMUFUSION_INCLUDE_NXNATIVE=0 declares no Activity, and these systems have no route.
      */
     private static boolean switchNativeBundled(Context context) {
         if (android.os.Build.VERSION.SDK_INT < 30) return false;

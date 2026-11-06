@@ -54,7 +54,7 @@ public final class EngineRouteStore {
 
     private static boolean isInternalOnly(String system) {
         String canonical = EngineSystemIdResolver.canonical(system);
-        return "ps3".equals(canonical) || "switchnative".equals(canonical);
+        return "ps3".equals(canonical) || "switchnative".equals(canonical) || "switch2".equals(canonical);
     }
 
     /**

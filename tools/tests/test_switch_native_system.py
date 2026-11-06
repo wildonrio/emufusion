@@ -1,5 +1,6 @@
-"""The Switch (Native) system stays wired end to end: library entry, launch route,
-theme entry, and a build that declares its Activity only when it bundles the host."""
+"""The Switch (Native) and Switch 2 systems stay wired end to end: library entries, launch
+route, theme entries, and a normal build that stages its host from the pinned source."""
+import json
 import re
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ ROUTER = (ROOT / "android-companion/src/com/thorium/preview/GameLaunchRouter.jav
 ROUTES = (ROOT / "android-companion/src/com/thorium/preview/EngineRouteStore.java").read_text()
 THEME = (ROOT / "theme/theme.qml").read_text()
 BUILD = (ROOT / "unified-android/build.sh").read_text()
+LOCK = json.loads((ROOT / "engines/nxnative-source-lock.json").read_text())
 
 
 class SwitchNativeSystemTest(unittest.TestCase):
@@ -17,6 +19,23 @@ class SwitchNativeSystemTest(unittest.TestCase):
         entry = re.search(r'add\("switchnative", "Nintendo Switch \(Native\)", "[^"]*", "([^"]*)"', SYSTEMS)
         self.assertIsNotNone(entry)
         self.assertEqual(entry.group(1), "nxpack")
+
+    def test_switch_2_has_its_own_folder_and_file(self):
+        entry = re.search(r'add\("switch2", "Nintendo Switch 2", "[^"]*", "([^"]*)"', SYSTEMS)
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.group(1), "nx2pack")
+        self.assertIn('"switch2".equals(canonical)', ROUTER)
+        self.assertIn('"switch2".equals(canonical)', ROUTES)
+        self.assertIn('folder: "switch2"', THEME)
+        self.assertTrue((ROOT / "theme/assets/logos-png/switch2.png").is_file())
+
+    def test_nothing_claims_switch_2_games_work(self):
+        self.assertIn("Not yet tested", SYSTEMS)
+        self.assertIn("No Switch 2 game has run", LOCK["note"])
+
+    def test_a_pack_folder_is_one_game(self):
+        scan = (ROOT / "android-companion/src/com/thorium/preview/ImportManager.java").read_text()
+        self.assertIn('"nxpack".equals(packExtension) || "nx2pack".equals(packExtension)', scan)
 
     def test_eden_keeps_the_switch_system(self):
         self.assertRegex(SYSTEMS, r'add\("switch", "Nintendo Switch", "[^"]*", "nsp xci"')
@@ -35,9 +54,13 @@ class SwitchNativeSystemTest(unittest.TestCase):
         self.assertTrue((ROOT / "theme/assets/logos-png/switchnative.png").is_file())
         self.assertTrue((ROOT / "theme/assets/logos/switchnative.svg").is_file())
 
-    def test_build_is_opt_in_and_refuses_a_missing_host(self):
-        self.assertIn("INCLUDE_NXNATIVE=${EMUFUSION_INCLUDE_NXNATIVE:-0}", BUILD)
-        self.assertIn("EMUFUSION_INCLUDE_NXNATIVE=1 requires the staged host library", BUILD)
+    def test_the_normal_build_stages_the_pinned_host(self):
+        self.assertIn("INCLUDE_NXNATIVE=${EMUFUSION_INCLUDE_NXNATIVE:-1}", BUILD)
+        self.assertIn('tools/stage_nxnative_host.py"', BUILD)
+        self.assertRegex(LOCK["commit"], r"^[0-9a-f]{40}$")
+        self.assertRegex(LOCK["libdmhostSha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(LOCK["ndk"], r"^\d+\.\d+\.\d+$")
+        self.assertNotIn("nxnative-android-work", BUILD)
         declared = BUILD.index('android:name="com.thorium.nxnative.NxActivity"')
         guard = BUILD.rindex('if [ "$INCLUDE_NXNATIVE" = 1 ]; then', 0, declared)
         self.assertLess(BUILD.count("\nfi", guard, declared), 1)
