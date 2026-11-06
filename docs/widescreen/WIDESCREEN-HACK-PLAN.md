@@ -342,6 +342,12 @@ Contra, Life Force and Super Mario Bros score about 99%; stale columns like Cris
 needs at least 90% over at least 10 scrolling frame pairs with sides that are not blank. It only shortlists:
 a game still has to be seen before it gets a recipe. ROMs are in `~/.cache/emufusion-widescreen/library`.
 
+NES, 2026-11-06: 1,030 games checked, 139 shortlisted, 85 new recipes after looking at two frames of each. Left out:
+games where only a title or intro was captured, and any with visible junk at the sides. These recipes carry
+`emufusion_ws_gate=scroll`: the sides stay black until the scene scrolls and close when the screen is rebuilt with
+the picture off, so title screens and menus stay narrow in games nobody has played through. Being unplayed, they
+may still show something wrong deeper in; the owner asked for a cursory pass here, not a deep one.
+
 ## Release gate
 
 Each system in the recipe table has `"release"`. Nothing shows to players until it is true, which

@@ -591,6 +591,601 @@
             "emufusion_ws_map": "bionic"
           },
           "tested": "2026-11-05 host: first area on foot; the level from the ROM fills both sides, area map and briefings stay narrow. Vertical parts not yet reached. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac"
+        },
+        "Adventures of Bayou Billy, The": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 64 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Aladdin 3": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 96% of side columns arrived in the picture over 67 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Amagon": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 90% of side columns arrived in the picture over 34 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Batman: The Video Game": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 44 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Bee 52": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 32 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Bonk's Adventure": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 43 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "BreakThru": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 37 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Captain Planet and the Planeteers": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 91% of side columns arrived in the picture over 39 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Castlevania": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 39 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Cheetahmen II": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 92% of side columns arrived in the picture over 53 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "City Connection": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 92% of side columns arrived in the picture over 38 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Cobra Command": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 58 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Cross Fire 2": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 41 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Darkwing Duck 2": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 43 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Defender II": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 98% of side columns arrived in the picture over 35 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Dr. Jekyll and Mr. Hyde": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 42 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Forcity": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 20 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Ganbare Goemon 2": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 40 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Ganbare Goemon!: Karakuri Douchuu": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 39 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Ghoul School": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 69 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Goonies II, The": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 25 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Gumshoe": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 27 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Heavy Shreddin'": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 96% of side columns arrived in the picture over 31 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Hello Kitty World": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 90% of side columns arrived in the picture over 54 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Holy Diver": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 15 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Iron Tank: The Invasion of Normandy": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 10 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Jackal": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 20 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Jetsons, The - Cogswell's Caper": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 10 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Kaiketsu Yancha Maru 2 - Karakuri Land": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 94% of side columns arrived in the picture over 31 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Kaiketsu Yanchamaru 2: Karakuri Land": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 94% of side columns arrived in the picture over 31 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Kick Master": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 28 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Kid Kool and the Quest for the 7 Wonder Herbs": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 19 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Krion Conquest, The": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 17 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Legendary Wings": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 69 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Little Mermaid, The": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 59 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Lode Runner": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 38 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Lupin Sansei - Pandora no Isan": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 24 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Magic Carpet 1001": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 96% of side columns arrived in the picture over 69 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Majou Densetsu II: Daimashikyou Galious": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 51 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Mappy-Land": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 22 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Master Chu and the Drunkard Hu": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 57 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Mega Man": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 18 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Metal Storm": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 39 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Mickey's Safari in Letterland": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 98% of side columns arrived in the picture over 22 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Milon's Secret Castle": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 16 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Motor City Patrol": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 93% of side columns arrived in the picture over 13 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Ninja Crusaders": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 12 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Over Horizon": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 93% of side columns arrived in the picture over 69 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Punisher, The": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 57 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Q Boy": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 13 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Red Pig": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 96% of side columns arrived in the picture over 39 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Rescue: The Embassy Mission": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 14 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "River City Ransom": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 93% of side columns arrived in the picture over 27 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "RoboCop 2": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 91% of side columns arrived in the picture over 19 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Robodemons": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 69 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Rockin' Kats": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 61 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Rush'n Attack": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 45 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Silent Assault": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 50 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Silent Assult": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 50 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Silk Worm": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 98% of side columns arrived in the picture over 65 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Sky Kid": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 38 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Slalom": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 16 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Soccer": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 13 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Sqoon": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 93% of side columns arrived in the picture over 69 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Street Fighter III": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 20 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Stunt Kids": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 14 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Super C": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 38 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Super Contra 7": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 56 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Super Contra II": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 39 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Super Dodge Ball": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 94% of side columns arrived in the picture over 18 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Super Mario Bros. : Duck Hunt : World Class Track Meet": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 41 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Super Mario Bros. : Duck Hunt": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 42 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "TaleSpin": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 46 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Tashiro Masashi no Princess ga Ippai": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 28 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Tecmo Bowl": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 98% of side columns arrived in the picture over 13 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Teenage Mutant Ninja Turtles II: The Arcade Game": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 11 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Touch Down Fever": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 99% of side columns arrived in the picture over 18 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Transformers - Comvoy no Nazo": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 31 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Treasure Master": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 94% of side columns arrived in the picture over 20 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Twin Cobra": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 11 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Urban Champion": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 100% of side columns arrived in the picture over 17 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Urban Strike": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 56 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Volleyball": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 97% of side columns arrived in the picture over 27 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Vs. Castlevania": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 98% of side columns arrived in the picture over 30 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Vs. TKO Boxing": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 11 scrolling frame pairs; two frames looked at, not played through"
         }
       },
       "release": true
