@@ -5613,6 +5613,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private final com.thorium.emufusion.video.ArrivalQueuePolicy arrivalQueuePolicy =
             new com.thorium.emufusion.video.ArrivalQueuePolicy();
+    /** QA log: not prepared, already shown, no callback, no latch, latch past the next callback, too late, deadline, selection. */
+    private final long[] arrivalQueueRefusals = new long[8];
 
     private boolean arrivalQueueActive() {
         return TimelineSchedulerSwitch.arrivalQueue() && sourcePhaseLockConsumer &&
@@ -5629,16 +5631,29 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     /** The pair just formed: its generated image to the next latch, without waiting for a callback. */
     private void queueGeneratedOnArrival() {
-        if (!preparedFrameValid || activePairSyntheticCommitted || lastCallbackFrameTimeNs == 0L) return;
+        if (!preparedFrameValid || activePairSyntheticCommitted || lastCallbackFrameTimeNs == 0L) {
+            ++arrivalQueueRefusals[!preparedFrameValid ? 0 : activePairSyntheticCommitted ? 1 : 2];
+            return;
+        }
         long nowNs = System.nanoTime();
         long arrivedNs = arrivalNs(activeRightSubmission);
         long latchNs = nextLatchNs(nowNs);
-        if (latchNs == 0L || !arrivalQueuePolicy.present(nowNs, lastCallbackFrameTimeNs, latchNs,
-                frameRate.panelPeriodNs())) return;
+        if (latchNs == 0L) {
+            ++arrivalQueueRefusals[3];
+            return;
+        }
+        if (!arrivalQueuePolicy.present(nowNs, lastCallbackFrameTimeNs, latchNs, frameRate.panelPeriodNs())) {
+            ++arrivalQueueRefusals[latchNs - lastCallbackFrameTimeNs >= frameRate.panelPeriodNs() ? 4 : 5];
+            return;
+        }
         PhysicalPresentationDeadline deadline = nextBuiltInDeadline(lastCallbackFrameTimeNs, nowNs);
-        if (!deadline.valid() || deadline.skippedPanelScans() != 0) return;
+        if (!deadline.valid() || deadline.skippedPanelScans() != 0) {
+            ++arrivalQueueRefusals[6];
+            return;
+        }
         int presentation = selectTimelinePresentation(lastCallbackFrameTimeNs);
         if (presentation != AdaptiveFrameRateController.PRESENT_SYNTHETIC) {
+            ++arrivalQueueRefusals[7];
             timeline.abort();
             return;
         }
@@ -15017,7 +15032,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
                 " arrivalQueue=" + arrivalQueuePolicy.presents() + "/" + arrivalQueuePolicy.misses() + "/" +
-                        arrivalQueuePolicy.workNs() / 1000L +
+                        arrivalQueuePolicy.workNs() / 1000L + "/" +
+                        java.util.Arrays.toString(arrivalQueueRefusals).replace(" ", "") +
                 " compositorDrains=" + compositorStateDrain.drains() + "/" +
                         compositorStateDrain.spacingNs() / 1_000_000_000L +
                 " fastCores=0x" + Long.toHexString(fastCoreMask) +
