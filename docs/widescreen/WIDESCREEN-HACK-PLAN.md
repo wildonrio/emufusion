@@ -456,8 +456,9 @@ is lost.
 
 GTA III and Shadow of the Colossus play right. God of War I and II and Prince of Persia: The Sands of Time do not survive keeping 2D in
 shape: full-screen passes they draw in many strips or through their own filters come out striped or hazed, so they stay narrow.
-International Superstar Soccer 64's attract match is right. Still to see in real play: Vice City, Tekken 5, Soulcalibur III, Wave Race 64
-and Twilight Princess. Both copies of Ocarina of Time: Master Quest on the Thor are truncated (397 MB of 935 MB).
+International Superstar Soccer 64's attract match and Wave Race 64's race are right, and so is Vice City on foot. Tekken 5's fight stays
+narrow with faint seam lines, and Twilight Princess shows a stray black block over its title, so both stay narrow. Soulcalibur III has
+only been seen as far as its menus and story pages. Both copies of Ocarina of Time: Master Quest on the Thor are truncated (397 MB of 935 MB).
 
 ## Game files that are not there
 

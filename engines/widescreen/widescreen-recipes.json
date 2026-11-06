@@ -2216,9 +2216,9 @@
           "tested": "2026-11-05 Thor: folder menus sit inside bars; missions not reached, it stays narrow until they are"
         },
         "Wave Race 64": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: a real race; sea and shore wide, time, rank, speed and power displays in shape. Menus keep their shape in bars"
         },
         "International Superstar Soccer 64": {
           "strategy": "widen",
@@ -2308,9 +2308,9 @@
           "tested": "2026-11-06 Thor: no picture within two minutes; the 105 MB file may be a truncated copy"
         },
         "The Legend of Zelda: Twilight Princess": {
-          "strategy": "testing",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: attract scenes are wide, but a stray black block shows at the top left over the title. Stays narrow until that is understood; play not reached"
         },
         "The Legend of Zelda: Ocarina of Time: Master Quest": {
           "strategy": "fixed-screen",
@@ -2450,9 +2450,9 @@
           "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         },
         "Sly Cooper and the Thievius Raccoonus": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: intro films with full-width bars, title and spy-goggle scenes in shape. Play not reached"
+          "tested": "2026-11-06 Thor: intro films with full-width bars, title, spy-goggle scenes and the first rooftop at 60 to 120. Only one frame of rooftop play before a heat stop"
         },
         "Sly 2: Band of Thieves": {
           "strategy": "testing",
@@ -2490,9 +2490,9 @@
           "tested": "2026-11-06 Thor: walked the street at 60 to 120; city to both edges, HUD and radar in shape in the middle, film bars full width, loading art keeps its shape"
         },
         "Grand Theft Auto: Vice City": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: on foot through the streets at 30 to 60; city to both edges, HUD, radar and hints in shape in the middle, film bars full width, loading art keeps its shape"
         },
         "Prince of Persia: The Sands of Time": {
           "strategy": "fixed-screen",
@@ -2505,9 +2505,9 @@
           "tested": "2026-11-06 Thor: opening film, title and the first play at 30 to 60; world to both edges, film bars full width. The run stopped on heat before leaving the shrine"
         },
         "Tekken 5": {
-          "strategy": "testing",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06: being tried on the Thor; not offered to players"
+          "tested": "2026-11-06 Thor: a real fight stays narrow with faint vertical seam lines, so the engine does not take its stages for 3D and widening would add only faults"
         },
         "Soulcalibur III": {
           "strategy": "testing",
