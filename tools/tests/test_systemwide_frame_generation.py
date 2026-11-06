@@ -1813,7 +1813,7 @@ class SystemwideFrameGenerationTest(unittest.TestCase):
         self.assertIn("consumeEndpointIntoHistory", fifo)
         self.assertIn("activeRightSequence != activeLeftSequence + 1L", fifo)
         overflow = fifo[fifo.index("if (endpointFifoCount < ENDPOINT_FIFO_CAPACITY)"):
-                        fifo.index("copyTexture(sourceTexture")]
+                        fifo.index("moveIntoEndpointFifo(sourceTexture, slot)")]
         self.assertIn("endpointFifoHead = 0", overflow)
         self.assertIn("endpointFifoCount = 1", overflow)
         self.assertIn("Arrays.fill(endpointFifoSequence, 0L)", overflow)

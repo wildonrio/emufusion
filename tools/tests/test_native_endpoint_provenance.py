@@ -27,6 +27,7 @@ class NativeEndpointProvenanceTest(unittest.TestCase):
             "private void closeNativeSourceImageObserver()",
             "private void consumeClassifiedFrame(boolean unique)",
             "private void acceptPresentationEndpoint(int sourceTexture, long timestampNs,",
+            "private void moveIntoEndpointFifo(int sourceTexture, int slot)",
             "private boolean admitExternalEndpointCandidate()",
             "private void publishExternalEndpoint(",
             "private void discardEndpointFifoHead()",
@@ -104,6 +105,7 @@ public class ProvenanceTest {
     NativeSourceImageLedger nativeEndpointProvenance=new NativeSourceImageLedger(9);
     final Rate frameRate=new Rate();ExternalFrameGenerationTransport externalTransport;
     boolean holdoutMode;boolean withholdForHoldout(int texture,long timestampNs){return false;}
+    boolean handsTexturesOver(){return false;}int latestTexture;final int[] signatureCandidateTextures={};
     final int[] endpointFifoTextures={10,11,12,13,14,15},historyTextures={20,21};
     final long[] historyWrites=new long[2];
     final long[] endpointFifoSequence=new long[6],endpointFifoTimestampNs=new long[6],

@@ -116,6 +116,8 @@ public class WiringFixture {
     long workHintBusyNs;
     boolean physicalTraceEnabled; long traceConsumeEndNs;
     boolean densePyramidUnavailable, holdoutMode;
+    int latestHandedToCandidate=-1;
+    boolean handsTexturesOver(){return false;}
     void releaseSoftwareSnapshot(int[] snapshot){}
     static class NativeSourceImageObserver {
         static int allocations;
