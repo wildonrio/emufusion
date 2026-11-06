@@ -1186,6 +1186,41 @@
             "emufusion_ws_gate": "scroll"
           },
           "tested": "2026-11-06 host: library check, 95% of side columns arrived in the picture over 11 scrolling frame pairs; two frames looked at, not played through"
+        },
+        "Excitebike": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 80% of side columns arrived in the picture over 19 scrolling frame pairs, under the bar; two frames looked clean, not played through"
+        },
+        "3-D WorldRunner": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 87% of side columns arrived in the picture over 46 scrolling frame pairs, under the bar; two frames looked clean, not played through"
+        },
+        "Banana Prince": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 86% of side columns arrived in the picture over 47 scrolling frame pairs, under the bar; two frames looked clean, not played through"
+        },
+        "Chubby Cherub": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 80% of side columns arrived in the picture over 24 scrolling frame pairs, under the bar; two frames looked clean, not played through"
+        },
+        "Hudson's Adventure Island IV": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: library check, 89% of side columns arrived in the picture over 22 scrolling frame pairs, under the bar; two frames looked clean, not played through"
         }
       },
       "release": true
