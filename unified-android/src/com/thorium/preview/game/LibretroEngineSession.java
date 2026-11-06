@@ -3078,7 +3078,7 @@ public final class LibretroEngineSession implements EngineSession,
         return file;
     }
 
-    private static String firmwareFingerprint(File directory, boolean required,
+    static String firmwareFingerprint(File directory, boolean required,
             List<String> acceptedHashes) throws Exception {
         File[] files = directory.listFiles(file -> file.isFile());
         if (acceptedHashes == null || acceptedHashes.isEmpty()) {
@@ -3117,7 +3117,7 @@ public final class LibretroEngineSession implements EngineSession,
         return hex(digest.digest());
     }
 
-    private static String storageKey(String value) throws Exception {
+    static String storageKey(String value) throws Exception {
         return hex(MessageDigest.getInstance("SHA-256").digest(
                 value.getBytes("UTF-8"))).substring(0, 32);
     }

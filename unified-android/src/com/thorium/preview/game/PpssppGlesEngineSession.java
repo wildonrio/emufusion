@@ -294,8 +294,34 @@ final class PpssppGlesEngineSession implements EngineSession,
                 vault = StateVault.shared(new File(appContext.getFilesDir(),
                         "phase2-state-vault"));
                 saveRamFile = new File(saves, "save-ram.bin");
+                // A game that has just moved here from the software session keeps its card and its place.
+                boolean movedFromSoftware = WidescreenHackPolicy.needsHardwareRenderer(
+                        appContext, request, entry.id);
+                if (movedFromSoftware && !saveRamFile.exists()) {
+                    byte[] softwareCard = DurableBlobStore.read(new File(appContext.getFilesDir(),
+                            saveRoot + "/" + LibretroEngineSession.storageKey(gameHash) +
+                                    "/save-ram.bin"), MAX_SAVE_RAM_BYTES);
+                    if (softwareCard != null) {
+                        DurableBlobStore.write(saveRamFile, softwareCard, MAX_SAVE_RAM_BYTES);
+                        Log.i(TAG, "Carried the software session's card engine=" + entry.id);
+                    }
+                }
                 if (QuickResumePolicy.allowsRuntimeRestore(entry.id)) {
                     StateLoadResult quick = vault.loadQuickResume(identity);
+                    if (movedFromSoftware && quick.status == StateLoadResult.Status.NOT_FOUND) {
+                        String firmware = "firmware:none".equals(runtime.firmwareIdentity)
+                                ? LibretroEngineSession.firmwareFingerprint(system,
+                                        entry.firmwareRequired, entry.acceptedFirmwareHashes)
+                                : runtime.firmwareIdentity;
+                        StateLoadResult software = StateVault.shared(new File(
+                                appContext.getFilesDir(), "state-vault")).loadQuickResume(
+                                        new StateIdentity(gameHash, gameHash, entry.id, engineIdentity,
+                                                "serialize-v" + entry.stateCompatibilityVersion, firmware));
+                        if (software.status == StateLoadResult.Status.OK) {
+                            Log.i(TAG, "Carried the software session's Quick Resume engine=" + entry.id);
+                            quick = software;
+                        }
+                    }
                     if (quick.status == StateLoadResult.Status.OK) {
                         pendingQuickResume = quick.state;
                         activePlayMillis = quick.snapshot.metadata.activePlayMillis;
