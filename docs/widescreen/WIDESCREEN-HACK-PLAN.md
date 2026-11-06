@@ -258,8 +258,11 @@ per-game routes past their name-entry screens. Stray HUD digits at Mario Kart's 
 
 3D systems were started the same day; see "No stretching, ever" and the recipe table's `tested` notes.
 GameCube's 16:9 codes widen the 3D but stretch 2D by a third (Wind Waker's logo measured on the Thor), so
-`engines/patches/dolphin-emufusion-keep-2d-shape.patch` draws 2D narrower by the same amount, leaving out
-full-screen quads in 3D frames and whatever is drawn before an EFB copy to a texture. Dreamcast keeps 2D's
+`engines/patches/dolphin-emufusion-keep-2d-shape.patch` draws the 2D over a frame narrower by the same
+amount. It leaves out what comes before the frame's last 3D (a sky behind it), what comes before an EFB copy
+(the input of an effect) and full-screen quads (a fade, or the frame going through an effect). A frame with
+no 3D at all is a 2D screen and sits in bars. Anything a game keeps just off its old screen shows in those
+bars, as Double Dash's menu does; small, and not yet handled. Dreamcast keeps 2D's
 shape as it is: Crazy Taxi's PRESS START is the same width narrow and wide.
 
 ## The map reader (2026-11-05)
@@ -331,6 +334,14 @@ A Link to the Past matched 192 of 192 visible tiles.
 
 Not done yet: Star Ocean, Live A Live, Super Mario RPG. Towns and rooms in Chrono Trigger, houses
 and dungeons in A Link to the Past keep bars until they get decoders of their own.
+
+## The rest of each library
+
+`tools/widescreen/library_triage.py SYSTEM ROM_DIR OUT.json` plays every game on the Mac and asks one
+question: do the pixels at the side of the picture later arrive in the old picture when the game scrolls?
+Contra, Life Force and Super Mario Bros score about 99%; stale columns like Crisis Force score 43%. A pass
+needs at least 90% over at least 10 scrolling frame pairs with sides that are not blank. It only shortlists:
+a game still has to be seen before it gets a recipe. ROMs are in `~/.cache/emufusion-widescreen/library`.
 
 ## Release gate
 
