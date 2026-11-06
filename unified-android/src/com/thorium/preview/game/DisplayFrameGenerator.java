@@ -5491,7 +5491,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 pollSignatureEarly();
                 return;
             }
-        } else if (++signatureEarlyPollTries >= SIGNATURE_EARLY_POLL_TRIES) {
+        } else if (++signatureEarlyPollTries >=
+                (TimelineSchedulerSwitch.lateTakeUp() ? SIGNATURE_EARLY_POLL_TRIES + 2 : SIGNATURE_EARLY_POLL_TRIES)) {
             return;
         }
         signatureEarlyPollPosted = true;
@@ -5626,7 +5627,41 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // Start the solve now rather than at the callback's swap.
             GLES20.glFlush();
             if (physicalTraceEnabled) traceConsumeEndNs = System.nanoTime();
+            if (TimelineSchedulerSwitch.lateTakeUp()) presentAfterLateVerdict();
         }
+    }
+
+    /** From the vsync: the rest of the scan still covers a prepared image's final draw (about 3.5 ms). */
+    private static final long LATE_TAKE_UP_WINDOW_NS = 3_500_000L;
+    private long lateTakeUps, lateTakeUpsRefused;
+
+    /**
+     * The pair just formed, a moment after the callback that could have shown it had no
+     * pair to show. Wind Waker HD (Thor, 2026-11-06): arrival stays 3.6 ms before the callback
+     * and the uniqueness check, behind Cemu's GPU work, finishes around it; a pair that misses
+     * waits a whole scan, 19 ms instead of 11 to the generated image, for seconds at a time.
+     */
+    private void presentAfterLateVerdict() {
+        long callbackNs = lastCallbackFrameTimeNs;
+        long nowNs = System.nanoTime();
+        if (activePairSyntheticCommitted || callbackNs == 0L || nowNs <= callbackNs ||
+                nowNs - callbackNs > LATE_TAKE_UP_WINDOW_NS || !timelineActive) return;
+        PhysicalPresentationDeadline deadline = nextBuiltInDeadline(callbackNs, nowNs);
+        // That callback's own slot, not a later one, and only if nothing has taken it.
+        if (!deadline.valid() || deadline.skippedPanelScans() != 0 ||
+                deadline.contentPresentationTimeNs() - builtInLastCommittedTargetNs <
+                        frameRate.panelPeriodNs() / 2L) {
+            ++lateTakeUpsRefused;
+            return;
+        }
+        int presentation = selectTimelinePresentation(callbackNs);
+        if (presentation != AdaptiveFrameRateController.PRESENT_SYNTHETIC) {
+            timeline.abort();
+            ++lateTakeUpsRefused;
+            return;
+        }
+        ++lateTakeUps;
+        presentTimelineSelection(phaseLockedTimelineDeadline(deadline), null, presentation);
     }
 
     private void pollSignatureOnVsync() {
@@ -15044,6 +15079,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
                 " realPredraws=" + realPredraws + "/" + realPredrawHits +
+                " lateTakeUps=" + lateTakeUps + "/" + lateTakeUpsRefused +
                 " compositorDrains=" + compositorStateDrain.drains() + "/" +
                         compositorStateDrain.spacingNs() / 1_000_000_000L +
                 " fastCores=0x" + Long.toHexString(fastCoreMask) +
