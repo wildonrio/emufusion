@@ -343,6 +343,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         hardwarePhaseLock = hardwareLock;
+        boolean uniqueAssumed = false;
+        try {
+            if (context != null) uniqueAssumed = Settings.Global.getInt(
+                    context.getContentResolver(), ASSUME_UNIQUE_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        assumeUnique = uniqueAssumed;
         int cemuWaitUs = 5_500;
         try {
             if (context != null) cemuWaitUs = Settings.Global.getInt(
@@ -801,6 +809,12 @@ public final class TimelineSchedulerSwitch {
     static boolean hardwareStampBehind(boolean pinnedByDefault) {
         return hardwarePhaseLock < 0 && pinnedByDefault;
     }
+
+    /** QA emufusion_framegen_assume_unique=1: after a long run of unique verdicts, a callback does not wait for the check. */
+    static final String ASSUME_UNIQUE_GLOBAL = "emufusion_framegen_assume_unique";
+    private static volatile boolean assumeUnique = false;
+
+    static boolean assumeUnique() { return assumeUnique; }
 
     /** QA emufusion_framegen_cemu_phase_wait_us: the wait Cemu's phase lock holds (its nudge is QA too). */
     static final String CEMU_PHASE_WAIT_GLOBAL = "emufusion_framegen_cemu_phase_wait_us";

@@ -3620,7 +3620,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             consumeExternalPresentationDiscontinuities();
             consumeExternalEndpointDiscontinuities();
             pollPhysicalPresentations();
-            if (externalTransport == null) pollSignatureOnVsync();
+            if (externalTransport == null) {
+                pollSignatureOnVsync();
+                if (TimelineSchedulerSwitch.assumeUnique()) assumePendingSignatureUnique();
+            }
             if (externalTransport == null) {
                 frameRate.setGenerationAvailable(builtinClockAdmissionReady(
                         densePyramidEnabled, densePyramidUnavailable, displayId,
@@ -5194,6 +5197,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         unique = true;
                         ++softwareSignatureRescues;
                     }
+                    noteSignatureVerdict(unique, signatureCandidateAssumed[completedCandidate]);
+                    if (signatureCandidateAssumed[completedCandidate]) {
+                        // Already shown as unique; this was only its check.
+                        releaseSignatureCandidate(completedCandidate);
+                        completedCandidate = -1;
+                        unique = false;
+                    }
+                }
+                if (completedCandidate >= 0) {
                     // Preserve the exact classified candidate for both UNIQUE
                     // and DUPLICATE results.  The latter is a timing endpoint,
                     // not source-rate evidence.  Keep its texture slot reserved
@@ -5659,6 +5671,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     unique = true;
                     ++softwareSignatureRescues;
                 }
+                noteSignatureVerdict(unique, signatureCandidateAssumed[candidate]);
+                if (signatureCandidateAssumed[candidate]) {
+                    // Already shown as unique; this was only its check.
+                    releaseSignatureCandidate(candidate);
+                    continue;
+                }
                 clearNativeClassifiedObservation();
                 classifiedFrameReady = true;
                 classifiedUniqueTexture = signatureCandidateTextures[candidate];
@@ -5689,6 +5707,62 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         } finally {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
             GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        }
+    }
+
+    /** About 4 s at 30 fps: a source that repeats images breaks this quickly and starts again. */
+    private static final int ASSUME_UNIQUE_AFTER = 120;
+    private int signatureUniqueStreak;
+    private long assumedUnique, assumedWrong;
+    private final boolean[] signatureCandidateAssumed = new boolean[SIGNATURE_CANDIDATE_SLOTS];
+
+    private void noteSignatureVerdict(boolean unique, boolean assumed) {
+        if (assumed && !unique) ++assumedWrong;
+        signatureUniqueStreak = unique ? signatureUniqueStreak + 1 : 0;
+    }
+
+    private void releaseSignatureCandidate(int slot) {
+        signatureCandidateAssumed[slot] = false;
+        signatureCandidateSequence[slot] = 0L;
+        signatureCandidateTimestampNs[slot] = 0L;
+        signatureCandidateSubmission[slot] = 0;
+        signatureCandidatePixelsChanged[slot] = false;
+        if (nativeSourceImageObserver != null) nativeSourceImageObserver.releaseCandidate(slot);
+    }
+
+    /**
+     * The callback is here and an image's uniqueness check is still on the GPU behind the
+     * engine's work. Wind Waker HD (Thor, 2026-11-06): arrival stays 3.6 ms before the callback
+     * and the check finishes around it, so a pair that misses waits a whole scan, 19 ms instead
+     * of 11 to the generated image, for seconds at a time. After a long run of unique verdicts,
+     * show it as unique now. The check still reads back; a repeated image starts the run over.
+     */
+    private void assumePendingSignatureUnique() {
+        if (signatureUniqueStreak < ASSUME_UNIQUE_AFTER || !signatureVsyncPollEnabled()) return;
+        for (;;) {
+            int candidate = -1;
+            for (int slot = 0; slot < SIGNATURE_CANDIDATE_SLOTS; ++slot) {
+                if (signatureCandidateSequence[slot] != 0L && !signatureCandidateAssumed[slot] &&
+                        (candidate < 0 || signatureCandidateSequence[slot] < signatureCandidateSequence[candidate]))
+                    candidate = slot;
+            }
+            if (candidate < 0) return;
+            clearNativeClassifiedObservation();
+            classifiedFrameReady = true;
+            classifiedUniqueTexture = signatureCandidateTextures[candidate];
+            classifiedUniqueTimestampNs = signatureCandidateTimestampNs[candidate];
+            classifiedUniqueSubmission = signatureCandidateSubmission[candidate];
+            classifiedPixelVerdictKnown = true;
+            if (nativeSourceImageObserver != null)
+                nativeSourceImageObserver.classifyCandidate(candidate);
+            finishNativeClassifiedObservation(true);
+            consumeClassifiedFrame(true);
+            classifiedFrameReady = false;
+            classifiedUniqueTexture = 0;
+            classifiedUniqueTimestampNs = 0L;
+            classifiedUniqueSubmission = 0;
+            signatureCandidateAssumed[candidate] = true;
+            ++assumedUnique;
         }
     }
 
@@ -5796,6 +5870,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         java.util.Arrays.fill(signatureCandidateTimestampNs, 0L);
         java.util.Arrays.fill(signatureCandidateSubmission, 0);
         java.util.Arrays.fill(signatureCandidatePixelsChanged, false);
+        java.util.Arrays.fill(signatureCandidateAssumed, false);
     }
 
     /** Records one pixel-distinct image with its immutable producer timestamp. */
@@ -15044,6 +15119,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
                 " realPredraws=" + realPredraws + "/" + realPredrawHits +
+                " assumedUnique=" + assumedUnique + "/" + assumedWrong +
                 " compositorDrains=" + compositorStateDrain.drains() + "/" +
                         compositorStateDrain.spacingNs() / 1_000_000_000L +
                 " fastCores=0x" + Long.toHexString(fastCoreMask) +
