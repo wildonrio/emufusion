@@ -23,6 +23,7 @@ public final class CompositorStateDrainTest {
         aShortFastStateDoublesTheSpacing();
         spacingHalvesAgainOnceItLasts();
         aDrainThatChangesNothingDoublesTheSpacing();
+        aMiddlingStayKeepsTheSpacing();
         spacingIsBounded();
         System.out.println("Compositor state drain tests passed");
     }
@@ -59,7 +60,7 @@ public final class CompositorStateDrainTest {
         pipelined(drain, 100L * SECOND);
         check(drain.drain(102L * SECOND), "left out");
         fast(drain, 102L * SECOND);
-        pipelined(drain, 106L * SECOND);
+        pipelined(drain, 105L * SECOND);
         check(drain.spacingNs() == 2L * CompositorStateDrain.MIN_SPACING_NS, "doubled");
         check(!drain.drain(120L * SECOND), "not at the old spacing");
         check(drain.drain(132L * SECOND), "at the new spacing");
@@ -75,7 +76,7 @@ public final class CompositorStateDrainTest {
         check(drain.drain(132L * SECOND), "second");
         fast(drain, 132L * SECOND);
         pipelined(drain, 150L * SECOND);
-        check(drain.spacingNs() == 30L * SECOND, "at least half of it: unchanged");
+        check(drain.spacingNs() == 30L * SECOND, "over the short stay: unchanged");
         check(drain.drain(162L * SECOND), "third");
         fast(drain, 162L * SECOND);
         pipelined(drain, 200L * SECOND);
@@ -90,6 +91,16 @@ public final class CompositorStateDrainTest {
         check(!drain.drain(117L * SECOND), "no fast state came of it");
         check(drain.spacingNs() == 30L * SECOND, "doubled");
         check(drain.drain(132L * SECOND), "tries again later");
+    }
+
+    private static void aMiddlingStayKeepsTheSpacing() {
+        CompositorStateDrain drain = new CompositorStateDrain();
+        pipelined(drain, 100L * SECOND);
+        check(drain.drain(102L * SECOND), "left out");
+        fast(drain, 102L * SECOND);
+        pipelined(drain, 109L * SECOND);
+        check(drain.spacingNs() == CompositorStateDrain.MIN_SPACING_NS, "7 s of 15: tries again on time");
+        check(drain.drain(117L * SECOND), "the next try");
     }
 
     private static void spacingIsBounded() {

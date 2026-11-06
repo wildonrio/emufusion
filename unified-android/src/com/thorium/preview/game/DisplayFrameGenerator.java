@@ -10093,9 +10093,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             invalidateBufferedPairForReprime(false);
             return;
         }
+        // Only a source the phase lock holds: Double Dash, whose phase is chance, shows every late
+        // image in the fast state (Thor, 2026-11-06: 40-70 two-scan intervals in 16 s at a 2-3-ms wait).
         if (renderedSynthetic && TimelineSchedulerSwitch.compositorDrain() && timelineActive &&
-                externalTransport == null && timeline.arrivalPacing() &&
-                compositorStateDrain.drain(System.nanoTime())) {
+                externalTransport == null && timeline.arrivalPacing() && sourcePhaseLockConsumer &&
+                !sourcePhaseLock.abandoned() && compositorStateDrain.drain(System.nanoTime())) {
             if (physicalFramePrepared) physicalTracker.cancelPrepared();
             timeline.withhold();
             return;
