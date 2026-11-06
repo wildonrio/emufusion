@@ -1,9 +1,9 @@
 diff --git a/src/gba/renderers/ef_wide.h b/src/gba/renderers/ef_wide.h
 new file mode 100644
-index 0000000..31fd280
+index 0000000..acb6278
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,19 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. The renderer still draws the original 240 columns exactly as before;
@@ -17,6 +17,7 @@ index 0000000..31fd280
 +void ef_wide_set_scene_wide(bool wide);
 +void ef_wide_set_map(const char* value);
 +void ef_wide_set_skip(const char* value);
++void ef_wide_set_gate(const char* value);
 +void ef_wide_set_memory(const void* wram, const void* iwram, const void* rom, size_t rom_size);
 +int ef_wide_ext(void);
 +int ef_wide_milli(void);
@@ -24,10 +25,10 @@ index 0000000..31fd280
 +#endif
 diff --git a/src/gba/renderers/ef_wide.inc b/src/gba/renderers/ef_wide.inc
 new file mode 100644
-index 0000000..fd74f12
+index 0000000..6fe83ff
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.inc
-@@ -0,0 +1,528 @@
+@@ -0,0 +1,562 @@
 +// Included at the end of video-software.c.
 +static mColor ef_fb[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
 +static int ef_ext, ef_milli;
@@ -459,6 +460,37 @@ index 0000000..fd74f12
 +	}
 +}
 +
++// emufusion_ws_gate=scroll, for games nobody has played through: the sides stay black until the
++// scene has scrolled far enough to have filled them, and close when the screen is rebuilt.
++static bool ef_scroll_gate;
++static int ef_scene_travel, ef_frames_blanked;
++static uint16_t ef_last_scroll[4];
++
++void ef_wide_set_gate(const char* value) {
++	ef_scroll_gate = value && !strcmp(value, "scroll");
++	ef_scene_travel = 0;
++}
++
++static void ef_gate_frame(const struct GBAVideoSoftwareRenderer* r) {
++	int moved = 0;
++	bool cut = false;
++	for (int b = 0; b < 4; ++b) {
++		const struct GBAVideoSoftwareBackground* bg = &r->bg[b];
++		// The scroll is nine bits: a step across its wrap is still a small one.
++		int step = ((bg->x - ef_last_scroll[b] + 256) & 511) - 256;
++		ef_last_scroll[b] = bg->x;
++		if (!bg->enabled) {
++			continue;
++		}
++		step = step < 0 ? -step : step;
++		// A camera that jumps has cut to another scene; one that scrolls moves a few pixels.
++		cut = cut || step > 24;
++		moved = step > moved ? step : moved;
++	}
++	ef_frames_blanked = GBARegisterDISPCNTIsForcedBlank(r->dispcnt) ? ef_frames_blanked + 1 : 0;
++	ef_scene_travel = cut || ef_frames_blanked > 2 ? 0 : ef_scene_travel + moved;
++}
++
 +#define EF_LAYER_OBJ 4
 +#define EF_LAYER_BACKDROP 5
 +
@@ -479,6 +511,9 @@ index 0000000..fd74f12
 +	if (y == 0 && ef_grid.on) {
 +		ef_grid_frame(r);
 +	}
++	if (y == 0 && ef_scroll_gate) {
++		ef_gate_frame(r);
++	}
 +	int width = GBA_VIDEO_HORIZONTAL_PIXELS + 2 * ef_ext;
 +	mColor* out = ef_fb + y * width;
 +	int mode = GBARegisterDISPCNTGetMode(r->dispcnt);
@@ -490,7 +525,7 @@ index 0000000..fd74f12
 +		}
 +	}
 +	// With maps no wider than 256 the new columns would only repeat the far side of the screen.
-+	if (!ef_scene_wide || mode > 2 || !wider_map || GBARegisterDISPCNTIsForcedBlank(r->dispcnt)) {
++	if (!ef_scene_wide || mode > 2 || !wider_map || GBARegisterDISPCNTIsForcedBlank(r->dispcnt) || (ef_scroll_gate && ef_scene_travel < ef_ext + 16)) {
 +		for (int i = 0; i < ef_ext; ++i) {
 +			out[i] = out[ef_ext + GBA_VIDEO_HORIZONTAL_PIXELS + i] = 0;
 +		}
@@ -584,7 +619,7 @@ index c5bc37b..0704fe1 100644
 +#include "ef_wide.h"
 +#include "ef_wide.inc"
 diff --git a/src/platform/libretro/libretro.c b/src/platform/libretro/libretro.c
-index 12e7913..ce1f52c 100644
+index 12e7913..3c566cd 100644
 --- a/src/platform/libretro/libretro.c
 +++ b/src/platform/libretro/libretro.c
 @@ -4,6 +4,8 @@
@@ -596,7 +631,7 @@ index 12e7913..ce1f52c 100644
  
  #include <mgba-util/common.h>
  
-@@ -246,6 +248,81 @@ static void _updateGbPal(void) {
+@@ -246,6 +248,84 @@ static void _updateGbPal(void) {
  }
  #endif
  
@@ -654,6 +689,9 @@ index 12e7913..ce1f52c 100644
 +static void ef_read_options(void) {
 +	struct retro_variable var = { .key = "emufusion_ws_scene", .value = NULL };
 +	ef_set_scene(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_gate";
++	var.value = NULL;
++	ef_wide_set_gate(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
 +	var.key = "emufusion_ws_skip";
 +	var.value = NULL;
 +	ef_wide_set_skip(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -678,7 +716,7 @@ index 12e7913..ce1f52c 100644
  static void _reloadSettings(void) {
  	struct mCoreOptions opts = {
  		.useBios = true,
-@@ -418,9 +495,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
+@@ -418,9 +498,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
  	info->geometry.base_width = width;
  	info->geometry.base_height = height;
  	info->geometry.aspect_ratio = width / (double) height;
@@ -694,7 +732,7 @@ index 12e7913..ce1f52c 100644
  	info->geometry.max_height = height;
  
  	info->timing.fps = core->frequency(core) / (float) core->frameCycles(core);
-@@ -552,6 +634,7 @@ void retro_run(void) {
+@@ -552,6 +637,7 @@ void retro_run(void) {
  
  	bool updated = false;
  	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
@@ -702,7 +740,7 @@ index 12e7913..ce1f52c 100644
  		envVarsUpdated = true;
  
  		struct retro_variable var = {
-@@ -612,10 +695,17 @@ void retro_run(void) {
+@@ -612,10 +698,17 @@ void retro_run(void) {
  		}
  	}
  
@@ -721,7 +759,7 @@ index 12e7913..ce1f52c 100644
  
  #ifdef M_CORE_GBA
  	if (core->platform(core) == mPLATFORM_GBA) {
-@@ -988,6 +1078,7 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -988,6 +1081,7 @@ bool retro_load_game(const struct retro_game_info* game) {
  	}
  #endif
  
