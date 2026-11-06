@@ -1206,6 +1206,56 @@
         }
       },
       "release": true
+    },
+    "ps2": {
+      "engine": "armsx2",
+      "relaunch": true,
+      "baseWidth": 640,
+      "height": 448,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "options": {},
+      "onOptions": {
+        "armsx2_widescreen_patches": "enabled",
+        "armsx2_aspect_ratio": "16:9"
+      },
+      "offOptions": {
+        "armsx2_widescreen_patches": "disabled",
+        "armsx2_aspect_ratio": "4:3"
+      },
+      "release": false,
+      "games": {
+        "Kingdom Hearts": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Sly Cooper and the Thievius Raccoonus": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Sly 2: Band of Thieves": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Sly 3: Honor Among Thieves": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "Tony Hawk's Pro Skater 3": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        },
+        "DOA2: Hardcore": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "not yet judged"
+        }
+      }
     }
   }
 }
