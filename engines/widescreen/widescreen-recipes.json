@@ -508,14 +508,14 @@
             "emufusion_ws_lines": "0-175",
             "emufusion_ws_hud": "edge"
           },
-          "tested": "2026-11-05 host: Vegetable Valley played past the first enemies; the level from cartridge RAM fills both sides and the status panel's border carries on to the edges. Vertical rooms not yet reached"
+          "tested": "2026-11-05 host: Vegetable Valley played past the first enemies; the level from cartridge RAM fills both sides and the status panel's border carries on to the edges. Vertical rooms not yet reached. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac"
         },
         "Mega Man 3": {
           "strategy": "widen",
           "options": {
             "emufusion_ws_map": "mm3"
           },
-          "tested": "2026-11-05 host: all eight stages played; each stage's real level from the ROM fills both sides, room ends carry on, vertical room changes slide with it; title and stage select stay narrow"
+          "tested": "2026-11-05 host: all eight stages played; each stage's real level from the ROM fills both sides, room ends carry on, vertical room changes slide with it; title and stage select stay narrow. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac"
         },
         "Castlevania III: Dracula's Curse": {
           "strategy": "widen",
@@ -528,7 +528,7 @@
             "emufusion_ws_map": "ng2",
             "emufusion_ws_lines": "48-240"
           },
-          "tested": "2026-11-05 host: stage 1-1 played repeatedly; rooftops and city from the ROM reach both edges, the status panel keeps its place. Later stages not yet reached"
+          "tested": "2026-11-05 host: stage 1-1 played repeatedly; rooftops and city from the ROM reach both edges, the status panel keeps its place. Later stages not yet reached. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac"
         },
         "Tecmo Super Bowl": {
           "strategy": "widen",
@@ -568,12 +568,12 @@
         "Mega Man 2": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: all eight stages played; a two-screen map shows the level to both edges with no map reader"
+          "tested": "2026-11-05 host: all eight stages played; a two-screen map shows the level to both edges with no map reader. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac"
         },
         "Megaman II": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: all eight stages played; a two-screen map shows the level to both edges with no map reader"
+          "tested": "2026-11-05 host: all eight stages played; a two-screen map shows the level to both edges with no map reader. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac"
         },
         "Baseball Stars": {
           "strategy": "fixed-screen",
@@ -590,7 +590,7 @@
           "options": {
             "emufusion_ws_map": "bionic"
           },
-          "tested": "2026-11-05 host: first area on foot; the level from the ROM fills both sides, area map and briefings stay narrow. Vertical parts not yet reached"
+          "tested": "2026-11-05 host: first area on foot; the level from the ROM fills both sides, area map and briefings stay narrow. Vertical parts not yet reached. 2026-11-05 Thor: played through the prompt with frame generation on, same picture as on the Mac"
         }
       },
       "release": true
