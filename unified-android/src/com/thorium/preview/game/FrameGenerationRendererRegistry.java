@@ -24,6 +24,12 @@ public final class FrameGenerationRendererRegistry {
         return renderer == null ? 0L : renderer.takeSourcePhaseDelayNs();
     }
 
+    /** The renderer's phase-lock step for a hardware core feeding this Surface, or zero. */
+    public static long takeHardwareSourcePhaseNudgeNs(Surface surface) {
+        FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
+        return renderer == null ? 0L : renderer.takeHardwareSourcePhaseNudgeNs();
+    }
+
     static void register(FrameGenerationRenderer renderer) {
         if (renderer == null) throw new NullPointerException("renderer");
         Surface surface = renderer.inputSurface();

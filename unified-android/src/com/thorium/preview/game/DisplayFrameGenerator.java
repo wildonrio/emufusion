@@ -3074,6 +3074,14 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 TimelineSchedulerSwitch.sourcePhaseLock() ? sourcePhaseLock.smoothedErrorNs() : Double.NaN;
     }
 
+    private volatile boolean hardwarePhaseSource;
+
+    @Override public long takeHardwareSourcePhaseNudgeNs() {
+        if (!TimelineSchedulerSwitch.hardwarePhaseLock()) return 0L;
+        hardwarePhaseSource = true;
+        return takeSourcePhaseNudgeNs();
+    }
+
     @Override public long takeSourcePhaseNudgeNs() {
         if (closed.get() || !TimelineSchedulerSwitch.sourcePhase() ||
                 !TimelineSchedulerSwitch.sourcePhaseLock()) return 0L;
@@ -9715,7 +9723,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // Eden's frames finish with a few ms of jitter (arrival lateness p99
                 // 2.7 ms, NSMBU Deluxe in play): at a paced core's 2.3-ms wait 39 of
                 // them per 16 s missed their callback, at 3.9 ms 3.
-                if (switchContent) sourcePhaseLock.setTargetWaitNs(TimelineSchedulerSwitch.switchPhaseWaitNs());
+                if (switchContent || hardwarePhaseSource)
+                    sourcePhaseLock.setTargetWaitNs(TimelineSchedulerSwitch.switchPhaseWaitNs());
                 sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);
                 sourcePhaseLock.observe(waitNs, panelPeriodNs);
             }

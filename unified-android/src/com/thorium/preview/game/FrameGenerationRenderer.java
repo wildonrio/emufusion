@@ -88,6 +88,12 @@ public interface FrameGenerationRenderer extends AutoCloseable {
     default long takeSourcePhaseNudgeNs() { return 0L; }
 
     /**
+     * As {@link #takeSourcePhaseNudgeNs()}, for a hardware core's render loop: the
+     * source is GPU-heavy, so the renderer holds it to a longer wait.
+     */
+    default long takeHardwareSourcePhaseNudgeNs() { return 0L; }
+
+    /**
      * The phase lock's smoothed wait error for a source clocked by rate
      * (positive = images arrive early and wait too long), or NaN when there
      * is none yet (SourceRateLock).

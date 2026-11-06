@@ -1111,6 +1111,10 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                     nextFrameDeadlineNanos += phaseDelayNs;
                     Log.i(TAG, "Source phase moved hardware core delayUs=" + phaseDelayNs / 1000L);
                 }
+                // And held there, frame by frame (SourcePhaseLock), when QA asks for it.
+                long phaseNudgeNs = pacedCoreHz > 0.0 ?
+                        FrameGenerationRendererRegistry.takeHardwareSourcePhaseNudgeNs(attachedSurface) : 0L;
+                if (phaseNudgeNs != 0L) nextFrameDeadlineNanos += phaseNudgeNs;
             }
             scheduleFrame();
         }, delayNanos, TimeUnit.NANOSECONDS);

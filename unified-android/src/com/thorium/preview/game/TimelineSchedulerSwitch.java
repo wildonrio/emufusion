@@ -334,6 +334,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         compositorDrain = stateDrain;
+        boolean hardwareLock = false;
+        try {
+            if (context != null) hardwareLock = Settings.Global.getInt(
+                    context.getContentResolver(), HARDWARE_PHASE_LOCK_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        hardwarePhaseLock = hardwareLock;
         int check = 0;
         try {
             if (context != null) check = Settings.Global.getInt(
@@ -744,6 +752,17 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean compositorDrain = true;
 
     static boolean compositorDrain() { return compositorDrain; }
+
+    /**
+     * QA (emufusion_framegen_hardware_phase_lock=1): a hardware core is held to
+     * the phase lock frame by frame, at Eden's wait, instead of the advisor's
+     * occasional moves. Double Dash now ranges from 0 to about 70 two-scan
+     * intervals in 16 s by where its phase lands (Thor, 2026-11-06).
+     */
+    static final String HARDWARE_PHASE_LOCK_GLOBAL = "emufusion_framegen_hardware_phase_lock";
+    private static volatile boolean hardwarePhaseLock = false;
+
+    static boolean hardwarePhaseLock() { return hardwarePhaseLock; }
 
     /**
      * QA emufusion_framegen_image_check: a preview of each generated image is
