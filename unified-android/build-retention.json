@@ -1489,6 +1489,14 @@
     "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-631c29728f980228523183025ca76f86b52bbc604bc8149b3d3c65c1c65e16fe.apk": {
       "sha256": "631c29728f980228523183025ca76f86b52bbc604bc8149b3d3c65c1c65e16fe",
       "reason": "retry-364 Widescreen trial, closed"
+    },
+    "unified-android/build/emufusion-3.2.154-phase2-phase3-qualification.apk": {
+      "sha256": "2b2bdd9a51b428da7e3cb83c95283fa441ee272ef3cbe29087d205fc8c86dac0",
+      "reason": "Closed trial 3.2.154, superseded by release 3.2.155, 2026-11-05."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-cfddd4067a47b8937491b3c515353189429fe2df22352c9638d1267fed185431.apk": {
+      "sha256": "cfddd4067a47b8937491b3c515353189429fe2df22352c9638d1267fed185431",
+      "reason": "Closed trial retry-390 of 3.2.155, superseded by release 3.2.155, 2026-11-05."
     }
   }
 }
