@@ -334,10 +334,10 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         compositorDrain = stateDrain;
-        boolean hardwareLock = false;
+        int hardwareLock = -1;
         try {
             if (context != null) hardwareLock = Settings.Global.getInt(
-                    context.getContentResolver(), HARDWARE_PHASE_LOCK_GLOBAL, 0) != 0;
+                    context.getContentResolver(), HARDWARE_PHASE_LOCK_GLOBAL, hardwareLock);
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
@@ -762,15 +762,20 @@ public final class TimelineSchedulerSwitch {
     static boolean compositorDrain() { return compositorDrain; }
 
     /**
-     * QA (emufusion_framegen_hardware_phase_lock=1): a hardware core is held to
-     * the phase lock frame by frame, at Eden's wait, instead of the advisor's
-     * occasional moves. Double Dash now ranges from 0 to about 70 two-scan
-     * intervals in 16 s by where its phase lands (Thor, 2026-11-06).
+     * A hardware core the host names (Dolphin) is held to the phase lock frame
+     * by frame, at Eden's wait, and stamps its images ahead so the firmware's
+     * pacing leaves them alone. Double Dash ranged from 0 to 168 hitches per
+     * 30 s by where its phase landed; with both, 0 to 20 (Thor, 2026-11-06).
+     * Ocarina of Time, a steady source, is no better, so other cores stay out.
+     * QA emufusion_framegen_hardware_phase_lock: 0 none, 1 every hardware core.
      */
     static final String HARDWARE_PHASE_LOCK_GLOBAL = "emufusion_framegen_hardware_phase_lock";
-    private static volatile boolean hardwarePhaseLock = false;
+    private static volatile int hardwarePhaseLock = -1;
 
-    static boolean hardwarePhaseLock() { return hardwarePhaseLock; }
+    static boolean hardwarePhaseLock(boolean lockedByDefault) {
+        final int level = hardwarePhaseLock;
+        return level > 0 || (level < 0 && lockedByDefault);
+    }
 
     /**
      * QA emufusion_framegen_real_predraw=1: a pair's real image is drawn into

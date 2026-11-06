@@ -219,6 +219,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
     }
 
     private final Bindings bindings;
+    private final boolean phaseLockedByDefault;
     private long handle;
     private boolean lastFrameExecuted;
 
@@ -305,6 +306,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
                         SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS)) != 0)
             throw new IllegalArgumentException("unknown source timeline policy");
         this.bindings = bindings;
+        phaseLockedByDefault = phaseLockedByDefault(core.getName());
         File canonicalCore = core.getCanonicalFile();
         File canonicalRoot = trustedCoreDirectory.getCanonicalFile();
         if (!canonicalCore.getPath().startsWith(canonicalRoot.getPath() + File.separator))
@@ -369,12 +371,19 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         bindings.setPresentationAspect(handle, aspect);
     }
 
+    static boolean phaseLockedByDefault(String coreFileName) {
+        // Double Dash swings from clean to over 100 hitches per 30 s by where
+        // its phase lands. Ocarina of Time, on the same loop, is no better held.
+        return "libemufusion_core_dolphin.so".equals(coreFileName);
+    }
+
     public synchronized void attachSurface(Surface surface) {
         checkOpen();
         if (surface == null || !surface.isValid())
             throw new IllegalArgumentException("valid Android Surface is required");
         bindings.attach(handle, surface);
-        bindings.setStampAhead(handle, FrameGenerationRendererRegistry.hardwareStampAheadNs(surface));
+        bindings.setStampAhead(handle, FrameGenerationRendererRegistry.hardwareStampAheadNs(surface,
+                phaseLockedByDefault));
         bindings.setFgTimestamp(handle,
                 FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }
@@ -386,7 +395,8 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
             throw new IllegalArgumentException("valid Android Surface is required");
         bindings.recreate(handle, surface);
         // Native recreation detaches first, clearing the previous ownership.
-        bindings.setStampAhead(handle, FrameGenerationRendererRegistry.hardwareStampAheadNs(surface));
+        bindings.setStampAhead(handle, FrameGenerationRendererRegistry.hardwareStampAheadNs(surface,
+                phaseLockedByDefault));
         bindings.setFgTimestamp(handle,
                 FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }

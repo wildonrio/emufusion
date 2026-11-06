@@ -25,15 +25,15 @@ public final class FrameGenerationRendererRegistry {
     }
 
     /** How far ahead a hardware core feeding this Surface should stamp its images, or zero. */
-    public static long hardwareStampAheadNs(Surface surface) {
+    public static long hardwareStampAheadNs(Surface surface, boolean lockedByDefault) {
         FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
-        return renderer == null ? 0L : renderer.hardwareStampAheadNs();
+        return renderer == null ? 0L : renderer.hardwareStampAheadNs(lockedByDefault);
     }
 
     /** The renderer's phase-lock step for a hardware core feeding this Surface, or zero. */
-    public static long takeHardwareSourcePhaseNudgeNs(Surface surface) {
+    public static long takeHardwareSourcePhaseNudgeNs(Surface surface, boolean lockedByDefault) {
         FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
-        return renderer == null ? 0L : renderer.takeHardwareSourcePhaseNudgeNs();
+        return renderer == null ? 0L : renderer.takeHardwareSourcePhaseNudgeNs(lockedByDefault);
     }
 
     static void register(FrameGenerationRenderer renderer) {

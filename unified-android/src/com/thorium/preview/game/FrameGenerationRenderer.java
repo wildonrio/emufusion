@@ -91,10 +91,10 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      * As {@link #takeSourcePhaseNudgeNs()}, for a hardware core's render loop: the
      * source is GPU-heavy, so the renderer holds it to a longer wait.
      */
-    default long takeHardwareSourcePhaseNudgeNs() { return 0L; }
+    default long takeHardwareSourcePhaseNudgeNs(boolean lockedByDefault) { return 0L; }
 
     /** How far ahead a hardware core should stamp its images (the firmware's pacing skips those). */
-    default long hardwareStampAheadNs() { return 0L; }
+    default long hardwareStampAheadNs(boolean lockedByDefault) { return 0L; }
 
     /**
      * The phase lock's smoothed wait error for a source clocked by rate
