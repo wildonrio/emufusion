@@ -217,6 +217,7 @@ public final class TimelineFrameScheduler {
     private boolean readyTrimEnabled = true;
     private long readyTrims, readySlackAdds;
     private long rightReadyNs;
+    private long pairArrivalSpanNs;
     private long needLeftSequence;
     private long needNs;
     private boolean needReported;
@@ -416,7 +417,8 @@ public final class TimelineFrameScheduler {
             arrivalRightSequence = rightSequence;
             arrivalStartNs = displayNs;
             arrivalGeneratedShown = false;
-            long span = arrivalSpanNs(rightTimestampNs - leftTimestampNs);
+            long span = arrivalSpanNs(pairArrivalSpanNs > 0L ? pairArrivalSpanNs :
+                    rightTimestampNs - leftTimestampNs);
             arrivalRealDueNs = displayNs + span / 2L;
             // Taken up so late that generated + real would run into the next
             // image's arrival: show the real image now. At 60 -> 120 an image
@@ -524,6 +526,13 @@ public final class TimelineFrameScheduler {
 
     /** When the renderer admitted the current right image (zero when unknown). */
     public void setRightReadyNs(long admittedNs) { rightReadyNs = admittedNs; }
+
+    /**
+     * The time between the current pair's images arriving, or zero to use their
+     * timestamps. Cemu stamps each image with the 60 Hz lattice slot at or before
+     * it: images 33.3 ms apart near a slot boundary read 16.7 and 50 ms apart.
+     */
+    public void setPairArrivalSpanNs(long spanNs) { pairArrivalSpanNs = spanNs; }
 
     private void observeReadySlack(long slackNs) {
         readySlackNs[readySlackNext] = slackNs;

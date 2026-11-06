@@ -342,6 +342,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         hardwarePhaseLock = hardwareLock;
+        boolean pairArrivalSpan = false;
+        try {
+            if (context != null) pairArrivalSpan = Settings.Global.getInt(
+                    context.getContentResolver(), ARRIVAL_SPAN_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        arrivalSpan = pairArrivalSpan;
         boolean predraw = false;
         try {
             if (context != null) predraw = Settings.Global.getInt(
@@ -776,6 +784,18 @@ public final class TimelineSchedulerSwitch {
         final int level = hardwarePhaseLock;
         return level > 0 || (level < 0 && lockedByDefault);
     }
+
+    /**
+     * QA emufusion_framegen_arrival_span=1: arrival pacing places a pair's real
+     * image by the time between its images' arrivals, not their timestamps.
+     * Wind Waker HD's images arrive an even 33.3 ms apart, but Cemu's 60 Hz stamp
+     * lattice reads some 16.7 and 50 ms apart near a slot boundary, so real images
+     * come one or three scans after the generated image (Thor, 2026-11-06).
+     */
+    static final String ARRIVAL_SPAN_GLOBAL = "emufusion_framegen_arrival_span";
+    private static volatile boolean arrivalSpan = false;
+
+    static boolean arrivalSpan() { return arrivalSpan; }
 
     /**
      * QA emufusion_framegen_real_predraw=1: a pair's real image is drawn into

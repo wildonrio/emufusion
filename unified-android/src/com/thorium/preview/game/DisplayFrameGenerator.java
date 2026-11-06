@@ -9739,6 +9739,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         timeline.setRightReadyNs(timeline.arrivalPacing() ?
                 callbackReadyClock.readyNs(admissionNs(activeRightSequence), callbackNs) :
                 admissionNs(activeRightSequence));
+        long leftAdmittedNs = admissionNs(activeLeftSequence);
+        long rightAdmittedNs = admissionNs(activeRightSequence);
+        timeline.setPairArrivalSpanNs(TimelineSchedulerSwitch.arrivalSpan() &&
+                leftAdmittedNs > 0L && rightAdmittedNs > leftAdmittedNs ?
+                rightAdmittedNs - leftAdmittedNs : 0L);
         // Low latency: trim as soon as one extra image stays queued.
         timeline.setTrimExcessQueued(TimelineSchedulerSwitch.lowLatency() ?
                 1 : TimelineFrameScheduler.TRIM_EXCESS_QUEUED);

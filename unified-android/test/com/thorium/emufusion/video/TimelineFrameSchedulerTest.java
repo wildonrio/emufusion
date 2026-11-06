@@ -34,6 +34,7 @@ public final class TimelineFrameSchedulerTest {
         arrivalPacingShowsEachImageAsItArrives();
         lateImagesRealFollowsAtTheNextCallback();
         arrivalPacingKeepsLatencyAtHalfTheSpan();
+        arrivalSpanIgnoresALatticeOfStamps();
         arrivalPacingAtSixtyFps();
         arrivalPacingCatchesUpAtSixtyFps();
         keepAliveReshowsTheImageThroughAStall();
@@ -67,6 +68,7 @@ public final class TimelineFrameSchedulerTest {
         // a newer image arriving while the pair's generated image is up and its
         // real image waits replaces that real image; guarded asks the timeline first.
         boolean arrivalPass, arrivalPassGuarded = true, pairGeneratedShown;
+        boolean pairArrivalSpan;
         int passed;
 
         Rig(long outputPeriod, long sourcePeriod) {
@@ -104,6 +106,9 @@ public final class TimelineFrameSchedulerTest {
                     displayNs - ready : Long.MIN_VALUE);
             scheduler.setRightReadyNs((reportReady || scheduler.arrivalPacing()) && rightSeq != 0 &&
                     ready != null ? ready : 0L);
+            Long leftReady = admitted.get(leftSeq);
+            scheduler.setPairArrivalSpanNs(pairArrivalSpan && ready != null && leftReady != null ?
+                    ready - leftReady : 0L);
             int kind = passing ?
                     scheduler.select(displayNs, leftSeq, leftTs, rightSeq, rightTs, motionReady,
                             fifo.size() - steadyQueued, rightSeq != 0 && !fifo.isEmpty()) :
@@ -580,6 +585,54 @@ public final class TimelineFrameSchedulerTest {
         check(arrivalReal < 4 * PANEL / 1e6, "arrival: real images within half the longest span " + arrivalReal);
         check(arrivalFirst < PANEL / 1e6 + 0.5, "arrival: generated image within a scan " + arrivalFirst);
         check(arrival.fifo.size() <= 1, "arrival: nothing queues up " + arrival.fifo.size());
+    }
+
+    /** Scans from each shown image to the next. */
+    private static java.util.Map<Integer, Integer> shownIntervals(Rig rig, int skip) {
+        java.util.Map<Integer, Integer> intervals = new java.util.TreeMap<>();
+        int last = -1;
+        for (int v = skip; v < rig.shown.size(); ++v) {
+            if (rig.shown.get(v).equals("-")) continue;
+            if (last >= 0) intervals.merge(v - last, 1, Integer::sum);
+            last = v;
+        }
+        return intervals;
+    }
+
+    /** 30 fps on 120 Hz, stamped like Cemu: the 60 Hz lattice slot at or before each arrival. */
+    private static Rig thirtyFpsOnAStampLattice(boolean pairArrivalSpan) {
+        Rig rig = new Rig(2 * PANEL, 4 * PANEL);
+        rig.scheduler.setArrivalPacing(true, PANEL);
+        rig.pairArrivalSpan = pairArrivalSpan;
+        long t0 = 1_000_000_000L;
+        java.util.Random random = new java.util.Random(11);
+        int produced = 0;
+        // Arrivals sit on a stamp lattice slot boundary, +-1 ms, between two callbacks.
+        long base = t0 + PANEL / 2L;
+        long due = base + 4 * PANEL;
+        long lastSlot = -1L;
+        for (int v = 0; v < 960; ++v) {
+            rig.now = t0 + v * PANEL;
+            while (rig.now >= due) {
+                long slot = (due - base) / (2 * PANEL);
+                if (slot <= lastSlot) slot = lastSlot + 1L;
+                lastSlot = slot;
+                rig.produce(++produced, base + slot * 2 * PANEL);
+                due = base + (produced + 1L) * 4 * PANEL + (long) ((random.nextDouble() - 0.5) * 2_000_000L);
+            }
+            rig.vsync(rig.now);
+        }
+        return rig;
+    }
+
+    private static void arrivalSpanIgnoresALatticeOfStamps() {
+        java.util.Map<Integer, Integer> stamped = shownIntervals(thirtyFpsOnAStampLattice(false), 40);
+        check(stamped.getOrDefault(1, 0) + stamped.getOrDefault(3, 0) > 100,
+                "the stamps alone put real images one and three scans on " + stamped);
+        java.util.Map<Integer, Integer> arrivals = shownIntervals(thirtyFpsOnAStampLattice(true), 40);
+        int even = arrivals.getOrDefault(2, 0), all = 0;
+        for (int n : arrivals.values()) all += n;
+        check(even >= all - 3, "arrivals keep the two-scan rhythm " + arrivals);
     }
 
     private static void arrivalPacingAtSixtyFps() {
