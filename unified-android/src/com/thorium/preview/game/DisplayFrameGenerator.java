@@ -9778,7 +9778,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     long latch = nextLatchNs(arrived);
                     if (latch != 0L) {
                         waitNs = latch - arrived;
-                        sourcePhaseLock.setTargetWaitNs(com.thorium.emufusion.video.ArrivalQueuePolicy.TARGET_WAIT_NS);
+                        sourcePhaseLock.setTargetWaitNs(TimelineSchedulerSwitch.arrivalQueueWaitNs());
                     }
                 }
                 sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);

@@ -16,19 +16,19 @@ package com.thorium.emufusion.video;
  * NSMBU Deluxe leaves the fast state after 0.2-4 s whatever the lead (2026-11-06),
  * so that state is not one a heavy engine can keep anyway.</p>
  *
- * <p>Arrival to the end of the solve's encoding takes about 2 ms and the swap
- * under 1 ms more, so the source's target wait is {@link #TARGET_WAIT_NS} before
- * the latch (the phase lock adds its margin for arrival jitter). An image with less
- * than {@link #MIN_TO_LATCH_NS} left goes the usual way, through its callback. The
- * target is fixed: following a measured peak locked the first version out for a
- * whole run after one 6.5-ms sample.</p>
+ * <p>Arrival to the swap's return takes about 2.7 ms and the planner wants 1 ms
+ * before the latch, so the source's images must arrive that much plus their jitter
+ * before it: a target of 3.5 ms left nearly every image refused (NSMBU Deluxe,
+ * 2026-11-06), so the target is a QA value in {@code emufusion_framegen_arrival_queue}.
+ * An image with less than {@link #MIN_TO_LATCH_NS} left goes the usual way, through
+ * its callback. The target is fixed: following a measured peak locked the first
+ * version out for a whole run after one 6.5-ms sample.</p>
  */
 public final class ArrivalQueuePolicy {
-    public static final long TARGET_WAIT_NS = 3_500_000L;
     public static final long MIN_TO_LATCH_NS = 800_000L;
     private static final double SMOOTHING = 1.0 / 64.0;
 
-    private double workNs = TARGET_WAIT_NS;
+    private double workNs = 3_000_000.0;
     private long presents, misses;
 
     /** Arrival to the swap's return, for the log. */

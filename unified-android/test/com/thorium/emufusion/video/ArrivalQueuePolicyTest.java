@@ -25,7 +25,6 @@ public final class ArrivalQueuePolicyTest {
         policy.observeWork(6_500_000L);
         check(policy.present(latch - 1_500_000L, callback, latch, PERIOD),
                 "one slow frame does not lock it out");
-        check(ArrivalQueuePolicy.TARGET_WAIT_NS == 3_500_000L, "the target stays fixed");
         policy.observeWork(0L);
         policy.presented();
         policy.missed();
