@@ -102,6 +102,7 @@ struct emufusion_android_vulkan_backend {
     bool display_timing_logged;
     bool fg_timestamp_enabled[2]; /* primary, secondary; calloc defaults Off */
     int64_t stamp_ahead_ns;
+    int64_t timestamp_lead_ns;
     uint64_t timestamp_sequence;
     uint64_t timestamp_base_sequence;
     int64_t timestamp_base_ns;
@@ -1117,6 +1118,7 @@ bool emufusion_android_vulkan_set_stamp_ahead(
         return false;
     }
     backend->stamp_ahead_ns = ahead_ns > 0 ? ahead_ns : 0;
+    backend->timestamp_lead_ns = emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);
     /* Takes effect with the next timeline, which the following binding starts. */
     backend->timestamp_timeline_ready = false;
     backend->timestamp_last_ns = 0;
@@ -1327,7 +1329,7 @@ static bool stamp_core_frame_timestamp(
         } else if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
             backend->timestamp_base_ns =
                     (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec +
-                    emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);
+                    backend->timestamp_lead_ns;
         } else {
             backend->timestamp_base_ns = 1000000000LL;
         }
@@ -1339,6 +1341,20 @@ static bool stamp_core_frame_timestamp(
     if (offset_ns < 0.0L || offset_ns > (long double)INT64_MAX -
             (long double)backend->timestamp_base_ns) return false;
     timestamp = backend->timestamp_base_ns + (int64_t)(offset_ns + 0.5L);
+    /* A stall (a load, a shader compile) leaves a core behind its stamp timeline:
+     * Double Dash read 100-180 ms behind, where the firmware paces it again and the
+     * phase lock gives up (Thor, 2026-11-06). Keep the lead by moving the timeline on. */
+    if (backend->timestamp_lead_ns > 0) {
+        struct timespec clock_now;
+        if (clock_gettime(CLOCK_MONOTONIC, &clock_now) == 0) {
+            const int64_t floor_ns = (int64_t)clock_now.tv_sec * 1000000000LL + clock_now.tv_nsec +
+                    backend->timestamp_lead_ns;
+            if (timestamp < floor_ns) {
+                backend->timestamp_base_ns += floor_ns - timestamp;
+                timestamp = floor_ns;
+            }
+        }
+    }
     if (timestamp <= backend->timestamp_last_ns)
         timestamp = backend->timestamp_last_ns + 1;
     backend->timestamp_last_ns = timestamp;

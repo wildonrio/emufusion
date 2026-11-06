@@ -30,8 +30,11 @@ class DolphinPhaseLockTest(unittest.TestCase):
         vulkan = (PREVIEW / 'ExperimentalVulkanLibretroHost.java').read_text()
         self.assertIn('phaseLockedByDefault = FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());', vulkan)
         self.assertIn('FrameGenerationRendererRegistry.hardwareStampAheadNs(surface, phaseLockedByDefault)', vulkan)
-        native = (ROOT / 'unified-android/native/emufusion_android_vulkan_backend.c').read_text()
-        self.assertIn('emufusion_stamp_ahead_ns(backend->stamp_ahead_ns)', native)
+        for name in ('emufusion_android_vulkan_backend.c', 'emufusion_android_gles_backend.c'):
+            native = (ROOT / 'unified-android/native' / name).read_text()
+            self.assertIn('backend->timestamp_lead_ns = emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);', native)
+            # A stall does not use up the lead: the timeline moves on with the clock.
+            self.assertIn('backend->timestamp_base_ns += floor_ns - timestamp;', native)
         self.assertEqual(host.count('hardwareStampAheadNs(surface,\n                phaseLockedByDefault)'), 2)
         generator = (GAME / 'DisplayFrameGenerator.java').read_text()
         self.assertIn('TimelineSchedulerSwitch.hardwarePhaseLock(lockedByDefault) ? 10_000_000L : 0L', generator)
