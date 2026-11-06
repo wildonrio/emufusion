@@ -43,6 +43,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         void setPresentationAspect(long handle, float aspect);
         void attach(long handle, Surface surface);
         void recreate(long handle, Surface surface);
+        default void setStampAhead(long handle, long aheadNs) {}
         default void setFgTimestamp(long handle, boolean enabled) {
             if (enabled) throw new UnsupportedOperationException(
                     "FG timestamp ownership is unsupported by this binding");
@@ -116,6 +117,9 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         }
         @Override public void recreate(long handle, Surface surface) {
             nativeRecreateSurfaceGles(handle, surface);
+        }
+        @Override public void setStampAhead(long handle, long aheadNs) {
+            nativeSetStampAheadGles(handle, aheadNs);
         }
         @Override public void setFgTimestamp(long handle, boolean enabled) {
             nativeSetFgTimestampGles(handle, enabled);
@@ -370,6 +374,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         if (surface == null || !surface.isValid())
             throw new IllegalArgumentException("valid Android Surface is required");
         bindings.attach(handle, surface);
+        bindings.setStampAhead(handle, FrameGenerationRendererRegistry.hardwareStampAheadNs(surface));
         bindings.setFgTimestamp(handle,
                 FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }
@@ -381,6 +386,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
             throw new IllegalArgumentException("valid Android Surface is required");
         bindings.recreate(handle, surface);
         // Native recreation detaches first, clearing the previous ownership.
+        bindings.setStampAhead(handle, FrameGenerationRendererRegistry.hardwareStampAheadNs(surface));
         bindings.setFgTimestamp(handle,
                 FrameGenerationRendererRegistry.isFrameGenerationInput(surface));
     }
@@ -536,6 +542,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
     private static native void nativeCheatSetGles(long handle, int index,
                                                   boolean enabled, String code);
     private static native void nativeSetPresentationAspectGles(long handle, float aspect);
+    private static native void nativeSetStampAheadGles(long handle, long aheadNs);
     private static native void nativeSetFgTimestampGles(long handle, boolean enabled);
     private static native void nativeAttachSurfaceGles(long handle, Surface surface);
     private static native void nativeRecreateSurfaceGles(long handle, Surface surface);

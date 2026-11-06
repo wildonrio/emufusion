@@ -93,6 +93,9 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default long takeHardwareSourcePhaseNudgeNs() { return 0L; }
 
+    /** How far ahead a hardware core should stamp its images (the firmware's pacing skips those). */
+    default long hardwareStampAheadNs() { return 0L; }
+
     /**
      * The phase lock's smoothed wait error for a source clocked by rate
      * (positive = images arrive early and wait too long), or NaN when there

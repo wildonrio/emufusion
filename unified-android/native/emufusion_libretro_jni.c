@@ -577,6 +577,21 @@ Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeSetFgTimestampGles(
             !(*env)->ExceptionCheck(env)) throw_state(env, error);
 }
 
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalGlesLibretroHost_nativeSetStampAheadGles(
+        JNIEnv *env, jclass type, jlong handle, jlong ahead_ns) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    emufusion_gles_jni_session *session = from_gles_handle(handle);
+    if (!session || !session->backend) {
+        throw_state(env, "GLES session and backend are required");
+        return;
+    }
+    if (!emufusion_android_gles_set_stamp_ahead(session->backend,
+            (int64_t)ahead_ns, error, sizeof(error)) &&
+            !(*env)->ExceptionCheck(env)) throw_state(env, error);
+}
+
 static bool attach_java_surface(JNIEnv *env, emufusion_gles_jni_session *session,
                                 jobject surface, bool recreate,
                                 char *error, size_t error_size) {

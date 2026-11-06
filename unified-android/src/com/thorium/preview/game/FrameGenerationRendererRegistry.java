@@ -24,6 +24,12 @@ public final class FrameGenerationRendererRegistry {
         return renderer == null ? 0L : renderer.takeSourcePhaseDelayNs();
     }
 
+    /** How far ahead a hardware core feeding this Surface should stamp its images, or zero. */
+    public static long hardwareStampAheadNs(Surface surface) {
+        FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
+        return renderer == null ? 0L : renderer.hardwareStampAheadNs();
+    }
+
     /** The renderer's phase-lock step for a hardware core feeding this Surface, or zero. */
     public static long takeHardwareSourcePhaseNudgeNs(Surface surface) {
         FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;

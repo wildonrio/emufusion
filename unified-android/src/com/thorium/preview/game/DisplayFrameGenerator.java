@@ -3076,6 +3076,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
 
     private volatile boolean hardwarePhaseSource;
 
+    @Override public long hardwareStampAheadNs() {
+        return TimelineSchedulerSwitch.hardwarePhaseLock() ? 10_000_000L : 0L;
+    }
+
     @Override public long takeHardwareSourcePhaseNudgeNs() {
         if (!TimelineSchedulerSwitch.hardwarePhaseLock()) return 0L;
         hardwarePhaseSource = true;

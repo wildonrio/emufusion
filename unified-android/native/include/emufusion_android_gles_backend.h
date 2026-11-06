@@ -71,6 +71,10 @@ bool emufusion_android_gles_prepare_resume(
 /* Render-thread-affine. Default false; detach clears ownership. Set AFTER
  * attach/recreate using actual FG input-Surface ownership, never a preference.
  * Each call resets the source timestamp epoch without altering core timing. */
+bool emufusion_android_gles_set_stamp_ahead(
+        emufusion_android_gles_backend *backend, int64_t ahead_ns,
+        char *error, size_t error_size);
+
 bool emufusion_android_gles_set_fg_timestamp(
         emufusion_android_gles_backend *backend, bool enabled,
         char *error, size_t error_size);

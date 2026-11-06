@@ -27,9 +27,9 @@
  * sleeps inside queueBuffer until a fixed vsync phase unless the buffer's
  * timestamp is still in the future there. QA: debug.emufusion.stamp_ahead_ms starts
  * the stamps that far ahead of the clock; only their spacing is ever used. */
-static int64_t emufusion_stamp_ahead_ns(void) {
+static int64_t emufusion_stamp_ahead_ns(int64_t requested_ns) {
     char value[PROP_VALUE_MAX] = {0};
-    if (__system_property_get("debug.emufusion.stamp_ahead_ms", value) <= 0) return 0;
+    if (__system_property_get("debug.emufusion.stamp_ahead_ms", value) <= 0) return requested_ns;
     const long ms = atol(value);
     return ms > 0 && ms <= 600000 ? (int64_t)ms * 1000000LL : 0;
 }
@@ -87,6 +87,7 @@ struct emufusion_android_gles_backend {
     bool has_presented_game_frame;
     emufusion_gles_resume_warmup resume_warmup;
     bool fg_timestamp_enabled;
+    int64_t stamp_ahead_ns;
     bool direct_timestamp_bypass_logged;
     /* SurfaceTexture.getTimestamp() is only a source-timeline timestamp when
      * the EGL producer explicitly supplies EGL_ANDROID_presentation_time.
@@ -157,6 +158,17 @@ static bool claim_render_thread(emufusion_android_gles_backend *backend,
         set_error(error, error_size, "GLES lifecycle must stay on its render thread");
         return false;
     }
+    return true;
+}
+
+bool emufusion_android_gles_set_stamp_ahead(
+        emufusion_android_gles_backend *backend, int64_t ahead_ns,
+        char *error, size_t error_size) {
+    if (!claim_render_thread(backend, error, error_size)) return false;
+    backend->stamp_ahead_ns = ahead_ns > 0 ? ahead_ns : 0;
+    /* Takes effect with the next timeline, which the following binding starts. */
+    backend->timestamp_timeline_ready = false;
+    backend->timestamp_last_ns = 0;
     return true;
 }
 
@@ -790,7 +802,8 @@ static bool stamp_core_frame_timestamp(
                     (period_ns > 0 ? period_ns : 1);
         } else if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
             backend->timestamp_base_ns =
-                    (EGLnsecsANDROID)now.tv_sec * 1000000000LL + now.tv_nsec + emufusion_stamp_ahead_ns();
+                    (EGLnsecsANDROID)now.tv_sec * 1000000000LL + now.tv_nsec +
+                    emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);
         } else {
             /* SurfaceTexture timelines do not require an absolute zero. */
             backend->timestamp_base_ns = 1000000000LL;
