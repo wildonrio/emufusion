@@ -49,7 +49,9 @@ public final class InternalEngineBootstrap {
                 InternalEngineCatalog.approvedEntries(context)) {
             EngineSessionRegistry.register(entry.id, (sessionContext, request) ->
                     CheatLaunchHooks.prepare(sessionContext, request, entry.id,
-                            "opengl".equals(entry.renderer)
+                            "opengl".equals(entry.renderer) ||
+                                    WidescreenHackPolicy.needsHardwareRenderer(
+                                            sessionContext, request, entry.id)
                                     ? new PpssppGlesEngineSession(sessionContext, entry)
                                     : new LibretroEngineSession(sessionContext, entry)));
             verified++;

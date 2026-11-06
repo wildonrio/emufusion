@@ -220,7 +220,7 @@ final class PpssppGlesEngineSession implements EngineSession,
     }
 
     PpssppGlesEngineSession(Context context, InternalEngineCatalog.Entry entry) {
-        this(context, LibretroEngineSpec.phaseOne(entry));
+        this(context, LibretroEngineSpec.phaseOneOnGles(entry));
     }
 
     private PpssppGlesEngineSession(Context context, LibretroEngineSpec entry) {
@@ -406,6 +406,7 @@ final class PpssppGlesEngineSession implements EngineSession,
                 final int presentationPolicy = ("flycast".equals(entry.id) ||
                         "ppsspp".equals(entry.id) ||
                         "mupen64plus-next".equals(entry.id) ||
+                        "swanstation".equals(entry.id) ||
                         "dolphin".equals(entry.id)) ?
                         com.thorium.preview.ExperimentalGlesLibretroHost
                                 .PRESENT_FRONTEND_FBO :

@@ -56,11 +56,14 @@ public final class WidescreenRecipes {
         /** Core options at launch when the player has widescreen on, and off. */
         public final Map<String, String> onOptions;
         public final Map<String, String> offOptions;
+        /** The core widens properly only in its hardware renderer, which it otherwise does without. */
+        public final boolean hardwareWhenWide;
 
         Recipe(String system, String key, String engine, String widthOption, boolean widthIsAspect,
                int baseWidth, int height, float pixelAspect, float maxAspect, boolean exactBase,
                Map<String, String> options, boolean relaunch,
-               Map<String, String> onOptions, Map<String, String> offOptions) {
+               Map<String, String> onOptions, Map<String, String> offOptions,
+               boolean hardwareWhenWide) {
             this.system = system;
             this.key = key;
             this.engine = engine;
@@ -75,6 +78,7 @@ public final class WidescreenRecipes {
             this.relaunch = relaunch;
             this.onOptions = Collections.unmodifiableMap(onOptions);
             this.offOptions = Collections.unmodifiableMap(offOptions);
+            this.hardwareWhenWide = hardwareWhenWide;
         }
 
         /** Whether this recipe can widen a game the core reports at this size. */
@@ -182,7 +186,8 @@ public final class WidescreenRecipes {
                 (float) entry.getDouble("pixelAspect"),
                 (float) game.optDouble("maxAspect", entry.optDouble("maxAspect", 2.4)),
                 entry.optBoolean("exactBase", false),
-                options, entry.optBoolean("relaunch", false), onOptions, offOptions);
+                options, entry.optBoolean("relaunch", false), onOptions, offOptions,
+                entry.optBoolean("hardwareWhenWide", false));
     }
 
     private static void copyStrings(JSONObject from, Map<String, String> into) throws Exception {

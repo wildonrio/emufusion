@@ -2294,7 +2294,8 @@
           "options": {},
           "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
         }
-      }
+      },
+      "hardwareWhenWide": true
     }
   }
 }

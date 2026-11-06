@@ -59,11 +59,21 @@ final class LibretroEngineSpec {
     }
 
     static LibretroEngineSpec phaseOne(InternalEngineCatalog.Entry entry) {
+        return phaseOne(entry,
+                "opengl".equals(entry.renderer) ? "gles-libretro" : "software");
+    }
+
+    /** A core that can render either way, for the session that gives it a graphics context. */
+    static LibretroEngineSpec phaseOneOnGles(InternalEngineCatalog.Entry entry) {
+        return phaseOne(entry, "gles-libretro");
+    }
+
+    private static LibretroEngineSpec phaseOne(InternalEngineCatalog.Entry entry, String runtime) {
         return new LibretroEngineSpec(entry.id, entry.systems, entry.sourceCommit,
                 entry.coreArtifactSha256, false,
                 entry.stateCompatibilityVersion, entry.firmwareRequired,
                 entry.acceptedFirmwareHashes, entry.coreFile,
-                "opengl".equals(entry.renderer) ? "gles-libretro" : "software",
+                runtime,
                 (context, spec) -> {
                     InternalEngineCatalog.Entry installed =
                             InternalEngineCatalog.byId(context, spec.id);

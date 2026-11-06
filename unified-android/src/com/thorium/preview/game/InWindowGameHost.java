@@ -2009,7 +2009,7 @@ public final class InWindowGameHost
         }
         if (oledStaticOutputSinceMs == 0L) {
             oledStaticOutputSinceMs = now;
-        } else if (oledGuard == null &&
+        } else if (oledGuard == null && root != null &&
                 now - oledStaticOutputSinceMs >= OLED_GUARD_STATIC_MS) {
             View guard = new View(activity);
             guard.setBackgroundColor(Color.BLACK);
