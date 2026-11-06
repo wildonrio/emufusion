@@ -7501,7 +7501,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     result.actualNs);
         int minQueueScans = presentationScansPerOutput() >= 2 ? TimelineSchedulerSwitch.minQueueScans() : 0;
         builtinQueueReserve.setMinExtraScans(minQueueScans);
-        if (minQueueScans > 0 && compositorEarlyGuard.activate())
+        // Negative in QA: that floor, and no deeper.
+        if (minQueueScans < 0) {
+            builtinQueueReserve.setMaxExtraScans(-minQueueScans);
+            builtinQueueReserve.setMinExtraScans(-minQueueScans);
+        }
+        if (minQueueScans != 0 && compositorEarlyGuard.activate())
             Log.i(TAG, "Compositor early guard on generator=" + generatorId + " reason=queue-floor");
         int previous = builtinQueueReserve.extraScans();
         builtinQueueReserve.setEarlyGuardAvailable(TimelineSchedulerSwitch.earlyGuard() &&
