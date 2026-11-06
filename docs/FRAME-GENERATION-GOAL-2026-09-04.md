@@ -26,7 +26,7 @@ reviewed before this revision; its work was not discarded.
 *Smoothness* (on the intended interval):
 - 99.5-99.9% for retro, Mega Drive, God of War, Double Dash and NSMBU Deluxe;
 - SM3DW 95.2%: Cemu delivers frames in bursts on a saturated GPU.
-- 30 fps sources, two scans each (3.2.125): Wind Waker HD 76.1% (52.8% on 3.2.124; the rest is Cemu's own 50/17 ms frame pairs), Metroid Dread 85.8%.
+- 30 fps sources, two scans each (3.2.125): Wind Waker HD 76.1% (52.8% on 3.2.124; put down at the time to Cemu's own 50/17 ms frame pairs, which the November 6 entry corrects: its arrivals are even and the rhythm is ours), Metroid Dread 85.8%.
 
 *Artifacts* (device output, re-recorded large corpus, frames with invented content):
 
@@ -54,12 +54,12 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
 | SNES (drain trial) | 99.9%, 2 | 17.7 / 26.1 (17.3 / 25.6) ms | 0-14%, stays off |
 | GBA (drain trial) | 99.8%, 5.5 | 9.0 / 17.3 ms | not re-measured |
 | Star Fox 64 | not re-measured | not re-measured | 4%, 4% |
-| Ocarina of Time (20 fps) | older: 94.4%, 66 | older: 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench |
-| Double Dash | 99.8%, 7.3 (0-130 by its phase) | 18.1 / 26.6 (14.8 / 23.1) ms | 17%, 7% |
+| Ocarina of Time (20 fps) | 99.3%, 9.7 (one run, retry-415) | 11.1 / 36.1 ms (real minimum 33.3) | 0-4%, not on the device bench |
+| Double Dash | 99.8%, 7.3 (0-168 by where its stamps sit against the clock, see the November 6 entry) | 18.1 / 26.6 (14.8 / 23.1) ms | 17%, 7% |
 | NSMBU Deluxe | 99.7%, 10.9 (0-20 over 9 runs on 3.2.156 and 3.2.157 builds) | 18.8 / 27.1 (16.3 / 24.6) ms | world map 14%, 7% |
-| Link's Awakening (3.2.156) | 94.3%, 192 | 21.8 / 37.1 (24.6 / 34.5) ms | 6%, 11% |
-| Wind Waker HD | older: 76%, 30 fps source | older: ~37 ms real | 11%, 0% |
-| SM3DW (3.2.156) | 93.7% in its play window | 12.0 / 21.0 ms | 0%, not on the device bench |
+| Link's Awakening (beach scene, one run, retry-418; the older 94.3% was its intro movie) | 98.3%, 59 | 24.0 / 32.6 (24.9 / 34.3) ms | 6%, 11% |
+| Wind Waker HD (title flight, 30 fps source, two runs, retry-418; 87-91% with this table's QA options, see the November 6 entry) | 76.7%, 418; 47.5%, 929 | 27.6 / 44.3 (23.2 / 40.0), 19.3 / 36.1 (19.3 / 37.3) ms | 11%, 0% |
+| SM3DW (3.2.156; 94.7% with the QA options on retry-421) | 93.7% in its play window | 12.0 / 21.0 ms | 0%, not on the device bench |
 
 Nothing is at 10/10 on all three measures yet. Whether a run reaches the compositor's fast state is close to chance, and it is worth about 8 ms.
 
@@ -267,7 +267,132 @@ Nothing is at 10/10 on all three measures yet. Whether a run reaches the composi
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 6 (latest) **— 3.2.157 (231, `ca695958`, retry-414): the compositor drain on for phase-locked sources. It helps Mega Drive; on NES it is not shown to help. A Dolphin phase lock is the next pacing item.**
+November 6 (latest) **— Measured on purpose: Double Dash is cleaner with its stamps behind the clock, under the firmware's pin, than held by the phase lock. That is now Dolphin's default in the tree. Cemu's future stamp is rejected.**
+
+- **The Thor's USB drop:** it came back at about 15:19 with 5 days of uptime, so it did not reboot, and the package's identity was intact. The cause is not known. The runs `g4`, `h1` and `h2` started with no device and are not results.
+- **Double Dash, retry-427, predraw and arrival span on, one run a row:**
+
+  | Setting | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean | Wait: median (p10-p90) | Start |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Stamps behind | 99.9% | 1.8 | 60% | 14.7 / 23.0 ms | 4.2 (2.6-6.7) | 50 C |
+  | Stamps behind | 99.6% | 12.7 | 100% | 11.4 / 19.7 ms | 4.4 (3.9-5.6) | 53 C |
+  | Stamps behind | 99.6% | 14.5 | 46% | 15.7 / 24.0 ms | 4.4 (4.2-4.4) | 60 C |
+  | Stamps behind, drain for all sources | 100.0% | 0 | 0% | 19.1 / 27.5 ms | 4.1 (3.0-4.7) | 55 C |
+  | Stamps behind, drain for all sources | 100.0% | 0 | 0% | 19.5 / 27.9 ms | 4.4 (4.3-4.6) | 53 C |
+  | Lock, lead kept | 99.1% | 32.5 | 8% | 21.7 / 30.1 ms | 7.3 (6.0-8.8) | 31 C |
+  | Lock, lead kept | 99.5% | 16.3 | 77% | 13.4 / 21.7 ms | 4.1 (2.8-6.7) | 52 C |
+  | Lock, lead kept | 99.9% | 3.6 | 84% | 12.6 / 20.9 ms | 4.1 (3.5-5.8) | 60 C |
+
+  Two of these started at 60 C, because another stream's turn warmed the Thor while they waited for the lock, so they count for less. The script now checks the temperature again once it holds the lock. The drain made no move inside the two 16-s windows it was on for, so those two rows show a clean run left in the slow state, not the drain working; the 0 hitches may owe nothing to it. Its share of time in the fast state over a longer session is not measured.
+- **Decision:** stamps behind. The worst run is 14.5 against 32.5 hitches, the latency is about the same when the fast state holds, and it needs no nudges. `97db551`: Dolphin's stamps start a second behind the clock, the phase lock is QA only (`emufusion_framegen_hardware_phase_lock=1`), and the compositor drain also acts on a core the firmware paces. As a default it has not run yet.
+- **Cemu's future stamp and phase nudge: rejected.** Wind Waker HD, retry-427, both QA options on: with them 91.1%, 160 hitches, 31.1 / 48.3 ms; without 91.8%, 148 hitches, 18.8 / 35.4 ms. The stamp ended the firmware's pin (a wait spread over 0-8 ms), and the phase lock took no nudges, 0 in the run, for a reason not yet looked into.
+
+- **Dolphin's default on retry-428, no QA for the stamp:** it does engage (stamps 942 ms behind, 0 nudges): 99.6%, 12.7 hitches, 8% fast, 19.0 / 27.4 ms, one run.
+- **Tried on Wind Waker HD and rejected:**
+  - **Showing a pair at its missed callback's slot** (`late_take_up`, retry-428): 88.8%, 200 hitches, 16.0 / 32.6 ms. It caught 165 pairs but toggled more between the 11 ms and 19 ms levels, so it is removed.
+  - **The take-up lattice** (`takeup_lattice`, retry-428): 51.1%, 869 hitches, 38.1 / 50.6 ms. It still does not fit a 30 fps source.
+- **Now testing** QA `emufusion_framegen_assume_unique=1` (retry-429): after 120 unique verdicts in a row, a callback does not wait for an image's uniqueness check, which is probably what makes pairs miss it. The check still reads back, and a repeated image starts the run over.
+
+November 6 **— Double Dash's phases follow where its stamps sit against the clock. The firmware's pin looks like the clean state, not the problem. Off the Thor since 14:26: it dropped off USB, cause not known.**
+
+- **The table.** Every Double Dash run with a log, its stamps' lag behind the clock during the trace window (from `timelineRequiredLatencyUs`, negative means still ahead), against the wait before the callback and the result. Dolphin's stamps follow its run sequence, so a burst at startup leaves them ahead and a stall leaves them behind, whatever the QA setting:
+
+  | Run | Lag in the window | Lock nudges, gave up | Wait: median (p10-p90) | Hitches per 30 s | Fast mode |
+  | --- | --- | --- | --- | --- | --- |
+  | a2, no lock | -2.6 to -0.3 ms | 0 | 2.4 (1.6-5.3) | 102.9 | 100% |
+  | a5, no lock | -43 to -34 ms | 0 | 4.7 (1.7-7.3) | 167.5 | 99% |
+  | f9, no lock | -40 to -38 ms | 0 | 2.8 (1.3-8.3) | 78.7 | 64% |
+  | c5, no lock | -14 to -12 ms | 0 | 3.2 (2.3-4.0) | 29.0 | 99% |
+  | c3, no lock | -17 to +68 ms | 0 | 5.4 (4.5-6.7) | 16.3 | 100% |
+  | f5, no lock | -8 to +11 ms | 0 | 3.4 (2.7-5.2) | 16.3 | 69% |
+  | q1, lock | -85 to -83 ms | 3588 | 4.7 (3.1-5.4) | 0 | 60% |
+  | c1, lock | -73 to -71 ms | 3528 | 4.3 (3.7-4.7) | 3.6 | 80% |
+  | a3, lock | -23 to -20 ms | 3761 | 4.3 (3.0-5.0) | 5.5 | 73% |
+  | q2, lock | -26 to -14 ms | 3622 | 4.0 (3.3-4.3) | 14.5 | 94% |
+  | c2, lock, 4.5-ms target | -17 to -7 ms | 4058 | 5.6 (4.6-6.8) | 41.4 | 64% |
+  | p1, lock | -37 to -32 ms | 1737, gave up | 3.5 (1.8-4.4) | 66.3 | 99% |
+  | q4, lock | -19 to +79 ms | 4382, gave up | 4.3 (3.6-4.7) | 19.9 | 35% |
+  | c6, lock | +83 to +110 ms | 3474, gave up | 4.2 (3.5-4.5) | 9.1 | 77% |
+  | a6, lock | +97 to +113 ms | 106, gave up | 4.4 (4.3-5.5) | 7.3 | 71% |
+  | p2, lock | +116 to +133 ms | 329, gave up | 4.4 (4.4-4.6) | 3.7 | 20% |
+  | c4, lock, 4.5-ms target | +121 to +138 ms | 136, gave up | 4.4 (4.3-4.5) | 1.8 | 6% |
+
+- **How it reads.** Small sample, one game, and the sign of the lag was not set on purpose in any of these runs:
+  - **Stamps well behind the clock:** the wait is pinned at a tight 4.4 ms, the lock cannot move it and gives up within about 100-330 nudges, and the rhythm is clean: 1.8, 3.7 and 7.3 hitches. That fits the firmware's pacing, which only applies to stamps no longer in the future.
+  - **Stamps ahead, no lock:** the wait spreads over 1-8 ms and all but one of the runs are the worst here, 29-168 hitches.
+  - **Stamps ahead, lock held:** 0, 3.6, 5.5 and 14.5 hitches, at a slightly lower latency when the fast state holds.
+  - So the bad phases are not a bad pin. They are the times the firmware is not pacing Dolphin at all. This also changes the earlier "lock and stamp against lock alone" reading, since the QA prop was not what decided whether a stamp was ahead.
+- **Two ways out, both to be measured when the Thor is back:**
+  - **Always ahead, lock held:** `5e5127e` keeps the lead through stalls (a stamp is never behind the clock plus 10 ms), with the lock as the phase. This is the tree's default for Dolphin.
+  - **Always behind, firmware's pin:** QA `debug.emufusion.stamp_ahead_ms=-1000` with `emufusion_framegen_hardware_phase_lock=0`. It needs no nudges, at about 1 ms more latency than a 3.25-ms lock, but the compositor drain only acts on a locked source today, so it would stay in the slow state more often.
+- **Also tried off the Thor, no effect:** pixel art taking an unchanged pixel as static when the warp's samples disagree (`zero_center`, Mega Drive, 11 triplets): 18% of frames either way, area 0.109 against 0.109-0.116%. The failing frames are the fast pinball moves, not the HUD.
+- **Other results from this stretch.** On retry-421 and -422, one run each:
+  - SM3DW with both QA options: 94.7% in its play window, 13.9 / 23.3 ms, 12 generated and 3 real images after their scan (baseline runs 37-124 and 16-40).
+  - Metroid Dread's title loop, no options: 95.1%, 88 hitches, 11.6 / 28.2 ms. With both options is not measured yet: that run and the Cemu lock runs started after the Thor dropped and are not results.
+
+November 6 **— Wind Waker HD's 1- and 3-scan rhythm is ours, not Cemu's. Two QA options take it from 47-77% to 87-91% on cadence and cut its latency. Dolphin's phase lock and future stamp are the default in the tree, not yet released or measured as a default.**
+
+- **The earlier reading was wrong.** The 1- and 3-scan intervals were put down to "Cemu's own 50/17 ms frame pairs". On the title flight, images arrive an even 33.3 ms apart (p5 32.4-32.7, p95 34.1-34.5 ms in the two baseline runs). With generation off, the game's shown intervals over its title and first menu are an even two scans. Two things of ours cause the rhythm:
+  - **Real images come late.** A real image's draw waits behind Cemu's GPU work and finishes after its scan (447 and 501 of about 985 in the two baseline runs; about 3 ms after it in the frames read), so it shows one scan late, and the generated image after it comes a scan sooner. `emufusion_framegen_real_predraw=1` draws the real image right after the generated image's swap, as the November 5 trial did: late real images fall to 1-66, and the compositor stays in its fast state (93-98% against 48-57%).
+  - **Stamps on a lattice.** Arrival pacing put the real image half the pair's stamp span after the generated one. Cemu stamps each image with the 60 Hz slot at or before it, so images 33.3 ms apart near a slot boundary should read 16.7 and 50 ms apart: real images one and three scans on. This is read from the code and reproduced in a unit test (`arrivalSpanIgnoresALatticeOfStamps`). The device's raw spans were not logged in these runs. `emufusion_framegen_arrival_span=1` uses the time between the images' admissions instead.
+- **Wind Waker HD, title flight, no input, cool starts, one run a row, 33 s of trace:**
+
+  | Options | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean |
+  | --- | --- | --- | --- | --- |
+  | Neither (retry-418) | 76.7% | 418 | 48% | 23.2 / 40.0 ms |
+  | Neither (retry-418) | 47.5% | 929 | 57% | 19.3 / 37.3 ms |
+  | Predraw (retry-418) | 84.1% | 286 | 98% | 16.8 / 33.2 ms |
+  | Predraw (retry-418) | 76.8% | 416 | 93% | 26.1 / 42.2 ms |
+  | Arrival span (retry-419) | 83.1% | 300 | 29% | 23.7 / 40.7 ms |
+  | Both (retry-419) | 86.5% | 242 | 93% | 18.8 / 35.6 ms |
+  | Both (retry-419) | 90.8% | 164 | 98% | 14.6 / 31.2 ms |
+
+  Not at the target yet. What remains is mostly a "3 . 1" pattern: a pair taken up a scan late, then the next on time, in bursts. The arrival does not drift: it stays pinned 3.5-3.7 ms before the next callback for the whole run. Yet a generated image sits at 11 ms or 19.4 ms from arrival for seconds at a time. In the 19.4-ms stretches the callback 3.6 ms after arrival forms no pair and the next one does. The likely cause, not measured directly, is that the image's uniqueness check, read back on a GPU fence, finishes around then behind Cemu's GPU work. Retry-420 carries Cemu's QA future stamp and phase nudge (native `a4de8bfc`, `debug.emufusion.cemu_stamp_ahead_us`, `debug.emufusion.cemu_phase_nudge`, both off by default), not yet run on the device. The tree after it holds Cemu's lock at a 5.5-ms wait (QA `emufusion_framegen_cemu_phase_wait_us`), so its pairs should make the next callback every time, at about 13 ms to the generated image.
+- **Both options on the other sources, retry-419, one run each.** No harm shown, and too few runs to claim a gain:
+
+  | Game | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean |
+  | --- | --- | --- | --- | --- |
+  | NSMBU Deluxe | 99.9% | 3.7 | 44% | 15.3 / 23.6 ms |
+  | Double Dash (no lock or stamp, see below) | 99.5% | 16.3 | 69% | 13.3 / 21.7 ms |
+  | NES | 100.0% | 0 | 55% | 13.0 / 21.3 ms |
+  | Mega Drive | 99.7% | 9.1 | 89% | 9.8 / 18.2 ms |
+
+  Both stay off by default until SM3DW, Metroid Dread and repeats are in.
+- **Dolphin: the lock and the future stamp are now the default for that core only.** The first attempt (`7114d1b`) did not take effect: Dolphin runs on the Vulkan host, even for GameCube, and the default and the Java stamp were only wired to the GLES host. On those builds a run with no QA setting had no nudges (78.7 hitches on retry-422). The QA runs without the stamp prop also had no stamp, so they are listed here as lock alone, which corrects the first version of this entry. Double Dash, cool starts, 16-s windows:
+
+  | Setting | Hitches per 30 s, by run | First generated / real, mean |
+  | --- | --- | --- |
+  | Neither (retry-417, -422) | 102.9, 167.5, 78.7 | 9.2 / 17.2, 10.9 / 18.9, 13.1 / 21.3 ms |
+  | Lock and stamp, QA prop (retry-415, -417) | 0, 14.5, 19.9, 5.5, 7.3 | 11.4-16.6 / 19.7-24.9 ms |
+  | Lock alone (retry-415, -417) | 66, 3.7, 3.6, 9.1 | 10.2 / 18.4, 17.9 / 26.2, 12.8 / 21.2, 12.8 / 21.2 ms |
+  | Stamp alone, QA prop (retry-417) | 16.3, 29.0 | 12.5 / 20.8, 10.1 / 18.4 ms |
+  | Lock alone, 4.5-ms target (retry-417) | 41.4, 1.8 | 15.4 / 23.8, 19.0 / 27.4 ms |
+
+  Without either, runs land clean (0-7 hitches on earlier builds) or in a phase with 73-168, the worst of them with the lowest latency, in the fast state nearly all the time. An even rhythm comes first. Lock and stamp has the best worst case of the settings with several runs (19.9 against 66), but these are small samples and it still misses the 5-hitch target on four runs of five. The later target is not adopted. The lock gave up in two of the five lock-and-stamp runs (19.9 and 7.3 hitches), so its abandon rule on a stamped source is still open. The tree now wires both to the Vulkan host as well; that default has not run on the Thor yet. Ocarina stays out, as above.
+- **Link's Awakening's figures were its intro movie, not play.** The trial's window fell on the opening anime, 44-59 source fps on the counter. Generation off, 23% of the movie's frames take two periods or more, so those gaps are not ours. A window starting about 40 s in with no input, which should be the first engine scene (the beach; an exploration session showed it, but this run's screenshots were not kept), gives 98.3% and 59 hitches per 30 s at 24.9 / 34.3 ms (one run, retry-418, 12% fast). There generated frames are the problem: 751 of 869 finish after the latch and 239 after the scan, while few real images are late. Metroid Dread's trial window is also a mix (43 source fps) rather than its 30 fps title loop, which still needs measuring.
+- **A test mistake to avoid.** `pace_move.py` moves the stick, and on Wind Waker HD's title that leaves for a static menu: the first run here scored 240 frames of keep-alives. `NOMOVE=1 SETTLE=12` stays on the title flight.
+- **The Thor was shared badly today.** These queues and the cooling flag held the other stream's pass off the Thor for over an hour. The scripts no longer set the flag, and cooling happens with the lock free.
+
+November 6 **— A phase lock for hardware cores needs the future stamp as well, and it does not yet clearly win. QA, off by default.**
+
+- **Why Double Dash swings.** It has no phase lock, and its wait before the callback varies by run: at 4.4-5.7 ms it runs clean (0-5.5 hitches per 30 s), at 2-3 ms in the fast state late images show (73-118). Its wait often sits at a tight 4.4-4.6 ms, the same pin the firmware's pacing put on Eden.
+- **The lock alone is abandoned.** With `emufusion_framegen_hardware_phase_lock=1` and no stamp, the nudges did not move a pinned source, so the lock gave up in both runs (98.1%, 66 hitches, 10.2 / 18.4 ms mean; 99.9%, 3.7, 17.9 / 26.2 ms).
+- **Lock plus a future stamp (`debug.emufusion.stamp_ahead_ms=10`), retry-415, one run a row:**
+
+  | Game | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean | Lock |
+  | --- | --- | --- | --- | --- | --- |
+  | Double Dash | 100.0% | 0 | 60% | 14.8 / 23.2 ms | held |
+  | Double Dash | 99.6% | 14.5 | 94% | 11.4 / 19.7 ms | held |
+  | Double Dash | 99.4% | 19.9 | 35% | 16.6 / 24.9 ms | abandoned late in the session |
+  | Ocarina of Time | 99.1% (PACE) | 15.1 | 100% | 11.2 / 36.2 ms | held |
+  | Ocarina of Time | 98.0% (PACE) | 30.1 | 100% | 11.0 / 36.1 ms | held |
+  | Ocarina of Time, neither | 99.3% (PACE) | 9.7 | 100% | 11.1 / 36.2 ms | none |
+  | Star Fox 64 | 97.3% (PACE) | 49 | 100% | 10.8 / 27.5 ms | held |
+
+- **Reading these.** On Double Dash the worst run is far better (20 hitches against 118) and the average latency a little better, with the small sample and the wide natural spread to allow for. On Ocarina it is no better than today's baseline and possibly worse: that baseline is 99.3%, 9.7 hitches, so the older 94.4% in the status table is out of date. Star Fox 64 has no same-day baseline. It is not ready to be a default. Hardware cores with a steady pinned wait may be better left pinned.
+- **Plumbing.** Java now asks for the stamp when the QA lock is on, so a test needs no prop; the prop still overrides it. Not yet run on a device without the prop.
+
+November 6 **— 3.2.157 (231, `ca695958`, retry-414): the compositor drain on for phase-locked sources. It helps Mega Drive; on NES it is not shown to help. A Dolphin phase lock is the next pacing item.**
 
 - **Gate history.** The first candidate (retry-412) had the drain on for every source and did not go out. Double Dash, whose phase is chance (no lock), ran 40-70 two-scan intervals in 16 s in the fast state at a 2-3-ms wait, with the drain off as well (`m2`: 97.9%, 73 per 30 s, 92% fast mode); the slower state hides those late images, and the drain makes the fast state likelier. So the drain now acts only on sources the phase lock holds. A fast stay of 5-11 s no longer doubles the spacing (only under 4 s does): one NES run had waited 30 s for its next try and stayed late for its window.
 - **Thor, retry-414, default settings, cool starts, one run a row:**

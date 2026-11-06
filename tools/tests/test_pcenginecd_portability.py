@@ -158,7 +158,7 @@ public final class PcEngineCdProbe {
         source = (GAME/'LibretroEngineSession.java').read_text()
         selection = re.search(r'String firmware = "firmware:none".*?;',source,re.S).group(0)
         helpers = '\n'.join(method(source,name) for name in (
-            'private static String firmwareFingerprint(',
+            'static String firmwareFingerprint(',
             'private static String sha256(', 'private static String hex('))
         harness = r'''
 import java.io.*;

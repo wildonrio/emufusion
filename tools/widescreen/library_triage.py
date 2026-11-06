@@ -36,6 +36,8 @@ SYSTEMS = {
                 base=240, buttons='A', suffixes=('.gba',)),
     'gamegear': dict(core=BUILD / 'gearsystem/platforms/libretro/gearsystem_libretro.dylib',
                      option='emufusion_ws_aspect=1778', base=160, buttons='A', suffixes=('.gg',)),
+    'megadrive': dict(core=BUILD / 'blastem/blastem_libretro.so', option='emufusion_ws_aspect=1778',
+                      base=320, buttons='B', suffixes=('.md', '.gen', '.bin', '.smd')),
     'snes': dict(core=BUILD / 'bsnes-hd/bsnes/out/bsnes_hd_beta_libretro.dylib', option='emufusion_ws_width=348',
                  base=256, buttons='B', suffixes=('.sfc', '.smc'),
                  more=('bsnes_mode7_scale=1x', 'bsnes_ppu_show_overscan=ON', 'bsnes_video_aspectcorrection=ON',
@@ -51,6 +53,8 @@ LEADS = (
 )
 # GBA games open with longer logos and more menus; these look for scrolling instead of a fixed route.
 GBA_LEADS = ('explore:14000:0 ',)
+# EF_TRIAGE_LONG=1: a long run of buttons instead. It reaches play in many games the shorter ways do not.
+LONG_LEADS = ('wait:400 ' + 'tap:START wait:30 tap:A wait:50 tap:A wait:50 hold:RIGHT,B:40 tap:A wait:40 hold:LEFT:20 hold:RIGHT:30 ' * 15,)
 STEPS = 72
 GAP = 14
 MAX_SHIFT = 48
@@ -131,7 +135,8 @@ def judge(system, rom, keep):
     # A long run takes the core from a private copy, so rebuilding the working copy cannot disturb it.
     core = os.environ.get('EF_TRIAGE_CORE', str(spec['core']))
     best = dict(rom=rom.name, real=0.0, blank=1.0, pairs=0)
-    for way, lead in enumerate(GBA_LEADS if system == 'gba' else LEADS):
+    leads = LONG_LEADS if os.environ.get('EF_TRIAGE_LONG') else GBA_LEADS if system == 'gba' else LEADS
+    for way, lead in enumerate(leads):
         out = tempfile.mkdtemp(prefix='ef-triage-')
         try:
             run = subprocess.run(

@@ -69,13 +69,14 @@ public final class WidescreenHackPolicy {
         return isHackEnabledFor(context, request.systemId);
     }
 
-    /** A core that keeps its 2D in shape only in its hardware renderer needs that session when widened. */
+    /**
+     * A game whose wide picture needs the hardware renderer runs there narrow as well. The two kinds of
+     * session keep separate memory cards and Quick Resume, so switching between them would lose the player's place.
+     */
     public static boolean needsHardwareRenderer(Context context, GameLaunchRequest request, String engine) {
         WidescreenRecipes.Recipe recipe = WidescreenRecipes.find(
                 context, request.systemId, request.gameTitle);
-        return recipe != null && recipe.hardwareWhenWide && recipe.engine.equals(engine) &&
-                WidescreenSession.remembered(context, recipe, request.gameTitle,
-                        request.qualificationSession);
+        return recipe != null && recipe.hardwareWhenWide && recipe.engine.equals(engine);
     }
 
     /** Contract 4: {@code native | hack | cheats | unavailable}. */

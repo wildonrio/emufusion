@@ -1,0 +1,66 @@
+--- a/src/Cafe/HW/Latte/Core/LatteTiming.h
++++ b/src/Cafe/HW/Latte/Core/LatteTiming.h
+@@ -7,6 +7,7 @@
+ // host can lock the guest to an exact divisor of the measured panel (59.95 Hz
+ // on a 119.9 Hz panel). Zero disables it; it overrides the integral setting.
+ void LatteTiming_setEmuFusionVsyncHz(double hz);
++void LatteTiming_nudgeEmuFusionVsyncPhase(int64_t ns);
+ double LatteTiming_getEmuFusionVsyncHz();
+ 
+ void LatteTiming_EnableHostDrivenVSync();
+\ No newline at end of file
+--- a/src/Cafe/HW/Latte/Core/LatteTiming.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteTiming.cpp
+@@ -8,6 +8,9 @@
+ 
+ sint32 s_customVsyncFrequency = -1;
+ std::atomic<double> s_emufusionVsyncHz{0.0};
++// EmuFusion (2026-11-06): the frame generator's phase lock moves the next emulated vsync by small
++// steps (positive = later). Consumed on the Latte thread, which owns timer_nextVSync.
++std::atomic<int64_t> s_emufusionPhaseNudgeNs{0};
+ 
+ void LatteTiming_NotifyHostVSync();
+ 
+@@ -47,6 +50,11 @@
+ 	s_customVsyncFrequency = -1;
+ }
+ 
++void LatteTiming_nudgeEmuFusionVsyncPhase(int64_t ns)
++{
++	s_emufusionPhaseNudgeNs.fetch_add(ns, std::memory_order_relaxed);
++}
++
+ void LatteTiming_setEmuFusionVsyncHz(double hz)
+ {
+ 	s_emufusionVsyncHz.store(hz > 0.0 ? hz : 0.0, std::memory_order_relaxed);
+@@ -186,5 +194,8 @@
+ 		}
+ 		else	
+ 			LatteGPUState.timer_nextVSync += vsyncTime;
++		const int64_t emufusionNudgeNs = s_emufusionPhaseNudgeNs.exchange(0, std::memory_order_relaxed);
++		if (emufusionNudgeNs != 0)
++			LatteGPUState.timer_nextVSync += (uint64)(int64_t)((double)emufusionNudgeNs * (double)HighResolutionTimer::getFrequency() / 1000000000.0);
+ 	}
+ }
+\ No newline at end of file
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+@@ -3371,7 +3371,17 @@
+ 		if (slot <= s_emufusionStampLastSlot)
+ 			slot = s_emufusionStampLastSlot + 1;
+ 		s_emufusionStampLastSlot = slot;
+-		const int64_t stampNs = s_emufusionStampBaseNs + slot * kEmuFusionStampPeriodNs;
++		// EmuFusion (2026-11-06): the Thor's firmware (Qualcomm Penguin frame pacing, in libgui's
++		// queueBuffer) sleeps a producer about 2 ms to a fixed vsync phase unless the buffer's stamp
++		// is still in the future, which pins arrival whatever the emulated vsync's phase. The host
++		// reads only the stamps' spacing. QA: setprop debug.emufusion.cemu_stamp_ahead_us 10000.
++		static const int64_t s_emufusionStampAheadNs = []
++		{
++			char value[PROP_VALUE_MAX] = {};
++			const int length = __system_property_get("debug.emufusion.cemu_stamp_ahead_us", value);
++			return (length > 0 ? (int64_t)atoll(value) : 0LL) * 1000LL;
++		}();
++		const int64_t stampNs = s_emufusionStampBaseNs + slot * kEmuFusionStampPeriodNs + s_emufusionStampAheadNs;
+ 		emufusionPresentTime.presentID = ++s_emufusionPresentId;
+ 		emufusionPresentTime.desiredPresentTime = (uint64_t)stampNs;
+ 		emufusionPresentTimes.sType = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE;

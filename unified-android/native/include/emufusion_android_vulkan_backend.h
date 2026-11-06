@@ -21,6 +21,9 @@ typedef struct emufusion_android_vulkan_info {
 emufusion_android_vulkan_backend *emufusion_android_vulkan_create(
         char *error, size_t error_size);
 /* Render-owner configuration. Defaults Off; rebinds start a fresh FG timeline. */
+bool emufusion_android_vulkan_set_stamp_ahead(
+        emufusion_android_vulkan_backend *backend, int64_t ahead_ns,
+        char *error, size_t error_size);
 bool emufusion_android_vulkan_set_fg_timestamp(
         emufusion_android_vulkan_backend *backend, bool secondary, bool enabled,
         char *error, size_t error_size);

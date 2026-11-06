@@ -11,6 +11,8 @@ public final class BuiltinQueueReserveTest {
         compositorMissesDoNotCount();
         framesReadyForAnEarlierLatchDoNotCount();
         recorderBurstGivesTheScanBackOnceFramesFitEarlier();
+        anUnfinishedLatchMakesTheEarlierScanTheDeadline();
+        aFloorKeepsTheDepth();
         recoveryNeedsUnbrokenEvidence();
         failedRecoveryRestoresAtOnceAndBacksOff();
         recoveryThatHoldsResetsTheBackoff();
@@ -192,6 +194,49 @@ public final class BuiltinQueueReserveTest {
         eq(1L, r.recoveries(), "one recovery");
         for (int i = 0; i < 2000; ++i)
             check(onTime(r, clock, 3_000_000L) == BuiltinQueueReserve.Change.NONE, "nothing below the earliest scan");
+    }
+
+    private static void aFloorKeepsTheDepth() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long[] clock = {5_000_000_000L};
+        r.setMinExtraScans(1);
+        eq(1L, r.extraScans(), "deepened to the floor at once");
+        for (int i = 0; i < 1000; ++i)
+            check(onTime(r, clock, PERIOD + 2_000_000L) != BuiltinQueueReserve.Change.RECOVERED,
+                    "frames that would fit a scan earlier do not give it back");
+        for (int i = 0; i < 1000; ++i)
+            check(early(r, clock) != BuiltinQueueReserve.Change.RECOVERED, "nor do frames shown early");
+        eq(1L, r.extraScans(), "the floor holds");
+        r.setMinExtraScans(0);
+        BuiltinQueueReserve.Change last = BuiltinQueueReserve.Change.NONE;
+        for (int i = 0; i < 1000 && last != BuiltinQueueReserve.Change.RECOVERED; ++i)
+            last = onTime(r, clock, PERIOD + 2_000_000L);
+        eq(0L, r.extraScans(), "without the floor the scan comes back");
+    }
+
+    private static void anUnfinishedLatchMakesTheEarlierScanTheDeadline() {
+        // Finished 0.3 ms before the earlier latch: too close while the compositor waits for its fence.
+        BuiltinQueueReserve waits = new BuiltinQueueReserve();
+        long[] clock = {5_000_000_000L};
+        burst(waits, clock);
+        for (int i = 0; i < 1000; ++i)
+            check(onTime(waits, clock, PERIOD + 300_000L) != BuiltinQueueReserve.Change.RECOVERED,
+                    "a compositor that waits keeps the depth");
+        // The same frames once a frame finished after its latch has made its slot.
+        BuiltinQueueReserve latches = new BuiltinQueueReserve();
+        clock[0] = 5_000_000_000L;
+        onTime(latches, clock, -500_000L);
+        advance(clock, 3_000_000_000L);
+        burst(latches, clock);
+        BuiltinQueueReserve.Change last = BuiltinQueueReserve.Change.NONE;
+        int frames = 0;
+        while (last != BuiltinQueueReserve.Change.RECOVERED && frames < 1000) {
+            last = onTime(latches, clock, PERIOD + 300_000L);
+            ++frames;
+        }
+        int settle = (int) (BuiltinQueueReserve.SETTLE_NS / PERIOD);
+        check(frames <= BuiltinQueueReserve.RECOVERY_FRAMES + settle + 1, "the scan comes back: " + frames);
+        eq(0L, latches.extraScans(), "given back");
     }
 
     private static void recoveryNeedsUnbrokenEvidence() {

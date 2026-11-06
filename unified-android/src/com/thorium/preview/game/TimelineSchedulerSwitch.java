@@ -326,14 +326,63 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         fastPath = handOver;
-        boolean stateDrain = true;
+        int stateDrain = 1;
         try {
             if (context != null) stateDrain = Settings.Global.getInt(
-                    context.getContentResolver(), COMPOSITOR_DRAIN_GLOBAL, 1) != 0;
+                    context.getContentResolver(), COMPOSITOR_DRAIN_GLOBAL, 1);
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
-        compositorDrain = stateDrain;
+        compositorDrain = stateDrain != 0;
+        compositorDrainAllSources = stateDrain >= 2;
+        int hardwareLock = -1;
+        try {
+            if (context != null) hardwareLock = Settings.Global.getInt(
+                    context.getContentResolver(), HARDWARE_PHASE_LOCK_GLOBAL, hardwareLock);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        hardwarePhaseLock = hardwareLock;
+        int queueFloor = 0;
+        try {
+            if (context != null) queueFloor = Settings.Global.getInt(
+                    context.getContentResolver(), MIN_QUEUE_SCANS_GLOBAL, queueFloor);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        minQueueScans = queueFloor;
+        boolean uniqueAssumed = false;
+        try {
+            if (context != null) uniqueAssumed = Settings.Global.getInt(
+                    context.getContentResolver(), ASSUME_UNIQUE_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        assumeUnique = uniqueAssumed;
+        int cemuWaitUs = 5_500;
+        try {
+            if (context != null) cemuWaitUs = Settings.Global.getInt(
+                    context.getContentResolver(), CEMU_PHASE_WAIT_GLOBAL, cemuWaitUs);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        cemuPhaseWaitNs = cemuWaitUs * 1000L;
+        boolean pairArrivalSpan = false;
+        try {
+            if (context != null) pairArrivalSpan = Settings.Global.getInt(
+                    context.getContentResolver(), ARRIVAL_SPAN_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        arrivalSpan = pairArrivalSpan;
+        boolean predraw = false;
+        try {
+            if (context != null) predraw = Settings.Global.getInt(
+                    context.getContentResolver(), REAL_PREDRAW_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        realPredraw = predraw;
         int check = 0;
         try {
             if (context != null) check = Settings.Global.getInt(
@@ -744,6 +793,71 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean compositorDrain = true;
 
     static boolean compositorDrain() { return compositorDrain; }
+
+    /** QA emufusion_framegen_compositor_drain=2: not only the sources the phase lock holds. */
+    private static volatile boolean compositorDrainAllSources = false;
+
+    static boolean compositorDrainAllSources() { return compositorDrainAllSources; }
+
+    /**
+     * A hardware core's stamps follow its run sequence, so a burst leaves them
+     * ahead of the clock and a stall behind it. Only stamps behind it get the
+     * firmware's pacing, which pins arrival before the panel callback; ahead, the
+     * core runs free. Double Dash ranged from 1.8 to 168 hitches per 30 s by that
+     * alone (Thor, 2026-11-06). So the host's named cores (Dolphin) start their
+     * stamps a second behind (stampBehindByDefault).
+     * QA emufusion_framegen_hardware_phase_lock: 0 stamps as they fall, 1 every
+     * hardware core held by the phase lock instead, with its stamps kept ahead.
+     */
+    static final String HARDWARE_PHASE_LOCK_GLOBAL = "emufusion_framegen_hardware_phase_lock";
+    private static volatile int hardwarePhaseLock = -1;
+
+    static boolean hardwarePhaseLock() { return hardwarePhaseLock > 0; }
+
+    static boolean hardwareStampBehind(boolean pinnedByDefault) {
+        return hardwarePhaseLock < 0 && pinnedByDefault;
+    }
+
+    /** QA emufusion_framegen_min_queue_scans: the shallowest queue for a multi-scan output, with the early guard on. */
+    static final String MIN_QUEUE_SCANS_GLOBAL = "emufusion_framegen_min_queue_scans";
+    private static volatile int minQueueScans = 0;
+
+    static int minQueueScans() { return minQueueScans; }
+
+    /** QA emufusion_framegen_assume_unique=1: after a long run of unique verdicts, a callback does not wait for the check. */
+    static final String ASSUME_UNIQUE_GLOBAL = "emufusion_framegen_assume_unique";
+    private static volatile boolean assumeUnique = false;
+
+    static boolean assumeUnique() { return assumeUnique; }
+
+    /** QA emufusion_framegen_cemu_phase_wait_us: the wait Cemu's phase lock holds (its nudge is QA too). */
+    static final String CEMU_PHASE_WAIT_GLOBAL = "emufusion_framegen_cemu_phase_wait_us";
+    private static volatile long cemuPhaseWaitNs = 5_500_000L;
+
+    static long cemuPhaseWaitNs() { return cemuPhaseWaitNs; }
+
+    /**
+     * QA emufusion_framegen_arrival_span=1: arrival pacing places a pair's real
+     * image by the time between its images' arrivals, not their timestamps.
+     * Wind Waker HD's images arrive an even 33.3 ms apart, but Cemu's 60 Hz stamp
+     * lattice reads some 16.7 and 50 ms apart near a slot boundary, so real images
+     * come one or three scans after the generated image (Thor, 2026-11-06).
+     */
+    static final String ARRIVAL_SPAN_GLOBAL = "emufusion_framegen_arrival_span";
+    private static volatile boolean arrivalSpan = false;
+
+    static boolean arrivalSpan() { return arrivalSpan; }
+
+    /**
+     * QA emufusion_framegen_real_predraw=1: a pair's real image is drawn into
+     * the back buffer right after its generated image's swap, so its own
+     * callback only swaps it. Wind Waker HD's real images finish 3 ms after
+     * their scan behind Cemu's GPU work, one scan late every time (Thor, 2026-11-06).
+     */
+    static final String REAL_PREDRAW_GLOBAL = "emufusion_framegen_real_predraw";
+    private static volatile boolean realPredraw = false;
+
+    static boolean realPredraw() { return realPredraw; }
 
     /**
      * QA emufusion_framegen_image_check: a preview of each generated image is

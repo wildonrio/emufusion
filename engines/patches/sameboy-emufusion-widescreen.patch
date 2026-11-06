@@ -50,10 +50,10 @@ index 0000000..3b3b8d3
 +#endif
 diff --git a/Core/ef_wide.inc b/Core/ef_wide.inc
 new file mode 100644
-index 0000000..ebd1e25
+index 0000000..a5b6cad
 --- /dev/null
 +++ b/Core/ef_wide.inc
-@@ -0,0 +1,261 @@
+@@ -0,0 +1,322 @@
 +// Included at the end of display.c.
 +#include "ef_wide.h"
 +static uint32_t ef_fb[EF_WIDE_WIDTH * LINES];
@@ -134,6 +134,13 @@ index 0000000..ebd1e25
 +// Gold and Silver: also a colour for each tile, four bits in a list in ROM bank 2.
 +static const ef_map_layout ef_pokemon2 = {0xC700, 0xDA03, 0xDA02, 0xD088, 0xD087, 0xD0C5, 0xD0C6, 0xD0CF};
 +static const ef_map_layout *ef_map;
++// Wario Land II and 3: the level is in a battery RAM bank, a byte for each 16-pixel block, 256 to a row.
++// A block's four tiles are in a list in work RAM, and their colours in a list in another work RAM bank.
++typedef struct { uint8_t battery_bank; uint16_t rows, tiles; uint32_t colors; } ef_block_layout;
++static const ef_block_layout ef_wl2 = {1, 32, 0xC400, 0x4400};
++static const ef_block_layout ef_wl3 = {2, 32, 0xC600, 0x3300};
++static const ef_block_layout *ef_blocks;
++static int ef_turn_x, ef_turn_y;
 +// For a game nobody has played through: a scene that has not scrolled is likely a menu, and its
 +// map holds anything. The sides open once it has scrolled past the new columns, since until then the
 +// ones behind it are the last scene's, and close when the screen goes off.
@@ -152,6 +159,7 @@ index 0000000..ebd1e25
 +{
 +    ef_map = !value ? NULL : !strcmp(value, "pokemon1") ? &ef_pokemon1 :
 +        !strcmp(value, "pokemon1y") ? &ef_pokemon1y : !strcmp(value, "pokemon2") ? &ef_pokemon2 : NULL;
++    ef_blocks = !value ? NULL : !strcmp(value, "wl2") ? &ef_wl2 : !strcmp(value, "wl3") ? &ef_wl3 : NULL;
 +    ef_map_matches = ef_map_misses = 0;
 +}
 +
@@ -175,6 +183,23 @@ index 0000000..ebd1e25
 +    return address < gb->rom_size ? gb->rom[address] : 0;
 +}
 +
++static int ef_block_corner(GB_gameboy_t *gb, int world_x, int world_y)
++{
++    int column = world_x >> 4, row = world_y >> 4;
++    if (world_x < 0 || world_y < 0 || column > 255 || row >= ef_blocks->rows) return -1;
++    size_t at = ef_blocks->battery_bank * 0x2000 + row * 0x100 + column;
++    if (at >= gb->mbc_ram_size) return -1;
++    // The game's own sum loses a block number's top bit, which marks things like hidden coins.
++    return (gb->mbc_ram[at] & 0x7F) * 4 + ((world_y >> 3) & 1) * 2 + ((world_x >> 3) & 1);
++}
++
++static uint8_t ef_map_tile(GB_gameboy_t *gb, int world_x, int world_y)
++{
++    if (!ef_blocks) return ef_pokemon_tile(gb, world_x, world_y);
++    int corner = ef_block_corner(gb, world_x, world_y);
++    return corner < 0 ? 0 : gb->ram[ef_blocks->tiles - 0xC000 + corner];
++}
++
 +// How well a camera position explains the middle of the real picture, out of 40.
 +static int ef_map_score(GB_gameboy_t *gb, int camera_x, int camera_y)
 +{
@@ -184,7 +209,7 @@ index 0000000..ebd1e25
 +    for (int y = 16; y < 96; y += 16) {
 +        for (int x = 24; x < 136; x += 16) {
 +            uint8_t ring_x = x + scx, ring_y = y + scy;
-+            if (gb->vram[base + (ring_y >> 3) * 32 + (ring_x >> 3)] == ef_pokemon_tile(gb, camera_x + x, camera_y + y)) score++;
++            if (gb->vram[base + (ring_y >> 3) * 32 + (ring_x >> 3)] == ef_map_tile(gb, camera_x + x, camera_y + y)) score++;
 +        }
 +    }
 +    return score;
@@ -211,6 +236,40 @@ index 0000000..ebd1e25
 +    ef_map_misses = best * 10 >= 42 * 6 ? 0 : ef_map_misses + 1;
 +    if (!ef_map_misses) ef_map_matches = 1;
 +    else if (ef_map_misses >= 3) ef_map_matches = 0;
++}
++
++// The level and the video scroll differ only by whole turns of the 256-pixel ring.
++static void ef_blocks_frame(GB_gameboy_t *gb)
++{
++    uint8_t scx = gb->io_registers[GB_IO_SCX], scy = gb->io_registers[GB_IO_SCY];
++    int best = ef_map_score(gb, ef_turn_x * 256 + scx, ef_turn_y * 256 + scy);
++    if (best * 10 < 35 * 8) {
++        for (int y = 0; y * 256 < ef_blocks->rows * 16; y++) {
++            for (int x = 0; x < 16; x++) {
++                int score = ef_map_score(gb, x * 256 + scx, y * 256 + scy);
++                if (score > best) { best = score; ef_turn_x = x; ef_turn_y = y; }
++            }
++        }
++    }
++    ef_map_x = ef_turn_x * 256 + scx;
++    ef_map_y = ef_turn_y * 256 + scy;
++    ef_map_misses = best * 10 >= 35 * 6 ? 0 : ef_map_misses + 1;
++    if (!ef_map_misses) ef_map_matches = 1;
++    else if (ef_map_misses >= 3) ef_map_matches = 0;
++}
++
++static uint8_t ef_blocks_pixel(GB_gameboy_t *gb, int x, int line, uint8_t *attributes)
++{
++    int world_x = ef_map_x + x, world_y = ef_map_y + line;
++    int corner = ef_block_corner(gb, world_x, world_y);
++    if (corner < 0) return 0;
++    uint8_t tile = gb->ram[ef_blocks->tiles - 0xC000 + corner];
++    *attributes = gb->ram[ef_blocks->colors + corner];
++    uint16_t address = gb->io_registers[GB_IO_LCDC] & GB_LCDC_TILE_SEL ? tile * 16 : 0x1000 + (int8_t)tile * 16;
++    if (*attributes & 8) address += 0x2000;
++    uint8_t fine_y = *attributes & 0x40 ? 7 - (world_y & 7) : world_y & 7;
++    uint8_t bit = *attributes & 0x20 ? world_x & 7 : 7 - (world_x & 7);
++    return (gb->vram[address + fine_y * 2] >> bit & 1) | (gb->vram[address + fine_y * 2 + 1] >> bit & 1) << 1;
 +}
 +
 +static uint8_t ef_map_pixel(GB_gameboy_t *gb, int x, int line, uint8_t *attributes)
@@ -259,13 +318,14 @@ index 0000000..ebd1e25
 +        ef_scene_travel = step < -24 || step > 24 ? 0 : ef_scene_travel + (step < 0 ? -step : step);
 +        ef_last_scx = gb->io_registers[GB_IO_SCX];
 +        ef_evaluate_scene(gb);
-+        if (ef_map) ef_map_frame(gb);
++        if (ef_blocks) ef_blocks_frame(gb);
++        else if (ef_map) ef_map_frame(gb);
 +    }
 +    uint8_t line = gb->current_line;
 +    uint32_t *out = ef_fb + line * (160 + 2 * ef_ext);
 +    uint8_t lcdc = gb->io_registers[GB_IO_LCDC];
 +    uint32_t blank = gb->rgb_encode_callback ? gb->rgb_encode_callback(gb, 0, 0, 0) : 0;
-+    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE) || (ef_map && !ef_map_matches) ||
++    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE) || ((ef_map || ef_blocks) && !ef_map_matches) ||
 +        (ef_scroll_gate && ef_scene_travel < ef_ext + 16)) {
 +        for (int i = 0; i < ef_ext; i++) out[i] = out[ef_ext + 160 + i] = blank;
 +        return;
@@ -277,11 +337,12 @@ index 0000000..ebd1e25
 +    for (int side = 0; side < 2; side++) {
 +        // The window runs to the right edge, and from the left edge when it starts there. Its
 +        // own map holds no more columns, so the bar carries on in the colour of its edge.
-+        uint8_t covered = !ef_map && window_line && (side || gb->io_registers[GB_IO_WX] <= 7);
++        uint8_t covered = !ef_map && !ef_blocks && window_line && (side || gb->io_registers[GB_IO_WX] <= 7);
 +        uint32_t edge = gb->screen ? gb->screen[line * 160 + (side ? 159 : 0)] : blank;
 +        for (int i = 0; i < ef_ext; i++) {
 +            int x = side ? 160 + i : i - ef_ext;
-+            uint8_t attributes = 0, bg = covered ? 0 : ef_map ? ef_map_pixel(gb, x, line, &attributes) : ef_bg_pixel(gb, x, &attributes);
++            uint8_t attributes = 0, bg = covered ? 0 : ef_blocks ? ef_blocks_pixel(gb, x, line, &attributes) :
++                ef_map ? ef_map_pixel(gb, x, line, &attributes) : ef_bg_pixel(gb, x, &attributes);
 +            uint32_t color = covered ? edge
 +                : gb->cgb_mode ? gb->background_palettes_rgb[(attributes & 7) * 4 + bg]
 +                : gb->background_palettes_rgb[bgp >> (bg * 2) & 3];

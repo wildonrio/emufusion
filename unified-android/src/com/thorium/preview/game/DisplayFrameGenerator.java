@@ -3074,6 +3074,25 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 TimelineSchedulerSwitch.sourcePhaseLock() ? sourcePhaseLock.smoothedErrorNs() : Double.NaN;
     }
 
+    private volatile boolean hardwarePhaseSource;
+    // Its stamps start behind the clock: the firmware's pacing holds its phase, so a drain can hold too.
+    private volatile boolean firmwarePacedSource;
+    private volatile long sourcePhaseWaitNs;
+
+    @Override public void setSourcePhaseWaitNs(long ns) { sourcePhaseWaitNs = ns; }
+
+    @Override public long hardwareStampAheadNs(boolean pinnedByDefault) {
+        if (TimelineSchedulerSwitch.hardwarePhaseLock()) return 10_000_000L;
+        firmwarePacedSource = TimelineSchedulerSwitch.hardwareStampBehind(pinnedByDefault);
+        return firmwarePacedSource ? -1_000_000_000L : 0L;
+    }
+
+    @Override public long takeHardwareSourcePhaseNudgeNs() {
+        if (!TimelineSchedulerSwitch.hardwarePhaseLock()) return 0L;
+        hardwarePhaseSource = true;
+        return takeSourcePhaseNudgeNs();
+    }
+
     @Override public long takeSourcePhaseNudgeNs() {
         if (closed.get() || !TimelineSchedulerSwitch.sourcePhase() ||
                 !TimelineSchedulerSwitch.sourcePhaseLock()) return 0L;
@@ -3602,6 +3621,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             consumeExternalEndpointDiscontinuities();
             pollPhysicalPresentations();
             if (externalTransport == null) pollSignatureOnVsync();
+            if (externalTransport == null && TimelineSchedulerSwitch.assumeUnique())
+                assumePendingSignatureUnique();
             if (externalTransport == null) {
                 frameRate.setGenerationAvailable(builtinClockAdmissionReady(
                         densePyramidEnabled, densePyramidUnavailable, displayId,
@@ -5175,6 +5196,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         unique = true;
                         ++softwareSignatureRescues;
                     }
+                    noteSignatureVerdict(unique, signatureCandidateAssumed[completedCandidate]);
+                    if (signatureCandidateAssumed[completedCandidate]) {
+                        // Already shown as unique; this was only its check.
+                        releaseSignatureCandidate(completedCandidate);
+                        completedCandidate = -1;
+                        unique = false;
+                    }
+                }
+                if (completedCandidate >= 0) {
                     // Preserve the exact classified candidate for both UNIQUE
                     // and DUPLICATE results.  The latter is a timing endpoint,
                     // not source-rate evidence.  Keep its texture slot reserved
@@ -5551,6 +5581,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * with the callback, which handles them as before.
      */
     private void prepareArrivalPairEarly() {
+        // On arrival, not at the callback: the pair's solve starts now and can make that callback's slot.
+        if (externalTransport == null && timelineActive && timeline.arrivalPacing() &&
+                TimelineSchedulerSwitch.assumeUnique()) assumePendingSignatureUnique();
         if (externalTransport != null || !timelineActive || !timeline.arrivalPacing() ||
                 activeLeftSequence <= 0L || endpointFifoCount <= 0 ||
                 observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;
@@ -5640,6 +5673,12 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     unique = true;
                     ++softwareSignatureRescues;
                 }
+                noteSignatureVerdict(unique, signatureCandidateAssumed[candidate]);
+                if (signatureCandidateAssumed[candidate]) {
+                    // Already shown as unique; this was only its check.
+                    releaseSignatureCandidate(candidate);
+                    continue;
+                }
                 clearNativeClassifiedObservation();
                 classifiedFrameReady = true;
                 classifiedUniqueTexture = signatureCandidateTextures[candidate];
@@ -5670,6 +5709,62 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         } finally {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
             GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        }
+    }
+
+    /** About 4 s at 30 fps: a source that repeats images breaks this quickly and starts again. */
+    private static final int ASSUME_UNIQUE_AFTER = 120;
+    private int signatureUniqueStreak;
+    private long assumedUnique, assumedWrong;
+    private final boolean[] signatureCandidateAssumed = new boolean[SIGNATURE_CANDIDATE_SLOTS];
+
+    private void noteSignatureVerdict(boolean unique, boolean assumed) {
+        if (assumed && !unique) ++assumedWrong;
+        signatureUniqueStreak = unique ? signatureUniqueStreak + 1 : 0;
+    }
+
+    private void releaseSignatureCandidate(int slot) {
+        signatureCandidateAssumed[slot] = false;
+        signatureCandidateSequence[slot] = 0L;
+        signatureCandidateTimestampNs[slot] = 0L;
+        signatureCandidateSubmission[slot] = 0;
+        signatureCandidatePixelsChanged[slot] = false;
+        if (nativeSourceImageObserver != null) nativeSourceImageObserver.releaseCandidate(slot);
+    }
+
+    /**
+     * An image's uniqueness check is on the GPU behind the engine's work.
+     * Wind Waker HD (Thor, 2026-11-06): arrival stays 3.6 ms before the callback
+     * and the check finishes around it, so a pair that misses waits a whole scan, 19 ms instead
+     * of 11 to the generated image, for seconds at a time. After a long run of unique verdicts,
+     * show it as unique now. The check still reads back; a repeated image starts the run over.
+     */
+    private void assumePendingSignatureUnique() {
+        if (signatureUniqueStreak < ASSUME_UNIQUE_AFTER || !signatureVsyncPollEnabled()) return;
+        for (;;) {
+            int candidate = -1;
+            for (int slot = 0; slot < SIGNATURE_CANDIDATE_SLOTS; ++slot) {
+                if (signatureCandidateSequence[slot] != 0L && !signatureCandidateAssumed[slot] &&
+                        (candidate < 0 || signatureCandidateSequence[slot] < signatureCandidateSequence[candidate]))
+                    candidate = slot;
+            }
+            if (candidate < 0) return;
+            clearNativeClassifiedObservation();
+            classifiedFrameReady = true;
+            classifiedUniqueTexture = signatureCandidateTextures[candidate];
+            classifiedUniqueTimestampNs = signatureCandidateTimestampNs[candidate];
+            classifiedUniqueSubmission = signatureCandidateSubmission[candidate];
+            classifiedPixelVerdictKnown = true;
+            if (nativeSourceImageObserver != null)
+                nativeSourceImageObserver.classifyCandidate(candidate);
+            finishNativeClassifiedObservation(true);
+            consumeClassifiedFrame(true);
+            classifiedFrameReady = false;
+            classifiedUniqueTexture = 0;
+            classifiedUniqueTimestampNs = 0L;
+            classifiedUniqueSubmission = 0;
+            signatureCandidateAssumed[candidate] = true;
+            ++assumedUnique;
         }
     }
 
@@ -5777,6 +5872,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         java.util.Arrays.fill(signatureCandidateTimestampNs, 0L);
         java.util.Arrays.fill(signatureCandidateSubmission, 0);
         java.util.Arrays.fill(signatureCandidatePixelsChanged, false);
+        java.util.Arrays.fill(signatureCandidateAssumed, false);
     }
 
     /** Records one pixel-distinct image with its immutable producer timestamp. */
@@ -7403,6 +7499,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (TimelineSchedulerSwitch.earliestLatch() && builtinQueueReserve.extraScans() == 0)
             builtinBacklogCatchUp.observe(result.desiredNs, result.actualNs, result.panelPeriodNs,
                     result.actualNs);
+        int minQueueScans = presentationScansPerOutput() >= 2 ? TimelineSchedulerSwitch.minQueueScans() : 0;
+        builtinQueueReserve.setMinExtraScans(minQueueScans);
+        // Negative in QA: that floor, and no deeper.
+        if (minQueueScans < 0) {
+            builtinQueueReserve.setMaxExtraScans(-minQueueScans);
+            builtinQueueReserve.setMinExtraScans(-minQueueScans);
+        }
+        if (minQueueScans != 0 && compositorEarlyGuard.activate())
+            Log.i(TAG, "Compositor early guard on generator=" + generatorId + " reason=queue-floor");
         int previous = builtinQueueReserve.extraScans();
         builtinQueueReserve.setEarlyGuardAvailable(TimelineSchedulerSwitch.earlyGuard() &&
                 !compositorEarlyGuard.active() && !compositorEarlyGuard.disabled());
@@ -9173,6 +9278,42 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     /** The callback's generated image: the prepared copy when it is this pair's, else rendered now. */
+    private boolean predrawnReal;
+    private long predrawnRealKey, realPredraws, realPredrawHits;
+    private float predrawnRealAspect;
+    private FrameRateOverlay.Image predrawnRealOverlay;
+
+    /**
+     * The pair's real image goes into the back buffer right after its
+     * generated image's swap: nothing is left for the GPU at that image's own
+     * callback, half a source period later, so sharing the GPU with the
+     * engine cannot make it late.
+     */
+    private void predrawRealImage() {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        GLES20.glViewport(0, 0, outputWidth, outputHeight);
+        GLES20.glClearColor(0f, 0f, 0f, 1f);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        setPresentationViewport();
+        drawTexture2d(historyTextures[currentIndex]);
+        FrameRateOverlay overlay = frameRateOverlay;
+        drawFrameRateOverlay();
+        GLES20.glFlush();
+        predrawnReal = true;
+        predrawnRealKey = historyFrameKey(currentIndex);
+        predrawnRealAspect = presentationAspect;
+        predrawnRealOverlay = overlay != null ? overlay.image : null;
+        ++realPredraws;
+    }
+
+    private boolean realPredrawnFor(float selectedPhase) {
+        if (!predrawnReal || selectedPhase < 1f) return false;
+        FrameRateOverlay overlay = frameRateOverlay;
+        return predrawnRealKey == historyFrameKey(currentIndex) &&
+                predrawnRealAspect == presentationAspect &&
+                predrawnRealOverlay == (overlay != null ? overlay.image : null);
+    }
+
     private void drawPreparedOrMotionFrame(float phase) {
         boolean atInput = preparedAtInputSize();
         if (preparedFrameValid && preparedFrameTexture != 0 &&
@@ -9691,6 +9832,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         timeline.setRightReadyNs(timeline.arrivalPacing() ?
                 callbackReadyClock.readyNs(admissionNs(activeRightSequence), callbackNs) :
                 admissionNs(activeRightSequence));
+        long leftAdmittedNs = admissionNs(activeLeftSequence);
+        long rightAdmittedNs = admissionNs(activeRightSequence);
+        timeline.setPairArrivalSpanNs(TimelineSchedulerSwitch.arrivalSpan() &&
+                leftAdmittedNs > 0L && rightAdmittedNs > leftAdmittedNs ?
+                rightAdmittedNs - leftAdmittedNs : 0L);
         // Low latency: trim as soon as one extra image stays queued.
         timeline.setTrimExcessQueued(TimelineSchedulerSwitch.lowLatency() ?
                 1 : TimelineFrameScheduler.TRIM_EXCESS_QUEUED);
@@ -9715,7 +9861,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // Eden's frames finish with a few ms of jitter (arrival lateness p99
                 // 2.7 ms, NSMBU Deluxe in play): at a paced core's 2.3-ms wait 39 of
                 // them per 16 s missed their callback, at 3.9 ms 3.
-                if (switchContent) sourcePhaseLock.setTargetWaitNs(TimelineSchedulerSwitch.switchPhaseWaitNs());
+                if (switchContent || hardwarePhaseSource)
+                    sourcePhaseLock.setTargetWaitNs(TimelineSchedulerSwitch.switchPhaseWaitNs());
+                if (sourcePhaseWaitNs > 0L) sourcePhaseLock.setTargetWaitNs(sourcePhaseWaitNs);
                 sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);
                 sourcePhaseLock.observe(waitNs, panelPeriodNs);
             }
@@ -9921,10 +10069,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // above could reject; a rejection here already invalidated the pair.
         boolean rejectedAfterSelection =
                 denseEnabledAtSelection && !densePyramidEnabled;
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
-        GLES20.glViewport(0, 0, outputWidth, outputHeight);
-        GLES20.glClearColor(0f, 0f, 0f, 1f);
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        boolean realPredrawn = realThisTick && realPredrawnFor(selectedPhase);
+        predrawnReal = false;
+        if (realPredrawn) {
+            ++realPredrawHits;
+        } else {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, outputWidth, outputHeight);
+            GLES20.glClearColor(0f, 0f, 0f, 1f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        }
         // densePairMeanDifference is never measured in the cadence path (the
         // synchronous proof readbacks were removed), so this Java hold never
         // fires; the hard-cut hold lives in the interpolate shader
@@ -9936,9 +10090,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // the retained left, while a late physical callback may land on
             // phase1 and consume the retained right. Neither path reads the
             // producer's overwriteable latest texture.
-            setPresentationViewport();
-            drawTexture2d(historyTextures[selectedPhase >= 1f ?
-                    currentIndex : previousIndex]);
+            if (!realPredrawn) {
+                setPresentationViewport();
+                drawTexture2d(historyTextures[selectedPhase >= 1f ?
+                        currentIndex : previousIndex]);
+            }
         } else if (denseSceneCut) {
             // There is no physical intermediate across a hard scene cut.
             // Hold the left endpoint until the rational source timeline
@@ -10096,14 +10252,16 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // Only a source the phase lock holds: Double Dash, whose phase is chance, shows every late
         // image in the fast state (Thor, 2026-11-06: 40-70 two-scan intervals in 16 s at a 2-3-ms wait).
         if (renderedSynthetic && TimelineSchedulerSwitch.compositorDrain() && timelineActive &&
-                externalTransport == null && timeline.arrivalPacing() && sourcePhaseLockConsumer &&
-                !sourcePhaseLock.abandoned() && compositorStateDrain.drain(System.nanoTime())) {
+                externalTransport == null && timeline.arrivalPacing() &&
+                (TimelineSchedulerSwitch.compositorDrainAllSources() || firmwarePacedSource ||
+                        (sourcePhaseLockConsumer && !sourcePhaseLock.abandoned())) &&
+                compositorStateDrain.drain(System.nanoTime())) {
             if (physicalFramePrepared) physicalTracker.cancelPrepared();
             timeline.withhold();
             return;
         }
         beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);
-        drawFrameRateOverlay();
+        if (!realPredrawn) drawFrameRateOverlay();
         long denseSwapEnteredNs = densePyramidEnabled ? System.nanoTime() : 0L;
         if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
             discardFullImageCapture();
@@ -10294,6 +10452,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 invalidateBufferedPairForReprime();
             }
         }
+        if (renderedSynthetic && TimelineSchedulerSwitch.realPredraw() && timelineActive &&
+                externalTransport == null && activeRightSequence > 0L) predrawRealImage();
         long presentationEpochAfterAdvance = schedulerPresentationEpoch();
         refreshProofEvidencePresentationEpoch();
         // Until dense interpolation is armed, try twice a second instead of
@@ -11138,6 +11298,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         try {
             if (generated && !midpointPairBudget.admit(request))
                 throw new IllegalStateException("app-owned midpoint admission rejected");
+            predrawnReal = false;  // this draw replaces whatever the back buffer holds
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
             GLES20.glViewport(0, 0, outputWidth, outputHeight);
             GLES20.glClearColor(0f, 0f, 0f, 1f);
@@ -14968,6 +15129,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " signatureEarlyCommits=" + signatureEarlyCommits +
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
+                " realPredraws=" + realPredraws + "/" + realPredrawHits +
+                " assumedUnique=" + assumedUnique + "/" + assumedWrong +
                 " compositorDrains=" + compositorStateDrain.drains() + "/" +
                         compositorStateDrain.spacingNs() / 1_000_000_000L +
                 " fastCores=0x" + Long.toHexString(fastCoreMask) +

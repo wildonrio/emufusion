@@ -1543,12 +1543,112 @@
       "reason": "Superseded rollback 3.2.155 (229); 3.2.156 is the rollback for 3.2.157, 2026-11-06."
     },
     "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification.apk": {
-      "sha256": "d33d4e010e0a0b50675bed83dd756564b7b9c8d27cd5fcce0de560fee05f9085",
-      "reason": "Superseded rollback 3.2.155 (229); 3.2.156 is the rollback for 3.2.157, 2026-11-06."
+      "sha256": "c664b251edda7db4f856aa8edab1b6011213189bc0852a8307017f7d5b1e6dce",
+      "reason": "Closed shared trial retry-402 under the plain 3.2.155 name, not the release (d33d4e01); retired 2026-11-06."
     },
     "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-15dcfead29a96597080365c7ef5f55737328d8d75ee5cd29f774e58772266aeb.apk": {
       "sha256": "15dcfead29a96597080365c7ef5f55737328d8d75ee5cd29f774e58772266aeb",
       "reason": "Rejected candidate 3.2.157 retry-412: the drain acted on sources without a phase lock, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-0f428009fc928b1cebc99b6622d7d23c2063f84c2fb21329b6ac1057810e34e1.apk": {
+      "sha256": "0f428009fc928b1cebc99b6622d7d23c2063f84c2fb21329b6ac1057810e34e1",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-143226d77075424b1a7c47079121caf97032769eb8503514ea93e4cfa82e1c09.apk": {
+      "sha256": "143226d77075424b1a7c47079121caf97032769eb8503514ea93e4cfa82e1c09",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-14d86db7a0d1ad6a09e0c8ca98624ad19d0cd37d073256f6368f9a7eea16acd4.apk": {
+      "sha256": "14d86db7a0d1ad6a09e0c8ca98624ad19d0cd37d073256f6368f9a7eea16acd4",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-717ab6415df178f19f91d02e246f348f2e58fe03b73cf11c39d967fcfedb4167.apk": {
+      "sha256": "717ab6415df178f19f91d02e246f348f2e58fe03b73cf11c39d967fcfedb4167",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-87e5be7a3c8e449bc2ba9aa4ac1bbb4abf1a7183848ddef0fa6f74814b9849f5.apk": {
+      "sha256": "87e5be7a3c8e449bc2ba9aa4ac1bbb4abf1a7183848ddef0fa6f74814b9849f5",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-8a764b604c43996279face31093c4980f3e845acd75d8b8d4c479babdf9a050f.apk": {
+      "sha256": "8a764b604c43996279face31093c4980f3e845acd75d8b8d4c479babdf9a050f",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-c5f8b30893b26f1ed7f680e589479f120caaea2d305727111d9eb49d8b780dab.apk": {
+      "sha256": "c5f8b30893b26f1ed7f680e589479f120caaea2d305727111d9eb49d8b780dab",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification.apk": {
+      "sha256": "8a764b604c43996279face31093c4980f3e845acd75d8b8d4c479babdf9a050f",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-bfde1e78f12a81cea915ba2effdfc6c1148d72d9acccaae01d29ec5b1f63619f.apk": {
+      "sha256": "bfde1e78f12a81cea915ba2effdfc6c1148d72d9acccaae01d29ec5b1f63619f",
+      "reason": "Closed shared trial build, superseded by release 3.2.157 (231) on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-4076a6e61bd9024256672b980e557620b8ea0aad3dfcd75fc2ab9dcaf535d096.apk": {
+      "sha256": "4076a6e61bd9024256672b980e557620b8ea0aad3dfcd75fc2ab9dcaf535d096",
+      "reason": "Retry-415: hardware lock trial closed; superseded by retry-417 and later."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-9753d2592ec617176cb43f2436a84c25f089e7b1c3e18f8f50eba82d55b27a59.apk": {
+      "sha256": "9753d2592ec617176cb43f2436a84c25f089e7b1c3e18f8f50eba82d55b27a59",
+      "reason": "Retry-420: never installed; superseded by retry-421, which adds Cemu's 5.5-ms wait."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-9dd4b99c55614d22fb2dc6ded4558a2e36845adea040c3221c0ee657a12fd233.apk": {
+      "sha256": "9dd4b99c55614d22fb2dc6ded4558a2e36845adea040c3221c0ee657a12fd233",
+      "reason": "Retry-418 and -419: QA trial builds, superseded by retry-421."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-c2c4444715bf13bc628269ee444b826c66a004f2f2adf976d84415e98ec6001a.apk": {
+      "sha256": "c2c4444715bf13bc628269ee444b826c66a004f2f2adf976d84415e98ec6001a",
+      "reason": "Retry-418 and -419: QA trial builds, superseded by retry-421."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-da2d22e69e4942e176213eef9ea7baa9b834bf0b29fac8f2c47d6f41a13ba56b.apk": {
+      "sha256": "da2d22e69e4942e176213eef9ea7baa9b834bf0b29fac8f2c47d6f41a13ba56b",
+      "reason": "Closed shared widescreen trial, superseded by later builds on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-262990245506f4cd36a25afa2cd0c8adfdf75b5effcce319f95a93877a8f8a09.apk": {
+      "sha256": "262990245506f4cd36a25afa2cd0c8adfdf75b5effcce319f95a93877a8f8a09",
+      "reason": "Closed shared widescreen trial, superseded by later builds on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-0d491f6119055c65ecd84fe58f8aeb64d7a225d59d16943907bbee8bfb29f179.apk": {
+      "sha256": "0d491f6119055c65ecd84fe58f8aeb64d7a225d59d16943907bbee8bfb29f179",
+      "reason": "Retry-421: QA trial build, superseded by retry-424."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-cb89930738c08a15242a3964bd7d5ce2bddc100a8808865d6bae614828c5d974.apk": {
+      "sha256": "cb89930738c08a15242a3964bd7d5ce2bddc100a8808865d6bae614828c5d974",
+      "reason": "Closed shared widescreen trial, superseded by retry-424 on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-09ee91235b71351cb9b311decff0c98818474c97a6364181f77b3a59c7c91924.apk": {
+      "sha256": "09ee91235b71351cb9b311decff0c98818474c97a6364181f77b3a59c7c91924",
+      "reason": "Closed shared widescreen trial, superseded by retry-424 on 2026-11-06; build receipts stay in docs/qa."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-c76e078f33e810ce190ec158206248442cf0479039675b5eab8ea1ca74f4ea9b.apk": {
+      "sha256": "c76e078f33e810ce190ec158206248442cf0479039675b5eab8ea1ca74f4ea9b",
+      "reason": "Retry-425: never installed; superseded by retry-426."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-ef3dc7d4840322713cd0c9b0dd5d342860476ea6f39fbe8a776f6d574ac47c84.apk": {
+      "sha256": "ef3dc7d4840322713cd0c9b0dd5d342860476ea6f39fbe8a776f6d574ac47c84",
+      "reason": "Retry-424 and -426: QA trial builds, superseded by retry-427."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-8e2b303d8178d9f49b00b4f8e11e18822a4f30261933e013bf5b2c732ec76a59.apk": {
+      "sha256": "8e2b303d8178d9f49b00b4f8e11e18822a4f30261933e013bf5b2c732ec76a59",
+      "reason": "Retry-424 and -426: QA trial builds, superseded by retry-427."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-2d4fffd46b4dc9b26784bb044c4f6bf90e272078590260d69e2bc2e21f2fc380.apk": {
+      "sha256": "2d4fffd46b4dc9b26784bb044c4f6bf90e272078590260d69e2bc2e21f2fc380",
+      "reason": "Retry-427: QA trial build, superseded by retry-428."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-d829755a0691ee364d05dd7bbd81433d7116ba1e5b811fa411d42d3888754eac.apk": {
+      "sha256": "d829755a0691ee364d05dd7bbd81433d7116ba1e5b811fa411d42d3888754eac",
+      "reason": "Retry-428: QA trial build, superseded by retry-429."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-fa5e44d1dc79f3f645e3ec045664bb80ff9f070c1f32ae593ee83a707a55963e.apk": {
+      "sha256": "fa5e44d1dc79f3f645e3ec045664bb80ff9f070c1f32ae593ee83a707a55963e",
+      "reason": "Retry-429: QA trial build, superseded by retry-430."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-8657825c80be25260bfad9b873af89284fc7db118093a9318e0e01839a8a934b.apk": {
+      "sha256": "8657825c80be25260bfad9b873af89284fc7db118093a9318e0e01839a8a934b",
+      "reason": "Retry-430: QA trial build, superseded by retry-431."
     }
   }
 }

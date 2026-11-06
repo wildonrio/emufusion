@@ -27,11 +27,12 @@
  * sleeps inside queueBuffer until a fixed vsync phase unless the buffer's
  * timestamp is still in the future there. QA: debug.emufusion.stamp_ahead_ms starts
  * the stamps that far ahead of the clock; only their spacing is ever used. */
-static int64_t emufusion_stamp_ahead_ns(void) {
+static int64_t emufusion_stamp_ahead_ns(int64_t requested_ns) {
     char value[PROP_VALUE_MAX] = {0};
-    if (__system_property_get("debug.emufusion.stamp_ahead_ms", value) <= 0) return 0;
+    if (__system_property_get("debug.emufusion.stamp_ahead_ms", value) <= 0) return requested_ns;
     const long ms = atol(value);
-    return ms > 0 && ms <= 600000 ? (int64_t)ms * 1000000LL : 0;
+    /* Negative: start behind the clock, so the firmware always paces the core. */
+    return ms >= -600000 && ms <= 600000 ? (int64_t)ms * 1000000LL : 0;
 }
 
 typedef struct emufusion_gles_resume_frame {
@@ -87,6 +88,8 @@ struct emufusion_android_gles_backend {
     bool has_presented_game_frame;
     emufusion_gles_resume_warmup resume_warmup;
     bool fg_timestamp_enabled;
+    int64_t stamp_ahead_ns;
+    int64_t timestamp_lead_ns;
     bool direct_timestamp_bypass_logged;
     /* SurfaceTexture.getTimestamp() is only a source-timeline timestamp when
      * the EGL producer explicitly supplies EGL_ANDROID_presentation_time.
@@ -157,6 +160,18 @@ static bool claim_render_thread(emufusion_android_gles_backend *backend,
         set_error(error, error_size, "GLES lifecycle must stay on its render thread");
         return false;
     }
+    return true;
+}
+
+bool emufusion_android_gles_set_stamp_ahead(
+        emufusion_android_gles_backend *backend, int64_t ahead_ns,
+        char *error, size_t error_size) {
+    if (!claim_render_thread(backend, error, error_size)) return false;
+    backend->stamp_ahead_ns = ahead_ns;
+    backend->timestamp_lead_ns = emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);
+    /* Takes effect with the next timeline, which the following binding starts. */
+    backend->timestamp_timeline_ready = false;
+    backend->timestamp_last_ns = 0;
     return true;
 }
 
@@ -790,7 +805,8 @@ static bool stamp_core_frame_timestamp(
                     (period_ns > 0 ? period_ns : 1);
         } else if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
             backend->timestamp_base_ns =
-                    (EGLnsecsANDROID)now.tv_sec * 1000000000LL + now.tv_nsec + emufusion_stamp_ahead_ns();
+                    (EGLnsecsANDROID)now.tv_sec * 1000000000LL + now.tv_nsec +
+                    backend->timestamp_lead_ns;
         } else {
             /* SurfaceTexture timelines do not require an absolute zero. */
             backend->timestamp_base_ns = 1000000000LL;
@@ -805,6 +821,20 @@ static bool stamp_core_frame_timestamp(
             (long double)backend->timestamp_base_ns) return false;
     timestamp = backend->timestamp_base_ns +
             (EGLnsecsANDROID)(offset_ns + 0.5L);
+    /* A stall (a load, a shader compile) leaves a core behind its stamp timeline:
+     * Double Dash read 100-180 ms behind, where the firmware paces it again and the
+     * phase lock gives up (Thor, 2026-11-06). Keep the lead by moving the timeline on. */
+    if (backend->timestamp_lead_ns > 0) {
+        struct timespec clock_now;
+        if (clock_gettime(CLOCK_MONOTONIC, &clock_now) == 0) {
+            const EGLnsecsANDROID floor_ns = (EGLnsecsANDROID)clock_now.tv_sec * 1000000000LL +
+                    clock_now.tv_nsec + backend->timestamp_lead_ns;
+            if (timestamp < floor_ns) {
+                backend->timestamp_base_ns += floor_ns - timestamp;
+                timestamp = floor_ns;
+            }
+        }
+    }
     if (timestamp <= backend->timestamp_last_ns)
         timestamp = backend->timestamp_last_ns + 1;
     if (!backend->presentation_time_android(

@@ -533,7 +533,7 @@ case "$ENGINE" in
         cp -R "$source/." "$patched/"
         apply_locked_patch "$patched" \
             engines/patches/mgba-emufusion-widescreen.patch \
-            57cff41c1c05305f3e209b26b679cf65253aef0398f8fca72c73968b028d7654
+            bd4ec777f4eb83304fef1873b1874666789d37fc4e520047187f750b5495c8e3
         source="$patched"
         build="$BUILD_ROOT/work/mgba-$ABI"
         rm -rf "$build"
@@ -568,7 +568,7 @@ case "$ENGINE" in
         cp -R "$source/." "$build/"
         apply_locked_patch "$build" \
             engines/patches/mesen-emufusion-widescreen.patch \
-            f1bb30eebef3376932b39412094a054bfddb1eab1fd2fabb7014c118c4fa2de5
+            a8131929ee18795ded19424e0be9bd7f051ef17eb074014c03593f9384d72072
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -630,7 +630,7 @@ case "$ENGINE" in
         # Widescreen Hack: exact picture width, per-game scene and HUD rules.
         apply_locked_patch "$staged_source" \
             engines/patches/bsnes-hd-emufusion-widescreen.patch \
-            d89917b2e89d6f1fa080bb3d889ed0546ae896fbba2181bf8af1ba0569739076
+            0233e744cdeb8698e25cabf50158cb0a1d67f1aa0161ddb6ab5e9e0454363d45
         "$NDK_DIR/ndk-build" -C "$staged_source/bsnes/target-libretro/jni" \
             NDK_PROJECT_PATH="$staged_source/bsnes/target-libretro" \
             APP_BUILD_SCRIPT="$staged_source/bsnes/target-libretro/jni/Android.mk" \
@@ -659,7 +659,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$build" \
             engines/patches/sameboy-emufusion-widescreen.patch \
-            9c121326f3f0b48589d18831893c135b2ca4d3d664e6f607952488d1b693777a
+            3f1f96a1a3f5a7022aa57ae80d6442eb922db5f7e4faee0b03ab5c92bef294bf
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -971,7 +971,7 @@ case "$ENGINE" in
             0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4
         apply_locked_patch "$staged_source" \
             engines/patches/armsx2-emufusion-keep-2d.patch \
-            eacccbc89124e96f8bf3105e13d4f2b8c85bbbf59b690468c9c888af31f47783
+            402288fcd797dd33a688f7044fbb4ee805889c81e8a2f204f901312852fb6fd3
 
         armsx2_ndk_dir="$SDK_DIR/ndk/27.0.12077973"
         armsx2_cmake="$SDK_DIR/cmake/3.31.6/bin/cmake"

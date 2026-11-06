@@ -53,6 +53,8 @@ class RendererSourceImageWiringTest(unittest.TestCase):
             "private void uploadSoftwareFrame(int[] colors, int width, int height, float aspect,",
             "public void setNativeSourceImageProvider(",
             "private void clearNativeClassifiedObservation()",
+            "private void noteSignatureVerdict(boolean unique, boolean assumed)",
+            "private void releaseSignatureCandidate(int slot)",
             "private void classifyLatestNativeObservation()",
             "private void finishNativeClassifiedObservation(boolean unique)",
             "private void releaseNativeEndpointProvenance(int slot)",
@@ -214,6 +216,8 @@ public class WiringFixture {
     final long[] signatureCandidateSequence=new long[6],signatureCandidateTimestampNs=new long[6];
     final int[] signatureCandidateSubmission=new int[6];
     final boolean[] signatureCandidatePixelsChanged=new boolean[6];
+    final boolean[] signatureCandidateAssumed=new boolean[6];
+    int signatureUniqueStreak;long assumedWrong;
     int[] previousSoftwareColors;int previousSoftwareWidth,previousSoftwareHeight;
     boolean pendingSoftwarePixelsChanged;long softwareSignatureRescues;
     ByteBuffer signaturePixels=ByteBuffer.allocate(8),proofPixels,regionalFlowPixels;

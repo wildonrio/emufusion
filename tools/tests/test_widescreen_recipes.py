@@ -42,8 +42,8 @@ class RecipeTableTest(unittest.TestCase):
                                      {k.rstrip('s') for k in known}, title)
 
     def test_scene_and_hud_rules_parse(self):
-        scene_term = re.compile(r'^(bgmode|[0-9A-F]{4,6}(/[0-9A-F]{2})?)!?=[0-9A-F]+$')
-        hud_rule = re.compile(r'^(edge|(bg[1-4]|obj):\d+-\d+:-?\d+-\d+:-?1(:[0-9a-fA-F]+-[0-9a-fA-F]+)?)$')
+        scene_term = re.compile(r'^(bgmode|[0-9A-F]{4,7}(/[0-9A-F]{2})?)!?=[0-9A-F]+$')
+        hud_rule = re.compile(r'^(edge|(bg[0-4]|obj):-?\d+-\d+:-?\d+-\d+:-?1(:[0-9a-fA-F]+-[0-9a-fA-F]+)?)$')
         for system in RECIPES['systems'].values():
             for title, game in system['games'].items():
                 options = game.get('options', {})
@@ -167,8 +167,25 @@ class HardwareWhenWideTest(unittest.TestCase):
         bootstrap = (game / 'InternalEngineBootstrap.java').read_text()
         self.assertIn('WidescreenHackPolicy.needsHardwareRenderer(', bootstrap)
         policy = (game / 'WidescreenHackPolicy.java').read_text()
-        self.assertIn('recipe.hardwareWhenWide && recipe.engine.equals(engine)', policy)
-        self.assertIn('LibretroEngineSpec.phaseOneOnGles(entry)', (game / 'PpssppGlesEngineSession.java').read_text())
+        self.assertIn('recipe.hardwareWhenWide && recipe.engine.equals(engine);', policy)
+        hardware = (game / 'PpssppGlesEngineSession.java').read_text()
+        self.assertIn('LibretroEngineSpec.phaseOneOnGles(entry)', hardware)
+
+    def test_ps1_narrow_and_wide_share_a_card_and_quick_resume(self):
+        game = ROOT / 'unified-android/src/com/thorium/preview/game'
+        # The session must not depend on the player's choice, or a toggle would change card and state.
+        policy = (game / 'WidescreenHackPolicy.java').read_text()
+        rule = policy[policy.index('public static boolean needsHardwareRenderer('):]
+        self.assertNotIn('remembered', rule[:rule.index('}')])
+        # What the software session already holds is carried across, once, and left where it was.
+        hardware = (game / 'PpssppGlesEngineSession.java').read_text()
+        self.assertIn('if (movedFromSoftware && !saveRamFile.exists()) {', hardware)
+        self.assertIn('if (movedFromSoftware && quick.status == StateLoadResult.Status.NOT_FOUND) {', hardware)
+        self.assertIn('appContext.getFilesDir(), "state-vault")).loadQuickResume(', hardware)
+        self.assertIn('"serialize-v" + entry.stateCompatibilityVersion, firmware));', hardware)
+        software = (game / 'LibretroEngineSession.java').read_text()
+        self.assertIn('"serialize-v" + entry.stateCompatibilityVersion,', software)
+        self.assertIn('saveRoot + "/" + storageKey(romSha));', software)
 
     def test_ps2_keep_2d_stays_off_until_a_recipe_sets_it(self):
         table = json.loads((ROOT / 'engines/widescreen/widescreen-recipes.json').read_text())

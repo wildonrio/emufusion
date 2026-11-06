@@ -305,12 +305,19 @@ Game Boy, in `Core/ef_wide.inc` of the SameBoy patch:
 | Pokemon Red, Blue | `pokemon1` | Work RAM $C6E8: 32-pixel blocks with a 3-block border; size $D368-9, position $D361-2; 16-tile block lists from bank $D52B at $D52C |
 | Pokemon Yellow | `pokemon1y` | The same, every variable one byte lower |
 | Pokemon Gold, Silver | `pokemon2` | Work RAM $C700; size $D087-8, position $DA02-3; block lists from bank $D0C5 at $D0C6; each tile's colour in a 4-bit list in bank 2 at the address in $D0CF |
+| Wario Land II (Color) | `wl2` | Battery RAM bank 1, a byte for each 16-pixel block, 256 to a row. Tiles at $C400 + block x 4 + corner, colours the same in work RAM bank 4 at $D400. A block number's top bit is dropped, as in the game's own sum |
+| Wario Land 3 | `wl3` | The same in battery RAM bank 2, tiles at $C600, colours in work RAM bank 3 at $D300 |
 
 The player stands still on screen and the map scrolls 16 pixels a step. The game's position changes when
 a step begins, so the reader tries the positions a step could be at and keeps the one that explains the
 picture. That check also keeps menus and battles narrow. Rooms sit in the map's own border colour.
 
+The Wario games have no position to read: the level and the video scroll differ only by whole turns of the 256-pixel
+ring, so the reader tries those and keeps the one that explains the picture. Donkey Kong Land and its sequel swap tile
+graphics as they scroll, so their map numbers do not match the picture, and they stay narrow.
+
 Tools: `~/.cache/emufusion-widescreen/host-build/mesen-trace` logs every CPU read and write with
+(`host-build/sameboy-trace` does the same for Game Boy: it logs the code and data banks with each access.)
 `EF_TRACE_FILE`, `EF_TRACE_FROM`, `EF_TRACE_COUNT`. `retro_play.py` gained `poke:ADDR=VALUE` to reach a test
 case without playing there and `saveram:NAME` for battery RAM. All host-only so far; on the Thor next.
 
@@ -359,8 +366,31 @@ shortlist was checked again that way on 2026-11-06:
 | Game Boy | 524 | 141 | 74 | 35 added | |
 | Game Boy Color | 450 | 67 | 29 | 11 added | Shantae fell from 100% to 31%: it was blank frames |
 | Game Gear | 201 | 34 | 16 | 11 added, after adding the gate to Gearsystem | |
+| GBA | 957 | 145 scrolled | see recipes | added after looking at two frames of each | uses the explorer instead of fixed routes |
+| SNES | 853 | 107 scrolled and scored 55% or more | see below | the whole library by default | `emufusion_ws_strict`, stale cells stay black, plus the scroll rule |
 
 A low score alone does not drop a game: sprites and animation cost some, so near misses that looked clean stayed.
+
+SNES, 2026-11-06: the engine gained the same scroll rule as the others (`emufusion_ws_gate=scroll`). With it and strict tiles, two
+frames of each of the 107 games that scrolled showed titles and menus narrow, and gameplay either wide and clean or narrow and clean.
+Six showed junk, mostly in an intro or a menu, and have narrow entries: Spider-Man & Venom, Fever Pitch Soccer, Rocko's Modern Life,
+Mecarobot Golf, Waterworld and Tom & Jerry 2. So the SNES now has a fallback for every title without its own entry. A game that
+loads nothing past the old screen simply stays black at the sides, and the player can swipe it off. Most of these games have not been
+played through. A mode 7 game whose ordinary scroll registers do not move stays narrow until it has an entry of its own. On the Thor,
+Smart Ball and Tiny Toon: Buster Busts Loose keep their titles narrow, widen in the level and take the toggle in play. Harvest Moon is
+black on the Thor with or without any widescreen option, though the identical file runs on the Mac, so that fault is not widescreen's.
+
+GBA, 2026-11-06: the explorer rarely got far enough, so `explore` found only 7 games. A longer fixed run of START, A, walking and
+jumping, seven shots a game, got much further. Over all 957 games, 218 showed content at both sides, because their video maps are 64
+cells wide; the rest stay narrow by themselves. Two frames of each were looked at, and 79 games were added with the scroll rule, among
+them F-Zero: Maximum Velocity, Street Fighter Alpha 3, Mega Man & Bass, Rayman Advance, Klonoa and Tekken Advance. Left out: stale tiles
+or colour bands at the edges (Mega Man Zero 1, 3 and 4, Buffy, Tarzan), sky that stops short of the new corners (Road Rash, Simpsons Road
+Rage, Wakeboarding Unleashed), cockpits narrower than the view (F-14, Super Hornet), and any that showed only a menu. Most have not been
+played through. A separate search for level grids in work RAM over 61 games found about ten, nearly all minor licensed titles, so
+it was not followed up. On the GBA the new columns are 22 pixels a side at 16:9, so a reader does less here than on the NES or SNES.
+
+Mega Drive, 2026-11-06: the first 182 of 750 files checked before the Thor dropped off USB. 10 pass, and Blaster Master 2, Caesars
+Palace and Bugs Bunny in Double Trouble score low. Most of the rest did not scroll in the automatic run, so they say little.
 
 ## GBA map reader (2026-11-06)
 
@@ -380,8 +410,65 @@ room's size, because the cells past it are left over from the last room. Out on 
 drawn. `tools/widescreen/retro_play.py` has `iwram:NAME` for the fast work RAM these searches need.
 
 Finding a game's addresses: `gbagrid.py` in the session notes looks for the video map's 2x2 groups in memory, then for a
-grid whose differences match. Aria of Sorrow, Circle of the Moon, Advance Wars and Final Fantasy VI Advance store their
-blocks differently, or build them in code, and still need their own look.
+grid whose differences match. For the games it could not place, a trace core (`host-build/mgba-trace`, `EF_TRACE_FILE`, now
+logging fast work RAM too) shows the routine that loads a column as the camera moves.
+
+| Game | Form | Where the level is |
+| --- | --- | --- |
+| Aria of Sorrow | `rooms=1,edge=1,ring=8,planes=200A094:200A108+200A0B0:200C0EC` | Each layer has a record (room pointer, camera at +4 and +8, 16.16). The room header gives width and height in 256-pixel screens, a tile list and a block list: blocks of 4x4 tiles, top two bits flip the block. Second table in RAM when the header's flag 2 is set |
+| Harmony of Dissonance | `rooms=1,edge=1,ring=C,planes=200A440:200A494` | The same engine at other addresses. Its first table is 0x54 past the record, not 0x74 |
+| Circle of the Moon | `rooms=2,edge=1,planes=20230F0+2023130+2023170+20231B0` | A record per background: tile table +4, RAM block grid +C, columns +10, rows +12, camera +18 and +1C. No flip bits |
+| Final Fantasy VI Advance | `cell=1,stride=100,cols=100,rows=100,split=200,step=100,planes=2010000:201C000+2014000:201C800,front=2020000+2020400` | Two maps, one byte a block, 256 per row. A tile list per corner, 0x200 apart. Tiles in front of sprites form a background of their own, built from either map and a list of marks |
+
+Rules these add. A room's header with no second pointer is a menu, so menus and maps keep their bars. A room's last block repeats
+past its end (`edge`). `ring` names backgrounds drawn from the video map as they are, for backdrops that repeat at 256 anyway.
+`step` limits the search when the world and the video scroll differ only by a multiple of 256.
+
+Staying narrow, and why: Tony Hawk's Pro Skater 3, Tony Hawk's Underground and Alien Hominid load tile graphics only for what is
+on screen, so the art for the new columns is not in video memory. WarioWare and Ultimate Card Games have no scrolling world.
+Advance Wars and Fire Emblem open on maps that fit the screen, and their larger maps are behind long campaigns, so their readers
+have not been tried. Mario & Luigi draws rooms on black and looks right in Mario's house, but its plain backdrop shows beside
+some rooms and no outdoor area has been reached yet.
+
+### GBA meters in the corners (2026-11-06)
+
+`emufusion_ws_hud=obj:-8-24:0-119:-1:040-0FF;bg0:0-31:0-119:-1:0C0-0EF`: a layer (`obj` or `bgN`), lines, columns, a direction
+and optionally a range of tile numbers. Sprites match by their top left corner. A matching sprite leaves the list the
+original picture is drawn from; a layer's pixels are covered with what lies under them, worked out from the other layers. The
+moved meter is then laid over the finished picture. A tile range keeps dialogs on the same layer out of it. If a scene drops out
+of wide for a few frames while a reader finds its place, the meter stays put rather than jumping. Emulation is not touched.
+
+| Game | Moved | Lives in |
+| --- | --- | --- |
+| Metroid Fusion, Zero Mission | Energy to the left corner, minimap to the right | Sprites |
+| Aria of Sorrow | Health and magic | Background 0 and sprites |
+| Circle of the Moon | Health, magic and hearts | Background 0. Also `void=1`: a white strip past a room's wall showed the game's backdrop, so empty new columns are now black |
+| Minish Cap | Hearts left; item buttons and rupees right | Background 0 and sprites |
+| Mario Kart: Super Circuit | Rank, lap, coins and speed left; time and track map right; item box stays centred | Background 0, map dots in sprites. Also a race rule, `30016E0=01,300040E=18`: the first byte alone blips for single frames on menus. Menus and the pause screen now stay narrow |
+
+Mario Kart ran this way on the Thor at 60 to 120, with the toggle in mid-race. The others have been seen on the Mac so far. Super Mario
+Advance 4's status bar is a panel across the bottom and stays where it is. Golden Sun, Final Fantasy VI Advance and Tactics Advance
+show no meters during play.
+
+The NES has the same kind of rule for sprites, `obj:y0-y1:x0-x1:dir:t0-t1`. A moved sprite still counts for sprite zero, so timing is
+unchanged; it only stops being drawn in its old place. Mega Man 2 and 3's energy bars and Contra's lives use it. Status panels drawn in
+the background, as in Castlevania III and Ninja Gaiden II, stay where they are. On the Mega Drive the meters of the top games left
+(Gunstar Heroes, Contra: Hard Corps, Castle of Illusion, Monster World IV, Lightening Force) are panels in the window plane, so they
+stay too.
+
+### Top games looked at again (2026-11-06)
+
+Several narrow top games had been judged from menus. Playing them changed one and gave the rest reasons from real play:
+
+| Game | Now | Why |
+| --- | --- | --- |
+| Mario Tennis | Widens | Each court map is 256 wide, so the whole court and its surroundings fill the picture and the camera pans over real scenery. Menus are told apart by the game's graphics queue: its fourth entry points at sprite tiles only on a court (`C0BE=B0|C0BD=83,C0BE=00|C0BD=86,C0BE=C0|C0BD=87,C0BE=C0`). Followed frame by frame: wide on 0 of 9,472 menu frames, and one change to wide in each of a singles and a doubles match with pauses. A mini-game round flashes bars on a white screen for a frame or two |
+| Metal Gear Solid | Narrow | The status panel sits inside the right of the picture |
+| Warlocked | Narrow | The first mission's map is built only just past the old screen, so the sides stay mostly black |
+| Cannon Fodder | Narrow | The first mission's sides show stale pieces and checker junk |
+| Mario Golf | Narrow | The shot view's sides are half course and half unrelated tiles |
+| Mole Mania | Narrow | Each room is one screen inside black |
+| Advance Wars | Narrow | The first versus maps fit the screen exactly, and larger maps are locked behind the campaign |
 
 ## PS1 (2026-11-06)
 
@@ -400,6 +487,74 @@ The library has 13 PS1 games, 8 of them 3D. Tekken 2 played: right. Spyro's open
 stops at its Designers Republic screen in both renderers, still to explain. HUDs stay in the middle for now: moving them
 to the corners needs a per-game rule, because splitting by screen side would break centred text like GAME OVER.
 
+### PS1 and PS2 on the Thor (2026-11-06)
+
+PS1: WipEout 3 and WipEout XL (races), Twisted Metal 2 (a battle), Die Hard Trilogy (the car park), Tekken 2 (a fight) and Spyro (a
+level) play with the world at both edges and their status displays in shape, in the middle. Bushido Blade's demo fight and credits
+look right; the coloured corners behind its faces are the game's own, seen narrow on the Mac too. WipEout (USA) stops at an intro
+movie with or without widescreen, so its file is suspect and it stays out. The 2D games (Symphony of the Night, Mega Man 8, X4 to X6)
+stay narrow. PS1 is released to players from the next build.
+
+The software and hardware sessions keep separate memory cards and Quick Resume. The first version chose the session from the
+player's choice, so swiping widescreen off went back to the state from when it was turned on. A PS1 game with a recipe now runs in
+the hardware session narrow or wide, and its first run there copies the software session's card and Quick Resume, leaving the
+originals in place. Twisted Metal 2 proved it: a software-session battle came across, then a swipe and a tap in play kept the same
+battle going. A pause restored from Quick Resume looks like a 2D screen, so it stays narrow until play resumes.
+
+PS2: DOA2's fight is right and its stale sides are gone. Kingdom Hearts keeps its menus and opening in shape; play not reached.
+Sly Cooper's title and spy-goggle scenes look right. Its film bars were narrowed at first, leaving the rooftops showing above and
+below them at the sides; plain untextured bars across the whole width now stay full width, as they have no shape to lose, and that
+was seen right on the Thor. PS2 stays hidden from players until more of its games have been played.
+
+New readers seen on the Thor at 60 to 120 the same day: Aria of Sorrow and Circle of the Moon (opening scenes), Harmony of Dissonance
+(the bridge), Wario Land II (bedroom and coin room) and The Legend of Zelda (the overworld across screens, inventory narrow). Wario
+Land 3 and Final Fantasy VI Advance have been played on the Mac only.
+
+A game started over an open one is refused unless it needs a different kind of session, and the first game keeps running, so nothing
+is lost.
+
+### Turning widescreen off and on in play (2026-11-06)
+
+Systems that restart their engine on a toggle were tried in live play on the Thor. N64 (Super Mario 64), Dreamcast (Jet Grind Radio) and
+GameCube (Double Dash) each logged a Quick Resume commit and restore every time; Mario 64 came back at the same spot, Jet Grind Radio
+kept playing its attract loop and Double Dash stayed on its opening menu. PS1 does too since its sessions were joined. One thing to
+look at: Double Dash's card prompt changed after the first restore to "No Memory Card found", so a restore may make Dolphin's card look
+missing for a moment. PS2 is the exception, below.
+
+### PS2 stays hidden: its toggle restarts the game (2026-11-06)
+
+Quick Resume is deliberately off for ARMSX2, because a restored state can run on with only black frames and no way to detect it
+(`QuickResumePolicy`). So a swipe or tap in play, which restarts the engine on PS2, goes back to the game's logos: on GTA III a swipe
+in the street landed on the Rockstar logo. Memory-card saves survive, unsaved progress does not. Good PS2 pictures are not enough until
+this is solved. The likely way is to boot these games wide always and make off a live crop of the middle 3/4 of the picture, so neither
+direction restarts anything; the widening keeps vertical view, so the crop should match the game's own 4:3 framing.
+The core side is small: crop `CalculateDrawSrcRect`'s middle 3/4 when a scene is 3D, and its aspect sum keeps the pixel shape. The hardware
+session has no way to change a core option while running, though, so it needs a new call through the native host first.
+
+### More PS2, N64 and GameCube first looks (2026-11-06)
+
+GTA III and Shadow of the Colossus play right. God of War I and II and Prince of Persia: The Sands of Time do not survive keeping 2D in
+shape: full-screen passes they draw in many strips or through their own filters come out striped or hazed, so they stay narrow.
+International Superstar Soccer 64's attract match and Wave Race 64's race are right, and so is Vice City on foot. Tekken 5's fight stays
+narrow with faint seam lines, and Twilight Princess shows a stray black block over its title, so both stay narrow. Soulcalibur III has
+only been seen as far as its menus and story pages. Both copies of Ocarina of Time: Master Quest on the Thor are truncated (397 MB of 935 MB).
+
+### The rest of the N64 library (2026-11-06)
+
+A short look on the Thor at 20 more N64 games, each started wide. Widen: Mario Kart 64, Mario Golf, Mario Tennis, Pokémon Snap, Kirby 64,
+Castlevania, Doom 64, Harvest Moon 64, Ogre Battle 64, Turok and Yoshi's Story. Stay narrow: Donkey Kong 64 (draws in its own window, stale
+pieces beside menus), Jet Force Gemini (stray pieces beside the title), Pilotwings 64 (black gaps down both sides), F-Zero X (sky stops short
+of the corners on some courses) and Body Harvest (plays inside a narrow box). Only menus reached so far, so no entry yet: Smash Bros, Beetle
+Adventure Racing, WWF No Mercy and Rogue Squadron. With about a quarter failing, the N64 gets no fallback: each game needs a look. On GameCube,
+Mario Party 4 and Star Fox Assault did not get past their memory card prompts. Katamari Damacy on PS2 showed no picture in two minutes.
+
+## Game files that are not there
+
+Many top-rated files on the Thor are 4 to 7 MB stubs, which the app refuses. They cannot be played, so they have no recipe:
+GameCube's Burnout 2, F-Zero GX, Luigi's Mansion, Metroid Prime 2, Mega Man X Collection, SoulCalibur II, Zelda Collector's
+Edition and Four Swords Adventures; PS2's Half-Life, Resident Evil 2 and The Simpsons: Hit & Run. Katamari Damacy was listed here by
+mistake: what looked like a stub was a macOS `._` sidecar, and the real file is 3 GB.
+
 ## Release gate
 
 Each system in the recipe table has `"release"`. Nothing shows to players until it is true, which
@@ -410,8 +565,8 @@ game played on the Thor, with frame generation on, and Sonic & Knuckles and Cont
 `settings put global
 emufusion_qa_widescreen_all 1` still enables everything for testing.
 
-Only Mega Drive has a fallback for titles without their own entry. A map no wider than the picture
-stays narrow by itself there. Game Gear's was removed: 7 of its 19 top games could not widen
+Mega Drive and SNES have a fallback for titles without their own entry. A map no wider than the picture
+stays narrow by itself on the Mega Drive, and the scroll rule and strict tiles do that job on the SNES. Game Gear's was removed: 7 of its 19 top games could not widen
 cleanly, so unlisted titles are not offered widening until the rest of the library is triaged.
 
 Most recipes have only been played on the Mac. A device pass here means the engine, prompts and

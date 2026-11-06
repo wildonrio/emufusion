@@ -135,7 +135,9 @@ def main():
     out, system, engine, rom, script = Path(sys.argv[1]), *sys.argv[2:6]
     out.mkdir(parents=True, exist_ok=True)
     take_cool_thor()
-    shell('settings put global emufusion_qa_widescreen_all 1')
+    # THOR_QA_WIDESCREEN=0 runs the game as a player would see it while its system is still hidden.
+    if os.environ.get('THOR_QA_WIDESCREEN') != '0':
+        shell('settings put global emufusion_qa_widescreen_all 1')
     # The recipe table is cached per app process, so a running app would not see the setting.
     # Wake first and let it settle: the firmware rebuilds the lower display at the upper panel's
     # size if an app's display mode change lands just before a wake (thor-lower-panel-squeeze).

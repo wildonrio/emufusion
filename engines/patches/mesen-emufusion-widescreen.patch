@@ -16,7 +16,7 @@ index 96b488c..7b1683a 100644
  	static constexpr uint32_t NametableSize = 0x400;
  	
 diff --git a/Core/PPU.cpp b/Core/PPU.cpp
-index 3692210..4d0ef32 100644
+index 3692210..e5eb95e 100644
 --- a/Core/PPU.cpp
 +++ b/Core/PPU.cpp
 @@ -451,6 +451,7 @@ void PPU::WriteRAM(uint16_t addr, uint8_t value)
@@ -27,7 +27,27 @@ index 3692210..4d0ef32 100644
  					_console->GetMapper()->WriteVRAM(_ppuBusAddress & 0x3FFF, value);
  				} else {
  					//During rendering, the value written is ignored, and instead the address' LSB is used (not confirmed, based on Visual NES)
-@@ -922,9 +923,425 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
+@@ -735,6 +736,7 @@ void PPU::LoadSprite(uint8_t spriteY, uint8_t tileIndex, uint8_t attributes, uin
+ 		info.AbsoluteTileAddr = _console->GetMapper()->ToAbsoluteChrAddress(tileAddr);
+ 		info.OffsetY = lineOffset;
+ 		info.SpriteX = spriteX;
++		_efSpriteMove[_spriteIndex] = _efHudLive ? EfHudDirection(spriteY, tileIndex, spriteX) : 0;
+ 
+ 		if(_scanline >= 0) {
+ 			//Sprites read on prerender scanline are not shown on scanline 0
+@@ -850,6 +852,11 @@ uint8_t PPU::GetPixelColor()
+ 						_statusFlags.Sprite0Hit = true;
+ 					}
+ 
++					//A meter that has moved out to the corner still counts for sprite zero, above.
++					if(_efSpriteMove[i]) {
++						continue;
++					}
++
+ 					if(_settings->GetSpritesEnabled() && (backgroundColor == 0 || !_spriteTiles[i].BackgroundPriority)) {
+ 						//Check sprite priority
+ 						return _lastSprite->PaletteOffset + spriteColor;
+@@ -922,9 +929,615 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
  	UpdateColorBitMasks();
  }
  
@@ -219,6 +239,94 @@ index 3692210..4d0ef32 100644
 +	return true;
 +}
 +
++// The Legend of Zelda's overworld: a list in battery RAM gives each of 128 screens a layout in ROM bank 5,
++// 16 columns picked from lists of 11 squares of 16 pixels. A square's top bit starts a column, its next bit
++// repeats the square. Secrets already found change a few squares. The screen beside this one is real level.
++void PPU::EfZeldaDecode(int slot, int room, bool found)
++{
++	BaseMapper *mapper = _console->GetMapper();
++	const uint8_t *prg = mapper->EfPrg(), *cart = mapper->EfSaveRam();
++	auto rom = [&](int cpu) { return prg[0x14000 + ((cpu - 0x8000) & 0x3FFF)]; };
++	int layout = (rom(0x9F9C) | rom(0x9F9D) << 8) + (cart[0x9FE + room] & 0x7F) * 16;
++	for(int col = 0; col < 16; col++) {
++		uint8_t pick = rom(layout + col);
++		int at = cart[0x827 + (pick >> 4) * 2] | cart[0x828 + (pick >> 4) * 2] << 8;
++		int count = pick & 15;
++		for(int guard = 0; guard < 0x800; guard++, at++) {
++			if((rom(at) & 0x80) && --count < 0) break;
++		}
++		bool repeated = false;
++		for(int row = 0; row < 11; row++) {
++			uint8_t value = rom(at);
++			int square = value & 0x3F;
++			uint8_t first = rom(0xA97C + square);
++			if(found) {
++				if(first == 0xE7 || first == 0xEA) { square = 0x10; first = 0x70; }
++				else if(first == 0xE6) square = 0x0C;
++			}
++			if(first >= 0xE5 && first <= 0xEA) first = rom(0xA976 + 5 - (0xEA - first));
++			for(int i = 0; i < 4; i++) {
++				_efZeldaTiles[slot][(col * 2 + (i >> 1)) * 22 + row * 2 + (i & 1)] = square >= 0x10 ? first + i : rom(0xA9B4 + square * 4 + i);
++			}
++			if(value & 0x40) {
++				repeated = !repeated;
++				if(repeated) continue;
++			}
++			at++;
++		}
++	}
++	_efZeldaPalettes[slot][0] = cart[0x87E + room] & 3;
++	_efZeldaPalettes[slot][1] = cart[0x8FE + room] & 3;
++	_efZeldaRooms[slot] = room;
++	_efZeldaFound[slot] = found;
++}
++
++bool PPU::EfZeldaTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette)
++{
++	BaseMapper *mapper = _console->GetMapper();
++	const uint8_t *prg = mapper->EfPrg(), *cart = mapper->EfSaveRam();
++	uint8_t *ram = _console->GetMemoryManager()->GetInternalRAM();
++	int row = worldY - 64, across = worldX >> 8;
++	// Dungeons and caves have no screen beside them to show.
++	if(!prg || !cart || mapper->EfPrgSize() < 0x18000 || ram[0x10] || _efZeldaShown < 0) return false;
++	if(worldX < 0 || across > 15 || row < 0 || row >= 176) return false;
++	int room = (_efZeldaShown & 0x70) | across, slot = room % 3;
++	int flags = cart[0xBAF] | cart[0xBB0] << 8;
++	bool found = (flags < 0x800 ? ram[(flags + room) & 0x7FF] : cart[(flags + room) & 0x1FFF]) & 0x80;
++	if(_efZeldaRooms[slot] != room || _efZeldaFound[slot] != found) EfZeldaDecode(slot, room, found);
++	int x = (worldX & 255) >> 3, y = row >> 3;
++	tile = _efZeldaTiles[slot][x * 22 + y];
++	// The screen's outer ring and its inside each have their own palette.
++	palette = _efZeldaPalettes[slot][x >= 4 && x < 28 && y >= 4 && y < 18];
++	return true;
++}
++
++// The game names the next screen well before the picture moves, so the picture says which one is showing.
++void PPU::EfZeldaPick()
++{
++	uint8_t here = _console->GetMemoryManager()->GetInternalRAM()[0xEB];
++	BaseMapper *mapper = _console->GetMapper();
++	int page = (_efLineV >> 10) & 1, was = _efZeldaShown;
++	int tries[5] = { here, here - 1, here + 1, here - 16, here + 16 };
++	for(int room : tries) {
++		if(room < 0 || room > 127) continue;
++		_efZeldaShown = room;
++		int hits = 0, total = 0;
++		for(int y = 8; y < 30; y += 3) {
++			for(int x = 4; x < 28; x += 3) {
++				uint8_t tile = 0, palette = 0;
++				total++;
++				if(EfZeldaTile((room & 15) * 256 + x * 8, y * 8, tile, palette) && tile == mapper->DebugReadVRAM(0x2000 | page << 10 | y << 5 | x)) hits++;
++			}
++		}
++		if(hits * 10 >= total * 8) {
++			_efMapMatched = _efMapChecked;
++			return;
++		}
++	}
++	_efZeldaShown = was;
++}
++
 +bool PPU::EfMapTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette)
 +{
 +	switch(_efMap) {
@@ -227,6 +335,7 @@ index 3692210..4d0ef32 100644
 +		case EfMap::Mm4: return EfMm3Tile(worldX, worldY, tile, palette);
 +		case EfMap::Ng2: return EfNg2Tile(worldX, worldY, tile, palette);
 +		case EfMap::Bionic: return EfBionicTile(worldX, worldY, tile, palette);
++		case EfMap::Zelda: return EfZeldaTile(worldX, worldY, tile, palette);
 +		default: return EfKirbyTile(worldX, worldY, tile, palette);
 +	}
 +}
@@ -259,6 +368,15 @@ index 3692210..4d0ef32 100644
 +
 +void PPU::EfMapCamera(int &cameraX, int &cameraY)
 +{
++	if(_efMap == EfMap::Zelda) {
++		// Screens slide past one another: the scroll runs one way or the other, then rests at zero on the next.
++		int scroll = (((_efLineV & 0x1F) - 2) * 8 + _efLineFineX) & 255;
++		if(!scroll && _efZeldaSlide) { _efZeldaShown += _efZeldaSlide; _efZeldaSlide = 0; }
++		else if(scroll && !_efZeldaSlide) _efZeldaSlide = scroll < 128 ? 1 : -1;
++		cameraX = (_efZeldaShown & 15) * 256 + (_efZeldaSlide < 0 ? scroll - 256 : scroll);
++		cameraY = 0;
++		return;
++	}
 +	cameraX = _efMapCameraX;
 +	cameraY = _efMapCameraY;
 +	if(_efMap == EfMap::Mm3 || _efMap == EfMap::Mm4) {
@@ -299,6 +417,9 @@ index 3692210..4d0ef32 100644
 +		if(EfMapTile(cameraX + x, cameraY + line, tile, palette) && tile == mapper->DebugReadVRAM(0x2000 | cell)) _efMapMatched++;
 +	}
 +	if(nth == 3) {
++		// Only a picture at rest: the inventory slides down over a map that is still in video memory.
++		int rest = ((((v >> 5) & 0x1F) * 8 + ((v >> 12) & 7) - line) % 240 + 240) % 240;
++		if(_efMap == EfMap::Zelda && !_efZeldaSlide && (rest <= 2 || rest >= 238) && _efMapMatched * 10 < _efMapChecked * 7) EfZeldaPick();
 +		// One odd frame is not a menu: a door opening, or a room change about to show.
 +		_efMapMisses = _efMapMatched * 10 >= _efMapChecked * 7 ? 0 : _efMapMisses + 1;
 +		if(!_efMapMisses) _efMapMatches = true;
@@ -319,10 +440,30 @@ index 3692210..4d0ef32 100644
 +		for(int i = 0; i < _efExt; i++) _efLeft[line][i] = _efRight[line][i] = (uint16_t)0x0F;
 +		return true;
 +	}
++	_efHudLive = true;
 +	bool clip = !_flags.BackgroundMask;
 +	_efFillClip[line] = clip;
 +	int cameraX, cameraY;
 +	EfMapCamera(cameraX, cameraY);
++	// A panel split into the picture below the level, a pause menu say, is no part of the map, and
++	// its CHR banks turn the level's tiles into font. The frame's check can pass with the level above it.
++	{
++		uint16_t v = _efLineV;
++		int startColumn = (v & 0x1F) + ((v >> 10) & 1) * 32 - 2;
++		int checked = 0, matched = 0;
++		for(int x = 32; x < 224; x += 16) {
++			int col = (((startColumn + ((x + _efLineFineX) >> 3)) % 64) + 64) % 64;
++			int cell = (((v >> 11) & 1) << 11) | (((col >> 5) & 1) << 10) | (((v >> 5) & 0x1F) << 5) | (col & 0x1F);
++			uint8_t tile = 0, palette = 0;
++			checked++;
++			if(EfMapTile(cameraX + x, cameraY + line, tile, palette) && tile == mapper->DebugReadVRAM(0x2000 | cell)) matched++;
++		}
++		if(matched * 4 < checked) {
++			_efFillClip[line] = false;
++			for(int i = 0; i < _efExt; i++) _efLeft[line][i] = _efRight[line][i] = (uint16_t)0x0F;
++			return true;
++		}
++	}
 +	for(int side = 0; side < 2; side++) {
 +		uint16_t *out = side ? _efRight[line] : _efLeft[line];
 +		int lastCell = 0x7FFFFFFF;
@@ -350,10 +491,78 @@ index 3692210..4d0ef32 100644
 +}
 +
 +// The line is finished: draw the columns beside it from the same nametables and CHR banks.
++void PPU::EfSetHudRules(const char *value)
++{
++	_efHudCount = 0;
++	_efHudLive = false;
++	memset(_efSpriteMove, 0, sizeof(_efSpriteMove));
++	while(value && *value && _efHudCount < EfHudRuleMax) {
++		EfHudRule rule;
++		rule.t0 = 0;
++		rule.t1 = 0xFF;
++		int used = 0;
++		if(sscanf(value, "obj:%d-%d:%d-%d:%d%n", &rule.y0, &rule.y1, &rule.x0, &rule.x1, &rule.dir, &used) >= 5) {
++			value += used;
++			if(*value == ':') {
++				unsigned low = 0, high = 0;
++				if(sscanf(value, ":%x-%x", &low, &high) == 2) {
++					rule.t0 = (int)low;
++					rule.t1 = (int)high;
++				}
++			}
++			_efHudRules[_efHudCount++] = rule;
++		}
++		value = strchr(value, ';');
++		value = value ? value + 1 : nullptr;
++	}
++}
++
++int PPU::EfHudDirection(uint8_t spriteY, uint8_t tile, uint8_t spriteX)
++{
++	for(int i = 0; i < _efHudCount; i++) {
++		const EfHudRule &rule = _efHudRules[i];
++		if(spriteY >= rule.y0 && spriteY <= rule.y1 && spriteX >= rule.x0 && spriteX <= rule.x1 && tile >= rule.t0 && tile <= rule.t1) {
++			return rule.dir;
++		}
++	}
++	return 0;
++}
++
++// Sprites the original picture has left out for this line, at their new places.
++void PPU::EfDrawMoved(int line)
++{
++	for(int index = _spriteCount - 1; index >= 0; index--) {
++		int dir = _efSpriteMove[index];
++		if(!dir) continue;
++		const SpriteInfo &sprite = _spriteTiles[index];
++		for(int px = 0; px < 8; px++) {
++			int bit = sprite.HorizontalMirror ? px : 7 - px;
++			int color = ((sprite.LowByte >> bit) & 1) | (((sprite.HighByte >> bit) & 1) << 1);
++			if(!color) continue;
++			uint16_t value = (_paletteRAM[sprite.PaletteOffset + color] & _paletteRamMask) | _intensifyColorBits;
++			int x = sprite.SpriteX + px + dir * _efExt;
++			if(x < 0) {
++				if(x + _efExt >= 0) _efLeft[line][x + _efExt] = value;
++			} else if(x >= 256) {
++				if(x - 256 < _efExt) _efRight[line][x - 256] = value;
++			} else if(x < 255) {
++				_currentOutputBuffer[(line << 8) + x] = value;
++			}
++		}
++	}
++}
++
 +void PPU::EfDrawLine()
++{
++	EfDrawColumns();
++	if(_efHudCount && _efHudLive && _scanline >= 0 && _scanline < 240) EfDrawMoved(_scanline);
++}
++
++void PPU::EfDrawColumns()
 +{
 +	int line = _scanline;
 +	if(line < 0 || line >= 240) return;
++	_efHudLive = false;
 +	uint16_t backdrop = (_paletteRAM[0] & _paletteRamMask) | _intensifyColorBits;
 +	_efFillClip[line] = false;
 +	bool clip = IsRenderingEnabled() && !_flags.BackgroundMask;
@@ -388,6 +597,7 @@ index 3692210..4d0ef32 100644
 +		return;
 +	}
 +	_efFillClip[line] = clip;
++	_efHudLive = true;
 +	uint16_t v = _efLineV;
 +	int startColumn = (v & 0x1F) + ((v >> 10) & 1) * 32 - 2;
 +	int fineY = (v >> 12) & 7;
@@ -453,7 +663,7 @@ index 3692210..4d0ef32 100644
  	if(_cycle <= 256) {
  		LoadTileInfo();
  
-@@ -1166,6 +1583,7 @@ void PPU::SendFrame()
+@@ -1166,6 +1779,7 @@ void PPU::SendFrame()
  
  void PPU::BeginVBlank()
  {
@@ -462,7 +672,7 @@ index 3692210..4d0ef32 100644
  }
  
 diff --git a/Core/PPU.h b/Core/PPU.h
-index 55c3182..9f67d55 100644
+index 55c3182..b43008e 100644
 --- a/Core/PPU.h
 +++ b/Core/PPU.h
 @@ -28,6 +28,11 @@ enum PPURegisters
@@ -472,12 +682,12 @@ index 55c3182..9f67d55 100644
 +	public:
 +		static constexpr int EfMaxExt = 96;
 +		// A decoder per game engine: draws the new columns from the game's own level map.
-+		enum class EfMap { None, Smb3, Mm3, Mm4, Kirby, Ng2, Bionic };
++		enum class EfMap { None, Smb3, Mm3, Mm4, Kirby, Ng2, Bionic, Zelda };
 +	protected:
  	protected:
  		std::shared_ptr<Console> _console;
  		EmulationSettings* _settings;
-@@ -61,6 +66,51 @@ class PPU : public IMemoryHandler, public Snapshotable
+@@ -61,6 +66,70 @@ class PPU : public IMemoryHandler, public Snapshotable
  		PPUControlFlags _flags;
  		PPUStatusFlags _statusFlags;
  
@@ -502,6 +712,13 @@ index 55c3182..9f67d55 100644
 +		bool _efMapSearched = false;
 +		bool _efMapMatches = false;
 +		bool _efHudEdge = false;
++		// Meters drawn in sprites move out to the new corners: "obj:y0-y1:x0-x1:dir:t0-t1;..."
++		struct EfHudRule { int y0, y1, x0, x1, dir, t0, t1; };
++		static constexpr int EfHudRuleMax = 8;
++		EfHudRule _efHudRules[EfHudRuleMax];
++		int _efHudCount = 0;
++		bool _efHudLive = false;
++		int8_t _efSpriteMove[64] = {};
 +		bool _efScrollGate = false;
 +		int _efSceneTravel = 0;
 +		int _efBlankCount = 0;
@@ -512,6 +729,15 @@ index 55c3182..9f67d55 100644
 +		bool EfSmb3Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
 +		bool EfMm3Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
 +		bool EfKirbyTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
++		bool EfZeldaTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
++		void EfZeldaDecode(int slot, int room, bool found);
++		void EfZeldaPick();
++		uint8_t _efZeldaTiles[3][704] = {};
++		uint8_t _efZeldaPalettes[3][2] = {};
++		int _efZeldaRooms[3] = { -1, -1, -1 };
++		bool _efZeldaFound[3] = {};
++		int _efZeldaShown = -1;
++		int _efZeldaSlide = 0;
 +		bool EfNg2Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
 +		bool EfBionicTile(int worldX, int worldY, uint8_t &tile, uint8_t &palette);
 +		int _efMapColumnsAt = 0;
@@ -523,20 +749,24 @@ index 55c3182..9f67d55 100644
 +		void EfCheckMap();
 +		bool EfDrawLineMap(int line);
 +		void EfDrawLine();
++		void EfDrawColumns();
++		void EfDrawMoved(int line);
++		int EfHudDirection(uint8_t spriteY, uint8_t tile, uint8_t spriteX);
 +		void EfTagWrite(uint16_t addr);
 +		void EfSweepBlank();
 +		uint16_t EfWorldFor(int col, int columns);
  		uint16_t _intensifyColorBits;
  		uint8_t _paletteRamMask;
  		int32_t _lastUpdatedPixel;
-@@ -205,6 +255,14 @@ class PPU : public IMemoryHandler, public Snapshotable
+@@ -205,6 +274,15 @@ class PPU : public IMemoryHandler, public Snapshotable
  		uint8_t PeekRAM(uint16_t addr) override;
  		void WriteRAM(uint16_t addr, uint8_t value) override;
  
 +		void EfConfigure(int ext, int lineFrom, int lineTo, bool strict);
 +		void EfSetHudEdge(bool on) { _efHudEdge = on; }
++		void EfSetHudRules(const char *value);
 +		void EfSetScrollGate(bool on) { _efScrollGate = on; _efSceneTravel = 0; }
-+		void EfSetMap(EfMap map) { _efMap = map; _efTilesetBanks = nullptr; _efMapSearched = false; _efMapMatches = false; _efMapMisses = 0; }
++		void EfSetMap(EfMap map) { _efMap = map; _efTilesetBanks = nullptr; _efMapSearched = false; _efMapMatches = false; _efMapMisses = 0; _efZeldaShown = -1; _efZeldaSlide = 0; _efZeldaRooms[0] = _efZeldaRooms[1] = _efZeldaRooms[2] = -1; }
 +		int EfExt() const { return _efExt; }
 +		const uint16_t* EfLeft(int line) const { return _efLeft[line]; }
 +		const uint16_t* EfRight(int line) const { return _efRight[line]; }
@@ -581,10 +811,10 @@ index 4ed0c1a..d704ca3 100644
  	GetScreenSize(screenSize, true);
  	
 diff --git a/Libretro/libretro.cpp b/Libretro/libretro.cpp
-index 48fa641..af6057c 100644
+index 48fa641..fd17cb5 100644
 --- a/Libretro/libretro.cpp
 +++ b/Libretro/libretro.cpp
-@@ -322,6 +322,59 @@ extern "C" {
+@@ -322,6 +322,64 @@ extern "C" {
  		}
  	}
  
@@ -622,8 +852,12 @@ index 48fa641..af6057c 100644
 +		if(_console->GetPpu()) _console->GetPpu()->EfConfigure(ext, lineFrom, lineTo, strict);
 +		efVar.key = "emufusion_ws_hud";
 +		efVar.value = nullptr;
-+		bool hudEdge = env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value && !strcmp(efVar.value, "edge");
-+		if(_console->GetPpu()) _console->GetPpu()->EfSetHudEdge(hudEdge);
++		bool hudKnown = env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value;
++		bool hudEdge = hudKnown && strstr(efVar.value, "edge");
++		if(_console->GetPpu()) {
++			_console->GetPpu()->EfSetHudEdge(hudEdge);
++			_console->GetPpu()->EfSetHudRules(hudKnown ? strstr(efVar.value, "obj:") : nullptr);
++		}
 +		efVar.key = "emufusion_ws_gate";
 +		efVar.value = nullptr;
 +		bool scrollGate = env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value && !strcmp(efVar.value, "scroll");
@@ -637,14 +871,15 @@ index 48fa641..af6057c 100644
 +				known && !strcmp(efVar.value, "mm4") ? PPU::EfMap::Mm4 :
 +				known && !strcmp(efVar.value, "kirby") ? PPU::EfMap::Kirby :
 +				known && !strcmp(efVar.value, "ng2") ? PPU::EfMap::Ng2 :
-+				known && !strcmp(efVar.value, "bionic") ? PPU::EfMap::Bionic : PPU::EfMap::None);
++				known && !strcmp(efVar.value, "bionic") ? PPU::EfMap::Bionic :
++				known && !strcmp(efVar.value, "zelda") ? PPU::EfMap::Zelda : PPU::EfMap::None);
 +		}
 +	}
 +
  	void update_settings()
  	{
  		struct retro_variable var = { };
-@@ -447,6 +500,8 @@ extern "C" {
+@@ -447,6 +505,8 @@ extern "C" {
  			readOverscanValue(MesenOverscanBottom)
  		);
  
@@ -653,7 +888,7 @@ index 48fa641..af6057c 100644
  		if(readVariable(MesenAspectRatio, var)) {
  			string value = string(var.value);
  			if(value == "Auto") {
-@@ -641,7 +696,8 @@ extern "C" {
+@@ -641,7 +701,8 @@ extern "C" {
  
  		retro_system_av_info avInfo = {};
  		_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -663,7 +898,7 @@ index 48fa641..af6057c 100644
  	}
  
  	RETRO_API void retro_run()
-@@ -676,6 +732,7 @@ extern "C" {
+@@ -676,6 +737,7 @@ extern "C" {
  			//Update geometry after running the frame, in case the console's region changed (affects "auto" aspect ratio)
  			retro_system_av_info avInfo = {};
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -671,7 +906,7 @@ index 48fa641..af6057c 100644
  			env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &avInfo);
  		}
  
-@@ -1123,6 +1180,7 @@ extern "C" {
+@@ -1123,6 +1185,7 @@ extern "C" {
  				default: _console->GetSettings()->SetDipSwitches(0); break;
  			}
  
@@ -679,7 +914,7 @@ index 48fa641..af6057c 100644
  			update_core_controllers();
  			update_input_descriptors();
  
-@@ -1190,6 +1248,7 @@ extern "C" {
+@@ -1190,6 +1253,7 @@ extern "C" {
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, NES_NTSC_OUT_WIDTH(256), 240 * vscale);
  		else
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, 256 * hscale, 240 * vscale);
@@ -687,7 +922,7 @@ index 48fa641..af6057c 100644
  	}
  
  	RETRO_API void *retro_get_memory_data(unsigned id)
-@@ -1198,6 +1257,10 @@ extern "C" {
+@@ -1198,6 +1262,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetSaveRam();
  			case RETRO_MEMORY_SYSTEM_RAM: return _console->GetMemoryManager()->GetInternalRAM();
@@ -698,7 +933,7 @@ index 48fa641..af6057c 100644
  		}
  		return nullptr;
  	}
-@@ -1208,6 +1271,10 @@ extern "C" {
+@@ -1208,6 +1276,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetMemorySize(DebugMemoryType::SaveRam);
  			case RETRO_MEMORY_SYSTEM_RAM: return MemoryManager::InternalRAMSize;
