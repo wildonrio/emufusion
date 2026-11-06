@@ -602,31 +602,143 @@ final class DenseInverseSearchFlow {
         }
         int generateField = (discrete ? TimelineSchedulerSwitch.pixelMode() : TimelineSchedulerSwitch.mode3d()) ?
                 modeChoiceField(frameA, frameC, t) : phaseFlow;
+        int staticField = overlay ? staticCounts[staticIndex] : zeroField;
+        float staticCount = overlay ? staticFrames : 0f;
+        int imageCheck = 0;
+        if (TimelineSchedulerSwitch.imageCheck(discrete)) {
+            if (imageCheckProgram == 0) compileImageCheck();
+            if (imageCheckMask == 0) allocateImageCheck();
+            if (phaseKeyA != imageCheckKeyA || phaseKeyB != imageCheckKeyB || t != imageCheckValue) {
+                runImageCheck(frameA, frameC, t, structureMask, minMotionPx, cutVerdict,
+                        generateField, staticField, staticCount);
+                imageCheckKeyA = phaseKeyA;
+                imageCheckKeyB = phaseKeyB;
+                imageCheckValue = t;
+            }
+            imageCheck = imageCheckMask;
+        }
         GLES20.glUseProgram(generatePhase);
-        bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);
-        bind(generatePhase, "uStatic", overlay ? staticCounts[staticIndex] : zeroField, 9);
-        GLES20.glUniform1f(location(generatePhase, "uStaticFrames"), overlay ? staticFrames : 0f);
-        GLES20.glUniform1f(location(generatePhase, "uCutEnabled"), cutVerdict != 0 ? 1f : 0f);
-        bind(generatePhase, "uCut", cutVerdict != 0 ? cutVerdict : zeroField, 4);
-        GLES20.glUniform1f(location(generatePhase, "uStructure"), structureMask != 0 ? 1f : 0f);
-        bind(generatePhase, "uStructureMask", structureMask != 0 ? structureMask : zeroField, 3);
-        GLES20.glUniform1f(location(generatePhase, "uStructureMinMotionPx"), minMotionPx);
-        GLES20.glUniform2f(location(generatePhase, "uHistorySize"), historyWidth, historyHeight);
-        GLES20.glUniform1f(location(generatePhase, "uDiscrete"), discrete ? 1f : 0f);
+        setGenerateInputs(generatePhase, frameA, frameC, t, structureMask, minMotionPx, cutVerdict,
+                generateField, staticField, staticCount, imageCheck);
+    }
+
+    private void setGenerateInputs(int generateProgram, int frameA, int frameC, float t, int structureMask,
+                                   float minMotionPx, int cutVerdict, int generateField,
+                                   int staticField, float staticCount, int imageCheck) {
+        bind(generateProgram, "uLate", late != 0 ? late : zeroField, 8);
+        bind(generateProgram, "uStatic", staticField, 9);
+        GLES20.glUniform1f(location(generateProgram, "uStaticFrames"), staticCount);
+        GLES20.glUniform1f(location(generateProgram, "uCutEnabled"), cutVerdict != 0 ? 1f : 0f);
+        bind(generateProgram, "uCut", cutVerdict != 0 ? cutVerdict : zeroField, 4);
+        GLES20.glUniform1f(location(generateProgram, "uStructure"), structureMask != 0 ? 1f : 0f);
+        bind(generateProgram, "uStructureMask", structureMask != 0 ? structureMask : zeroField, 3);
+        GLES20.glUniform1f(location(generateProgram, "uStructureMinMotionPx"), minMotionPx);
+        GLES20.glUniform2f(location(generateProgram, "uHistorySize"), historyWidth, historyHeight);
+        GLES20.glUniform1f(location(generateProgram, "uDiscrete"), discrete ? 1f : 0f);
         // 3.2.86: the per-pixel 3x3 field choice (the per-phase field is 1/8
         // of a 1080p history); QA restores 3.2.85's bilinear field.
-        GLES20.glUniform1f(location(generatePhase, "uChoiceSpread"),
+        GLES20.glUniform1f(location(generateProgram, "uChoiceSpread"),
                 TimelineSchedulerSwitch.fieldDetail() ? FIELD_CHOICE_SPREAD : 0f);
-        bind(generatePhase, "uFrameA", frameA, 0);
-        bind(generatePhase, "uFrameC", frameC, 1);
-        bind(generatePhase, "uPhaseFlow", generateField, 2);
+        bind(generateProgram, "uFrameA", frameA, 0);
+        bind(generateProgram, "uFrameC", frameC, 1);
+        bind(generateProgram, "uPhaseFlow", generateField, 2);
         // Endpoint flows for the occlusion side choice, and the picture
         // rectangle for content bounds (each unused unless generated in).
-        bind(generatePhase, "uFlowAC", flows[0][used], 5);
-        bind(generatePhase, "uFlowCA", flows[1][used], 6);
-        bind(generatePhase, "uBounds", bounds, 7);
-        GLES20.glUniform1f(location(generatePhase, "uT"), t);
-        GLES20.glUniform2f(location(generatePhase, "uFlowSize"), sizes[used][0], sizes[used][1]);
+        bind(generateProgram, "uFlowAC", flows[0][used], 5);
+        bind(generateProgram, "uFlowCA", flows[1][used], 6);
+        bind(generateProgram, "uBounds", bounds, 7);
+        GLES20.glUniform1f(location(generateProgram, "uT"), t);
+        GLES20.glUniform2f(location(generateProgram, "uFlowSize"), sizes[used][0], sizes[used][1]);
+        bind(generateProgram, "uImageCheck", imageCheck != 0 ? imageCheck : zeroField, 10);
+        GLES20.glUniform1f(location(generateProgram, "uImageCheckOn"), imageCheck != 0 ? 1f : 0f);
+    }
+
+    // --- Generated-image check (dis_gles.py IMAGE_CHECK_*) ----------------------
+
+    private static final int IMAGE_CHECK_WIDTH = 320;
+    private int generatePreview, imageCheckProgram, imageCheckBox, imageCheckGrow;
+    private int imageCheckFramebuffer;
+    private int imageCheckPreview, imageCheckMotion, imageCheckFlags, imageCheckAcross, imageCheckBoxed,
+            imageCheckMask;
+    private int imageCheckWidth, imageCheckHeight;
+    private long imageCheckKeyA, imageCheckKeyB;
+    private float imageCheckValue = -1f;
+
+    private void compileImageCheck() {
+        generatePreview = link(DenseInverseSearchShaders.VERTEX_UV, DenseInverseSearchShaders.GENERATE_PHASE_PREVIEW);
+        String v = DenseInverseSearchShaders.VERTEX;
+        imageCheckProgram = link(v, DenseInverseSearchShaders.IMAGE_CHECK_PATCH);
+        imageCheckBox = link(v, DenseInverseSearchShaders.IMAGE_CHECK_BOX);
+        imageCheckGrow = link(v, DenseInverseSearchShaders.IMAGE_CHECK_GROW);
+        passNames.put(generatePreview, "IMAGE_PREVIEW");
+        passNames.put(imageCheckProgram, "IMAGE_CHECK");
+        passNames.put(imageCheckBox, "IMAGE_BOX");
+        passNames.put(imageCheckGrow, "IMAGE_GROW");
+    }
+
+    private void allocateImageCheck() {
+        imageCheckWidth = Math.min(IMAGE_CHECK_WIDTH, historyWidth);
+        imageCheckHeight = Math.max(1, Math.round((float) imageCheckWidth * historyHeight / historyWidth));
+        int w = imageCheckWidth, h = imageCheckHeight;
+        imageCheckPreview = rgba8(w, h, false);
+        imageCheckMotion = texture(w, h, true);
+        imageCheckFlags = texture(w, h, false);
+        imageCheckAcross = texture(w, h, false);
+        imageCheckBoxed = texture(w, h, false);
+        imageCheckMask = texture(w, h, false);
+        int[] id = new int[1];
+        GLES20.glGenFramebuffers(1, id, 0);
+        imageCheckFramebuffer = id[0];
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, imageCheckFramebuffer);
+        GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                GLES20.GL_TEXTURE_2D, imageCheckPreview, 0);
+        GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT1,
+                GLES20.GL_TEXTURE_2D, imageCheckMotion, 0);
+        GLES30.glDrawBuffers(2, new int[] {GLES20.GL_COLOR_ATTACHMENT0, GLES30.GL_COLOR_ATTACHMENT1}, 0);
+        if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) != GLES20.GL_FRAMEBUFFER_COMPLETE)
+            throw new IllegalStateException("image check framebuffer incomplete");
+        imageCheckKeyA = imageCheckKeyB = 0L;
+        imageCheckValue = -1f;
+    }
+
+    private void runImageCheck(int frameA, int frameC, float t, int structureMask, float minMotionPx,
+                               int cutVerdict, int generateField, int staticField, float staticCount) {
+        int w = imageCheckWidth, h = imageCheckHeight;
+        saveState();
+        try {
+            if (PASS_TIMING) markPass("IMAGE_PREVIEW@" + w + "x" + h);
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, imageCheckFramebuffer);
+            GLES20.glViewport(0, 0, w, h);
+            GLES20.glUseProgram(generatePreview);
+            setGenerateInputs(generatePreview, frameA, frameC, t, structureMask, minMotionPx, cutVerdict,
+                    generateField, staticField, staticCount, 0);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            begin(imageCheckProgram, w, h, imageCheckFlags);
+            bind(imageCheckProgram, "uPreview", imageCheckPreview, 0);
+            bind(imageCheckProgram, "uPreviewMotion", imageCheckMotion, 1);
+            bind(imageCheckProgram, "uFrameA", frameA, 2);
+            bind(imageCheckProgram, "uFrameC", frameC, 3);
+            GLES20.glUniform1f(location(imageCheckProgram, "uT"), t);
+            GLES20.glUniform1f(location(imageCheckProgram, "uDiscrete"), discrete ? 1f : 0f);
+            GLES20.glUniform2f(location(imageCheckProgram, "uHistorySize"), historyWidth, historyHeight);
+            GLES20.glUniform2f(location(imageCheckProgram, "uSize"), w, h);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            begin(imageCheckBox, w, h, imageCheckAcross);
+            bind(imageCheckBox, "uIn", imageCheckFlags, 0);
+            GLES30.glUniform2i(location(imageCheckBox, "uStep"), 1, 0);
+            GLES20.glUniform1f(location(imageCheckBox, "uShare"), 0f);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            begin(imageCheckBox, w, h, imageCheckBoxed);
+            bind(imageCheckBox, "uIn", imageCheckAcross, 0);
+            GLES30.glUniform2i(location(imageCheckBox, "uStep"), 0, 1);
+            GLES20.glUniform1f(location(imageCheckBox, "uShare"), 0.6f);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+            begin(imageCheckGrow, w, h, imageCheckMask);
+            bind(imageCheckGrow, "uIn", imageCheckBoxed, 0);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
+        } finally {
+            restoreState();
+        }
     }
 
     /** Synthesis 25: the selector's logits for the last per-phase field (after estimatePhase). */
@@ -940,6 +1052,12 @@ final class DenseInverseSearchFlow {
         phasePatches = phaseFlow = cut = late = lateRows = bounds = 0;
         phaseMode = phaseChoice = 0;
         phaseChoiceLevel = -1;
+        imageCheckPreview = imageCheckMotion = imageCheckFlags = imageCheckAcross = imageCheckBoxed = 0;
+        imageCheckMask = 0;
+        imageCheckKeyA = imageCheckKeyB = 0L;
+        imageCheckValue = -1f;
+        if (imageCheckFramebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {imageCheckFramebuffer}, 0);
+        imageCheckFramebuffer = 0;
         phaseChoiceKeyA = phaseChoiceKeyB = 0L;
         phaseChoiceValue = -1f;
         quietRows = quiet = 0;
@@ -963,13 +1081,15 @@ final class DenseInverseSearchFlow {
         releaseTextures();
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
                 phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram,
-                quietRowsProgram, quietSumProgram, boundsProgram, phaseModeProgram, phaseChoiceProgram, selectFeatures, selectC1,
+                quietRowsProgram, quietSumProgram, boundsProgram, phaseModeProgram, phaseChoiceProgram,
+                generatePreview, imageCheckProgram, imageCheckBox, imageCheckGrow, selectFeatures, selectC1,
                 selectC2, selectC3, selectOut, selectGenerate})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
         phaseSearch = phaseDensify = generatePhase = cutProgram = lateProgram = lateRowsProgram = boundsProgram = 0;
         staticCountProgram = quietRowsProgram = quietSumProgram = 0;
         phaseModeProgram = phaseChoiceProgram = 0;
+        generatePreview = imageCheckProgram = imageCheckBox = imageCheckGrow = 0;
         if (quietQuery[0] != 0) GLES30.glDeleteQueries(2, quietQuery, 0);
         quietQuery[0] = quietQuery[1] = 0;
         quietPending[0] = quietPending[1] = false;

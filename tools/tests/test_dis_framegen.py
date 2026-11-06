@@ -48,7 +48,9 @@ class DisShaderTest(unittest.TestCase):
                       "generatePhase": "GENERATE_PHASE", "cutProgram": "CUT", "boundsProgram": "BOUNDS",
                       "lateProgram": "LATE_VERDICT", "lateRowsProgram": "LATE_ROWS", "quietRowsProgram": "QUIET_ROWS", "quietSumProgram": "QUIET_SUM",
                       "staticCountProgram": "STATIC_COUNT", "phaseModeProgram": "PHASE_MODE",
-                      "phaseChoiceProgram": "PHASE_CHOICE"}
+                      "phaseChoiceProgram": "PHASE_CHOICE", "generateProgram": "GENERATE_PHASE",
+                      "imageCheckProgram": "IMAGE_CHECK_PATCH", "imageCheckBox": "IMAGE_CHECK_BOX",
+                      "imageCheckGrow": "IMAGE_CHECK_GROW"}
         # QA synthesis 25 (the learned selector): its generated class; the
         # shared conv helper binds through "program".
         selector = (RUNTIME.parent / "LearnedSelectorShaders.java").read_text()
@@ -61,8 +63,8 @@ class DisShaderTest(unittest.TestCase):
             variant = dis_gles.shaders()["GENERATE_PHASE"]
         finally:
             dis_gles.OCCLUSION_SIDE_T, dis_gles.CONTENT_BOUNDS = 0.0, False
-        optional = {("generatePhase", "uFlowAC"), ("generatePhase", "uFlowCA"),
-                    ("generatePhase", "uBounds")}
+        optional = {("generateProgram", "uFlowAC"), ("generateProgram", "uFlowCA"),
+                    ("generateProgram", "uBounds"), ("generatePhase", "uBounds")}
         # The pixel-art motion fade's densify variant.
         default_fade = dis_gles.PHASE_DENSIFY_DISCRETE_FADE
         dis_gles.PHASE_DENSIFY_DISCRETE_FADE = default_fade or (10.0, 6.0)
@@ -98,6 +100,36 @@ class DisShaderTest(unittest.TestCase):
         self.assertIn("float w=1.0/max(1.0,d);", dis_gles.shaders()["DENSIFY"])
 
 
+class ImageCheckTest(unittest.TestCase):
+    """The generated-image check: QA-selected, 3-D at level 1, pixel art only at level 2."""
+
+    def test_generate_shows_the_nearer_frame_where_the_check_failed(self):
+        generate = dis_gles.shaders()["GENERATE_PHASE"]
+        rule = "if(uImageCheckOn>0.5&&texture(uImageCheck,u).r>0.0)w=uT>=0.5?c0:a0;"
+        self.assertIn(rule, generate)
+        # A cut's or a flash's verdict still overrides it.
+        self.assertLess(generate.index(rule), generate.index("vec4 ct=texture(uCut,vec2(0.5));"))
+
+    def test_preview_is_the_generate_pass_with_its_motion(self):
+        shaders = dis_gles.shaders()
+        preview = shaders["GENERATE_PHASE_PREVIEW"]
+        self.assertIn("o1=vec4(v*uHistorySize,0.0,1.0);", preview)
+        self.assertEqual(preview.replace("layout(location=1) out vec4 o1;", "")
+                         .replace("o1=vec4(v*uHistorySize,0.0,1.0);", ""), shaders["GENERATE_PHASE"])
+
+    def test_check_reads_where_the_generate_pass_read(self):
+        check = dis_gles.shaders()["IMAGE_CHECK_PATCH"]
+        self.assertIn("vec2 vp=floor(v*uHistorySize+0.5),ap=floor(uT*vp+0.5),q=floor(u*uHistorySize)+0.5;", check)
+        self.assertIn("ca=(q-ap)/uHistorySize;cc=(q+vp-ap)/uHistorySize;", check)
+        self.assertIn("fits(uFrameC,cc,d)||fits(uFrameA,ca,d)||fits(uFrameC,u,d)||fits(uFrameA,u,d)", check)
+
+    def test_levels(self):
+        switch = SWITCH.read_text()
+        self.assertIn('static final String IMAGE_CHECK_GLOBAL = "emufusion_framegen_image_check";', switch)
+        self.assertIn("return imageCheck >= (discrete ? 2 : 1);", switch)
+        self.assertIn("TimelineSchedulerSwitch.imageCheck(discrete)", RUNTIME.read_text())
+
+
 class SingleRouteTest(unittest.TestCase):
     def test_every_source_renders_the_same_route(self):
         # Like LSFG, nothing about the system picks the motion route (3.2.80).
@@ -127,7 +159,7 @@ class SingleRouteTest(unittest.TestCase):
                       shader)
         self.assertIn("  if(uDiscrete<0.5){float nk=", shader)
         flow = (GAME / "DenseInverseSearchFlow.java").read_text()
-        self.assertIn('GLES20.glUniform1f(location(generatePhase, "uDiscrete"), discrete ? 1f : 0f);', flow)
+        self.assertIn('GLES20.glUniform1f(location(generateProgram, "uDiscrete"), discrete ? 1f : 0f);', flow)
         self.assertIn("flow.setDiscrete(discreteContent);", GENERATOR.read_text())
         host = (GAME / "InWindowGameHost.java").read_text()
         self.assertEqual(2, host.count("layer.setDiscreteContent(authoritativeHz > 0.0);"))
@@ -248,7 +280,7 @@ class DisSelectionTest(unittest.TestCase):
                       f"PHASE_PATCH = {dis_gles.PATCH};", flow)
         self.assertIn("uniform int uS;\n#define S uS\n", shaders["PHASE_SEARCH"])
         self.assertIn("uniform int uS;\n#define S uS\n", shaders["PHASE_DENSIFY"])
-        self.assertIn('bind(generatePhase, "uLate", late != 0 ? late : zeroField, 8);', RUNTIME.read_text())
+        self.assertIn('bind(generateProgram, "uLate", late != 0 ? late : zeroField, 8);', RUNTIME.read_text())
         # Replay dumps carry the endpoint DIS flows beside the per-phase field.
         self.assertIn('dumpFloatPlane(out, "disFlowACF32", disField.endpointFlowTexture(0),', generator)
         # Two flat frames that differ are a fade, not a cut.

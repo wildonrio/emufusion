@@ -326,6 +326,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         fastPath = handOver;
+        int check = 0;
+        try {
+            if (context != null) check = Settings.Global.getInt(
+                    context.getContentResolver(), IMAGE_CHECK_GLOBAL, check);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        imageCheck = check;
         long phaseWaitUs = 3250L;
         try {
             if (context != null) phaseWaitUs = Settings.Global.getLong(
@@ -717,6 +725,18 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean fastPath = false;
 
     static boolean fastPath() { return fastPath; }
+
+    /**
+     * QA emufusion_framegen_image_check: a preview of each generated image is
+     * compared with the real frames, and what is in neither shows the nearer
+     * real frame (dis_gles.py IMAGE_CHECK). 0 off, 1 3-D, 2 pixel art as well:
+     * a held patch of a large 2-D move can be a second copy of its object
+     * (Sonic 2's flippers).
+     */
+    static final String IMAGE_CHECK_GLOBAL = "emufusion_framegen_image_check";
+    private static volatile int imageCheck = 0;
+
+    static boolean imageCheck(boolean discrete) { return imageCheck >= (discrete ? 2 : 1); }
 
 
     static final String SWITCH_PHASE_WAIT_GLOBAL = "emufusion_framegen_switch_phase_wait_us";

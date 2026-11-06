@@ -640,6 +640,7 @@ def _generate_phase_shader_text():
     ("uniform sampler2D uLate;\n" if LATE_SHARE > 0 else "") +
     ("uniform sampler2D uStatic;uniform float uStaticFrames;\n" if STATIC_OVERLAY else "") +
     ("uniform sampler2D uFlowAC,uFlowCA;\n" if OCCLUSION_SIDE_T > 0 else "") +
+    ("uniform sampler2D uImageCheck;uniform float uImageCheckOn;\n" if IMAGE_CHECK else "") +
     "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
     "float wc(vec2 u,vec2 k){return md(abs(texture(uFrameA,u-uT*k).rgb-texture(uFrameC,u+(1.0-uT)*k).rgb));}\n"
     + wc5_glsl() +
@@ -779,6 +780,10 @@ def _generate_phase_shader_text():
         f"smoothstep({float(EDGE_HOLD_T)*0.5}/255.0,{float(EDGE_HOLD_T)}/255.0,md(abs(aw-cw)));\n"
         "    w=mix(w,uT<=0.5?a0:c0,k);}\n") +
        "  }}\n") +
+    ("" if not IMAGE_CHECK else
+     # IMAGE_CHECK_*: content the check found in neither real frame shows the
+     # nearer real frame, as drawn.
+     " if(uImageCheckOn>0.5&&texture(uImageCheck,u).r>0.0)w=uT>=0.5?c0:a0;\n") +
     ("" if LATE_SHARE <= 0 or LATE_NEAR <= 0 else
      (f" w=mix(w,uT>=0.5?c0:a0,step(uDiscrete>0.5?{LATE_NEAR_DISCRETE}:{LATE_NEAR},"
       if DISCRETE_UNIFORM else f" w=mix(w,uT>=0.5?c0:a0,step({LATE_NEAR},") +
@@ -880,6 +885,71 @@ STATIC_COUNT = (HEADER +
     "void main(){ivec2 p=ivec2(gl_FragCoord.xy);vec3 e=abs(texelFetch(uFrameA,p,0).rgb-texelFetch(uFrameC,p,0).rgb);\n"
     " float n=texelFetch(uCount,p,0).r;\n"
     " o0=vec4(step(max(max(e.r,e.g),e.b),1.5/255.0)*min(n+1.0/255.0,1.0),0.0,0.0,1.0);}\n")
+
+
+# Generated-image check (2026-11-05, 3-D; QA emufusion_framegen_image_check).
+# Motion search cannot always follow a small fast object: its vectors scatter
+# and the warp shreds it (Double Dash's karts, Wind Waker HD's and NSMBU's fine
+# detail). The image is checked before it is shown. A preview at a quarter of a
+# 1280-wide picture is drawn with the generate pass itself; each preview pixel's
+# 3x3 patch is compared with the real frames, read along that pixel's own motion
+# and at zero motion, four places a correct result must match. A share of a 5x5
+# neighbourhood failing, grown by one pixel, shows the nearer real frame instead:
+# one uneven step for that object instead of content the game never drew.
+# genport selfcheck, invented measure (frames over 0.1%, area, error):
+# Double Dash 16 -> 4%, 0.059 -> 0.025, 0.567 -> 0.574; Wind Waker HD 20 -> 0%,
+# 0.049 -> 0.010, 0.390 -> 0.395; NSMBU map 11 -> 3%, 0.045 -> 0.006, 0.955 ->
+# 0.972; Link's Awakening 5 -> 5%, 0.022 -> 0.032; Star Fox 64 12 -> 0%, 0.040 ->
+# 0.013; Ocarina 4 -> 0%. Pixel art, read at the generate pass's own whole-pixel
+# places: Mega Drive 18 -> 18%, 0.109 -> 0.090, 0.542 -> 0.569; SNES 15 -> 8%,
+# 0.058 -> 0.045, 0.380 -> 0.388; NES 0 -> 0%, 0.014 -> 0.011.
+IMAGE_CHECK = True
+IMAGE_CHECK_WIDTH = 320
+IMAGE_CHECK_T = 24.0
+IMAGE_CHECK_SHARE = 0.6
+VERTEX_UV = (
+    "#version 300 es\n"
+    "out vec2 vTexCoord;\n"
+    "void main(){vec2 p=vec2(gl_VertexID==1?3.0:-1.0,gl_VertexID==2?3.0:-1.0);"
+    "vTexCoord=0.5*p+0.5;gl_Position=vec4(p,0.0,1.0);}\n")
+IMAGE_CHECK_PATCH = (HEADER +
+    "uniform sampler2D uPreview,uPreviewMotion,uFrameA,uFrameC;uniform float uT,uDiscrete;uniform vec2 uHistorySize,uSize;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "vec3 g[9];\n"
+    "float md(vec3 x){return max(max(x.r,x.g),x.b);}\n"
+    "bool fits(sampler2D s,vec2 c,vec2 d){float e=0.0;int i=0;\n"
+    " for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)e+=md(abs(g[i++]-texture(s,c+vec2(x,y)*d).rgb));\n"
+    f" return e/9.0<={float(IMAGE_CHECK_T)}/255.0;}}\n"
+    "void main(){ivec2 p=ivec2(gl_FragCoord.xy),m=ivec2(uSize)-1;vec2 u=(vec2(p)+0.5)/uSize,d=1.0/uSize;\n"
+    " vec2 v=texelFetch(uPreviewMotion,p,0).xy/uHistorySize;\n"
+    " int i=0;for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)g[i++]=texelFetch(uPreview,clamp(p+ivec2(x,y),ivec2(0),m),0).rgb;\n"
+    " vec2 ca=u-uT*v,cc=u+(1.0-uT)*v;\n"
+    # Pixel art: the generate pass's own whole-pixel reads; a half-pixel read blurs every edge.
+    " if(uDiscrete>0.5){vec2 vp=floor(v*uHistorySize+0.5),ap=floor(uT*vp+0.5),q=floor(u*uHistorySize)+0.5;\n"
+    "  ca=(q-ap)/uHistorySize;cc=(q+vp-ap)/uHistorySize;}\n"
+    " bool ok=fits(uFrameC,cc,d)||fits(uFrameA,ca,d)||fits(uFrameC,u,d)||fits(uFrameA,u,d);\n"
+    " o0=vec4(ok?0.0:1.0,0.0,0.0,1.0);}\n")
+# One direction of the 5x5 box; uShare > 0 on the second, thresholding the mean.
+IMAGE_CHECK_BOX = (HEADER +
+    "uniform sampler2D uIn;uniform ivec2 uStep;uniform float uShare;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "void main(){ivec2 p=ivec2(gl_FragCoord.xy),m=textureSize(uIn,0)-1;float s=0.0;\n"
+    " for(int k=-2;k<=2;++k)s+=texelFetch(uIn,clamp(p+k*uStep,ivec2(0),m),0).r;s*=0.2;\n"
+    " o0=vec4(uShare>0.0?step(uShare-0.01,s):s,0.0,0.0,1.0);}\n")
+IMAGE_CHECK_GROW = (HEADER +
+    "uniform sampler2D uIn;\n"
+    "layout(location=0) out vec4 o0;\n"
+    "void main(){ivec2 p=ivec2(gl_FragCoord.xy),m=textureSize(uIn,0)-1;float s=0.0;\n"
+    " for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)s=max(s,texelFetch(uIn,clamp(p+ivec2(x,y),ivec2(0),m),0).r);\n"
+    " o0=vec4(s,0.0,0.0,1.0);}\n")
+
+
+def generate_phase_preview_shader():
+    """The generate pass, also writing each pixel's chosen motion to a second target."""
+    text = generate_phase_shader()
+    assert text.count("layout(location=0) out vec4 o0;") == 1 and text.count(" o0=vec4(w,1.0);}") == 1
+    text = text.replace("layout(location=0) out vec4 o0;", "layout(location=0) out vec4 o0;layout(location=1) out vec4 o1;")
+    return text.replace(" o0=vec4(w,1.0);}", " o0=vec4(w,1.0);o1=vec4(v*uHistorySize,0.0,1.0);}")
 
 
 # The late verdict counted its whole grid in one fragment: 576 samples of
@@ -1277,6 +1347,9 @@ def shaders():
             'QUIET_ROWS': quiet_rows_shader(), 'QUIET_SUM': quiet_sum_shader(),
             'PHASE_MODE': phase_mode_shader(), 'PHASE_CHOICE': phase_choice_shader(),
             'STATIC_COUNT': STATIC_COUNT,
+            'VERTEX_UV': VERTEX_UV, 'GENERATE_PHASE_PREVIEW': generate_phase_preview_shader(),
+            'IMAGE_CHECK_PATCH': IMAGE_CHECK_PATCH, 'IMAGE_CHECK_BOX': IMAGE_CHECK_BOX,
+            'IMAGE_CHECK_GROW': IMAGE_CHECK_GROW,
             'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader(),
             'PATCH_PROPAGATE': patch_propagate_shader()}
 
