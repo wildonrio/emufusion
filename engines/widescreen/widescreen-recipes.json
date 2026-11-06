@@ -1041,7 +1041,7 @@
         "Super Smash Bros. Melee": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape",
+          "tested": "2026-11-05 Thor: no 16:9 code, so Dolphin's own widening; card dialog in bars, title wide. Not yet played",
           "onOptions": {
             "dolphin_widescreen_hack": "enabled"
           },
@@ -1052,7 +1052,7 @@
         "Metroid Prime": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape",
+          "tested": "2026-11-05 Thor: no 16:9 code, so Dolphin's own widening; title 2D sits in bars, 3D menu wide. Not yet played",
           "onOptions": {
             "dolphin_widescreen_hack": "enabled"
           },
@@ -1063,7 +1063,7 @@
         "Super Mario Sunshine": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title, sky and save panel compared; 2D keeps its shape with the 3D wide behind it, 2D-only screens sit in bars. Not yet played"
+          "tested": "2026-11-05 Thor: title and save panel keep their shape with 3D wide behind them, postcards sit in bars. Not yet played"
         },
         "The Legend of Zelda: The Wind Waker": {
           "strategy": "widen",
