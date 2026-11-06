@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contact sheet of the games library_triage.py shortlisted, two gameplay frames each, to look at.
+"""Contact sheet of the games library_triage.py shortlisted, the two frames that scrolled, to look at.
 
 usage: library_sheet.py SYSTEM ROM_DIR TRIAGE.json OUT_PREFIX [--per 24] [--min-real 0.9] [--skip N]
 Prints each sheet's row order, so a row can be matched back to its game.
@@ -19,7 +19,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from library_triage import LEADS, ROOT, SYSTEMS, script
 
 
-def frames(system, roms, row):
+def frames(system, roms, row, keep):
+    kept = [keep / f"{row['rom']}.{slot}.png" for slot in (0, 1)]
+    if all(path.exists() for path in kept):
+        return [Image.open(path).convert('RGB').copy() for path in kept]
     spec = SYSTEMS[system]
     out = tempfile.mkdtemp(prefix='ef-sheet-')
     try:
@@ -51,7 +54,7 @@ def main():
     rows = sorted(rows, key=lambda r: r['rom'])[args.skip:]
     print(len(rows), 'games')
     with concurrent.futures.ThreadPoolExecutor(4) as pool:
-        shots = list(pool.map(lambda r: frames(args.system, args.roms, r), rows))
+        shots = list(pool.map(lambda r: frames(args.system, args.roms, r, Path(args.triage).with_suffix('.frames')), rows))
     cell = (250, 150)
     for page in range((len(rows) + args.per - 1) // args.per):
         part = list(zip(rows, shots))[page * args.per:(page + 1) * args.per]

@@ -1,8 +1,8 @@
 diff --git a/platforms/libretro/libretro.cpp b/platforms/libretro/libretro.cpp
-index c1ad656..ac2ab48 100644
+index c1ad656..056e651 100644
 --- a/platforms/libretro/libretro.cpp
 +++ b/platforms/libretro/libretro.cpp
-@@ -72,6 +72,86 @@ static bool libretro_supports_bitmasks = false;
+@@ -72,6 +72,109 @@ static bool libretro_supports_bitmasks = false;
  static bool categories_supported = false;
  static float aspect_ratio = 0.0f;
  static int current_screen_width = 0;
@@ -68,6 +68,29 @@ index c1ad656..ac2ab48 100644
 +    core->GetVideo()->SetWideHud(rules, count);
 +}
 +
++// emufusion_ws_gate=scroll, for games nobody has played through: the sides stay black until the scene
++// has scrolled far enough to have filled them, and close when the screen is rebuilt.
++static bool ef_scroll_gate = false;
++static int ef_scene_travel = 0;
++static int ef_frames_display_off = 0;
++static u8 ef_last_scroll = 0;
++
++static bool ef_gate_open(GearsystemCore* core)
++{
++    if (!ef_scroll_gate) return true;
++    const u8* registers = core->GetVideo()->GetRegisters();
++    int step = (s8)(registers[8] - ef_last_scroll);
++    ef_last_scroll = registers[8];
++    // A game may blank the screen for a moment each frame to reach the VDP faster.
++    ef_frames_display_off = (registers[1] & 0x40) ? 0 : ef_frames_display_off + 1;
++    // A scroll that jumps has cut to another scene; one that scrolls moves a few pixels.
++    if (step < -24 || step > 24 || ef_frames_display_off > 2)
++        ef_scene_travel = 0;
++    else
++        ef_scene_travel += step < 0 ? -step : step;
++    return ef_scene_travel >= ef_wide_ext + 16;
++}
++
 +static bool ef_scene_wide(GearsystemCore* core)
 +{
 +    if (!ef_term_count) return true;
@@ -89,15 +112,15 @@ index c1ad656..ac2ab48 100644
  static int current_screen_height = 0;
  static float current_aspect_ratio = 0;
  
-@@ -268,6 +348,7 @@ void retro_run(void)
+@@ -268,6 +371,7 @@ void retro_run(void)
      update_input();
  
      audio_sample_count = 0;
-+    if (ef_wide_ext) core->GetVideo()->SetWideScene(ef_scene_wide(core));
++    if (ef_wide_ext) core->GetVideo()->SetWideScene(ef_gate_open(core) && ef_scene_wide(core));
      core->RunToVBlank(frame_buffer, audio_buf, &audio_sample_count);
  
      GS_RuntimeInfo runtime_info;
-@@ -286,7 +367,10 @@ void retro_run(void)
+@@ -286,7 +390,10 @@ void retro_run(void)
          info.geometry.base_height  = runtime_info.screen_height;
          info.geometry.max_width    = GS_RESOLUTION_MAX_WIDTH_WITH_OVERSCAN;
          info.geometry.max_height   = GS_RESOLUTION_MAX_HEIGHT_WITH_OVERSCAN;
@@ -109,7 +132,7 @@ index c1ad656..ac2ab48 100644
  
          environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info.geometry);
      }
-@@ -437,6 +521,8 @@ void *retro_get_memory_data(unsigned id)
+@@ -437,6 +544,8 @@ void *retro_get_memory_data(unsigned id)
              return core->GetMemory()->GetCurrentRule()->GetRamBanks();
          case RETRO_MEMORY_SYSTEM_RAM:
              return core->GetMemory()->GetMemoryMap() + 0xC000;
@@ -118,7 +141,7 @@ index c1ad656..ac2ab48 100644
      }
  
      return NULL;
-@@ -450,6 +536,8 @@ size_t retro_get_memory_size(unsigned id)
+@@ -450,6 +559,8 @@ size_t retro_get_memory_size(unsigned id)
              return core->GetMemory()->GetCurrentRule()->GetRamSize();
          case RETRO_MEMORY_SYSTEM_RAM:
              return 0x2000;
@@ -127,7 +150,7 @@ index c1ad656..ac2ab48 100644
      }
  
      return 0;
-@@ -892,6 +980,24 @@ static void check_variables(void)
+@@ -892,6 +1003,29 @@ static void check_variables(void)
  {
      struct retro_variable var = {0};
  
@@ -135,6 +158,11 @@ index c1ad656..ac2ab48 100644
 +    var.key = "emufusion_ws_scene";
 +    var.value = NULL;
 +    ef_set_scene(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++
++    var.key = "emufusion_ws_gate";
++    var.value = NULL;
++    ef_scroll_gate = environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !strcmp(var.value, "scroll");
++    ef_scene_travel = 0;
 +
 +    var.key = "emufusion_ws_hud";
 +    var.value = NULL;

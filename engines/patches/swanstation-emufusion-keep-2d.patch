@@ -1,0 +1,316 @@
+diff --git a/src/core/gpu_hw.cpp b/src/core/gpu_hw.cpp
+index 99582d7..5551424 100644
+--- a/src/core/gpu_hw.cpp
++++ b/src/core/gpu_hw.cpp
+@@ -694,6 +694,7 @@ void GPU_HW::LoadVertices()
+       std::array<BatchVertex, 4> vertices;
+       std::array<std::array<int32_t, 2>, 4> native_vertex_positions;
+       bool valid_w = g_settings.gpu_pgxp_texture_correction;
++      uint32_t emufusion_gte_vertices = 0;
+       for (uint32_t i = 0; i < num_vertices; i++)
+       {
+         const uint32_t color = (shaded && i > 0) ? (FifoPop() & UINT32_C(0x00FFFFFF)) : first_color;
+@@ -710,9 +711,35 @@ void GPU_HW::LoadVertices()
+ 
+         if (pgxp)
+         {
+-          valid_w &=
++          const bool precise =
+             PGXP::GetPreciseVertex(static_cast<uint32_t>(maddr_and_pos >> 32), vp.bits, native_x, native_y, m_drawing_offset.x,
+                                    m_drawing_offset.y, &vertices[i].x, &vertices[i].y, &vertices[i].w);
++          valid_w &= precise;
++          emufusion_gte_vertices += precise;
++        }
++      }
++
++      if (m_emufusion_keep_2d)
++      {
++        // One vertex from the GTE is enough: a polygon the game clipped itself keeps the others.
++        if (emufusion_gte_vertices > 0)
++        {
++          EmufusionNote3D();
++        }
++        else
++        {
++          int32_t left = native_vertex_positions[0][0];
++          int32_t right = left;
++          for (uint32_t i = 1; i < num_vertices; i++)
++          {
++            left = std::min(left, native_vertex_positions[i][0]);
++            right = std::max(right, native_vertex_positions[i][0]);
++          }
++          if (EmufusionNote2D(right - left))
++          {
++            for (uint32_t i = 0; i < num_vertices; i++)
++              vertices[i].x = EmufusionX(vertices[i].x);
++          }
+         }
+       }
+       if (pgxp)
+@@ -869,6 +896,8 @@ void GPU_HW::LoadVertices()
+       if (m_batch.use_depth_buffer)
+         SetBatchDepthBuffer(false);
+ 
++      const bool emufusion_narrow = EmufusionNote2D(rectangle_width);
++
+       // Split the rectangle into multiple quads if it's greater than 256x256, as the texture page should repeat.
+       uint16_t tex_top = orig_tex_top;
+       for (int32_t y_offset = 0; y_offset < rectangle_height;)
+@@ -882,8 +911,13 @@ void GPU_HW::LoadVertices()
+         for (int32_t x_offset = 0; x_offset < rectangle_width;)
+         {
+           const int32_t quad_width = std::min<int32_t>(rectangle_width - x_offset, TEXTURE_PAGE_HEIGHT - tex_left);
+-          const float quad_start_x = static_cast<float>(pos_x + x_offset);
+-          const float quad_end_x = quad_start_x + static_cast<float>(quad_width);
++          float quad_start_x = static_cast<float>(pos_x + x_offset);
++          float quad_end_x = quad_start_x + static_cast<float>(quad_width);
++          if (emufusion_narrow)
++          {
++            quad_start_x = EmufusionX(quad_start_x);
++            quad_end_x = EmufusionX(quad_end_x);
++          }
+           const uint16_t tex_right = tex_left + static_cast<uint16_t>(quad_width);
+           const uint32_t uv_limits = BatchVertex::PackUVLimits(tex_left, tex_right - 1, tex_top, tex_bottom - 1);
+ 
+@@ -973,7 +1007,10 @@ void GPU_HW::LoadVertices()
+         AddDrawLineTicks(clip_right - clip_left, clip_bottom - clip_top, rc.shading_enable);
+ 
+         // TODO: Should we do a PGXP lookup here? Most lines are 2D.
+-        DrawLine(static_cast<float>(start_x), static_cast<float>(start_y), start_color, static_cast<float>(end_x),
++        const bool emufusion_narrow = EmufusionNote2D(max_x - min_x);
++        DrawLine(emufusion_narrow ? EmufusionX(static_cast<float>(start_x)) : static_cast<float>(start_x),
++                 static_cast<float>(start_y), start_color,
++                 emufusion_narrow ? EmufusionX(static_cast<float>(end_x)) : static_cast<float>(end_x),
+                  static_cast<float>(end_y), end_color, depth);
+ 
+         if (m_sw_renderer)
+@@ -1038,7 +1075,10 @@ void GPU_HW::LoadVertices()
+             AddDrawLineTicks(clip_right - clip_left, clip_bottom - clip_top, rc.shading_enable);
+ 
+             // TODO: Should we do a PGXP lookup here? Most lines are 2D.
+-            DrawLine(static_cast<float>(start_x), static_cast<float>(start_y), start_color, static_cast<float>(end_x),
++            const bool emufusion_narrow = EmufusionNote2D(max_x - min_x);
++            DrawLine(emufusion_narrow ? EmufusionX(static_cast<float>(start_x)) : static_cast<float>(start_x),
++                     static_cast<float>(start_y), start_color,
++                     emufusion_narrow ? EmufusionX(static_cast<float>(end_x)) : static_cast<float>(end_x),
+                      static_cast<float>(end_y), end_color, depth);
+           }
+ 
+@@ -1317,8 +1357,74 @@ void GPU_HW::FillVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, u
+     Common::Rectangle<uint32_t>::FromExtents(x, y, width, height).Clamped(0, 0, VRAM_WIDTH, VRAM_HEIGHT));
+ }
+ 
++bool GPU_HW::EmufusionNote2D(int32_t span)
++{
++  if (!m_emufusion_keep_2d)
++    return false;
++
++  m_emufusion_other_draws++;
++  if (!m_emufusion_scene_3d)
++    return false;
++
++  // A smaller drawing area is a texture being drawn. A fade or backdrop covers the picture as it is.
++  const int32_t area = static_cast<int32_t>(m_drawing_area.right) - static_cast<int32_t>(m_drawing_area.left) + 1;
++  if (area + 16 < static_cast<int32_t>(m_crtc_state.display_vram_width) || span * 10 >= area * 9)
++    return false;
++
++  // The draw lands away from its own coordinates, which is all the caller tells the dirty rectangle.
++  m_vram_dirty_rect.Include(m_drawing_area.left, m_drawing_area.right + 1u, m_drawing_area.top, m_drawing_area.bottom + 1u);
++  return true;
++}
++
++void GPU_HW::EmufusionNoteBlit(uint32_t width, uint32_t height)
++{
++  if (!m_emufusion_keep_2d)
++    return;
++
++  // Movies and menus reach the screen this way. Textures loading in a 3D scene do not end the scene.
++  m_emufusion_blit_area += width * height;
++  if (m_emufusion_blit_area * 2 >= m_crtc_state.display_vram_width * m_crtc_state.display_vram_height)
++    m_emufusion_other_draws++;
++}
++
++void GPU_HW::EmufusionEndFrame()
++{
++  const float aspect = g_settings.GetDisplayAspectRatioValue();
++  m_emufusion_keep_2d =
++    g_settings.gpu_emufusion_keep_2d && g_settings.gpu_widescreen_hack && g_settings.gpu_pgxp_enable && aspect > 4.0f / 3.0f;
++  if (!m_emufusion_keep_2d)
++  {
++    m_host_display->SetEmufusionPictureWidth(1.0f);
++    return;
++  }
++
++  m_emufusion_scale = (4.0f / 3.0f) / aspect;
++  if (m_emufusion_3d_draws >= EMUFUSION_3D_DRAWS)
++  {
++    m_emufusion_frames_without_3d = 0;
++  }
++  else if (m_emufusion_other_draws > 0 && ++m_emufusion_frames_without_3d >= EMUFUSION_FRAMES_TO_2D)
++  {
++    // Only what was drawn counts: a picture left up while the game loads is still the same scene.
++    m_emufusion_scene_3d = false;
++  }
++  m_emufusion_3d_draws = 0;
++  m_emufusion_other_draws = 0;
++  m_emufusion_blit_area = 0;
++
++  // A movie is 24-bit whatever state the scene before it left.
++  const bool whole_picture_wide = m_emufusion_scene_3d && !m_GPUSTAT.display_area_color_depth_24;
++  m_host_display->SetEmufusionPictureWidth(whole_picture_wide ? 1.0f : m_emufusion_scale);
++}
++
++void GPU_HW::UpdateDisplay()
++{
++  EmufusionEndFrame();
++}
++
+ void GPU_HW::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const void* data, bool set_mask, bool check_mask)
+ {
++  EmufusionNoteBlit(width, height);
+   IncludeVRAMDirtyRectangle(Common::Rectangle<uint32_t>::FromExtents(x, y, width, height));
+ 
+   if (check_mask)
+@@ -1330,6 +1436,7 @@ void GPU_HW::UpdateVRAM(uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+ 
+ void GPU_HW::CopyVRAM(uint32_t src_x, uint32_t src_y, uint32_t dst_x, uint32_t dst_y, uint32_t width, uint32_t height)
+ {
++  EmufusionNoteBlit(width, height);
+   IncludeVRAMDirtyRectangle(
+     Common::Rectangle<uint32_t>::FromExtents(dst_x, dst_y, width, height).Clamped(0, 0, VRAM_WIDTH, VRAM_HEIGHT));
+ 
+diff --git a/src/core/gpu_hw.h b/src/core/gpu_hw.h
+index 3741e75..ff2e1b4 100644
+--- a/src/core/gpu_hw.h
++++ b/src/core/gpu_hw.h
+@@ -299,6 +299,8 @@ protected:
+                         bool* shader_source_changed = nullptr,
+                         bool* display_only_source_changed = nullptr);
+ 
++  void UpdateDisplay() override;
++
+   virtual void UpdateVRAMReadTexture();
+   virtual void UpdateDepthBufferFromMaskBit() = 0;
+   virtual void ClearDepthBuffer() = 0;
+@@ -308,6 +310,24 @@ protected:
+   virtual void UploadUniformBuffer(const void* uniforms, uint32_t uniforms_size) = 0;
+   virtual void DrawBatchVertices(BatchRenderMode render_mode, uint32_t base_vertex, uint32_t num_vertices) = 0;
+ 
++  // EmuFusion: the widescreen hack narrows what the GTE projects and the display stretches the
++  // whole picture back out, so anything else would come out a third too wide. In a 3D scene such a
++  // draw is narrowed here instead. A scene with no 3D is left alone and shown narrow as a whole,
++  // which also keeps uploads and copies right.
++  ALWAYS_INLINE void EmufusionNote3D()
++  {
++    if (++m_emufusion_3d_draws >= EMUFUSION_3D_DRAWS)
++      m_emufusion_scene_3d = true;
++  }
++  bool EmufusionNote2D(int32_t span);
++  void EmufusionNoteBlit(uint32_t width, uint32_t height);
++  void EmufusionEndFrame();
++  ALWAYS_INLINE float EmufusionX(float x) const
++  {
++    const float centre = static_cast<float>(m_drawing_area.left + m_drawing_area.right + 1) * 0.5f;
++    return centre + (x - centre) * m_emufusion_scale;
++  }
++
+   uint32_t CalculateResolutionScale() const;
+   GPUDownsampleMode GetDownsampleMode(uint32_t resolution_scale) const;
+ 
+@@ -578,4 +598,14 @@ private:
+     m_batch_current_vertex_ptr->Set(std::forward<Args>(args)...);
+     m_batch_current_vertex_ptr++;
+   }
++
++  static constexpr uint32_t EMUFUSION_3D_DRAWS = 16;
++  static constexpr uint32_t EMUFUSION_FRAMES_TO_2D = 8;
++  uint32_t m_emufusion_3d_draws = 0;
++  uint32_t m_emufusion_other_draws = 0;
++  uint32_t m_emufusion_blit_area = 0;
++  uint32_t m_emufusion_frames_without_3d = 0;
++  float m_emufusion_scale = 1.0f;
++  bool m_emufusion_keep_2d = false;
++  bool m_emufusion_scene_3d = false;
+ };
+diff --git a/src/core/host_display.cpp b/src/core/host_display.cpp
+index 3807fc4..cfd4f0d 100644
+--- a/src/core/host_display.cpp
++++ b/src/core/host_display.cpp
+@@ -145,6 +145,8 @@ std::tuple<int32_t, int32_t, int32_t, int32_t> HostDisplay::CalculateDrawRect(in
+   CalculateDrawRect(window_width, window_height - top_margin, &left, &top, &width, &height, &left_padding, &top_padding,
+                     nullptr, nullptr, apply_aspect_ratio);
+ 
++  left += width * (1.0f - m_emufusion_picture_width) * 0.5f;
++  width *= m_emufusion_picture_width;
+   return std::make_tuple(static_cast<int32_t>(left + left_padding), static_cast<int32_t>(top + top_padding) + top_margin,
+                          static_cast<int32_t>(width), static_cast<int32_t>(height));
+ }
+diff --git a/src/core/host_display.h b/src/core/host_display.h
+index 3bf6c27..e041bf8 100644
+--- a/src/core/host_display.h
++++ b/src/core/host_display.h
+@@ -159,6 +159,9 @@ public:
+   /// Disables the software cursor.
+   void ClearSoftwareCursor();
+ 
++  /// EmuFusion: share of the width the picture takes, centred, for a scene that must keep its 4:3 shape.
++  void SetEmufusionPictureWidth(float share) { m_emufusion_picture_width = share; }
++
+   /// Helper function for computing the draw rectangle in a larger window.
+   std::tuple<int32_t, int32_t, int32_t, int32_t> CalculateDrawRect(int32_t window_width, int32_t window_height, int32_t top_margin,
+                                                    bool apply_aspect_ratio = true) const;
+@@ -192,6 +195,7 @@ protected:
+   int32_t m_display_active_width = 0;
+   int32_t m_display_active_height = 0;
+   float m_display_aspect_ratio = 1.0f;
++  float m_emufusion_picture_width = 1.0f;
+ 
+   void* m_display_texture_handle = nullptr;
+   HostDisplayPixelFormat m_display_texture_format = HostDisplayPixelFormat::Count;
+diff --git a/src/core/settings.cpp b/src/core/settings.cpp
+index f676325..685b934 100644
+--- a/src/core/settings.cpp
++++ b/src/core/settings.cpp
+@@ -108,6 +108,7 @@ void Settings::Load(LibretroSettingsInterface& si)
+   gpu_disable_interlacing = si.GetBoolValue("GPU", "DisableInterlacing", true);
+   gpu_force_ntsc_timings = si.GetBoolValue("GPU", "ForceNTSCTimings", false);
+   gpu_widescreen_hack = si.GetBoolValue("GPU", "WidescreenHack", false);
++  gpu_emufusion_keep_2d = si.GetBoolValue("GPU", "EmufusionKeep2D", false);
+   gpu_24bit_chroma_smoothing = si.GetBoolValue("GPU", "ChromaSmoothing24Bit", false);
+   gpu_pgxp_enable = si.GetBoolValue("GPU", "PGXPEnable", false);
+   gpu_pgxp_culling = si.GetBoolValue("GPU", "PGXPCulling", true);
+diff --git a/src/core/settings.h b/src/core/settings.h
+index 2781a89..ee069c9 100644
+--- a/src/core/settings.h
++++ b/src/core/settings.h
+@@ -46,6 +46,7 @@ struct Settings
+   bool gpu_disable_interlacing = true;
+   bool gpu_force_ntsc_timings = false;
+   bool gpu_widescreen_hack = false;
++  bool gpu_emufusion_keep_2d = false;
+   bool gpu_pgxp_enable = false;
+   bool gpu_pgxp_culling = true;
+   bool gpu_pgxp_texture_correction = true;
+diff --git a/src/libretro/libretro_core_options.h b/src/libretro/libretro_core_options.h
+index b96b983..6712229 100644
+--- a/src/libretro/libretro_core_options.h
++++ b/src/libretro/libretro_core_options.h
+@@ -482,6 +482,18 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+      {NULL, NULL},
+    },
+    "false"},
++  {"swanstation_GPU_EmufusionKeep2D",
++   "Widescreen: Keep 2D Shape",
++   NULL,
++   "With the widescreen hack, draws what the GTE did not project a third narrower so it keeps its shape, and shows scenes with no 3D at 4:3. Needs PGXP.",
++   NULL,
++   "enhancement",
++   {
++     {"true", "Enabled"},
++     {"false", "Disabled"},
++     {NULL, NULL},
++   },
++   "false"},
+   {"swanstation_GPU_PGXPEnable",
+    "PGXP Geometry Correction",
+    NULL,

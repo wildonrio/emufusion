@@ -1893,6 +1893,72 @@
           "tested": "2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         }
       }
+    },
+    "psx": {
+      "engine": "swanstation",
+      "relaunch": true,
+      "baseWidth": 320,
+      "height": 240,
+      "pixelAspect": 1.0,
+      "maxAspect": 1.778,
+      "options": {},
+      "onOptions": {
+        "swanstation_GPU_WidescreenHack": "true",
+        "swanstation_Display_AspectRatio": "16:9",
+        "swanstation_GPU_PGXPEnable": "true",
+        "swanstation_GPU_EmufusionKeep2D": "true",
+        "swanstation_GPU_ResolutionScale": "4"
+      },
+      "offOptions": {
+        "swanstation_GPU_WidescreenHack": "false",
+        "swanstation_Display_AspectRatio": "4:3",
+        "swanstation_GPU_PGXPEnable": "false",
+        "swanstation_GPU_EmufusionKeep2D": "false",
+        "swanstation_GPU_ResolutionScale": "1"
+      },
+      "release": false,
+      "games": {
+        "Bushido Blade": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        },
+        "Die Hard Trilogy": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        },
+        "Spyro: Year of the Dragon": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        },
+        "Tekken": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        },
+        "Twisted Metal": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        },
+        "WipEout": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        },
+        "WipEout 3 - Special Edition": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        },
+        "Wipeout XL": {
+          "strategy": "testing",
+          "options": {},
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        }
+      }
     }
   }
 }

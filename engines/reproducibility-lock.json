@@ -56,16 +56,17 @@
       "id": "swanstation",
       "sourceCommit": "5430a4a53b89fa5827c97b84ada29d23317245bc",
       "sourceArchiveSha256": "df747c49b9038499b8d8762cd2662f0b8c128ee3999b74b19979e5ab20dd622d",
-      "recipeSha256": "d9c51fb98844d035bb4ee0c00e48cb9696e10353010b317b329689686531ead6",
+      "recipeSha256": "419fde62fcb2f425a84038f37c5aa8693c3949f23e3b21a4fc087baf2b740d3d",
       "patches": {
-        "engines/patches/swanstation-disable-forced-ipo.patch": "8d312fb06736b0577d05e0b0694592112632f3a659c247f801185f9acbbb881f"
+        "engines/patches/swanstation-disable-forced-ipo.patch": "8d312fb06736b0577d05e0b0694592112632f3a659c247f801185f9acbbb881f",
+        "engines/patches/swanstation-emufusion-keep-2d.patch": "25fdaedce03d879f5fdf14bd577e05365bcb0356feeb6ba39e4dbb9933887e2d"
       },
-      "artifactSha256": "032a04bcb4bc924f73c49769bc4848ddee132c40448b472aaab49f5eec48f239",
+      "artifactSha256": "2bf0c73a84308d6418185614a485326b4f0f4bdf996b5d211db7f5fa6f8fbafa",
       "independentBuilds": 2,
       "byteIdentical": true,
-      "proofDate": "2026-10-12",
-      "proofScope": "2 consecutive clean builds at one isolated root (engines/build/candidates/c2b-swanstation) with the EmuFusion-renamed recipe and patches; not new gameplay qualification.",
-      "evidence": "docs/qa/android-portability-2026-10-12-rename-c2b/results.jsonl"
+      "proofDate": "2026-11-06",
+      "proofScope": "2 consecutive clean builds at one isolated root with the Widescreen Hack keep-2D patch; byte-identical; not new gameplay qualification",
+      "evidence": "docs/widescreen/WIDESCREEN-HACK-PLAN.md"
     },
     {
       "id": "beetle-pce-fast",

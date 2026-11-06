@@ -53,6 +53,7 @@ STEPS = 72
 GAP = 14
 MAX_SHIFT = 48
 MATCH_MIDDLE = 0.90
+STANDS_OUT = 0.02
 
 
 def script(lead):
@@ -72,30 +73,34 @@ def same_share(left, right):
 
 
 def shift_between(a, b, base, width, height):
-    """The sideways shift taking frame a to frame b, judged from the old picture's columns."""
+    """The sideways shift taking frame a to frame b, judged from the old picture's columns.
+
+    A flat or striped picture matches itself at every shift and says nothing about scrolling,
+    so the best shift has to stand out from the typical one.
+    """
     start = (width - base) // 2
     probes = range(start + MAX_SHIFT, start + base - MAX_SHIFT, 12)
     columns_a = {x: column(a, x, height, 3) for x in probes}
-    best, best_share = 0, 0.0
-    for shift in range(-MAX_SHIFT, MAX_SHIFT + 1):
-        share = sum(same_share(columns_a[x], column(b, x - shift, height, 3)) for x in probes) / len(columns_a)
-        if share > best_share:
-            best, best_share = shift, share
-    return best, best_share
+    shares = {shift: sum(same_share(columns_a[x], column(b, x - shift, height, 3)) for x in probes) / len(columns_a)
+              for shift in range(-MAX_SHIFT, MAX_SHIFT + 1)}
+    best = max(shares, key=shares.get)
+    if shares[best] - sorted(shares.values())[len(shares) // 2] < STANDS_OUT:
+        return 0, 0.0
+    return best, shares[best]
 
 
 def score_frames(paths, base):
-    """(real, blank, evidence): side columns that later arrive in the picture, blank ones, pairs used."""
+    """(real, blank, pairs, used): side columns that later arrive in the picture, blank ones, frames that scrolled."""
     frames = [Image.open(p).convert('RGB') for p in paths]
     if not frames:
-        return 0.0, 1.0, 0
+        return 0.0, 1.0, 0, []
     width, height = frames[0].size
     pads = (width - base) // 2
     if pads <= 0:
-        return 0.0, 1.0, 0
+        return 0.0, 1.0, 0, []
     pixels = [f.load() for f in frames]
     start, end = pads, pads + base
-    real, seen, blank, total = 0.0, 0, 0, 0
+    real, seen, blank, total, used = 0.0, 0, 0, 0, []
     for frame in pixels:
         for x in (pads // 2, width - 1 - pads // 2):
             cells = column(frame, x, height)
@@ -114,11 +119,12 @@ def score_frames(paths, base):
                     match += same_share(column(pixels[i], x, height), column(pixels[i + gap], x - shift, height))
                 real += match / len(xs)
                 seen += 1
+                used.append(i)
             break
-    return (real / seen if seen else 0.0), blank / max(total, 1), seen
+    return (real / seen if seen else 0.0), blank / max(total, 1), seen, used
 
 
-def judge(system, rom):
+def judge(system, rom, keep):
     spec = SYSTEMS[system]
     # A long run takes the core from a private copy, so rebuilding the working copy cannot disturb it.
     core = os.environ.get('EF_TRIAGE_CORE', str(spec['core']))
@@ -134,9 +140,13 @@ def judge(system, rom):
             if run.returncode:
                 best.setdefault('error', run.stderr.strip().split('\n')[-1][:120])
                 continue
-            real, blank, pairs = score_frames(sorted(str(p) for p in Path(out).glob('*.png')), spec['base'])
+            paths = sorted(str(p) for p in Path(out).glob('*.png'))
+            real, blank, pairs, used = score_frames(paths, spec['base'])
             if pairs > best['pairs']:
                 best = dict(rom=rom.name, real=round(real, 3), blank=round(blank, 3), pairs=pairs, way=way)
+                # The frames that proved it, for the contact sheet.
+                for slot, share in enumerate((3, 1.5)):
+                    shutil.copyfile(paths[used[int(len(used) / share)]], keep / f'{rom.name}.{slot}.png')
             if pairs >= 12:
                 break
         except subprocess.TimeoutExpired:
@@ -160,11 +170,13 @@ def main():
     roms = sorted(p for p in Path(args.roms).iterdir() if p.suffix.lower() in suffixes and args.only.lower() in p.name.lower())
     results = {}
     target = Path(args.out)
+    keep = target.with_suffix('.frames')
+    keep.mkdir(exist_ok=True)
     if target.exists():
         results = {row['rom']: row for row in json.loads(target.read_text())}
     todo = [rom for rom in roms if rom.name not in results]
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
-        for row in pool.map(lambda rom: judge(args.system, rom), todo):
+        for row in pool.map(lambda rom: judge(args.system, rom, keep), todo):
             results[row['rom']] = row
             target.write_text(json.dumps(sorted(results.values(), key=lambda r: -r.get('real', 0)), indent=1) + '\n')
             print(row, flush=True)

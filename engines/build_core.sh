@@ -496,6 +496,9 @@ case "$ENGINE" in
         cp -R "$source/." "$staged_source/"
         patch -s -d "$staged_source" -p1 \
             < "$ROOT/engines/patches/swanstation-disable-forced-ipo.patch"
+        apply_locked_patch "$staged_source" \
+            engines/patches/swanstation-emufusion-keep-2d.patch \
+            25fdaedce03d879f5fdf14bd577e05365bcb0356feeb6ba39e4dbb9933887e2d
         source="$staged_source"
         # CMake exposes its binary directory through generated code. Resolve
         # macOS's /tmp -> /private/tmp alias, then canonicalize both source and
@@ -718,7 +721,7 @@ case "$ENGINE" in
             cp -R "$source/." "$build/"
             apply_locked_patch "$build" \
                 engines/patches/gearsystem-emufusion-widescreen.patch \
-                60b0a7944c2cc978022ebdefdf543cbee82763aaaf5e447d0ba6e6c502c2db42
+                92d11dad8ed1f8cf71482c0555b58be5a8669b8f6b2daef1cf0a369857d51148
             source="$build"
         fi
         if [ "$ENGINE" = gearcoleco ]; then
