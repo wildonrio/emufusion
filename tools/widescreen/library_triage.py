@@ -49,6 +49,8 @@ LEADS = (
     'wait:300 tap:START wait:150 tap:A wait:150 tap:START wait:200 tap:A wait:200 tap:A wait:400 ',
     'wait:600 tap:START wait:300 tap:A wait:300 tap:A wait:300 tap:START wait:300 tap:A wait:500 ',
 )
+# GBA games open with longer logos and more menus; these look for scrolling instead of a fixed route.
+GBA_LEADS = ('explore:14000:0 ',)
 STEPS = 72
 GAP = 14
 MAX_SHIFT = 48
@@ -129,14 +131,14 @@ def judge(system, rom, keep):
     # A long run takes the core from a private copy, so rebuilding the working copy cannot disturb it.
     core = os.environ.get('EF_TRIAGE_CORE', str(spec['core']))
     best = dict(rom=rom.name, real=0.0, blank=1.0, pairs=0)
-    for way, lead in enumerate(LEADS):
+    for way, lead in enumerate(GBA_LEADS if system == 'gba' else LEADS):
         out = tempfile.mkdtemp(prefix='ef-triage-')
         try:
             run = subprocess.run(
                 ['nice', '-n', '10', sys.executable, str(ROOT / 'tools/widescreen/retro_play.py'), core, str(rom),
                  '--out', out, '--opt', spec['option'], *[arg for more in spec.get('more', ()) for arg in ('--opt', more)],
                  '--play', script(lead)],
-                capture_output=True, text=True, timeout=240, cwd=str(ROOT))
+                capture_output=True, text=True, timeout=480, cwd=str(ROOT))
             if run.returncode:
                 best.setdefault('error', run.stderr.strip().split('\n')[-1][:120])
                 continue

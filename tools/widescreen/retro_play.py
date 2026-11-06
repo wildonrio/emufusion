@@ -17,9 +17,11 @@ Script, one step per whitespace-separated token (read from --play or a file):
   ram:NAME        dump the console's main RAM to NAME.ram in --out; vram:NAME video RAM;
                   saveram:NAME battery RAM; iwram:NAME the GBA's fast work RAM
   poke:ADDR=VALUE set a main RAM byte (hex), to reach a test case without playing there
+  explore:N[:SEED] press through logos and menus, trying to walk, until the picture scrolls or N frames pass
 Buttons: B Y SELECT START UP DOWN LEFT RIGHT A X L R L2 R2 L3 R3.
 """
 import argparse
+import array
 import ctypes as C
 import json
 import os
@@ -258,6 +260,62 @@ class Player:
                     out += 3
         write_png(path, width, height, bytes(rgb))
 
+    def rows(self):
+        """Three rows of raw pixels from the frame's middle, to compare one frame with another."""
+        data, width, height, pitch = self.frame
+        size = 4 if self.pixel_format == 1 else 2
+        kind = 'I' if size == 4 else 'H'
+        rows = []
+        for share in (0.4, 0.6, 0.8):
+            start = int(height * share) * pitch
+            rows.append(array.array(kind, data[start:start + width * size]))
+        return rows
+
+    @staticmethod
+    def shift_between(before, after):
+        """The sideways shift between two sets of rows, or 0 when none stands out."""
+        width = len(before[0])
+        margin = 48
+        scores = {}
+        for shift in range(-margin, margin + 1):
+            same = total = 0
+            for a, b in zip(before, after):
+                for x in range(margin, width - margin, 2):
+                    same += a[x] == b[x - shift]
+                    total += 1
+            scores[shift] = same / max(total, 1)
+        best = max(scores, key=scores.get)
+        typical = sorted(scores.values())[len(scores) // 2]
+        return best if scores[best] >= 0.8 and scores[best] - typical >= 0.05 else 0
+
+    def explore(self, budget, seed=0):
+        """Presses through logos and menus, trying to walk, until the picture scrolls."""
+        presses = ('START', 'A', 'A', 'A', 'START', 'A', 'A', 'DOWN', 'A', 'A', 'START', 'A', 'UP', 'A')
+        start = self.frames
+        turn = seed
+        scrolled = direction = 0
+        self.run(120)
+        while self.frames - start < budget:
+            before = self.rows() if self.frame else None
+            # Not B as well: in a menu that is the way back out.
+            self.pressed = {'RIGHT'}
+            self.run(24)
+            self.pressed = set()
+            after = self.rows() if self.frame else None
+            shift = self.shift_between(before, after) if before and after else 0
+            # Several times running the same way, so a wipe between two screens does not count.
+            scrolled = scrolled + 1 if abs(shift) >= 4 and (not scrolled or (shift > 0) == direction) else 0
+            direction = shift > 0
+            if scrolled >= 4:
+                return True
+            if not scrolled:
+                self.pressed = {presses[turn % len(presses)]}
+                self.run(4)
+                self.pressed = set()
+                self.run(70)
+                turn += 1
+        return False
+
     def save(self, slot):
         size = self.lib.retro_serialize_size()
         buffer = C.create_string_buffer(size)
@@ -275,6 +333,9 @@ class Player:
             kind, _, rest = token.partition(':')
             if kind == 'wait':
                 self.run(int(rest))
+            elif kind == 'explore':
+                budget, _, seed = rest.partition(':')
+                print('explore found scrolling' if self.explore(int(budget), int(seed or 0)) else 'explore gave up', self.frames)
             elif kind == 'tap':
                 self.pressed = set(rest.split(','))
                 self.run(4)
