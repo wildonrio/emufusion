@@ -258,11 +258,10 @@ per-game routes past their name-entry screens. Stray HUD digits at Mario Kart's 
 
 3D systems were started the same day; see "No stretching, ever" and the recipe table's `tested` notes.
 GameCube's 16:9 codes widen the 3D but stretch 2D by a third (Wind Waker's logo measured on the Thor), so
-`engines/patches/dolphin-emufusion-keep-2d-shape.patch` draws the 2D over a frame narrower by the same
-amount. It leaves out what comes before the frame's first 3D (a sky behind it), what comes before an EFB
-copy (the input of an effect) and anything spanning the screen (a fade, or the frame going through an effect). A frame with
-no 3D at all is a 2D screen and sits in bars. Anything a game keeps just off its old screen shows in those
-bars, as Double Dash's menu does; small, and not yet handled. Dreamcast keeps 2D's
+`engines/patches/dolphin-emufusion-keep-2d-shape.patch` draws 2D through a viewport narrower by the same
+amount, which also clips whatever a game keeps just off its old screen. It leaves out what comes before an
+EFB copy (the input of an effect) and, in a 3D frame, anything spanning the screen (a sky, a fade, or the frame
+going through an effect). A frame with no 3D at all is a 2D screen and sits in bars. Dreamcast keeps 2D's
 shape as it is: Crazy Taxi's PRESS START is the same width narrow and wide.
 
 ## The map reader (2026-11-05)
