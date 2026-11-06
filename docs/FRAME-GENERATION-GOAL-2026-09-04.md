@@ -267,7 +267,26 @@ The candidate's real gain is not in this measure: stock arrival is stamped after
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 5 (latest) **— Candidate for 3.2.155: Eden's future stamp and a wider phase target. More trials around the compositor's two states, none adopted. The Thor left adb again at 16:58, so the candidate has not run yet.**
+November 5 (latest) **— The generated image can be checked before it is shown: frames with invented content fall to 0-7% on the 3-D sets on the device's replay bench. QA, off by default until its GPU cost is measured.**
+
+- **Idea.** The invented measure needs no middle frame, so the device can ask the same question. A preview of the generated image is drawn with the generate pass itself at 320 pixels wide, also writing each pixel's chosen motion. Each preview pixel's 3x3 patch is compared with the real frames at four places a correct result must match: along that pixel's motion in each frame, and at zero motion in each frame. Where the mean difference is over 24 grey levels in at least 60% of a 5x5 neighbourhood, grown by one pixel, the image shows the nearer real frame instead. A shredded kart becomes a whole kart, one uneven step behind.
+- **Device replay bench, 18-30 pinned triplets a set, paired against the same tree with the check off (`emufusion_framegen_image_check=1`):**
+
+  | Set | Frames with invented content | Area | Hold-out error |
+  | --- | --- | --- | --- |
+  | Wind Waker HD | 11 -> 0% | 0.032 -> 0.005% | 0.512 -> 0.516 |
+  | Star Fox 64 | 4 -> 0% | 0.019 -> 0.005% | 0.719 -> 0.718 |
+  | NSMBU Deluxe map | 13 -> 3% | 0.045 -> 0.006% | 0.961 -> 0.971 |
+  | Double Dash | 14 -> 7% | 0.043 -> 0.027% | 0.618 -> 0.625 |
+  | Link's Awakening, full size | 6 -> 6% | 0.012 -> 0.024% | 0.578 -> 0.580 |
+
+  The port agrees within a few points (Double Dash 16 -> 4%, Wind Waker HD 20 -> 0%, NSMBU map 11 -> 3%, Link's Awakening 5 -> 5%, Star Fox 64 12 -> 0%, Ocarina 4 -> 0%, SM3DW 0 -> 0%). Double Dash and Link's Awakening are still over the 5% target on the device. Link's Awakening's one failing frame gets worse: 0.148 -> 0.339%, where new content enters along the picture's top edge.
+- **Not known yet:** the GPU cost (five extra passes at 320 wide), pacing with it on in play, and the owner's visual check. The default stays off until the first two are measured.
+- **Pixel art stays out (level 2 only).** Reading the frames at the generate pass's whole-pixel places cuts false alarms (Mega Drive 5.2 -> 1.9% of the frame flagged), and the port improves a little: Mega Drive 18 -> 18% of frames, area 0.109 -> 0.090%, error 0.542 -> 0.569; SNES 15 -> 8%; NES 0 -> 0%. But a held patch of a large 2-D move can be a second copy of its object (Sonic 2's flippers). On the 11 Mega Drive triplets the port reproduces, the two failing frames are the two with 1% or more flagged, so a whole-frame fallback at that share looks worth testing on a larger set.
+- **Fast path committed, off by default (`emufusion_framegen_fast_path=1`):** endpoint textures change hands instead of being copied, one framebuffer per flow target, discarded contents invalidated. Bit-exactness and timing are not measured yet.
+- **Device heat decides these runs.** The candidate on NSMBU Deluxe started at xo-therm 60 C aborted twice at the 72-C gate (99.5% and 97.0% on cadence, up to 80 two-scan intervals per 30 s). Started at 53 C: 99.8%, 3 two-scan intervals in 16 s. That run sat in the pipelined state (3% fast mode, 19.3 / 27.7 ms), so it does not show the latency gain. Compare runs only from a cool start.
+
+November 5 **— Candidate for 3.2.155: Eden's future stamp and a wider phase target. More trials around the compositor's two states, none adopted. The Thor left adb again at 16:58, so the candidate has not run yet.**
 
 - **In the tree, on by default (commit `4e4814c`):**
   - Eden stamps its presents 10 ms ahead under frame generation (`vk_swapchain.cpp`; QA `setprop debug.emufusion.eden_stamp_ahead_us 0` for stock stamps).
