@@ -34,6 +34,12 @@ SYSTEMS = {
                 base=160, buttons='A', suffixes=('.gbc',)),
     'gba': dict(core=BUILD / 'mgba/build-host/mgba_libretro.dylib', option='emufusion_ws_aspect=1778',
                 base=240, buttons='A', suffixes=('.gba',)),
+    'gamegear': dict(core=BUILD / 'gearsystem/platforms/libretro/gearsystem_libretro.dylib',
+                     option='emufusion_ws_aspect=1778', base=160, buttons='A', suffixes=('.gg',)),
+    'snes': dict(core=BUILD / 'bsnes-hd/bsnes/out/bsnes_hd_beta_libretro.dylib', option='emufusion_ws_width=348',
+                 base=256, buttons='B', suffixes=('.sfc', '.smc'),
+                 more=('bsnes_mode7_scale=1x', 'bsnes_ppu_show_overscan=ON', 'bsnes_video_aspectcorrection=ON',
+                       'bsnes_mode7_wsMode=all')),
 }
 # Past most title screens without knowing the game, then walk and jump. A START too many pauses a
 # game that is already playing, so each way in has a different count.
@@ -122,7 +128,8 @@ def judge(system, rom):
         try:
             run = subprocess.run(
                 ['nice', '-n', '10', sys.executable, str(ROOT / 'tools/widescreen/retro_play.py'), core, str(rom),
-                 '--out', out, '--opt', spec['option'], '--play', script(lead)],
+                 '--out', out, '--opt', spec['option'], *[arg for more in spec.get('more', ()) for arg in ('--opt', more)],
+                 '--play', script(lead)],
                 capture_output=True, text=True, timeout=240, cwd=str(ROOT))
             if run.returncode:
                 best.setdefault('error', run.stderr.strip().split('\n')[-1][:120])

@@ -25,6 +25,7 @@ def frames(system, roms, row):
     try:
         subprocess.run(['nice', '-n', '10', sys.executable, str(ROOT / 'tools/widescreen/retro_play.py'), str(spec['core']),
                         str(Path(roms) / row['rom']), '--out', out, '--opt', spec['option'],
+                        *[arg for more in spec.get('more', ()) for arg in ('--opt', more)],
                         '--play', script(LEADS[row.get('way', 0)])], capture_output=True, timeout=240, cwd=str(ROOT))
         paths = sorted(Path(out).glob('*.png'))
         return [Image.open(paths[i]).convert('RGB').copy() for i in (30, 66) if i < len(paths)]
