@@ -54,7 +54,7 @@ The 3-D failures are fast near objects: Double Dash's karts tear at their edges,
 | SNES (drain trial) | 99.9%, 2 | 17.7 / 26.1 (17.3 / 25.6) ms | 0-14%, stays off |
 | GBA (drain trial) | 99.8%, 5.5 | 9.0 / 17.3 ms | not re-measured |
 | Star Fox 64 | not re-measured | not re-measured | 4%, 4% |
-| Ocarina of Time (20 fps) | older: 94.4%, 66 | older: 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench |
+| Ocarina of Time (20 fps) | 99.3%, 9.7 (one run, retry-415) | 11.1 / 36.1 ms (real minimum 33.3) | 0-4%, not on the device bench |
 | Double Dash | 99.8%, 7.3 (0-130 by its phase) | 18.1 / 26.6 (14.8 / 23.1) ms | 17%, 7% |
 | NSMBU Deluxe | 99.7%, 10.9 (0-20 over 9 runs on 3.2.156 and 3.2.157 builds) | 18.8 / 27.1 (16.3 / 24.6) ms | world map 14%, 7% |
 | Link's Awakening (3.2.156) | 94.3%, 192 | 21.8 / 37.1 (24.6 / 34.5) ms | 6%, 11% |
