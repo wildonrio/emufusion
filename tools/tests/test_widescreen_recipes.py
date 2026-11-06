@@ -42,8 +42,8 @@ class RecipeTableTest(unittest.TestCase):
                                      {k.rstrip('s') for k in known}, title)
 
     def test_scene_and_hud_rules_parse(self):
-        scene_term = re.compile(r'^(bgmode|[0-9A-F]{4,6}(/[0-9A-F]{2})?)!?=[0-9A-F]+$')
-        hud_rule = re.compile(r'^(edge|(bg[1-4]|obj):\d+-\d+:-?\d+-\d+:-?1(:[0-9a-fA-F]+-[0-9a-fA-F]+)?)$')
+        scene_term = re.compile(r'^(bgmode|[0-9A-F]{4,7}(/[0-9A-F]{2})?)!?=[0-9A-F]+$')
+        hud_rule = re.compile(r'^(edge|(bg[0-4]|obj):-?\d+-\d+:-?\d+-\d+:-?1(:[0-9a-fA-F]+-[0-9a-fA-F]+)?)$')
         for system in RECIPES['systems'].values():
             for title, game in system['games'].items():
                 options = game.get('options', {})

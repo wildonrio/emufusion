@@ -1952,20 +1952,26 @@
       "games": {
         "Metroid Fusion": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: first area played, cave and enemies reach both edges"
+          "options": {
+            "emufusion_ws_hud": "obj:-8-24:0-119:-1:040-0FF;obj:-8-24:120-239:1:040-0FF"
+          },
+          "tested": "2026-11-05 host: first area played, cave and enemies reach both edges; energy and minimap moved to the corners"
         },
         "Metroid: Zero Mission": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: Brinstar start played"
+          "options": {
+            "emufusion_ws_hud": "obj:-8-24:0-119:-1:040-0FF;obj:-8-24:120-239:1:040-0FF"
+          },
+          "tested": "2026-11-05 host: Brinstar start played; energy and minimap moved to the corners, room art shows where they were"
         },
         "Mario Kart: Super Circuit": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_skip": "1"
+            "emufusion_ws_skip": "1",
+            "emufusion_ws_scene": "30016E0=01,300040E=18",
+            "emufusion_ws_hud": "bg0:0-159:0-103:-1;bg0:0-159:144-239:1;obj:90-135:170-239:1:118-118"
           },
-          "tested": "2026-11-06 host and Thor: race played; road and scenery extend, the status layer no longer wraps to the edges, the horizon blends across the new columns, 60 to 120"
+          "tested": "2026-11-06 host and Thor: race played; road and scenery extend, the status layer no longer wraps to the edges, the horizon blends across the new columns, 60 to 120. Rank, lap, time and track map moved to the corners, item box stays centred; menus and pause stay narrow"
         },
         "Alien Hominid": {
           "strategy": "fixed-screen",
@@ -1985,16 +1991,18 @@
         "Castlevania: Aria of Sorrow": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_map": "grid:rooms=1,edge=1,ring=8,planes=200A094:200A108+200A0B0:200C0EC"
+            "emufusion_ws_map": "grid:rooms=1,edge=1,ring=8,planes=200A094:200A108+200A0B0:200C0EC",
+            "emufusion_ws_hud": "bg0:0-47:0-119:-1:200-2FF;obj:0-20:0-40:-1:080-08F"
           },
-          "tested": "2026-11-06 host: played through castle rooms, stairs and a fight; walls, moon and enemies carry on to both edges, status menu and map stay narrow. HUD stays in its place"
+          "tested": "2026-11-06 host: played through castle rooms, stairs and a fight; walls, moon and enemies carry on to both edges, status menu and map stay narrow. Health and magic moved to the corner."
         },
         "Castlevania: Circle of the Moon": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_map": "grid:rooms=2,edge=1,planes=20230F0+2023130+2023170+20231B0"
+            "emufusion_ws_map": "grid:rooms=2,edge=1,void=1,planes=20230F0+2023130+2023170+20231B0",
+            "emufusion_ws_hud": "bg0:0-31:0-119:-1:0C0-0EF"
           },
-          "tested": "2026-11-06 host: opening story and first tall rooms played; real level to both edges, status menu stays narrow. HUD stays in its place"
+          "tested": "2026-11-06 host: opening story and first tall rooms played; real level to both edges, status menu stays narrow. Health, magic and hearts moved to the corner; empty columns past a room are black."
         },
         "Final Fantasy VI Advance": {
           "strategy": "widen",
@@ -2018,9 +2026,10 @@
         "The Legend of Zelda: The Minish Cap": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_map": "grid:planes=200B654:2012654+2025EB4:202CEB4,cell=2,stride=80,cols=40,rows=40,width=3000C0E,height=3000C10"
+            "emufusion_ws_map": "grid:planes=200B654:2012654+2025EB4:202CEB4,cell=2,stride=80,cols=40,rows=40,width=3000C0E,height=3000C10",
+            "emufusion_ws_hud": "bg0:0-31:0-119:-1:000-03F;bg0:136-159:120-239:1:060-07A;obj:0-24:0-40:-1:100-12F;obj:0-24:170-239:1:100-12F"
           },
-          "tested": "2026-11-06 host: Link's house and the fields around it walked; ground and tree tops reach both edges, rooms sit in black. Thor: rooms inside the house, 60 to 120; outdoors not yet played there"
+          "tested": "2026-11-06 host: Link's house and the fields around it walked; ground and tree tops reach both edges, rooms sit in black. Thor: rooms inside the house, 60 to 120; outdoors not yet played there. Hearts, item buttons and rupees moved to the corners, dialogs unchanged"
         },
         "Tony Hawk's Pro Skater 3": {
           "strategy": "fixed-screen",

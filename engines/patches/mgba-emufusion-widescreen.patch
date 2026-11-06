@@ -1,9 +1,9 @@
 diff --git a/src/gba/renderers/ef_wide.h b/src/gba/renderers/ef_wide.h
 new file mode 100644
-index 0000000..acb6278
+index 0000000..dfb4710
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.h
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,20 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. The renderer still draws the original 240 columns exactly as before;
@@ -18,6 +18,7 @@ index 0000000..acb6278
 +void ef_wide_set_map(const char* value);
 +void ef_wide_set_skip(const char* value);
 +void ef_wide_set_gate(const char* value);
++void ef_wide_set_hud(const char* value);
 +void ef_wide_set_memory(const void* wram, const void* iwram, const void* rom, size_t rom_size);
 +int ef_wide_ext(void);
 +int ef_wide_milli(void);
@@ -25,10 +26,10 @@ index 0000000..acb6278
 +#endif
 diff --git a/src/gba/renderers/ef_wide.inc b/src/gba/renderers/ef_wide.inc
 new file mode 100644
-index 0000000..5861a17
+index 0000000..121b8e1
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.inc
-@@ -0,0 +1,687 @@
+@@ -0,0 +1,915 @@
 +// Included at the end of video-software.c.
 +static mColor ef_fb[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
 +static int ef_ext, ef_milli;
@@ -49,10 +50,63 @@ index 0000000..5861a17
 +int ef_wide_ext(void) { return ef_ext; }
 +int ef_wide_milli(void) { return ef_milli; }
 +
++// emufusion_ws_hud=obj:-8-24:0-119:-1:050-0FF;bg2:0-15:120-239:1
++// Meters go out to the new corners. Each rule is a layer (obj or bgN), lines, columns, a direction
++// and optionally a range of tile numbers. Sprites match by their top left corner and bg rules by the
++// pixel. Matching sprites leave the original picture before it is drawn; a layer's pixels are covered
++// with what lies under them. Either way the moved meter is laid over the finished picture.
++#define EF_HUD_RULES 8
++#define EF_HUD_OBJ 4
++struct EfHudRule {
++	int layer, y0, y1, x0, x1, dir, t0, t1;
++};
++static struct EfHudRule ef_hud_rules[EF_HUD_RULES];
++static int ef_hud_count;
++static bool ef_hud_live;
++static int ef_hud_narrow_frames;
++static bool ef_hud_row[GBA_VIDEO_VERTICAL_PIXELS];
++static mColor ef_hud_pixel[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
++static uint8_t ef_hud_mask[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
++
++void ef_wide_set_hud(const char* value) {
++	ef_hud_count = 0;
++	while (value && *value && ef_hud_count < EF_HUD_RULES) {
++		struct EfHudRule rule = { .t0 = 0, .t1 = 0x3FF };
++		char layer[4] = {0};
++		int used = 0;
++		int got = sscanf(value, "%3[a-z0-9]:%d-%d:%d-%d:%d%n", layer, &rule.y0, &rule.y1, &rule.x0, &rule.x1, &rule.dir, &used);
++		if (got < 6) {
++			break;
++		}
++		value += used;
++		if (*value == ':') {
++			int more = 0;
++			sscanf(value, ":%x-%x%n", (unsigned*) &rule.t0, (unsigned*) &rule.t1, &more);
++			value += more;
++		}
++		rule.layer = !strcmp(layer, "obj") ? EF_HUD_OBJ : layer[0] == 'b' && layer[1] == 'g' ? layer[2] - '0' : -1;
++		if (rule.layer >= 0 && rule.layer <= EF_HUD_OBJ) {
++			ef_hud_rules[ef_hud_count++] = rule;
++		}
++		value = strchr(value, ';');
++		value = value ? value + 1 : NULL;
++	}
++}
++
 +const mColor* ef_wide_compose(const mColor* picture, int stride, int* width) {
 +	*width = GBA_VIDEO_HORIZONTAL_PIXELS + 2 * ef_ext;
 +	for (int y = 0; y < GBA_VIDEO_VERTICAL_PIXELS; ++y) {
-+		memcpy(ef_fb + y * *width + ef_ext, picture + y * stride, GBA_VIDEO_HORIZONTAL_PIXELS * sizeof(mColor));
++		mColor* out = ef_fb + y * *width;
++		memcpy(out + ef_ext, picture + y * stride, GBA_VIDEO_HORIZONTAL_PIXELS * sizeof(mColor));
++		if (ef_hud_row[y]) {
++			const uint8_t* mask = ef_hud_mask + y * EF_WIDE_WIDTH;
++			const mColor* pixel = ef_hud_pixel + y * EF_WIDE_WIDTH;
++			for (int x = 0; x < *width; ++x) {
++				if (mask[x]) {
++					out[x] = pixel[x];
++				}
++			}
++		}
 +	}
 +	return ef_fb;
 +}
@@ -85,6 +139,8 @@ index 0000000..5861a17
 +	uint16_t add;
 +	int rooms;
 +	bool edge;
++	// void=1: in the new columns, where no layer draws, black instead of the backdrop colour.
++	bool void_black;
 +	unsigned ring;
 +	int split, step;
 +	uint32_t front[2];
@@ -142,6 +198,8 @@ index 0000000..5861a17
 +			ef_grid.rooms = strtoul(cursor + 6, &end, 16);
 +		} else if (!strncmp(cursor, "edge=", 5)) {
 +			ef_grid.edge = strtoul(cursor + 5, &end, 16) != 0;
++		} else if (!strncmp(cursor, "void=", 5)) {
++			ef_grid.void_black = strtoul(cursor + 5, &end, 16) != 0;
 +		} else if (!strncmp(cursor, "ring=", 5)) {
 +			ef_grid.ring = strtoul(cursor + 5, &end, 16);
 +		} else if (!strncmp(cursor, "split=", 6)) {
@@ -483,8 +541,9 @@ index 0000000..5861a17
 +}
 +
 +// A text background's palette index at screen column x, 0 when transparent.
++static int ef_entry_pixel(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, uint16_t entry, int localX, int localY);
++
 +static int ef_text_pixel(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, int x, int y) {
-+	const uint8_t* vram = (const uint8_t*) r->d.vram;
 +	int localX = x + bg->x;
 +	int localY = y + bg->y;
 +	uint16_t entry;
@@ -496,6 +555,11 @@ index 0000000..5861a17
 +	} else {
 +		entry = ef_ring_entry(r, bg, localX, localY);
 +	}
++	return ef_entry_pixel(r, bg, entry, localX, localY);
++}
++
++static int ef_entry_pixel(const struct GBAVideoSoftwareRenderer* r, const struct GBAVideoSoftwareBackground* bg, uint16_t entry, int localX, int localY) {
++	const uint8_t* vram = (const uint8_t*) r->d.vram;
 +	localX &= 511;
 +	localY &= 511;
 +	int fineX = entry & 0x400 ? 7 - (localX & 7) : localX & 7;
@@ -523,8 +587,37 @@ index 0000000..5861a17
 +	return vram[(bg->charBase + tile * 64 + (localY & 7) * 8 + (localX & 7)) & 0xFFFF];
 +}
 +
++// Which way a moving meter's sprite goes, or 0 if it is not one.
++static int ef_hud_direction(const struct GBAObj* obj) {
++	if (GBAObjAttributesAIsTransformed(obj->a) || GBAObjAttributesAIsDisable(obj->a)) {
++		return 0;
++	}
++	int top = GBAObjAttributesAGetY(obj->a);
++	if (top >= GBA_VIDEO_VERTICAL_PIXELS) {
++		top -= 256;
++	}
++	int left = GBAObjAttributesBGetX(obj->b);
++	if (left >= 256) {
++		left -= 512;
++	}
++	int tile = GBAObjAttributesCGetTile(obj->c);
++	for (int i = 0; i < ef_hud_count; ++i) {
++		const struct EfHudRule* rule = &ef_hud_rules[i];
++		if (rule->layer == EF_HUD_OBJ && top >= rule->y0 && top <= rule->y1 && left >= rule->x0 && left <= rule->x1 && tile >= rule->t0 && tile <= rule->t1) {
++			return rule->dir;
++		}
++	}
++	return 0;
++}
++
++enum EfSpriteSet {
++	EF_SPRITES_SIDES,
++	EF_SPRITES_WHOLE,
++	EF_SPRITES_HUD
++};
++
 +// Plain sprites over the wide line; x_pos is 9 bits, so they really do reach the new columns.
-+static void ef_sprites(const struct GBAVideoSoftwareRenderer* r, int y, int16_t* colors, int8_t* priorities, int width) {
++static void ef_sprites(const struct GBAVideoSoftwareRenderer* r, int y, int16_t* colors, int8_t* priorities, int width, enum EfSpriteSet set) {
 +	const uint8_t* vram = (const uint8_t*) r->d.vram;
 +	bool oneDimensional = GBARegisterDISPCNTIsObjCharacterMapping(r->dispcnt);
 +	for (int index = 127; index >= 0; --index) {
@@ -534,6 +627,10 @@ index 0000000..5861a17
 +		}
 +		int mode = GBAObjAttributesAGetMode(obj->a);
 +		if (mode == OBJ_MODE_OBJWIN) {
++			continue;
++		}
++		int moved = ef_hud_live ? ef_hud_direction(obj) : 0;
++		if (set == EF_SPRITES_HUD ? !moved : moved) {
 +			continue;
 +		}
 +		int shape = GBAObjAttributesAGetShape(obj->a) * 4 + GBAObjAttributesBGetSize(obj->b);
@@ -554,11 +651,11 @@ index 0000000..5861a17
 +		int tile = GBAObjAttributesCGetTile(obj->c);
 +		int palette = GBAObjAttributesCGetPalette(obj->c);
 +		for (int px = 0; px < sw; ++px) {
-+			int sx = left + (GBAObjAttributesBIsHFlip(obj->b) ? sw - 1 - px : px) + ef_ext;
++			int sx = left + (GBAObjAttributesBIsHFlip(obj->b) ? sw - 1 - px : px) + ef_ext + moved * ef_ext;
 +			if (sx < 0 || sx >= width) {
 +				continue;
 +			}
-+			if (sx >= ef_ext && sx < ef_ext + GBA_VIDEO_HORIZONTAL_PIXELS) {
++			if (set == EF_SPRITES_SIDES && sx >= ef_ext && sx < ef_ext + GBA_VIDEO_HORIZONTAL_PIXELS) {
 +				continue;
 +			}
 +			int cellX = px >> 3, cellY = row >> 3, id;
@@ -629,6 +726,191 @@ index 0000000..5861a17
 +	return first ? r->bg[layer].target1 : r->bg[layer].target2;
 +}
 +
++// One pixel of the picture from its layers, in the way the original picture is drawn.
++static mColor ef_compose_pixel(const struct GBAVideoSoftwareRenderer* r, int x, int y, const int16_t* sprite_color, const int8_t* sprite_priority, unsigned skip) {
++	int mode = GBARegisterDISPCNTGetMode(r->dispcnt);
++	const mColor* palette = r->blendEffect == BLEND_BRIGHTEN || r->blendEffect == BLEND_DARKEN ? r->variantPalette : r->normalPalette;
++	int sx = x + ef_ext;
++	int index = 0;
++	bool sprite = sprite_color[sx] != 0;
++	if (sprite && ef_grid.on && !ef_grid.rooms) {
++		// Out on the black around a room a sprite is somewhere the game would not show it.
++		sprite = false;
++		for (int b = 0; b < 4 && !sprite; ++b) {
++			sprite = r->bg[b].enabled && ef_grid_bg[b].locked && ef_text_pixel(r, &r->bg[b], x, y);
++		}
++	}
++	// The two topmost layers here, the way the picture blends a see-through layer on the one below.
++	int under = 0, top_layer = EF_LAYER_BACKDROP, under_layer = EF_LAYER_BACKDROP;
++	bool found_under = false;
++	for (int priority = 0; priority < 4 && !found_under; ++priority) {
++		if (sprite && sprite_priority[sx] == priority) {
++			index = 256 + sprite_color[sx];
++			top_layer = EF_LAYER_OBJ;
++		}
++		for (int b = 0; b < 4 && !found_under; ++b) {
++			const struct GBAVideoSoftwareBackground* bg = &r->bg[b];
++			if (!bg->enabled || (int) bg->priority != priority || (skip >> b & 1)) {
++				continue;
++			}
++			int pixel = 0;
++			if (mode == 0 || (mode == 1 && b < 2)) {
++				pixel = ef_text_pixel(r, bg, x, y);
++			} else if ((mode == 1 && b == 2) || (mode == 2 && b >= 2)) {
++				pixel = ef_affine_pixel(r, bg, x);
++			}
++			if (!pixel) {
++				continue;
++			}
++			if (!index) {
++				index = pixel;
++				top_layer = b;
++			} else {
++				under = pixel;
++				under_layer = b;
++				found_under = true;
++			}
++		}
++	}
++	if (!index && ef_grid.void_black && (x < 0 || x >= GBA_VIDEO_HORIZONTAL_PIXELS)) {
++		return 0;
++	}
++	if (r->blendEffect == BLEND_ALPHA && ef_is_target(r, top_layer, true) && ef_is_target(r, under_layer, false)) {
++		return mColorMix5Bit(r->blda, palette[index], r->bldb, palette[under]);
++	}
++	return palette[index];
++}
++
++// Does this line show the new columns? With maps no wider than 256 they would only repeat the far
++// side of the screen.
++static bool ef_line_wide(const struct GBAVideoSoftwareRenderer* r) {
++	int mode = GBARegisterDISPCNTGetMode(r->dispcnt);
++	bool wider_map = ef_grid.on && (ef_grid_bg[0].locked || ef_grid_bg[1].locked || ef_grid_bg[2].locked || ef_grid_bg[3].locked);
++	for (int i = 0; i < 4; ++i) {
++		const struct GBAVideoSoftwareBackground* bg = &r->bg[i];
++		if (!ef_grid.on && bg->enabled && ((mode == 0 && (bg->size & 1)) || (mode == 1 && ((i < 2 && (bg->size & 1)) || i == 2)) || (mode == 2 && i >= 2))) {
++			wider_map = true;
++		}
++	}
++	return ef_scene_wide && mode <= 2 && wider_map && !GBARegisterDISPCNTIsForcedBlank(r->dispcnt) && !(ef_scroll_gate && ef_scene_travel < ef_ext + 16);
++}
++
++// Before each frame. A wide scene can drop out for a frame or two while a reader finds its place, and a
++// meter should not jump for that. Changing over redraws every line, since lines are only redrawn when dirty.
++static void ef_hud_frame(struct GBAVideoSoftwareRenderer* r) {
++	if (!ef_hud_count) {
++		return;
++	}
++	bool wide = ef_ext && ef_line_wide(r);
++	ef_hud_narrow_frames = wide ? 0 : ef_hud_narrow_frames + 1;
++	bool live = wide || (ef_hud_live && ef_hud_narrow_frames <= 8);
++	if (live != ef_hud_live) {
++		ef_hud_live = live;
++		r->oamDirty = 1;
++		memset(r->scanlineDirty, 0xFFFFFFFF, sizeof(r->scanlineDirty));
++	}
++	if (!live || GBARegisterDISPCNTIsForcedBlank(r->dispcnt)) {
++		memset(ef_hud_row, 0, sizeof(ef_hud_row));
++	}
++}
++
++// Moving sprites leave the list the original picture is drawn from.
++static void ef_hud_filter(struct GBAVideoSoftwareRenderer* r) {
++	if (!ef_hud_live) {
++		return;
++	}
++	int kept = 0;
++	for (int i = 0; i < r->oamMax; ++i) {
++		if (!ef_hud_direction(&r->sprites[i].obj)) {
++			r->sprites[kept++] = r->sprites[i];
++		}
++	}
++	r->oamMax = kept;
++}
++
++static void ef_hud_line(const struct GBAVideoSoftwareRenderer* r, int y, int width) {
++	ef_hud_row[y] = false;
++	if (!ef_hud_live) {
++		return;
++	}
++	uint8_t* mask = ef_hud_mask + y * EF_WIDE_WIDTH;
++	mColor* out = ef_hud_pixel + y * EF_WIDE_WIDTH;
++	const mColor* palette = r->blendEffect == BLEND_BRIGHTEN || r->blendEffect == BLEND_DARKEN ? r->variantPalette : r->normalPalette;
++	memset(mask, 0, width);
++	bool used = false;
++	static int16_t whole_color[EF_WIDE_WIDTH];
++	static int8_t whole_priority[EF_WIDE_WIDTH];
++	bool have_whole = false;
++	for (int i = 0; i < ef_hud_count; ++i) {
++		const struct EfHudRule* rule = &ef_hud_rules[i];
++		if (rule->layer == EF_HUD_OBJ || y < rule->y0 || y > rule->y1 || !r->bg[rule->layer].enabled) {
++			continue;
++		}
++		const struct GBAVideoSoftwareBackground* bg = &r->bg[rule->layer];
++		for (int x = rule->x0; x <= rule->x1; ++x) {
++			int localX = x + bg->x, localY = y + bg->y;
++			uint16_t entry = ef_ring_entry(r, bg, localX, localY);
++			int tile = entry & 0x3FF;
++			if (tile < rule->t0 || tile > rule->t1) {
++				continue;
++			}
++			int pixel = ef_entry_pixel(r, bg, entry, localX, localY);
++			if (!pixel) {
++				continue;
++			}
++			if (!have_whole) {
++				memset(whole_color, 0, width * sizeof(int16_t));
++				if (GBARegisterDISPCNTIsObjEnable(r->dispcnt)) {
++					ef_sprites(r, y, whole_color, whole_priority, width, EF_SPRITES_WHOLE);
++				}
++				have_whole = true;
++			}
++			int sx = x + ef_ext;
++			if (!mask[sx]) {
++				out[sx] = ef_compose_pixel(r, x, y, whole_color, whole_priority, ef_skip_layers | 1U << rule->layer);
++				mask[sx] = 1;
++			}
++			used = true;
++		}
++	}
++	// A second pass, so a moved meter is not covered by the place another one left.
++	for (int i = 0; i < ef_hud_count; ++i) {
++		const struct EfHudRule* rule = &ef_hud_rules[i];
++		if (rule->layer == EF_HUD_OBJ || y < rule->y0 || y > rule->y1 || !r->bg[rule->layer].enabled) {
++			continue;
++		}
++		const struct GBAVideoSoftwareBackground* bg = &r->bg[rule->layer];
++		for (int x = rule->x0; x <= rule->x1; ++x) {
++			int localX = x + bg->x, localY = y + bg->y;
++			uint16_t entry = ef_ring_entry(r, bg, localX, localY);
++			int tile = entry & 0x3FF;
++			if (tile < rule->t0 || tile > rule->t1) {
++				continue;
++			}
++			int pixel = ef_entry_pixel(r, bg, entry, localX, localY);
++			int sx = x + ef_ext + rule->dir * ef_ext;
++			if (pixel && sx >= 0 && sx < width) {
++				out[sx] = palette[pixel];
++				mask[sx] = 1;
++			}
++		}
++	}
++	if (GBARegisterDISPCNTIsObjEnable(r->dispcnt)) {
++		static int16_t hud_color[EF_WIDE_WIDTH];
++		static int8_t hud_priority[EF_WIDE_WIDTH];
++		memset(hud_color, 0, width * sizeof(int16_t));
++		ef_sprites(r, y, hud_color, hud_priority, width, EF_SPRITES_HUD);
++		for (int sx = 0; sx < width; ++sx) {
++			if (hud_color[sx]) {
++				out[sx] = palette[256 + hud_color[sx]];
++				mask[sx] = 1;
++				used = true;
++			}
++		}
++	}
++	ef_hud_row[y] = used;
++}
++
 +static void ef_wide_line(struct GBAVideoSoftwareRenderer* r, int y) {
 +	if (!ef_ext) {
 +		return;
@@ -641,16 +923,10 @@ index 0000000..5861a17
 +	}
 +	int width = GBA_VIDEO_HORIZONTAL_PIXELS + 2 * ef_ext;
 +	mColor* out = ef_fb + y * width;
-+	int mode = GBARegisterDISPCNTGetMode(r->dispcnt);
-+	bool wider_map = ef_grid.on && (ef_grid_bg[0].locked || ef_grid_bg[1].locked || ef_grid_bg[2].locked || ef_grid_bg[3].locked);
-+	for (int i = 0; i < 4; ++i) {
-+		const struct GBAVideoSoftwareBackground* bg = &r->bg[i];
-+		if (!ef_grid.on && bg->enabled && ((mode == 0 && (bg->size & 1)) || (mode == 1 && ((i < 2 && (bg->size & 1)) || i == 2)) || (mode == 2 && i >= 2))) {
-+			wider_map = true;
-+		}
++	if (ef_hud_count) {
++		ef_hud_line(r, y, width);
 +	}
-+	// With maps no wider than 256 the new columns would only repeat the far side of the screen.
-+	if (!ef_scene_wide || mode > 2 || !wider_map || GBARegisterDISPCNTIsForcedBlank(r->dispcnt) || (ef_scroll_gate && ef_scene_travel < ef_ext + 16)) {
++	if (!ef_line_wide(r)) {
 +		for (int i = 0; i < ef_ext; ++i) {
 +			out[i] = out[ef_ext + GBA_VIDEO_HORIZONTAL_PIXELS + i] = 0;
 +		}
@@ -660,75 +936,40 @@ index 0000000..5861a17
 +	static int8_t sprite_priority[EF_WIDE_WIDTH];
 +	memset(sprite_color, 0, width * sizeof(int16_t));
 +	if (GBARegisterDISPCNTIsObjEnable(r->dispcnt)) {
-+		ef_sprites(r, y, sprite_color, sprite_priority, width);
++		ef_sprites(r, y, sprite_color, sprite_priority, width, EF_SPRITES_SIDES);
 +	}
-+	const mColor* palette = r->blendEffect == BLEND_BRIGHTEN || r->blendEffect == BLEND_DARKEN ? r->variantPalette : r->normalPalette;
 +	for (int side = 0; side < 2; ++side) {
 +		for (int i = 0; i < ef_ext; ++i) {
 +			int x = side ? GBA_VIDEO_HORIZONTAL_PIXELS + i : i - ef_ext;
-+			int sx = x + ef_ext;
-+			int index = 0;
-+			bool sprite = sprite_color[sx] != 0;
-+			if (sprite && ef_grid.on && !ef_grid.rooms) {
-+				// Out on the black around a room a sprite is somewhere the game would not show it.
-+				sprite = false;
-+				for (int b = 0; b < 4 && !sprite; ++b) {
-+					sprite = r->bg[b].enabled && ef_grid_bg[b].locked && ef_text_pixel(r, &r->bg[b], x, y);
-+				}
-+			}
-+			// The two topmost layers here, the way the picture blends a see-through layer on the one below.
-+			int under = 0, top_layer = EF_LAYER_BACKDROP, under_layer = EF_LAYER_BACKDROP;
-+			bool found_under = false;
-+			for (int priority = 0; priority < 4 && !found_under; ++priority) {
-+				if (sprite && sprite_priority[sx] == priority) {
-+					index = 256 + sprite_color[sx];
-+					top_layer = EF_LAYER_OBJ;
-+				}
-+				for (int b = 0; b < 4 && !found_under; ++b) {
-+					const struct GBAVideoSoftwareBackground* bg = &r->bg[b];
-+					if (!bg->enabled || (int) bg->priority != priority || (ef_skip_layers >> b & 1)) {
-+						continue;
-+					}
-+					int pixel = 0;
-+					if (mode == 0 || (mode == 1 && b < 2)) {
-+						pixel = ef_text_pixel(r, bg, x, y);
-+					} else if ((mode == 1 && b == 2) || (mode == 2 && b >= 2)) {
-+						pixel = ef_affine_pixel(r, bg, x);
-+					}
-+					if (!pixel) {
-+						continue;
-+					}
-+					if (!index) {
-+						index = pixel;
-+						top_layer = b;
-+					} else {
-+						under = pixel;
-+						under_layer = b;
-+						found_under = true;
-+					}
-+				}
-+			}
-+			mColor color = palette[index];
-+			if (r->blendEffect == BLEND_ALPHA && ef_is_target(r, top_layer, true) && ef_is_target(r, under_layer, false)) {
-+				color = mColorMix5Bit(r->blda, palette[index], r->bldb, palette[under]);
-+			}
-+			out[sx] = color;
++			out[x + ef_ext] = ef_compose_pixel(r, x, y, sprite_color, sprite_priority, ef_skip_layers);
 +		}
 +	}
 +}
 diff --git a/src/gba/renderers/video-software.c b/src/gba/renderers/video-software.c
-index c5bc37b..0704fe1 100644
+index c5bc37b..b121c71 100644
 --- a/src/gba/renderers/video-software.c
 +++ b/src/gba/renderers/video-software.c
-@@ -27,6 +27,7 @@ static void GBAVideoSoftwareRendererWriteOAM(struct GBAVideoRenderer* renderer,
+@@ -27,6 +27,9 @@ static void GBAVideoSoftwareRendererWriteOAM(struct GBAVideoRenderer* renderer,
  static void GBAVideoSoftwareRendererWritePalette(struct GBAVideoRenderer* renderer, uint32_t address, uint16_t value);
  static uint16_t GBAVideoSoftwareRendererWriteVideoRegister(struct GBAVideoRenderer* renderer, uint32_t address, uint16_t value);
  static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* renderer, int y);
 +static void ef_wide_line(struct GBAVideoSoftwareRenderer* r, int y);
++static void ef_hud_frame(struct GBAVideoSoftwareRenderer* r);
++static void ef_hud_filter(struct GBAVideoSoftwareRenderer* r);
  static void GBAVideoSoftwareRendererFinishFrame(struct GBAVideoRenderer* renderer);
  static void GBAVideoSoftwareRendererGetPixels(struct GBAVideoRenderer* renderer, size_t* stride, const void** pixels);
  static void GBAVideoSoftwareRendererPutPixels(struct GBAVideoRenderer* renderer, size_t stride, const void* pixels);
-@@ -675,6 +676,7 @@ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* render
+@@ -561,6 +564,9 @@ static void GBAVideoSoftwareRendererPrepareWindow(struct GBAVideoSoftwareRendere
+ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* renderer, int y) {
+ 	struct GBAVideoSoftwareRenderer* softwareRenderer = (struct GBAVideoSoftwareRenderer*) renderer;
+ 
++	if (y == 0) {
++		ef_hud_frame(softwareRenderer);
++	}
+ 	if (y == GBA_VIDEO_VERTICAL_PIXELS - 1) {
+ 		softwareRenderer->nextY = 0;
+ 	} else {
+@@ -675,6 +681,7 @@ static void GBAVideoSoftwareRendererDrawScanline(struct GBAVideoRenderer* render
  	}
  
  	GBAVideoSoftwareRendererPostprocessBuffer(softwareRenderer);
@@ -736,7 +977,15 @@ index c5bc37b..0704fe1 100644
  
  	if (GBARegisterDISPCNTGetMode(softwareRenderer->dispcnt) != 0) {
  		if (softwareRenderer->bg[2].enabled == ENABLED_MAX) {
-@@ -1115,3 +1117,6 @@ void _updateFlags(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoft
+@@ -1022,6 +1029,7 @@ int GBAVideoSoftwareRendererPreprocessSpriteLayer(struct GBAVideoSoftwareRendere
+ 	if (GBARegisterDISPCNTIsObjEnable(renderer->dispcnt) && !renderer->d.disableOBJ) {
+ 		if (renderer->oamDirty) {
+ 			renderer->oamMax = GBAVideoRendererCleanOAM(renderer->d.oam->obj, renderer->sprites, renderer->objOffsetY);
++			ef_hud_filter(renderer);
+ 			renderer->oamDirty = false;
+ 		}
+ 		int mosaicV = GBAMosaicControlGetObjV(renderer->mosaic) + 1;
+@@ -1115,3 +1123,6 @@ void _updateFlags(struct GBAVideoSoftwareRenderer* renderer, struct GBAVideoSoft
  	background->objwinFlags = objwinFlags;
  	background->variant = background->target1 && GBAWindowControlIsBlendEnable(renderer->currentWindow.packed) && (renderer->blendEffect == BLEND_BRIGHTEN || renderer->blendEffect == BLEND_DARKEN);
  }
@@ -744,7 +993,7 @@ index c5bc37b..0704fe1 100644
 +#include "ef_wide.h"
 +#include "ef_wide.inc"
 diff --git a/src/platform/libretro/libretro.c b/src/platform/libretro/libretro.c
-index 12e7913..3c566cd 100644
+index 12e7913..8575ee4 100644
 --- a/src/platform/libretro/libretro.c
 +++ b/src/platform/libretro/libretro.c
 @@ -4,6 +4,8 @@
@@ -756,7 +1005,7 @@ index 12e7913..3c566cd 100644
  
  #include <mgba-util/common.h>
  
-@@ -246,6 +248,84 @@ static void _updateGbPal(void) {
+@@ -246,6 +248,87 @@ static void _updateGbPal(void) {
  }
  #endif
  
@@ -820,6 +1069,9 @@ index 12e7913..3c566cd 100644
 +	var.key = "emufusion_ws_skip";
 +	var.value = NULL;
 +	ef_wide_set_skip(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_hud";
++	var.value = NULL;
++	ef_wide_set_hud(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
 +	var.key = "emufusion_ws_map";
 +	var.value = NULL;
 +	ef_wide_set_map(environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -841,7 +1093,7 @@ index 12e7913..3c566cd 100644
  static void _reloadSettings(void) {
  	struct mCoreOptions opts = {
  		.useBios = true,
-@@ -418,9 +498,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
+@@ -418,9 +501,14 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
  	info->geometry.base_width = width;
  	info->geometry.base_height = height;
  	info->geometry.aspect_ratio = width / (double) height;
@@ -857,7 +1109,7 @@ index 12e7913..3c566cd 100644
  	info->geometry.max_height = height;
  
  	info->timing.fps = core->frequency(core) / (float) core->frameCycles(core);
-@@ -552,6 +637,7 @@ void retro_run(void) {
+@@ -552,6 +640,7 @@ void retro_run(void) {
  
  	bool updated = false;
  	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
@@ -865,7 +1117,7 @@ index 12e7913..3c566cd 100644
  		envVarsUpdated = true;
  
  		struct retro_variable var = {
-@@ -612,10 +698,17 @@ void retro_run(void) {
+@@ -612,10 +701,17 @@ void retro_run(void) {
  		}
  	}
  
@@ -884,7 +1136,7 @@ index 12e7913..3c566cd 100644
  
  #ifdef M_CORE_GBA
  	if (core->platform(core) == mPLATFORM_GBA) {
-@@ -988,6 +1081,7 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -988,6 +1084,7 @@ bool retro_load_game(const struct retro_game_info* game) {
  	}
  #endif
  

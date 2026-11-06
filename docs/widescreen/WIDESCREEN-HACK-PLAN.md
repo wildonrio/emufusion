@@ -409,6 +409,38 @@ Advance Wars and Fire Emblem open on maps that fit the screen, and their larger 
 have not been tried. Mario & Luigi draws rooms on black and looks right in Mario's house, but its plain backdrop shows beside
 some rooms and no outdoor area has been reached yet.
 
+### GBA meters in the corners (2026-11-06)
+
+`emufusion_ws_hud=obj:-8-24:0-119:-1:040-0FF;bg0:0-31:0-119:-1:0C0-0EF`: a layer (`obj` or `bgN`), lines, columns, a direction
+and optionally a range of tile numbers. Sprites match by their top left corner. A matching sprite leaves the list the
+original picture is drawn from; a layer's pixels are covered with what lies under them, worked out from the other layers. The
+moved meter is then laid over the finished picture. A tile range keeps dialogs on the same layer out of it. If a scene drops out
+of wide for a few frames while a reader finds its place, the meter stays put rather than jumping. Emulation is not touched.
+
+| Game | Moved | Lives in |
+| --- | --- | --- |
+| Metroid Fusion, Zero Mission | Energy to the left corner, minimap to the right | Sprites |
+| Aria of Sorrow | Health and magic | Background 0 and sprites |
+| Circle of the Moon | Health, magic and hearts | Background 0. Also `void=1`: a white strip past a room's wall showed the game's backdrop, so empty new columns are now black |
+| Minish Cap | Hearts left; item buttons and rupees right | Background 0 and sprites |
+| Mario Kart: Super Circuit | Rank, lap, coins and speed left; time and track map right; item box stays centred | Background 0, map dots in sprites. Also a race rule, `30016E0=01,300040E=18`: the first byte alone blips for single frames on menus. Menus and the pause screen now stay narrow |
+
+Seen on the Mac only so far. Super Mario Advance 4's status bar is a panel across the bottom and stays where it is. Golden Sun, Final
+Fantasy VI Advance and Tactics Advance show no meters during play.
+
+### Top games looked at again (2026-11-06)
+
+Several narrow top games had been judged from menus. Playing them changed one and gave the rest reasons from real play:
+
+| Game | Now | Why |
+| --- | --- | --- |
+| Mario Tennis | Widens | Each court map is 256 wide, so the whole court and its surroundings fill the picture and the camera pans over real scenery. Menus are told apart by the game's graphics queue: its fourth entry points at sprite tiles only on a court (`C0BE=B0|C0BD=83,C0BE=00|C0BD=86,C0BE=C0|C0BD=87,C0BE=C0`). Followed frame by frame: wide on 0 of 9,472 menu frames, and one change to wide in each of a singles and a doubles match with pauses. A mini-game round flashes bars on a white screen for a frame or two |
+| Metal Gear Solid | Narrow | The status panel sits inside the right of the picture |
+| Warlocked | Narrow | The first mission's map is built only just past the old screen, so the sides stay mostly black |
+| Cannon Fodder | Narrow | The first mission's sides show stale pieces and checker junk |
+| Mario Golf | Narrow | The shot view's sides are half course and half unrelated tiles |
+| Mole Mania | Narrow | Each room is one screen inside black |
+
 ## PS1 (2026-11-06)
 
 The hack narrows what the GTE projects and the display stretches the whole picture back out. PGXP already knows which
