@@ -38,7 +38,7 @@ index 180bc86..b297d38 100644
          // ZBuffer (Zbuffer uses 24-bit Format)
          bool is_depth_copy = bpmem.zcontrol.pixel_format == PixelFormat::Z24;
 diff --git a/Source/Core/VideoCommon/VertexManagerBase.cpp b/Source/Core/VideoCommon/VertexManagerBase.cpp
-index 2bc6d58..388e412 100644
+index 2bc6d58..2e94965 100644
 --- a/Source/Core/VideoCommon/VertexManagerBase.cpp
 +++ b/Source/Core/VideoCommon/VertexManagerBase.cpp
 @@ -3,6 +3,9 @@
@@ -59,14 +59,16 @@ index 2bc6d58..388e412 100644
  #include "VideoCommon/NativeVertexFormat.h"
  #include "VideoCommon/OpcodeDecoding.h"
  #include "VideoCommon/PerfQueryBase.h"
-@@ -323,10 +327,69 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
+@@ -323,10 +327,72 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
    }
  }
  
-+// EmuFusion: the 3D is wider, the picture is shown wider, and 2D must keep its shape. So 2D is drawn
-+// narrower by the same amount. Not all of it: a full-screen quad in a 3D frame is a fade or the frame
-+// itself going through an effect, and what a game draws before copying the frame to a texture is
-+// the input of an effect. A frame with no 3D at all is a 2D screen: it keeps its shape, with bars.
++// EmuFusion: the 3D is wider, the picture is shown wider, and 2D must keep its shape. So the 2D drawn
++// over a frame, its HUD, is drawn narrower by the same amount. Not all 2D is that: what comes before the
++// frame's last 3D is a sky or background behind it, what comes before a copy of the frame to a texture
++// is the input of an effect, and a full-screen quad is a fade or the frame itself going through an
++// effect. The counts come from the frame before, which looks the same. A frame with no 3D at all
++// is a 2D screen: it keeps its shape, with bars.
 +bool VertexManagerBase::EmufusionBatchCoversScreen() const
 +{
 +  const NativeVertexFormat* format = VertexLoaderManager::GetCurrentVertexFormat();
@@ -103,6 +105,7 @@ index 2bc6d58..388e412 100644
 +  if (xfmem.projection.type == ProjectionType::Perspective)
 +  {
 +    m_emufusion_saw_3d = true;
++    m_emufusion_2d_before_copy = m_emufusion_2d_batches;
 +  }
 +  else if (m_emufusion_2d_batches++ >= m_emufusion_2d_effects &&
 +           !(m_emufusion_scene_3d && EmufusionBatchCoversScreen()))
@@ -129,7 +132,7 @@ index 2bc6d58..388e412 100644
    return result;
  }
  
-@@ -596,6 +659,7 @@ void VertexManagerBase::Flush()
+@@ -596,6 +662,7 @@ void VertexManagerBase::Flush()
        }
      }
    }

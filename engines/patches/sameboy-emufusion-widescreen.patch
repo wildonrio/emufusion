@@ -26,10 +26,10 @@ index 5eff0cd..ca5f2f8 100644
 +#include "ef_wide.inc"
 diff --git a/Core/ef_wide.h b/Core/ef_wide.h
 new file mode 100644
-index 0000000..69733d3
+index 0000000..3b3b8d3
 --- /dev/null
 +++ b/Core/ef_wide.h
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,18 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. The background map is 256 pixels wide and the handheld shows 160
@@ -43,16 +43,17 @@ index 0000000..69733d3
 +void ef_wide_set_aspect(const char *value);
 +void ef_wide_set_scene(const char *value);
 +void ef_wide_set_map(const char *value);
++void ef_wide_set_gate(const char *value);
 +int ef_wide_ext(void);
 +int ef_wide_milli(void);
 +const uint32_t *ef_wide_compose(const uint32_t *picture);
 +#endif
 diff --git a/Core/ef_wide.inc b/Core/ef_wide.inc
 new file mode 100644
-index 0000000..98ea6a2
+index 0000000..51194a6
 --- /dev/null
 +++ b/Core/ef_wide.inc
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,257 @@
 +// Included at the end of display.c.
 +#include "ef_wide.h"
 +static uint32_t ef_fb[EF_WIDE_WIDTH * LINES];
@@ -133,8 +134,17 @@ index 0000000..98ea6a2
 +// Gold and Silver: also a colour for each tile, four bits in a list in ROM bank 2.
 +static const ef_map_layout ef_pokemon2 = {0xC700, 0xDA03, 0xDA02, 0xD088, 0xD087, 0xD0C5, 0xD0C6, 0xD0CF};
 +static const ef_map_layout *ef_map;
++// For a game nobody has played through: a scene that has not scrolled is likely a menu, and its
++// map holds anything. The sides open when it scrolls and close when the screen goes off.
++static uint8_t ef_scroll_gate, ef_scene_moved, ef_frames_without_lines, ef_last_scx;
 +static uint8_t ef_map_matches, ef_map_misses;
 +static int ef_map_x, ef_map_y;
++
++void ef_wide_set_gate(const char *value)
++{
++    ef_scroll_gate = value && !strcmp(value, "scroll");
++    ef_scene_moved = 0;
++}
 +
 +void ef_wide_set_map(const char *value)
 +{
@@ -241,6 +251,9 @@ index 0000000..98ea6a2
 +{
 +    if (!ef_ext || gb->current_line >= LINES || gb->sgb) return;
 +    if (gb->current_line == 0) {
++        ef_frames_without_lines = 0;
++        if (gb->io_registers[GB_IO_SCX] != ef_last_scx) ef_scene_moved = 1;
++        ef_last_scx = gb->io_registers[GB_IO_SCX];
 +        ef_evaluate_scene(gb);
 +        if (ef_map) ef_map_frame(gb);
 +    }
@@ -248,7 +261,8 @@ index 0000000..98ea6a2
 +    uint32_t *out = ef_fb + line * (160 + 2 * ef_ext);
 +    uint8_t lcdc = gb->io_registers[GB_IO_LCDC];
 +    uint32_t blank = gb->rgb_encode_callback ? gb->rgb_encode_callback(gb, 0, 0, 0) : 0;
-+    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE) || (ef_map && !ef_map_matches)) {
++    if (!ef_scene_wide || !(lcdc & GB_LCDC_ENABLE) || (ef_map && !ef_map_matches) ||
++        (ef_scroll_gate && !ef_scene_moved)) {
 +        for (int i = 0; i < ef_ext; i++) out[i] = out[ef_ext + 160 + i] = blank;
 +        return;
 +    }
@@ -292,12 +306,13 @@ index 0000000..98ea6a2
 +
 +const uint32_t *ef_wide_compose(const uint32_t *picture)
 +{
++    if (++ef_frames_without_lines > 2) ef_scene_moved = 0;
 +    int width = 160 + 2 * ef_ext;
 +    for (int y = 0; y < LINES; y++) memcpy(ef_fb + y * width + ef_ext, picture + y * 160, 160 * sizeof(uint32_t));
 +    return ef_fb;
 +}
 diff --git a/libretro/libretro.c b/libretro/libretro.c
-index bb298ff..65a6b87 100644
+index bb298ff..2568302 100644
 --- a/libretro/libretro.c
 +++ b/libretro/libretro.c
 @@ -18,6 +18,7 @@
@@ -308,7 +323,7 @@ index bb298ff..65a6b87 100644
  #include "libretro_core_options.inc"
  
  #ifdef _WIN32
-@@ -750,6 +751,20 @@ static GB_model_t string_to_model(const char *string)
+@@ -750,6 +751,23 @@ static GB_model_t string_to_model(const char *string)
  
  static void check_variables()
  {
@@ -316,6 +331,9 @@ index bb298ff..65a6b87 100644
 +        // EmuFusion Widescreen Hack: target picture aspect x 1000, and when to widen.
 +        struct retro_variable ef_var = {"emufusion_ws_scene", NULL};
 +        ef_wide_set_scene(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
++        ef_var.key = "emufusion_ws_gate";
++        ef_var.value = NULL;
++        ef_wide_set_gate(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
 +        ef_var.key = "emufusion_ws_map";
 +        ef_var.value = NULL;
 +        ef_wide_set_map(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
@@ -329,7 +347,7 @@ index bb298ff..65a6b87 100644
      struct retro_variable var = {0};
      if (emulated_devices == 1) {
  
-@@ -1296,6 +1311,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
+@@ -1296,6 +1314,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
          geom.base_width = GB_get_screen_width(&gameboy[0]);
          geom.base_height = GB_get_screen_height(&gameboy[0]);
          geom.aspect_ratio = (double)GB_get_screen_width(&gameboy[0]) / GB_get_screen_height(&gameboy[0]);
@@ -340,7 +358,7 @@ index bb298ff..65a6b87 100644
      }
  
      geom.max_width = MAX_VIDEO_WIDTH * emulated_devices;
-@@ -1436,6 +1455,10 @@ void retro_run(void)
+@@ -1436,6 +1458,10 @@ void retro_run(void)
              video_cb(frame_buf_copy, GB_get_screen_width(&gameboy[0]) * emulated_devices, GB_get_screen_height(&gameboy[0]), GB_get_screen_width(&gameboy[0]) * emulated_devices * sizeof(uint32_t));
          }
      }

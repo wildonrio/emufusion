@@ -16,7 +16,7 @@ index 96b488c..7b1683a 100644
  	static constexpr uint32_t NametableSize = 0x400;
  	
 diff --git a/Core/PPU.cpp b/Core/PPU.cpp
-index 3692210..23d4ccb 100644
+index 3692210..f0e4bd1 100644
 --- a/Core/PPU.cpp
 +++ b/Core/PPU.cpp
 @@ -451,6 +451,7 @@ void PPU::WriteRAM(uint16_t addr, uint8_t value)
@@ -54,14 +54,11 @@ index 3692210..23d4ccb 100644
 +	if(addr < 0x2000 || addr >= 0x3000) return;
 +	int cell = addr & 0xFFF;
 +	if((cell & 0x3FF) >= 0x3C0) return;
-+	if(_scanline >= 240 && IsRenderingEnabled() == false) {
-+		_efBlankWrites[cell] = true;
-+		_efBlankPending = true;
-+		return;
-+	}
 +	if(!IsRenderingEnabled()) {
 +		_efBlankWrites[cell] = true;
 +		_efBlankPending = true;
++		// A screenful written with the picture off is a new scene: it has not scrolled yet.
++		if(++_efBlankCount > 300) _efSceneMoved = false;
 +		return;
 +	}
 +	int col = (cell & 0x1F) + ((cell >> 10) & 1) * 32;
@@ -73,6 +70,7 @@ index 3692210..23d4ccb 100644
 +void PPU::EfSweepBlank()
 +{
 +	_efBlankPending = false;
++	_efBlankCount = 0;
 +	int columns = _console->GetMapper()->EfColumns();
 +	for(int cell = 0; cell < 0x1000; cell++) {
 +		if(!_efBlankWrites[cell]) continue;
@@ -376,8 +374,9 @@ index 3692210..23d4ccb 100644
 +	BaseMapper *mapper = _console->GetMapper();
 +	int columns = mapper->EfColumns();
 +	// A map only one screen wide has nothing more to show: new columns would repeat the far
-+	// side of the screen, so this scene stays at the game's own width.
-+	if(columns <= 32) {
++	// side of the screen, so this scene stays at the game's own width. For a game nobody has
++	// played through, a scene that has not scrolled is likely a menu, and its map holds anything.
++	if(columns <= 32 || (_efScrollGate && !_efSceneMoved)) {
 +		for(int i = 0; i < _efExt; i++) _efLeft[line][i] = _efRight[line][i] = (uint16_t)0x0F;
 +		return;
 +	}
@@ -436,6 +435,7 @@ index 3692210..23d4ccb 100644
 +				int delta = ((cam - _efCam + 256) & 511) - 256;
 +				_efCam = cam;
 +				_efWorldX += delta;
++				if(delta) _efSceneMoved = true;
 +			}
 +			if(_scanline == 0 && _efBlankPending && IsRenderingEnabled()) EfSweepBlank();
 +		} else if(_cycle == 256) {
@@ -454,7 +454,7 @@ index 3692210..23d4ccb 100644
  }
  
 diff --git a/Core/PPU.h b/Core/PPU.h
-index 55c3182..2353f0b 100644
+index 55c3182..2622019 100644
 --- a/Core/PPU.h
 +++ b/Core/PPU.h
 @@ -28,6 +28,11 @@ enum PPURegisters
@@ -469,7 +469,7 @@ index 55c3182..2353f0b 100644
  	protected:
  		std::shared_ptr<Console> _console;
  		EmulationSettings* _settings;
-@@ -61,6 +66,48 @@ class PPU : public IMemoryHandler, public Snapshotable
+@@ -61,6 +66,51 @@ class PPU : public IMemoryHandler, public Snapshotable
  		PPUControlFlags _flags;
  		PPUStatusFlags _statusFlags;
  
@@ -494,6 +494,9 @@ index 55c3182..2353f0b 100644
 +		bool _efMapSearched = false;
 +		bool _efMapMatches = false;
 +		bool _efHudEdge = false;
++		bool _efScrollGate = false;
++		bool _efSceneMoved = false;
++		int _efBlankCount = 0;
 +		int _efMapRise = 0;
 +		int _efMapMisses = 0;
 +		int _efMapChecked = 0;
@@ -518,12 +521,13 @@ index 55c3182..2353f0b 100644
  		uint16_t _intensifyColorBits;
  		uint8_t _paletteRamMask;
  		int32_t _lastUpdatedPixel;
-@@ -205,6 +252,13 @@ class PPU : public IMemoryHandler, public Snapshotable
+@@ -205,6 +255,14 @@ class PPU : public IMemoryHandler, public Snapshotable
  		uint8_t PeekRAM(uint16_t addr) override;
  		void WriteRAM(uint16_t addr, uint8_t value) override;
  
 +		void EfConfigure(int ext, int lineFrom, int lineTo, bool strict);
 +		void EfSetHudEdge(bool on) { _efHudEdge = on; }
++		void EfSetScrollGate(bool on) { _efScrollGate = on; _efSceneMoved = false; }
 +		void EfSetMap(EfMap map) { _efMap = map; _efTilesetBanks = nullptr; _efMapSearched = false; _efMapMatches = false; _efMapMisses = 0; }
 +		int EfExt() const { return _efExt; }
 +		const uint16_t* EfLeft(int line) const { return _efLeft[line]; }
@@ -569,10 +573,10 @@ index 4ed0c1a..d704ca3 100644
  	GetScreenSize(screenSize, true);
  	
 diff --git a/Libretro/libretro.cpp b/Libretro/libretro.cpp
-index 48fa641..bfdc6e2 100644
+index 48fa641..dd9eb73 100644
 --- a/Libretro/libretro.cpp
 +++ b/Libretro/libretro.cpp
-@@ -322,6 +322,54 @@ extern "C" {
+@@ -322,6 +322,58 @@ extern "C" {
  		}
  	}
  
@@ -612,6 +616,10 @@ index 48fa641..bfdc6e2 100644
 +		efVar.value = nullptr;
 +		bool hudEdge = env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value && !strcmp(efVar.value, "edge");
 +		if(_console->GetPpu()) _console->GetPpu()->EfSetHudEdge(hudEdge);
++		efVar.key = "emufusion_ws_gate";
++		efVar.value = nullptr;
++		bool scrollGate = env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value && !strcmp(efVar.value, "scroll");
++		if(_console->GetPpu()) _console->GetPpu()->EfSetScrollGate(scrollGate);
 +		efVar.key = "emufusion_ws_map";
 +		efVar.value = nullptr;
 +		if(_console->GetPpu()) {
@@ -627,7 +635,7 @@ index 48fa641..bfdc6e2 100644
  	void update_settings()
  	{
  		struct retro_variable var = { };
-@@ -447,6 +495,8 @@ extern "C" {
+@@ -447,6 +499,8 @@ extern "C" {
  			readOverscanValue(MesenOverscanBottom)
  		);
  
@@ -636,7 +644,7 @@ index 48fa641..bfdc6e2 100644
  		if(readVariable(MesenAspectRatio, var)) {
  			string value = string(var.value);
  			if(value == "Auto") {
-@@ -641,7 +691,8 @@ extern "C" {
+@@ -641,7 +695,8 @@ extern "C" {
  
  		retro_system_av_info avInfo = {};
  		_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -646,7 +654,7 @@ index 48fa641..bfdc6e2 100644
  	}
  
  	RETRO_API void retro_run()
-@@ -676,6 +727,7 @@ extern "C" {
+@@ -676,6 +731,7 @@ extern "C" {
  			//Update geometry after running the frame, in case the console's region changed (affects "auto" aspect ratio)
  			retro_system_av_info avInfo = {};
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -654,7 +662,7 @@ index 48fa641..bfdc6e2 100644
  			env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &avInfo);
  		}
  
-@@ -1123,6 +1175,7 @@ extern "C" {
+@@ -1123,6 +1179,7 @@ extern "C" {
  				default: _console->GetSettings()->SetDipSwitches(0); break;
  			}
  
@@ -662,7 +670,7 @@ index 48fa641..bfdc6e2 100644
  			update_core_controllers();
  			update_input_descriptors();
  
-@@ -1190,6 +1243,7 @@ extern "C" {
+@@ -1190,6 +1247,7 @@ extern "C" {
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, NES_NTSC_OUT_WIDTH(256), 240 * vscale);
  		else
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, 256 * hscale, 240 * vscale);
@@ -670,7 +678,7 @@ index 48fa641..bfdc6e2 100644
  	}
  
  	RETRO_API void *retro_get_memory_data(unsigned id)
-@@ -1198,6 +1252,10 @@ extern "C" {
+@@ -1198,6 +1256,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetSaveRam();
  			case RETRO_MEMORY_SYSTEM_RAM: return _console->GetMemoryManager()->GetInternalRAM();
@@ -681,7 +689,7 @@ index 48fa641..bfdc6e2 100644
  		}
  		return nullptr;
  	}
-@@ -1208,6 +1266,10 @@ extern "C" {
+@@ -1208,6 +1270,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetMemorySize(DebugMemoryType::SaveRam);
  			case RETRO_MEMORY_SYSTEM_RAM: return MemoryManager::InternalRAMSize;

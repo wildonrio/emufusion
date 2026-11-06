@@ -565,7 +565,7 @@ case "$ENGINE" in
         cp -R "$source/." "$build/"
         apply_locked_patch "$build" \
             engines/patches/mesen-emufusion-widescreen.patch \
-            5f3d3d8939e845911feda666bf71b7b2490ab9720644c369fe929e159e44a93d
+            07e6a22ac5fddb67ddd8d936f446785ab65e124e50066a9eb0f7ee8c86727cc5
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -656,7 +656,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$build" \
             engines/patches/sameboy-emufusion-widescreen.patch \
-            bc4e4469b797eaa06925a1cb6d14c2c8873170e75ea0378a4b8a389ecaa64a98
+            763d01502d49b92149d03d84858d6b8205bb9465d7a25d1e87482895641c77b2
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -1443,7 +1443,7 @@ case "$ENGINE" in
             bb52313363b569cf87ad57eb8673d76bc7a8290b68b75eb94f3b41292c593624
         apply_locked_patch "$staged_source" \
             engines/patches/dolphin-emufusion-keep-2d-shape.patch \
-            18debebff6a698c046d6b443f6658560b6e84c0a22b6b26784491b1a3b4d751b
+            0237d77d10076cb5df158857f388327cd14e4d9aabc68bd5a27651842e45221b
 
         while IFS='|' read -r dep_path dep_repository dep_commit dep_sha; do
             [ -n "$dep_path" ] || continue
@@ -1531,7 +1531,7 @@ DOLPHIN_DEPENDENCIES
         rm -f "$stripped_core"
         normalized_sha=$(shasum -a 256 "$normalized_core" | awk '{print $1}')
         if [ "$normalized_sha" != \
-                04c613f75ae2d1b8f5c5821ef343f5dfd94b1a8a9731da19a52401e8a5b9abe3 ]; then
+                3436726506c20fd78fe4203024992530be1223d4c40a7ccf436d88a7846e4d97 ]; then
             printf 'Normalized Dolphin core checksum mismatch: %s\n' \
                 "$normalized_sha" >&2
             rm -rf "$candidate_dir"

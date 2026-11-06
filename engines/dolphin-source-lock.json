@@ -26,7 +26,7 @@
     "ENABLE_QT": false,
     "androidMaxPageSize": 16384,
     "normalizedByRemovingSection": ".note.gnu.build-id",
-    "normalizedArtifactSha256": "04c613f75ae2d1b8f5c5821ef343f5dfd94b1a8a9731da19a52401e8a5b9abe3",
+    "normalizedArtifactSha256": "3436726506c20fd78fe4203024992530be1223d4c40a7ccf436d88a7846e4d97",
     "rawBuildIds": [
       "c4d6d4b8f59d7b0da24455612c1299b07dec195b"
     ]
@@ -54,7 +54,7 @@
     },
     {
       "path": "engines/patches/dolphin-emufusion-keep-2d-shape.patch",
-      "sha256": "18debebff6a698c046d6b443f6658560b6e84c0a22b6b26784491b1a3b4d751b",
+      "sha256": "0237d77d10076cb5df158857f388327cd14e4d9aabc68bd5a27651842e45221b",
       "purpose": "Widescreen Hack: when the picture is shown wider than the game drew it, draw 2D narrower by the same amount so it keeps its shape. Off unless the emufusion_ws_2d option is set."
     }
   ],
