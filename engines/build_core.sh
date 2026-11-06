@@ -565,7 +565,7 @@ case "$ENGINE" in
         cp -R "$source/." "$build/"
         apply_locked_patch "$build" \
             engines/patches/mesen-emufusion-widescreen.patch \
-            07e6a22ac5fddb67ddd8d936f446785ab65e124e50066a9eb0f7ee8c86727cc5
+            2c3c36d6cd2112b2ee7f4fbacea7e8b8dc942ed231752777b3458430f614c0c5
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
@@ -656,7 +656,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$build" \
             engines/patches/sameboy-emufusion-widescreen.patch \
-            763d01502d49b92149d03d84858d6b8205bb9465d7a25d1e87482895641c77b2
+            9c121326f3f0b48589d18831893c135b2ca4d3d664e6f607952488d1b693777a
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;

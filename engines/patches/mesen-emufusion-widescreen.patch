@@ -16,7 +16,7 @@ index 96b488c..7b1683a 100644
  	static constexpr uint32_t NametableSize = 0x400;
  	
 diff --git a/Core/PPU.cpp b/Core/PPU.cpp
-index 3692210..f0e4bd1 100644
+index 3692210..9b24baa 100644
 --- a/Core/PPU.cpp
 +++ b/Core/PPU.cpp
 @@ -451,6 +451,7 @@ void PPU::WriteRAM(uint16_t addr, uint8_t value)
@@ -27,7 +27,7 @@ index 3692210..f0e4bd1 100644
  					_console->GetMapper()->WriteVRAM(_ppuBusAddress & 0x3FFF, value);
  				} else {
  					//During rendering, the value written is ignored, and instead the address' LSB is used (not confirmed, based on Visual NES)
-@@ -922,9 +923,417 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
+@@ -922,9 +923,419 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
  	UpdateColorBitMasks();
  }
  
@@ -58,7 +58,7 @@ index 3692210..f0e4bd1 100644
 +		_efBlankWrites[cell] = true;
 +		_efBlankPending = true;
 +		// A screenful written with the picture off is a new scene: it has not scrolled yet.
-+		if(++_efBlankCount > 300) _efSceneMoved = false;
++		if(++_efBlankCount > 300) _efSceneTravel = 0;
 +		return;
 +	}
 +	int col = (cell & 0x1F) + ((cell >> 10) & 1) * 32;
@@ -375,8 +375,9 @@ index 3692210..f0e4bd1 100644
 +	int columns = mapper->EfColumns();
 +	// A map only one screen wide has nothing more to show: new columns would repeat the far
 +	// side of the screen, so this scene stays at the game's own width. For a game nobody has
-+	// played through, a scene that has not scrolled is likely a menu, and its map holds anything.
-+	if(columns <= 32 || (_efScrollGate && !_efSceneMoved)) {
++	// played through, a scene that has not scrolled is likely a menu and its map holds anything;
++	// and until the scene has scrolled past the new columns, the ones behind it are the last scene's.
++	if(columns <= 32 || (_efScrollGate && _efSceneTravel < _efExt + 16)) {
 +		for(int i = 0; i < _efExt; i++) _efLeft[line][i] = _efRight[line][i] = (uint16_t)0x0F;
 +		return;
 +	}
@@ -435,7 +436,8 @@ index 3692210..f0e4bd1 100644
 +				int delta = ((cam - _efCam + 256) & 511) - 256;
 +				_efCam = cam;
 +				_efWorldX += delta;
-+				if(delta) _efSceneMoved = true;
++				// A camera that jumps has cut to another scene; one that scrolls moves a few pixels.
++				_efSceneTravel = delta < -24 || delta > 24 ? 0 : _efSceneTravel + (delta < 0 ? -delta : delta);
 +			}
 +			if(_scanline == 0 && _efBlankPending && IsRenderingEnabled()) EfSweepBlank();
 +		} else if(_cycle == 256) {
@@ -445,7 +447,7 @@ index 3692210..f0e4bd1 100644
  	if(_cycle <= 256) {
  		LoadTileInfo();
  
-@@ -1166,6 +1575,7 @@ void PPU::SendFrame()
+@@ -1166,6 +1577,7 @@ void PPU::SendFrame()
  
  void PPU::BeginVBlank()
  {
@@ -454,7 +456,7 @@ index 3692210..f0e4bd1 100644
  }
  
 diff --git a/Core/PPU.h b/Core/PPU.h
-index 55c3182..2622019 100644
+index 55c3182..9c91086 100644
 --- a/Core/PPU.h
 +++ b/Core/PPU.h
 @@ -28,6 +28,11 @@ enum PPURegisters
@@ -495,7 +497,7 @@ index 55c3182..2622019 100644
 +		bool _efMapMatches = false;
 +		bool _efHudEdge = false;
 +		bool _efScrollGate = false;
-+		bool _efSceneMoved = false;
++		int _efSceneTravel = 0;
 +		int _efBlankCount = 0;
 +		int _efMapRise = 0;
 +		int _efMapMisses = 0;
@@ -527,7 +529,7 @@ index 55c3182..2622019 100644
  
 +		void EfConfigure(int ext, int lineFrom, int lineTo, bool strict);
 +		void EfSetHudEdge(bool on) { _efHudEdge = on; }
-+		void EfSetScrollGate(bool on) { _efScrollGate = on; _efSceneMoved = false; }
++		void EfSetScrollGate(bool on) { _efScrollGate = on; _efSceneTravel = 0; }
 +		void EfSetMap(EfMap map) { _efMap = map; _efTilesetBanks = nullptr; _efMapSearched = false; _efMapMatches = false; _efMapMisses = 0; }
 +		int EfExt() const { return _efExt; }
 +		const uint16_t* EfLeft(int line) const { return _efLeft[line]; }
