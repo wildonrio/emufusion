@@ -16,7 +16,7 @@ index 96b488c..7b1683a 100644
  	static constexpr uint32_t NametableSize = 0x400;
  	
 diff --git a/Core/PPU.cpp b/Core/PPU.cpp
-index 3692210..9b24baa 100644
+index 3692210..4d0ef32 100644
 --- a/Core/PPU.cpp
 +++ b/Core/PPU.cpp
 @@ -451,6 +451,7 @@ void PPU::WriteRAM(uint16_t addr, uint8_t value)
@@ -27,7 +27,7 @@ index 3692210..9b24baa 100644
  					_console->GetMapper()->WriteVRAM(_ppuBusAddress & 0x3FFF, value);
  				} else {
  					//During rendering, the value written is ignored, and instead the address' LSB is used (not confirmed, based on Visual NES)
-@@ -922,9 +923,419 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
+@@ -922,9 +923,425 @@ void PPU::UpdateGrayscaleAndIntensifyBits()
  	UpdateColorBitMasks();
  }
  
@@ -113,31 +113,36 @@ index 3692210..9b24baa 100644
 +	return true;
 +}
 +
-+// Mega Man 3 builds each stage from its ROM bank: a list of screens by page, 8x8 32-pixel blocks per
++// Mega Man 3 and 4 build each stage from its ROM bank: a list of screens by page, 8x8 32-pixel blocks per
 +// screen, four 16-pixel blocks in each, then four tile lists and a palette list. Rooms are runs of
 +// pages; a run's far side is another room, usually above or below, so its edge carries on instead.
++// Each list is at an offset into the bank; the game keeps which way a room change went in zero page.
 +bool PPU::EfMm3Tile(int worldX, int worldY, uint8_t &tile, uint8_t &palette)
 +{
 +	const uint8_t *prg = _console->GetMapper()->EfPrg();
 +	uint8_t *ram = _console->GetMemoryManager()->GetInternalRAM();
-+	uint32_t bank = ram[0x22] * 0x2000;
++	bool four = _efMap == EfMap::Mm4;
++	uint32_t bank = (four ? ram[0x22] | 0x20 : ram[0x22]) * 0x2000;
++	uint32_t screens = four ? 0x1500 : 0xA00, rooms = four ? 0x1530 : 0xA40, layouts = four ? 0x900 : 0xF00;
++	uint32_t blocks = four ? 0x500 : 0x1700, tiles = four ? 0 : 0x1B00, palettes = four ? 0x400 : 0x1F00;
++	uint8_t forward = ram[four ? 0x2F : 0x2E];
 +	if(!prg || bank + 0x2000 > _console->GetMapper()->EfPrgSize()) return false;
 +	// Between rooms the picture slides over two pages: the one above, then the one below it.
 +	if(_efMapRise) {
-+		int fresh = ram[0xF9], old = fresh + (ram[0x2E] == 1 ? -1 : 1);
++		int fresh = ram[0xF9], old = fresh + (forward == 1 ? -1 : 1);
 +		bool down = ram[0x23] & 4;
 +		int here = (worldY < 240) == down ? old : fresh;
 +		if(worldY >= 240) worldY -= 240;
 +		worldX += (here - fresh) * 256;
 +	} else if(ram[0xFA]) {
 +		// The game has already begun a room change that this picture does not show yet.
-+		worldX += (ram[0x2E] == 1 ? -256 : 256);
++		worldX += (forward == 1 ? -256 : 256);
 +	}
 +	int page = worldX >> 8;
 +	if(page < 0) page = 0;
 +	int first = 0, last = 0;
 +	for(int i = 0; i < 32; i++) {
-+		last = first + (prg[bank + 0xA40 + i] & 0x1F);
++		last = first + (prg[bank + rooms + i] & 0x1F);
 +		if(page <= last) break;
 +		first = last + 1;
 +	}
@@ -145,11 +150,11 @@ index 3692210..9b24baa 100644
 +	int x = worldX & 255;
 +	if(worldX < first * 256) { page = first; x = worldX & 15; }
 +	else if(worldX >= (last + 1) * 256) { page = last; x = 240 + (worldX & 15); }
-+	uint8_t screen = prg[bank + 0xA00 + page];
-+	uint8_t big = prg[bank + 0xF00 + screen * 0x40 + (worldY >> 5) * 8 + (x >> 5)];
-+	uint8_t block = prg[bank + 0x1700 + big * 4 + ((worldY >> 4) & 1) * 2 + ((x >> 4) & 1)];
-+	tile = prg[bank + 0x1B00 + (((worldY >> 3) & 1) * 2 + ((x >> 3) & 1)) * 0x100 + block];
-+	palette = prg[bank + 0x1F00 + block] & 3;
++	uint8_t screen = prg[bank + screens + page];
++	uint8_t big = prg[bank + layouts + screen * 0x40 + (worldY >> 5) * 8 + (x >> 5)];
++	uint8_t block = prg[bank + blocks + big * 4 + ((worldY >> 4) & 1) * 2 + ((x >> 4) & 1)];
++	tile = prg[bank + tiles + (((worldY >> 3) & 1) * 2 + ((x >> 3) & 1)) * 0x100 + block];
++	palette = prg[bank + palettes + block] & 3;
 +	return true;
 +}
 +
@@ -218,7 +223,8 @@ index 3692210..9b24baa 100644
 +{
 +	switch(_efMap) {
 +		case EfMap::Smb3: return EfSmb3Tile(worldX, worldY, tile, palette);
-+		case EfMap::Mm3: return EfMm3Tile(worldX, worldY, tile, palette);
++		case EfMap::Mm3:
++		case EfMap::Mm4: return EfMm3Tile(worldX, worldY, tile, palette);
 +		case EfMap::Ng2: return EfNg2Tile(worldX, worldY, tile, palette);
 +		case EfMap::Bionic: return EfBionicTile(worldX, worldY, tile, palette);
 +		default: return EfKirbyTile(worldX, worldY, tile, palette);
@@ -255,7 +261,7 @@ index 3692210..9b24baa 100644
 +{
 +	cameraX = _efMapCameraX;
 +	cameraY = _efMapCameraY;
-+	if(_efMap == EfMap::Mm3) {
++	if(_efMap == EfMap::Mm3 || _efMap == EfMap::Mm4) {
 +		_efMapRise = cameraY = ((((_efLineV >> 5) & 0x1F) * 8 + ((_efLineV >> 12) & 7) - _scanline) % 240 + 240) % 240;
 +	}
 +	if(_efMap == EfMap::Ng2) {
@@ -447,7 +453,7 @@ index 3692210..9b24baa 100644
  	if(_cycle <= 256) {
  		LoadTileInfo();
  
-@@ -1166,6 +1577,7 @@ void PPU::SendFrame()
+@@ -1166,6 +1583,7 @@ void PPU::SendFrame()
  
  void PPU::BeginVBlank()
  {
@@ -456,7 +462,7 @@ index 3692210..9b24baa 100644
  }
  
 diff --git a/Core/PPU.h b/Core/PPU.h
-index 55c3182..9c91086 100644
+index 55c3182..9f67d55 100644
 --- a/Core/PPU.h
 +++ b/Core/PPU.h
 @@ -28,6 +28,11 @@ enum PPURegisters
@@ -466,7 +472,7 @@ index 55c3182..9c91086 100644
 +	public:
 +		static constexpr int EfMaxExt = 96;
 +		// A decoder per game engine: draws the new columns from the game's own level map.
-+		enum class EfMap { None, Smb3, Mm3, Kirby, Ng2, Bionic };
++		enum class EfMap { None, Smb3, Mm3, Mm4, Kirby, Ng2, Bionic };
 +	protected:
  	protected:
  		std::shared_ptr<Console> _console;
@@ -575,10 +581,10 @@ index 4ed0c1a..d704ca3 100644
  	GetScreenSize(screenSize, true);
  	
 diff --git a/Libretro/libretro.cpp b/Libretro/libretro.cpp
-index 48fa641..dd9eb73 100644
+index 48fa641..af6057c 100644
 --- a/Libretro/libretro.cpp
 +++ b/Libretro/libretro.cpp
-@@ -322,6 +322,58 @@ extern "C" {
+@@ -322,6 +322,59 @@ extern "C" {
  		}
  	}
  
@@ -628,6 +634,7 @@ index 48fa641..dd9eb73 100644
 +			bool known = env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &efVar) && efVar.value;
 +			_console->GetPpu()->EfSetMap(known && !strcmp(efVar.value, "smb3") ? PPU::EfMap::Smb3 :
 +				known && !strcmp(efVar.value, "mm3") ? PPU::EfMap::Mm3 :
++				known && !strcmp(efVar.value, "mm4") ? PPU::EfMap::Mm4 :
 +				known && !strcmp(efVar.value, "kirby") ? PPU::EfMap::Kirby :
 +				known && !strcmp(efVar.value, "ng2") ? PPU::EfMap::Ng2 :
 +				known && !strcmp(efVar.value, "bionic") ? PPU::EfMap::Bionic : PPU::EfMap::None);
@@ -637,7 +644,7 @@ index 48fa641..dd9eb73 100644
  	void update_settings()
  	{
  		struct retro_variable var = { };
-@@ -447,6 +499,8 @@ extern "C" {
+@@ -447,6 +500,8 @@ extern "C" {
  			readOverscanValue(MesenOverscanBottom)
  		);
  
@@ -646,7 +653,7 @@ index 48fa641..dd9eb73 100644
  		if(readVariable(MesenAspectRatio, var)) {
  			string value = string(var.value);
  			if(value == "Auto") {
-@@ -641,7 +695,8 @@ extern "C" {
+@@ -641,7 +696,8 @@ extern "C" {
  
  		retro_system_av_info avInfo = {};
  		_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -656,7 +663,7 @@ index 48fa641..dd9eb73 100644
  	}
  
  	RETRO_API void retro_run()
-@@ -676,6 +731,7 @@ extern "C" {
+@@ -676,6 +732,7 @@ extern "C" {
  			//Update geometry after running the frame, in case the console's region changed (affects "auto" aspect ratio)
  			retro_system_av_info avInfo = {};
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(avInfo);
@@ -664,7 +671,7 @@ index 48fa641..dd9eb73 100644
  			env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &avInfo);
  		}
  
-@@ -1123,6 +1179,7 @@ extern "C" {
+@@ -1123,6 +1180,7 @@ extern "C" {
  				default: _console->GetSettings()->SetDipSwitches(0); break;
  			}
  
@@ -672,7 +679,7 @@ index 48fa641..dd9eb73 100644
  			update_core_controllers();
  			update_input_descriptors();
  
-@@ -1190,6 +1247,7 @@ extern "C" {
+@@ -1190,6 +1248,7 @@ extern "C" {
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, NES_NTSC_OUT_WIDTH(256), 240 * vscale);
  		else
  			_console->GetVideoRenderer()->GetSystemAudioVideoInfo(*info, 256 * hscale, 240 * vscale);
@@ -680,7 +687,7 @@ index 48fa641..dd9eb73 100644
  	}
  
  	RETRO_API void *retro_get_memory_data(unsigned id)
-@@ -1198,6 +1256,10 @@ extern "C" {
+@@ -1198,6 +1257,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetSaveRam();
  			case RETRO_MEMORY_SYSTEM_RAM: return _console->GetMemoryManager()->GetInternalRAM();
@@ -691,7 +698,7 @@ index 48fa641..dd9eb73 100644
  		}
  		return nullptr;
  	}
-@@ -1208,6 +1270,10 @@ extern "C" {
+@@ -1208,6 +1271,10 @@ extern "C" {
  		switch(id) {
  			case RETRO_MEMORY_SAVE_RAM: return mapper->GetMemorySize(DebugMemoryType::SaveRam);
  			case RETRO_MEMORY_SYSTEM_RAM: return MemoryManager::InternalRAMSize;

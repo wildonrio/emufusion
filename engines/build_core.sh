@@ -565,7 +565,7 @@ case "$ENGINE" in
         cp -R "$source/." "$build/"
         apply_locked_patch "$build" \
             engines/patches/mesen-emufusion-widescreen.patch \
-            2c3c36d6cd2112b2ee7f4fbacea7e8b8dc942ed231752777b3458430f614c0c5
+            f1bb30eebef3376932b39412094a054bfddb1eab1fd2fabb7014c118c4fa2de5
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;

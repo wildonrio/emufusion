@@ -279,6 +279,7 @@ NES readers added the same day, each worked out from a CPU trace of the game loa
 | Game | Reader | Where the level is |
 | --- | --- | --- |
 | Mega Man 3 | `mm3` | ROM bank = stage ($22): screen list $AA00, room list $AA40, screens $AF00 (8x8), blocks $B700, tiles $BB00-$BE00, palette $BF00. Camera $FC, $F9 |
+| Mega Man 4 | `mm4` | ROM bank = stage ($22) or $20: screen list $B500, room list $B530, screens $A900 (8x8), blocks $A500, tiles $A000-$A300, palette $A400. Mega Man 5 and 6 differ and have no reader yet |
 | Kirby's Adventure | `kirby` | Battery RAM: size $67EE-F, page list $67F6, pages $68C8 (12 rows of 16), tiles $7A00-$7D00, palette $7E00. Camera $DD-E, $E0-1 |
 | Ninja Gaiden II | `ng2` | ROM: running column pointer $86 (6 blocks a column), blocks $69, tiles $6B, colours $6D. Scroll read per line, it changes after the status panel |
 | Bionic Commando | `bionic` | ROM banks named in $F0-$F7: screen list, screens (8x8), blocks 7 bytes each. Screen index comes from the game's column loader ($98, $99) |

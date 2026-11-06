@@ -1221,6 +1221,13 @@
             "emufusion_ws_gate": "scroll"
           },
           "tested": "2026-11-06 host: library check, 89% of side columns arrived in the picture over 22 scrolling frame pairs, under the bar; two frames looked clean, not played through"
+        },
+        "Mega Man 4": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "mm4"
+          },
+          "tested": "2026-11-06 host: all eight stages played; each stage's real level from the ROM fills both sides, title and stage select stay narrow. Room changes share Mega Man 3's code but were not tried here"
         }
       },
       "release": true
