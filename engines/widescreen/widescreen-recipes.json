@@ -1227,7 +1227,7 @@
           "options": {
             "emufusion_ws_map": "mm4"
           },
-          "tested": "2026-11-06 host: all eight stages played; each stage's real level from the ROM fills both sides, title and stage select stay narrow. Room changes share Mega Man 3's code but were not tried here"
+          "tested": "2026-11-06 host: all eight stages played; each stage's real level from the ROM fills both sides, title and stage select stay narrow. Thor: first stage played, the same picture. Room changes share Mega Man 3's code but were not tried here"
         }
       },
       "release": true
@@ -1581,9 +1581,9 @@
           "tested": "2026-11-05 Thor: castle grounds and Lakitu intro compared narrow and wide; HUD and text the same width, world extends, Mario keeps his shape"
         },
         "Banjo-Tooie": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "not yet compared narrow and wide; stays narrow until it is"
+          "tested": "2026-11-06 Thor: file room and story text compared narrow and wide; text the same width, room and sky extend. A world not played yet"
         },
         "Blast Corps": {
           "strategy": "widen",
@@ -1636,9 +1636,9 @@
           "tested": "2026-11-05 Thor: logo and agent menus keep their shape over a wide 3D background. A mission not played yet"
         },
         "International Superstar Soccer '98": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "not yet compared narrow and wide; stays narrow until it is"
+          "tested": "2026-11-06 Thor: menus compared narrow and wide, the same width and sitting in bars. A match not played yet"
         },
         "Tony Hawk's Pro Skater": {
           "strategy": "fixed-screen",
@@ -1708,14 +1708,14 @@
           "tested": "2026-11-05 Thor: logo the same size narrow and wide, sky fills the width with no seams, save dialog keeps its shape. Not yet played"
         },
         "Resident Evil 4": {
-          "strategy": "testing",
+          "strategy": "already-native",
           "options": {},
-          "tested": "not yet compared narrow and wide; stays narrow until it is"
+          "tested": "2026-11-06 Thor: the game draws its own wide letterbox; widened further its band looks too wide, so it is left as the game made it"
         },
         "Eternal Darkness: Sanity's Requiem": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "not yet compared narrow and wide; stays narrow until it is"
+          "tested": "2026-11-06 Thor: logos, title and save screens keep their shape. Play not reached"
         },
         "Mario Kart: Double Dash!!": {
           "strategy": "widen",
@@ -1723,9 +1723,9 @@
           "tested": "2026-11-05 Thor: a real race; 3D at 16:9 with position, time, map and speed in their original shape; menus sit in bars, nothing shows from off the old screen"
         },
         "Donkey Kong Jungle Beat": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "not yet compared narrow and wide; stays narrow until it is"
+          "tested": "2026-11-06 Thor: warning, bongo poster and save panels keep their shape in bars. Play not reached"
         },
         "Star Fox Adventures": {
           "strategy": "widen",
@@ -1733,9 +1733,9 @@
           "tested": "2026-11-05 Thor: title and name entry keep their shape with the 3D cockpit wide behind them. Play not reached"
         },
         "Wave Race: Blue Storm": {
-          "strategy": "testing",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "not yet compared narrow and wide; stays narrow until it is"
+          "tested": "2026-11-06 Thor: no picture within two minutes; the 105 MB file may be a truncated copy"
         }
       },
       "release": true
