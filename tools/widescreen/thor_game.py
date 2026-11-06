@@ -222,6 +222,9 @@ def leave(log):
         wait_log(log, r'Exit checkpoint finished', 60)
     else:
         print('EXIT_ROW_NOT_FOUND')
+    # Whatever happened above, no game stays open for the next user of the device: a launch over an
+    # open one left the frame-generation runner with no game at all for five minutes.
+    shell('am force-stop com.thorium.preview')
     shell('input keyevent KEYCODE_SLEEP')
 
 
