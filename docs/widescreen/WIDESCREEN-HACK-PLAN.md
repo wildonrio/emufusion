@@ -348,9 +348,9 @@ a game still has to be seen before it gets a recipe. ROMs are in `~/.cache/emufu
 Each system in the recipe table has `"release"`. Nothing shows to players until it is true, which
 needs a system's games to have run on the Thor in real play.
 
-On since 2026-11-05: Mega Drive, Game Gear, NES, SNES, Game Boy Color, GBA. Each has at least one
+On since 2026-11-05: Mega Drive, Game Gear, NES, SNES, Game Boy Color, GBA; v3.2.155 was the first public release to carry them. Next release adds Game Boy (Pokemon Red walked on the Thor) and Dreamcast (Crazy Taxi and Soul Calibur in real play, 2D the same width narrow and wide, swipe and tap both relaunch). Each has at least one
 game played on the Thor, with frame generation on, and Sonic & Knuckles and Contra also with it off.
-Game Boy stays off until one of its games is played there. `settings put global
+`settings put global
 emufusion_qa_widescreen_all 1` still enables everything for testing.
 
 Only Mega Drive has a fallback for titles without their own entry. A map no wider than the picture

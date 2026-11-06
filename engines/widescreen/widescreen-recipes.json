@@ -655,14 +655,14 @@
           "options": {
             "emufusion_ws_map": "pokemon1"
           },
-          "tested": "2026-11-05 host: house and Pallet Town walked; the map reaches both edges, rooms sit in black, opening and menus stay narrow. Thor: bedroom played with the reader on"
+          "tested": "2026-11-05 host and Thor: house and Pallet Town walked with the reader on; the map reaches both edges, rooms sit in black, opening and menus stay narrow"
         },
         "Pokémon Blue Version": {
           "strategy": "widen",
           "options": {
             "emufusion_ws_map": "pokemon1"
           },
-          "tested": "2026-11-05 host: house and Pallet Town walked; the map reaches both edges, rooms sit in black, opening and menus stay narrow. Thor: bedroom played with the reader on"
+          "tested": "2026-11-05 host and Thor: house and Pallet Town walked with the reader on; the map reaches both edges, rooms sit in black, opening and menus stay narrow"
         },
         "Pokémon Yellow Version: Special Pikachu Edition": {
           "strategy": "widen",
@@ -702,7 +702,7 @@
           "tested": "2026-11-05 host: fixed playfield, side columns only repeat a pattern"
         }
       },
-      "release": false,
+      "release": true,
       "exactBase": true
     },
     "gbc": {
@@ -956,7 +956,7 @@
         "Conker's Bad Fur Day": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro scenes at 16:9; play not reached"
+          "tested": "2026-11-05 Thor: intro and first scenes in 3D at 16:9, title text keeps its shape. Play not reached"
         },
         "Diddy Kong Racing": {
           "strategy": "widen",
@@ -986,7 +986,7 @@
         "1080° Snowboarding": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title and rider select at 16:9; a run not played yet"
+          "tested": "2026-11-05 Thor: level, rider and board menus; text keeps its shape in wide 3D scenes. A run not played yet"
         },
         "The Legend of Zelda: Majora's Mask": {
           "strategy": "widen",
@@ -996,7 +996,7 @@
         "Perfect Dark": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: menus over a wide 3D background; a mission not played yet"
+          "tested": "2026-11-05 Thor: logo and agent menus keep their shape over a wide 3D background. A mission not played yet"
         },
         "International Superstar Soccer '98": {
           "strategy": "widen",
