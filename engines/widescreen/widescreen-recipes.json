@@ -1539,7 +1539,7 @@
           "tested": "2026-11-05 Thor: castle grounds and Lakitu intro compared narrow and wide; HUD and text the same width, world extends, Mario keeps his shape"
         },
         "Banjo-Tooie": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
           "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
@@ -1594,7 +1594,7 @@
           "tested": "2026-11-05 Thor: logo and agent menus keep their shape over a wide 3D background. A mission not played yet"
         },
         "International Superstar Soccer '98": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
           "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
@@ -1666,12 +1666,12 @@
           "tested": "2026-11-05 Thor: logo the same size narrow and wide, sky fills the width with no seams, save dialog keeps its shape. Not yet played"
         },
         "Resident Evil 4": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
           "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
         "Eternal Darkness: Sanity's Requiem": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
           "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
@@ -1681,7 +1681,7 @@
           "tested": "2026-11-05 Thor: a real race; 3D at 16:9 with position, time, map and speed in their original shape; menus sit in bars, nothing shows from off the old screen"
         },
         "Donkey Kong Jungle Beat": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
           "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
@@ -1691,7 +1691,7 @@
           "tested": "2026-11-05 Thor: title and name entry keep their shape with the 3D cockpit wide behind them. Play not reached"
         },
         "Wave Race: Blue Storm": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
           "tested": "not yet compared narrow and wide; stays narrow until it is"
         }

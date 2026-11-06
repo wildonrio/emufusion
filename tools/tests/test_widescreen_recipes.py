@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 RECIPES = json.loads((ROOT / 'engines/widescreen/widescreen-recipes.json').read_text())
 GAME = ROOT / 'unified-android/src/com/thorium/preview/game'
 TOP20 = json.loads((ROOT / 'docs/widescreen/top20-by-critic.json').read_text())
-STRATEGIES = {'widen', 'fixed-screen', 'already-native', 'untested'}
+STRATEGIES = {'widen', 'fixed-screen', 'already-native', 'untested', 'testing'}
 
 
 def normalize(title):
@@ -76,6 +76,10 @@ class RecipeTableTest(unittest.TestCase):
 
 
 class PlumbingTest(unittest.TestCase):
+    def test_a_testing_title_widens_only_on_a_qa_run(self):
+        recipes = (GAME / 'WidescreenRecipes.java').read_text()
+        self.assertIn('(qaAll && STRATEGY_TESTING.equals(strategy))', recipes)
+
     def test_a_relaunch_recipe_restarts_the_game_with_its_options(self):
         overlay = (GAME / 'WidescreenOverlayView.java').read_text()
         self.assertIn('if (!relaunchNow()) showHint();', overlay)

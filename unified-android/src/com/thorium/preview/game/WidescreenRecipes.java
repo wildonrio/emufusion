@@ -28,6 +28,7 @@ public final class WidescreenRecipes {
     private static final String TAG = "WidescreenRecipes";
     static final String ASSET = "widescreen-recipes.json";
     private static final String STRATEGY_WIDEN = "widen";
+    private static final String STRATEGY_TESTING = "testing";
     private static final String FALLBACK_KEY = "*";
     private static final String QA_ALL_SYSTEMS_GLOBAL = "emufusion_qa_widescreen_all";
     private static volatile Map<String, Recipe> table;
@@ -151,7 +152,10 @@ public final class WidescreenRecipes {
                 JSONObject game = games.getJSONObject(title);
                 String key = gameKey(title);
                 // Tested and left alone: keep the key, so the system's fallback can't take it.
-                into.put(system + "/" + key, STRATEGY_WIDEN.equals(game.optString("strategy"))
+                String strategy = game.optString("strategy");
+                // "testing": widens only on a QA run, so a title can be judged before players get it.
+                into.put(system + "/" + key, STRATEGY_WIDEN.equals(strategy) ||
+                        (qaAll && STRATEGY_TESTING.equals(strategy))
                         ? recipe(system, key, entry, game) : null);
             }
             JSONObject fallback = entry.optJSONObject("fallback");
