@@ -25,10 +25,10 @@ index 0000000..acb6278
 +#endif
 diff --git a/src/gba/renderers/ef_wide.inc b/src/gba/renderers/ef_wide.inc
 new file mode 100644
-index 0000000..6fe83ff
+index 0000000..44dabb2
 --- /dev/null
 +++ b/src/gba/renderers/ef_wide.inc
-@@ -0,0 +1,562 @@
+@@ -0,0 +1,658 @@
 +// Included at the end of video-software.c.
 +static mColor ef_fb[EF_WIDE_WIDTH * GBA_VIDEO_VERTICAL_PIXELS];
 +static int ef_ext, ef_milli;
@@ -83,6 +83,9 @@ index 0000000..6fe83ff
 +	uint32_t width_at, height_at, size_at;
 +	int room_cols, room_rows, unit;
 +	uint16_t add;
++	int rooms;
++	bool edge;
++	unsigned ring;
 +} ef_grid;
 +struct EfGridPlace {
 +	bool locked;
@@ -132,6 +135,12 @@ index 0000000..6fe83ff
 +			ef_grid.add = strtoul(cursor + 4, &end, 16);
 +		} else if (!strncmp(cursor, "mask=", 5)) {
 +			ef_grid.mask = strtoul(cursor + 5, &end, 16);
++		} else if (!strncmp(cursor, "rooms=", 6)) {
++			ef_grid.rooms = strtoul(cursor + 6, &end, 16);
++		} else if (!strncmp(cursor, "edge=", 5)) {
++			ef_grid.edge = strtoul(cursor + 5, &end, 16) != 0;
++		} else if (!strncmp(cursor, "ring=", 5)) {
++			ef_grid.ring = strtoul(cursor + 5, &end, 16);
 +		} else if (!strncmp(cursor, "planes=", 7)) {
 +			end = (char*) cursor + 6;
 +			while (*end == '=' || *end == '+') {
@@ -169,8 +178,73 @@ index 0000000..6fe83ff
 +	return NULL;
 +}
 +
++static uint32_t ef_read32(const uint8_t* at) {
++	return at[0] | at[1] << 8 | at[2] << 16 | (uint32_t) at[3] << 24;
++}
++
++// A room the cartridge lays out, in blocks of 4 by 4 tiles. The game keeps a record per layer with its
++// camera. Family 1 points to a room header naming the size in 256-pixel screens, and a block number's top
++// bits flip it; family 2 has size and pointers in the record itself.
++static bool ef_room_entry(int plane, int x, int y, uint16_t* entry) {
++	int cols, rows;
++	uint32_t grid, table;
++	if (ef_grid.rooms == 2) {
++		const uint8_t* record = ef_bus(ef_grid.planes[plane], 0x14);
++		if (!record) {
++			return false;
++		}
++		cols = record[0x10] | record[0x11] << 8;
++		rows = record[0x12] | record[0x13] << 8;
++		grid = ef_read32(record + 0xC);
++		table = ef_read32(record + 4);
++	} else {
++		const uint8_t* slot = ef_bus(ef_grid.planes[plane], 4);
++		const uint8_t* room = slot ? ef_bus(ef_read32(slot), 16) : NULL;
++		// Menus are records too, with no second table.
++		if (!room || !ef_read32(room + 8)) {
++			return false;
++		}
++		cols = room[0] * 8;
++		rows = room[1] * 8;
++		grid = ef_read32(room + 12);
++		table = room[2] & 2 ? ef_grid.tables[plane] : ef_read32(room + 4);
++	}
++	int blockX = x >> 5, blockY = y >> 5;
++	if (ef_grid.edge) {
++		blockX = blockX < 0 ? 0 : blockX >= cols ? cols - 1 : blockX;
++	}
++	if (blockX < 0 || blockY < 0 || blockX >= cols || blockY >= rows) {
++		return false;
++	}
++	const uint8_t* cell = ef_bus(grid + (blockY * cols + blockX) * 2, 2);
++	if (!cell) {
++		return false;
++	}
++	int value = cell[0] | cell[1] << 8;
++	int cornerX = (x >> 3) & 3, cornerY = (y >> 3) & 3;
++	int number = value;
++	if (ef_grid.rooms == 1) {
++		number = (value & 0x3FFF) - 1;
++		if (number < 0) {
++			*entry = 0;
++			return true;
++		}
++		cornerX = value & 0x4000 ? 3 - cornerX : cornerX;
++		cornerY = value & 0x8000 ? 3 - cornerY : cornerY;
++	}
++	const uint8_t* tile = ef_bus(table + (number * 16 + cornerY * 4 + cornerX) * 2, 2);
++	if (!tile) {
++		return false;
++	}
++	*entry = (tile[0] | tile[1] << 8) ^ (ef_grid.rooms == 1 ? (value & 0xC000) >> 4 : 0);
++	return true;
++}
++
 +// The map entry the grid holds at pixel x, y of the world.
 +static bool ef_grid_entry(int plane, int x, int y, uint16_t* entry) {
++	if (ef_grid.rooms) {
++		return ef_room_entry(plane, x, y, entry);
++	}
 +	int gridX = (x >> 4) & (ef_grid.cols - 1);
 +	int gridY = (y >> 4) & (ef_grid.rows - 1);
 +	if (gridX >= ef_grid.room_cols || gridY >= ef_grid.room_rows) {
@@ -295,6 +369,10 @@ index 0000000..6fe83ff
 +			place->locked = false;
 +			continue;
 +		}
++		if (ef_grid.ring >> b & 1) {
++			place->locked = false;
++			continue;
++		}
 +		ef_grid_collect(r, bg, &samples[b]);
 +		if (place->locked && ef_grid_fits(&samples[b], place->plane, place->x, place->y, 4)) {
 +			place->misses = 0;
@@ -310,7 +388,25 @@ index 0000000..6fe83ff
 +		}
 +		// The search is the costly part, so a background that has never matched looks less often.
 +		bool found = false;
-+		if (distinct >= 3 && samples[b].drawn >= 8 && (place->locked || !(ef_grid_tick & 7))) {
++		if (ef_grid.rooms) {
++			// The game's own camera says where the room is; the video scroll is the same but for its wrap.
++			for (int plane = 0; plane < ef_grid.plane_count && !found && samples[b].drawn >= 8; ++plane) {
++				const uint8_t* camera = ef_bus(ef_grid.planes[plane] + (ef_grid.rooms == 2 ? 0x18 : 4), 8);
++				if (!camera) {
++					continue;
++				}
++				int x = (((camera[2] | camera[3] << 8) - bg->x + 128) >> 8) * 256;
++				int y = (((camera[6] | camera[7] << 8) - bg->y + 128) >> 8) * 256;
++				if (ef_grid_fits(&samples[b], plane, x, y, 4)) {
++					place->locked = true;
++					place->misses = 0;
++					place->plane = plane;
++					place->x = x;
++					place->y = y;
++					found = true;
++				}
++			}
++		} else if (distinct >= 3 && samples[b].drawn >= 8 && (place->locked || !(ef_grid_tick & 7))) {
 +			// The video scroll says little about the world position, so every place is tried, and
 +			// the game may start a block on either of its two tile rows and columns.
 +			for (int plane = 0; plane < ef_grid.plane_count && !found; ++plane) {
@@ -363,7 +459,7 @@ index 0000000..6fe83ff
 +	int localX = x + bg->x;
 +	int localY = y + bg->y;
 +	uint16_t entry;
-+	if (ef_grid.on) {
++	if (ef_grid.on && !(ef_grid.ring >> bg->index & 1)) {
 +		const struct EfGridPlace* place = &ef_grid_bg[bg->index];
 +		if (!place->locked || !ef_grid_entry(place->plane, localX + place->x, localY + place->y, &entry)) {
 +			return 0;
@@ -544,7 +640,7 @@ index 0000000..6fe83ff
 +			int sx = x + ef_ext;
 +			int index = 0;
 +			bool sprite = sprite_color[sx] != 0;
-+			if (sprite && ef_grid.on) {
++			if (sprite && ef_grid.on && !ef_grid.rooms) {
 +				// Out on the black around a room a sprite is somewhere the game would not show it.
 +				sprite = false;
 +				for (int b = 0; b < 4 && !sprite; ++b) {

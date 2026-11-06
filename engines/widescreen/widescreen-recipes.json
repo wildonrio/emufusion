@@ -1974,14 +1974,18 @@
           "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
         },
         "Castlevania: Aria of Sorrow": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "grid:rooms=1,edge=1,ring=8,planes=200A094:200A108+200A0B0:200C0EC"
+          },
+          "tested": "2026-11-06 host: played through castle rooms, stairs and a fight; walls, moon and enemies carry on to both edges, status menu and map stay narrow. HUD stays in its place"
         },
         "Castlevania: Circle of the Moon": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: played: 256-wide maps, one screen plus a column, so new columns would repeat. A map reader could widen the scrolling games"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "grid:rooms=2,edge=1,planes=20230F0+2023130+2023170+20231B0"
+          },
+          "tested": "2026-11-06 host: opening story and first tall rooms played; real level to both edges, status menu stays narrow. HUD stays in its place"
         },
         "Final Fantasy VI Advance": {
           "strategy": "fixed-screen",
@@ -2042,9 +2046,9 @@
         "Castlevania: Harmony of Dissonance": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_gate": "scroll"
+            "emufusion_ws_map": "grid:rooms=1,edge=1,ring=C,planes=200A440:200A494"
           },
-          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+          "tested": "2026-11-06 host: first boss and six rooms played; real level to both edges, status menu and map stay narrow. HUD stays in its place"
         },
         "Classic NES Series: Metroid": {
           "strategy": "widen",
