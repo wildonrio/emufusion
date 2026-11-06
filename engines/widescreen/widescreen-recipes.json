@@ -1137,12 +1137,12 @@
         "Soul Calibur": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: fights in attract mode at 16:9; the arena extends, health bars and text keep their shape"
         },
         "Resident Evil: Code Veronica": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: title keeps its shape in bars, demo play in 3D at 16:9"
         },
         "Skies of Arcadia": {
           "strategy": "widen",
@@ -1150,9 +1150,9 @@
           "tested": "not yet judged"
         },
         "Marvel vs. Capcom 2": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: title background is cut at the sides; a 2D fighter, a fight not reached"
         },
         "Shenmue": {
           "strategy": "widen",
@@ -1167,12 +1167,12 @@
         "MDK 2": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: comic intro fills the width, judged by eye; no narrow frame of it to compare. Play not reached"
         },
         "Sonic Adventure 2": {
           "strategy": "widen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: intro cutscene in 3D at 16:9, subtitles keep their shape. Play not reached"
         },
         "Ecco the Dolphin: Defender of the Future": {
           "strategy": "widen",
@@ -1180,9 +1180,9 @@
           "tested": "not yet judged"
         },
         "Hydro Thunder": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "not yet judged"
+          "tested": "2026-11-05 Thor: a race played; the game does not draw the track beyond the old edges, black wedges at the sides"
         },
         "Star Wars: Episode I: Racer": {
           "strategy": "widen",
