@@ -282,7 +282,7 @@ November 5 (latest) **— 3.2.155 (229, `d33d4e01`, retry-395) released: Switch 
 
 - **Link's Awakening against stock stamps, same APK (`debug.emufusion.eden_stamp_ahead_us=0`), one run each:** PACE cadence 95.5% against 91.6%, on intended 96.6% against 94.7%, 19.3 / 28.5 ms against 16.3 / 25.6 ms. The candidate is smoother. The latency difference is not resolved: the stock run's trace was 115 s, against 17 s.
 - **Open question, the top latency item.** NSMBU Deluxe's fast-mode share was 36-90% in this afternoon's candidate runs and 0, 3 and 22% in these three cool-start runs. I do not know why it dropped. Generated images finishing after their scan enter the pipelined state (9-57 in 16 s), and nothing leaves it unless a refresh passes with nothing new, so a perfectly smooth run stays there for good. With pipelined at 19.4 / 27.7 ms, the earlier 10.7 / 19.0 ms is reached only in the fast state.
-- **Disk:** 4.76 GiB of APKs retired at this close (3.2.150, 3.2.154 and nine 3.2.155 trials), 3.8 GiB of bench dumps removed.
+- **Disk:** 4.76 GiB of APKs retired at this close (3.2.150, 3.2.154 and ten 3.2.155 trials), 3.8 GiB of bench dumps removed.
 
 November 5 **— The generated image can be checked before it is shown: frames with invented content fall to 0-7% on the 3-D sets on the device's replay bench. QA, off by default until its GPU cost is measured.**
 

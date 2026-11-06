@@ -890,21 +890,27 @@ STATIC_COUNT = (HEADER +
 # Generated-image check (2026-11-05, 3-D; QA emufusion_framegen_image_check).
 # Motion search cannot always follow a small fast object: its vectors scatter
 # and the warp shreds it (Double Dash's karts, Wind Waker HD's and NSMBU's fine
-# detail). The image is checked before it is shown. A preview at a quarter of a
-# 1280-wide picture is drawn with the generate pass itself; each preview pixel's
-# 3x3 patch is compared with the real frames, read along that pixel's own motion
-# and at zero motion, four places a correct result must match. A share of a 5x5
-# neighbourhood failing, grown by one pixel, shows the nearer real frame instead:
-# one uneven step for that object instead of content the game never drew.
-# genport selfcheck, invented measure (frames over 0.1%, area, error):
-# Double Dash 16 -> 4%, 0.059 -> 0.025, 0.567 -> 0.574; Wind Waker HD 20 -> 0%,
-# 0.049 -> 0.010, 0.390 -> 0.395; NSMBU map 11 -> 3%, 0.045 -> 0.006, 0.955 ->
-# 0.972; Link's Awakening 5 -> 5%, 0.022 -> 0.032; Star Fox 64 12 -> 0%, 0.040 ->
-# 0.013; Ocarina 4 -> 0%. Pixel art, read at the generate pass's own whole-pixel
+# detail). The image is checked before it is shown. A preview 160 pixels wide is
+# drawn with the generate pass itself; each preview pixel's 3x3 patch is compared
+# with the real frames, read along that pixel's own motion and at zero motion,
+# four places a correct result must match. Two thirds of a 3x3 neighbourhood
+# failing shows the nearer real frame there instead: one uneven step for that
+# object instead of content the game never drew.
+# The first version, 320 wide with a separable 5x5 box and a grow pass, did better
+# on the replay bench but cost too much in play: NSMBU Deluxe 99.9-100 -> 97.9% on
+# cadence, generated image plan-to-done median 1.6-2.3 -> 4.7 ms. Each preview
+# fragment reads all over a large history image, so its cost does not shrink with
+# the pixel count as much as the size suggests (Thor, net of the drain: preview
+# ~0.5 ms, check ~0.4 ms).
+# genport coarse.py, invented measure (frames over 0.1%, area, error), this version:
+# Double Dash 16 -> 4%, 0.059 -> 0.032, 0.567 -> 0.582; Wind Waker HD 20 -> 0%,
+# 0.049 -> 0.014, 0.390 -> 0.400; NSMBU map 11 -> 6%, 0.045 -> 0.009, 0.955 -> 0.974;
+# Star Fox 64 12 -> 6%, 0.040 -> 0.022; Link's Awakening 5 -> 11%, 0.022 -> 0.039.
+# Pixel art at the 320-wide version, read at the generate pass's own whole-pixel
 # places: Mega Drive 18 -> 18%, 0.109 -> 0.090, 0.542 -> 0.569; SNES 15 -> 8%,
 # 0.058 -> 0.045, 0.380 -> 0.388; NES 0 -> 0%, 0.014 -> 0.011.
 IMAGE_CHECK = True
-IMAGE_CHECK_WIDTH = 320
+IMAGE_CHECK_WIDTH = 160
 IMAGE_CHECK_T = 24.0
 IMAGE_CHECK_SHARE = 0.6
 VERTEX_UV = (
@@ -929,19 +935,12 @@ IMAGE_CHECK_PATCH = (HEADER +
     "  ca=(q-ap)/uHistorySize;cc=(q+vp-ap)/uHistorySize;}\n"
     " bool ok=fits(uFrameC,cc,d)||fits(uFrameA,ca,d)||fits(uFrameC,u,d)||fits(uFrameA,u,d);\n"
     " o0=vec4(ok?0.0:1.0,0.0,0.0,1.0);}\n")
-# One direction of the 5x5 box; uShare > 0 on the second, thresholding the mean.
 IMAGE_CHECK_BOX = (HEADER +
-    "uniform sampler2D uIn;uniform ivec2 uStep;uniform float uShare;\n"
-    "layout(location=0) out vec4 o0;\n"
-    "void main(){ivec2 p=ivec2(gl_FragCoord.xy),m=textureSize(uIn,0)-1;float s=0.0;\n"
-    " for(int k=-2;k<=2;++k)s+=texelFetch(uIn,clamp(p+k*uStep,ivec2(0),m),0).r;s*=0.2;\n"
-    " o0=vec4(uShare>0.0?step(uShare-0.01,s):s,0.0,0.0,1.0);}\n")
-IMAGE_CHECK_GROW = (HEADER +
     "uniform sampler2D uIn;\n"
     "layout(location=0) out vec4 o0;\n"
     "void main(){ivec2 p=ivec2(gl_FragCoord.xy),m=textureSize(uIn,0)-1;float s=0.0;\n"
-    " for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)s=max(s,texelFetch(uIn,clamp(p+ivec2(x,y),ivec2(0),m),0).r);\n"
-    " o0=vec4(s,0.0,0.0,1.0);}\n")
+    " for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)s+=texelFetch(uIn,clamp(p+ivec2(x,y),ivec2(0),m),0).r;\n"
+    f" o0=vec4(step({float(IMAGE_CHECK_SHARE)}-0.01,s/9.0),0.0,0.0,1.0);}}\n")
 
 
 def generate_phase_preview_shader():
@@ -1349,7 +1348,6 @@ def shaders():
             'STATIC_COUNT': STATIC_COUNT,
             'VERTEX_UV': VERTEX_UV, 'GENERATE_PHASE_PREVIEW': generate_phase_preview_shader(),
             'IMAGE_CHECK_PATCH': IMAGE_CHECK_PATCH, 'IMAGE_CHECK_BOX': IMAGE_CHECK_BOX,
-            'IMAGE_CHECK_GROW': IMAGE_CHECK_GROW,
             'DENSIFY_SHARP': sharp_densify_shader(), 'BOUNDS': bounds_shader(),
             'PATCH_PROPAGATE': patch_propagate_shader()}
 

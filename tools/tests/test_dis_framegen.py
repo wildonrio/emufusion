@@ -49,8 +49,7 @@ class DisShaderTest(unittest.TestCase):
                       "lateProgram": "LATE_VERDICT", "lateRowsProgram": "LATE_ROWS", "quietRowsProgram": "QUIET_ROWS", "quietSumProgram": "QUIET_SUM",
                       "staticCountProgram": "STATIC_COUNT", "phaseModeProgram": "PHASE_MODE",
                       "phaseChoiceProgram": "PHASE_CHOICE", "generateProgram": "GENERATE_PHASE",
-                      "imageCheckProgram": "IMAGE_CHECK_PATCH", "imageCheckBox": "IMAGE_CHECK_BOX",
-                      "imageCheckGrow": "IMAGE_CHECK_GROW"}
+                      "imageCheckProgram": "IMAGE_CHECK_PATCH", "imageCheckBox": "IMAGE_CHECK_BOX"}
         # QA synthesis 25 (the learned selector): its generated class; the
         # shared conv helper binds through "program".
         selector = (RUNTIME.parent / "LearnedSelectorShaders.java").read_text()

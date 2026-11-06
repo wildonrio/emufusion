@@ -104,12 +104,8 @@ final class DenseInverseSearchShaders {
             .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uPreview,uPreviewMotion,uFrameA,uFrameC;uniform float uT,uDiscrete;uniform vec2 uHistorySize,uSize;\nlayout(location=0) out vec4 o0;\nvec3 g[9];\nfloat md(vec3 x){return max(max(x.r,x.g),x.b);}\nbool fits(sampler2D s,vec2 c,vec2 d){float e=0.0;int i=0;\n for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)e+=md(abs(g[i++]-texture(s,c+vec2(x,y)*d).rgb));\n return e/9.0<=24.0/255.0;}\nvoid main(){ivec2 p=ivec2(gl_FragCoord.xy),m=ivec2(uSize)-1;vec2 u=(vec2(p)+0.5)/uSize,d=1.0/uSize;\n vec2 v=texelFetch(uPreviewMotion,p,0).xy/uHistorySize;\n int i=0;for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)g[i++]=texelFetch(uPreview,clamp(p+ivec2(x,y),ivec2(0),m),0).rgb;\n vec2 ca=u-uT*v,cc=u+(1.0-uT)*v;\n if(uDiscrete>0.5){vec2 vp=floor(v*uHistorySize+0.5),ap=floor(uT*vp+0.5),q=floor(u*uHistorySize)+0.5;\n  ca=(q-ap)/uHistorySize;cc=(q+vp-ap)/uHistorySize;}\n bool ok=fits(uFrameC,cc,d)||fits(uFrameA,ca,d)||fits(uFrameC,u,d)||fits(uFrameA,u,d);\n o0=vec4(ok?0.0:1.0,0.0,0.0,1.0);}\n")
             .toString();
 
-    static final String IMAGE_CHECK_BOX = new StringBuilder(401)
-            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uIn;uniform ivec2 uStep;uniform float uShare;\nlayout(location=0) out vec4 o0;\nvoid main(){ivec2 p=ivec2(gl_FragCoord.xy),m=textureSize(uIn,0)-1;float s=0.0;\n for(int k=-2;k<=2;++k)s+=texelFetch(uIn,clamp(p+k*uStep,ivec2(0),m),0).r;s*=0.2;\n o0=vec4(uShare>0.0?step(uShare-0.01,s):s,0.0,0.0,1.0);}\n")
-            .toString();
-
-    static final String IMAGE_CHECK_GROW = new StringBuilder(353)
-            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uIn;\nlayout(location=0) out vec4 o0;\nvoid main(){ivec2 p=ivec2(gl_FragCoord.xy),m=textureSize(uIn,0)-1;float s=0.0;\n for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)s=max(s,texelFetch(uIn,clamp(p+ivec2(x,y),ivec2(0),m),0).r);\n o0=vec4(s,0.0,0.0,1.0);}\n")
+    static final String IMAGE_CHECK_BOX = new StringBuilder(366)
+            .append("#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nuniform sampler2D uIn;\nlayout(location=0) out vec4 o0;\nvoid main(){ivec2 p=ivec2(gl_FragCoord.xy),m=textureSize(uIn,0)-1;float s=0.0;\n for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)s+=texelFetch(uIn,clamp(p+ivec2(x,y),ivec2(0),m),0).r;\n o0=vec4(step(0.6-0.01,s/9.0),0.0,0.0,1.0);}\n")
             .toString();
 
     static final String DENSIFY_SHARP = new StringBuilder(850)

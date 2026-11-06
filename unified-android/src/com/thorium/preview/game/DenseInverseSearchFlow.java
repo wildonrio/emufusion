@@ -655,11 +655,10 @@ final class DenseInverseSearchFlow {
 
     // --- Generated-image check (dis_gles.py IMAGE_CHECK_*) ----------------------
 
-    private static final int IMAGE_CHECK_WIDTH = 320;
-    private int generatePreview, imageCheckProgram, imageCheckBox, imageCheckGrow;
+    private static final int IMAGE_CHECK_WIDTH = 160;
+    private int generatePreview, imageCheckProgram, imageCheckBox;
     private int imageCheckFramebuffer;
-    private int imageCheckPreview, imageCheckMotion, imageCheckFlags, imageCheckAcross, imageCheckBoxed,
-            imageCheckMask;
+    private int imageCheckPreview, imageCheckMotion, imageCheckFlags, imageCheckMask;
     private int imageCheckWidth, imageCheckHeight;
     private long imageCheckKeyA, imageCheckKeyB;
     private float imageCheckValue = -1f;
@@ -669,11 +668,9 @@ final class DenseInverseSearchFlow {
         String v = DenseInverseSearchShaders.VERTEX;
         imageCheckProgram = link(v, DenseInverseSearchShaders.IMAGE_CHECK_PATCH);
         imageCheckBox = link(v, DenseInverseSearchShaders.IMAGE_CHECK_BOX);
-        imageCheckGrow = link(v, DenseInverseSearchShaders.IMAGE_CHECK_GROW);
         passNames.put(generatePreview, "IMAGE_PREVIEW");
         passNames.put(imageCheckProgram, "IMAGE_CHECK");
         passNames.put(imageCheckBox, "IMAGE_BOX");
-        passNames.put(imageCheckGrow, "IMAGE_GROW");
     }
 
     private void allocateImageCheck() {
@@ -683,8 +680,6 @@ final class DenseInverseSearchFlow {
         imageCheckPreview = rgba8(w, h, false);
         imageCheckMotion = texture(w, h, true);
         imageCheckFlags = texture(w, h, false);
-        imageCheckAcross = texture(w, h, false);
-        imageCheckBoxed = texture(w, h, false);
         imageCheckMask = texture(w, h, false);
         int[] id = new int[1];
         GLES20.glGenFramebuffers(1, id, 0);
@@ -723,18 +718,8 @@ final class DenseInverseSearchFlow {
             GLES20.glUniform2f(location(imageCheckProgram, "uHistorySize"), historyWidth, historyHeight);
             GLES20.glUniform2f(location(imageCheckProgram, "uSize"), w, h);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
-            begin(imageCheckBox, w, h, imageCheckAcross);
+            begin(imageCheckBox, w, h, imageCheckMask);
             bind(imageCheckBox, "uIn", imageCheckFlags, 0);
-            GLES30.glUniform2i(location(imageCheckBox, "uStep"), 1, 0);
-            GLES20.glUniform1f(location(imageCheckBox, "uShare"), 0f);
-            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
-            begin(imageCheckBox, w, h, imageCheckBoxed);
-            bind(imageCheckBox, "uIn", imageCheckAcross, 0);
-            GLES30.glUniform2i(location(imageCheckBox, "uStep"), 0, 1);
-            GLES20.glUniform1f(location(imageCheckBox, "uShare"), 0.6f);
-            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
-            begin(imageCheckGrow, w, h, imageCheckMask);
-            bind(imageCheckGrow, "uIn", imageCheckBoxed, 0);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3);
         } finally {
             restoreState();
@@ -1052,8 +1037,7 @@ final class DenseInverseSearchFlow {
         phasePatches = phaseFlow = cut = late = lateRows = bounds = 0;
         phaseMode = phaseChoice = 0;
         phaseChoiceLevel = -1;
-        imageCheckPreview = imageCheckMotion = imageCheckFlags = imageCheckAcross = imageCheckBoxed = 0;
-        imageCheckMask = 0;
+        imageCheckPreview = imageCheckMotion = imageCheckFlags = imageCheckMask = 0;
         imageCheckKeyA = imageCheckKeyB = 0L;
         imageCheckValue = -1f;
         if (imageCheckFramebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {imageCheckFramebuffer}, 0);
@@ -1082,14 +1066,14 @@ final class DenseInverseSearchFlow {
         for (int program : new int[] {gray, down, grad, patchSearch, densify, generate, toRaw,
                 phaseSearch, phaseDensify, generatePhase, cutProgram, lateProgram, lateRowsProgram, staticCountProgram,
                 quietRowsProgram, quietSumProgram, boundsProgram, phaseModeProgram, phaseChoiceProgram,
-                generatePreview, imageCheckProgram, imageCheckBox, imageCheckGrow, selectFeatures, selectC1,
+                generatePreview, imageCheckProgram, imageCheckBox, selectFeatures, selectC1,
                 selectC2, selectC3, selectOut, selectGenerate})
             if (program != 0) GLES20.glDeleteProgram(program);
         gray = down = grad = patchSearch = densify = generate = toRaw = 0;
         phaseSearch = phaseDensify = generatePhase = cutProgram = lateProgram = lateRowsProgram = boundsProgram = 0;
         staticCountProgram = quietRowsProgram = quietSumProgram = 0;
         phaseModeProgram = phaseChoiceProgram = 0;
-        generatePreview = imageCheckProgram = imageCheckBox = imageCheckGrow = 0;
+        generatePreview = imageCheckProgram = imageCheckBox = 0;
         if (quietQuery[0] != 0) GLES30.glDeleteQueries(2, quietQuery, 0);
         quietQuery[0] = quietQuery[1] = 0;
         quietPending[0] = quietPending[1] = false;
