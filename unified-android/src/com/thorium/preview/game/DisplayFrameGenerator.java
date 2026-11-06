@@ -7499,6 +7499,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (TimelineSchedulerSwitch.earliestLatch() && builtinQueueReserve.extraScans() == 0)
             builtinBacklogCatchUp.observe(result.desiredNs, result.actualNs, result.panelPeriodNs,
                     result.actualNs);
+        int minQueueScans = presentationScansPerOutput() >= 2 ? TimelineSchedulerSwitch.minQueueScans() : 0;
+        builtinQueueReserve.setMinExtraScans(minQueueScans);
+        if (minQueueScans > 0 && compositorEarlyGuard.activate())
+            Log.i(TAG, "Compositor early guard on generator=" + generatorId + " reason=queue-floor");
         int previous = builtinQueueReserve.extraScans();
         builtinQueueReserve.setEarlyGuardAvailable(TimelineSchedulerSwitch.earlyGuard() &&
                 !compositorEarlyGuard.active() && !compositorEarlyGuard.disabled());

@@ -12,6 +12,7 @@ public final class BuiltinQueueReserveTest {
         framesReadyForAnEarlierLatchDoNotCount();
         recorderBurstGivesTheScanBackOnceFramesFitEarlier();
         anUnfinishedLatchMakesTheEarlierScanTheDeadline();
+        aFloorKeepsTheDepth();
         recoveryNeedsUnbrokenEvidence();
         failedRecoveryRestoresAtOnceAndBacksOff();
         recoveryThatHoldsResetsTheBackoff();
@@ -193,6 +194,24 @@ public final class BuiltinQueueReserveTest {
         eq(1L, r.recoveries(), "one recovery");
         for (int i = 0; i < 2000; ++i)
             check(onTime(r, clock, 3_000_000L) == BuiltinQueueReserve.Change.NONE, "nothing below the earliest scan");
+    }
+
+    private static void aFloorKeepsTheDepth() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        long[] clock = {5_000_000_000L};
+        r.setMinExtraScans(1);
+        eq(1L, r.extraScans(), "deepened to the floor at once");
+        for (int i = 0; i < 1000; ++i)
+            check(onTime(r, clock, PERIOD + 2_000_000L) != BuiltinQueueReserve.Change.RECOVERED,
+                    "frames that would fit a scan earlier do not give it back");
+        for (int i = 0; i < 1000; ++i)
+            check(early(r, clock) != BuiltinQueueReserve.Change.RECOVERED, "nor do frames shown early");
+        eq(1L, r.extraScans(), "the floor holds");
+        r.setMinExtraScans(0);
+        BuiltinQueueReserve.Change last = BuiltinQueueReserve.Change.NONE;
+        for (int i = 0; i < 1000 && last != BuiltinQueueReserve.Change.RECOVERED; ++i)
+            last = onTime(r, clock, PERIOD + 2_000_000L);
+        eq(0L, r.extraScans(), "without the floor the scan comes back");
     }
 
     private static void anUnfinishedLatchMakesTheEarlierScanTheDeadline() {

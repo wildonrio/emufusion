@@ -113,6 +113,7 @@ public final class BuiltinQueueReserve {
     private int earlierFrames;
     private int recoveryFrames = RECOVERY_FRAMES;
     private boolean latchesUnfinished;
+    private int minExtraScans;
     private long recoveredAtNs;
     private int windowFrames, earlyFrames, earlySwitches;
     private boolean previousEarly;
@@ -127,6 +128,15 @@ public final class BuiltinQueueReserve {
     private boolean earlyGuardAvailable;
 
     public int extraScans() { return extraScans; }
+
+    /** The shallowest the queue may go: a source that cannot make the earliest scan steadily. */
+    public void setMinExtraScans(int scans) {
+        minExtraScans = Math.max(0, Math.min(MAX_EXTRA_SCANS, scans));
+        if (extraScans < minExtraScans) {
+            extraScans = minExtraScans;
+            trial = false;
+        }
+    }
 
     /** QA: the deepest the queue may go (0 never deepens); a deeper queue is given back. */
     public void setMaxExtraScans(int scans) {
@@ -181,7 +191,7 @@ public final class BuiltinQueueReserve {
             recordSlot(Math.abs(actualNs - desiredNs) < panelPeriodNs / 2L);
         if (!late && actualNs > 0L && latchNs > 0L && renderCompleteNs > latchNs &&
                 Math.abs(actualNs - desiredNs) < panelPeriodNs / 2L) latchesUnfinished = true;
-        if (extraScans > 0 && !within(changedAtNs, nowNs)) {
+        if (extraScans > minExtraScans && !within(changedAtNs, nowNs)) {
             if (++windowFrames > EARLY_WINDOW) {
                 windowFrames = 1;
                 earlyFrames = 0;
@@ -283,7 +293,7 @@ public final class BuiltinQueueReserve {
             recoveryFrames = RECOVERY_FRAMES;
         }
         // Frames queued at the previous depth are no evidence for this one.
-        if (extraScans == 0 || within(changedAtNs, nowNs)) {
+        if (extraScans <= minExtraScans || within(changedAtNs, nowNs)) {
             earlierFrames = 0;
             return Change.NONE;
         }

@@ -343,6 +343,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         hardwarePhaseLock = hardwareLock;
+        int queueFloor = 0;
+        try {
+            if (context != null) queueFloor = Settings.Global.getInt(
+                    context.getContentResolver(), MIN_QUEUE_SCANS_GLOBAL, queueFloor);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        minQueueScans = queueFloor;
         boolean uniqueAssumed = false;
         try {
             if (context != null) uniqueAssumed = Settings.Global.getInt(
@@ -809,6 +817,12 @@ public final class TimelineSchedulerSwitch {
     static boolean hardwareStampBehind(boolean pinnedByDefault) {
         return hardwarePhaseLock < 0 && pinnedByDefault;
     }
+
+    /** QA emufusion_framegen_min_queue_scans: the shallowest queue for a multi-scan output, with the early guard on. */
+    static final String MIN_QUEUE_SCANS_GLOBAL = "emufusion_framegen_min_queue_scans";
+    private static volatile int minQueueScans = 0;
+
+    static int minQueueScans() { return minQueueScans; }
 
     /** QA emufusion_framegen_assume_unique=1: after a long run of unique verdicts, a callback does not wait for the check. */
     static final String ASSUME_UNIQUE_GLOBAL = "emufusion_framegen_assume_unique";
