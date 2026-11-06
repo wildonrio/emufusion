@@ -39,7 +39,9 @@ HEAT_CHECK_SECONDS = 5
 # one waits to cool its runner keeps this file; one left behind by a crash stops counting after a while.
 FG_COOLING = '/tmp/claude-501/thor.fg-cooling'
 FG_COOLING_MAX_SECONDS = 12 * 60
-KEYS = {'south': 304, 'east': 305, 'north': 308, 'west': 307, 'start': 315, 'select': 314,
+# The Thor's own layout: event 304 is its right-hand button and 305 its bottom one, whatever the names
+# of those events suggest. The app's log calls them EAST and SOUTH, and these names follow the log.
+KEYS = {'south': 305, 'east': 304, 'north': 308, 'west': 307, 'start': 315, 'select': 314,
         'l': 310, 'r': 311, 'up': 544, 'down': 545, 'left': 546, 'right': 547, 'back': 158}
 
 
