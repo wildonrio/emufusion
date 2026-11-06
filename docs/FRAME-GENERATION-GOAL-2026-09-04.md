@@ -267,7 +267,33 @@ Nothing is at 10/10 on all three measures yet. Whether a run reaches the composi
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 6 (latest) **— Double Dash's phases follow where its stamps sit against the clock. The firmware's pin looks like the clean state, not the problem. Off the Thor since 14:26: it dropped off USB, cause not known.**
+November 6 (latest) **— Measured on purpose: Double Dash is cleaner with its stamps behind the clock, under the firmware's pin, than held by the phase lock. That is now Dolphin's default in the tree. Cemu's future stamp is rejected.**
+
+- **The Thor's USB drop:** it came back at about 15:19 with 5 days of uptime, so it did not reboot, and the package's identity was intact. The cause is not known. The runs `g4`, `h1` and `h2` started with no device and are not results.
+- **Double Dash, retry-427, predraw and arrival span on, one run a row:**
+
+  | Setting | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean | Wait: median (p10-p90) | Start |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Stamps behind | 99.9% | 1.8 | 60% | 14.7 / 23.0 ms | 4.2 (2.6-6.7) | 50 C |
+  | Stamps behind | 99.6% | 12.7 | 100% | 11.4 / 19.7 ms | 4.4 (3.9-5.6) | 53 C |
+  | Stamps behind | 99.6% | 14.5 | 46% | 15.7 / 24.0 ms | 4.4 (4.2-4.4) | 60 C |
+  | Stamps behind, drain for all sources | 100.0% | 0 | 0% | 19.1 / 27.5 ms | 4.1 (3.0-4.7) | 55 C |
+  | Stamps behind, drain for all sources | 100.0% | 0 | 0% | 19.5 / 27.9 ms | 4.4 (4.3-4.6) | 53 C |
+  | Lock, lead kept | 99.1% | 32.5 | 8% | 21.7 / 30.1 ms | 7.3 (6.0-8.8) | 31 C |
+  | Lock, lead kept | 99.5% | 16.3 | 77% | 13.4 / 21.7 ms | 4.1 (2.8-6.7) | 52 C |
+  | Lock, lead kept | 99.9% | 3.6 | 84% | 12.6 / 20.9 ms | 4.1 (3.5-5.8) | 60 C |
+
+  Two of these started at 60 C, because another stream's turn warmed the Thor while they waited for the lock, so they count for less. The script now checks the temperature again once it holds the lock. The drain made no move inside the two 16-s windows it was on for, so those two rows show a clean run left in the slow state, not the drain working; the 0 hitches may owe nothing to it. Its share of time in the fast state over a longer session is not measured.
+- **Decision:** stamps behind. The worst run is 14.5 against 32.5 hitches, the latency is about the same when the fast state holds, and it needs no nudges. `97db551`: Dolphin's stamps start a second behind the clock, the phase lock is QA only (`emufusion_framegen_hardware_phase_lock=1`), and the compositor drain also acts on a core the firmware paces. As a default it has not run yet.
+- **Cemu's future stamp and phase nudge: rejected.** Wind Waker HD, retry-427, both QA options on: with them 91.1%, 160 hitches, 31.1 / 48.3 ms; without 91.8%, 148 hitches, 18.8 / 35.4 ms. The stamp ended the firmware's pin (a wait spread over 0-8 ms), and the phase lock took no nudges, 0 in the run, for a reason not yet looked into.
+
+- **Dolphin's default on retry-428, no QA for the stamp:** it does engage (stamps 942 ms behind, 0 nudges): 99.6%, 12.7 hitches, 8% fast, 19.0 / 27.4 ms, one run.
+- **Tried on Wind Waker HD and rejected:**
+  - **Showing a pair at its missed callback's slot** (`late_take_up`, retry-428): 88.8%, 200 hitches, 16.0 / 32.6 ms. It caught 165 pairs but toggled more between the 11 ms and 19 ms levels, so it is removed.
+  - **The take-up lattice** (`takeup_lattice`, retry-428): 51.1%, 869 hitches, 38.1 / 50.6 ms. It still does not fit a 30 fps source.
+- **Now testing** QA `emufusion_framegen_assume_unique=1` (retry-429): after 120 unique verdicts in a row, a callback does not wait for an image's uniqueness check, which is probably what makes pairs miss it. The check still reads back, and a repeated image starts the run over.
+
+November 6 **— Double Dash's phases follow where its stamps sit against the clock. The firmware's pin looks like the clean state, not the problem. Off the Thor since 14:26: it dropped off USB, cause not known.**
 
 - **The table.** Every Double Dash run with a log, its stamps' lag behind the clock during the trace window (from `timelineRequiredLatencyUs`, negative means still ahead), against the wait before the callback and the result. Dolphin's stamps follow its run sequence, so a burst at startup leaves them ahead and a stall leaves them behind, whatever the QA setting:
 
