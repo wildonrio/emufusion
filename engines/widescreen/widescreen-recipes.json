@@ -1825,14 +1825,18 @@
           "tested": "2026-11-05 host: fixed playfield, nothing to reveal"
         },
         "Wario Land 3": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: first cave played; the sides stay black, nothing gained without a map reader"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "wl3"
+          },
+          "tested": "2026-11-06 host: Out of the Woods played; forest, blocks and enemies reach both edges, the pause screen stays narrow. Later levels not reached"
         },
         "Wario Land II": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: first room played; the sides are a flat colour band, nothing gained without a map reader"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "wl2"
+          },
+          "tested": "2026-11-06 host: Wario's bedroom and the coin room walked; real level at both edges, hidden-item cells drawn as the game draws them, pause stays over the same picture. Later chapters not reached"
         },
         "Micro Machines V3": {
           "strategy": "fixed-screen",
