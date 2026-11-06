@@ -75,6 +75,8 @@ def main():
     shell('input keyevent KEYCODE_WAKEUP')
     time.sleep(2)
     shell('am force-stop com.thorium.preview')
+    # Set again: whoever had the Thor before may still be clearing its settings just after the lock.
+    shell('settings put global emufusion_qa_widescreen_all 1')
     subprocess.run(ADB + ['logcat', '-c'], timeout=30)
     log = out / 'runtime.log'
     logger = subprocess.Popen(ADB + ['logcat', '-v', 'threadtime'], stdout=log.open('wb'),
