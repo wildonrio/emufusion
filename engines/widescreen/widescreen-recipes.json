@@ -2208,6 +2208,636 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-06 host: first stage played: stale coloured tiles at both edges"
+        },
+        "Army Men: Operation Green": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Backyard Basketball": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Backyard Sports: Basketball 2007": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Banjo-Pilot": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Boxing Fever": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Classic NES Series: Bomberman": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Classic NES Series: Super Mario Bros": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Contra Advance - The Alien Wars EX (U": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Crash Nitro Kart": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Disney Sports Skateboarding": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Disney's Magical Quest 2": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Disney's Magical Quest 3 Starring Mic": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Dragon Ball Z: Supersonic Warriors": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Dragon Ball Z: Taiketsu": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Dual Blades": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "E.T. The Extra-Terrestrial": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "ESPN X-Games Skateboarding": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "F-Zero: Maximum Velocity": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "FIFA 06": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "FIFA 2007": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "FIFA Football 2005": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "FIFA World Cup 2006": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Final Fight One": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Fire Pro Wrestling 2": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Flintstones. The - Big Trouble in Bed": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Franklin the Turtle": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Galidor - Defenders of the Outer Dime": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Garfield and His Nine Lives": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Goemon: New Age Shutsudou!": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "GT Advance 2: Rally Racing": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "GT Advance 3: Pro Concept Racing": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Guilty Gear X: Advance Edition": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Hot Wheels Velocity X": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Ice Age": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Iridion 3D": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Iridion II": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Klonoa: Empire of Dreams": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Koala Brothers. The - Outback Adventu": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "LEGO Island 2": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Lilo & Stitch 2 - Haemsterviel Havoc": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Lizzie McGuire - On The Go!": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Looney Tunes: Back in Action": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Lost Vikings. The": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Madden NFL 2002": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Madden NFL 2003": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Madden NFL 2004": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mega Man & Bass": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mobile Suit Gundam Seed - Battle Assa": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mortal Kombat - Tournament Edition (U": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Moto GP": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Motoracer Advance": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "NFL Blitz 2002": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "NFL Blitz 2003": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Nicktoons Racing": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Nicktoons Unite!": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Phalanx - The Enforce Fighter A-144 (": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Pinobee: Wings of Adventure": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Rave Master: Special Attack Force!": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Rayman 10th Anniversary - Rayman Adva": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Rayman Advance": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Robot Wars: Advanced Destruction": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Sega Rally Championship": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Shaun Palmer's Pro Snowboarder": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Shrek: Reekin' Havoc": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Sonic Battle": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Street Fighter Alpha 3": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Super Street Fighter II Turbo: Revival": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Teenage Mutant Ninja Turtles": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Tekken Advance": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Thunder Alley": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Top Gun: Firestorm Advance": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Ultimate Muscle - The Path of the Sup": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Wade Hixton's Counter Punch": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Wild. The": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Woody Woodpecker in Crazy Castle 5": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "WTA Tour Tennis": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "WWF Road to WrestleMania": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "XS Moto": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Zatch Bell! Electric Arena": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Contra Advance: The Alien Wars EX": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Disney's Magical Quest 3 Starring Mickey & Donald": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Disney's Magical Quest 2 Starring Mickey & Minnie": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "The Flintstones: Big Trouble in Bedrock": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Galidor: Defenders of the Outer Dimension": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "The Koala Brothers: Outback Adventures": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mobile Suit Gundam Seed: Battle Assault": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mortal Kombat: Tournament Edition": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Phalanx: The Enforce Fighter A-144": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Rayman 10th Anniversary": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Ultimate Muscle: The Kinnikuman Legacy - The Path of the Superhero": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, GBA scan: two frames of play looked clean, with a wide video map reaching both edges; titles and menus stay narrow behind the scroll rule. Not played through"
         }
       },
       "release": true

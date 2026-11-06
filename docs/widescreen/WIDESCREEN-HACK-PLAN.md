@@ -378,6 +378,15 @@ Mecarobot Golf, Waterworld and Tom & Jerry 2. So the SNES now has a fallback for
 loads nothing past the old screen simply stays black at the sides, and the player can swipe it off. Most of these games have not been
 played through. A mode 7 game whose ordinary scroll registers do not move stays narrow until it has an entry of its own.
 
+GBA, 2026-11-06: the explorer rarely got far enough, so `explore` found only 7 games. A longer fixed run of START, A, walking and
+jumping, seven shots a game, got much further. Over all 957 games, 218 showed content at both sides, because their video maps are 64
+cells wide; the rest stay narrow by themselves. Two frames of each were looked at, and 79 games were added with the scroll rule, among
+them F-Zero: Maximum Velocity, Street Fighter Alpha 3, Mega Man & Bass, Rayman Advance, Klonoa and Tekken Advance. Left out: stale tiles
+or colour bands at the edges (Mega Man Zero 1, 3 and 4, Buffy, Tarzan), sky that stops short of the new corners (Road Rash, Simpsons Road
+Rage, Wakeboarding Unleashed), cockpits narrower than the view (F-14, Super Hornet), and any that showed only a menu. Most have not been
+played through. A separate search for level grids in work RAM over 61 games found about ten, nearly all minor licensed titles, so
+it was not followed up. On the GBA the new columns are 22 pixels a side at 16:9, so a reader does less here than on the NES or SNES.
+
 Mega Drive, 2026-11-06: the first 182 of 750 files checked before the Thor dropped off USB. 10 pass, and Blaster Master 2, Caesars
 Palace and Bugs Bunny in Double Trouble score low. Most of the rest did not scroll in the automatic run, so they say little.
 
