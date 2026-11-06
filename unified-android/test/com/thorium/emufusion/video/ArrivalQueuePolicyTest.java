@@ -10,27 +10,23 @@ public final class ArrivalQueuePolicyTest {
     public static void main(String[] args) {
         ArrivalQueuePolicy policy = new ArrivalQueuePolicy();
         long callback = 1_000_000_000L, latch = callback + 5_500_000L;
-        long work = ArrivalQueuePolicy.INITIAL_WORK_NS, margin = ArrivalQueuePolicy.MARGIN_NS;
-        check(policy.targetWaitNs() == work + margin, "target: the work and a margin");
-
-        long arrived = latch - work - margin;
-        check(policy.present(arrived + 2_000_000L, arrived, callback, latch, PERIOD),
-                "an image at its target wait goes to the latch");
-        check(!policy.present(latch - 500_000L, latch - 1_000_000L, callback, latch, PERIOD),
+        check(policy.present(latch - 1_500_000L, callback, latch, PERIOD),
+                "an image in time goes to the latch");
+        check(policy.present(latch - ArrivalQueuePolicy.MIN_TO_LATCH_NS, callback, latch, PERIOD),
+                "exactly enough time");
+        check(!policy.present(latch - 500_000L, callback, latch, PERIOD),
                 "an image with too little time goes through its callback");
-        check(!policy.present(latch + 1_000L, arrived, callback, latch, PERIOD), "past the latch");
+        check(!policy.present(latch + 1_000L, callback, latch, PERIOD), "past the latch");
         long later = callback + PERIOD + 5_500_000L;
-        check(!policy.present(callback + 7_000_000L, callback + 6_000_000L, callback, later, PERIOD),
+        check(!policy.present(callback + 7_000_000L, callback, later, PERIOD),
                 "the latch after the next callback belongs to that callback");
-        check(!policy.present(arrived, arrived, 0L, latch, PERIOD), "no callback yet");
+        check(!policy.present(latch - 2_000_000L, 0L, latch, PERIOD), "no callback yet");
 
-        for (int i = 0; i < 1000; ++i) policy.observeWork(1_000_000L);
-        check(policy.workNs() < 1_100_000L, "falls to what the work takes: " + policy.workNs());
-        check(policy.targetWaitNs() < 1_800_000L, "the target follows");
-        policy.observeWork(2_500_000L);
-        check(policy.workNs() == 2_500_000L, "one peak counts at once");
+        policy.observeWork(6_500_000L);
+        check(policy.present(latch - 1_500_000L, callback, latch, PERIOD),
+                "one slow frame does not lock it out");
+        check(ArrivalQueuePolicy.TARGET_WAIT_NS == 3_500_000L, "the target stays fixed");
         policy.observeWork(0L);
-        check(policy.workNs() == 2_500_000L, "no sample, no change");
         policy.presented();
         policy.missed();
         check(policy.presents() == 1L && policy.misses() == 1L, "counted");

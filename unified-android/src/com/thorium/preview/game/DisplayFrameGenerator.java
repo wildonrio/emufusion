@@ -5633,7 +5633,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         long nowNs = System.nanoTime();
         long arrivedNs = arrivalNs(activeRightSubmission);
         long latchNs = nextLatchNs(nowNs);
-        if (latchNs == 0L || !arrivalQueuePolicy.present(nowNs, arrivedNs, lastCallbackFrameTimeNs, latchNs,
+        if (latchNs == 0L || !arrivalQueuePolicy.present(nowNs, lastCallbackFrameTimeNs, latchNs,
                 frameRate.panelPeriodNs())) return;
         PhysicalPresentationDeadline deadline = nextBuiltInDeadline(lastCallbackFrameTimeNs, nowNs);
         if (!deadline.valid() || deadline.skippedPanelScans() != 0) return;
@@ -9763,7 +9763,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     long latch = nextLatchNs(arrived);
                     if (latch != 0L) {
                         waitNs = latch - arrived;
-                        sourcePhaseLock.setTargetWaitNs(arrivalQueuePolicy.targetWaitNs());
+                        sourcePhaseLock.setTargetWaitNs(com.thorium.emufusion.video.ArrivalQueuePolicy.TARGET_WAIT_NS);
                     }
                 }
                 sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);
@@ -15017,7 +15017,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
                 " arrivalQueue=" + arrivalQueuePolicy.presents() + "/" + arrivalQueuePolicy.misses() + "/" +
-                        arrivalQueuePolicy.workNs() / 1000L + "/" + arrivalQueuePolicy.targetWaitNs() / 1000L +
+                        arrivalQueuePolicy.workNs() / 1000L +
                 " compositorDrains=" + compositorStateDrain.drains() + "/" +
                         compositorStateDrain.spacingNs() / 1_000_000_000L +
                 " fastCores=0x" + Long.toHexString(fastCoreMask) +
