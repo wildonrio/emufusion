@@ -1041,22 +1041,34 @@
         "Super Smash Bros. Melee": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape",
+          "onOptions": {
+            "dolphin_widescreen_hack": "enabled"
+          },
+          "offOptions": {
+            "dolphin_widescreen_hack": "disabled"
+          }
         },
         "Metroid Prime": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape",
+          "onOptions": {
+            "dolphin_widescreen_hack": "enabled"
+          },
+          "offOptions": {
+            "dolphin_widescreen_hack": "disabled"
+          }
         },
         "Super Mario Sunshine": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "2026-11-05 Thor: title, sky and save panel compared; 2D keeps its shape with the 3D wide behind it, 2D-only screens sit in bars. Not yet played"
         },
         "The Legend of Zelda: The Wind Waker": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "2026-11-05 Thor: logo and copyright the same width narrow and wide; the title's sky showed seams at the old edges, fix in progress. Not yet played"
         },
         "Resident Evil 4": {
           "strategy": "widen",
@@ -1071,7 +1083,7 @@
         "Mario Kart: Double Dash!!": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "2026-11-05 Thor: menus keep their shape in bars. A race not played yet"
         },
         "Donkey Kong Jungle Beat": {
           "strategy": "widen",
@@ -1081,7 +1093,7 @@
         "Star Fox Adventures": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "2026-11-05 Thor: title and file menu keep their shape with the 3D cockpit wide behind them. Not yet played"
         },
         "Wave Race: Blue Storm": {
           "strategy": "widen",
