@@ -38,7 +38,7 @@ index 180bc86..b297d38 100644
          // ZBuffer (Zbuffer uses 24-bit Format)
          bool is_depth_copy = bpmem.zcontrol.pixel_format == PixelFormat::Z24;
 diff --git a/Source/Core/VideoCommon/VertexManagerBase.cpp b/Source/Core/VideoCommon/VertexManagerBase.cpp
-index 2bc6d58..a56dc83 100644
+index 2bc6d58..8d366e8 100644
 --- a/Source/Core/VideoCommon/VertexManagerBase.cpp
 +++ b/Source/Core/VideoCommon/VertexManagerBase.cpp
 @@ -3,6 +3,9 @@
@@ -63,12 +63,12 @@ index 2bc6d58..a56dc83 100644
    }
  }
  
-+// EmuFusion: the 3D is wider, the picture is shown wider, and 2D must keep its shape. So the 2D drawn
-+// over a frame, its HUD, is drawn narrower by the same amount. Not all 2D is that: what comes before the
-+// frame's first 3D is a sky behind it, what comes before a copy of the frame to a texture is the input
-+// of an effect, and whatever spans the screen is a fade or the frame itself going through an effect.
-+// The count of effect draws comes from the frame before, which looks the same. A frame with no 3D
-+// at all is a 2D screen: it keeps its shape, with bars.
++// EmuFusion: the 3D is wider, the picture is shown wider, and 2D must keep its shape. So 2D is drawn
++// through a narrower viewport, which also clips what a game keeps just off its old screen. Not all of
++// it: what comes before a copy of the frame to a texture is the input of an effect (the count comes
++// from the frame before, which looks the same), and in a 3D frame whatever spans the screen is a sky,
++// a fade or the frame itself going through an effect. A frame with no 3D at all is a 2D screen: it
++// keeps its shape, with bars.
 +bool VertexManagerBase::EmufusionBatchCoversScreen() const
 +{
 +  const NativeVertexFormat* format = VertexLoaderManager::GetCurrentVertexFormat();
@@ -106,17 +106,17 @@ index 2bc6d58..a56dc83 100644
 +  {
 +    m_emufusion_saw_3d = true;
 +  }
-+  else if (m_emufusion_2d_batches++ >= m_emufusion_2d_effects)
++  else if (m_emufusion_2d_batches++ >= m_emufusion_2d_effects &&
++           !(m_emufusion_scene_3d && EmufusionBatchCoversScreen()))
 +  {
-+    if (!m_emufusion_scene_3d || (m_emufusion_saw_3d && !EmufusionBatchCoversScreen()))
-+      wanted = narrower;
++    wanted = narrower;
 +  }
 +  auto& system = Core::System::GetInstance();
 +  auto& shader_manager = system.GetVertexShaderManager();
 +  if (shader_manager.emufusion_2d_scale != wanted)
 +  {
 +    shader_manager.emufusion_2d_scale = wanted;
-+    system.GetXFStateManager().SetProjectionChanged();
++    system.GetXFStateManager().SetViewportChanged();
 +  }
 +}
 +
@@ -166,22 +166,21 @@ index 715dbee..77dc23f 100644
    u8* m_base_buffer_pointer = nullptr;
    u8* m_end_buffer_pointer = nullptr;
 diff --git a/Source/Core/VideoCommon/VertexShaderManager.cpp b/Source/Core/VideoCommon/VertexShaderManager.cpp
-index 6d69803..2cce4ee 100644
+index 6d69803..41ca60d 100644
 --- a/Source/Core/VideoCommon/VertexShaderManager.cpp
 +++ b/Source/Core/VideoCommon/VertexShaderManager.cpp
-@@ -76,10 +76,10 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
+@@ -388,8 +388,10 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
+     }
  
-   case ProjectionType::Orthographic:
-   {
--    m_projection_matrix[0] = rawProjection[0];
-+    m_projection_matrix[0] = rawProjection[0] * emufusion_2d_scale;
-     m_projection_matrix[1] = 0.0f;
-     m_projection_matrix[2] = 0.0f;
--    m_projection_matrix[3] = rawProjection[1];
-+    m_projection_matrix[3] = rawProjection[1] * emufusion_2d_scale;
+     dirty = true;
++    Viewport viewport = xfmem.viewport;
++    viewport.wd *= emufusion_2d_scale;
+     BPFunctions::SetScissorAndViewport(g_framebuffer_manager.get(), bpmem.scissorTL,
+-                                       bpmem.scissorBR, bpmem.scissorOffset, xfmem.viewport);
++                                       bpmem.scissorBR, bpmem.scissorOffset, viewport);
+     g_stats.AddScissorRect();
+   }
  
-     m_projection_matrix[4] = 0.0f;
-     m_projection_matrix[5] = rawProjection[2];
 diff --git a/Source/Core/VideoCommon/VertexShaderManager.h b/Source/Core/VideoCommon/VertexShaderManager.h
 index 600ba3b..57cb66f 100644
 --- a/Source/Core/VideoCommon/VertexShaderManager.h
