@@ -758,9 +758,12 @@
           "tested": "2026-11-05 host: World 1-1 played, ground, hills, blocks and pipes run edge to edge with no map reader. Enemies appear at the old screen edge. A library file named this that really holds Mario 2 stays narrow by itself: one-screen rooms"
         },
         "The Legend of Zelda": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: title and file screens only so far; rooms are one screen"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_map": "zelda",
+            "emufusion_ws_lines": "64-240"
+          },
+          "tested": "2026-11-06 host: overworld walked across several screens; the neighbouring screens fill the sides in their own colours and slide with the picture, the inventory stays narrow and the sides go dark while moving up or down. Caves and dungeons rely on the reader not matching them; not yet entered"
         },
         "Mega Man 2": {
           "strategy": "widen",
