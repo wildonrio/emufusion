@@ -2432,7 +2432,7 @@
         "Sly Cooper and the Thievius Raccoonus": {
           "strategy": "testing",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06 Thor: intro films with full-width bars, title and spy-goggle scenes in shape. Play not reached"
         },
         "Sly 2: Band of Thieves": {
           "strategy": "testing",
@@ -2478,7 +2478,7 @@
         "swanstation_GPU_EmufusionKeep2D": "false",
         "swanstation_GPU_ResolutionScale": "1"
       },
-      "release": false,
+      "release": true,
       "games": {
         "Bushido Blade": {
           "strategy": "widen",
@@ -2491,9 +2491,9 @@
           "tested": "2026-11-06 Thor: real play in the car park; 3D to both edges, HUD and map in shape, loading screen keeps its shape. HUD stays in the middle"
         },
         "Spyro: Year of the Dragon": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: title and opening scenes reach both edges with logos and the memory card panel in shape; a level has not been played yet"
+          "tested": "2026-11-06 Thor: a real level to both edges with the display in shape"
         },
         "Tekken": {
           "strategy": "widen",
@@ -2503,7 +2503,7 @@
         "Twisted Metal": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: real battle (the file is Twisted Metal 2); arena to both edges, car, radar and pause text in shape. HUD stays in the middle"
+          "tested": "2026-11-06 Thor: real battle (the file is Twisted Metal 2); arena to both edges, car, radar and pause text in shape. Swiped off and tapped back on mid-battle: the same battle carries on. A software-session save came across. A pause restored from Quick Resume stays narrow until play resumes. HUD stays in the middle"
         },
         "WipEout": {
           "strategy": "testing",
@@ -2516,9 +2516,9 @@
           "tested": "2026-11-06 Thor: real race, track and scenery to both edges at 25 to 50, ship and timing display in shape; the league menu sits in bars. Picked 3.2.157"
         },
         "Wipeout XL": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+          "tested": "2026-11-06 Thor: real race, track and scenery to both edges, ship, speed and position displays in shape; intro, title and menus keep their shape in bars"
         },
         "Castlevania: Symphony of the Night": {
           "strategy": "fixed-screen",

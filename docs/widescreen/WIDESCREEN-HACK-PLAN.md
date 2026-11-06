@@ -428,17 +428,29 @@ to the corners needs a per-game rule, because splitting by screen side would bre
 
 ### PS1 and PS2 on the Thor (2026-11-06)
 
-PS1: WipEout 3 (a race), Twisted Metal 2 (a battle), Die Hard Trilogy (the car park) and Tekken 2 (a fight) play with the world
-at both edges and their status displays in shape, in the middle. Bushido Blade's demo fight and credits look right; the coloured
-corners behind its faces are the game's own, seen narrow on the Mac too. WipEout XL's intro, title and menus keep their shape; its
-race is still to run. Tapping and swiping work on Tekken 2, restarting the engine each way; whether progress survives that has not
-been checked in play yet. WipEout (USA) stops at an intro movie with or without widescreen, so its file is suspect. The 2D games
-(Symphony of the Night, Mega Man 8, X4 to X6) stay narrow. PS1 stays hidden from players until those last checks are done.
+PS1: WipEout 3 and WipEout XL (races), Twisted Metal 2 (a battle), Die Hard Trilogy (the car park), Tekken 2 (a fight) and Spyro (a
+level) play with the world at both edges and their status displays in shape, in the middle. Bushido Blade's demo fight and credits
+look right; the coloured corners behind its faces are the game's own, seen narrow on the Mac too. WipEout (USA) stops at an intro
+movie with or without widescreen, so its file is suspect and it stays out. The 2D games (Symphony of the Night, Mega Man 8, X4 to X6)
+stay narrow. PS1 is released to players from the next build.
+
+The software and hardware sessions keep separate memory cards and Quick Resume. The first version chose the session from the
+player's choice, so swiping widescreen off went back to the state from when it was turned on. A PS1 game with a recipe now runs in
+the hardware session narrow or wide, and its first run there copies the software session's card and Quick Resume, leaving the
+originals in place. Twisted Metal 2 proved it: a software-session battle came across, then a swipe and a tap in play kept the same
+battle going. A pause restored from Quick Resume looks like a 2D screen, so it stays narrow until play resumes.
 
 PS2: DOA2's fight is right and its stale sides are gone. Kingdom Hearts keeps its menus and opening in shape; play not reached.
-Sly Cooper's title and spy-goggle scenes look right, but its film bars were narrowed, leaving the rooftops showing above and below
-them at the sides. Plain untextured bars across the whole width now stay full width, as they have no shape to lose. That engine is
-built and not yet on the Thor.
+Sly Cooper's title and spy-goggle scenes look right. Its film bars were narrowed at first, leaving the rooftops showing above and
+below them at the sides; plain untextured bars across the whole width now stay full width, as they have no shape to lose, and that
+was seen right on the Thor. PS2 stays hidden from players until more of its games have been played.
+
+New readers seen on the Thor at 60 to 120 the same day: Aria of Sorrow and Circle of the Moon (opening scenes), Harmony of Dissonance
+(the bridge), Wario Land II (bedroom and coin room) and The Legend of Zelda (the overworld across screens, inventory narrow). Wario
+Land 3 and Final Fantasy VI Advance have been played on the Mac only.
+
+A game started over an open one is refused unless it needs a different kind of session, and the first game keeps running, so nothing
+is lost.
 
 ## Game files that are not there
 
