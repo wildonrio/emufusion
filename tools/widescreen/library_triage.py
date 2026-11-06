@@ -114,12 +114,14 @@ def score_frames(paths, base):
 
 def judge(system, rom):
     spec = SYSTEMS[system]
+    # A long run takes the core from a private copy, so rebuilding the working copy cannot disturb it.
+    core = os.environ.get('EF_TRIAGE_CORE', str(spec['core']))
     best = dict(rom=rom.name, real=0.0, blank=1.0, pairs=0)
     for way, lead in enumerate(LEADS):
         out = tempfile.mkdtemp(prefix='ef-triage-')
         try:
             run = subprocess.run(
-                ['nice', '-n', '10', sys.executable, str(ROOT / 'tools/widescreen/retro_play.py'), str(spec['core']), str(rom),
+                ['nice', '-n', '10', sys.executable, str(ROOT / 'tools/widescreen/retro_play.py'), core, str(rom),
                  '--out', out, '--opt', spec['option'], '--play', script(lead)],
                 capture_output=True, text=True, timeout=240, cwd=str(ROOT))
             if run.returncode:
