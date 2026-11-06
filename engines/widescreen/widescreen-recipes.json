@@ -2455,9 +2455,9 @@
           "tested": "2026-11-06 Thor: intro films with full-width bars, title, spy-goggle scenes and the first rooftop at 60 to 120. Only one frame of rooftop play before a heat stop"
         },
         "Sly 2: Band of Thieves": {
-          "strategy": "testing",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06 Thor: green and blue stripes show through the first save page, like God of War; play not reached, so it stays narrow"
         },
         "Sly 3: Honor Among Thieves": {
           "strategy": "testing",
@@ -2465,9 +2465,9 @@
           "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         },
         "Tony Hawk's Pro Skater 3": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06 Thor: skated the Foundry at 60 to 120; park to both edges, score and timer in shape in the middle, level menu keeps its shape"
         },
         "DOA2: Hardcore": {
           "strategy": "widen",

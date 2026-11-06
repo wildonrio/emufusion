@@ -452,6 +452,14 @@ Land 3 and Final Fantasy VI Advance have been played on the Mac only.
 A game started over an open one is refused unless it needs a different kind of session, and the first game keeps running, so nothing
 is lost.
 
+### PS2 stays hidden: its toggle restarts the game (2026-11-06)
+
+Quick Resume is deliberately off for ARMSX2, because a restored state can run on with only black frames and no way to detect it
+(`QuickResumePolicy`). So a swipe or tap in play, which restarts the engine on PS2, goes back to the game's logos: on GTA III a swipe
+in the street landed on the Rockstar logo. Memory-card saves survive, unsaved progress does not. Good PS2 pictures are not enough until
+this is solved. The likely way is to boot these games wide always and make off a live crop of the middle 3/4 of the picture, so neither
+direction restarts anything; the widening keeps vertical view, so the crop should match the game's own 4:3 framing.
+
 ### More PS2, N64 and GameCube first looks (2026-11-06)
 
 GTA III and Shadow of the Colossus play right. God of War I and II and Prince of Persia: The Sands of Time do not survive keeping 2D in
