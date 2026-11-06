@@ -38,7 +38,7 @@ index 180bc86..b297d38 100644
          // ZBuffer (Zbuffer uses 24-bit Format)
          bool is_depth_copy = bpmem.zcontrol.pixel_format == PixelFormat::Z24;
 diff --git a/Source/Core/VideoCommon/VertexManagerBase.cpp b/Source/Core/VideoCommon/VertexManagerBase.cpp
-index 2bc6d58..2e94965 100644
+index 2bc6d58..a56dc83 100644
 --- a/Source/Core/VideoCommon/VertexManagerBase.cpp
 +++ b/Source/Core/VideoCommon/VertexManagerBase.cpp
 @@ -3,6 +3,9 @@
@@ -59,23 +59,23 @@ index 2bc6d58..2e94965 100644
  #include "VideoCommon/NativeVertexFormat.h"
  #include "VideoCommon/OpcodeDecoding.h"
  #include "VideoCommon/PerfQueryBase.h"
-@@ -323,10 +327,72 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
+@@ -323,10 +327,71 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
    }
  }
  
 +// EmuFusion: the 3D is wider, the picture is shown wider, and 2D must keep its shape. So the 2D drawn
 +// over a frame, its HUD, is drawn narrower by the same amount. Not all 2D is that: what comes before the
-+// frame's last 3D is a sky or background behind it, what comes before a copy of the frame to a texture
-+// is the input of an effect, and a full-screen quad is a fade or the frame itself going through an
-+// effect. The counts come from the frame before, which looks the same. A frame with no 3D at all
-+// is a 2D screen: it keeps its shape, with bars.
++// frame's first 3D is a sky behind it, what comes before a copy of the frame to a texture is the input
++// of an effect, and whatever spans the screen is a fade or the frame itself going through an effect.
++// The count of effect draws comes from the frame before, which looks the same. A frame with no 3D
++// at all is a 2D screen: it keeps its shape, with bars.
 +bool VertexManagerBase::EmufusionBatchCoversScreen() const
 +{
 +  const NativeVertexFormat* format = VertexLoaderManager::GetCurrentVertexFormat();
 +  const PortableVertexDeclaration& declaration = format->GetVertexDeclaration();
 +  const u32 stride = declaration.stride;
 +  const u32 vertices = m_index_generator.GetNumVerts();
-+  if (!declaration.position.enable || vertices > 12 || stride == 0)
++  if (!declaration.position.enable || vertices > 4096 || stride == 0)
 +    return false;
 +  const auto& projection = xfmem.projection.rawProjection;
 +  float low = 1e9f, high = -1e9f;
@@ -105,12 +105,11 @@ index 2bc6d58..2e94965 100644
 +  if (xfmem.projection.type == ProjectionType::Perspective)
 +  {
 +    m_emufusion_saw_3d = true;
-+    m_emufusion_2d_before_copy = m_emufusion_2d_batches;
 +  }
-+  else if (m_emufusion_2d_batches++ >= m_emufusion_2d_effects &&
-+           !(m_emufusion_scene_3d && EmufusionBatchCoversScreen()))
++  else if (m_emufusion_2d_batches++ >= m_emufusion_2d_effects)
 +  {
-+    wanted = narrower;
++    if (!m_emufusion_scene_3d || (m_emufusion_saw_3d && !EmufusionBatchCoversScreen()))
++      wanted = narrower;
 +  }
 +  auto& system = Core::System::GetInstance();
 +  auto& shader_manager = system.GetVertexShaderManager();
@@ -132,7 +131,7 @@ index 2bc6d58..2e94965 100644
    return result;
  }
  
-@@ -596,6 +662,7 @@ void VertexManagerBase::Flush()
+@@ -596,6 +661,7 @@ void VertexManagerBase::Flush()
        }
      }
    }
