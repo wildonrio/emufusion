@@ -7399,6 +7399,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 (result.supportedMask & GpuPhysicalHeadroomLedger.RENDER_COMPLETE) != 0;
         boolean latchKnown = result.latchNs > 0L &&
                 (result.supportedMask & GpuPhysicalHeadroomLedger.COMPOSITION_LATCH) != 0;
+        if (latchKnown) compositorStateDrain.observe(result.latchNs, result.actualNs, result.panelPeriodNs);
         if (TimelineSchedulerSwitch.earliestLatch() && builtinQueueReserve.extraScans() == 0)
             builtinBacklogCatchUp.observe(result.desiredNs, result.actualNs, result.panelPeriodNs,
                     result.actualNs);
@@ -7528,6 +7529,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // Arrival pacing or the content-time timeline, chosen from the same
     // present times (PacingModeTrial).
     private final PacingModeTrial pacingTrial = new PacingModeTrial();
+    private final com.thorium.emufusion.video.CompositorStateDrain compositorStateDrain =
+            new com.thorium.emufusion.video.CompositorStateDrain();
     private boolean pacingTrialContentTime;
 
     private void logPresentRhythm() {
@@ -10088,6 +10091,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             }
             frameRate.abortBufferedPresentation();
             invalidateBufferedPairForReprime(false);
+            return;
+        }
+        if (renderedSynthetic && TimelineSchedulerSwitch.compositorDrain() && timelineActive &&
+                externalTransport == null && timeline.arrivalPacing() &&
+                compositorStateDrain.drain(System.nanoTime())) {
+            if (physicalFramePrepared) physicalTracker.cancelPrepared();
+            timeline.withhold();
             return;
         }
         beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);
@@ -14956,6 +14966,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " signatureEarlyCommits=" + signatureEarlyCommits +
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
+                " compositorDrains=" + compositorStateDrain.drains() + "/" +
+                        compositorStateDrain.spacingNs() / 1_000_000_000L +
                 " fastCores=0x" + Long.toHexString(fastCoreMask) +
                 " arrivalPassedReals=" + arrivalPassedReals +
                 " disPrecomputeHits=" + disPrecomputeHits +
