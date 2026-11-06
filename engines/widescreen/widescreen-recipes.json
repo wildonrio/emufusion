@@ -2163,6 +2163,51 @@
             "emufusion_ws_gate": "scroll"
           },
           "tested": "2026-11-06 host: first battle reached; the snowfield and sky reach both edges, the clock stays in place, menus stay narrow behind the scroll gate"
+        },
+        "Final Fantasy IV Advance": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: world map and airship played; its 64-wide video map reaches both edges, rooms sit in black. Titles and menus stay narrow behind the scroll rule"
+        },
+        "Final Fantasy V Advance": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: world map, forest and castle played; its 64-wide video map reaches both edges, rooms sit in black. Titles and menus stay narrow behind the scroll rule"
+        },
+        "Super Mario Advance 3: Yoshi's Island": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: first stages played; the level reaches both edges. Titles and menus stay narrow behind the scroll rule"
+        },
+        "Advance Guardian Heroes": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: first fights played; the arena reaches both edges. Titles and menus stay narrow behind the scroll rule"
+        },
+        "Mario vs. Donkey Kong": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host: first stages played; the stage reaches both edges. Titles and menus stay narrow behind the scroll rule"
+        },
+        "Mega Man Zero": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host: first stage played: a dotted strip of stale tiles at both edges"
+        },
+        "Mega Man Zero 3": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host: first stage played: stale coloured tiles at both edges"
         }
       },
       "release": true
