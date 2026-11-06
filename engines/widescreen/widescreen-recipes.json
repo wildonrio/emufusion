@@ -2478,14 +2478,14 @@
       "release": false,
       "games": {
         "Bushido Blade": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+          "tested": "2026-11-06 Thor: demo fight and credits; 3D to both edges, text and faces in shape. The faces' coloured corners are the game's own, seen narrow on the Mac too. Fight from a menu not reached"
         },
         "Die Hard Trilogy": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+          "tested": "2026-11-06 Thor: real play in the car park; 3D to both edges, HUD and map in shape, loading screen keeps its shape. HUD stays in the middle"
         },
         "Spyro: Year of the Dragon": {
           "strategy": "testing",
@@ -2498,9 +2498,9 @@
           "tested": "2026-11-06 Thor: Tekken 2 fights played; the city reaches both edges, the HUD keeps its shape in the middle, logos, stage card and movies keep their shape in black bars. The record screen mixes wide and narrow strips"
         },
         "Twisted Metal": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+          "tested": "2026-11-06 Thor: real battle (the file is Twisted Metal 2); arena to both edges, car, radar and pause text in shape. HUD stays in the middle"
         },
         "WipEout": {
           "strategy": "testing",
@@ -2508,14 +2508,39 @@
           "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
         },
         "WipEout 3 - Special Edition": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+          "tested": "2026-11-06 Thor: real race, track and scenery to both edges at 25 to 50, ship and timing display in shape; the league menu sits in bars. Picked 3.2.157"
         },
         "Wipeout XL": {
           "strategy": "testing",
           "options": {},
           "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+        },
+        "Castlevania: Symphony of the Night": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06: a 2D game, whose pictures a 3D widening hack would not extend; stays narrow until it has a reader of its own"
+        },
+        "Mega Man X4": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06: a 2D game, whose pictures a 3D widening hack would not extend; stays narrow until it has a reader of its own"
+        },
+        "Mega Man X5": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06: a 2D game, whose pictures a 3D widening hack would not extend; stays narrow until it has a reader of its own"
+        },
+        "Mega Man X6": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06: a 2D game, whose pictures a 3D widening hack would not extend; stays narrow until it has a reader of its own"
+        },
+        "Mega Man 8": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06: a 2D game, whose pictures a 3D widening hack would not extend; stays narrow until it has a reader of its own"
         }
       },
       "hardwareWhenWide": true
