@@ -65,10 +65,10 @@ index 1a67ddf..02d9388 100644
  		(static_cast<float>(src_rect.height()) / static_cast<float>(src_size.y));
  
 diff --git a/pcsx2/GS/Renderers/HW/GSRendererHW.cpp b/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
-index 0d41abf..6c8ddf0 100644
+index 0d41abf..c6f85a3 100644
 --- a/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
 +++ b/pcsx2/GS/Renderers/HW/GSRendererHW.cpp
-@@ -108,8 +108,117 @@ void GSRendererHW::UpdateSettings(const Pcsx2Config::GSOptions& old_config)
+@@ -108,8 +108,130 @@ void GSRendererHW::UpdateSettings(const Pcsx2Config::GSOptions& old_config)
  	SetTCOffset();
  }
  
@@ -111,6 +111,9 @@ index 0d41abf..6c8ddf0 100644
 +	const GSVertex* const vertices = m_vertex->buff;
 +	const u16* const indices = m_index->buff;
 +	s64 area = 0;
++	// Plain bars across the whole screen, a film's letterbox say, have no shape to lose.
++	const int bar_width = static_cast<int>(static_cast<float>(resolution.x) * 0.9f) * 16;
++	bool plain_bars = !PRIM->TME && m_index->tail > 0;
 +	if (m_vt.m_primclass == GS_SPRITE_CLASS)
 +	{
 +		for (u32 i = 0; i + 1 < m_index->tail; i += 2)
@@ -118,6 +121,7 @@ index 0d41abf..6c8ddf0 100644
 +			const GSVertex& a = vertices[indices[i]];
 +			const GSVertex& b = vertices[indices[i + 1]];
 +			area += static_cast<s64>(std::abs(a.XYZ.X - b.XYZ.X)) * std::abs(a.XYZ.Y - b.XYZ.Y);
++			plain_bars = plain_bars && std::abs(a.XYZ.X - b.XYZ.X) >= bar_width;
 +		}
 +	}
 +	else if (m_vt.m_primclass == GS_TRIANGLE_CLASS)
@@ -129,8 +133,17 @@ index 0d41abf..6c8ddf0 100644
 +			const GSVertex& c = vertices[indices[i + 2]];
 +			area += std::abs(static_cast<s64>(b.XYZ.X - a.XYZ.X) * (c.XYZ.Y - a.XYZ.Y) -
 +							 static_cast<s64>(c.XYZ.X - a.XYZ.X) * (b.XYZ.Y - a.XYZ.Y)) / 2;
++			const int left = std::min<int>(a.XYZ.X, std::min<int>(b.XYZ.X, c.XYZ.X));
++			const int right = std::max<int>(a.XYZ.X, std::max<int>(b.XYZ.X, c.XYZ.X));
++			plain_bars = plain_bars && right - left >= bar_width;
 +		}
 +	}
++	else
++	{
++		plain_bars = false;
++	}
++	if (plain_bars)
++		return;
 +	// In pixels: the area is in the vertices' sixteenths, and a game may copy one field, half the height.
 +	const float span_x = m_vt.m_max.p.x - m_vt.m_min.p.x;
 +	const float span_y = m_vt.m_max.p.y - m_vt.m_min.p.y;
@@ -186,7 +199,7 @@ index 0d41abf..6c8ddf0 100644
  	// Retire whatever the GPU finished since the last frame. Runs unconditionally: after the
  	// mode is switched off there can still be a tail of queued downloads to drain.
  	g_texture_cache->ProcessPendingDownloads();
-@@ -2910,6 +3019,8 @@ void GSRendererHW::Draw()
+@@ -2910,6 +3032,8 @@ void GSRendererHW::Draw()
  		return;
  	}
  

@@ -38,7 +38,7 @@
     },
     {
       "path": "engines/patches/armsx2-emufusion-keep-2d.patch",
-      "sha256": "eacccbc89124e96f8bf3105e13d4f2b8c85bbbf59b690468c9c888af31f47783"
+      "sha256": "402288fcd797dd33a688f7044fbb4ee805889c81e8a2f204f901312852fb6fd3"
     }
   ],
   "dependencies": [

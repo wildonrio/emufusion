@@ -426,6 +426,20 @@ The library has 13 PS1 games, 8 of them 3D. Tekken 2 played: right. Spyro's open
 stops at its Designers Republic screen in both renderers, still to explain. HUDs stay in the middle for now: moving them
 to the corners needs a per-game rule, because splitting by screen side would break centred text like GAME OVER.
 
+### PS1 and PS2 on the Thor (2026-11-06)
+
+PS1: WipEout 3 (a race), Twisted Metal 2 (a battle), Die Hard Trilogy (the car park) and Tekken 2 (a fight) play with the world
+at both edges and their status displays in shape, in the middle. Bushido Blade's demo fight and credits look right; the coloured
+corners behind its faces are the game's own, seen narrow on the Mac too. WipEout XL's intro, title and menus keep their shape; its
+race is still to run. Tapping and swiping work on Tekken 2, restarting the engine each way; whether progress survives that has not
+been checked in play yet. WipEout (USA) stops at an intro movie with or without widescreen, so its file is suspect. The 2D games
+(Symphony of the Night, Mega Man 8, X4 to X6) stay narrow. PS1 stays hidden from players until those last checks are done.
+
+PS2: DOA2's fight is right and its stale sides are gone. Kingdom Hearts keeps its menus and opening in shape; play not reached.
+Sly Cooper's title and spy-goggle scenes look right, but its film bars were narrowed, leaving the rooftops showing above and below
+them at the sides. Plain untextured bars across the whole width now stay full width, as they have no shape to lose. That engine is
+built and not yet on the Thor.
+
 ## Game files that are not there
 
 Many top-rated files on the Thor are 4 to 7 MB stubs, which the app refuses. They cannot be played, so they have no recipe:
