@@ -1505,6 +1505,38 @@
     "unified-android/build/emufusion-3.2.153-phase2-phase3-qualification.apk": {
       "sha256": "1393683aac42b5fcd74d75eb7f8f8eae3a60b512d04ce2bf21b026840456f101",
       "reason": "Superseded rollback 3.2.153 (227); 3.2.155 is the rollback for 3.2.156, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-4789e3600ce2ccc3fdca30cd4603ebbed90507e4733095f6402a58ec01dc5c98.apk": {
+      "sha256": "4789e3600ce2ccc3fdca30cd4603ebbed90507e4733095f6402a58ec01dc5c98",
+      "reason": "Closed shared trial retry-396; 3.2.156 and retry-405 supersede it, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-437b091f1d0ad724798192044612cc0e318939628c5ca79a958c368f89bd303e.apk": {
+      "sha256": "437b091f1d0ad724798192044612cc0e318939628c5ca79a958c368f89bd303e",
+      "reason": "Closed shared trial retry-397; 3.2.156 and retry-405 supersede it, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-bf767715908a0165868fbc91b79c0ee80ff92103bd40872229c0a4322807b73f.apk": {
+      "sha256": "bf767715908a0165868fbc91b79c0ee80ff92103bd40872229c0a4322807b73f",
+      "reason": "Closed shared trial retry-398; 3.2.156 and retry-405 supersede it, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-a42714901de911e7cc2a7cfb1641655e9a987c6bfb424b6cc34122d52c1e8bcf.apk": {
+      "sha256": "a42714901de911e7cc2a7cfb1641655e9a987c6bfb424b6cc34122d52c1e8bcf",
+      "reason": "Closed shared trial retry-399; 3.2.156 and retry-405 supersede it, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-a7a4cc8183448a8f1d6b6eddc90d3d786103c3ba65a353eb0d3c54918f5ceb0e.apk": {
+      "sha256": "a7a4cc8183448a8f1d6b6eddc90d3d786103c3ba65a353eb0d3c54918f5ceb0e",
+      "reason": "Closed shared trial retry-400; 3.2.156 and retry-405 supersede it, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-65542e5252e8f4dab7a9f4db60af150c8b3361e6c49a070695bab351b3f61257.apk": {
+      "sha256": "65542e5252e8f4dab7a9f4db60af150c8b3361e6c49a070695bab351b3f61257",
+      "reason": "Closed shared trial retry-401; 3.2.156 and retry-405 supersede it, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-c664b251edda7db4f856aa8edab1b6011213189bc0852a8307017f7d5b1e6dce.apk": {
+      "sha256": "c664b251edda7db4f856aa8edab1b6011213189bc0852a8307017f7d5b1e6dce",
+      "reason": "Closed shared trial retry-402; 3.2.156 and retry-405 supersede it, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-5acd1bb715827c9797b030ffd0af576661a28b2f404875ac81251e3311b214fe.apk": {
+      "sha256": "5acd1bb715827c9797b030ffd0af576661a28b2f404875ac81251e3311b214fe",
+      "reason": "Closed shared trial retry-404; 3.2.156 and retry-405 supersede it, 2026-11-06."
     }
   }
 }
