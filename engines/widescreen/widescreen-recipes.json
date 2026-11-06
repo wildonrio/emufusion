@@ -1068,7 +1068,7 @@
         "The Legend of Zelda: The Wind Waker": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: logo and copyright the same width narrow and wide; the title's sky showed seams at the old edges, fix in progress. Not yet played"
+          "tested": "2026-11-05 Thor: logo the same size narrow and wide, sky fills the width with no seams, save dialog keeps its shape. Not yet played"
         },
         "Resident Evil 4": {
           "strategy": "widen",
@@ -1083,7 +1083,7 @@
         "Mario Kart: Double Dash!!": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: menus keep their shape in bars. A race not played yet"
+          "tested": "2026-11-05 Thor: menus keep their shape in bars, nothing shows from off the old screen, course intro wide with the HUD in place"
         },
         "Donkey Kong Jungle Beat": {
           "strategy": "widen",
