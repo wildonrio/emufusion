@@ -1453,6 +1453,42 @@
     "unified-android/build/emufusion-3.2.150-phase2-phase3-qualification.apk": {
       "sha256": "11dd131c86c67f16a14c448b9f695d8d81001c276d25988d038cbb9afd3cbaf6",
       "reason": "Superseded rollback 3.2.150 (224); 3.2.153 is the rollback for 3.2.155, 2026-11-05."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-a4e2cd5c7dc856c50032840ea3aba7c7909dbd9f9923678fb94ae5c64438109e.apk": {
+      "sha256": "a4e2cd5c7dc856c50032840ea3aba7c7909dbd9f9923678fb94ae5c64438109e",
+      "reason": "Closed trial of 3.2.155 before the shared release build retry-395 (d33d4e01), 2026-11-05."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-d9f1f78374f1aa8cadc56e85c75b8da6a62633cbd7103505055b1fe50f47b2ee.apk": {
+      "sha256": "d9f1f78374f1aa8cadc56e85c75b8da6a62633cbd7103505055b1fe50f47b2ee",
+      "reason": "Closed trial of 3.2.155 before the shared release build retry-395 (d33d4e01), 2026-11-05."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-af2ab1b1c81fe41b58fe60cf705b481ace0b27790e02676659b58ef1431e6c4f.apk": {
+      "sha256": "af2ab1b1c81fe41b58fe60cf705b481ace0b27790e02676659b58ef1431e6c4f",
+      "reason": "Closed trial of 3.2.155 before the shared release build retry-395 (d33d4e01), 2026-11-05."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-c068b7f9442d45cd127800c49038c25b051e2fa79972c02478a397f6dfdaabf2.apk": {
+      "sha256": "c068b7f9442d45cd127800c49038c25b051e2fa79972c02478a397f6dfdaabf2",
+      "reason": "Closed trial of 3.2.155 before the shared release build retry-395 (d33d4e01), 2026-11-05."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-4fcf28db39298e6628b8952658e0b5d64e74b5b7ceb6dc53c5515f73c54219c6.apk": {
+      "sha256": "4fcf28db39298e6628b8952658e0b5d64e74b5b7ceb6dc53c5515f73c54219c6",
+      "reason": "retry-394 Widescreen trial, NES readers and Pokemon played on the Thor, closed by v3.2.155"
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-0dfebcc3687eb279bbd403961206377e795b0305f91113c20ce5905c61a23b01.apk": {
+      "sha256": "0dfebcc3687eb279bbd403961206377e795b0305f91113c20ce5905c61a23b01",
+      "reason": "retry-384 Widescreen trial, closed"
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-7c681f7f96f1d568e4f33b724aa6cc116812362c9abdc4c1b3e23963f3e9567b.apk": {
+      "sha256": "7c681f7f96f1d568e4f33b724aa6cc116812362c9abdc4c1b3e23963f3e9567b",
+      "reason": "retry-385 Widescreen trial, closed"
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-b9ebee789bc9a20607bc4b885e305593368ede3e15dcc96de8877957c3e71057.apk": {
+      "sha256": "b9ebee789bc9a20607bc4b885e305593368ede3e15dcc96de8877957c3e71057",
+      "reason": "retry-382 Widescreen trial, closed"
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-631c29728f980228523183025ca76f86b52bbc604bc8149b3d3c65c1c65e16fe.apk": {
+      "sha256": "631c29728f980228523183025ca76f86b52bbc604bc8149b3d3c65c1c65e16fe",
+      "reason": "retry-364 Widescreen trial, closed"
     }
   }
 }
