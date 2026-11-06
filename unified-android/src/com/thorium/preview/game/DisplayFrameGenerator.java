@@ -5581,6 +5581,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
      * with the callback, which handles them as before.
      */
     private void prepareArrivalPairEarly() {
+        // On arrival, not at the callback: the pair's solve starts now and can make that callback's slot.
+        if (externalTransport == null && timelineActive && timeline.arrivalPacing() &&
+                TimelineSchedulerSwitch.assumeUnique()) assumePendingSignatureUnique();
         if (externalTransport != null || !timelineActive || !timeline.arrivalPacing() ||
                 activeLeftSequence <= 0L || endpointFifoCount <= 0 ||
                 observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;
@@ -5730,8 +5733,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     /**
-     * The callback is here and an image's uniqueness check is still on the GPU behind the
-     * engine's work. Wind Waker HD (Thor, 2026-11-06): arrival stays 3.6 ms before the callback
+     * An image's uniqueness check is on the GPU behind the engine's work.
+     * Wind Waker HD (Thor, 2026-11-06): arrival stays 3.6 ms before the callback
      * and the check finishes around it, so a pair that misses waits a whole scan, 19 ms instead
      * of 11 to the generated image, for seconds at a time. After a long run of unique verdicts,
      * show it as unique now. The check still reads back; a repeated image starts the run over.
