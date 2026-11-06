@@ -655,14 +655,14 @@
           "options": {
             "emufusion_ws_map": "pokemon1"
           },
-          "tested": "2026-11-05 host: bedroom, house and Pallet Town walked; the map from work RAM reaches both edges, rooms sit in black, opening and menus stay narrow"
+          "tested": "2026-11-05 host: house and Pallet Town walked; the map reaches both edges, rooms sit in black, opening and menus stay narrow. Thor: bedroom played with the reader on"
         },
         "Pokémon Blue Version": {
           "strategy": "widen",
           "options": {
             "emufusion_ws_map": "pokemon1"
           },
-          "tested": "2026-11-05 host: bedroom, house and Pallet Town walked; the map from work RAM reaches both edges, rooms sit in black, opening and menus stay narrow"
+          "tested": "2026-11-05 host: house and Pallet Town walked; the map reaches both edges, rooms sit in black, opening and menus stay narrow. Thor: bedroom played with the reader on"
         },
         "Pokémon Yellow Version: Special Pikachu Edition": {
           "strategy": "widen",
@@ -780,14 +780,14 @@
           "options": {
             "emufusion_ws_map": "pokemon2"
           },
-          "tested": "2026-11-05 host: Gold's bedroom and house walked; the map and each tile's colour come from the game's own tables, rooms sit inside the map border, menus stay narrow. Outdoors still to walk"
+          "tested": "2026-11-05 host: house and New Bark Town walked; town, trees and water run edge to edge in the right colours, NPCs included; rooms sit inside the map border, menus stay narrow"
         },
         "Pokémon Silver Version": {
           "strategy": "widen",
           "options": {
             "emufusion_ws_map": "pokemon2"
           },
-          "tested": "2026-11-05 host: Gold's bedroom and house walked; the map and each tile's colour come from the game's own tables, rooms sit inside the map border, menus stay narrow. Outdoors still to walk"
+          "tested": "2026-11-05 host: house and New Bark Town walked; town, trees and water run edge to edge in the right colours, NPCs included; rooms sit inside the map border, menus stay narrow"
         },
         "Pokémon Puzzle Challenge": {
           "strategy": "fixed-screen",
