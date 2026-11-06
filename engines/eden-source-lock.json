@@ -202,8 +202,8 @@
     },
     {
       "path": "engines/patches/eden-emufusion-clock.patch",
-      "sha256": "e4b0a545f1ffdfb9089cb281d554f11a2bdc1c7e3f0c98601b587da1c9c69ed7",
-      "sizeBytes": 39188,
+      "sha256": "7ad7f811d98b559d16d8098d38d13291f46873365e2f7101e6fd654bda35c7cf",
+      "sizeBytes": 41068,
       "role": "timing-source-reproduction",
       "note": "2026-09-04 native source rebuilt. Tracked timing subset reproduction input; default apply script checks without edits. Not a complete Eden dependency closure. 2026-11-02: conductor.cpp adds the VI phase nudge to GetNextTicks; vk_swapchain.cpp timing line adds acquire/reuse wait diagnostics."
     },
@@ -425,8 +425,8 @@
   "artifact": {
     "fileName": "libemufusion_native_adapter_eden.so",
     "stagedPath": "engines/build/arm64-v8a/libemufusion_native_adapter_eden.so",
-    "sha256": "1bdade25362f3b2b153b1cfa21a508d51189788398e574d0859baf5bc07da662",
-    "sizeBytes": 35558752,
+    "sha256": "37b236c7403540c179c477f79553f0751185049e16d7d5a4b814fd8ac1f7030f",
+    "sizeBytes": 35558736,
     "elfMachine": "AARCH64",
     "ptLoadAlignment": "0x4000",
     "stripped": true,
@@ -450,7 +450,8 @@
     "measurement20261102AcquireDiagnostic": "Rebuild of build-emufusion (same configure, NDK 28.2.13676358; Homebrew ninja discarded its old build log, so every object was recompiled) after the 2026-11-02 acquire-wait diagnostic; llvm-strip --strip-all. Previous artifact 0106ea5229c8353f58d3c7d3fc597fc47246232b393ce141283e42a7a4d624b1 kept compressed in ~/Code/emufusion-qa-tools/eden-backup-20261102. Unstripped library kept as engines/build/candidates/eden-acquire-diagnostic-2026-11-02/libyuzu-android.unstripped.so.gz. 52639 defined dynamic symbols, required exports present, PT_LOAD 16 KiB aligned.",
     "measurement20261102PhaseLock": "Rebuild of build-emufusion (same configure, NDK 28.2.13676358; Homebrew ninja discarded its old build log, so every object was recompiled) after the 2026-11-02 VI phase nudge (source phase lock); llvm-strip --strip-all. Previous artifact 36711f421029d9c7245f60fd0ce9680a71796b4f3238db5a82269dbe90aac08f kept compressed in ~/Code/emufusion-qa-tools/eden-backup-20261102. Unstripped library kept as engines/build/candidates/eden-phase-lock-2026-11-02/libyuzu-android.unstripped.so.gz. 52641 defined dynamic symbols, required exports present, PT_LOAD 16 KiB aligned.",
     "measurement20261105StampAhead": "Incremental rebuild of build-emufusion (same configure, NDK 28.2.13676358) after the 2026-11-05 future present stamp in vk_swapchain.cpp (frame generation only; skips the vendor libgui frame pacing); llvm-strip --strip-all. Previous artifact 0696ade9de1e298138d8ede420d32e72089217ea0cc06f055b81d8b9f72a402b is in the pinned releases. Unstripped library kept as engines/build/candidates/eden-stamp-ahead-2026-11-05/libyuzu-android.unstripped.so.gz. Required exports present, PT_LOAD 16 KiB aligned.",
-    "measurement20261102PresentTiming": "Rebuild of build-emufusion (same configure, NDK 28.2.13676358; Homebrew ninja discarded its old build log, so every object was recompiled) after the 2026-11-02 present-call and VI-to-present diagnostics; llvm-strip --strip-all. Previous artifact 811d4716e61e56232657ed88c2026b540781d78ca22f3ed5aa6f39b51c0a04c2 kept compressed in ~/Code/emufusion-qa-tools/eden-backup-20261102. Unstripped library kept as engines/build/candidates/eden-present-timing-2026-11-02/libyuzu-android.unstripped.so.gz. 52642 defined dynamic symbols, required exports present, PT_LOAD 16 KiB aligned."
+    "measurement20261102PresentTiming": "Rebuild of build-emufusion (same configure, NDK 28.2.13676358; Homebrew ninja discarded its old build log, so every object was recompiled) after the 2026-11-02 present-call and VI-to-present diagnostics; llvm-strip --strip-all. Previous artifact 811d4716e61e56232657ed88c2026b540781d78ca22f3ed5aa6f39b51c0a04c2 kept compressed in ~/Code/emufusion-qa-tools/eden-backup-20261102. Unstripped library kept as engines/build/candidates/eden-present-timing-2026-11-02/libyuzu-android.unstripped.so.gz. 52642 defined dynamic symbols, required exports present, PT_LOAD 16 KiB aligned.",
+    "measurement20261105FlushQa": "2026-11-05 incremental rebuild: QA setprop debug.emufusion.eden_flush_draws N in RasterizerVulkan::FlushWork; unset or invalid keeps 512 draws. No other change."
   },
   "runtimeInputs": {
     "keysAndFirmwareBundled": false,

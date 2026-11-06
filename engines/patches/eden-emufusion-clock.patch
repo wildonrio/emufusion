@@ -882,3 +882,43 @@ index 270828129..727e93ad7 100644
      std::vector<size_t> valid_heap_memory;                   ///< Heaps used.
  
      /// Format properties dictionary.
+diff --git a/src/video_core/renderer_vulkan/vk_rasterizer.cpp b/src/video_core/renderer_vulkan/vk_rasterizer.cpp
+index a10d2e01e..3ab015601 100644
+--- a/src/video_core/renderer_vulkan/vk_rasterizer.cpp
++++ b/src/video_core/renderer_vulkan/vk_rasterizer.cpp
+@@ -32,6 +32,10 @@
+ #include "video_core/renderer_vulkan/vk_descriptor_pool.h"
+ #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
+ #include "video_core/renderer_vulkan/vk_query_cache.h"
++#ifdef __ANDROID__
++#include <cstdlib>
++#include <sys/system_properties.h>
++#endif
+ #include "video_core/renderer_vulkan/vk_rasterizer.h"
+ #include "video_core/renderer_vulkan/vk_scheduler.h"
+ #include "video_core/renderer_vulkan/vk_staging_buffer_pool.h"
+@@ -977,14 +981,22 @@ void RasterizerVulkan::LoadDiskResources(u64 title_id, std::stop_token stop_load
+ 
+ void RasterizerVulkan::FlushWork() {
+ #ifdef __ANDROID__
+-    static constexpr u32 DRAWS_TO_DISPATCH = 512;
++    // EmuFusion QA (2026-11-05): the Thor's GPU has no preemption, so the frame generator's work
++    // waits behind the batch Eden has running. setprop debug.emufusion.eden_flush_draws N
++    // (a multiple of 4) submits every N draws instead of 512.
++    static const u32 DRAWS_TO_DISPATCH = [] {
++        char value[PROP_VALUE_MAX] = {};
++        const int length = __system_property_get("debug.emufusion.eden_flush_draws", value);
++        const int draws = length > 0 ? atoi(value) : 0;
++        return draws >= 4 && draws % 4 == 0 ? static_cast<u32>(draws) : 512u;
++    }();
+     static constexpr u32 CHECK_MASK = 3;
+ #else
+     static constexpr u32 DRAWS_TO_DISPATCH = 4096;
+     static constexpr u32 CHECK_MASK = 7;
++    static_assert(DRAWS_TO_DISPATCH % (CHECK_MASK + 1) == 0);
+ #endif // __ANDROID__
+ 
+-    static_assert(DRAWS_TO_DISPATCH % (CHECK_MASK + 1) == 0);
+     if ((++draw_counter & CHECK_MASK) != CHECK_MASK) {
+         return;
+     }

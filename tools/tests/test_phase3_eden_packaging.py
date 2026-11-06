@@ -50,7 +50,7 @@ SUPERSEDED_COMMIT = "5ec94b19714f75489cdfc62d890d2f94d45514ce"
 # 3.2.34 runs the guest natively (NCE) and flushes saves for process replacement.
 # 3.2.64 adds bounded, logging-only diagnostics for guest faults and InvalidHandle.
 # November 5, 2026: present stamps ahead of the clock under frame generation.
-ADAPTER_SHA256 = "1bdade25362f3b2b153b1cfa21a508d51189788398e574d0859baf5bc07da662"
+ADAPTER_SHA256 = "37b236c7403540c179c477f79553f0751185049e16d7d5a4b814fd8ac1f7030f"
 ADAPTER_LIBRARY = "libemufusion_native_adapter_eden.so"
 STAGED_ADAPTER = ROOT / "engines" / "build" / "arm64-v8a" / ADAPTER_LIBRARY
 ADAPTER_PATCH = ROOT / "engines" / "patches" / "eden-emufusion-adapter.cpp"
