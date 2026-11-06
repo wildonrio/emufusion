@@ -61,8 +61,8 @@ public final class CompositorStateDrainTest {
         fast(drain, 102L * SECOND);
         pipelined(drain, 106L * SECOND);
         check(drain.spacingNs() == 2L * CompositorStateDrain.MIN_SPACING_NS, "doubled");
-        check(!drain.drain(115L * SECOND), "not at the old spacing");
-        check(drain.drain(122L * SECOND), "at the new spacing");
+        check(!drain.drain(120L * SECOND), "not at the old spacing");
+        check(drain.drain(132L * SECOND), "at the new spacing");
     }
 
     private static void spacingHalvesAgainOnceItLasts() {
@@ -71,11 +71,15 @@ public final class CompositorStateDrainTest {
         check(drain.drain(102L * SECOND), "first");
         fast(drain, 102L * SECOND);
         pipelined(drain, 104L * SECOND);
-        check(drain.spacingNs() == 20L * SECOND, "doubled");
-        check(drain.drain(122L * SECOND), "second");
-        fast(drain, 122L * SECOND);
+        check(drain.spacingNs() == 30L * SECOND, "doubled");
+        check(drain.drain(132L * SECOND), "second");
+        fast(drain, 132L * SECOND);
         pipelined(drain, 150L * SECOND);
-        check(drain.spacingNs() == 10L * SECOND, "halved");
+        check(drain.spacingNs() == 30L * SECOND, "at least half of it: unchanged");
+        check(drain.drain(162L * SECOND), "third");
+        fast(drain, 162L * SECOND);
+        pipelined(drain, 200L * SECOND);
+        check(drain.spacingNs() == 15L * SECOND, "all of it: halved");
     }
 
     private static void aDrainThatChangesNothingDoublesTheSpacing() {
@@ -83,9 +87,9 @@ public final class CompositorStateDrainTest {
         pipelined(drain, 100L * SECOND);
         check(drain.drain(102L * SECOND), "left out");
         pipelined(drain, 103L * SECOND);
-        check(!drain.drain(112L * SECOND), "no fast state came of it");
-        check(drain.spacingNs() == 20L * SECOND, "doubled");
-        check(drain.drain(122L * SECOND), "tries again later");
+        check(!drain.drain(117L * SECOND), "no fast state came of it");
+        check(drain.spacingNs() == 30L * SECOND, "doubled");
+        check(drain.drain(132L * SECOND), "tries again later");
     }
 
     private static void spacingIsBounded() {
