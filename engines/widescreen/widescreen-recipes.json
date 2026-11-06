@@ -944,14 +944,14 @@
           "tested": "2026-11-05 Thor: castle grounds and Lakitu intro compared narrow and wide; HUD and text the same width, world extends, Mario keeps his shape"
         },
         "Banjo-Tooie": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 Thor: title and intro cutscene in 3D at 16:9; a world not played yet"
+          "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
         "Blast Corps": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: attract and mission scene at 16:9; not driven yet"
+          "tested": "2026-11-05 Thor: name screen compared narrow and wide; the ring of letters the same width. A mission not played yet"
         },
         "Conker's Bad Fur Day": {
           "strategy": "widen",
@@ -971,7 +971,7 @@
         "Rayman 2: The Great Escape": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro scenes in 3D at 16:9; play not reached"
+          "tested": "2026-11-05 Thor: intro compared narrow and wide; logo text the same width, 3D extends. Play not reached"
         },
         "Star Fox 64": {
           "strategy": "widen",
@@ -991,7 +991,7 @@
         "The Legend of Zelda: Majora's Mask": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: file select only; play not reached"
+          "tested": "2026-11-05 Thor: title and file menus compared narrow and wide; logo and panels the same width, sky extends. Play not reached"
         },
         "Perfect Dark": {
           "strategy": "widen",
@@ -999,9 +999,9 @@
           "tested": "2026-11-05 Thor: logo and agent menus keep their shape over a wide 3D background. A mission not played yet"
         },
         "International Superstar Soccer '98": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro and title; a match not played yet"
+          "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
         "Tony Hawk's Pro Skater": {
           "strategy": "fixed-screen",
@@ -1019,7 +1019,7 @@
           "tested": "2026-11-05 Thor: folder menus sit inside bars; missions not reached, it stays narrow until they are"
         }
       },
-      "release": false
+      "release": true
     },
     "gamecube": {
       "engine": "dolphin",
@@ -1071,37 +1071,37 @@
           "tested": "2026-11-05 Thor: logo the same size narrow and wide, sky fills the width with no seams, save dialog keeps its shape. Not yet played"
         },
         "Resident Evil 4": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
         "Eternal Darkness: Sanity's Requiem": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
         "Mario Kart: Double Dash!!": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: menus keep their shape in bars, nothing shows from off the old screen, course intro wide with the HUD in place"
+          "tested": "2026-11-05 Thor: a real race; 3D at 16:9 with position, time, map and speed in their original shape; menus sit in bars, nothing shows from off the old screen"
         },
         "Donkey Kong Jungle Beat": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "not yet compared narrow and wide; stays narrow until it is"
         },
         "Star Fox Adventures": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title and file menu keep their shape with the 3D cockpit wide behind them. Not yet played"
+          "tested": "2026-11-05 Thor: title and name entry keep their shape with the 3D cockpit wide behind them. Play not reached"
         },
         "Wave Race: Blue Storm": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 Thor: Wind Waker logo and copyright line are 33% wider than narrow; the code widens the 3D but 2D is stretched. Stays unreleased until 2D keeps its shape"
+          "tested": "not yet compared narrow and wide; stays narrow until it is"
         }
       },
-      "release": false
+      "release": true
     },
     "dreamcast": {
       "engine": "flycast",
