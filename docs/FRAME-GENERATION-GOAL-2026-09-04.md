@@ -45,23 +45,22 @@ reviewed before this revision; its work was not discarded.
 
 The 3-D failures are fast near objects: Double Dash's karts tear at their edges, and the per-phase field is 1/8 of a 1080p picture.
 
-**Status, November 5 (Thor, 3.2.153 plus the unreleased Eden candidate; 16-s windows scaled to 30 s; see the November 5 entries).**
+**Status, November 5 (Thor, 3.2.155 from a cool start, 16-s windows scaled to 30 s, one run each unless noted; see the November 5 entries).**
 
-| System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content |
+| System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content, replay bench: now, with the image check (QA) |
 | --- | --- | --- | --- |
-| NES | 99.9%, 2 | 9.3-11.1 / 17.6-19.4 ms | 0% |
-| Mega Drive | not re-measured | not re-measured | 46% |
-| SNES | not re-measured | not re-measured | 0-14% |
-| Star Fox 64, Ocarina eval | not re-measured | not re-measured | 4% |
-| Ocarina of Time (20 fps) | 94.4%, 66 | 11.2 / 36.2 ms (real minimum 33.3) | 0-4% |
-| Double Dash | 99.8%, 6 | 11.3 / 19.6 (14.0 / 22.4) ms | 19% |
-| NSMBU Deluxe, stock stamps | 99.7-99.9%, 4-9 | 11.2 / 19.5 (12.2-16.0 / 20.5-24.3) ms | world map 11% |
-| NSMBU Deluxe, candidate | 99.8%, 4-7 | 10.7-11.3 / 19.0-19.6 (11.5-15.9 / 19.8-24.3) ms | world map 11% |
-| Link's Awakening | not re-measured | not re-measured | 6% full size |
-| Wind Waker HD | older: 76%, 30 fps source | older: ~37 ms real | 21% |
-| SM3DW | older: 95.2% | older: 19.1 / 28.3 ms | 0% |
+| NES | 99.9%, 2 | 9.1 / 17.4 (10.6 / 18.9) ms | 0%, not tried |
+| Mega Drive | not re-measured | not re-measured | 46%, stays off |
+| SNES | not re-measured | not re-measured | 0-14%, stays off |
+| Star Fox 64 | not re-measured | not re-measured | 4%, 0% |
+| Ocarina of Time (20 fps) | older: 94.4%, 66 | older: 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench (port 0%) |
+| Double Dash | 99.8%, 6 | 13.0 / 21.4 (15.2 / 23.6) ms | 14%, 7% |
+| NSMBU Deluxe, two runs | 100.0%, 0; 99.9%, 4 | 19.4 / 27.7, 19.3 / 27.6 (19.3 / 27.7, 17.7 / 26.1) ms | world map 13%, 3% |
+| Link's Awakening | 95.5%, about 150 | 20.6 / 29.5 (23.4 / 32.9) ms | 6%, 6% |
+| Wind Waker HD | older: 76%, 30 fps source | older: ~37 ms real | 11%, 0% |
+| SM3DW | 98.3% in its play window | 12.1 / 21.7 ms | 0%, not on the device bench (port 0%) |
 
-The candidate's real gain is not in this measure: stock arrival is stamped after the firmware's 2-ms sleep.
+Nothing is at 10/10 on all three measures yet. NSMBU Deluxe stayed in the compositor's pipelined state in these runs (0, 3 and 22% fast mode), about 8 ms over the structural minimum.
 
 **10/10 targets, per tested system in gameplay (loads and keep-alive frames excluded):**
 - **Smoothness:** at least 99.5% of output intervals at the intended cadence, and at most 5 Present-rhythm hitches per 30 s.
@@ -267,7 +266,25 @@ The candidate's real gain is not in this measure: stock arrival is stamped after
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 5 (latest) **— The generated image can be checked before it is shown: frames with invented content fall to 0-7% on the 3-D sets on the device's replay bench. QA, off by default until its GPU cost is measured.**
+November 5 (latest) **— 3.2.155 (229, `d33d4e01`, retry-395) released: Switch images skip the firmware's sleep, and widescreen for six systems. Smoothness holds from a cool start; NSMBU Deluxe's latency does not improve in these runs.**
+
+- **What ships:** Eden's future stamp and 3.25-ms phase target, a late image's real at the nearest callback, and the widescreen work for Mega Drive, Game Gear, NES, SNES, Game Boy Color and GBA. The image check and the fast path are in the APK, off by default. Built with plain `build.py` from the tree at `9069c36`; the reproducibility check passed. Later commits change tools, tests, docs and unreleased GameCube recipes. All 406 Python test files and the Java host tests pass. Rollback: 3.2.153.
+- **Thor, retry-395, each run started at xo-therm about 53 C:**
+
+  | Game | On cadence | Two-scan or longer intervals | Fast mode | First generated / real, median (mean) |
+  | --- | --- | --- | --- | --- |
+  | NSMBU Deluxe | 100.0% | 0 in 16 s | 0% | 19.4 / 27.7 (19.3 / 27.7) ms |
+  | NSMBU Deluxe | 99.9% | 2 in 16 s | 22% | 19.3 / 27.6 (17.7 / 26.1) ms |
+  | NES | 99.9% | 1 in 16 s | 81% | 9.1 / 17.4 (10.6 / 18.9) ms |
+  | Double Dash | 99.8% | 3 in 16 s | 63% | 13.0 / 21.4 (15.2 / 23.6) ms |
+  | Link's Awakening | 95.5% | 89 in 17 s | 35% | 20.6 / 29.5 (23.4 / 32.9) ms |
+  | SM3DW | 98.3% (PACE window; the whole 45-s trace, which includes a load, scores 56.6%) | 19 in about 9 s | 77% | 12.1 / 21.7 ms |
+
+- **Link's Awakening against stock stamps, same APK (`debug.emufusion.eden_stamp_ahead_us=0`), one run each:** PACE cadence 95.5% against 91.6%, on intended 96.6% against 94.7%, 19.3 / 28.5 ms against 16.3 / 25.6 ms. The candidate is smoother. The latency difference is not resolved: the stock run's trace was 115 s, against 17 s.
+- **Open question, the top latency item.** NSMBU Deluxe's fast-mode share was 36-90% in this afternoon's candidate runs and 0, 3 and 22% in these three cool-start runs. I do not know why it dropped. Generated images finishing after their scan enter the pipelined state (9-57 in 16 s), and nothing leaves it unless a refresh passes with nothing new, so a perfectly smooth run stays there for good. With pipelined at 19.4 / 27.7 ms, the earlier 10.7 / 19.0 ms is reached only in the fast state.
+- **Disk:** 4.76 GiB of APKs retired at this close (3.2.150, 3.2.154 and nine 3.2.155 trials), 3.8 GiB of bench dumps removed.
+
+November 5 **— The generated image can be checked before it is shown: frames with invented content fall to 0-7% on the 3-D sets on the device's replay bench. QA, off by default until its GPU cost is measured.**
 
 - **Idea.** The invented measure needs no middle frame, so the device can ask the same question. A preview of the generated image is drawn with the generate pass itself at 320 pixels wide, also writing each pixel's chosen motion. Each preview pixel's 3x3 patch is compared with the real frames at four places a correct result must match: along that pixel's motion in each frame, and at zero motion in each frame. Where the mean difference is over 24 grey levels in at least 60% of a 5x5 neighbourhood, grown by one pixel, the image shows the nearer real frame instead. A shredded kart becomes a whole kart, one uneven step behind.
 - **Device replay bench, 18-30 pinned triplets a set, paired against the same tree with the check off (`emufusion_framegen_image_check=1`):**
