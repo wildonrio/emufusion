@@ -43,10 +43,11 @@ def main():
     parser.add_argument('prefix')
     parser.add_argument('--per', type=int, default=24)
     parser.add_argument('--min-real', type=float, default=0.9)
+    parser.add_argument('--max-real', type=float, default=1.01)
     parser.add_argument('--skip', type=int, default=0)
     args = parser.parse_args()
     rows = [r for r in json.loads(Path(args.triage).read_text())
-            if r.get('real', 0) >= args.min_real and r.get('blank', 1) <= 0.5 and r.get('pairs', 0) >= 10]
+            if args.min_real <= r.get('real', 0) < args.max_real and r.get('blank', 1) <= 0.5 and r.get('pairs', 0) >= 10]
     rows = sorted(rows, key=lambda r: r['rom'])[args.skip:]
     print(len(rows), 'games')
     with concurrent.futures.ThreadPoolExecutor(4) as pool:
