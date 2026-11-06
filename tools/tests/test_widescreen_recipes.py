@@ -155,5 +155,35 @@ class PlumbingTest(unittest.TestCase):
         self.assertIn('saveRamFile = new File(saves, "save-ram.bin");', session)
 
 
+class HardwareWhenWideTest(unittest.TestCase):
+    def test_ps1_keeps_2d_in_shape_only_in_the_hardware_session(self):
+        table = json.loads((ROOT / 'engines/widescreen/widescreen-recipes.json').read_text())
+        psx = table['systems']['psx']
+        self.assertTrue(psx['hardwareWhenWide'])
+        self.assertEqual(psx['onOptions']['swanstation_GPU_EmufusionKeep2D'], 'true')
+        self.assertEqual(psx['offOptions']['swanstation_GPU_EmufusionKeep2D'], 'false')
+        self.assertEqual(psx['onOptions']['swanstation_GPU_PGXPEnable'], 'true')
+        game = ROOT / 'unified-android/src/com/thorium/preview/game'
+        bootstrap = (game / 'InternalEngineBootstrap.java').read_text()
+        self.assertIn('WidescreenHackPolicy.needsHardwareRenderer(', bootstrap)
+        policy = (game / 'WidescreenHackPolicy.java').read_text()
+        self.assertIn('recipe.hardwareWhenWide && recipe.engine.equals(engine)', policy)
+        self.assertIn('LibretroEngineSpec.phaseOneOnGles(entry)', (game / 'PpssppGlesEngineSession.java').read_text())
+
+    def test_ps2_keep_2d_stays_off_until_a_recipe_sets_it(self):
+        table = json.loads((ROOT / 'engines/widescreen/widescreen-recipes.json').read_text())
+        ps2 = table['systems']['ps2']
+        self.assertFalse(ps2['release'])
+        self.assertEqual(ps2['onOptions']['armsx2_keep_2d'], 'enabled')
+        self.assertEqual(ps2['offOptions']['armsx2_keep_2d'], 'disabled')
+
+    def test_gba_map_readers_name_their_planes(self):
+        games = json.loads((ROOT / 'engines/widescreen/widescreen-recipes.json').read_text())['systems']['gba']['games']
+        for title in ('Golden Sun', 'The Legend of Zelda: The Minish Cap'):
+            reader = games[title]['options']['emufusion_ws_map']
+            self.assertTrue(reader.startswith('grid:'))
+            self.assertIn('planes=', reader)
+
+
 if __name__ == '__main__':
     unittest.main()
