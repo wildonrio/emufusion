@@ -45,22 +45,23 @@ reviewed before this revision; its work was not discarded.
 
 The 3-D failures are fast near objects: Double Dash's karts tear at their edges, and the per-phase field is 1/8 of a 1080p picture.
 
-**Status, November 6 (Thor, 3.2.156 from a cool start, 16-s windows scaled to 30 s, one run each unless noted; see the November 6 entries).**
+**Status, November 6 (Thor, 3.2.157 from a cool start, 16-s windows scaled to 30 s; see the November 6 entries).**
 
 | System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content, replay bench: now, with the 160-wide image check (QA) |
 | --- | --- | --- | --- |
-| NES | 99.9%, 2 | 9.2 / 17.5 (11.3 / 19.7) ms | 0%, stays off |
-| Mega Drive | not re-measured | not re-measured | 46%, stays off |
-| SNES | not re-measured | not re-measured | 0-14%, stays off |
+| NES, two runs | 100.0%, 0; 100.0%, 0 | 17.3 / 25.6, 9.3 / 17.6 ms | 0%, stays off |
+| Mega Drive | 99.8%, 5.5 | 9.1 / 17.4 (9.4 / 17.7) ms | 46%, stays off |
+| SNES (drain trial) | 99.9%, 2 | 17.7 / 26.1 (17.3 / 25.6) ms | 0-14%, stays off |
+| GBA (drain trial) | 99.8%, 5.5 | 9.0 / 17.3 ms | not re-measured |
 | Star Fox 64 | not re-measured | not re-measured | 4%, 4% |
 | Ocarina of Time (20 fps) | older: 94.4%, 66 | older: 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench |
-| Double Dash | 100.0%, 0 | 19.8 / 28.1 (19.8 / 28.2) ms | 17%, 7% |
-| NSMBU Deluxe, three runs | 99.4%, 20; 100.0%, 0; 99.5%, 16 | 14.8 / 23.3, 19.6 / 27.9, 18.4 / 26.7 (16.6 / 25.0, 19.4 / 27.7, 15.5 / 23.9) ms | world map 14%, 7% |
-| Link's Awakening | 94.3%, 192 | 21.8 / 37.1 (24.6 / 34.5) ms | 6%, 11% |
+| Double Dash | 99.8%, 7.3 (0-130 by its phase) | 18.1 / 26.6 (14.8 / 23.1) ms | 17%, 7% |
+| NSMBU Deluxe | 99.7%, 10.9 (0-20 over 9 runs on 3.2.156 and 3.2.157 builds) | 18.8 / 27.1 (16.3 / 24.6) ms | world map 14%, 7% |
+| Link's Awakening (3.2.156) | 94.3%, 192 | 21.8 / 37.1 (24.6 / 34.5) ms | 6%, 11% |
 | Wind Waker HD | older: 76%, 30 fps source | older: ~37 ms real | 11%, 0% |
-| SM3DW | 93.7% in its play window | 12.0 / 21.0 ms | 0%, not on the device bench |
+| SM3DW (3.2.156) | 93.7% in its play window | 12.0 / 21.0 ms | 0%, not on the device bench |
 
-Nothing is at 10/10 on all three measures yet. The compositor's pipelined state costs about 8 ms wherever a run stays in it (Double Dash here, NSMBU Deluxe's second run), and NSMBU Deluxe's hitches vary widely between runs.
+Nothing is at 10/10 on all three measures yet. Whether a run reaches the compositor's fast state is close to chance, and it is worth about 8 ms.
 
 **10/10 targets, per tested system in gameplay (loads and keep-alive frames excluded):**
 - **Smoothness:** at least 99.5% of output intervals at the intended cadence, and at most 5 Present-rhythm hitches per 30 s.
@@ -266,7 +267,25 @@ Nothing is at 10/10 on all three measures yet. The compositor's pipelined state 
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 6 (latest) **— 3.2.156 (230, `dc4f4948`, retry-403) released for the widescreen systems. Frame generation is 3.2.155 plus code that is off by default. NSMBU Deluxe's hitches varied widely in the gate, so its spread is being measured.**
+November 6 (latest) **— 3.2.157 (231, `ca695958`, retry-414): the compositor drain on for phase-locked sources. It helps Mega Drive; on NES it is not shown to help. A Dolphin phase lock is the next pacing item.**
+
+- **Gate history.** The first candidate (retry-412) had the drain on for every source and did not go out. Double Dash, whose phase is chance (no lock), ran 40-70 two-scan intervals in 16 s in the fast state at a 2-3-ms wait, with the drain off as well (`m2`: 97.9%, 73 per 30 s, 92% fast mode); the slower state hides those late images, and the drain makes the fast state likelier. So the drain now acts only on sources the phase lock holds. A fast stay of 5-11 s no longer doubles the spacing (only under 4 s does): one NES run had waited 30 s for its next try and stayed late for its window.
+- **Thor, retry-414, default settings, cool starts, one run a row:**
+
+  | Game | On cadence | Hitches per 30 s | Fast mode | First generated / real, median (mean) | Drains / spacing |
+  | --- | --- | --- | --- | --- | --- |
+  | NES | 100.0% | 0 | 0% | 17.3 / 25.6 (17.2 / 25.6) ms | 1 / 30 s |
+  | NES | 100.0% | 0 | 100% | 9.3 / 17.6 (9.2 / 17.6) ms | 1 / 15 s |
+  | NSMBU Deluxe | 99.7% | 10.9 | 39% | 18.8 / 27.1 (16.3 / 24.6) ms | 1 / 30 s |
+  | Mega Drive | 99.8% | 5.5 | 96% | 9.1 / 17.4 (9.4 / 17.7) ms | 3 / 15 s |
+  | Double Dash | 99.8% | 7.3 | 47% | 18.1 / 26.6 (14.8 / 23.1) ms | 0 |
+
+- **Does the drain earn its place?** Mega Drive: mean first generated 9.1-14.0 ms over four runs with it, 16.9 ms on one without. NES: 4 of 6 runs with it reached the fast state against 2 of 3 without, mean 12.7 against 13.1 ms, so no gain is shown. SNES: no gain. No harm is visible on these runs, so it stays on, but the evidence is thin and it may yet come off.
+- **Why the fast state is fragile (reading, not a measurement).** The compositor's duration is 10.33 ms at 120 Hz: it wakes for scan T at T - 10.33, which is 2 ms before the scan before T. The pipelined state's latch-to-present of 10.1 ms is that designed path, and the fast state looks like the commit making the earlier scan with about 1.8 ms to spare. Anything slower, a late GPU fence or the compositor itself, falls to T, and the next commit then queues behind it. That would make the fast state a race the app can only partly influence.
+- **A launch over an open game left the app with no game for 5 minutes** (`z1`: the open PS1 session closed, Dolphin never started, `EGL_BAD_SURFACE` until the run timed out). It came from a QA tool leaving a game open; the coordinator is testing whether players can reach it.
+- **Next.** A phase lock for the hardware cores, starting with Dolphin: Double Dash ranges from 0 to about 70 two-scan intervals in 16 s by where its phase lands. `SourcePhaseAdvisor` moves it now and then, with no steady hold.
+
+November 6 **— 3.2.156 (230, `dc4f4948`, retry-403) released for the widescreen systems. Frame generation is 3.2.155 plus code that is off by default. NSMBU Deluxe's hitches varied widely in the gate, so its spread is being measured.**
 
 - **What ships:** widescreen for Nintendo 64, GameCube, Dreamcast and Game Boy joins the six earlier systems, and NES goes from 19 to 110 games. PS2 stays off. In the APK and off by default: the compositor drain, the 160-wide image check, the fast path. Built with plain `build.py` from the tree at `717da0a` plus the version bump; later commits are not in it. All 406 Python test files and the Java host tests pass. Rollback: 3.2.155.
 - **Thor, retry-403, default settings, each run started at xo-therm 45-53 C:**

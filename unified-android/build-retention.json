@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "d33d4e010e0a0b50675bed83dd756564b7b9c8d27cd5fcce0de560fee05f9085": "Rollback 3.2.155 (229), released and Thor-tested 2026-11-05.",
-    "dc4f4948946a7f1d820c2051e792a4b12d982ffbf342d6242d6e78f9494d3ad7": "Release 3.2.156 (230), GitHub v3.2.156, Thor-tested from a cool start 2026-11-06."
+    "dc4f4948946a7f1d820c2051e792a4b12d982ffbf342d6242d6e78f9494d3ad7": "Rollback 3.2.156 (230), released and Thor-tested 2026-11-06.",
+    "ca6959588d60cd876f8f529e5eef850da1c8118d7745f045d5d77ca09149e98e": "Release 3.2.157 (231), GitHub v3.2.157, Thor-tested from a cool start 2026-11-06."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -1537,6 +1537,18 @@
     "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-5acd1bb715827c9797b030ffd0af576661a28b2f404875ac81251e3311b214fe.apk": {
       "sha256": "5acd1bb715827c9797b030ffd0af576661a28b2f404875ac81251e3311b214fe",
       "reason": "Closed shared trial retry-404; 3.2.156 and retry-405 supersede it, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification-d33d4e010e0a0b50675bed83dd756564b7b9c8d27cd5fcce0de560fee05f9085.apk": {
+      "sha256": "d33d4e010e0a0b50675bed83dd756564b7b9c8d27cd5fcce0de560fee05f9085",
+      "reason": "Superseded rollback 3.2.155 (229); 3.2.156 is the rollback for 3.2.157, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.155-phase2-phase3-qualification.apk": {
+      "sha256": "d33d4e010e0a0b50675bed83dd756564b7b9c8d27cd5fcce0de560fee05f9085",
+      "reason": "Superseded rollback 3.2.155 (229); 3.2.156 is the rollback for 3.2.157, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-15dcfead29a96597080365c7ef5f55737328d8d75ee5cd29f774e58772266aeb.apk": {
+      "sha256": "15dcfead29a96597080365c7ef5f55737328d8d75ee5cd29f774e58772266aeb",
+      "reason": "Rejected candidate 3.2.157 retry-412: the drain acted on sources without a phase lock, 2026-11-06."
     }
   }
 }
