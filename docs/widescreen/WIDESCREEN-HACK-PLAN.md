@@ -376,7 +376,9 @@ frames of each of the 107 games that scrolled showed titles and menus narrow, an
 Six showed junk, mostly in an intro or a menu, and have narrow entries: Spider-Man & Venom, Fever Pitch Soccer, Rocko's Modern Life,
 Mecarobot Golf, Waterworld and Tom & Jerry 2. So the SNES now has a fallback for every title without its own entry. A game that
 loads nothing past the old screen simply stays black at the sides, and the player can swipe it off. Most of these games have not been
-played through. A mode 7 game whose ordinary scroll registers do not move stays narrow until it has an entry of its own.
+played through. A mode 7 game whose ordinary scroll registers do not move stays narrow until it has an entry of its own. On the Thor,
+Smart Ball and Tiny Toon: Buster Busts Loose keep their titles narrow, widen in the level and take the toggle in play. Harvest Moon is
+black on the Thor with or without any widescreen option, though the identical file runs on the Mac, so that fault is not widescreen's.
 
 GBA, 2026-11-06: the explorer rarely got far enough, so `explore` found only 7 games. A longer fixed run of START, A, walking and
 jumping, seven shots a game, got much further. Over all 957 games, 218 showed content at both sides, because their video maps are 64
@@ -537,11 +539,21 @@ International Superstar Soccer 64's attract match and Wave Race 64's race are ri
 narrow with faint seam lines, and Twilight Princess shows a stray black block over its title, so both stay narrow. Soulcalibur III has
 only been seen as far as its menus and story pages. Both copies of Ocarina of Time: Master Quest on the Thor are truncated (397 MB of 935 MB).
 
+### The rest of the N64 library (2026-11-06)
+
+A short look on the Thor at 20 more N64 games, each started wide. Widen: Mario Kart 64, Mario Golf, Mario Tennis, Pokémon Snap, Kirby 64,
+Castlevania, Doom 64, Harvest Moon 64, Ogre Battle 64, Turok and Yoshi's Story. Stay narrow: Donkey Kong 64 (draws in its own window, stale
+pieces beside menus), Jet Force Gemini (stray pieces beside the title), Pilotwings 64 (black gaps down both sides), F-Zero X (sky stops short
+of the corners on some courses) and Body Harvest (plays inside a narrow box). Only menus reached so far, so no entry yet: Smash Bros, Beetle
+Adventure Racing, WWF No Mercy and Rogue Squadron. With about a quarter failing, the N64 gets no fallback: each game needs a look. On GameCube,
+Mario Party 4 and Star Fox Assault did not get past their memory card prompts. Katamari Damacy on PS2 showed no picture in two minutes.
+
 ## Game files that are not there
 
 Many top-rated files on the Thor are 4 to 7 MB stubs, which the app refuses. They cannot be played, so they have no recipe:
 GameCube's Burnout 2, F-Zero GX, Luigi's Mansion, Metroid Prime 2, Mega Man X Collection, SoulCalibur II, Zelda Collector's
-Edition and Four Swords Adventures; PS2's Katamari Damacy, Half-Life, Resident Evil 2 and The Simpsons: Hit & Run.
+Edition and Four Swords Adventures; PS2's Half-Life, Resident Evil 2 and The Simpsons: Hit & Run. Katamari Damacy was listed here by
+mistake: what looked like a stub was a macOS `._` sidecar, and the real file is 3 GB.
 
 ## Release gate
 
