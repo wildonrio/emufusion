@@ -26,6 +26,18 @@ static emufusion_vulkan_jni_session *from_handle(jlong handle) {
 }
 
 JNIEXPORT void JNICALL
+Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeSetStampAheadVulkan(
+        JNIEnv *env, jclass type, jlong handle, jlong ahead_ns) {
+    (void)type;
+    char error[ERROR_SIZE] = {0};
+    emufusion_vulkan_jni_session *session = from_handle(handle);
+    if ((!session || !session->backend ||
+            !emufusion_android_vulkan_set_stamp_ahead(session->backend,
+                    (int64_t)ahead_ns, error, sizeof(error))) && !(*env)->ExceptionCheck(env))
+        throw_state(env, error);
+}
+
+JNIEXPORT void JNICALL
 Java_com_thorium_preview_ExperimentalVulkanLibretroHost_nativeSetFgTimestampVulkan(
         JNIEnv *env, jclass type, jlong handle, jboolean secondary, jboolean enabled) {
     (void)type;

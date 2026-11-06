@@ -14,10 +14,11 @@ GAME = PREVIEW / 'game'
 class DolphinPhaseLockTest(unittest.TestCase):
     def test_only_dolphin_is_locked_by_default(self):
         loop = (PREVIEW / 'ExperimentalGlesRenderLoop.java').read_text()
-        host = (PREVIEW / 'ExperimentalGlesLibretroHost.java').read_text()
-        self.assertIn('static boolean phaseLockedByDefault(String coreFileName) {', host)
-        self.assertIn('return "libemufusion_core_dolphin.so".equals(coreFileName);', host)
-        self.assertIn('return ExperimentalGlesLibretroHost.phaseLockedByDefault(core.getName());', loop)
+        registry = (GAME / 'FrameGenerationRendererRegistry.java').read_text()
+        self.assertIn('public static boolean phaseLockedByDefault(String coreFileName) {', registry)
+        self.assertIn('return "libemufusion_core_dolphin.so".equals(coreFileName);', registry)
+        # Both runtimes: Dolphin on GameCube and Wii runs the Vulkan host.
+        self.assertEqual(loop.count('return FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());'), 2)
         self.assertIn('default boolean phaseLockedByDefault() { return false; }', loop)
 
     def test_the_lock_and_the_stamp_share_one_decision(self):
@@ -25,7 +26,12 @@ class DolphinPhaseLockTest(unittest.TestCase):
         self.assertIn('takeHardwareSourcePhaseNudgeNs(attachedSurface,\n'
                       '                                host.phaseLockedByDefault())', loop)
         host = (PREVIEW / 'ExperimentalGlesLibretroHost.java').read_text()
-        self.assertIn('phaseLockedByDefault = phaseLockedByDefault(core.getName());', host)
+        self.assertIn('phaseLockedByDefault = FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());', host)
+        vulkan = (PREVIEW / 'ExperimentalVulkanLibretroHost.java').read_text()
+        self.assertIn('phaseLockedByDefault = FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());', vulkan)
+        self.assertIn('FrameGenerationRendererRegistry.hardwareStampAheadNs(surface, phaseLockedByDefault)', vulkan)
+        native = (ROOT / 'unified-android/native/emufusion_android_vulkan_backend.c').read_text()
+        self.assertIn('emufusion_stamp_ahead_ns(backend->stamp_ahead_ns)', native)
         self.assertEqual(host.count('hardwareStampAheadNs(surface,\n                phaseLockedByDefault)'), 2)
         generator = (GAME / 'DisplayFrameGenerator.java').read_text()
         self.assertIn('TimelineSchedulerSwitch.hardwarePhaseLock(lockedByDefault) ? 10_000_000L : 0L', generator)

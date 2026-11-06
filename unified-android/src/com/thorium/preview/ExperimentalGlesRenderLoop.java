@@ -253,7 +253,7 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                     nativeHost.surfaceResized();
                 }
                 @Override public boolean phaseLockedByDefault() {
-                    return ExperimentalGlesLibretroHost.phaseLockedByDefault(core.getName());
+                    return FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());
                 }
                 @Override public boolean runAndPresent() {
                     return nativeHost.runFrameAndPresent();
@@ -376,6 +376,9 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                 }
                 @Override public boolean retainsFrameDebt() {
                     return retainsVulkanFrameDebt(core.getName());
+                }
+                @Override public boolean phaseLockedByDefault() {
+                    return FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());
                 }
                 @Override public void detach() { nativeHost.detachSurface(); }
                 @Override public void attachSecondary(Surface surface) {

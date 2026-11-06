@@ -24,6 +24,15 @@ public final class FrameGenerationRendererRegistry {
         return renderer == null ? 0L : renderer.takeSourcePhaseDelayNs();
     }
 
+    /**
+     * Whether the frame generator's phase lock and future stamp hold this core unless QA says otherwise.
+     * Double Dash swings from clean to over 100 hitches per 30 s by where its phase lands.
+     * Ocarina of Time, on the same loop, is no better held.
+     */
+    public static boolean phaseLockedByDefault(String coreFileName) {
+        return "libemufusion_core_dolphin.so".equals(coreFileName);
+    }
+
     /** How far ahead a hardware core feeding this Surface should stamp its images, or zero. */
     public static long hardwareStampAheadNs(Surface surface, boolean lockedByDefault) {
         FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;

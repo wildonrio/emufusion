@@ -267,7 +267,7 @@ Nothing is at 10/10 on all three measures yet. Whether a run reaches the composi
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 6 (latest) **— Wind Waker HD's 1- and 3-scan rhythm is ours, not Cemu's. Two QA options take it from 47-77% to 87-91% on cadence and cut its latency. Dolphin now holds to the phase lock by default (in the tree, not released).**
+November 6 (latest) **— Wind Waker HD's 1- and 3-scan rhythm is ours, not Cemu's. Two QA options take it from 47-77% to 87-91% on cadence and cut its latency. Dolphin's phase lock and future stamp are the default in the tree, not yet released or measured as a default.**
 
 - **The earlier reading was wrong.** The 1- and 3-scan intervals were put down to "Cemu's own 50/17 ms frame pairs". On the title flight, images arrive an even 33.3 ms apart (p5 32.4-32.7, p95 34.1-34.5 ms in the two baseline runs). With generation off, the game's shown intervals over its title and first menu are an even two scans. Two things of ours cause the rhythm:
   - **Real images come late.** A real image's draw waits behind Cemu's GPU work and finishes after its scan (447 and 501 of about 985 in the two baseline runs; about 3 ms after it in the frames read), so it shows one scan late, and the generated image after it comes a scan sooner. `emufusion_framegen_real_predraw=1` draws the real image right after the generated image's swap, as the November 5 trial did: late real images fall to 1-66, and the compositor stays in its fast state (93-98% against 48-57%).
@@ -290,21 +290,22 @@ November 6 (latest) **— Wind Waker HD's 1- and 3-scan rhythm is ours, not Cemu
   | Game | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean |
   | --- | --- | --- | --- | --- |
   | NSMBU Deluxe | 99.9% | 3.7 | 44% | 15.3 / 23.6 ms |
-  | Double Dash (Dolphin lock on) | 99.5% | 16.3 | 69% | 13.3 / 21.7 ms |
+  | Double Dash (no lock or stamp, see below) | 99.5% | 16.3 | 69% | 13.3 / 21.7 ms |
   | NES | 100.0% | 0 | 55% | 13.0 / 21.3 ms |
   | Mega Drive | 99.7% | 9.1 | 89% | 9.8 / 18.2 ms |
 
   Both stay off by default until SM3DW, Metroid Dread and repeats are in.
-- **Dolphin: the lock and the future stamp are now the default for that core only (`7114d1b`).** Double Dash, cool starts, 16-s windows:
+- **Dolphin: the lock and the future stamp are now the default for that core only.** The first attempt (`7114d1b`) did not take effect: Dolphin runs on the Vulkan host, even for GameCube, and the default and the Java stamp were only wired to the GLES host. On those builds a run with no QA setting had no nudges (78.7 hitches on retry-422). The QA runs without the stamp prop also had no stamp, so they are listed here as lock alone, which corrects the first version of this entry. Double Dash, cool starts, 16-s windows:
 
   | Setting | Hitches per 30 s, by run | First generated / real, mean |
   | --- | --- | --- |
-  | Neither (retry-417) | 102.9, 167.5 | 9.2 / 17.2, 10.9 / 18.9 ms |
-  | Lock and stamp (retry-415, -417) | 0, 14.5, 19.9, 5.5, 7.3, 3.6, 9.1 | 11.4-16.6 / 19.7-24.9 ms |
-  | Stamp alone (retry-417) | 16.3, 29.0 | 12.5 / 20.8, 10.1 / 18.4 ms |
-  | Lock and stamp, 4.5-ms target (retry-417) | 41.4, 1.8 | 15.4 / 23.8, 19.0 / 27.4 ms |
+  | Neither (retry-417, -422) | 102.9, 167.5, 78.7 | 9.2 / 17.2, 10.9 / 18.9, 13.1 / 21.3 ms |
+  | Lock and stamp, QA prop (retry-415, -417) | 0, 14.5, 19.9, 5.5, 7.3 | 11.4-16.6 / 19.7-24.9 ms |
+  | Lock alone (retry-415, -417) | 66, 3.7, 3.6, 9.1 | 10.2 / 18.4, 17.9 / 26.2, 12.8 / 21.2, 12.8 / 21.2 ms |
+  | Stamp alone, QA prop (retry-417) | 16.3, 29.0 | 12.5 / 20.8, 10.1 / 18.4 ms |
+  | Lock alone, 4.5-ms target (retry-417) | 41.4, 1.8 | 15.4 / 23.8, 19.0 / 27.4 ms |
 
-  Without the lock, runs land either clean (0-7 hitches on earlier builds) or in a phase with 73-168. The two runs here have the lowest latency, in the fast state 99-100% of the time, and over 100 hitches. An even rhythm comes first, so the lock wins. It still misses the 5-hitch target on five runs of seven. The later target is not adopted. The lock gave up in three of the seven runs (19.9, 7.3 and 9.1 hitches), so its abandon rule on a stamped source is still open. Java now asks for the stamp without a QA prop (3.6 and 9.1 hitches on retry-417). Ocarina stays out, as above.
+  Without either, runs land clean (0-7 hitches on earlier builds) or in a phase with 73-168, the worst of them with the lowest latency, in the fast state nearly all the time. An even rhythm comes first. Lock and stamp has the best worst case of the settings with several runs (19.9 against 66), but these are small samples and it still misses the 5-hitch target on four runs of five. The later target is not adopted. The lock gave up in two of the five lock-and-stamp runs (19.9 and 7.3 hitches), so its abandon rule on a stamped source is still open. The tree now wires both to the Vulkan host as well; that default has not run on the Thor yet. Ocarina stays out, as above.
 - **Link's Awakening's figures were its intro movie, not play.** The trial's window fell on the opening anime, 44-59 source fps on the counter. Generation off, 23% of the movie's frames take two periods or more, so those gaps are not ours. A window starting about 40 s in with no input, which should be the first engine scene (the beach; an exploration session showed it, but this run's screenshots were not kept), gives 98.3% and 59 hitches per 30 s at 24.9 / 34.3 ms (one run, retry-418, 12% fast). There generated frames are the problem: 751 of 869 finish after the latch and 239 after the scan, while few real images are late. Metroid Dread's trial window is also a mix (43 source fps) rather than its 30 fps title loop, which still needs measuring.
 - **A test mistake to avoid.** `pace_move.py` moves the stick, and on Wind Waker HD's title that leaves for a static menu: the first run here scored 240 frames of keep-alives. `NOMOVE=1 SETTLE=12` stays on the title flight.
 - **The Thor was shared badly today.** These queues and the cooling flag held the other stream's pass off the Thor for over an hour. The scripts no longer set the flag, and cooling happens with the lock free.

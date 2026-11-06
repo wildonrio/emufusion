@@ -24,9 +24,9 @@
  * sleeps inside queueBuffer until a fixed vsync phase unless the buffer's
  * timestamp is still in the future there. QA: debug.emufusion.stamp_ahead_ms starts
  * the stamps that far ahead of the clock; only their spacing is ever used. */
-static int64_t emufusion_stamp_ahead_ns(void) {
+static int64_t emufusion_stamp_ahead_ns(int64_t requested_ns) {
     char value[PROP_VALUE_MAX] = {0};
-    if (__system_property_get("debug.emufusion.stamp_ahead_ms", value) <= 0) return 0;
+    if (__system_property_get("debug.emufusion.stamp_ahead_ms", value) <= 0) return requested_ns;
     const long ms = atol(value);
     return ms > 0 && ms <= 600000 ? (int64_t)ms * 1000000LL : 0;
 }
@@ -101,6 +101,7 @@ struct emufusion_android_vulkan_backend {
     bool display_timing_enabled;
     bool display_timing_logged;
     bool fg_timestamp_enabled[2]; /* primary, secondary; calloc defaults Off */
+    int64_t stamp_ahead_ns;
     uint64_t timestamp_sequence;
     uint64_t timestamp_base_sequence;
     int64_t timestamp_base_ns;
@@ -1108,6 +1109,20 @@ emufusion_android_vulkan_backend *emufusion_android_vulkan_create(
     return backend;
 }
 
+bool emufusion_android_vulkan_set_stamp_ahead(
+        emufusion_android_vulkan_backend *backend, int64_t ahead_ns,
+        char *error, size_t error_size) {
+    if (!backend) {
+        set_error(error, error_size, "Vulkan backend is required");
+        return false;
+    }
+    backend->stamp_ahead_ns = ahead_ns > 0 ? ahead_ns : 0;
+    /* Takes effect with the next timeline, which the following binding starts. */
+    backend->timestamp_timeline_ready = false;
+    backend->timestamp_last_ns = 0;
+    return true;
+}
+
 bool emufusion_android_vulkan_set_fg_timestamp(
         emufusion_android_vulkan_backend *backend, bool secondary, bool enabled,
         char *error, size_t error_size) {
@@ -1311,7 +1326,8 @@ static bool stamp_core_frame_timestamp(
                     (period_ns > 0 ? period_ns : 1);
         } else if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
             backend->timestamp_base_ns =
-                    (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec + emufusion_stamp_ahead_ns();
+                    (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec +
+                    emufusion_stamp_ahead_ns(backend->stamp_ahead_ns);
         } else {
             backend->timestamp_base_ns = 1000000000LL;
         }

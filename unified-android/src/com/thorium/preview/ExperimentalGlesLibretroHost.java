@@ -306,7 +306,7 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
                         SOURCE_TIMELINE_MUPEN_CONTENT_BOUNDS)) != 0)
             throw new IllegalArgumentException("unknown source timeline policy");
         this.bindings = bindings;
-        phaseLockedByDefault = phaseLockedByDefault(core.getName());
+        phaseLockedByDefault = FrameGenerationRendererRegistry.phaseLockedByDefault(core.getName());
         File canonicalCore = core.getCanonicalFile();
         File canonicalRoot = trustedCoreDirectory.getCanonicalFile();
         if (!canonicalCore.getPath().startsWith(canonicalRoot.getPath() + File.separator))
@@ -369,12 +369,6 @@ public final class ExperimentalGlesLibretroHost implements Closeable {
         if (!Float.isFinite(aspect) || aspect <= 0.1f || aspect >= 10f)
             throw new IllegalArgumentException("a plausible presentation aspect is required");
         bindings.setPresentationAspect(handle, aspect);
-    }
-
-    static boolean phaseLockedByDefault(String coreFileName) {
-        // Double Dash swings from clean to over 100 hitches per 30 s by where
-        // its phase lands. Ocarina of Time, on the same loop, is no better held.
-        return "libemufusion_core_dolphin.so".equals(coreFileName);
     }
 
     public synchronized void attachSurface(Surface surface) {
