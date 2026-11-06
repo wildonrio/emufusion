@@ -1467,7 +1467,7 @@
         "Mole Mania": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: item and menu screens seen; rooms are one screen"
+          "tested": "2026-11-06 host: first rooms played: each is one screen inside black, and the sides show only stray pieces"
         },
         "Monster Max": {
           "strategy": "fixed-screen",
@@ -1776,7 +1776,7 @@
         "Metal Gear Solid": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: story scenes show unrelated side blocks; play not reached yet"
+          "tested": "2026-11-06 host: first area played: the status panel sits inside the right of the picture, and the sides show unrelated tiles"
         },
         "Survival Kids": {
           "strategy": "widen",
@@ -1796,12 +1796,14 @@
         "Mario Golf": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: rooms show stale tiles at the sides; menus junk"
+          "tested": "2026-11-06 host: a round played: the shot view is half course and half unrelated tiles at the sides"
         },
         "Mario Tennis": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: character select repeats its pattern, play not reached yet"
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_scene": "C0BE=B0|C0BD=83,C0BE=00|C0BD=86,C0BE=C0|C0BD=87,C0BE=C0"
+          },
+          "tested": "2026-11-06 host: singles, doubles and a mini-game played: the whole court and its surroundings fill the wide picture; menus stay narrow"
         },
         "Mickey's Racing Adventure": {
           "strategy": "fixed-screen",
@@ -1926,12 +1928,12 @@
         "Cannon Fodder": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06 host: menu and briefing show scrambled tiles at the sides; play not reached"
+          "tested": "2026-11-06 host: first mission played: the sides show stale pieces of map and checker junk"
         },
         "Warlocked": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06 host: name entry shows unrelated tile blocks at the sides; play not reached"
+          "tested": "2026-11-06 host: first mission played: the map is built only just past the old screen, so the sides stay mostly black"
         }
       },
       "release": true,
