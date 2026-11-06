@@ -1806,7 +1806,7 @@
           "options": {
             "emufusion_ws_skip": "1"
           },
-          "tested": "2026-11-06 host: race played; road and scenery extend, the status layer no longer wraps to the edges, and the horizon blends across the new columns"
+          "tested": "2026-11-06 host and Thor: race played; road and scenery extend, the status layer no longer wraps to the edges, the horizon blends across the new columns, 60 to 120"
         },
         "Alien Hominid": {
           "strategy": "fixed-screen",
@@ -1848,14 +1848,14 @@
           "options": {
             "emufusion_ws_map": "grid:table=2020000,planes=2014000+201C000,cell=4,stride=200,cols=80,rows=80,mask=3FFF"
           },
-          "tested": "2026-11-06 host: Vale played, house and town; the map from work RAM reaches both edges, rooms sit in black, dialogs and menus unchanged. Not yet on the Thor"
+          "tested": "2026-11-06 host and Thor: Vale played, house and town; the map from work RAM reaches both edges, rooms sit in black, dialogs and menus unchanged, frame generation 60 to 120"
         },
         "The Legend of Zelda: The Minish Cap": {
           "strategy": "widen",
           "options": {
             "emufusion_ws_map": "grid:planes=200B654:2012654+2025EB4:202CEB4,cell=2,stride=80,cols=40,rows=40,width=3000C0E,height=3000C10"
           },
-          "tested": "2026-11-06 host: Link's house and the fields around it walked; ground and tree tops reach both edges, rooms sit in black. Not yet on the Thor"
+          "tested": "2026-11-06 host: Link's house and the fields around it walked; ground and tree tops reach both edges, rooms sit in black. Thor: rooms inside the house, 60 to 120; outdoors not yet played there"
         },
         "Tony Hawk's Pro Skater 3": {
           "strategy": "fixed-screen",
@@ -1888,6 +1888,48 @@
             "emufusion_ws_gate": "scroll"
           },
           "tested": "2026-11-06 host: World 1-1 run through; its 64-wide video map reaches both edges with sprites, the status bar stays in the middle, title and menus stay narrow behind the scroll gate"
+        },
+        "Castlevania: Harmony of Dissonance": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Classic NES Series: Metroid": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Disney's Aladdin": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Super Ghouls 'n Ghosts": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Flintstones, The: Big Trouble in Bedrock": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Adventures of Jimmy Neutron Boy Genius: Jet Fusion": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
         }
       },
       "release": true
