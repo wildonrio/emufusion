@@ -15,7 +15,7 @@ Script, one step per whitespace-separated token (read from --play or a file):
   save:SLOT       snapshot the emulator in memory; load:SLOT restores it
   savefile:PATH   write a save state to disk; loadfile:PATH restores one
   ram:NAME        dump the console's main RAM to NAME.ram in --out; vram:NAME video RAM;
-                  saveram:NAME battery RAM
+                  saveram:NAME battery RAM; iwram:NAME the GBA's fast work RAM
   poke:ADDR=VALUE set a main RAM byte (hex), to reach a test case without playing there
 Buttons: B Y SELECT START UP DOWN LEFT RIGHT A X L R L2 R2 L3 R3.
 """
@@ -306,6 +306,11 @@ class Player:
                 size = self.lib.retro_get_memory_size(2)
                 with open(os.path.join(out, rest + '.ram'), 'wb') as dump:
                     dump.write(C.string_at(self.lib.retro_get_memory_data(2), size))
+            elif kind == 'iwram':
+                self.lib.retro_get_memory_data.restype = C.c_void_p
+                self.lib.retro_get_memory_size.restype = C.c_size_t
+                with open(os.path.join(out, rest + '.iwram'), 'wb') as dump:
+                    dump.write(C.string_at(self.lib.retro_get_memory_data(5), self.lib.retro_get_memory_size(5)))
             elif kind == 'vram':
                 self.lib.retro_get_memory_data.restype = C.c_void_p
                 self.lib.retro_get_memory_size.restype = C.c_size_t
