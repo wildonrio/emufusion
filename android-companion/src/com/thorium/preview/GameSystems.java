@@ -165,6 +165,12 @@ final class GameSystems {
         add("switch", "Nintendo Switch", "Nintendo - Nintendo Switch", "nsp xci",
                 "switch nintendoswitch", "nintendo-switch-video-archive", 
                 "Nintendo Switch", "switch");
+        // Switch games whose own ARM code runs directly on the device, not through
+        // Eden. A game here is a pack built on a computer (nxnative-android), listed
+        // by the small .nxpack file inside its folder under Games/switchnative.
+        add("switchnative", "Nintendo Switch (Native)", "Nintendo - Nintendo Switch", "nxpack",
+                "switchnative nxnative", "nintendo-switch-video-archive",
+                "Nintendo Switch", "switch");
         add("dos", "DOS", "DOS", "exe com bat conf zip",
                 "dos msdos", "", "PC", "pc");
         add("scummvm", "ScummVM", "ScummVM", "scummvm",

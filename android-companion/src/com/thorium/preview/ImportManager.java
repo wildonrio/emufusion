@@ -3668,7 +3668,7 @@ final class ImportManager {
      * entire catalog. A page is accepted only when its title matches the ROM.
      */
     private NintendoMedia nintendoMedia(GameSystems.SystemDef system, String title, File cacheRoot) {
-        if (system == null || !"switch".equals(system.folder)) return null;
+        if (system == null || !("switch".equals(system.folder) || "switchnative".equals(system.folder))) return null;
         String slug = nintendoSlug(title);
         if (slug.isEmpty()) return null;
         try {

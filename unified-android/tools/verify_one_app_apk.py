@@ -23,6 +23,7 @@ LSFG_QUALIFICATION_LIBRARY = (
 )
 VOICE_FEEDBACK_ACTIVITY = "com.thorium.preview.VoiceFeedbackActivity"
 UPDATE_COMPLETE_ACTIVITY = "com.thorium.preview.UpdateCompleteActivity"
+NXNATIVE_ACTIVITY = "com.thorium.nxnative.NxActivity"
 ALLOWED_ACTIVITIES = {
     MAIN_ACTIVITY,
     "com.thorium.preview.FrontendRestartActivity",
@@ -37,6 +38,10 @@ ALLOWED_ACTIVITIES = {
     # its manifest properties are asserted below so it can never become a
     # second launcher, a display-0 window, or a recents entry.
     "com.thorium.preview.RomLaunchActivity",
+    # Switch (Native), present only in a build with EMUFUSION_INCLUDE_NXNATIVE=1:
+    # the host can only end by ending its process, so it runs in a process of its
+    # own. Checked below to stay non-exported with no intent filter.
+    NXNATIVE_ACTIVITY,
     # Conditional, shell-launched in-process surface for the bounded LSFG
     # feasibility test. Its exact transient/debug-only boundary is checked
     # below and cross-bound to the qualification native library in verify().
@@ -242,6 +247,13 @@ def verify_manifest(xmltree: str, expected_label: str = APP_LABEL) -> list[str]:
             errors.append("voice-feedback Activity must be no-history")
         if 'E: intent-filter' in voice:
             errors.append("voice-feedback Activity must have no intent filter")
+
+    nxnative = by_name.get(NXNATIVE_ACTIVITY, "")
+    if nxnative:
+        if not re.search(r'android:exported[^\n]*\(type 0x12\)0x0', nxnative):
+            errors.append("Switch (Native) Activity must be non-exported")
+        if 'E: intent-filter' in nxnative:
+            errors.append("Switch (Native) Activity must have no intent filter")
 
     update_prompt = by_name.get(UPDATE_COMPLETE_ACTIVITY, "")
     if update_prompt:

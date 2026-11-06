@@ -959,6 +959,8 @@ FocusScope {
 
     function hardwarePhotoUrl(index, variant) {
         var folder = systemModel.get(index).folder
+        // Switch (Native) is the same hardware: it shares the Switch's large photographs
+        if (folder === "switchnative") folder = "switch"
         return Qt.resolvedUrl("assets/hardware-cutouts/" + folder + "/" + variant + ".png")
     }
 
@@ -1376,7 +1378,7 @@ FocusScope {
             "ps4": [135, 172], "ps5": [135, 172],
             "psp": [105, 177], "psvita": [105, 135],
             "gc": [135, 190], "wii": [135, 190], "wiiu": [135, 190],
-            "switch": [105, 170], "windows": [135, 190],
+            "switch": [105, 170], "switchnative": [105, 170], "windows": [135, 190],
             "xbox": [135, 190], "xbox360": [135, 190],
             "arcade": [135, 190]
         }
@@ -5761,6 +5763,7 @@ FocusScope {
         ListElement { name: "NINTENDO WII U"; years: "2012–2017"; mark: "WIIU"; collectionName: "Nintendo Wii U"; folder: "wiiu"; family: "nintendo"; accent: "#ff9f43" }
         ListElement { name: "WINDOWS"; years: "1985–PRESENT"; mark: "WIN"; collectionName: "Microsoft Windows"; folder: "windows"; family: "microsoft"; accent: "#4aa3ff" }
         ListElement { name: "NINTENDO SWITCH"; years: "2017–PRESENT"; mark: "NSW"; collectionName: "Nintendo Switch"; folder: "switch"; family: "nintendo"; accent: "#ff9f43" }
+        ListElement { name: "SWITCH (NATIVE)"; years: "2017–PRESENT"; mark: "NSW"; collectionName: "Nintendo Switch (Native)"; folder: "switchnative"; family: "nintendo"; accent: "#ff9f43" }
     }
 
     // Predecode official platform logotypes used by the rail. Full-resolution system
