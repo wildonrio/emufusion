@@ -35,15 +35,61 @@
     {
       "path": "engines/patches/armsx2-libretro-input-attachment.patch",
       "sha256": "0312e9a6d7f45caefb1d62784dfac1fbda196c87b67a3f5252307b2a945af9e4"
+    },
+    {
+      "path": "engines/patches/armsx2-emufusion-keep-2d.patch",
+      "sha256": "a0db3a18b136431e74f2ee92d546ac22b6f6b77f576a83753e1b910a09a65d4d"
     }
   ],
   "dependencies": [
-    {"path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/abseil_cpp", "repository": "https://github.com/abseil/abseil-cpp", "commit": "1315c900e1ddbb08a23e06eeb9a06450052ccb5e", "archiveSha256": "4ae9fc64860d5204f0ca6bd6c7a5f8e59ced118494db7e14537d8ed55dce5715", "licenseDeclared": "Apache-2.0"},
-    {"path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/effcee", "repository": "https://github.com/google/effcee", "commit": "08da24ec245a274fea3a128ba50068f163390565", "archiveSha256": "d6d6b602f1b6f09d3a83c44a067d087c23fdc3d3530e2e5dd27be2adda91fe4d", "licenseDeclared": "Apache-2.0"},
-    {"path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/glslang", "repository": "https://github.com/KhronosGroup/glslang", "commit": "09c541ee5b22bbac307987b50d86ec2b4f683d75", "archiveSha256": "e8dbf161cb49ae882076455d2146fff699b90caa092bcb65938a6cd4bc46ea10", "licenseDeclared": "BSD-3-Clause"},
-    {"path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/googletest", "repository": "https://github.com/google/googletest", "commit": "1d17ea141d2c11b8917d2c7d029f1c4e2b9769b2", "archiveSha256": "7aca173cc96c0feaa01035184e34b020daaa93ddc132c5a829b7ea34006f701b", "licenseDeclared": "BSD-3-Clause"},
-    {"path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/re2", "repository": "https://github.com/google/re2", "commit": "4a8cee3dd3c3d81b6fe8b867811e193d5819df07", "archiveSha256": "f0a65168e64a10ab556b265f2f411678e6b9555f21e04202f84f250b659954ba", "licenseDeclared": "BSD-3-Clause"},
-    {"path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/spirv-headers", "repository": "https://github.com/KhronosGroup/SPIRV-Headers", "commit": "465055f6c9128772e20082e893d974146acf7a02", "archiveSha256": "fddd1edaea6e436970efa9a06cdc43f0522b37ba7edfbf042ab076b5ea53527b", "licenseDeclared": "MIT"},
-    {"path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/spirv-tools", "repository": "https://github.com/KhronosGroup/SPIRV-Tools", "commit": "e4bceacf59fdfe742047e94e41ef65a48999a0dd", "archiveSha256": "92d1ba1042df2a2dcaa1946d12751c18c7c0e6bc71618dc9988ede838c13021e", "licenseDeclared": "Apache-2.0"}
+    {
+      "path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/abseil_cpp",
+      "repository": "https://github.com/abseil/abseil-cpp",
+      "commit": "1315c900e1ddbb08a23e06eeb9a06450052ccb5e",
+      "archiveSha256": "4ae9fc64860d5204f0ca6bd6c7a5f8e59ced118494db7e14537d8ed55dce5715",
+      "licenseDeclared": "Apache-2.0"
+    },
+    {
+      "path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/effcee",
+      "repository": "https://github.com/google/effcee",
+      "commit": "08da24ec245a274fea3a128ba50068f163390565",
+      "archiveSha256": "d6d6b602f1b6f09d3a83c44a067d087c23fdc3d3530e2e5dd27be2adda91fe4d",
+      "licenseDeclared": "Apache-2.0"
+    },
+    {
+      "path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/glslang",
+      "repository": "https://github.com/KhronosGroup/glslang",
+      "commit": "09c541ee5b22bbac307987b50d86ec2b4f683d75",
+      "archiveSha256": "e8dbf161cb49ae882076455d2146fff699b90caa092bcb65938a6cd4bc46ea10",
+      "licenseDeclared": "BSD-3-Clause"
+    },
+    {
+      "path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/googletest",
+      "repository": "https://github.com/google/googletest",
+      "commit": "1d17ea141d2c11b8917d2c7d029f1c4e2b9769b2",
+      "archiveSha256": "7aca173cc96c0feaa01035184e34b020daaa93ddc132c5a829b7ea34006f701b",
+      "licenseDeclared": "BSD-3-Clause"
+    },
+    {
+      "path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/re2",
+      "repository": "https://github.com/google/re2",
+      "commit": "4a8cee3dd3c3d81b6fe8b867811e193d5819df07",
+      "archiveSha256": "f0a65168e64a10ab556b265f2f411678e6b9555f21e04202f84f250b659954ba",
+      "licenseDeclared": "BSD-3-Clause"
+    },
+    {
+      "path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/spirv-headers",
+      "repository": "https://github.com/KhronosGroup/SPIRV-Headers",
+      "commit": "465055f6c9128772e20082e893d974146acf7a02",
+      "archiveSha256": "fddd1edaea6e436970efa9a06cdc43f0522b37ba7edfbf042ab076b5ea53527b",
+      "licenseDeclared": "MIT"
+    },
+    {
+      "path": "platforms/android/app/src/main/cpp/3rdparty/shaderc/third_party/spirv-tools",
+      "repository": "https://github.com/KhronosGroup/SPIRV-Tools",
+      "commit": "e4bceacf59fdfe742047e94e41ef65a48999a0dd",
+      "archiveSha256": "92d1ba1042df2a2dcaa1946d12751c18c7c0e6bc71618dc9988ede838c13021e",
+      "licenseDeclared": "Apache-2.0"
+    }
   ]
 }

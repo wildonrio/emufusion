@@ -789,7 +789,7 @@
       "build": {
         "recipe": "engines/build_core.sh armsx2",
         "proofArtifactPath": "engines/build/arm64-v8a/armsx2_libretro.so",
-        "proofArtifactSha256": "83b71de18ed7e1f4f20f0a833983c59e52e297afc7e4afb322cf6033b236d62e",
+        "proofArtifactSha256": "5e1981a789420425cd5f49042e9ca87aa0e172f1ce93685e73c60e0620d6afc5",
         "reproducible": false,
         "notes": "October 6 qualification staging: normal-recipe, source-receipt-verified 4 KiB and 16 KiB descriptor-batching/input-attachment fixes. Both page variants pass bounded internal Training input and normal exit; 4 KiB external Vulkan core/synchronization validation passes. Same-scene landscape 4 KiB package comparison: corrected 59.46/59.45 callbacks per second with 8/14 underruns, older 57.75/55.15 with 201/329. Zero sampled PCM drops. Sequential host-GPU comparison, not isolated patch attribution or universal speed/audio acceptance. No two-clean-build reproducibility, state, physical-device or release acceptance. Backup and evidence: docs/qa/android-portability-2026-10-06-ps2-performance."
       },

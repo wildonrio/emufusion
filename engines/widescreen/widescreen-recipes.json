@@ -2197,43 +2197,45 @@
       "options": {},
       "onOptions": {
         "armsx2_widescreen_patches": "enabled",
-        "armsx2_aspect_ratio": "16:9"
+        "armsx2_aspect_ratio": "16:9",
+        "armsx2_keep_2d": "enabled"
       },
       "offOptions": {
         "armsx2_widescreen_patches": "disabled",
-        "armsx2_aspect_ratio": "4:3"
+        "armsx2_aspect_ratio": "4:3",
+        "armsx2_keep_2d": "disabled"
       },
       "release": false,
       "games": {
         "Kingdom Hearts": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         },
         "Sly Cooper and the Thievius Raccoonus": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         },
         "Sly 2: Band of Thieves": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         },
         "Sly 3: Honor Among Thieves": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         },
         "Tony Hawk's Pro Skater 3": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         },
         "DOA2: Hardcore": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
+          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet. 2026-11-05 Thor: its 16:9 patches widen the 3D but stretch 2D by about a third (Kingdom Hearts' logo, Tony Hawk's SkateShop); stays narrow until 2D keeps its shape"
         }
       }
     },
