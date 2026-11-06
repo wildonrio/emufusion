@@ -2274,12 +2274,12 @@
         "Spyro: Year of the Dragon": {
           "strategy": "testing",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+          "tested": "2026-11-06 Thor: title and opening scenes reach both edges with logos and the memory card panel in shape; a level has not been played yet"
         },
         "Tekken": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06: engine patched so 2D keeps its shape; not played yet"
+          "tested": "2026-11-06 Thor: Tekken 2 fights played; the city reaches both edges, the HUD keeps its shape in the middle, logos, stage card and movies keep their shape in black bars. The record screen mixes wide and narrow strips"
         },
         "Twisted Metal": {
           "strategy": "testing",

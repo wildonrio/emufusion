@@ -211,7 +211,7 @@ stretch. `tools/widescreen/par_check.py` proves it for the 2D engines; run it af
 
 The 3D engines' generic hacks are where this bites:
 - PS1 (Swanstation `GPU_WidescreenHack` with a 16:9 display) widens only 3D that goes through the GTE,
-  and 2D logos, HUDs and menus stretch 33%. No PS1 recipes until 2D stays undistorted.
+  and 2D logos, HUDs and menus stretched 33%. Fixed for the hardware renderer, see "PS1" below.
 - N64 (GLideN64 `16:9 adjusted`) scales 2D back: Ocarina's title logo is the same width narrow and wide.
   Each game still needs that compared, because some draw 2D as polygons.
 - GameCube and Dreamcast: not evaluated yet, and a generic hack is only acceptable under the same test.
@@ -382,6 +382,23 @@ drawn. `tools/widescreen/retro_play.py` has `iwram:NAME` for the fast work RAM t
 Finding a game's addresses: `gbagrid.py` in the session notes looks for the video map's 2x2 groups in memory, then for a
 grid whose differences match. Aria of Sorrow, Circle of the Moon, Advance Wars and Final Fantasy VI Advance store their
 blocks differently, or build them in code, and still need their own look.
+
+## PS1 (2026-11-06)
+
+The hack narrows what the GTE projects and the display stretches the whole picture back out. PGXP already knows which
+vertices came from the GTE, so `engines/patches/swanstation-emufusion-keep-2d.patch` (option
+`swanstation_GPU_EmufusionKeep2D`) draws everything else a quarter narrower about the centre in a 3D scene. One GTE vertex
+makes a polygon 3D, because a game that clips a polygon itself keeps the others. A draw across most of the screen is left
+alone: it is a fade or backdrop. A scene with no 3D for 8 frames in which something was drawn is left alone and shown at
+4:3 as a whole, which also keeps movies, uploads and copies right. A loading screen left up stays what it was.
+
+This lives in the hardware renderer, and the app ran SwanStation in its software session, where hardware requests are
+refused. `hardwareWhenWide` in the recipe starts the GLES session when widescreen is on; with it off the game runs as it
+always did. Resolution scale 4 makes a 2D pixel exactly 3 pixels wide before presentation, so narrowed sprites stay even.
+
+The library has 13 PS1 games, 8 of them 3D. Tekken 2 played: right. Spyro's opening right, level not played. WipEout (USA)
+stops at its Designers Republic screen in both renderers, still to explain. HUDs stay in the middle for now: moving them
+to the corners needs a per-game rule, because splitting by screen side would break centred text like GAME OVER.
 
 ## Release gate
 
