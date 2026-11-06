@@ -267,7 +267,26 @@ Nothing is at 10/10 on all three measures yet. Whether a run reaches the composi
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 6 (latest) **— 3.2.157 (231, `ca695958`, retry-414): the compositor drain on for phase-locked sources. It helps Mega Drive; on NES it is not shown to help. A Dolphin phase lock is the next pacing item.**
+November 6 (latest) **— A phase lock for hardware cores needs the future stamp as well, and it does not yet clearly win. QA, off by default.**
+
+- **Why Double Dash swings.** It has no phase lock, and its wait before the callback varies by run: at 4.4-5.7 ms it runs clean (0-5.5 hitches per 30 s), at 2-3 ms in the fast state late images show (73-118). Its wait often sits at a tight 4.4-4.6 ms, the same pin the firmware's pacing put on Eden.
+- **The lock alone is abandoned.** With `emufusion_framegen_hardware_phase_lock=1` and no stamp, the nudges did not move a pinned source, so the lock gave up in both runs (98.1%, 66 hitches, 10.2 / 18.4 ms mean; 99.9%, 3.7, 17.9 / 26.2 ms).
+- **Lock plus a future stamp (`debug.emufusion.stamp_ahead_ms=10`), retry-415, one run a row:**
+
+  | Game | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean | Lock |
+  | --- | --- | --- | --- | --- | --- |
+  | Double Dash | 100.0% | 0 | 60% | 14.8 / 23.2 ms | held |
+  | Double Dash | 99.6% | 14.5 | 94% | 11.4 / 19.7 ms | held |
+  | Double Dash | 99.4% | 19.9 | 35% | 16.6 / 24.9 ms | abandoned late in the session |
+  | Ocarina of Time | 99.1% (PACE) | 15.1 | 100% | 11.2 / 36.2 ms | held |
+  | Ocarina of Time | 98.0% (PACE) | 30.1 | 100% | 11.0 / 36.1 ms | held |
+  | Ocarina of Time, neither | 99.3% (PACE) | 9.7 | 100% | 11.1 / 36.2 ms | none |
+  | Star Fox 64 | 97.3% (PACE) | 49 | 100% | 10.8 / 27.5 ms | held |
+
+- **Reading these.** On Double Dash the worst run is far better (20 hitches against 118) and the average latency a little better, with the small sample and the wide natural spread to allow for. On Ocarina it is no better than today's baseline and possibly worse: that baseline is 99.3%, 9.7 hitches, so the older 94.4% in the status table is out of date. Star Fox 64 has no same-day baseline. It is not ready to be a default. Hardware cores with a steady pinned wait may be better left pinned.
+- **Plumbing.** Java now asks for the stamp when the QA lock is on, so a test needs no prop; the prop still overrides it. Not yet run on a device without the prop.
+
+November 6 **— 3.2.157 (231, `ca695958`, retry-414): the compositor drain on for phase-locked sources. It helps Mega Drive; on NES it is not shown to help. A Dolphin phase lock is the next pacing item.**
 
 - **Gate history.** The first candidate (retry-412) had the drain on for every source and did not go out. Double Dash, whose phase is chance (no lock), ran 40-70 two-scan intervals in 16 s in the fast state at a 2-3-ms wait, with the drain off as well (`m2`: 97.9%, 73 per 30 s, 92% fast mode); the slower state hides those late images, and the drain makes the fast state likelier. So the drain now acts only on sources the phase lock holds. A fast stay of 5-11 s no longer doubles the spacing (only under 4 s does): one NES run had waited 30 s for its next try and stayed late for its window.
 - **Thor, retry-414, default settings, cool starts, one run a row:**
