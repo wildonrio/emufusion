@@ -326,14 +326,15 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         fastPath = handOver;
-        boolean stateDrain = true;
+        int stateDrain = 1;
         try {
             if (context != null) stateDrain = Settings.Global.getInt(
-                    context.getContentResolver(), COMPOSITOR_DRAIN_GLOBAL, 1) != 0;
+                    context.getContentResolver(), COMPOSITOR_DRAIN_GLOBAL, 1);
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
-        compositorDrain = stateDrain;
+        compositorDrain = stateDrain != 0;
+        compositorDrainAllSources = stateDrain >= 2;
         int hardwareLock = -1;
         try {
             if (context != null) hardwareLock = Settings.Global.getInt(
@@ -776,6 +777,11 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean compositorDrain = true;
 
     static boolean compositorDrain() { return compositorDrain; }
+
+    /** QA emufusion_framegen_compositor_drain=2: not only the sources the phase lock holds. */
+    private static volatile boolean compositorDrainAllSources = false;
+
+    static boolean compositorDrainAllSources() { return compositorDrainAllSources; }
 
     /**
      * A hardware core the host names (Dolphin) is held to the phase lock frame
