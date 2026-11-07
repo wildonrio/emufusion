@@ -1,9 +1,9 @@
 diff --git a/bsnes/emulator/efwide.hpp b/bsnes/emulator/efwide.hpp
 new file mode 100644
-index 0000000..6f128f5
+index 0000000..990caea
 --- /dev/null
 +++ b/bsnes/emulator/efwide.hpp
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,74 @@
 +#pragma once
 +// EmuFusion Widescreen Hack: per-game state set by the recipe through core options.
 +// emufusion_ws_width  total picture width in pixels (0 = original 256)
@@ -67,6 +67,9 @@ index 0000000..6f128f5
 +  int mapCellAt(unsigned hscroll, unsigned vscroll, int x, int y, bool checked);
 +  void mapCheck(bool same);
 +  extern int mapGame;
++  extern bool sideBackdropBlack;
++  void setBand(const char *value);
++  bool bandRow(int row);
 +  void setBounds(const char *value);
 +  bool outside(int x);
 +  extern bool bounded;
@@ -185,10 +188,10 @@ index 4eac82f..909fddc 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..770a8d2
+index 0000000..e79e6ff
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,396 @@
+@@ -0,0 +1,434 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -208,6 +211,7 @@ index 0000000..770a8d2
 +  bool blankCenterOnly = false;
 +  bool bounded = false;
 +  static unsigned boundsCamera, boundsLeft, boundsRight;
++  static bool boundsFixed = false;
 +  static int offsetLeft, offsetRight;
 +  static int camera, edgeLeft, edgeRight;
 +  static bool tagsReady = false;
@@ -236,6 +240,7 @@ index 0000000..770a8d2
 +
 +  bool scrollGate = false;
 +  bool edgeUnmask = false;
++  bool sideBackdropBlack = false;
 +  static int gateTravel = 0, gateBlanked = 0;
 +  static unsigned gateLast[4];
 +
@@ -520,10 +525,42 @@ index 0000000..770a8d2
 +    }
 +  }
 +
++  // "y0-y1;y0-y1": picture rows where the new columns stay black.
++  static int bandFirst[4], bandLast[4];
++  static int bandCount = 0;
++
++  void setBand(const char *value) {
++    bandCount = 0;
++    const char *cursor = value ? value : "";
++    while(*cursor && bandCount < 4) {
++      int first, last;
++      if(sscanf(cursor, "%d-%d", &first, &last) == 2) {
++        bandFirst[bandCount] = first;
++        bandLast[bandCount] = last;
++        bandCount++;
++      }
++      const char *next = strchr(cursor, ';');
++      if(!next) break;
++      cursor = next + 1;
++    }
++  }
++
++  bool bandRow(int row) {
++    for(int i = 0; i < bandCount; i++)
++      if(row >= bandFirst[i] && row <= bandLast[i]) return true;
++    return false;
++  }
++
 +  void setBounds(const char *value) {
 +    bounded = false;
 +    if(!value) return;
 +    offsetLeft = offsetRight = 0;
++    // "CAMERA:=LEFT,=RIGHT": world pixels, in decimal, of a stage that never changes size.
++    boundsFixed = sscanf(value, "%x:=%d,=%d", &boundsCamera, &edgeLeft, &edgeRight) == 3;
++    if(boundsFixed) {
++      bounded = true;
++      return;
++    }
 +    bounded = sscanf(value, "%x:%x+%x,%x+%x", &boundsCamera, &boundsLeft, &offsetLeft, &boundsRight, &offsetRight) == 5 ||
 +              sscanf(value, "%x:%x,%x+%x", &boundsCamera, &boundsLeft, &boundsRight, &offsetRight) >= 3;
 +  }
@@ -551,8 +588,12 @@ index 0000000..770a8d2
 +    if(bounded && wram) {
 +      auto word = [](unsigned address) { return wram[address & 0x1ffff] | wram[(address + 1) & 0x1ffff] << 8; };
 +      camera = word(boundsCamera);
-+      edgeLeft = word(boundsLeft) + offsetLeft;
-+      edgeRight = word(boundsRight) + offsetRight;
++      if(boundsFixed) {
++        camera = (int16_t)camera;
++      } else {
++        edgeLeft = word(boundsLeft) + offsetLeft;
++        edgeRight = word(boundsRight) + offsetRight;
++      }
 +    }
 +    if(!termCount || !wram) { sceneWide = true; return; }
 +    bool any = false;
@@ -598,7 +639,7 @@ index 24843e9..a488c17 100644
      vram[address] = vram[address] & 0xff00 | data << 0;
    }
 diff --git a/bsnes/sfc/ppu-fast/line.cpp b/bsnes/sfc/ppu-fast/line.cpp
-index 551430c..9a7e2a8 100644
+index 551430c..4792dac 100644
 --- a/bsnes/sfc/ppu-fast/line.cpp
 +++ b/bsnes/sfc/ppu-fast/line.cpp
 @@ -6,6 +6,7 @@ auto PPU::Line::flush() -> void {
@@ -624,17 +665,18 @@ index 551430c..9a7e2a8 100644
        above[x] = {Source::COL, 0, aboveColor};
        below[x] = {Source::COL, 0, belowColors[x / ((256+2*ppufast.widescreen()) * scale)]};
      }
-@@ -351,9 +359,12 @@ auto PPU::Line::render(bool fieldID) -> void {
+@@ -351,9 +359,13 @@ auto PPU::Line::render(bool fieldID) -> void {
    uint curr = 0, prev = 0;
    if(hd) {
      int x = 0;
 +    // A scene with its sides closed has black bars, whatever colour math the game has on.
-+    bool closed = (EfWide::termCount || EfWide::scrollGate) && !EfWide::sceneWide;
++    bool closed = ((EfWide::termCount || EfWide::scrollGate) && !EfWide::sceneWide) || EfWide::bandRow(y - 1);
 +    uint sideEnd = ppufast.widescreen() * scale, picture = (256 + ppufast.widescreen()) * scale;
      for(uint ySub : range(scale)) {
        for(uint i : range((256 + 2 * ppufast.widescreen() ) * scale)) {
 -        *output++ = pixel(x, above[x], below[x], ppu.widescreen(), wsm, wsma, bgFixedColors[ySub]);
-+        *output++ = closed && (i < sideEnd || i >= picture) ? 0 : pixel(x, above[x], below[x], ppu.widescreen(), wsm, wsma, bgFixedColors[ySub]);
++        bool side = i < sideEnd || i >= picture;
++        *output++ = side && (closed || (EfWide::sideBackdropBlack && above[x].source == Source::COL)) ? 0 : pixel(x, above[x], below[x], ppu.widescreen(), wsm, wsma, bgFixedColors[ySub]);
          x++;
        }
      }
@@ -896,7 +938,7 @@ index da07e7c..0113ab6 100644
  LOCAL_CPP_FEATURES := exceptions rtti
  include $(BUILD_SHARED_LIBRARY)
 diff --git a/bsnes/target-libretro/libretro.cpp b/bsnes/target-libretro/libretro.cpp
-index 8a50f53..1fc250b 100644
+index 8a50f53..4fe8d26 100644
 --- a/bsnes/target-libretro/libretro.cpp
 +++ b/bsnes/target-libretro/libretro.cpp
 @@ -2,6 +2,7 @@
@@ -907,7 +949,7 @@ index 8a50f53..1fc250b 100644
  
  static retro_environment_t environ_cb;
  static retro_video_refresh_t video_cb;
-@@ -652,6 +653,32 @@ static bool update_variables() // returns whether video dimensions have changed
+@@ -652,6 +653,38 @@ static bool update_variables() // returns whether video dimensions have changed
  	vc = vc | program->scale != scale; // scale changed
  	program->scale = scale;
  	ws = HdToolkit::determineWsExt(ws, overscan, aspectcorrection);
@@ -930,6 +972,12 @@ index 8a50f53..1fc250b 100644
 +	var.key = "emufusion_ws_map";
 +	var.value = NULL;
 +	EfWide::setMap(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++	var.key = "emufusion_ws_backdrop";
++	var.value = NULL;
++	EfWide::sideBackdropBlack = environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !strcmp(var.value, "black");
++	var.key = "emufusion_ws_band";
++	var.value = NULL;
++	EfWide::setBand(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
 +	var.key = "emufusion_ws_bounds";
 +	var.value = NULL;
 +	EfWide::setBounds(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -940,7 +988,7 @@ index 8a50f53..1fc250b 100644
  	vc = vc | program->ws != ws; // widescreen AR changed
  	program->ws = ws;
  	return vc; // returns whether video dimensions have changed (overscan, aspectcorrection scale or widescreen AR)
-@@ -1129,10 +1156,14 @@ unsigned retro_get_region()
+@@ -1129,10 +1162,14 @@ unsigned retro_get_region()
  // Rely on higan to load and save SRAM until there is really compelling reason not to.
  void *retro_get_memory_data(unsigned id)
  {
