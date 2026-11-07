@@ -338,6 +338,7 @@ A Link to the Past matched 192 of 192 visible tiles.
 | A Link to the Past | `lttp` | 7E:2000, 64 per row from the area's corner | ROM 0F:8000 |
 | Super Mario World | `smw` | 7E:C800 and 7F:C800, 27 rows per screen | $0FBE pointers into bank 0D |
 | Chrono Trigger, world map | `ct` | 7E:4000 and 7E:5800, 96 per row, wraps | 7E:3000 and 7E:3800, 8 bytes per tile |
+| Yoshi's Island | `yi` | 7F:8000, screens of 256 in rows of 16; 7E:0CE1 gives each level position its screen | Super FX ROM: page offsets at file C32A4, 8 bytes per entry from C33F2 |
 
 Not done yet: Star Ocean, Live A Live, Super Mario RPG. Towns and rooms in Chrono Trigger, houses
 and dungeons in A Link to the Past keep bars until they get decoders of their own.
@@ -574,14 +575,14 @@ Looking at full frames of those states found real faults the earlier passes had 
 | Game | Fault | Now |
 | --- | --- | --- |
 | Final Fantasy III | The game masks its first and last 8 columns, seen as black bands between the old picture and the new columns | `emufusion_ws_unmask=on` lifts it in wide scenes |
-| Yoshi's Island | Mountains and ground stopped at the old edge | Far layer reaches both edges. The near ground still stops short; it needs a map reader |
+| Yoshi's Island | Mountains and ground stopped at the old edge | Map reader `yi`: everything reaches both edges in 1-1. Only levels widen |
 | Super Mario All-Stars | Cut-off ground in play, cyan strips beside the World screen | Strict on the far layer only; rule `7E0079=01`. Only Super Mario Bros. widens |
 | Tecmo Super Bowl | Other menu pages at the sides of the main menu | Scroll rule: menus keep bars, the field opens once play has scrolled |
 | Jimmy Connors Pro Tennis Tour | Scrolled menu text at the sides | Rule `7E00B0=02`: only a match widens |
 | Survival Kids | Junk beside story scenes | Rule `C131=04`: only the island widens |
 | NHL Hockey (Mega Drive) | Flat patches of ice beside the rink ends | Narrow |
 
-SNES colour math can tint closed sides: the game adds a fixed colour over the black. The engine now writes closed sides as black in the
+Yoshi's Island's table was found without reading code, since its columns are built through Super FX RAM: search the ROM for the four tile words of blocks on screen, then search RAM for numbers whose differences follow those table positions. SNES colour math can tint closed sides: the game adds a fixed colour over the black. The engine now writes closed sides as black in the
 finished line. A high share of filled side pixels does not mean a game is right, so each frame was looked at. All of this is Mac only so far.
 
 ## Game files that are not there

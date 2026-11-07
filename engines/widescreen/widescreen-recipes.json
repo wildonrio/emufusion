@@ -67,9 +67,11 @@
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1"
+            "emufusion_ws_strict": "bg1",
+            "emufusion_ws_map": "yi",
+            "emufusion_ws_scene": "7E0118=0F|7E0118=10|7E0118=11|7E0118=12"
           },
-          "tested": "2026-11-04 host: title, intro, 1-1. 2026-11-06: mountains and sky now reach both edges; the near ground still stops at the loaded area, awaiting a map reader"
+          "tested": "2026-11-06 host: 1-1 walked both ways; a map reader draws the near layer from the game's own map, 238 of 238 on-screen blocks predicted; mountains and sky reach both edges. Only levels widen. Other levels not played"
         },
         "Super Metroid": {
           "strategy": "widen",

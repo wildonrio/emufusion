@@ -175,10 +175,10 @@ index 4eac82f..0d4ba8a 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..db48ba5
+index 0000000..48adf2a
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,298 @@
+@@ -0,0 +1,323 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -324,10 +324,10 @@ index 0000000..db48ba5
 +  }
 +
 +  int mapGame = 0;
-+  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3, MapCT = 4 };
++  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3, MapCT = 4, MapYI = 5 };
 +
 +  void setMap(const char *value) {
-+    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : !strcmp(value, "ct") ? MapCT : MapNone;
++    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : !strcmp(value, "ct") ? MapCT : !strcmp(value, "yi") ? MapYI : MapNone;
 +  }
 +
 +  // Super Mario World, horizontal levels: layer 1 is 16x16 tiles, their numbers at 7E:C800 (low)
@@ -347,6 +347,30 @@ index 0000000..db48ba5
 +    unsigned entry = (0x0D << 15 | (pointer & 0x7FFF)) + ((cellX & 1) ? 4 : 0) + ((cellY & 1) ? 2 : 0);
 +    if(entry + 1 >= rom.size()) return MapNothing;
 +    return rom.data()[entry] | rom.data()[entry + 1] << 8;
++  }
++
++  // Yoshi's Island's levels: layer 1 is 16x16 tiles, their numbers at 7F:8000, 256 to a screen in rows of
++  // 16. 7E:0CE1 gives each level position (16 wide, 8 tall) its screen. Each number's four 8x8 words are in
++  // the Super FX ROM: the table at file offset C32A4 has an offset per high byte into the entries at C33F2.
++  // $39/$3B are the camera.
++  static int mapCellYI(int layer, int cellX, int cellY) {
++    if(layer != 0 || !wram) return -1;
++    auto word = [](unsigned address) { return wram[address] | wram[address + 1] << 8; };
++    auto &rom = SuperFamicom::superfx.rom;
++    if(rom.size() < 0xD8000) return -1;
++    int tileX = (word(0x39) >> 4) + (cellX >> 1);
++    int tileY = (word(0x3B) >> 4) + (cellY >> 1);
++    if(tileX < 0 || tileX >= 256 || tileY < 0 || tileY >= 128) return MapNothing;
++    int position = (tileY >> 4) << 4 | tileX >> 4;
++    unsigned screen = wram[0x0CE1 + position];
++    // A position the level does not use reads 0, like its first screen, which screen 1 follows.
++    if(!screen && (position >= 0x7F || wram[0x0CE1 + position + 1] != 1)) return MapNothing;
++    unsigned number = word(0x18000 + screen * 0x200 + ((tileY & 15) * 16 + (tileX & 15)) * 2);
++    auto *data = rom.data();
++    unsigned table = 0xC32A4 + (number >> 8) * 2;
++    unsigned entry = 0xC33F2 + (data[table] | data[table + 1] << 8) + (number & 0xFF) * 8 + ((cellX & 1) ? 2 : 0) + ((cellY & 1) ? 4 : 0);
++    if(entry + 1 >= rom.size()) return MapNothing;
++    return data[entry] | data[entry + 1] << 8;
 +  }
 +
 +  // Chrono Trigger's world map (C2:0776): 96x64 tile ids at 7E:4000 and 7E:5800, each with four
@@ -401,6 +425,7 @@ index 0000000..db48ba5
 +    if(mapGame == MapLttP) return mapCellLttP(layer, cellX, cellY);
 +    if(mapGame == MapSMW) return mapCellSMW(layer, cellX, cellY);
 +    if(mapGame == MapCT) return mapCellCT(layer, cellX, cellY);
++    if(mapGame == MapYI) return mapCellYI(layer, cellX, cellY);
 +    return -1;
 +  }
 +
