@@ -607,6 +607,13 @@ All four passed on the Thor on 2026-11-07 (3.2.159 candidate retry-452, core `4a
 narrow and tapped wide again, clean at full size with no crashes. They now reach players with the next release. Only the first level or course of each has
 been seen, and the right-hand walls have not been reached.
 
+### N64 with the real stick (2026-11-07)
+
+Most N64 games ignore the D-pad, so earlier scripted runs barely moved. `thor_game.py` now has `stick:DIR[+DIR]:SECONDS`. First six of the top 20 on 3.2.159
+candidate retry-454, no crashes. Super Mario 64 walked round the castle grounds, right at full size. Perfect Dark's first room and Banjo-Kazooie's opening scene are
+right as far as they went. GoldenEye reached its first mission for the first time, but narrow, so it moves to QA only until a mission has been judged wide. Ocarina's
+short presses never left the title and Majora's Mask stopped at an empty name, so neither has new play. Ten of the top 20 have not run this way yet.
+
 ### The top 20 on the way to the Thor (2026-11-06, evening)
 
 A count of the top-20 lists found how few had run on the Thor: SNES 1 of 20, Mega Drive and Game Gear none, NES 5. Blind menu presses on the

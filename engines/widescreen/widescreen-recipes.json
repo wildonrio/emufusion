@@ -3480,17 +3480,17 @@
         "The Legend of Zelda: Ocarina of Time": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title sequence, Hyrule Field at true 16:9, logo undistorted"
+          "tested": "2026-11-05 Thor: title sequence, Hyrule Field at true 16:9, logo undistorted. 2026-11-07 Thor, with the real stick: title and attract scenes again, wide inside its own letterbox. Short presses did not get past the title, so no new play"
         },
         "Banjo-Kazooie": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title compared narrow and wide; logo the same width, world extends. A jigsaw-shaped wipe looks odd on black, to compare with narrow"
+          "tested": "2026-11-05 Thor: title compared narrow and wide; logo the same width, world extends. A jigsaw-shaped wipe looks odd on black, to compare with narrow. 2026-11-07 Thor, with the real stick: long opening scene; the room reaches both edges, the text and portrait keep their shape. Spiral Mountain still not reached"
         },
         "Super Mario 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: castle grounds and Lakitu intro compared narrow and wide; HUD and text the same width, world extends, Mario keeps his shape"
+          "tested": "2026-11-05 Thor: castle grounds and Lakitu intro compared narrow and wide; HUD and text the same width, world extends, Mario keeps his shape. 2026-11-07 Thor, with the real stick: walked round the castle grounds; the castle, moat and hills reach both edges, Mario and the counters keep their shape, swipe narrow works. Inside the castle not reached"
         },
         "Banjo-Tooie": {
           "strategy": "widen",
@@ -3540,12 +3540,12 @@
         "The Legend of Zelda: Majora's Mask": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title and file menus compared narrow and wide; logo and panels the same width, sky extends. Play not reached"
+          "tested": "2026-11-05 Thor: title and file menus compared narrow and wide; logo and panels the same width, sky extends. Play not reached. 2026-11-07 Thor, with the real stick: name entry, wide with the panel in shape. Stopped there because the name stayed empty, so play still not reached"
         },
         "Perfect Dark": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: logo and agent menus keep their shape over a wide 3D background. A mission not played yet"
+          "tested": "2026-11-05 Thor: logo and agent menus keep their shape over a wide 3D background. A mission not played yet. 2026-11-07 Thor, with the real stick: first room; walls and furniture reach both edges. A mission not played further, because the script only reached that room"
         },
         "International Superstar Soccer '98": {
           "strategy": "widen",
@@ -3563,9 +3563,9 @@
           "tested": "2026-11-05 Thor: stage and file screens show white gaps beside their 2D art"
         },
         "GoldenEye 007": {
-          "strategy": "fixed-screen",
+          "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: folder menus sit inside bars; missions not reached, it stays narrow until they are"
+          "tested": "2026-11-05 Thor: folder menus sit inside bars; missions not reached, it stays narrow until they are. 2026-11-07 Thor, with the real stick: the first mission reached, narrow, since its recipe kept it so. Now QA only, to judge a mission wide; players still get it narrow"
         },
         "Wave Race 64": {
           "strategy": "widen",
