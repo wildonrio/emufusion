@@ -3914,7 +3914,8 @@
           "tested": "2026-11-06 Thor: the file is damaged (RVZ declares 935 MB, 397 MB present) and the app refuses it; nothing to judge"
         }
       },
-      "release": true
+      "release": false,
+      "releaseNote": "2026-11-07: off for players. On the Thor, The Wind Waker's save prompt was drawn a third wider than it should be, stretched from 4:3 to 16:9, while the same prompt in another run kept its shape. The 2D rule in dolphin-emufusion-keep-2d-shape.patch leaves some 2D at full width; until that cannot happen, no GameCube game is offered widening"
     },
     "dreamcast": {
       "engine": "flycast",
