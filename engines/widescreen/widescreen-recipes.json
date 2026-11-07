@@ -592,7 +592,7 @@
         "Micro Machines 2: Turbo Tournament": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06 host: driven: the sides show broken pieces of the track for the same reason. Stays narrow. A map reader could open it up"
+          "tested": "2026-11-06 host: driven: the sides show broken pieces of the track for the same reason. Stays narrow. A map reader could open it up. 2026-11-07: traced. Same kind of loader, but a rewritten engine whose row buffer holds only 36 cells, so 32 visible cells would need that buffer moved in memory. Not tried; it stays narrow"
         },
         "Ecco the Dolphin": {
           "strategy": "testing",
@@ -640,9 +640,14 @@
           "tested": "2026-11-05 host: runs in Master System mode at 256x192: it already shows everything the console draws"
         },
         "Micro Machines": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-06 host: driven round the bath: bubbles at the sides end in hard rectangles because the game updates its map only near the old window. Stays narrow. A map reader could open it up. Thor 2026-11-07: narrow and clean, also from a state saved wide"
+          "strategy": "testing",
+          "options": {
+            "emufusion_ws_patch": "008A:000000000000000000>3ADFDED605D0C60CC9;0093:0000000000000000000000>3ADFDEFE053AA0DBD03DC9;00DF:0000000000000000000000>3ADFDEFE053AD5DED03DC9;00EA:0000000000000000000000>3AE1DEC605FE0CD8D60CC9;00F5:0000000000000000000000>3AE1DEFE073AD7DED83CC9;150A:CD83157ECDB20932BCDE3E4A32C1DE3E7832C2DEE5CDE012E1CDE564237ECDB20932BCDE3E6232C1DE3E7832C2DEE5CDE012E1ED5B9CDB2AD1DE19CD83153E0632C5DE7ECDB20932BCDE3E4A32C1DE3E7B32C2DEE5CDE012E1CDE5643E0632C5DE237ECDB20932BCDE3E6232C1DE3E7B32C2DEE5CDE012E1C9>CD83153E0632C5DE2AD1DEED5B9CDB1901327BCD2F153E0C32C5DE2AD1DE013278CD2F15C92BCD5015CD5015CD50153E0332CFDE3E0932CEDECD50153E0C32CFDEAF32CEDEC9E5C57932C1DE7832C2DE7ECDB20932BCDECDE012C1E12379C6184FC90000000000000000000000000000000000000000000000;77B2:C60A>C600;7888:34>3E;788D:0A>00;78DC:16>20;799C:15>20;17EC:3ADFDE>CD8A00;1807:3ADFDE>CD8A00;1820:3ADFDE>CD8A00;1826:3AA0DB>CD9300;18E6:3ADFDE>CD8A00;18EC:3AD5DE>CDDF00;18FD:3AE1DE>CDEA00;1903:3AD7DE>CDF500",
+            "emufusion_ws_freepc": "008A-00FF;17E6-1990;4F1B-4F8E;795E-79C7;78CE-7915;7916-795D",
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_hud": "obj:49-49:52-66:-1:A4-AC;obj:57-120:56-56:-1:94-97;obj:57-81:64-64:-1:A4-A7"
+          },
+          "tested": "2026-11-07 host: bath course driven, including fresh race starts from attract. The game has its own Master System path with 32-cell rows; a patch uses those lengths and moves its map window five columns left, and draws the first screen across all of it. Random-input lockstep: 210 shots, and only the first shot after each load of a state saved narrow differs in the old screen area. Rank markers moved to the left side. QA only until it passes on the Thor; other track types not seen"
         },
         "Lemmings": {
           "strategy": "fixed-screen",

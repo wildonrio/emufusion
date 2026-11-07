@@ -585,14 +585,15 @@ loaders no console time, so the wider picture costs no frames. `emufusion_ws_max
 | Game | Change | Check |
 | --- | --- | --- |
 | Cool Spot | All loaders six tiles further left: map position, tile within the block, place in video memory, including the routine that draws a level's first screen | 60 random-input shots match the original exactly in the old screen area. Video map matches the level in work RAM, 468 of 468 cells seen |
+| Micro Machines | The game's own Master System lengths: 32-cell rows. Map window five columns left, right column five further out, and a first screen drawn across all 32 columns in the space of the old routine, which drew 21 | Random-input lockstep, 210 shots: only the first shot after loading a state saved narrow differs. The test found the first screen and a second row path |
 | Ecco the Dolphin | Columns load from six left to 25 right of the camera, not 0 and 22. Rows fill 32 cells, not 23. Three shifts made arithmetic, or a row near the level's left edge loads wrong across the whole picture | 160 random-input shots match exactly against a run with the same timing and no patch. The first version showed that fault only when the reference state came from the original game |
 
 The test that matters is lockstep. Random inputs through the original and the patched game, then every pixel of the old 160x144 area compared. A
 state saved by a patched run must not be used as the reference: its video memory carries the fault into the original. Comparing a frame's side
 columns with a later frame of the same run proves nothing, since it is the same cell.
 
-Micro Machines and its sequel really do load only 22 cells across and 15 to 19 down, so they may need more than this. Both recipes are QA only until
-they have passed on the Thor.
+Micro Machines 2 has a rewritten engine whose row buffer holds only 36 cells, so 32 visible cells would need that buffer moved in memory. It was not
+tried and stays narrow. All three recipes are QA only until they have passed on the Thor.
 
 ### The top 20 on the way to the Thor (2026-11-06, evening)
 
