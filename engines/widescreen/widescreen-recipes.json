@@ -3514,7 +3514,7 @@
         "Banjo-Tooie": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: file room and story text compared narrow and wide; text the same width, room and sky extend. A world not played yet. 2026-11-07 Thor, with the real stick: the opening card game; wide inside its letterbox, text in shape. A world not reached. 2026-11-07 Thor, longer route with the stick: the long opening again, wide inside its letterbox; a world still not reached"
+          "tested": "2026-11-06 Thor: file room and story text compared narrow and wide; text the same width, room and sky extend. A world not played yet. 2026-11-07 Thor, with the real stick: the opening card game; wide inside its letterbox, text in shape. A world not reached. 2026-11-07 Thor, longer route with the stick: the long opening again, wide inside its letterbox; a world still not reached. 2026-11-07 Thor, longer route with the stick, full size: the scene outside Banjo's house after the opening, still a cut-scene inside its letterbox; right to both edges. Free play still not reached"
         },
         "Blast Corps": {
           "strategy": "widen",
@@ -3524,7 +3524,7 @@
         "Conker's Bad Fur Day": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro and first scenes in 3D at 16:9, title text keeps its shape. Play not reached. 2026-11-07 Thor, with the real stick: opening only, right to both edges. Play not reached. 2026-11-07 Thor, longer route with the stick: the opening phone scene; rooms reach both edges, speech bubbles keep their shape. Play still not reached"
+          "tested": "2026-11-05 Thor: intro and first scenes in 3D at 16:9, title text keeps its shape. Play not reached. 2026-11-07 Thor, with the real stick: opening only, right to both edges. Play not reached. 2026-11-07 Thor, longer route with the stick: the opening phone scene; rooms reach both edges, speech bubbles keep their shape. Play still not reached. 2026-11-07 Thor, longer route with the stick, full size: play at last: Conker in the rain at the NICE/NASTY sign; hills, windmill and sign reach both edges, the speech bubble keeps its shape"
         },
         "Diddy Kong Racing": {
           "strategy": "widen",
@@ -3564,7 +3564,7 @@
         "Perfect Dark": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: logo and agent menus keep their shape over a wide 3D background. A mission not played yet. 2026-11-07 Thor, with the real stick: first room; walls and furniture reach both edges. A mission not played further, because the script only reached that room"
+          "tested": "2026-11-05 Thor: logo and agent menus keep their shape over a wide 3D background. A mission not played yet. 2026-11-07 Thor, with the real stick: first room; walls and furniture reach both edges. A mission not played further, because the script only reached that room. 2026-11-07 Thor, longer route with the stick, full size: Joanna's room on the first mission, walking and turning: windows, walls and furniture reach both edges, the subtitle keeps its shape"
         },
         "International Superstar Soccer '98": {
           "strategy": "widen",
@@ -3582,9 +3582,9 @@
           "tested": "2026-11-05 Thor: stage and file screens show white gaps beside their 2D art"
         },
         "GoldenEye 007": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: folder menus sit inside bars; missions not reached, it stays narrow until they are. 2026-11-07 Thor, with the real stick: the first mission reached, narrow, since its recipe kept it so. Now QA only, to judge a mission wide; players still get it narrow"
+          "tested": "2026-11-05 Thor: folder menus sit inside bars; missions not reached, it stays narrow until they are. 2026-11-07 Thor, with the real stick: the first mission reached, narrow, since its recipe kept it so. Now QA only, to judge a mission wide; players still get it narrow. 2026-11-07 Thor, longer route with the stick, full size: the Dam mission wide: rock, sky, barriers and ground reach both edges with nothing cut off. The view went dark after that, likely Bond falling, so firing, the ammo display and the watch menu were not seen"
         },
         "Wave Race 64": {
           "strategy": "widen",
