@@ -139,7 +139,7 @@
           "tested": "2026-11-04 host: grass court match. 2026-11-06: menus keep bars, only a match widens. After Quick Resume a match stays narrow until the next redraw, from the strict rule"
         },
         "NBA Jam": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {
             "bsnes_mode7_wsobj": "unsafe",
             "bsnes_mode7_wsbg1": "on",
@@ -147,7 +147,7 @@
             "bsnes_mode7_wsbg3": "off",
             "emufusion_ws_scene": "7E06F1=02"
           },
-          "tested": "2026-11-06 host: played from tip-off. The sides show large black wedges and slices of crowd at the court's angled ends. Stays narrow. 2026-11-07 host: played both ends of the court and walked from boot to the tip-off. That verdict was too harsh: the court, hoops and crowd are right, and the black past the court's ends reads as the arena's end. A flag in work RAM keeps logos, menus and the attract demo narrow; pause stays wide. QA only until it passes on the Thor"
+          "tested": "2026-11-06 host: played from tip-off. The sides show large black wedges and slices of crowd at the court's angled ends. Stays narrow. 2026-11-07 host: played both ends of the court and walked from boot to the tip-off. That verdict was too harsh: the court, hoops and crowd are right, and the black past the court's ends reads as the arena's end. A flag in work RAM keeps logos, menus and the attract demo narrow; pause stays wide. 2026-11-07 Thor, candidate retry-457: from a saved state in play, tapped wide while moving, swiped narrow, tapped wide again, 0 fatal, checked at full size. Court, hoops and crowd are right; near the court ends a black block sits in the lower corner, with a small stale piece of floor at its very corner"
         },
         "NBA Live 95": {
           "strategy": "widen",
@@ -475,12 +475,12 @@
           "tested": "2026-11-05 host: Agrabah Market"
         },
         "Monster World IV": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {
             "emufusion_ws_patch": "5BE0:0000000000000000000000000000000000000000>044700300C47100064043E3C10003947C75E4E75;5BF4:0000000000000000000000000000000000000000>044000300C4010006404303C10003940C75E4E75;5C08:00000000000000000000>2F006100FFE8201F4E75;B168:0100>0130;B17E:3940C75E>4EB85BF4;B1BA:3947C75E>4EB85BE0;B1D2:3947C75E>4EB85BE0;AEFA:3940C75E>4EB85C08;B0BC:0021>002D;B10E:001F>0013;B113:20>2C;B11A:001F>0013;B11D:20>2C;B054:C79A>8E00;B0EE:C79A>8E00",
             "emufusion_ws_gate": "scroll"
           },
-          "tested": "2026-11-07 host: first island walked. The sides showed stale cells on slopes because the game's rows stop at 33 cells. A patch makes rows 45 cells starting 48 pixels left of the camera, loads columns 48 pixels further out each side, and moves one row buffer to unused memory. Against the level in work RAM, wrong cells in the new columns fell from 762 to 52 over 24 moments; those left look like objects the game draws itself, not proven. Rooms using the game's other map routines are not patched and not seen. QA only until it passes on the Thor"
+          "tested": "2026-11-07 host: first island walked. The sides showed stale cells on slopes because the game's rows stop at 33 cells. A patch makes rows 45 cells starting 48 pixels left of the camera, loads columns 48 pixels further out each side, and moves one row buffer to unused memory. Against the level in work RAM, wrong cells in the new columns fell from 762 to 52 over 24 moments; those left look like objects the game draws itself, not proven. Rooms using the game's other map routines are not patched and not seen. 2026-11-07 Thor, candidate retry-457: past the opening talk, tapped wide while walking, swiped narrow, tapped wide again, 0 fatal, checked at full size. Slopes, houses and bridges reach both edges with no gaps. The status bar stays where the game put it. Only the first island seen; rooms using its other map routines not seen"
         },
         "PGA Tour Golf III": {
           "strategy": "fixed-screen",
@@ -509,20 +509,20 @@
           "tested": "2026-11-05 host: menus, kickoff"
         },
         "NHL 94": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {
             "emufusion_ws_scene": "FFBD1E=FF",
             "emufusion_ws_world": "B:0-47;A:0-31"
           },
-          "tested": "2026-11-06 host: walked in play; coloured tile junk in the crowd beside the rink. 2026-11-07 host: from boot to the ice and round the rink. The arena fills 48 of the plane's 64 columns; the rest held tile junk, and past the 48th column it is now black. The score boxes are in a map plane, so they stay where the game put them. Menus, the scoreboard and pause stay narrow. QA only until it passes on the Thor"
+          "tested": "2026-11-06 host: walked in play; coloured tile junk in the crowd beside the rink. 2026-11-07 host: from boot to the ice and round the rink. The arena fills 48 of the plane's 64 columns; the rest held tile junk, and past the 48th column it is now black. The score boxes are in a map plane, so they stay where the game put them. Menus, the scoreboard and pause stay narrow. 2026-11-07 Thor, candidate retry-457: from a saved state in play, tapped wide while moving, swiped narrow, tapped wide again, 0 fatal, checked at full size. Rink and crowd reach the edges, black past the arena. Score boxes stay where the game put them"
         },
         "NBA Jam Tournament Edition": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {
             "emufusion_ws_world": "A:0-63;B:0-39/24-63",
             "emufusion_ws_camera": "A:838+569"
           },
-          "tested": "2026-11-06 host: played from tip-off. The old rule held only at the tip-off, so play was narrow anyway. Opening the sides shows repeated crowd at the court's end and a black wedge with the strict rule. Stays narrow. 2026-11-07 host: played both ends of the court, and menus from boot to the tip-off. The repeated crowd was the far hoop wrapping round on the hoop plane, so each side now keeps to its own hoop. Past the court's ends, where the plane held stale columns, it is black. The floor scrolls line by line, so that black edge slants across the floor when the camera is near an end. Menus keep their own black sides. QA only until it passes on the Thor"
+          "tested": "2026-11-06 host: played from tip-off. The old rule held only at the tip-off, so play was narrow anyway. Opening the sides shows repeated crowd at the court's end and a black wedge with the strict rule. Stays narrow. 2026-11-07 host: played both ends of the court, and menus from boot to the tip-off. The repeated crowd was the far hoop wrapping round on the hoop plane, so each side now keeps to its own hoop. Past the court's ends, where the plane held stale columns, it is black. The floor scrolls line by line, so that black edge slants across the floor when the camera is near an end. Menus keep their own black sides. 2026-11-07 Thor, candidate retry-457: from a saved state in play, tapped wide while moving, swiped narrow, tapped wide again, 0 fatal, checked at full size. Court, hoops and crowd are right; near the court ends a black wedge cuts across the lower corner"
         },
         "NHL 96": {
           "strategy": "widen",
@@ -530,15 +530,15 @@
             "emufusion_ws_scene": "FFB016!=00,FFB018!=00",
             "emufusion_ws_world": "B:0-47;A:0-31"
           },
-          "tested": "2026-11-05 host: faceoff; pause and setup keep bars. 2026-11-07 host: round the rink. A diamond pattern showed past the arena on the right, now black"
+          "tested": "2026-11-05 host: faceoff; pause and setup keep bars. 2026-11-07 host: round the rink. A diamond pattern showed past the arena on the right, now black. 2026-11-07 Thor, candidate retry-457: from a saved state in play, tapped wide while moving, swiped narrow, tapped wide again, 0 fatal, checked at full size. Past the rink black, no diamond pattern. Its menus were not re-checked after the new option"
         },
         "NHL Hockey": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {
             "emufusion_ws_scene": "FFD546=01",
             "emufusion_ws_world": "B:0-47;A:0-31"
           },
-          "tested": "2026-11-05 host: play; pause keeps bars. Stale ice beyond the crowd near the rink end still to fix. 2026-11-06: narrow, flat patches of ice beside the rink at its ends. 2026-11-07 host: from boot to the ice and round the rink. The arena fills 48 of the plane's 64 columns; the rest held tile junk, and past the 48th column it is now black. The score boxes are in a map plane, so they stay where the game put them. Menus, the scoreboard and pause stay narrow. QA only until it passes on the Thor"
+          "tested": "2026-11-05 host: play; pause keeps bars. Stale ice beyond the crowd near the rink end still to fix. 2026-11-06: narrow, flat patches of ice beside the rink at its ends. 2026-11-07 host: from boot to the ice and round the rink. The arena fills 48 of the plane's 64 columns; the rest held tile junk, and past the 48th column it is now black. The score boxes are in a map plane, so they stay where the game put them. Menus, the scoreboard and pause stay narrow. 2026-11-07 Thor, candidate retry-457: from a saved state in play, tapped wide while moving, swiped narrow, tapped wide again, 0 fatal, checked at full size. Rink and crowd reach the edges, black past the arena. Score boxes stay where the game put them"
         },
         "Shining Force II": {
           "strategy": "fixed-screen",
@@ -3499,12 +3499,12 @@
         "The Legend of Zelda: Ocarina of Time": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title sequence, Hyrule Field at true 16:9, logo undistorted. 2026-11-07 Thor, with the real stick: title and attract scenes again, wide inside its own letterbox. Short presses did not get past the title, so no new play"
+          "tested": "2026-11-05 Thor: title sequence, Hyrule Field at true 16:9, logo undistorted. 2026-11-07 Thor, with the real stick: title and attract scenes again, wide inside its own letterbox. Short presses did not get past the title, so no new play. 2026-11-07 Thor, with the real stick: Link's house reached in real play: the room reaches both edges at full size, hearts and buttons keep their shape. Outdoors not reached"
         },
         "Banjo-Kazooie": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title compared narrow and wide; logo the same width, world extends. A jigsaw-shaped wipe looks odd on black, to compare with narrow. 2026-11-07 Thor, with the real stick: long opening scene; the room reaches both edges, the text and portrait keep their shape. Spiral Mountain still not reached"
+          "tested": "2026-11-05 Thor: title compared narrow and wide; logo the same width, world extends. A jigsaw-shaped wipe looks odd on black, to compare with narrow. 2026-11-07 Thor, with the real stick: long opening scene; the room reaches both edges, the text and portrait keep their shape. Spiral Mountain still not reached. 2026-11-07 Thor, with the real stick: the whole long opening again; right to both edges. Spiral Mountain seen only narrow, after the swipe"
         },
         "Super Mario 64": {
           "strategy": "widen",
@@ -3514,22 +3514,22 @@
         "Banjo-Tooie": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: file room and story text compared narrow and wide; text the same width, room and sky extend. A world not played yet"
+          "tested": "2026-11-06 Thor: file room and story text compared narrow and wide; text the same width, room and sky extend. A world not played yet. 2026-11-07 Thor, with the real stick: the opening card game; wide inside its letterbox, text in shape. A world not reached"
         },
         "Blast Corps": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: name screen compared narrow and wide; the ring of letters the same width. A mission not played yet"
+          "tested": "2026-11-05 Thor: name screen compared narrow and wide; the ring of letters the same width. A mission not played yet. 2026-11-07 Thor, with the real stick: a real mission with the bulldozer: ground and rails reach both edges, money, radar and arrow in shape"
         },
         "Conker's Bad Fur Day": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro and first scenes in 3D at 16:9, title text keeps its shape. Play not reached"
+          "tested": "2026-11-05 Thor: intro and first scenes in 3D at 16:9, title text keeps its shape. Play not reached. 2026-11-07 Thor, with the real stick: opening only, right to both edges. Play not reached"
         },
         "Diddy Kong Racing": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: menus compared narrow and wide, GAME SELECT and its panels the same width; sky and flyby run to the edges. A race not played yet"
+          "tested": "2026-11-05 Thor: menus compared narrow and wide, GAME SELECT and its panels the same width; sky and flyby run to the edges. A race not played yet. 2026-11-07 Thor, with the real stick: the island opening with the stick moving; the bay, waterfalls and Taj's scene reach both edges. A race not reached"
         },
         "Excitebike 64": {
           "strategy": "fixed-screen",
@@ -3539,22 +3539,22 @@
         "Rayman 2: The Great Escape": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro compared narrow and wide; logo text the same width, 3D extends. Play not reached"
+          "tested": "2026-11-05 Thor: intro compared narrow and wide; logo text the same width, 3D extends. Play not reached. 2026-11-07 Thor, with the real stick: first cave; the picture widens inside the game's thin border. Moving through a level not reached"
         },
         "Star Fox 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro compared narrow and wide; text the same width. First wide frame showed a noise band at the top and sides, not seen again; a mission not flown yet"
+          "tested": "2026-11-05 Thor: intro compared narrow and wide; text the same width. First wide frame showed a noise band at the top and sides, not seen again; a mission not flown yet. 2026-11-07 Thor, with the real stick: first mission opening: ships, sea and sky are wide; portraits and meters keep their shape; the game keeps its thin black border"
         },
         "Turok 2: Seeds of Evil": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro compared narrow and wide; logo the same width, jungle extends inside its own letterbox. Play not reached"
+          "tested": "2026-11-05 Thor: intro compared narrow and wide; logo the same width, jungle extends inside its own letterbox. Play not reached. 2026-11-07 Thor, with the real stick: opening scenes: inside its letterbox, thin vertical black lines show in the wide picture, about 200 px in from each side of the game's window at full size, and are not seen narrow. Play not reached, so not yet judged"
         },
         "1080° Snowboarding": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: level, rider and board menus; text keeps its shape in wide 3D scenes. A run not played yet"
+          "tested": "2026-11-05 Thor: level, rider and board menus; text keeps its shape in wide 3D scenes. A run not played yet. 2026-11-07 Thor, with the real stick: a real run with steering, full size: slopes, lake and fences reach both edges, nothing cut off, time, damage and map in shape"
         },
         "The Legend of Zelda: Majora's Mask": {
           "strategy": "widen",
@@ -3569,7 +3569,7 @@
         "International Superstar Soccer '98": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: menus compared narrow and wide, the same width and sitting in bars. A match not played yet"
+          "tested": "2026-11-06 Thor: menus compared narrow and wide, the same width and sitting in bars. A match not played yet. 2026-11-07 Thor, with the real stick: menus sit in bars in shape. The match started just as the script swiped, so it has been seen only narrow"
         },
         "Tony Hawk's Pro Skater": {
           "strategy": "fixed-screen",
@@ -3594,7 +3594,7 @@
         "International Superstar Soccer 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: attract match wide with players in shape; title and menus keep their shape in bars. A match of my own not played"
+          "tested": "2026-11-06 Thor: attract match wide with players in shape; title and menus keep their shape in bars. A match of my own not played. 2026-11-07 Thor, with the real stick: team, stadium and line-up menus sit in bars in shape. A match not reached yet"
         },
         "Mario Kart 64": {
           "strategy": "widen",

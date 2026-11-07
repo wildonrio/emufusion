@@ -619,6 +619,17 @@ All four passed on the Thor on 2026-11-07 (3.2.159 candidate retry-452, core `4a
 narrow and tapped wide again, clean at full size with no crashes. They now reach players with the next release. Only the first level or course of each has
 been seen, and the right-hand walls have not been reached.
 
+### Mega Drive sports games and Monster World IV on the Thor (2026-11-07)
+
+Candidate retry-457, from saved states in play, tapped wide while moving, swiped narrow, tapped wide again, no crashes, checked at full size. NHL 94, NHL Hockey,
+NBA Jam Tournament Edition, SNES NBA Jam and Monster World IV move to widen, and NHL 96's new edge passes too, though its menus were not re-checked. Near the court ends
+both NBA Jams show black in a lower corner, a wedge on the Mega Drive and a block on the SNES. The game has nothing to draw there. The hockey score boxes are in a map
+plane, so they stay put. Monster World IV has been seen on its first island only.
+
+Vigilante 8 goes back to narrow. Driven with the stick, its slopes end in a sawtooth at both sides of the wide picture. It had shipped as widen in 3.2.159 on the
+strength of demo battles, and frame generation's captures caught it, not this stream's pass. Most N64 entries had been judged from openings, so the open-terrain games
+are being driven with the stick too.
+
 ### N64 with the real stick (2026-11-07)
 
 Most N64 games ignore the D-pad, so earlier scripted runs barely moved. `thor_game.py` now has `stick:DIR[+DIR]:SECONDS`. First six of the top 20 on 3.2.159
