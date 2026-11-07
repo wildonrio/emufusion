@@ -592,8 +592,10 @@ The test that matters is lockstep. Random inputs through the original and the pa
 state saved by a patched run must not be used as the reference: its video memory carries the fault into the original. Comparing a frame's side
 columns with a later frame of the same run proves nothing, since it is the same cell.
 
-Micro Machines 2 has a rewritten engine whose row buffer holds only 36 cells, so 32 visible cells would need that buffer moved in memory. It was not
-tried and stays narrow. All three recipes are QA only until they have passed on the Thor.
+Micro Machines 2 has a rewritten engine whose row buffer holds only 36 cells. It draws its first screen by scrolling row by row, so the row loader covers
+that too. The console has no spare RAM: every stretch that looked free was either addressed by the game or part of a table that happens to be zero on one
+track. `emufusion_ws_xram=1` makes the first page of the RAM mirror at E000 its own memory while wide, and the row buffer moves there. Random-input
+lockstep, 140 shots: only the first shots after loading a state saved narrow differ. All four recipes are QA only until they have passed on the Thor.
 
 ### The top 20 on the way to the Thor (2026-11-06, evening)
 

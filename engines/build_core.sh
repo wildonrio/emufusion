@@ -721,7 +721,7 @@ case "$ENGINE" in
             cp -R "$source/." "$build/"
             apply_locked_patch "$build" \
                 engines/patches/gearsystem-emufusion-widescreen.patch \
-                ae4644be95510ce315b15f2a2a715b9a7afa2b055c899474b1a0190cdc4e8e94
+                0d790aef511f798fe93a1550552cc0b5bd13fc82c998eda9d9aef9f3b39c5979
             source="$build"
         fi
         if [ "$ENGINE" = gearcoleco ]; then

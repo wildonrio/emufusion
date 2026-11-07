@@ -1,5 +1,5 @@
 diff --git a/platforms/libretro/libretro.cpp b/platforms/libretro/libretro.cpp
-index c1ad656..aef5c5b 100644
+index c1ad656..e07d700 100644
 --- a/platforms/libretro/libretro.cpp
 +++ b/platforms/libretro/libretro.cpp
 @@ -72,6 +72,109 @@ static bool libretro_supports_bitmasks = false;
@@ -166,7 +166,7 @@ index c1ad656..aef5c5b 100644
      }
  
      return 0;
-@@ -888,10 +1001,155 @@ static void update_input(void)
+@@ -888,10 +1001,164 @@ static void update_input(void)
      core->SetReset(reset_pressed);
  }
  
@@ -314,6 +314,15 @@ index c1ad656..aef5c5b 100644
 +        }
 +    }
 +
++    // emufusion_ws_xram: "1" gives a lengthened loader 256 bytes of its own at E000, only while wide.
++    var.key = "emufusion_ws_xram";
++    var.value = NULL;
++    {
++        extern u8* g_efXram;
++        static u8 ef_xram[256];
++        g_efXram = ef_wide_ext && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && atoi(var.value) ? ef_xram : NULL;
++    }
++
 +    var.key = "emufusion_ws_patch";
 +    var.value = NULL;
 +    snprintf(ef_patch_text, sizeof(ef_patch_text), "%s", environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "");
@@ -323,15 +332,16 @@ index c1ad656..aef5c5b 100644
      var.value = NULL;
  
 diff --git a/src/GearsystemCore.cpp b/src/GearsystemCore.cpp
-index e2475ca..561dd8b 100644
+index e2475ca..6ac229f 100644
 --- a/src/GearsystemCore.cpp
 +++ b/src/GearsystemCore.cpp
-@@ -164,6 +164,19 @@ void GearsystemCore::Init(GS_Color_Format pixelFormat)
+@@ -164,6 +164,20 @@ void GearsystemCore::Init(GS_Color_Format pixelFormat)
      InitMemoryRules();
  }
  
 +// EmuFusion Widescreen Hack: map loaders a recipe has lengthened take no console time, so the longer
 +// picture costs the game no frames. Set from emufusion_ws_freepc.
++u8* g_efXram = NULL;
 +int g_efFreeCount = 0;
 +u16 g_efFree[8][2];
 +
@@ -346,7 +356,7 @@ index e2475ca..561dd8b 100644
  bool GearsystemCore::RunToVBlank(u8* pFrameBuffer, s16* pSampleBuffer, int* pSampleCount, GS_Debug_Run* debug)
  {
      m_pFrameBuffer = pFrameBuffer;
-@@ -184,7 +197,10 @@ bool GearsystemCore::RunToVBlank(u8* pFrameBuffer, s16* pSampleBuffer, int* pSam
+@@ -184,7 +198,10 @@ bool GearsystemCore::RunToVBlank(u8* pFrameBuffer, s16* pSampleBuffer, int* pSam
  
          do
          {
@@ -357,7 +367,7 @@ index e2475ca..561dd8b 100644
              instruction_completed = true;
              vblank = m_pVideo->Tick(clockCycles);
              m_pAudio->Tick(clockCycles);
-@@ -225,7 +241,10 @@ bool GearsystemCore::RunToVBlank(u8* pFrameBuffer, s16* pSampleBuffer, int* pSam
+@@ -225,7 +242,10 @@ bool GearsystemCore::RunToVBlank(u8* pFrameBuffer, s16* pSampleBuffer, int* pSam
  
          do
          {
@@ -368,7 +378,7 @@ index e2475ca..561dd8b 100644
              vblank = m_pVideo->Tick(clockCycles);
              m_pAudio->Tick(clockCycles);
              m_master_clock_cycles += clockCycles;
-@@ -351,7 +370,7 @@ bool GearsystemCore::GetRuntimeInfo(GS_RuntimeInfo& runtime_info)
+@@ -351,7 +371,7 @@ bool GearsystemCore::GetRuntimeInfo(GS_RuntimeInfo& runtime_info)
      {
          if (m_pCartridge->IsGameGear() && !m_pCartridge->IsGameGearInSMSMode())
          {
@@ -377,6 +387,38 @@ index e2475ca..561dd8b 100644
              runtime_info.screen_height = GS_RESOLUTION_GG_HEIGHT;
          }
          else
+diff --git a/src/Memory_inline.h b/src/Memory_inline.h
+index 22eea6f..9132618 100644
+--- a/src/Memory_inline.h
++++ b/src/Memory_inline.h
+@@ -23,8 +23,14 @@
+ #include "Processor.h"
+ #include "Cartridge.h"
+ 
++// EmuFusion Widescreen Hack: while a recipe asks for it, the first page of the RAM mirror is its own memory.
++extern u8* g_efXram;
++
+ inline u8 Memory::Read(u16 address)
+ {
++    if (g_efXram && (address & 0xFF00) == 0xE000)
++        return g_efXram[address & 0xFF];
++
+     #ifndef GS_DISABLE_DISASSEMBLER
+     m_pProcessor->CheckMemoryBreakpoints(Processor::GS_BREAKPOINT_TYPE_ROMRAM, address, true);
+     #endif
+@@ -43,6 +49,12 @@ inline u8 Memory::Read(u16 address)
+ 
+ inline void Memory::Write(u16 address, u8 value)
+ {
++    if (g_efXram && (address & 0xFF00) == 0xE000)
++    {
++        g_efXram[address & 0xFF] = value;
++        return;
++    }
++
+     #ifndef GS_DISABLE_DISASSEMBLER
+     m_pProcessor->CheckMemoryBreakpoints(Processor::GS_BREAKPOINT_TYPE_ROMRAM, address, false);
+     #endif
 diff --git a/src/Video.cpp b/src/Video.cpp
 index 18f0c16..c57915a 100644
 --- a/src/Video.cpp

@@ -590,9 +590,15 @@
           "tested": "2026-11-07 host: first level played. The sides showed the map's far right, because the game keeps a correct 32-column window starting at the old left edge. A patch moves its loaders' window six tiles left, so the game draws the real level there itself. 60 random-input shots match the original exactly in the old screen area, and the video map matches the level in work RAM. Time, cool, lives and score moved to the corners. QA only until it passes on the Thor; later levels not reached"
         },
         "Micro Machines 2: Turbo Tournament": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-06 host: driven: the sides show broken pieces of the track for the same reason. Stays narrow. A map reader could open it up. 2026-11-07: traced. Same kind of loader, but a rewritten engine whose row buffer holds only 36 cells, so 32 visible cells would need that buffer moved in memory. Not tried; it stays narrow"
+          "strategy": "testing",
+          "options": {
+            "emufusion_ws_patch": "2209:000000000000000000>3A3DC1D605D0C60CC9;2212:0000000000000000000000>3A3DC1FE052A40C1D02BC9;221D:00000000000000000000000000>CD1E102A52C1232252C1C31E10;222A:000000000000000000000000000000000000000000000000>0102020203020402050206020702080209020A020B020003;0E7C:C60A>C600;1142:3E0A>3E00;1146:3E34>3E3E;143F:0616>0620;1445:115CC1>1100E0;0FF5:3E5C>3E00;0FFA:3EC1>3EE0;0FF1:CD1E10>CD1D22;0F98:2A40C1>CD1222;0FBA:2A40C1>CD1222;0FC5:3A3DC1>CD0922;1188:3A3DC1>CD0922;118E:2A40C1>CD1222;11A4:21740F>212A22",
+            "emufusion_ws_xram": "1",
+            "emufusion_ws_freepc": "0F8C-110D;1188-1431;1432-14C5;2209-2241",
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_hud": "obj:33-33:56-56:-1;obj:43-79:55-55:-1:9F-A2"
+          },
+          "tested": "2026-11-07 host: billiard-table course driven. A rewritten engine whose row buffer holds 36 cells. A patch moves its map window five columns left, adds a fourth block to each row and uses a 256-byte buffer the emulator provides at E000 while wide, because the console has no RAM to spare. Random-input lockstep: 140 shots, and only the first shots after loading a state saved narrow differ in the old screen area. Lap markers moved to the left side. QA only until it passes on the Thor; other track types not seen"
         },
         "Ecco the Dolphin": {
           "strategy": "testing",
