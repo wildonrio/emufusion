@@ -3612,6 +3612,116 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-06 Thor, library pass: play stays inside a narrow box with black sides"
+        },
+        "Buck Bumble": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: first level flying; 3D is wide. Not played through"
+        },
+        "Cruis'n USA": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: a race; the road and scenery fill the wide picture. Not played through"
+        },
+        "Duke Nukem 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, menus keep their shape. Not played through"
+        },
+        "Extreme-G": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: a race; the track fills the wide picture. Not played through"
+        },
+        "Gex 64: Enter the Gecko": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the first area; 3D is wide. Not played through"
+        },
+        "Hybrid Heaven": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the first area; 3D is wide. Not played through"
+        },
+        "Indiana Jones and the Infernal Machine": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, 2D keeps its shape. Not played through"
+        },
+        "Mario Party": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: opening and the board; 3D is wide. Not played through"
+        },
+        "Mortal Kombat 4": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: a fight; the arena fills the wide picture. Not played through"
+        },
+        "Mystical Ninja Starring Goemon": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the first room and opening; 3D is wide. Not played through"
+        },
+        "Quake II": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, though dark in this view. Not played through"
+        },
+        "Ridge Racer 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture. Not played through"
+        },
+        "RR64 - Ridge Racer 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture. Not played through"
+        },
+        "Rocket: Robot on Wheels": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: title and first room; 3D is wide. Not played through"
+        },
+        "Shadow Man": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: the first area; 3D is wide. Not played through"
+        },
+        "Star Wars: Shadows of the Empire": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: first stage flying; the snowfield fills the wide picture. Not played through"
+        },
+        "Wipeout 64": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: a race; the track fills the wide picture. Not played through"
+        },
+        "Resident Evil 2": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: bars of noise beside the title and menus"
+        },
+        "San Francisco Rush: Extreme Racing": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: flat bands run down both edges in a race"
+        },
+        "Snowboard Kids": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: a race stays inside a narrow box"
+        },
+        "Space Station Silicon Valley": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: stray slices of picture beside scenes"
+        },
+        "Top Gear Rally": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 Thor, library pass: bars of noise beside the picture"
         }
       },
       "release": true
