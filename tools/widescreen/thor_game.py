@@ -8,6 +8,7 @@ Script steps (whitespace separated):
   wait:SECONDS         keep playing
   press:NAME[+NAME]    tap pad buttons (south east north west start select l r up down left right)
   hold:NAME[+NAME]:SECONDS
+  stick:DIR[+DIR]:SECONDS  push the left stick (up down left right) and release; most 3D games ignore the D-pad
   shot:NAME            top-panel screenshot NAME.png in OUT
   tap:X,Y              touch the top panel
   swipe:X1,Y1,X2,Y2    swipe on the top panel
@@ -58,6 +59,23 @@ def buttons(names, value):
 
 def hold(names, seconds):
     shell(f'{buttons(names, 1)}; sleep {seconds}; {buttons(names, 0)}')
+
+
+def stick_axes():
+    """The left stick's limits, as (x min, x max, y min, y max), read from the device."""
+    found = re.findall(r'\b000([01])\s*:\s*value -?\d+, min (-?\d+), max (-?\d+)', shell(f'getevent -p {PAD}'))
+    ranges = {axis: (int(low), int(high)) for axis, low, high in found}
+    return ranges['0'] + ranges['1']
+
+
+def push_stick(names, seconds):
+    x_low, x_high, y_low, y_high = stick_axes()
+    x_mid, y_mid = (x_low + x_high) // 2, (y_low + y_high) // 2
+    parts = names.split('+')
+    x = x_low if 'left' in parts else x_high if 'right' in parts else x_mid
+    y = y_low if 'up' in parts else y_high if 'down' in parts else y_mid
+    shell(f'sendevent {PAD} 3 0 {x}; sendevent {PAD} 3 1 {y}; sendevent {PAD} 0 0 0; sleep {seconds}; '
+          f'sendevent {PAD} 3 0 {x_mid}; sendevent {PAD} 3 1 {y_mid}; sendevent {PAD} 0 0 0')
 
 
 def screen(path):
@@ -120,6 +138,9 @@ def play(step, log_dir):
     elif kind == 'hold':
         names, _, seconds = rest.rpartition(':')
         hold(names, float(seconds))
+    elif kind == 'stick':
+        names, _, seconds = rest.rpartition(':')
+        push_stick(names, float(seconds))
     elif kind == 'shot':
         screen(log_dir / f'{rest}.png')
     elif kind == 'tap':
