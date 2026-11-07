@@ -1661,6 +1661,10 @@
     "unified-android/build/emufusion-3.2.156-phase2-phase3-qualification-dc4f4948946a7f1d820c2051e792a4b12d982ffbf342d6242d6e78f9494d3ad7.apk": {
       "sha256": "dc4f4948946a7f1d820c2051e792a4b12d982ffbf342d6242d6e78f9494d3ad7",
       "reason": "Superseded rollback 3.2.156 (230); 3.2.157 is the rollback for 3.2.158, 2026-11-06."
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-609a38d700a4d50e49e0d6eada1ab3cd086e69ad45d1585403451986ce425565.apk": {
+      "sha256": "609a38d700a4d50e49e0d6eada1ab3cd086e69ad45d1585403451986ce425565",
+      "reason": "retry-434 QA build replaced by retry-435 on the Thor; coordinator no longer needs it"
     }
   }
 }

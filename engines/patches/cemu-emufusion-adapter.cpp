@@ -24,14 +24,12 @@
 // own KeyCache. When it holds no key that fits the disc, load() still fails
 // closed and reports Cemu's missing-disc-key / missing-ticket status.
 
-#include <sys/system_properties.h>
 #include <array>
 #include <atomic>
 #include <cmath>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <thread>
@@ -1478,22 +1476,6 @@ extern "C" __attribute__((visibility("default")))
 double emufusion_native_adapter_declared_video_hz(void)
 {
 	return static_cast<double>(kEmuFusionDeclaredVideoHz);
-}
-
-// Moves the next emulated vsync by ns (positive = later); the frame generator's
-// phase lock calls this with small steps. A refusal stops the host asking.
-// QA: setprop debug.emufusion.cemu_phase_nudge 1.
-extern "C" __attribute__((visibility("default")))
-bool emufusion_native_adapter_nudge_video_phase_v1(int64_t ns)
-{
-	static const bool enabled = []
-	{
-		char value[PROP_VALUE_MAX] = {};
-		return __system_property_get("debug.emufusion.cemu_phase_nudge", value) > 0 && atoi(value) != 0;
-	}();
-	if (!enabled) return false;
-	LatteTiming_nudgeEmuFusionVsyncPhase(ns);
-	return true;
 }
 
 extern "C" __attribute__((visibility("default")))
