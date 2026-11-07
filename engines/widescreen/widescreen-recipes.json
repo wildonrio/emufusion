@@ -3547,9 +3547,9 @@
           "tested": "2026-11-05 Thor: intro compared narrow and wide; text the same width. First wide frame showed a noise band at the top and sides, not seen again; a mission not flown yet. 2026-11-07 Thor, with the real stick: first mission opening: ships, sea and sky are wide; portraits and meters keep their shape; the game keeps its thin black border"
         },
         "Turok 2: Seeds of Evil": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro compared narrow and wide; logo the same width, jungle extends inside its own letterbox. Play not reached. 2026-11-07 Thor, with the real stick: opening scenes: inside its letterbox, thin vertical black lines show in the wide picture, about 200 px in from each side of the game's window at full size, and are not seen narrow. Play not reached, so not yet judged"
+          "tested": "2026-11-05 Thor: intro compared narrow and wide; logo the same width, jungle extends inside its own letterbox. Play not reached. 2026-11-07 Thor, with the real stick: opening scenes: inside its letterbox, thin vertical black lines show in the wide picture, about 200 px in from each side of the game's window at full size, and are not seen narrow. Play not reached, so not yet judged. 2026-11-07 Thor, real play with the stick at full size: thin light lines run down the picture about 200 px in from each side of the game's window, plus one along its top, in the opening and in play. They are not seen narrow. Narrow until they can be removed"
         },
         "1080° Snowboarding": {
           "strategy": "widen",
@@ -3629,7 +3629,7 @@
         "Doom 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: attract and a level view; 3D is wide. Not played through"
+          "tested": "2026-11-06 Thor, library pass: attract and a level view; 3D is wide. Not played through. 2026-11-07 Thor, real play with the stick at full size: the script stopped in the options screen, so no new play seen"
         },
         "Harvest Moon 64": {
           "strategy": "widen",
@@ -3644,7 +3644,7 @@
         "Turok: Dinosaur Hunter": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: first level; the jungle fills the wide picture. Not played through"
+          "tested": "2026-11-06 Thor, library pass: first level; the jungle fills the wide picture. Not played through. 2026-11-07 Thor, real play with the stick at full size: walked and turned in the first level; cliffs and jungle reach both edges, no lines, ammo and health in shape"
         },
         "Yoshi's Story": {
           "strategy": "widen",
@@ -3679,7 +3679,7 @@
         "Buck Bumble": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: first level flying; 3D is wide. Not played through"
+          "tested": "2026-11-06 Thor, library pass: first level flying; 3D is wide. Not played through. 2026-11-07 Thor, real play with the stick at full size: flew the first level; scenery reaches the edges of the window the game draws in, score and meters in shape"
         },
         "Cruis'n USA": {
           "strategy": "fixed-screen",
@@ -3687,9 +3687,9 @@
           "tested": "2026-11-06 Thor, library pass: a race; the road and scenery fill the wide picture. Not played through. 2026-11-07 Thor, real race at full size: the sky stops short of the sides, leaving hard black blocks in both top corners, seen with the car standing still. That earlier widen came from a short view. Narrow"
         },
         "Duke Nukem 64": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, menus keep their shape. Not played through"
+          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, menus keep their shape. Not played through. 2026-11-07 Thor, real play with the stick at full size: the sky stops at the old screen width with a hard vertical edge, and past that edge it is black above the buildings. Walls and floors extend and the status panels keep their shape. Same kind of fault as Cruis'n USA. Narrow"
         },
         "Extreme-G": {
           "strategy": "widen",
@@ -3729,7 +3729,7 @@
         "Quake II": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, though dark in this view. Not played through"
+          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, though dark in this view. Not played through. 2026-11-07 Thor, real play with the stick at full size: the script stopped in the pause screen, so no new play seen"
         },
         "Ridge Racer 64": {
           "strategy": "widen",
@@ -3754,7 +3754,7 @@
         "Star Wars: Shadows of the Empire": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: first stage flying; the snowfield fills the wide picture. Not played through"
+          "tested": "2026-11-06 Thor, library pass: first stage flying; the snowfield fills the wide picture. Not played through. 2026-11-07 Thor, real play with the stick at full size: flew and rolled over the snowfield; snow and sky reach both edges, meters in shape. In a hard roll close to the ground it shows large flat polygons and a loose shard; narrow not compared"
         },
         "Wipeout 64": {
           "strategy": "widen",
@@ -3789,7 +3789,7 @@
         "Turok 3: Shadow of Oblivion": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-07 Thor, library pass at full size: first level; the room extends inside the window the game draws in, ammo and health keep their shape. Not played through"
+          "tested": "2026-11-07 Thor, library pass at full size: first level; the room extends inside the window the game draws in, ammo and health keep their shape. Not played through. 2026-11-07 Thor, real play with the stick at full size: 22 real frames from frame generation's captures on its own recipe, checked for Turok 2's lines: no fixed line inside the picture, only the game's own border"
         },
         "Vigilante 8": {
           "strategy": "fixed-screen",

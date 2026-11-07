@@ -630,6 +630,13 @@ Vigilante 8 goes back to narrow. Driven with the stick, its slopes end in a sawt
 strength of demo battles, and frame generation's captures caught it, not this stream's pass. Most N64 entries had been judged from openings, so the open-terrain games
 are being driven with the stick too.
 
+### Driving N64's open-terrain games (2026-11-07)
+
+Twelve games steered both ways on the Thor, looking at the sides at full size. Three more go narrow, all marked widen from short views. Cruis'n USA and Duke Nukem 64 draw
+their sky only as wide as the old screen, so black shows past it. Turok 2 shows thin light lines at its old window's edges. Vigilante 8, from the same kind of check, has
+cut-off terrain. Mario Kart 64, Ridge Racer 64, Wipeout 64, Shadows of the Empire, Buck Bumble and Turok: Dinosaur Hunter stay wide. Extreme-G, Quake II and Doom 64 did not
+reach moving play under the script. Turok 3's real frames show no such lines. The rest of the N64 widen entries have still mostly been judged from short views.
+
 ### N64 with the real stick (2026-11-07)
 
 Most N64 games ignore the D-pad, so earlier scripted runs barely moved. `thor_game.py` now has `stick:DIR[+DIR]:SECONDS`. First six of the top 20 on 3.2.159
