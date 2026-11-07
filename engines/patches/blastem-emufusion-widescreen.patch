@@ -1,9 +1,9 @@
 diff --git a/ef_wide.h b/ef_wide.h
 new file mode 100644
-index 0000000..327e69f
+index 0000000..de05c00
 --- /dev/null
 +++ b/ef_wide.h
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,32 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. BlastEm's renderer still draws the original 320 or 256
@@ -27,6 +27,10 @@ index 0000000..327e69f
 +void ef_wide_set_hud(const char *value);
 +void ef_wide_set_gate(const char *value);
 +void ef_wide_set_band(const char *value);
++void ef_wide_set_patch(const char *value);
++void ef_wide_set_world(const char *value);
++void ef_wide_set_camera(const char *value);
++void ef_wide_apply_patch(uint16_t *cart, uint32_t size);
 +void ef_wide_set_ram(const uint8_t *work_ram);
 +int ef_wide_on(void);
 +int ef_wide_ext(int base_width);
@@ -34,10 +38,13 @@ index 0000000..327e69f
 +#endif
 diff --git a/ef_wide.inc b/ef_wide.inc
 new file mode 100644
-index 0000000..2354540
+index 0000000..dd9cb00
 --- /dev/null
 +++ b/ef_wide.inc
-@@ -0,0 +1,438 @@
+@@ -0,0 +1,576 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
 +// Included at the end of vdp.c; uses its static helpers.
 +#include "ef_wide.h"
 +uint32_t ef_wide_fb[EF_WIDE_FB_WIDTH * 294];
@@ -64,9 +71,83 @@ index 0000000..2354540
 +void ef_wide_set_ram(const uint8_t *work_ram) { ef_ram = work_ram; }
 +int ef_wide_on(void) { return ef_milli > 1000; }
 +
++// emufusion_ws_patch: "ADDR:OLD>NEW;..." in hex, ROM file offsets: small changes to a game's own map
++// loaders, so they draw as far as the wide picture. Every OLD is checked first and a ROM that differs
++// stays narrow. They stay on while narrow: the old screen is unchanged, and video memory is then
++// already right whenever the picture goes wide.
++static char ef_patch_text[1536];
++static uint8_t ef_patch_refused;
++
++void ef_wide_set_patch(const char *value)
++{
++	snprintf(ef_patch_text, sizeof(ef_patch_text), "%s", value ? value : "");
++	ef_patch_refused = 0;
++}
++
++static int ef_hex_byte(const char *text)
++{
++	int value = 0;
++	for (int i = 0; i < 2; i++) {
++		char c = text[i];
++		int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'A' && c <= 'F' ? c - 'A' + 10 : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
++		if (digit < 0) return -1;
++		value = value * 16 + digit;
++	}
++	return value;
++}
++
++static inline uint8_t ef_cart_read(const uint16_t *cart, uint32_t at)
++{
++	return at & 1 ? cart[at >> 1] & 0xFF : cart[at >> 1] >> 8;
++}
++
++static inline void ef_cart_write(uint16_t *cart, uint32_t at, uint8_t value)
++{
++	cart[at >> 1] = at & 1 ? (cart[at >> 1] & 0xFF00) | value : (cart[at >> 1] & 0x00FF) | value << 8;
++}
++
++static int ef_patch_walk(uint16_t *cart, uint32_t size, int write)
++{
++	const char *p = ef_patch_text;
++	while (*p) {
++		char *end;
++		unsigned long addr = strtoul(p, &end, 16);
++		if (end == p || *end != ':') return 0;
++		const char *before = end + 1, *sep = strchr(before, '>');
++		if (!sep || (sep - before) % 2) return 0;
++		int count = (int)(sep - before) / 2;
++		const char *after = sep + 1;
++		if ((int)strlen(after) < count * 2 || addr + count > size) return 0;
++		for (int i = 0; i < count; i++) {
++			int old_byte = ef_hex_byte(before + i * 2), new_byte = ef_hex_byte(after + i * 2);
++			uint8_t now = ef_cart_read(cart, addr + i);
++			if (old_byte < 0 || new_byte < 0 || (now != old_byte && now != new_byte)) return 0;
++		}
++		if (write) {
++			for (int i = 0; i < count; i++)
++				ef_cart_write(cart, addr + i, ef_hex_byte(after + i * 2));
++		}
++		p = after + count * 2;
++		if (*p == ';') p++;
++		else if (*p) return 0;
++	}
++	return 1;
++}
++
++void ef_wide_apply_patch(uint16_t *cart, uint32_t size)
++{
++	if (!ef_patch_text[0] || !cart || !size) return;
++	if (!ef_patch_walk(cart, size, 0)) {
++		ef_patch_refused = 1;
++		return;
++	}
++	ef_patch_walk(cart, size, 1);
++}
++
 +// Picture stays 4:3 at the base width, so the same aspect gives the same world on both.
 +int ef_wide_ext(int base_width)
 +{
++	if (ef_patch_refused) return 0;
 +	int width = (ef_milli * (base_width * 3 / 4) / 1000) & ~1;
 +	int ext = (width - base_width) / 2;
 +	if (ext < 0) ext = 0;
@@ -261,6 +342,61 @@ index 0000000..2354540
 +	ef_center_only = 1;
 +}
 +
++// The columns of each map plane that hold the game's world, when a plane is wider than its world:
++// PLANE:FIRST-LAST, or PLANE:FIRST-LAST/FIRST-LAST for the left and right new columns apart.
++// The first plane named holds the world: past its columns the new columns are black.
++static int ef_world_first[2][2], ef_world_last[2][2] = {{127, 127}, {127, 127}};
++static uint32_t ef_world_plane;
++
++void ef_wide_set_world(const char *value)
++{
++	for (int plane = 0; plane < 2; plane++) {
++		ef_world_first[plane][0] = ef_world_first[plane][1] = 0;
++		ef_world_last[plane][0] = ef_world_last[plane][1] = 127;
++	}
++	ef_world_plane = 0;
++	if (!value) return;
++	ef_world_plane = value[0] == 'B';
++	for (int plane = 0; plane < 2; plane++) {
++		const char *part = strstr(value, plane ? "B:" : "A:");
++		int first, last, first2, last2;
++		if (!part) continue;
++		int fields = sscanf(part + 2, "%d-%d/%d-%d", &first, &last, &first2, &last2);
++		if (fields < 2) continue;
++		ef_world_first[plane][0] = first;
++		ef_world_last[plane][0] = last;
++		ef_world_first[plane][1] = fields == 4 ? first2 : first;
++		ef_world_last[plane][1] = fields == 4 ? last2 : last;
++	}
++}
++
++static inline uint8_t ef_past_world(uint32_t plane, int x, uint32_t col)
++{
++	int side = x >= 0;
++	return (int)col < ef_world_first[plane][side] || (int)col > ef_world_last[plane][side];
++}
++
++// The camera's left limit on a plane's ten-bit scroll, and how far it can travel: PLANE:LOW+SPAN.
++// For a map streamed into a plane narrower than its world, where columns cannot tell the ends.
++static int ef_limit_span = -1, ef_limit_low;
++static uint32_t ef_limit_plane;
++
++void ef_wide_set_camera(const char *value)
++{
++	char plane;
++	ef_limit_span = -1;
++	if (value && sscanf(value, "%c:%d+%d", &plane, &ef_limit_low, &ef_limit_span) != 3) ef_limit_span = -1;
++	if (value) ef_limit_plane = value[0] == 'B';
++}
++
++static inline uint8_t ef_past_camera(int x, int base_width, uint16_t hscroll)
++{
++	if (ef_limit_span < 0) return 0;
++	int half = (1024 - ef_limit_span) / 2;
++	int travel = ((((-(int)hscroll - ef_limit_low) & 0x3FF) + half) & 0x3FF) - half;
++	return x + travel < 0 || x + travel >= ef_limit_span + base_width;
++}
++
 +// One plane pixel at screen position x of this line, 0 when transparent, else the same
 +// byte the renderer's scroll buffers hold: palette, colour and priority.
 +static uint8_t ef_plane_pixel(vdp_context *c, uint32_t plane, int x, uint32_t line, uint16_t hscroll, uint16_t vscroll)
@@ -269,6 +405,7 @@ index 0000000..2354540
 +	uint32_t vmask = 0xFF | (c->regs[REG_SCROLL] & 0x30) << 4;
 +	int world = x - (int)hscroll;
 +	uint32_t col = (uint32_t)(world >> 3) & (cols - 1);
++	if (ef_past_world(plane, x, col)) return 0;
 +	uint32_t y = (vscroll + line) & vmask;
 +	uint32_t row = y >> 3;
 +	uint32_t offset = (row * cols + col) * 2;
@@ -456,6 +593,11 @@ index 0000000..2354540
 +		for (int i = 0; i < ext; i++) {
 +			int x = side ? base_width + i : i - ext;
 +			int sx = x + ext;
++			if (ef_past_camera(x, base_width, ef_limit_plane ? hs_b : hs_a) ||
++					ef_past_world(ef_world_plane, x, (uint32_t)((x - (int)(ef_world_plane ? hs_b : hs_a)) >> 3) & (ef_plane_cols(c) - 1))) {
++				out[sx] = 0;
++				continue;
++			}
 +			uint8_t a = no_a ? 0 : ef_plane_pixel(c, 0, x, line, hs_a, vs_a);
 +			uint8_t b = ef_plane_pixel(c, 1, x, line, hs_b, vs_b);
 +			uint8_t pixel;
@@ -477,7 +619,7 @@ index 0000000..2354540
 +	}
 +}
 diff --git a/libblastem.c b/libblastem.c
-index c239267..78182d1 100644
+index c239267..f991f8c 100644
 --- a/libblastem.c
 +++ b/libblastem.c
 @@ -7,6 +7,7 @@
@@ -524,7 +666,7 @@ index c239267..78182d1 100644
  	switch (id) {
  	case RETRO_MEMORY_SYSTEM_RAM:
  		switch (stype) {
-@@ -473,6 +480,35 @@ void render_destroy_window(uint8_t which)
+@@ -473,6 +480,40 @@ void render_destroy_window(uint8_t which)
  	//not supported in lib build
  }
  
@@ -545,6 +687,11 @@ index c239267..78182d1 100644
 +	ef_read_option("emufusion_ws_strict", ef_wide_set_strict);
 +	ef_read_option("emufusion_ws_gate", ef_wide_set_gate);
 +	ef_read_option("emufusion_ws_band", ef_wide_set_band);
++	ef_read_option("emufusion_ws_world", ef_wide_set_world);
++	ef_read_option("emufusion_ws_camera", ef_wide_set_camera);
++	ef_read_option("emufusion_ws_patch", ef_wide_set_patch);
++	if (stype == SYSTEM_GENESIS || stype == SYSTEM_SEGACD)
++		ef_wide_apply_patch(((genesis_context *)current_system)->cart, media.size);
 +	ef_read_option("emufusion_ws_scene", ef_wide_set_scene);
 +	ef_read_option("emufusion_ws_hud", ef_wide_set_hud);
 +	ef_read_option("emufusion_ws_aspect", ef_wide_set_aspect);
@@ -560,7 +707,7 @@ index c239267..78182d1 100644
  static uint32_t fb[LINEBUF_SIZE * 294 * 2];
  static uint8_t last_fb;
  uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
-@@ -494,6 +530,25 @@ void render_framebuffer_updated(uint8_t which, int width)
+@@ -494,6 +535,25 @@ void render_framebuffer_updated(uint8_t which, int width)
  	unsigned height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
  	width -= (overscan_left + overscan_right);
  	unsigned base_height = height;
@@ -586,7 +733,7 @@ index c239267..78182d1 100644
  	if (which != last_fb) {
  		height *= 2;
  		last_fb = which;
-@@ -502,7 +557,7 @@ void render_framebuffer_updated(uint8_t which, int width)
+@@ -502,7 +562,7 @@ void render_framebuffer_updated(uint8_t which, int width)
  		struct retro_game_geometry geometry = {
  			.base_width = width,
  			.base_height = height,

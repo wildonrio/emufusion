@@ -594,6 +594,18 @@ corner stays visible there.
 The first run on the Thor found what the Mac runs could not, because they all started wide: a game started narrow and tapped wide kept old map pieces in
 the middle of the picture, since the patches only came on at the tap. Test the way a player plays: start narrow, tap in play, move straight away.
 
+Monster World IV on the Mega Drive had the same kind of fault: small stair-stepped gaps in the corners on slopes, because its rows stop at 33 cells. The
+same option on BlastEm makes rows 45 cells from 48 pixels left of the camera, loads columns 48 pixels further out each side, and moves one row buffer to
+unused memory. Its timing is not held still, so lockstep cannot be exact here. Instead each visible foreground cell was computed from the level in work
+RAM by the game's own formula: wrong cells in the new columns fell from 762 to 52 over 24 moments. Those left look like objects the game draws itself.
+Rooms using its other map routines are not patched and have not been seen.
+
+The Mega Drive sports games needed two more options, no patch. `emufusion_ws_world=PLANE:FIRST-LAST;PLANE:FIRST-LAST` names the columns of each map plane
+that hold the game. The first plane named holds the world and past it the new columns are black; a plane can take a second range for the right-hand side.
+All three hockey games keep the arena in 48 of 64 columns, with tile junk in the other 16. NBA Jam Tournament Edition keeps both hoops on one plane, so the
+new columns showed the far hoop. `emufusion_ws_camera=PLANE:LOW+SPAN` is for a map streamed into a narrower plane, where columns cannot tell where the world
+ends: it takes the camera's limits from the scroll. Both are read where the new columns are drawn, so the halfway image follows them.
+
 The test that matters is lockstep. Random inputs through the original and the patched game, then every pixel of the old 160x144 area compared. A
 state saved by a patched run must not be used as the reference: its video memory carries the fault into the original. Comparing a frame's side
 columns with a later frame of the same run proves nothing, since it is the same cell.

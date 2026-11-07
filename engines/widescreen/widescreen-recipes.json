@@ -139,9 +139,15 @@
           "tested": "2026-11-04 host: grass court match. 2026-11-06: menus keep bars, only a match widens. After Quick Resume a match stays narrow until the next redraw, from the strict rule"
         },
         "NBA Jam": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-06 host: played from tip-off. The sides show large black wedges and slices of crowd at the court's angled ends. Stays narrow"
+          "strategy": "testing",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "off",
+            "emufusion_ws_scene": "7E06F1=02"
+          },
+          "tested": "2026-11-06 host: played from tip-off. The sides show large black wedges and slices of crowd at the court's angled ends. Stays narrow. 2026-11-07 host: played both ends of the court and walked from boot to the tip-off. That verdict was too harsh: the court, hoops and crowd are right, and the black past the court's ends reads as the arena's end. A flag in work RAM keeps logos, menus and the attract demo narrow; pause stays wide. QA only until it passes on the Thor"
         },
         "NBA Live 95": {
           "strategy": "widen",
@@ -469,9 +475,12 @@
           "tested": "2026-11-05 host: Agrabah Market"
         },
         "Monster World IV": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-06 host: walked in play; black blocks in the clouds beside the first area, in play"
+          "strategy": "testing",
+          "options": {
+            "emufusion_ws_patch": "5BE0:0000000000000000000000000000000000000000>044700300C47100064043E3C10003947C75E4E75;5BF4:0000000000000000000000000000000000000000>044000300C4010006404303C10003940C75E4E75;5C08:00000000000000000000>2F006100FFE8201F4E75;B168:0100>0130;B17E:3940C75E>4EB85BF4;B1BA:3947C75E>4EB85BE0;B1D2:3947C75E>4EB85BE0;AEFA:3940C75E>4EB85C08;B0BC:0021>002D;B10E:001F>0013;B113:20>2C;B11A:001F>0013;B11D:20>2C;B054:C79A>8E00;B0EE:C79A>8E00",
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-07 host: first island walked. The sides showed stale cells on slopes because the game's rows stop at 33 cells. A patch makes rows 45 cells starting 48 pixels left of the camera, loads columns 48 pixels further out each side, and moves one row buffer to unused memory. Against the level in work RAM, wrong cells in the new columns fell from 762 to 52 over 24 moments; those left look like objects the game draws itself, not proven. Rooms using the game's other map routines are not patched and not seen. QA only until it passes on the Thor"
         },
         "PGA Tour Golf III": {
           "strategy": "fixed-screen",
@@ -500,31 +509,41 @@
           "tested": "2026-11-05 host: menus, kickoff"
         },
         "NHL 94": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-06 host: walked in play; coloured tile junk in the crowd beside the rink"
+          "strategy": "testing",
+          "options": {
+            "emufusion_ws_scene": "FFBD1E=FF",
+            "emufusion_ws_world": "B:0-47;A:0-31"
+          },
+          "tested": "2026-11-06 host: walked in play; coloured tile junk in the crowd beside the rink. 2026-11-07 host: from boot to the ice and round the rink. The arena fills 48 of the plane's 64 columns; the rest held tile junk, and past the 48th column it is now black. The score boxes are in a map plane, so they stay where the game put them. Menus, the scoreboard and pause stay narrow. QA only until it passes on the Thor"
         },
         "NBA Jam Tournament Edition": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-06 host: played from tip-off. The old rule held only at the tip-off, so play was narrow anyway. Opening the sides shows repeated crowd at the court's end and a black wedge with the strict rule. Stays narrow"
+          "strategy": "testing",
+          "options": {
+            "emufusion_ws_world": "A:0-63;B:0-39/24-63",
+            "emufusion_ws_camera": "A:838+569"
+          },
+          "tested": "2026-11-06 host: played from tip-off. The old rule held only at the tip-off, so play was narrow anyway. Opening the sides shows repeated crowd at the court's end and a black wedge with the strict rule. Stays narrow. 2026-11-07 host: played both ends of the court, and menus from boot to the tip-off. The repeated crowd was the far hoop wrapping round on the hoop plane, so each side now keeps to its own hoop. Past the court's ends, where the plane held stale columns, it is black. The floor scrolls line by line, so that black edge slants across the floor when the camera is near an end. Menus keep their own black sides. QA only until it passes on the Thor"
         },
         "NHL 96": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_scene": "FFB016!=00,FFB018!=00"
+            "emufusion_ws_scene": "FFB016!=00,FFB018!=00",
+            "emufusion_ws_world": "B:0-47;A:0-31"
           },
-          "tested": "2026-11-05 host: faceoff; pause and setup keep bars"
+          "tested": "2026-11-05 host: faceoff; pause and setup keep bars. 2026-11-07 host: round the rink. A diamond pattern showed past the arena on the right, now black"
         },
         "NHL Hockey": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: play; pause keeps bars. Stale ice beyond the crowd near the rink end still to fix. 2026-11-06: narrow, flat patches of ice beside the rink at its ends"
+          "strategy": "testing",
+          "options": {
+            "emufusion_ws_scene": "FFD546=01",
+            "emufusion_ws_world": "B:0-47;A:0-31"
+          },
+          "tested": "2026-11-05 host: play; pause keeps bars. Stale ice beyond the crowd near the rink end still to fix. 2026-11-06: narrow, flat patches of ice beside the rink at its ends. 2026-11-07 host: from boot to the ice and round the rink. The arena fills 48 of the plane's 64 columns; the rest held tile junk, and past the 48th column it is now black. The score boxes are in a map plane, so they stay where the game put them. Menus, the scoreboard and pause stay narrow. QA only until it passes on the Thor"
         },
         "Shining Force II": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06 host: house and town map reached; the map stops at the old edge and the trees are cut off beside black, so widening shows nothing. Needs a map reader"
+          "tested": "2026-11-06 host: house and town map reached; the map stops at the old edge and the trees are cut off beside black, so widening shows nothing. Needs a map reader. 2026-11-07: traced as far as its start menu only. It copies 1024 cells from RAM to the map plane in one transfer each frame, which suggests a plane only as wide as the old screen, so a small loader patch is unlikely to open it. Plane size not read and no map scene traced; not pursued"
         },
         "Exo-Squad": {
           "strategy": "fixed-screen",

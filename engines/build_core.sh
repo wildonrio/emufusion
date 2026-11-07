@@ -805,7 +805,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$source" \
             engines/patches/blastem-emufusion-widescreen.patch \
-            6e973d9704d5324039f903f8fd40ca8de343d4013ba1ff7777d7b1605ee8ced7
+            8fa218db72309c94f3e27dbd7fb5b0e663a8a8b38ad11eb2d6055f78f91a1c31
         # Frame generation: the image halfway between frames, by the VDP's own rules, when asked for.
         apply_locked_patch "$source" \
             engines/patches/blastem-emufusion-halfway.patch \
