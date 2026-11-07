@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "ca6959588d60cd876f8f529e5eef850da1c8118d7745f045d5d77ca09149e98e": "Rollback 3.2.157 (231), released and Thor-tested 2026-11-06.",
-    "cd183b4d3ce0fefeadba9c69cca83e74116ee5aee9b2451f6007dca26da04f87": "Release 3.2.158 (232), GitHub v3.2.158, Thor-tested from a cool start 2026-11-06."
+    "cd183b4d3ce0fefeadba9c69cca83e74116ee5aee9b2451f6007dca26da04f87": "Rollback 3.2.158 (232), released and Thor-tested 2026-11-06.",
+    "b2f516d7a0d5deaf2e76c67b5154b3e3345fab2524bbc30071c422afd78018c3": "Release 3.2.159 (233), GitHub v3.2.159, Thor-tested from a cool start 2026-11-07."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -1733,6 +1733,22 @@
     "unified-android/build/emufusion-3.2.159-phase2-phase3-qualification-aee929b12a107d31ca1a3d69b5891e6bbf574b073fb84e503cc20085f7fdf43d.apk": {
       "sha256": "aee929b12a107d31ca1a3d69b5891e6bbf574b073fb84e503cc20085f7fdf43d",
       "reason": "retry-453 QA build replaced by retry-454"
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-ca6959588d60cd876f8f529e5eef850da1c8118d7745f045d5d77ca09149e98e.apk": {
+      "sha256": "ca6959588d60cd876f8f529e5eef850da1c8118d7745f045d5d77ca09149e98e",
+      "reason": "Superseded rollback 3.2.157 (231); 3.2.158 is the rollback for 3.2.159, 2026-11-07."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification.apk": {
+      "sha256": "ca6959588d60cd876f8f529e5eef850da1c8118d7745f045d5d77ca09149e98e",
+      "reason": "Superseded rollback 3.2.157 (231); 3.2.158 is the rollback for 3.2.159, 2026-11-07."
+    },
+    "unified-android/build/emufusion-3.2.159-phase2-phase3-qualification-3b9f30bdacaba7ff3eca8641cb6ea8e01a767a12cb9325f925df4e7c1d63a26b.apk": {
+      "sha256": "3b9f30bdacaba7ff3eca8641cb6ea8e01a767a12cb9325f925df4e7c1d63a26b",
+      "reason": "retry-455 same members as the released retry-454; a 3.2.158 QA build"
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-ec7c52b44534d98081575ae422630462152b6bc4ab06fbfcb67fc34c36ac3021.apk": {
+      "sha256": "ec7c52b44534d98081575ae422630462152b6bc4ab06fbfcb67fc34c36ac3021",
+      "reason": "retry-455 same members as the released retry-454; a 3.2.158 QA build"
     }
   }
 }

@@ -45,23 +45,23 @@ reviewed before this revision; its work was not discarded.
 
 The 3-D failures are fast near objects: Double Dash's karts tear at their edges, and the per-phase field is 1/8 of a 1080p picture.
 
-**Status, November 6 (Thor, 3.2.158 from a cool start, 16-s windows scaled to 30 s, one or two runs; see the November 6 entries).**
+**Status, November 7 (Thor, 3.2.159 from a cool start, 16-s windows scaled to 30 s, except 33 s for Wind Waker HD and 49 s for Ocarina; see the November 7 entries).**
 
 | System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content, replay bench: now, with the 160-wide image check (QA) |
 | --- | --- | --- | --- |
-| NES | 99.9%, 3.7 | 9.0 / 17.4 (9.9 / 18.3) ms | 0%, stays off |
-| Mega Drive | 99.8%, 5.5 | 8.9 / 17.2 ms | 46%, stays off |
+| NES | 99.9%, 1.8 (fast 60%) | 9.5 / 17.9 (12.6 / 20.9) ms | 0%, stays off |
+| Mega Drive | 99.9%, 1.8 (fast 88%) | 9.1 / 17.4 (10.0 / 18.3) ms | the core's own image: 0-36% by set, shipped generator 3-74%; the owner's check is pending |
 | SNES (drain trial) | 99.9%, 2 | 17.7 / 26.1 (17.3 / 25.6) ms | 0-14%, stays off |
 | GBA (drain trial) | 99.8%, 5.5 | 9.0 / 17.3 ms | not re-measured |
 | Star Fox 64 | not re-measured | not re-measured | 4%, 4% |
-| Ocarina of Time (20 fps) | 99.6%, 4.9 | 11.6 / 36.6 ms (real minimum 33.3) | 0-4%, not on the device bench |
-| Double Dash, two runs | 99.8%, 5.5; 99.8%, 7.3 | 19.5 / 27.9 (16.6 / 24.9), 11.2 / 19.6 (13.4 / 21.7) ms | 17%, 7% |
-| NSMBU Deluxe | 99.9%, 3.7 (0-20 over earlier builds) | 19.9 / 28.2 (19.8 / 28.1) ms | world map 14%, 7% |
-| Link's Awakening (about 40 s in, likely the beach scene; the older 94.3% was its intro movie) | 98.4%, 55 | 23.1 / 30.7 (22.7 / 31.0) ms | 6%, 11% |
-| Wind Waker HD (title flight, 30 fps source, two runs) | 98.2%, 32; 96.6%, 60 | 27.7 / 44.3 ms | 11%, 0% |
-| SM3DW | 98.6% in its play window | 13.8 / 23.0 ms | 0%, not on the device bench |
+| Ocarina of Time (20 fps), three runs | 96.4%, 43; 99.3%, 8.5; 98.0%, 24 | 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench |
+| Double Dash | 99.8%, 5.5 (fast 94%) | 11.2 / 19.5 (11.6 / 19.9) ms | 17%, 7% |
+| NSMBU Deluxe | 99.9%, 3.7 (fast 89%) | 10.5 / 18.8 (11.8 / 20.2) ms | world map 14%, 7% |
+| Link's Awakening (about 40 s in, likely the beach scene) | 98.0%, 70 (fast 5%) | 24.3 / 32.9 (25.2 / 33.6) ms | 6%, 11% |
+| Wind Waker HD (title flight, 30 fps source, two runs) | 99.4%, 10; 99.2%, 14 | 19.4 / 36.1 ms | 11%, 0% |
+| SM3DW | 53.5% over the whole 47-s window, which includes loads (98.6% in its play window on 3.2.158) | 11.2 / 19.6 (14.4 / 23.3) ms | 0%, not on the device bench |
 
-Nothing is at 10/10 on all three measures yet. Whether a run reaches the compositor's fast state is close to chance, and it is worth about 8 ms.
+Nothing is at 10/10 on all three measures yet. The compositor's fast state, worth about 8 ms, now holds 60-94% of the time on these runs; each fall from it costs a hitch at the drain.
 
 **10/10 targets, per tested system in gameplay (loads and keep-alive frames excluded):**
 - **Smoothness:** at least 99.5% of output intervals at the intended cadence, and at most 5 Present-rhythm hitches per 30 s.
@@ -267,13 +267,61 @@ Nothing is at 10/10 on all three measures yet. Whether a run reaches the composi
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 7 (latest) **— Why Wind Waker HD could not hold one scan: the GamePad image takes its own compositor pass. In the tree: Cemu's Pad stamp and the held swap, 19.3 / 35.9 ms against 27.7 / 44.3 ms. A halfway image from BlastEm itself, QA.**
+November 7 (latest) **— 3.2.159 (233, `b2f516d7`, retry-454): Wind Waker HD at 99.4% and a scan less latency, the halfway image default on for BlastEm, and the frame thread's CPU mask no longer collapses. On retry-454, cool starts: Wind Waker HD 99.4%, 99.2%; Mega Drive 99.9%, 9.1 / 17.4 ms; NES 99.9%, 9.5 / 17.9 ms; NSMBU Deluxe 99.9%, 10.5 / 18.8 ms; Double Dash 99.8%, 11.2 / 19.5 ms.**
+
+- **Why identical code gave 1 or 190 late real images in Wind Waker HD.** After the Pad stamp, real images were 1-4 of 1,000 late through the evening, and 22-264 from the next morning. The stamp's base made no difference (from the Pad's own present: 27, 29; from the TV image's: 22, 32).
+  - **What decides it:** a real image's pass starts at the same time either way (S-1.5 ms) and its main-display commit ends S-0.03 when it makes the scan and S+0.29 when it does not. The commit has about 0.1 ms to spare. CPU clocks are not the variable: `performance_mode=2` fixes them at 2016, 2803 and 3187 MHz, and DDR stayed at 4224 MHz with L3 and LLCC showing no link to late frames (`fg/freqpoll.sh`, `fg/ctlpoll.sh`).
+  - **The commit thread:** `composer-service` is woken about S-0.66 ms and takes the smallest core that fits. On a small core the commit takes 0.28 ms; on a medium core, 0.14 (`fg/trcpu.py`). A small core only stops fitting near 100% load.
+  - **Kept small cores full, shipped for Cemu's held output:** three threads at the lowest priority, one per small core, in the CPU's low-power wait for an event (`SmallCoreOccupancy`, QA `emufusion_framegen_small_cores=0`). Little-core temperature showed no pattern: 72.8 and 74.8 C with them, 72.7 without, within the drift of the run order.
+
+  | Small cores | Real images late of 1,000 | On cadence |
+  | --- | --- | --- |
+  | Nothing, same morning (mask fixed) | 108, 190, 28 | 89.0, 80.3, 96.8% |
+  | Threads only for the pass, 1.5 ms in 16.7 | 49, 39 (trace: commit still on the small cores) | 94.3, 96.1% |
+  | One or two cores full | 26, 44 | 96.8, 94.9% |
+  | All three full, spinning (test from the shell) | 2, 4, 2 | 98.8, 98.5, 99.2% |
+  | All three full, low-power wait (shipped) | 9, 1, 1, 2 | 98.0, 99.3, 99.4, 99.2% |
+
+  The hitches left are mostly source gaps and late arrivals from Cemu. Wind Waker HD is still above 5 per 30 s: 10-14.
+- **The frame thread's CPU mask collapsed (bug since 3.2.143, fixed).** The once-a-second re-pin intersected with `sched_getaffinity`, which leaves out cores that core control has paused at that moment. So the mask ratcheted, 0xf8 to 0x38 to 0x18, and stayed on two cores for the rest of the game, in 98 of 225 logged runs since November 5. Core control pauses cores in some stretches of hours and not others, with no reboot between (gold min 3 of 4, prime min 0 of 1). What flips it is not known yet; `fg/statewatch.sh` is watching.
+  - The fast state followed this. By median across November 6-7 default runs, mask whole against narrowed: Mega Drive fast 94% against 10%, Double Dash 91 against 36, NES 50 against 20, NSMBU Deluxe 39 against 15. That is why it looked like chance. In the gate, stretches of it lasted 3-11 s, with a drain after each fall.
+  - This compares different hours, so how much is the mask and how much the paused cores themselves is not separated yet.
+- **The gate, retry-454, default settings, cool starts, one run unless shown.** Host tests pass (Java, 409 Python). No fatals or ANRs. Mask 0xf8 throughout.
+
+  | Game | On cadence | Hitches per 30 s | Fast | First generated / real, median (mean) |
+  | --- | --- | --- | --- | --- |
+  | Wind Waker HD, two runs | 99.4, 99.2% | 10.0, 13.6 | 100% | 19.4 / 36.1 ms |
+  | Mega Drive | 99.9% | 1.8 | 88% | 9.1 / 17.4 (10.0 / 18.3) ms |
+  | NES | 99.9% | 1.8 | 60% | 9.5 / 17.9 (12.6 / 20.9) ms |
+  | NSMBU Deluxe | 99.9% | 3.7 | 89% | 10.5 / 18.8 (11.8 / 20.2) ms |
+  | Double Dash | 99.8% | 5.5 | 94% | 11.2 / 19.5 (11.6 / 19.9) ms |
+  | Ocarina of Time, three runs | 96.4, 99.3, 98.0% | 43, 8.5, 24 | 99-100% | 11.2 / 36.2 ms |
+  | Link's Awakening | 98.0% | 70 | 5% | 24.3 / 32.9 (25.2 / 33.6) ms |
+  | SM3DW, whole window with loads | 53.5% | 589 | 84% | 11.2 / 19.6 (14.4 / 23.3) ms |
+
+  - Ocarina is wider than its earlier 99.2-99.6%. Its late frames follow late arrivals from the core, a scan or so at a time. Whether the wider mask moved that is not settled.
+  - Metroid Dread reads 66% and 70% by the plain count, but it is not comparable: it reached 55-60 fps for much of the window where it held 30 before, and its window moves between rates.
+  - PS1 not re-measured: the WipEout 3 Quick Resume now appears to sit on a still screen (one present a second, 0.02% motion). The harness needs a moving state. Twisted Metal would be a better gate game.
+- **Tried and not adopted, all removed from the tree:**
+  - The real image queued a pass early with a stamp just after its slot, to warm the pass: 111, 46 against 25, 31 late. Swapped at S-10.2 ms, it did not reach the earlier pass.
+  - Waiting at arrival until the real image's latch (back for a day): 47, 45, 123 with it, 57 without. No evidence, and it read 1.6 ms too low in the latency figure.
+  - The image check in play: Wind Waker HD 80 and 264 real images late, Double Dash 98.2%, 61.6, NSMBU Deluxe 99.8%, 5.5. Stays off, though those runs fell in the paused-core morning, so it isn't a clean comparison.
+  - Keeping the small cores full on one-scan sources, from the shell, before the mask fix: Mega Drive fast 0, 21 against 0, 88. Not retested since.
+- **New artifact reports from the widescreen stream, wide N64 with generation on, not yet worked on:** Turok 3 (24 to 46 fps): jagged black holes around the weapon and torn ceiling edges, near the game's own black border. Vigilante 8 (59 to 118 fps): blocky white patches at the left edge and jagged fir trees. Samples that land outside the picture are clamped and then compete as if real: `texture2D(uPrevious,clamp(vTexCoord-uPhase*pv,...))` in the composite. An older stored set's error shows no general edge problem, so these need captures of their own.
+- **Next:**
+  1. Separate the mask from paused cores: Mega Drive and NES with core control logged. Then whether keeping cores occupied lengthens the fast state, since each fall still costs a hitch.
+  2. Captures of Turok 3 and Vigilante 8 and a sample that knows it left the picture.
+  3. Wind Waker HD's Cemu source gaps, the rest of its 10-14 hitches.
+  4. The owner's visual check of the halfway image; the same method for other 2-D systems.
+- **Disk:** about 7 GiB freed this stretch: 2.87 GiB of closed trial scratch and about 4.4 GiB of QA APKs and the superseded rollback.
+
+November 7 **— Why Wind Waker HD could not hold one scan: the GamePad image takes its own compositor pass. In the tree: Cemu's Pad stamp and the held swap, 19.3 / 35.9 ms against 27.7 / 44.3 ms. A halfway image from BlastEm itself, QA.**
 
 - **The cause, from a 6-s system trace (`ATRACE=path` in `pace_move.py`; `fg/trsf3.py` joins it to the physical trace by the swaps).**
   - The Wii U GamePad image is a second layer: PreviewActivity's SurfaceView on the lower panel, its own `QueuePresentKHR`. Queued alone, its buffer reached the compositor about 9 ms after the TV image's arrival and took a pass of its own, a scan before the generated image's.
   - The compositor commits every display on every pass. On a late frame the main display's commit blocked for about a millisecond (`DRMAtomicReq::Commit` 0.97 ms against 0.16; the display's thread in `sde_encoder_helper_wait_for_irq`) and ended 0.51 ms past the slot against -0.36. A commit in the scan before is not enough by itself: NES commits every scan and stays in the fast state. What the wait depends on beyond the GamePad's pass is not known.
   - The frame after that pass is the late one, and only that frame. Stamped 28 ms ahead, the pass moved a scan later and 116 real images were late with 3 generated. With no extra scan or two, the pass coincides with one of our frames: that is why only one scan failed, and the earlier reading (Cemu's frame finishing too late) was wrong.
-- **The fix, default on for Cemu at a steady 30 fps (library `7e235d78`): the Pad image asks for a present 23 ms on,** which falls in the generated image's pass (the window is arrival + 19.5 to + 27.8 ms: the trace's `vsyncIn` shows expected present = wake + 10.2 ms). QA `debug.emufusion.cemu_pad_stamp_us`, 0 for none.
+- **The fix, default on for Cemu at a steady 30 fps (library `7e235d78`, later `ade2f784`, counted from the return of the TV image's present): the Pad image asks for a present 23 ms on,** which falls in the generated image's pass (the window is arrival + 19.5 to + 27.8 ms: the trace's `vsyncIn` shows expected present = wake + 10.2 ms). QA `debug.emufusion.cemu_pad_stamp_us`, 0 for none.
 - **The held swap (`e840cd1`, default on for Cemu at a multi-scan output): frames are drawn at the one-scan callback, wait for their GPU work, and are queued 6.3 ms before the slot.** One late pair may go without the extra scan (`HeldSwapCadence`), and the real image comes a fixed output after the generated one. Depth is capped at one scan here. QA `emufusion_framegen_held_swap=0`.
 - **Wind Waker HD, title flight, 33 s, cool starts:**
 
