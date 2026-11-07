@@ -634,8 +634,8 @@ are being driven with the stick too.
 
 Twelve games steered both ways on the Thor, looking at the sides at full size. Three more go narrow, all marked widen from short views. Cruis'n USA and Duke Nukem 64 draw
 their sky only as wide as the old screen, so black shows past it. Turok 2 shows thin light lines at its old window's edges. Vigilante 8, from the same kind of check, has
-cut-off terrain. Mario Kart 64, Ridge Racer 64, Wipeout 64, Shadows of the Empire, Buck Bumble and Turok: Dinosaur Hunter stay wide. Extreme-G, Quake II and Doom 64 did not
-reach moving play under the script. Turok 3's real frames show no such lines. The rest of the N64 widen entries have still mostly been judged from short views.
+cut-off terrain. Mario Kart 64, Ridge Racer 64, Wipeout 64, Shadows of the Empire, Buck Bumble and Turok: Dinosaur Hunter stay wide. Quake II and Doom 64 also stay wide after
+real play on a second route, and Extreme-G after steering at a crawl. Turok 3's real frames show no such lines. The rest of the N64 widen entries have still mostly been judged from short views.
 
 ### N64 with the real stick (2026-11-07)
 

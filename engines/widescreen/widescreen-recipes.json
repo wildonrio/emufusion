@@ -3629,7 +3629,7 @@
         "Doom 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: attract and a level view; 3D is wide. Not played through. 2026-11-07 Thor, real play with the stick at full size: the script stopped in the options screen, so no new play seen"
+          "tested": "2026-11-06 Thor, library pass: attract and a level view; 3D is wide. Not played through. 2026-11-07 Thor, real play with the stick at full size: the script stopped in the options screen, so no new play seen. Later the same day: real play, walking and turning; walls, floors and the stars reach both edges with no gaps, health and armor keep their shape"
         },
         "Harvest Moon 64": {
           "strategy": "widen",
@@ -3694,7 +3694,7 @@
         "Extreme-G": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: a race; the track fills the wide picture. Not played through. 2026-11-07 Thor, real race at full size: the bike did not move under the script, so only a standing view: track and rocks reach both edges, meters in shape. Not driven"
+          "tested": "2026-11-06 Thor, library pass: a race; the track fills the wide picture. Not played through. 2026-11-07 Thor, real race at full size: the bike did not move under the script, so only a standing view: track and rocks reach both edges, meters in shape. Not driven. Later the same day: moving only at a crawl under the script, but steered: mountains and track reach both edges, meters in shape"
         },
         "Gex 64: Enter the Gecko": {
           "strategy": "widen",
@@ -3729,7 +3729,7 @@
         "Quake II": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, though dark in this view. Not played through. 2026-11-07 Thor, real play with the stick at full size: the script stopped in the pause screen, so no new play seen"
+          "tested": "2026-11-06 Thor, library pass: the first level; 3D is wide, though dark in this view. Not played through. 2026-11-07 Thor, real play with the stick at full size: the script stopped in the pause screen, so no new play seen. Later the same day: real play at last, walking and turning in the first level; walls reach both edges, the gun and crosshair keep their shape"
         },
         "Ridge Racer 64": {
           "strategy": "widen",
