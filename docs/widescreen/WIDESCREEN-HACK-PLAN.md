@@ -561,6 +561,29 @@ San Francisco Rush (flat bands down both edges), Snowboard Kids (a narrow box) a
 Undecided: Goemon's Great Adventure (white gaps in one scene), plus Bomberman 64, Glover, Mega Man 64, Quake and Episode I: Racer, which
 reached only menus or logos. All from short runs, none played through.
 
+### The top 20 on the way to the Thor (2026-11-06, evening)
+
+A count of the top-20 lists found how few had run on the Thor: SNES 1 of 20, Mega Drive and Game Gear none, NES 5. Blind menu presses on the
+device rarely reached play, so a QA launch can now start from a save state (`emufusion_qa_start_state`, `THOR_START_STATE` in `thor_game.py`).
+Not yet run on a device, and whether a Mac core's state loads on the Android build of that core is still to be proven. States for 65 of the
+72 games, in play or close to it, are in `~/.cache/emufusion-widescreen/states/top20`. Still on a menu or story screen: Super Mario Bros. 3,
+Micro Machines, Madden NFL 95, Jungle Strike, NBA Jam Tournament Edition, Contra: Hard Corps, Final Fantasy Tactics Advance.
+
+Looking at full frames of those states found real faults the earlier passes had missed:
+
+| Game | Fault | Now |
+| --- | --- | --- |
+| Final Fantasy III | The game masks its first and last 8 columns, seen as black bands between the old picture and the new columns | `emufusion_ws_unmask=on` lifts it in wide scenes |
+| Yoshi's Island | Mountains and ground stopped at the old edge | Far layer reaches both edges. The near ground still stops short; it needs a map reader |
+| Super Mario All-Stars | Cut-off ground in play, cyan strips beside the World screen | Strict on the far layer only; rule `7E0079=01`. Only Super Mario Bros. widens |
+| Tecmo Super Bowl | Other menu pages at the sides of the main menu | Scroll rule: menus keep bars, the field opens once play has scrolled |
+| Jimmy Connors Pro Tennis Tour | Scrolled menu text at the sides | Rule `7E00B0=02`: only a match widens |
+| Survival Kids | Junk beside story scenes | Rule `C131=04`: only the island widens |
+| NHL Hockey (Mega Drive) | Flat patches of ice beside the rink ends | Narrow |
+
+SNES colour math can tint closed sides: the game adds a fixed colour over the black. The engine now writes closed sides as black in the
+finished line. A high share of filled side pixels does not mean a game is right, so each frame was looked at. All of this is Mac only so far.
+
 ## Game files that are not there
 
 Many top-rated files on the Thor are 4 to 7 MB stubs, which the app refuses. They cannot be played, so they have no recipe:

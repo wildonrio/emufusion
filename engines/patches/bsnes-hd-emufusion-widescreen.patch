@@ -1,9 +1,9 @@
 diff --git a/bsnes/emulator/efwide.hpp b/bsnes/emulator/efwide.hpp
 new file mode 100644
-index 0000000..a5ee7b3
+index 0000000..48f898d
 --- /dev/null
 +++ b/bsnes/emulator/efwide.hpp
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,67 @@
 +#pragma once
 +// EmuFusion Widescreen Hack: per-game state set by the recipe through core options.
 +// emufusion_ws_width  total picture width in pixels (0 = original 256)
@@ -21,6 +21,8 @@ index 0000000..a5ee7b3
 +//                     position, "bg1,bg2": no stale or wrapped tilemap, never-loaded VRAM;
 +//                     with "center", a tile loaded during forced blank counts only near the
 +//                     original screen, for games that keep other data beside the tilemap
++// emufusion_ws_unmask "on": the game masks its first and last eight columns to hide scrolling; in a wide
++//                     scene that would be a band between the old picture and the new columns
 +// emufusion_ws_gate   "scroll", for games nobody has played through: the wide areas stay closed
 +//                     until the scene has scrolled far enough to fill them, and close again on
 +//                     a cut or a blank screen, so titles and menus keep their bars
@@ -36,6 +38,7 @@ index 0000000..a5ee7b3
 +  extern int termCount;
 +  extern bool sceneWide;
 +  extern bool scrollGate;
++  extern bool edgeUnmask;
 +  extern const unsigned char *wram;
 +  extern int strictLayers;  // bit per BG layer
 +  enum : unsigned short { TagNever = 0xffff, TagBlank = 0xfffe };
@@ -172,10 +175,10 @@ index 4eac82f..0d4ba8a 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..ce88061
+index 0000000..db48ba5
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,297 @@
+@@ -0,0 +1,298 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -222,6 +225,7 @@ index 0000000..ce88061
 +  void *systemRamData() { return SuperFamicom::cpu.wram; }
 +
 +  bool scrollGate = false;
++  bool edgeUnmask = false;
 +  static int gateTravel = 0, gateBlanked = 0;
 +  static unsigned gateLast[4];
 +
@@ -486,7 +490,7 @@ index 24843e9..a488c17 100644
      vram[address] = vram[address] & 0xff00 | data << 0;
    }
 diff --git a/bsnes/sfc/ppu-fast/line.cpp b/bsnes/sfc/ppu-fast/line.cpp
-index 551430c..7bdd569 100644
+index 551430c..9a7e2a8 100644
 --- a/bsnes/sfc/ppu-fast/line.cpp
 +++ b/bsnes/sfc/ppu-fast/line.cpp
 @@ -6,6 +6,7 @@ auto PPU::Line::flush() -> void {
@@ -511,6 +515,20 @@ index 551430c..7bdd569 100644
 +      }
        above[x] = {Source::COL, 0, aboveColor};
        below[x] = {Source::COL, 0, belowColors[x / ((256+2*ppufast.widescreen()) * scale)]};
+     }
+@@ -351,9 +359,12 @@ auto PPU::Line::render(bool fieldID) -> void {
+   uint curr = 0, prev = 0;
+   if(hd) {
+     int x = 0;
++    // A scene with its sides closed has black bars, whatever colour math the game has on.
++    bool closed = (EfWide::termCount || EfWide::scrollGate) && !EfWide::sceneWide;
++    uint sideEnd = ppufast.widescreen() * scale, picture = (256 + ppufast.widescreen()) * scale;
+     for(uint ySub : range(scale)) {
+       for(uint i : range((256 + 2 * ppufast.widescreen() ) * scale)) {
+-        *output++ = pixel(x, above[x], below[x], ppu.widescreen(), wsm, wsma, bgFixedColors[ySub]);
++        *output++ = closed && (i < sideEnd || i >= picture) ? 0 : pixel(x, above[x], below[x], ppu.widescreen(), wsm, wsma, bgFixedColors[ySub]);
+         x++;
+       }
      }
 diff --git a/bsnes/sfc/ppu-fast/mode7hd.cpp b/bsnes/sfc/ppu-fast/mode7hd.cpp
 index 8fd6f4e..e52874a 100644
@@ -561,7 +579,7 @@ index 1fc167a..0d7e7b2 100644
      
      if(ppufast.hires() && ppufast.hd()) {
 diff --git a/bsnes/sfc/ppu-fast/ppu.cpp b/bsnes/sfc/ppu-fast/ppu.cpp
-index d7260af..f2924bc 100644
+index d7260af..db1d456 100644
 --- a/bsnes/sfc/ppu-fast/ppu.cpp
 +++ b/bsnes/sfc/ppu-fast/ppu.cpp
 @@ -1,4 +1,7 @@
@@ -647,16 +665,17 @@ index d7260af..f2924bc 100644
  auto PPU::widescreen() const -> uint { return wsExt; }
  auto PPU::widescreenRaw() const -> uint { return !hd() || configuration.hacks.ppu.mode7.wsMode == 0 ? 0 : configuration.hacks.ppu.mode7.widescreen; }
  auto PPU::wsbg(uint bg) const -> uint {
-@@ -38,6 +109,8 @@ auto PPU::wsbg(uint bg) const -> uint {
+@@ -38,6 +109,9 @@ auto PPU::wsbg(uint bg) const -> uint {
    return 0; }
  auto PPU::wsobj() const -> uint { return configuration.hacks.ppu.mode7.wsobj; }
  auto PPU::winXad(uint x, bool bel) const -> uint {
++  if(EfWide::edgeUnmask && EfWide::sceneWide && ((int)x >= 0 && (int)x < 8 || (int)x >= 248 && (int)x < 256)) x = 128;
 +  // "all" means the new columns; the original ones keep the game's window effects.
 +  if(configuration.hacks.ppu.mode7.igwin >= 3 && (int)x >= 0 && (int)x < 256) return x + widescreen();
    return ((configuration.hacks.ppu.mode7.igwin != 0 && (configuration.hacks.ppu.mode7.igwin >= 3
         || configuration.hacks.ppu.mode7.igwin >= 2 && ((bel ? io.col.window.belowMask : io.col.window.aboveMask) == 0)
         || configuration.hacks.ppu.mode7.igwin >= 1 && ((bel ? io.col.window.belowMask : io.col.window.aboveMask) == 2)))
-@@ -52,7 +125,10 @@ auto PPU::vramExt(uint addr) const -> uint { return addr & configuration.hacks.p
+@@ -52,7 +126,10 @@ auto PPU::vramExt(uint addr) const -> uint { return addr & configuration.hacks.p
  auto PPU::bgGrad() const -> uint { return !hd() ? 0 : configuration.hacks.ppu.mode7.bgGrad; }
  auto PPU::windRad() const -> uint { return !hd() ? 0 : configuration.hacks.ppu.mode7.windRad; }
  auto PPU::wsOverrideCandidate() const -> bool { return configuration.hacks.ppu.mode7.wsMode == 1; }
@@ -668,7 +687,7 @@ index d7260af..f2924bc 100644
  auto PPU::wsBgCol() const -> bool { return configuration.hacks.ppu.mode7.wsBgCol == 2
                                              || configuration.hacks.ppu.mode7.wsBgCol == 1 && wsOverride(); }
  auto PPU::wsMarker() const -> uint { return configuration.hacks.ppu.mode7.wsMarker; }
-@@ -147,6 +223,39 @@ auto PPU::scanline() -> void {
+@@ -147,6 +224,39 @@ auto PPU::scanline() -> void {
    if(vcounter() == 240) {
      Line::flush();
    }
@@ -769,7 +788,7 @@ index da07e7c..0113ab6 100644
  LOCAL_CPP_FEATURES := exceptions rtti
  include $(BUILD_SHARED_LIBRARY)
 diff --git a/bsnes/target-libretro/libretro.cpp b/bsnes/target-libretro/libretro.cpp
-index 8a50f53..1aa1c09 100644
+index 8a50f53..1fc250b 100644
 --- a/bsnes/target-libretro/libretro.cpp
 +++ b/bsnes/target-libretro/libretro.cpp
 @@ -2,6 +2,7 @@
@@ -780,7 +799,7 @@ index 8a50f53..1aa1c09 100644
  
  static retro_environment_t environ_cb;
  static retro_video_refresh_t video_cb;
-@@ -652,6 +653,28 @@ static bool update_variables() // returns whether video dimensions have changed
+@@ -652,6 +653,32 @@ static bool update_variables() // returns whether video dimensions have changed
  	vc = vc | program->scale != scale; // scale changed
  	program->scale = scale;
  	ws = HdToolkit::determineWsExt(ws, overscan, aspectcorrection);
@@ -793,6 +812,10 @@ index 8a50f53..1aa1c09 100644
 +	var.key = "emufusion_ws_gate";
 +	var.value = NULL;
 +	EfWide::setGate(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++
++	var.key = "emufusion_ws_unmask";
++	var.value = NULL;
++	EfWide::edgeUnmask = environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !strcmp(var.value, "on");
 +	var.key = "emufusion_ws_strict";
 +	var.value = NULL;
 +	EfWide::setStrict(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -809,7 +832,7 @@ index 8a50f53..1aa1c09 100644
  	vc = vc | program->ws != ws; // widescreen AR changed
  	program->ws = ws;
  	return vc; // returns whether video dimensions have changed (overscan, aspectcorrection scale or widescreen AR)
-@@ -1129,10 +1152,14 @@ unsigned retro_get_region()
+@@ -1129,10 +1156,14 @@ unsigned retro_get_region()
  // Rely on higan to load and save SRAM until there is really compelling reason not to.
  void *retro_get_memory_data(unsigned id)
  {
