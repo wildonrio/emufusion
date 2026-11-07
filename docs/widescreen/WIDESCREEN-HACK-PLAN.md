@@ -650,7 +650,7 @@ Heroes, Jungle Strike, Desert Strike, Contra: Hard Corps, Sonic & Knuckles and D
 - Two test states were bad, not the games: Sonic's was saved paused, and Yoshi's Island's was branched from an old state that restored to black. Six generations of
   load, play and save from a clean start all came back fine, so Quick Resume itself is sound there.
 
-Donkey Kong Country 3 joined the readers, seen in its attract levels only: its world map roams freely and a level was not reached by hand. Super Mario Bros. 3 on the
+Those fixes then ran on the Thor too (QA build retry-442): Micro Machines clean, Sonic with its clock running, Yoshi's Island's flowers to both edges, Madden's play-call screen on black. Donkey Kong Country 3 joined the readers, and an attract level was wide and clean on the Thor. It was not played by hand: its world map roams freely and a level was not reached. Super Mario Bros. 3 on the
 NES did not get past the first Goomba on the Thor, so its wide level is still judged from the Mac.
 
 Lessons:
