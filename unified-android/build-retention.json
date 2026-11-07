@@ -1665,6 +1665,14 @@
     "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-609a38d700a4d50e49e0d6eada1ab3cd086e69ad45d1585403451986ce425565.apk": {
       "sha256": "609a38d700a4d50e49e0d6eada1ab3cd086e69ad45d1585403451986ce425565",
       "reason": "retry-434 QA build replaced by retry-435 on the Thor; coordinator no longer needs it"
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-3a3fa5b7acc7c6f42527b4f3276c8e2e1437c74e0431a0d9d6f0e2227488e245.apk": {
+      "sha256": "3a3fa5b7acc7c6f42527b4f3276c8e2e1437c74e0431a0d9d6f0e2227488e245",
+      "reason": "retry-435 QA build replaced by retry-436 on the Thor"
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-3d7c22af2644da66136e6b31092327aa7e53c2db218b2fe5ade886588e49804c.apk": {
+      "sha256": "3d7c22af2644da66136e6b31092327aa7e53c2db218b2fe5ade886588e49804c",
+      "reason": "retry-436 QA build: overlay drawn after the hold left the fence pending; replaced by retry-437"
     }
   }
 }

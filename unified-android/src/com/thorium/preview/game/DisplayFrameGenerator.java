@@ -3462,6 +3462,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // phase depend on Android callback jitter. A missing PTS is
             // explicitly counted as an unqualified fallback below.
             long producerArrivalNs = System.nanoTime();
+            quietUntilLatch(producerArrivalNs);
             inputTexture.updateTexImage();
             long producerBufferTimestampNs = inputTexture.getTimestamp();
             long producerTimestampNs = producerBufferTimestampNs > 0L ?
@@ -9281,6 +9282,68 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private float predrawnRealAspect;
     private FrameRateOverlay.Image predrawnRealOverlay;
 
+    private final com.thorium.emufusion.video.HeldSwapCadence heldSwapCadence =
+            new com.thorium.emufusion.video.HeldSwapCadence();
+    private boolean plannedSooner;
+
+    private long arrivalQuiets;
+
+    /**
+     * QA (emufusion_framegen_arrival_quiet=1). In Wind Waker HD at one extra scan the real
+     * image's latch comes about 1 ms after the next image's arrival; it runs 0.1 ms later than
+     * the generated image's, and the misses (7 in 1,000) are at 1.6 ms or less. Tests whether
+     * our own arrival work is what delays it.
+     */
+    private void quietUntilLatch(long nowNs) {
+        if (!TimelineSchedulerSwitch.arrivalQuiet()) return;
+        long waitNs = builtInLastCommittedTargetNs - 1_500_000L - nowNs;
+        if (waitNs <= 0L || waitNs > 2_000_000L) return;
+        java.util.concurrent.locks.LockSupport.parkNanos(waitNs);
+        ++arrivalQuiets;
+    }
+
+    private boolean heldSwapOutput() {
+        return TimelineSchedulerSwitch.heldSwap() && steadyCemuOutput();
+    }
+
+    /** Where a held frame is queued before its slot: the place of a frame with no extra scan. */
+    private static final long HELD_SWAP_BEFORE_SLOT_NS = 6_300_000L;
+    /** The GPU gets until here: 0.7 ms before the compositor's latch, 1.8 ms before the slot. */
+    private static final long HELD_SWAP_LAST_BEFORE_SLOT_NS = 2_500_000L;
+    private long heldSwaps;
+
+    /**
+     * At one scan of queue depth, half of Wind Waker HD's generated images were shown a
+     * scan late although their GPU work ended 13 ms ahead of the slot, while the real
+     * images, finished when queued, were not; no extra scan and two are both clean. So the
+     * frame keeps its early draw, which is what the extra scan is for, and goes to the
+     * compositor where a frame with no extra scan does. Thor, 2026-11-06: 53% on cadence
+     * and half the generated images late, against 97.2% and 1%, in the fast state, at
+     * 19.3 / 36.0 ms against 27.7 / 44.3 ms two scans deep. QA emufusion_framegen_held_swap=0.
+     * What matters is the frame's fence having signalled when it is queued: with only a
+     * small overlay drawn after the hold, its fence ended about 1 ms after the swap and
+     * 9% of generated images were late again. So the wait covers the GPU as well.
+     */
+    private void holdSwap(boolean timelineActive, long targetNs) {
+        if (!timelineActive || externalTransport != null ||
+                !(heldSwapOutput() || TimelineSchedulerSwitch.heldSwapEverySource())) return;
+        long startNs = System.nanoTime();
+        long waitNs = targetNs - HELD_SWAP_BEFORE_SLOT_NS - startNs;
+        if (waitNs > 2L * frameRate.panelPeriodNs()) return;
+        long gpuWaitNs = targetNs - HELD_SWAP_LAST_BEFORE_SLOT_NS - startNs;
+        if (gpuWaitNs <= 0L) return;
+        long sync = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (sync == 0L) {
+            GLES20.glFlush();
+        } else {
+            GLES30.glClientWaitSync(sync, GLES30.GL_SYNC_FLUSH_COMMANDS_BIT, gpuWaitNs);
+            GLES30.glDeleteSync(sync);
+        }
+        waitNs = targetNs - HELD_SWAP_BEFORE_SLOT_NS - System.nanoTime();
+        if (waitNs > 0L) java.util.concurrent.locks.LockSupport.parkNanos(waitNs);
+        ++heldSwaps;
+    }
+
     /**
      * The pair's real image goes into the back buffer right after its
      * generated image's swap: nothing is left for the GPU at that image's own
@@ -9401,7 +9464,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             noteCompositorInterval(builtinCompositorTiming[1]);
             // Whole extra scans counted from the callback (BuiltinQueueReserve);
             // QA queue_deepen=0 keeps the queue at its minimum.
-            builtinQueueReserve.setMaxExtraScans(TimelineSchedulerSwitch.queueDeepen() ?
+            boolean heldOutput = heldSwapOutput();
+            builtinQueueReserve.setMaxExtraScans(heldOutput ? 1 : TimelineSchedulerSwitch.queueDeepen() ?
                     com.thorium.emufusion.video.BuiltinQueueReserve.MAX_EXTRA_SCANS : 0);
             builtinQueueReserveNs = builtinQueueReserve.reserveNs(callbackNs, planNowNs,
                     builtinCompositorTiming[1]);
@@ -9415,6 +9479,21 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     builtinCompositorTiming[0], builtinCompositorTiming[1],
                     latencyNs, planNowNs,
                     builtInLastCommittedTargetNs, builtinQueueReserveNs);
+            plannedSooner = false;
+            if (heldOutput && egl.valid()) {
+                long outputNs = presentationScansPerOutput() * builtinCompositorTiming[1];
+                if (heldSwapCadence.wantsSooner(planNowNs, egl.contentPresentationTimeNs(),
+                        builtInLastCommittedTargetNs, outputNs, builtinCompositorTiming[1])) {
+                    PhysicalPresentationDeadline sooner = PhysicalPresentationDeadline.nextEgl(
+                            builtinCompositorTiming[0], builtinCompositorTiming[1],
+                            latencyNs, planNowNs, builtInLastCommittedTargetNs,
+                            com.thorium.emufusion.video.BuiltinQueueReserve.MIN_NS);
+                    if (sooner.valid() && sooner.contentPresentationTimeNs() < egl.contentPresentationTimeNs()) {
+                        egl = sooner;
+                        plannedSooner = true;
+                    }
+                }
+            }
             // Copy the planning query: the later submission probe reuses its
             // array. Emit only after swap, never inside this admission window.
             builtinPlanCallbackNs = callbackNs;
@@ -9816,6 +9895,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // Pairs taken up on a lattice of whole callbacks (3.2.112); QA takeup_lattice=0.
         timeline.setTakeUpLattice(TimelineSchedulerSwitch.takeUpLattice());
         long rightArrivedNs = arrivalNs(activeRightSubmission);
+        timeline.setRealDelayNs(heldSwapOutput() && panelPeriodNs > 0L ? panelPeriodNs * scans : 0L);
         timeline.setRightArrivalLeadNs(rightArrivedNs > 0L && callbackStartedNs > 0L ?
                 callbackStartedNs - rightArrivedNs : Long.MIN_VALUE);
         // Re-show the image on screen through a source stall (3.2.102); QA keep_alive=0.
@@ -10259,6 +10339,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
         beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);
         if (!realPredrawn) drawFrameRateOverlay();
+        holdSwap(timelineActive, deadline.contentPresentationTimeNs());
         long denseSwapEnteredNs = densePyramidEnabled ? System.nanoTime() : 0L;
         if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
             discardFullImageCapture();
@@ -10321,6 +10402,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     " reserveNs=1000000 skippedScans=" + deadline.skippedPanelScans());
         }
         builtInLastCommittedTargetNs = deadline.contentPresentationTimeNs();
+        heldSwapCadence.committed(System.nanoTime(), plannedSooner,
+                presentationScansPerOutput() * frameRate.panelPeriodNs());
         if (physicalFramePrepared && !densePhysicalFrameCommitted)
             logPhysicalPresentationFailure(physicalTracker);
         if (densePyramidEnabled) {
@@ -15126,6 +15209,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " signatureEarlyCommits=" + signatureEarlyCommits +
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
+                " heldSwaps=" + heldSwaps + "/" + heldSwapCadence.pairs() +
+                " arrivalQuiets=" + arrivalQuiets +
                 " realPredraws=" + realPredraws + "/" + realPredrawHits +
                 " assumedUnique=" + assumedUnique + "/" + assumedWrong +
                 " compositorDrains=" + compositorStateDrain.drains() + "/" +

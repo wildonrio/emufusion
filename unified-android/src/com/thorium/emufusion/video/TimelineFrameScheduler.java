@@ -169,6 +169,7 @@ public final class TimelineFrameScheduler {
     private boolean takeUpLattice;
     private long latticeNextNs;
     private long rightArrivalLeadNs = Long.MIN_VALUE;
+    private long realDelayNs;
     private int latticeWindowPairs = LATTICE_WINDOW_PAIRS;
     private int latticeEarlyPairs;
     private long latticePairIndex, latticeEarlierAtPair = Long.MIN_VALUE;
@@ -326,6 +327,14 @@ public final class TimelineFrameScheduler {
     public void setRightArrivalLeadNs(long leadNs) { rightArrivalLeadNs = leadNs; }
 
     /**
+     * How long after its generated image a pair's real image is due, or zero for half
+     * the time between the pair's arrivals. An image one scan late has a long span
+     * and the next a short one; at a whole-scan rhythm that puts the real image a scan
+     * off though it has been drawn, so a fixed output keeps the rhythm.
+     */
+    public void setRealDelayNs(long delayNs) { realDelayNs = delayNs; }
+
+    /**
      * Whether a newer image may replace the active pair's waiting real image
      * (the renderer's arrival pass, 3.2.91: the new pair's midpoint is shown
      * at the callback where that real image was due). Never while the
@@ -419,7 +428,7 @@ public final class TimelineFrameScheduler {
             arrivalGeneratedShown = false;
             long span = arrivalSpanNs(pairArrivalSpanNs > 0L ? pairArrivalSpanNs :
                     rightTimestampNs - leftTimestampNs);
-            arrivalRealDueNs = displayNs + span / 2L;
+            arrivalRealDueNs = displayNs + (realDelayNs > 0L ? realDelayNs : span / 2L);
             // Taken up so late that generated + real would run into the next
             // image's arrival: show the real image now. At 60 -> 120 an image
             // arriving as its predecessor's real image is due otherwise starts

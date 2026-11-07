@@ -13,6 +13,7 @@ class FrameRateOverlayTest(unittest.TestCase):
         generator = (GAME / 'DisplayFrameGenerator.java').read_text()
         self.assertIn('beginFullImageCapture(renderedSynthetic, densePhysicalFrameId, proofPhase);\n'
                       '        if (!realPredrawn) drawFrameRateOverlay();\n'
+                      '        holdSwap(timelineActive, deadline.contentPresentationTimeNs());\n'
                       '        long denseSwapEnteredNs', generator)
         # A real image drawn ahead of its callback already carries the overlay.
         predraw = method(generator, '    private void predrawRealImage(')

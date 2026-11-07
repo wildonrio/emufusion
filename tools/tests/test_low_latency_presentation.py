@@ -80,7 +80,7 @@ class LowLatencyPresentationTest(unittest.TestCase):
         # as its pair is complete, the real image half the pair's span later.
         scheduler = SCHEDULER.read_text()
         self.assertIn("if (arrivalPacing)\n            return decideArrival(", scheduler)
-        self.assertIn("arrivalRealDueNs = displayNs + span / 2L;", scheduler)
+        self.assertIn("arrivalRealDueNs = displayNs + (realDelayNs > 0L ? realDelayNs : span / 2L);", scheduler)
         self.assertIn("if (excessQueued >= 1 || (!arrivalGeneratedShown && (arrivalLateStart || !motionReady))) {",
                       scheduler)
         self.assertIn("arrivalLateStart = waited > span / 2L - panel / 2L;", scheduler)

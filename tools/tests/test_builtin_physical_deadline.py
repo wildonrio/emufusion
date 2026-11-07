@@ -118,6 +118,11 @@ public class BuiltInDeadlineTest {
     long notedCompositorIntervalNs;
     void noteCompositorInterval(long intervalNs){notedCompositorIntervalNs=intervalNs;}
     boolean earliestLatchRefuted(){return false;}
+    boolean heldSwapOutput(){return false;}
+    int presentationScansPerOutput(){return 1;}
+    static class Cadence {boolean wantsSooner(long now,long planned,long last,long output,long panel){return false;}}
+    Cadence heldSwapCadence=new Cadence();
+    boolean plannedSooner;
 ''' + body + '''
     public static void main(String[] args) {
         BuiltInDeadlineTest t=new BuiltInDeadlineTest();
