@@ -805,7 +805,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$source" \
             engines/patches/blastem-emufusion-widescreen.patch \
-            6004791973499f5300e294412721b7a41ba3aef117b8642c55070bb25df18423
+            3373cf3fe51caa79777ad2a2ba35d5179eb0b093fde001a0ee2541f8e126a964
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'BlastEm recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;

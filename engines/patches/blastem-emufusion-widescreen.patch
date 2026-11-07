@@ -1,9 +1,9 @@
 diff --git a/ef_wide.h b/ef_wide.h
 new file mode 100644
-index 0000000..2e6cc1b
+index 0000000..fcb4010
 --- /dev/null
 +++ b/ef_wide.h
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,26 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. BlastEm's renderer still draws the original 320 or 256
@@ -14,6 +14,8 @@ index 0000000..2e6cc1b
 +//                      with "center" trusting a bulk load only on the original screen
 +// emufusion_ws_scene   when to widen: OR of AND terms of RAM tests, "FFF600=0C,FFF601!=1|..."
 +// emufusion_ws_hud     moves HUD sprites to the new edges: "obj:y0-y1:x0-x1:dir[:t0-t1];..."
++// emufusion_ws_gate    "scroll", for games nobody has played through: the new columns stay closed
++//                      until the scene has scrolled far enough to fill them, and close on a cut
 +#include <stdint.h>
 +#define EF_WIDE_MAX_EXT 136
 +#define EF_WIDE_FB_WIDTH (320 + 2 * EF_WIDE_MAX_EXT)
@@ -22,6 +24,7 @@ index 0000000..2e6cc1b
 +void ef_wide_set_strict(const char *value);
 +void ef_wide_set_scene(const char *value);
 +void ef_wide_set_hud(const char *value);
++void ef_wide_set_gate(const char *value);
 +void ef_wide_set_ram(const uint8_t *work_ram);
 +int ef_wide_on(void);
 +int ef_wide_ext(int base_width);
@@ -29,10 +32,10 @@ index 0000000..2e6cc1b
 +#endif
 diff --git a/ef_wide.inc b/ef_wide.inc
 new file mode 100644
-index 0000000..864121a
+index 0000000..550df66
 --- /dev/null
 +++ b/ef_wide.inc
-@@ -0,0 +1,394 @@
+@@ -0,0 +1,427 @@
 +// Included at the end of vdp.c; uses its static helpers.
 +#include "ef_wide.h"
 +uint32_t ef_wide_fb[EF_WIDE_FB_WIDTH * 294];
@@ -356,6 +359,35 @@ index 0000000..864121a
 +}
 +
 +// The line just finished in the original columns: copy it and draw the new columns beside it.
++static uint8_t ef_scroll_gate;
++static int ef_gate_travel, ef_gate_blanked;
++static uint16_t ef_gate_last[2];
++
++void ef_wide_set_gate(const char *value)
++{
++	ef_scroll_gate = value && !strcmp(value, "scroll");
++	ef_gate_travel = 0;
++}
++
++// Once a frame. The middle of the picture stands for the camera: a status bar at the top does not scroll.
++static void ef_gate_frame(vdp_context *c)
++{
++	int moved = 0;
++	uint8_t cut = 0;
++	for (uint32_t plane = 0; plane < 2; plane++) {
++		uint16_t now = ef_hscroll(c, 112, plane);
++		// The scroll is ten bits: a step across its wrap is still a small one.
++		int step = ((now - ef_gate_last[plane] + 512) & 1023) - 512;
++		ef_gate_last[plane] = now;
++		if (step < 0) step = -step;
++		// A camera that jumps has cut to another scene; one that scrolls moves a few pixels.
++		if (step > 24) cut = 1;
++		if (step > moved) moved = step;
++	}
++	ef_gate_blanked = c->regs[REG_MODE_2] & BIT_DISP_EN ? 0 : ef_gate_blanked + 1;
++	ef_gate_travel = cut || ef_gate_blanked > 2 ? 0 : ef_gate_travel + moved;
++}
++
 +static void ef_wide_line(vdp_context *c, pixel_t *source)
 +{
 +	if (!ef_wide_on() || c->double_res || !(c->regs[REG_MODE_2] & BIT_MODE_5) || c->s32x_vid) return;
@@ -368,6 +400,10 @@ index 0000000..864121a
 +		// A map plane no wider than the picture has nothing more to show: new columns would
 +		// only repeat the far side of the screen, so the game stays at its own width.
 +		if (ef_plane_cols(c) * 8 <= (c->regs[REG_MODE_4] & BIT_H40 ? 320u : 256u)) ef_scene_wide = 0;
++		if (ef_scroll_gate) {
++			ef_gate_frame(c);
++			if (ef_gate_travel < ef_wide_ext(c->regs[REG_MODE_4] & BIT_H40 ? 320 : 256) + 16) ef_scene_wide = 0;
++		}
 +		if (ef_blank_pending && (ef_strict_a || ef_strict_b) && (c->regs[REG_MODE_2] & BIT_DISP_EN))
 +			ef_sweep_blank(c);
 +	}
@@ -428,7 +464,7 @@ index 0000000..864121a
 +	}
 +}
 diff --git a/libblastem.c b/libblastem.c
-index c239267..b6bf600 100644
+index c239267..a5216b2 100644
 --- a/libblastem.c
 +++ b/libblastem.c
 @@ -7,6 +7,7 @@
@@ -475,7 +511,7 @@ index c239267..b6bf600 100644
  	switch (id) {
  	case RETRO_MEMORY_SYSTEM_RAM:
  		switch (stype) {
-@@ -473,6 +480,33 @@ void render_destroy_window(uint8_t which)
+@@ -473,6 +480,34 @@ void render_destroy_window(uint8_t which)
  	//not supported in lib build
  }
  
@@ -494,6 +530,7 @@ index c239267..b6bf600 100644
 +	if (loaded && !updated) return;
 +	loaded = 1;
 +	ef_read_option("emufusion_ws_strict", ef_wide_set_strict);
++	ef_read_option("emufusion_ws_gate", ef_wide_set_gate);
 +	ef_read_option("emufusion_ws_scene", ef_wide_set_scene);
 +	ef_read_option("emufusion_ws_hud", ef_wide_set_hud);
 +	ef_read_option("emufusion_ws_aspect", ef_wide_set_aspect);
@@ -509,7 +546,7 @@ index c239267..b6bf600 100644
  static uint32_t fb[LINEBUF_SIZE * 294 * 2];
  static uint8_t last_fb;
  uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
-@@ -494,6 +528,25 @@ void render_framebuffer_updated(uint8_t which, int width)
+@@ -494,6 +529,25 @@ void render_framebuffer_updated(uint8_t which, int width)
  	unsigned height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
  	width -= (overscan_left + overscan_right);
  	unsigned base_height = height;
@@ -535,7 +572,7 @@ index c239267..b6bf600 100644
  	if (which != last_fb) {
  		height *= 2;
  		last_fb = which;
-@@ -502,7 +555,7 @@ void render_framebuffer_updated(uint8_t which, int width)
+@@ -502,7 +556,7 @@ void render_framebuffer_updated(uint8_t which, int width)
  		struct retro_game_geometry geometry = {
  			.base_width = width,
  			.base_height = height,

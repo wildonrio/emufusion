@@ -504,12 +504,29 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-06 host: house and town map reached; the map stops at the old edge and the trees are cut off beside black, so widening shows nothing. Needs a map reader"
+        },
+        "Exo-Squad": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host, library pass: a black column runs down the side in play"
+        },
+        "Caesars Palace": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host, library pass: black gaps beside the casino floor"
+        },
+        "Warrior of Rome II": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host, library pass: the title wraps into the new columns behind its menu"
         }
       },
       "fallback": {
         "strategy": "widen",
-        "options": {},
-        "tested": "2026-11-05: 18 of 20 top games clean in gameplay with no per-game rule; sports menus are the exception"
+        "options": {
+          "emufusion_ws_gate": "scroll"
+        },
+        "tested": "2026-11-05: 18 of 20 top games clean in gameplay with no per-game rule; sports menus are the exception. 2026-11-06: the scroll rule added, so titles and menus stay narrow; 748 library files run on the Mac, the 104 that scrolled checked, and those with junk have narrow entries"
       },
       "release": true
     },
