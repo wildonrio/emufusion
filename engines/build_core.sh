@@ -806,6 +806,10 @@ case "$ENGINE" in
         apply_locked_patch "$source" \
             engines/patches/blastem-emufusion-widescreen.patch \
             5307c5bbbecf33fbb7efc4c60297889ef2d59db9704e17e7374d654613764068
+        # Frame generation: the image halfway between frames, by the VDP's own rules, when asked for.
+        apply_locked_patch "$source" \
+            engines/patches/blastem-emufusion-halfway.patch \
+            00e6f2c4d2e3a8fac5fd045f6c9a7a0d8ea8a4da1532564d3bdd66dfc66439ad
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'BlastEm recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;

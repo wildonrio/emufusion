@@ -1,0 +1,658 @@
+diff --git a/ef_mid.h b/ef_mid.h
+new file mode 100644
+index 0000000..74dfa34
+--- /dev/null
++++ b/ef_mid.h
+@@ -0,0 +1,15 @@
++#ifndef EF_MID_H_
++#define EF_MID_H_
++// EmuFusion halfway image. For frame generation, each frame also gets an image drawn
++// halfway between the last frame and this one: the VDP's own rules on this frame's tiles,
++// colours and registers, with the planes' scroll and the sprites' positions halfway. It reads
++// the emulated machine and writes nothing back to it, nor to any widescreen state.
++// emufusion_fg_halfway  "on"; "exact" draws at this frame's positions, which must reproduce the
++//                       frame pixel for pixel (a test); "span2" halfway across two frames, so the
++//                       real frame between them is the answer (a test); anything else is off.
++#include <stdint.h>
++void ef_mid_set_mode(const char *value);
++// The image for the frame now being handed over, in the same layout as that frame,
++// or NULL when there is none (off, the first frame, interlace, Mode 4, 32X).
++const uint32_t *ef_mid_image(int wide, int *pitch_pixels);
++#endif
+diff --git a/ef_mid.inc b/ef_mid.inc
+new file mode 100644
+index 0000000..cfa4f8b
+--- /dev/null
++++ b/ef_mid.inc
+@@ -0,0 +1,416 @@
++// Included at the end of vdp.c, after ef_wide.inc. See ef_mid.h.
++//
++// Each line is drawn as the VDP finishes the real one, so registers, colours and the
++// window read as the real line saw them, without keeping copies of them: games change all of
++// these mid-frame. What is kept from the last frame is only what moves: each line's scroll
++// and the sprite table.
++#include "ef_mid.h"
++#define EF_MID_LINES 256
++#define EF_MID_SPRITES MAX_SPRITES_FRAME
++enum { EF_MID_OFF, EF_MID_ON, EF_MID_EXACT, EF_MID_SPAN2 };
++
++typedef struct {
++	uint16_t hs[2];
++	uint16_t vsram[MIN_VSRAM_SIZE];
++	uint8_t valid;
++} ef_mid_scrolls;
++
++typedef struct {
++	int16_t x, y;
++	uint16_t attr;
++	uint8_t size, index;
++} ef_mid_sprite;
++
++static uint8_t ef_mid_mode;
++static uint16_t ef_mid_latch[EF_MID_LINES][2];
++static ef_mid_scrolls ef_mid_now[EF_MID_LINES], ef_mid_last[EF_MID_LINES], ef_mid_held[EF_MID_LINES];
++static ef_mid_sprite ef_mid_list[EF_MID_SPRITES], ef_mid_last_list[EF_MID_SPRITES], ef_mid_held_list[EF_MID_SPRITES];
++static int ef_mid_count, ef_mid_last_count, ef_mid_held_count;
++static int16_t ef_mid_at_x[EF_MID_SPRITES], ef_mid_at_y[EF_MID_SPRITES];
++static uint8_t ef_mid_complete, ef_mid_started;
++static uint32_t ef_mid_fb[LINEBUF_SIZE * 294 * 2];
++static uint32_t ef_mid_wide_fb[EF_WIDE_FB_WIDTH * 294];
++
++void ef_mid_set_mode(const char *value)
++{
++	uint8_t mode = EF_MID_OFF;
++	if (value) {
++		if (!strcmp(value, "on")) mode = EF_MID_ON;
++		else if (!strcmp(value, "exact")) mode = EF_MID_EXACT;
++		else if (!strcmp(value, "span2")) mode = EF_MID_SPAN2;
++	}
++	if (mode != ef_mid_mode) {
++		ef_mid_mode = mode;
++		ef_mid_complete = 0;
++		ef_mid_started = 0;
++		ef_mid_last_count = 0;
++		memset(ef_mid_last, 0, sizeof(ef_mid_last));
++	}
++}
++
++const uint32_t *ef_mid_image(int wide, int *pitch_pixels)
++{
++	if (!ef_mid_mode || !ef_mid_complete) return NULL;
++	*pitch_pixels = wide ? EF_WIDE_FB_WIDTH : LINEBUF_SIZE;
++	return wide ? ef_mid_wide_fb : ef_mid_fb;
++}
++
++static inline int ef_mid_wrap(int d, int mask)
++{
++	int span = mask + 1;
++	return ((d + span / 2) & mask) - span / 2;
++}
++
++// Toward the last value by half the shorter way round; d >> 1 rounds down, the same for
++// planes and sprites, so a sprite fixed to a plane stays fixed to it.
++static inline int ef_mid_halfway(int last, int now, int mask)
++{
++	return (last + (ef_mid_wrap(now - last, mask) >> 1)) & mask;
++}
++
++static void ef_mid_scroll(vdp_context *c)
++{
++	if (!ef_mid_mode) return;
++	uint16_t line = c->vcounter;
++	if (line >= EF_MID_LINES) return;
++	ef_mid_latch[line][0] = c->hscroll_a;
++	ef_mid_latch[line][1] = c->hscroll_b;
++}
++
++// The camera's move, from plane A's scroll table against what the last frame's lines used,
++// the most common change over the lines. Vertically, the last frame's top line against this one's.
++static void ef_mid_camera(vdp_context *c, int *cam_x, int *cam_y)
++{
++	static int16_t deltas[EF_MID_LINES];
++	int count = 0;
++	for (int y = 0; y < c->inactive_start && y < EF_MID_LINES; y++) {
++		if (!ef_mid_last[y].valid) continue;
++		deltas[count++] = ef_mid_wrap((ef_hscroll(c, y, 0) & 0x3FF) - (ef_mid_last[y].hs[0] & 0x3FF), 0x3FF);
++	}
++	int best = 0, best_count = 0;
++	for (int i = 0; i < count; i++) {
++		int same = 0;
++		for (int j = 0; j < count; j++) same += deltas[j] == deltas[i];
++		if (same > best_count) {
++			best_count = same;
++			best = deltas[i];
++		}
++	}
++	*cam_x = best;
++	*cam_y = ef_mid_last[0].valid ? -ef_mid_wrap((c->vsram[0] & 0x3FF) - (ef_mid_last[0].vsram[0] & 0x3FF), 0x3FF) : 0;
++}
++
++static void ef_mid_read_sprites(vdp_context *c)
++{
++	int limit = c->regs[REG_MODE_4] & BIT_H40 ? MAX_SPRITES_FRAME : MAX_SPRITES_FRAME_H32;
++	uint32_t table = mode5_sat_address(c);
++	uint8_t seen[EF_MID_SPRITES] = {0};
++	int count = 0, index = 0;
++	do {
++		if (index >= limit || seen[index]) break;
++		seen[index] = 1;
++		const uint8_t *cache = c->sat_cache + index * 4;
++		uint32_t att = table + index * 8 + 4;
++		ef_mid_sprite *s = ef_mid_list + count++;
++		s->index = index;
++		s->y = ((cache[0] & 0x3) << 8 | cache[1]) & 0x1FF;
++		s->size = cache[2] & 0xF;
++		s->attr = ef_word(c, att);
++		s->x = ef_word(c, att + 2) & 0x1FF;
++		index = cache[3] & 0x7F;
++	} while (index);
++	ef_mid_count = count;
++}
++
++// Sprites have no identity: a game rebuilds its table each frame, and an object's sprites move
++// down the table when another object appears. Most sprites are fixed to the world or to the screen,
++// so a sprite is looked for where the camera would have taken it, or where it was. The same
++// tile counts most, then the same slot. One with no match is new or changed beyond recognition:
++// it follows the sprite before it, usually another part of the same object.
++#define EF_MID_REACH 32
++#define EF_MID_SAME_SLOT_REACH 64
++static void ef_mid_place_sprites(vdp_context *c)
++{
++	int cam_x = 0, cam_y = 0, last_dx = 0, last_dy = 0, have_last = 0;
++	uint8_t used[EF_MID_SPRITES] = {0};
++	if (ef_mid_mode != EF_MID_EXACT) ef_mid_camera(c, &cam_x, &cam_y);
++	for (int i = 0; i < ef_mid_count; i++) {
++		const ef_mid_sprite *s = ef_mid_list + i;
++		int dx = 0, dy = 0;
++		if (ef_mid_mode != EF_MID_EXACT) {
++			int best = -1, best_score = 0x7FFFFFFF;
++			for (int j = 0; j < ef_mid_last_count; j++) {
++				const ef_mid_sprite *p = ef_mid_last_list + j;
++				if (p->size != s->size) continue;
++				int mx = s->x - p->x, my = s->y - p->y;
++				int with_camera = abs(mx - cam_x) + abs(my - cam_y);
++				int with_screen = abs(mx) + abs(my);
++				int score = with_camera < with_screen ? with_camera : with_screen;
++				uint8_t same_tile = (p->attr & 0x7FF) == (s->attr & 0x7FF);
++				uint8_t same_slot = p->index == s->index;
++				if (score > (same_tile && same_slot ? EF_MID_SAME_SLOT_REACH : EF_MID_REACH)) continue;
++				if (!same_tile && !same_slot) continue;
++				if (!same_tile) score += 16;
++				if (used[j]) score += 64;
++				if ((p->attr ^ s->attr) & 0x6000) score += 8;
++				if (score < best_score) {
++					best_score = score;
++					best = j;
++				}
++			}
++			if (best >= 0) {
++				used[best] = 1;
++				dx = s->x - ef_mid_last_list[best].x;
++				dy = s->y - ef_mid_last_list[best].y;
++				last_dx = dx;
++				last_dy = dy;
++				have_last = 1;
++			} else {
++				dx = have_last ? last_dx : cam_x;
++				dy = have_last ? last_dy : cam_y;
++			}
++		}
++		ef_mid_at_x[s->index] = s->x - dx + (dx >> 1);
++		ef_mid_at_y[s->index] = s->y - dy + (dy >> 1);
++	}
++}
++
++static inline uint8_t ef_mid_tile_pixel(const uint8_t *vram, uint16_t entry, int px, int py)
++{
++	uint32_t address = (entry & 0x7FF) << 5;
++	address += 4 * (entry & MAP_BIT_V_FLIP ? 7 - py : py);
++	if (entry & MAP_BIT_H_FLIP) px = 7 - px;
++	uint8_t byte = vram[(address + (px >> 1)) & 0xFFFF];
++	uint8_t pixel = px & 1 ? byte & 0xF : byte >> 4;
++	return ((entry >> 9) & 0x70) | pixel;
++}
++
++static inline int ef_mid_vscroll(const vdp_context *c, const ef_mid_scrolls *last, int word, int mask)
++{
++	if (ef_mid_mode == EF_MID_EXACT || !last->valid) return c->vsram[word] & mask;
++	return ef_mid_halfway(last->vsram[word] & mask, c->vsram[word] & mask, mask);
++}
++
++// One plane over the original columns. Which cell a pixel falls in is read_map_scroll's
++// arithmetic, with the halfway scroll in place of the latched one.
++static void ef_mid_plane_line(vdp_context *c, const ef_mid_scrolls *last, int plane, int y, int width, int hs, uint8_t *out)
++{
++	static const uint16_t cell_masks[] = {0x1F, 0x3F, 0x1F, 0x7F};
++	static const uint16_t row_shifts[] = {6, 7, 16, 8};
++	const uint8_t *vram = c->vdpmem;
++	uint8_t scroll = c->regs[REG_SCROLL];
++	uint16_t cell_mask = cell_masks[scroll & 3];
++	uint16_t row_shift = row_shifts[scroll & 3];
++	int v_mask = 0xFF | (scroll & 0x30) << 4;
++	int h_mask = (cell_mask + 1) * 8 - 1;
++	uint32_t base = ef_plane_base(c, plane);
++	uint8_t per_column = c->regs[REG_MODE_3] & BIT_VSCROLL;
++	int fine = hs & 15;
++	int last_strip = -1, vs = 0, last_cell = -1, last_row = -1;
++	uint16_t entry = 0;
++	for (int x = 0; x < width; x++) {
++		int strip = (x + fine) >> 4;
++		if (strip != last_strip) {
++			int word = per_column ? ((strip ? strip - 1 : 0) * 2 + plane) : plane;
++			if (word >= MIN_VSRAM_SIZE) word = plane;
++			vs = ef_mid_vscroll(c, last, word, v_mask);
++			last_strip = strip;
++		}
++		int row_pixels = (vs + y) & v_mask;
++		int plane_x = (x - hs) & h_mask;
++		int cell = plane_x >> 3, row = row_pixels >> 3;
++		if (cell != last_cell || row != last_row) {
++			uint32_t offset = base + (((row << row_shift) + cell * 2) & 0x1FFF);
++			entry = vram[offset & 0xFFFF] << 8 | vram[(offset + 1) & 0xFFFF];
++			last_cell = cell;
++			last_row = row;
++		}
++		out[x] = ef_mid_tile_pixel(vram, entry, plane_x & 7, row_pixels & 7);
++	}
++}
++
++// The window replaces plane A, unscrolled, over the columns or lines its latches name.
++static void ef_mid_window_line(vdp_context *c, int y, int width, uint8_t *out)
++{
++	const uint8_t *vram = c->vdpmem;
++	uint8_t h40 = (c->regs[REG_MODE_4] & BIT_H40) != 0;
++	int top = c->window_v_latch & WINDOW_DOWN ? (c->window_v_latch & 0x1F) * 8 : 0;
++	int bottom = c->window_v_latch & WINDOW_DOWN ? 241 : (c->window_v_latch & 0x1F) * 8;
++	int left = c->window_h_latch & WINDOW_RIGHT ? (c->window_h_latch & 0x1F) * 16 : 0;
++	int right = c->window_h_latch & WINDOW_RIGHT ? width : (c->window_h_latch & 0x1F) * 16;
++	if (y >= top && y < bottom) {
++		left = 0;
++		right = width;
++	}
++	if (right > width) right = width;
++	if (left >= right) return;
++	uint32_t base = (uint32_t)c->regs[REG_WINDOW] << 10;
++	base &= h40 ? 0xF000 : 0xF800;
++	int row_bytes = (h40 ? 64 : 32) * 2;
++	for (int x = left; x < right; x++) {
++		uint32_t offset = base + (((y >> 3) * row_bytes) & 0xFFF) + (((x >> 3) * 2) & (h40 ? 0x7F : 0x3F));
++		uint16_t entry = vram[offset & 0xFFFF] << 8 | vram[(offset + 1) & 0xFFFF];
++		out[x] = ef_mid_tile_pixel(vram, entry, x & 7, y & 7);
++	}
++}
++
++// Sprites over the original columns by the VDP's limits: first in the table wins a pixel, so many per
++// line, so many cells, and an x of 0 in the real table masks what follows.
++static void ef_mid_sprite_line(vdp_context *c, uint32_t line, int width, uint8_t *out)
++{
++	const uint8_t *vram = c->vdpmem;
++	uint8_t h40 = (c->regs[REG_MODE_4] & BIT_H40) != 0;
++	int max_sprites = h40 ? MAX_SPRITES_LINE : MAX_SPRITES_LINE_H32;
++	int cells_left = width / 8, shown = 0;
++	uint8_t can_mask = 0, masked = 0;
++	int y_line = (line + 128) & 0x1FF;
++	memset(out, 0, width);
++	for (int i = 0; i < ef_mid_count && cells_left > 0; i++) {
++		const ef_mid_sprite *s = ef_mid_list + i;
++		int height = ((s->size & 3) + 1) * 8;
++		int sy = ef_mid_at_y[s->index];
++		if (!(sy <= y_line && y_line < sy + height)) continue;
++		if (shown++ == max_sprites) break;
++		int cells = ((s->size >> 2) & 3) + 1;
++		uint16_t attr = s->attr;
++		uint8_t pal_priority = (attr >> 9) & 0x70;
++		int row = (attr & MAP_BIT_V_FLIP ? (sy + height - 1) - y_line : y_line - sy) & 0x1F;
++		uint32_t address = ((attr & 0x7FF) << 5) + row * 4;
++		if (!s->x) {
++			if (can_mask) {
++				masked = 1;
++				can_mask = 0;
++			}
++			cells_left -= cells;
++			continue;
++		}
++		can_mask = 1;
++		// A sprite the widescreen rules move is drawn at the new edge, not here (ef_hide_moved_sprite).
++		int hidden = ef_hide_moved_sprite(c, line, s->x, attr) != s->x;
++		int mid_x = ef_mid_at_x[s->index] - 128;
++		for (int cell = 0; cell < cells && cells_left > 0; cell++, cells_left--) {
++			if (masked || hidden) continue;
++			uint32_t bytes = address + cell * height * 4;
++			int x = attr & MAP_BIT_H_FLIP ? mid_x + 7 + 8 * (cells - cell - 1) : mid_x + cell * 8;
++			int dir = attr & MAP_BIT_H_FLIP ? -1 : 1;
++			for (int b = 0; b < 4; b++) {
++				uint8_t byte = vram[(bytes + b) & 0xFFFF];
++				for (int half = 0; half < 2; half++, x += dir) {
++					uint8_t pixel = half ? byte & 0xF : byte >> 4;
++					if (x >= 0 && x < width && !(out[x] & 0xF)) out[x] = pixel | pal_priority;
++				}
++			}
++		}
++	}
++}
++
++// The original columns, by composite_normal's and composite_highlight's rules.
++static void ef_mid_center(vdp_context *c, uint32_t line, int width, int hs_a, int hs_b, const ef_mid_scrolls *last,
++	const pixel_t *source, pixel_t *dst)
++{
++	static uint8_t plane_a[320], plane_b[320], sprites[320];
++	static pixel_t colors[256];
++	uint8_t debug;
++	// The real line's own colours where it used them: a game's mid-line palette change reaches the
++	// real line part way along, and the machine's colours now may already be the next line's.
++	memcpy(colors, c->colors, sizeof(pixel_t) * 192);
++	for (int x = 0; x < width; x++) {
++		uint8_t index = c->compositebuf[BORDER_LEFT + x];
++		if (index & 0x3F) colors[index] = source[BORDER_LEFT + x];
++	}
++	ef_mid_plane_line(c, last, 1, line, width, hs_b, plane_b);
++	ef_mid_plane_line(c, last, 0, line, width, hs_a, plane_a);
++	ef_mid_window_line(c, line, width, plane_a);
++	ef_mid_sprite_line(c, line, width, sprites);
++	uint8_t bg = c->regs[REG_BG_COLOR] & 0x3F;
++	uint8_t shadow_mode = c->regs[REG_MODE_4] & BIT_HILIGHT;
++	for (int x = 0; x < width; x++) {
++		if (shadow_mode) {
++			sh_pixel shaded = composite_highlight(c, &debug, sprites[x], plane_a[x], plane_b[x], bg);
++			uint8_t pixel = shaded.intensity == BUF_BIT_PRIORITY << 1 ? (shaded.index & 0x3F) + HIGHLIGHT_OFFSET :
++				shaded.intensity ? shaded.index & 0x3F : (shaded.index & 0x3F) + SHADOW_OFFSET;
++			dst[x] = colors[pixel];
++		} else {
++			dst[x] = colors[composite_normal(c, &debug, sprites[x], plane_a[x], plane_b[x], bg) & 0x3F];
++		}
++	}
++	if (c->regs[REG_MODE_1] & BIT_COL0_MASK) {
++		pixel_t fill = shadow_mode ? colors[SHADOW_OFFSET + bg] : colors[0];
++		for (int x = 0; x < 8; x++) dst[x] = fill;
++	}
++}
++
++// Called as a finished line leaves the output, after ef_wide_line. Reads the machine; writes only
++// its own buffers and last-frame records.
++static void ef_mid_line(vdp_context *c, pixel_t *source)
++{
++	if (!ef_mid_mode) return;
++	uint32_t row = (uint32_t)(((char *)source - (char *)c->fb) / c->output_pitch);
++	uint32_t line = (c->vcounter - 1) & 0x1FF;
++	uint32_t active = line < c->inactive_start && line < EF_MID_LINES;
++	if (!(c->regs[REG_MODE_2] & BIT_MODE_5) || c->double_res || c->s32x_vid || row >= 294) {
++		ef_mid_complete = 0;
++		ef_mid_started = 0;
++		return;
++	}
++	if (active && line == 0) {
++		ef_mid_complete = 0;
++		ef_mid_started = 1;
++		ef_mid_read_sprites(c);
++		ef_mid_place_sprites(c);
++	}
++	int base_width = c->regs[REG_MODE_4] & BIT_H40 ? 320 : 256;
++	uint8_t wide = ef_wide_on() != 0;
++	int ext = wide ? ef_wide_ext(base_width) : 0;
++	pixel_t *narrow = ef_mid_fb + row * LINEBUF_SIZE;
++	pixel_t *wide_out = ef_mid_wide_fb + row * EF_WIDE_FB_WIDTH;
++	memcpy(narrow, source, LINEBUF_SIZE * sizeof(pixel_t));
++	if (wide) memcpy(wide_out + ext, source + BORDER_LEFT, base_width * sizeof(pixel_t));
++	if (active) {
++		ef_mid_scrolls *now = ef_mid_now + line;
++		const ef_mid_scrolls *last = ef_mid_last + line;
++		now->hs[0] = ef_mid_latch[line][0] & 0x3FF;
++		now->hs[1] = ef_mid_latch[line][1] & 0x3FF;
++		memcpy(now->vsram, c->vsram, sizeof(now->vsram));
++		now->valid = 1;
++		int exact = ef_mid_mode == EF_MID_EXACT || !last->valid;
++		int hs_a = exact ? now->hs[0] : ef_mid_halfway(last->hs[0], now->hs[0], 0x3FF);
++		int hs_b = exact ? now->hs[1] : ef_mid_halfway(last->hs[1], now->hs[1], 0x3FF);
++		if (ef_mid_started && (c->regs[REG_MODE_2] & BIT_DISP_EN)) {
++			ef_mid_center(c, line, base_width, hs_a, hs_b, last, source, narrow + BORDER_LEFT);
++			if (wide) memcpy(wide_out + ext, narrow + BORDER_LEFT, base_width * sizeof(pixel_t));
++		}
++		if (wide) {
++			uint8_t column_scroll = c->regs[REG_MODE_3] & BIT_VSCROLL;
++			uint32_t last_column = base_width == 320 ? 38 : 30;
++			int mask = 0x3FF;
++			ef_side_view view = {
++				.hs_a = hs_a, .hs_b = hs_b,
++				.vs = {
++					ef_mid_vscroll(c, last, 0, mask), ef_mid_vscroll(c, last, 1, mask),
++					ef_mid_vscroll(c, last, column_scroll ? last_column : 0, mask), ef_mid_vscroll(c, last, column_scroll ? last_column + 1 : 1, mask)
++				},
++				.at_x = ef_mid_at_x, .at_y = ef_mid_at_y
++			};
++			ef_wide_sides(c, wide_out, line, active, base_width, ext, &view);
++		}
++		if (line + 1 == c->inactive_start || line + 1 == EF_MID_LINES) {
++			ef_mid_complete = ef_mid_started;
++			if (ef_mid_mode == EF_MID_SPAN2) {
++				memcpy(ef_mid_last, ef_mid_held, sizeof(ef_mid_last));
++				memcpy(ef_mid_last_list, ef_mid_held_list, sizeof(ef_mid_sprite) * ef_mid_held_count);
++				ef_mid_last_count = ef_mid_held_count;
++				memcpy(ef_mid_held, ef_mid_now, sizeof(ef_mid_held));
++				memcpy(ef_mid_held_list, ef_mid_list, sizeof(ef_mid_sprite) * ef_mid_count);
++				ef_mid_held_count = ef_mid_count;
++			} else {
++				memcpy(ef_mid_last, ef_mid_now, sizeof(ef_mid_last));
++				memcpy(ef_mid_last_list, ef_mid_list, sizeof(ef_mid_sprite) * ef_mid_count);
++				ef_mid_last_count = ef_mid_count;
++			}
++			memset(ef_mid_now, 0, sizeof(ef_mid_now));
++		}
++	} else if (wide) {
++		ef_wide_sides(c, wide_out, line, active, base_width, ext, NULL);
++	}
++}
+diff --git a/ef_wide.inc b/ef_wide.inc
+index e4f2c38..1f50736 100644
+--- a/ef_wide.inc
++++ b/ef_wide.inc
+@@ -264,7 +264,9 @@ static int ef_moved_x(uint32_t line, int x, uint32_t tile, int amount)
+ }
+ 
+ // Sprites over the whole wide line, in table order: the first one drawn wins, as on the VDP.
+-static void ef_sprites(vdp_context *c, uint32_t line, int ext, int base_width, uint8_t *wide, uint8_t *hud)
++// at_x, at_y: positions by table index in place of the table's own, or NULL (the halfway image).
++static void ef_sprites(vdp_context *c, uint32_t line, int ext, int base_width, uint8_t *wide, uint8_t *hud,
++	const int16_t *at_x, const int16_t *at_y)
+ {
+ 	uint32_t y_line = (line + 1 + 128) & 0x1FF;
+ 	uint32_t table = mode5_sat_address(c);
+@@ -274,6 +276,7 @@ static void ef_sprites(vdp_context *c, uint32_t line, int ext, int base_width, u
+ 	for (uint32_t count = 0; count < limit; count++) {
+ 		uint32_t cache = index * 4;
+ 		uint32_t y = (c->sat_cache[cache] << 8 | c->sat_cache[cache + 1]) & 0x1FF;
++		if (at_y) y = at_y[index] & 0x1FF;
+ 		uint8_t size = c->sat_cache[cache + 2];
+ 		uint32_t next = c->sat_cache[cache + 3] & 0x7F;
+ 		uint32_t height = ((size & 3) + 1) * 8;
+@@ -289,12 +292,13 @@ static void ef_sprites(vdp_context *c, uint32_t line, int ext, int base_width, u
+ 				uint32_t tile = tileinfo & 0x7FF;
+ 				int x = (int)x_pos - 128;
+ 				int moved = ef_rule_count ? ef_moved_x(line, x, tile, ext) : x;
++				int shift = at_x ? at_x[index] - (int)x_pos : 0;
+ 				uint8_t *target = moved != x ? hud : wide;
+ 				uint8_t pal_priority = tileinfo >> 9 & 0x70;
+ 				uint32_t row = y_line - y;
+ 				if (tileinfo & MAP_BIT_V_FLIP) row = height - 1 - row;
+ 				for (uint32_t px = 0; px < width; px++) {
+-					int sx = moved + (int)(tileinfo & MAP_BIT_H_FLIP ? width - 1 - px : px) + ext;
++					int sx = moved + shift + (int)(tileinfo & MAP_BIT_H_FLIP ? width - 1 - px : px) + ext;
+ 					if (sx < 0 || sx >= base_width + 2 * ext) continue;
+ 					if (target == wide && sx >= ext && sx < ext + base_width) continue;  // the renderer drew those
+ 					if (target[sx] & 0xF) continue;
+@@ -320,6 +324,13 @@ static uint16_t ef_hide_moved_sprite(vdp_context *c, uint32_t line, uint16_t x_p
+ 	return x_pos;
+ }
+ 
++typedef struct {
++	uint16_t hs_a, hs_b;
++	uint16_t vs[4];
++	const int16_t *at_x, *at_y;
++} ef_side_view;
++static void ef_wide_sides(vdp_context *c, pixel_t *out, uint32_t line, uint32_t active, int base_width, int ext, const ef_side_view *view);
++
+ // The line just finished in the original columns: copy it and draw the new columns beside it.
+ static uint8_t ef_scroll_gate;
+ static int ef_gate_travel, ef_gate_blanked;
+@@ -383,6 +394,14 @@ static void ef_wide_line(vdp_context *c, pixel_t *source)
+ 	int ext = ef_wide_ext(base_width);
+ 	pixel_t *out = ef_wide_fb + row * EF_WIDE_FB_WIDTH;
+ 	memcpy(out + ext, source + BORDER_LEFT, base_width * sizeof(pixel_t));
++	ef_wide_sides(c, out, line, active, base_width, ext, NULL);
++}
++
++// The new columns of one line, in out around the original ones. Reads the machine and the
++// widening state and changes neither. view: scroll and sprite positions to use in place of
++// this line's own, or NULL (the halfway image draws its sides here too).
++static void ef_wide_sides(vdp_context *c, pixel_t *out, uint32_t line, uint32_t active, int base_width, int ext, const ef_side_view *view)
++{
+ 	pixel_t back = active && ef_scene_wide ? c->colors[c->regs[REG_BG_COLOR] & 0x3F] : 0;
+ 	if ((int)line >= ef_band_first && (int)line <= ef_band_last) back = 0;
+ 	if (!active || !(c->regs[REG_MODE_2] & BIT_DISP_EN) || !ef_scene_wide || ((int)line >= ef_band_first && (int)line <= ef_band_last)) {
+@@ -395,8 +414,8 @@ static void ef_wide_line(vdp_context *c, pixel_t *source)
+ 	static uint8_t sprite_line[EF_WIDE_FB_WIDTH], hud_line[EF_WIDE_FB_WIDTH];
+ 	memset(sprite_line, 0, base_width + 2 * ext);
+ 	memset(hud_line, 0, base_width + 2 * ext);
+-	ef_sprites(c, line, ext, base_width, sprite_line, hud_line);
+-	uint16_t hs_a = ef_hscroll(c, line, 0), hs_b = ef_hscroll(c, line, 1);
++	ef_sprites(c, line, ext, base_width, sprite_line, hud_line, view ? view->at_x : NULL, view ? view->at_y : NULL);
++	uint16_t hs_a = view ? view->hs_a : ef_hscroll(c, line, 0), hs_b = view ? view->hs_b : ef_hscroll(c, line, 1);
+ 	uint8_t column_scroll = c->regs[REG_MODE_3] & BIT_VSCROLL;
+ 	uint32_t last_column = base_width == 320 ? 38 : 30;
+ 	uint8_t shadow_mode = c->regs[REG_MODE_4] & BIT_HILIGHT;
+@@ -410,8 +429,8 @@ static void ef_wide_line(vdp_context *c, pixel_t *source)
+ 	uint8_t debug;
+ 	for (int side = 0; side < 2; side++) {
+ 		uint32_t column = side ? last_column : 0;
+-		uint16_t vs_a = (column_scroll ? c->vsram[column] : c->vsram[0]) & 0x3FF;
+-		uint16_t vs_b = (column_scroll ? c->vsram[column + 1] : c->vsram[1]) & 0x3FF;
++		uint16_t vs_a = view ? view->vs[side * 2] : (column_scroll ? c->vsram[column] : c->vsram[0]) & 0x3FF;
++		uint16_t vs_b = view ? view->vs[side * 2 + 1] : (column_scroll ? c->vsram[column + 1] : c->vsram[1]) & 0x3FF;
+ 		uint8_t no_a = side ? window_right : window_left;
+ 		for (int i = 0; i < ext; i++) {
+ 			int x = side ? base_width + i : i - ext;
+diff --git a/libblastem.c b/libblastem.c
+index 78182d1..c0143b0 100644
+--- a/libblastem.c
++++ b/libblastem.c
+@@ -8,6 +8,7 @@
+ #include "vdp.h"
+ #include "render.h"
+ #include "ef_wide.h"
++#include "ef_mid.h"
+ #include "io.h"
+ #include "genesis.h"
+ #include "sms.h"
+@@ -500,6 +501,7 @@ static void ef_read_options(void)
+ 	ef_read_option("emufusion_ws_scene", ef_wide_set_scene);
+ 	ef_read_option("emufusion_ws_hud", ef_wide_set_hud);
+ 	ef_read_option("emufusion_ws_aspect", ef_wide_set_aspect);
++	ef_read_option("emufusion_fg_halfway", ef_mid_set_mode);
+ 	if (stype == SYSTEM_GENESIS || stype == SYSTEM_SEGACD)
+ 		ef_wide_set_ram((const uint8_t *)((genesis_context *)current_system)->work_ram);
+ }
+@@ -525,6 +527,31 @@ uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
+ 	}
+ }
+ 
++// What the frontend asks for just after the frame's video callback (or in it): the halfway image in
++// the frame's own shape. NULL when there is none. Not a libretro call: looked up by name, optional.
++static uint8_t ef_mid_frame_wide;
++static uint32_t ef_mid_frame_offset;
++static unsigned ef_mid_frame_width, ef_mid_frame_height;
++
++static void ef_mid_note_frame(int wide, uint32_t offset, unsigned width, unsigned height)
++{
++	ef_mid_frame_wide = wide;
++	ef_mid_frame_offset = wide ? offset * EF_WIDE_FB_WIDTH : offset;
++	ef_mid_frame_width = width;
++	ef_mid_frame_height = height;
++}
++
++RETRO_API const void *emufusion_halfway_image(unsigned *width, unsigned *height, size_t *pitch)
++{
++	int pitch_pixels = 0;
++	const uint32_t *image = ef_mid_image(ef_mid_frame_wide, &pitch_pixels);
++	if (!image || !ef_mid_frame_width || ef_mid_frame_height > 294) return NULL;
++	*width = ef_mid_frame_width;
++	*height = ef_mid_frame_height;
++	*pitch = (size_t)pitch_pixels * sizeof(uint32_t);
++	return image + ef_mid_frame_offset;
++}
++
+ void render_framebuffer_updated(uint8_t which, int width)
+ {
+ 	unsigned height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
+@@ -544,6 +571,7 @@ void render_framebuffer_updated(uint8_t which, int width)
+ 			last_width = wide;
+ 			last_height = height;
+ 		}
++		ef_mid_note_frame(1, overscan_top, wide, height);
+ 		retro_video_refresh(ef_wide_fb + EF_WIDE_FB_WIDTH * overscan_top, wide, height, EF_WIDE_FB_WIDTH * sizeof(uint32_t));
+ 		frame_presented = 1;
+ 		system_request_exit(current_system, 0);
+@@ -563,6 +591,7 @@ void render_framebuffer_updated(uint8_t which, int width)
+ 		last_width = width;
+ 		last_height = height;
+ 	}
++	ef_mid_note_frame(0, overscan_left + LINEBUF_SIZE * overscan_top, width, height);
+ 	retro_video_refresh(fb + overscan_left + LINEBUF_SIZE * overscan_top, width, height, LINEBUF_SIZE * sizeof(uint32_t));
+ 	frame_presented = 1;
+ 	system_request_exit(current_system, 0);
+diff --git a/vdp.c b/vdp.c
+index 3934b4d..4c1904a 100644
+--- a/vdp.c
++++ b/vdp.c
+@@ -1065,6 +1065,7 @@ static void scan_sprite_table_mode4(vdp_context * context)
+ 	}
+ }
+ 
++static void ef_mid_scroll(vdp_context *c);
+ static uint16_t ef_hide_moved_sprite(vdp_context *c, uint32_t line, uint16_t x_pos, uint16_t tileinfo);
+ static void read_sprite_x(uint32_t line, vdp_context * context)
+ {
+@@ -3058,6 +3059,7 @@ void vdp_force_update_framebuffer(vdp_context *context)
+ }
+ 
+ static void ef_wide_line(vdp_context *c, pixel_t *source);
++static void ef_mid_line(vdp_context *c, pixel_t *source);
+ static uint16_t ef_hide_moved_sprite(vdp_context *c, uint32_t line, uint16_t x_pos, uint16_t tileinfo);
+ static void advance_output_line(vdp_context *context)
+ {
+@@ -3069,6 +3071,7 @@ static void advance_output_line(vdp_context *context)
+ 		output_line++;
+ 	}
+ 	if (context->output && context->fb) ef_wide_line(context, context->output);
++	if (context->output && context->fb) ef_mid_line(context, context->output);
+ 	if (context->s32x_vid && context->output) {
+ 		//vcounter advances before output line does in Mode 5, so temporarily back it up here
+ 		output_line--;
+@@ -3703,6 +3706,7 @@ static void vdp_h40_line(vdp_context * context)
+ 	context->hscroll_a_fine = context->hscroll_a & 0xF;
+ 	context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+ 	context->hscroll_b_fine = context->hscroll_b & 0xF;
++	ef_mid_scroll(context);
+ 	//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
+ 	//243-246 inclusive
+ 	for (int i = 0; i < 3; i++)
+@@ -3934,6 +3938,7 @@ static void vdp_h40(vdp_context * context, uint32_t target_cycles)
+ 		context->hscroll_a_fine = context->hscroll_a & 0xF;
+ 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+ 		context->hscroll_b_fine = context->hscroll_b & 0xF;
++	ef_mid_scroll(context);
+ 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
+ 		if (context->flags & FLAG_DMA_RUN) { run_dma_src(context, -1); }
+ 		context->hslot++;
+@@ -4312,6 +4317,7 @@ static void vdp_h32(vdp_context * context, uint32_t target_cycles)
+ 		context->hscroll_a_fine = context->hscroll_a & 0xF;
+ 		context->hscroll_b = context->vdpmem[address+2] << 8 | context->vdpmem[address+3];
+ 		context->hscroll_b_fine = context->hscroll_b & 0xF;
++	ef_mid_scroll(context);
+ 		//printf("%d: HScroll A: %d, HScroll B: %d\n", context->vcounter, context->hscroll_a, context->hscroll_b);
+ 		CHECK_LIMIT //provides "garbage" for border when plane A selected
+ 	SPRITE_RENDER_H32(245)
+@@ -6915,4 +6921,5 @@ void vdp_replay_event(vdp_context *context, uint8_t event, event_reader *reader)
+ }
+ 
+ #include "ef_wide.inc"
++#include "ef_mid.inc"
+ static uint8_t ef_tracking(void) { return ef_strict_a || ef_strict_b; }
