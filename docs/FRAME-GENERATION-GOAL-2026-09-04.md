@@ -45,21 +45,21 @@ reviewed before this revision; its work was not discarded.
 
 The 3-D failures are fast near objects: Double Dash's karts tear at their edges, and the per-phase field is 1/8 of a 1080p picture.
 
-**Status, November 6 (Thor, 3.2.157 from a cool start, 16-s windows scaled to 30 s; see the November 6 entries).**
+**Status, November 6 (Thor, 3.2.158 from a cool start, 16-s windows scaled to 30 s, one or two runs; see the November 6 entries).**
 
 | System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content, replay bench: now, with the 160-wide image check (QA) |
 | --- | --- | --- | --- |
-| NES, two runs | 100.0%, 0; 100.0%, 0 | 17.3 / 25.6, 9.3 / 17.6 ms | 0%, stays off |
-| Mega Drive | 99.8%, 5.5 | 9.1 / 17.4 (9.4 / 17.7) ms | 46%, stays off |
+| NES | 99.9%, 3.7 | 9.0 / 17.4 (9.9 / 18.3) ms | 0%, stays off |
+| Mega Drive | 99.8%, 5.5 | 8.9 / 17.2 ms | 46%, stays off |
 | SNES (drain trial) | 99.9%, 2 | 17.7 / 26.1 (17.3 / 25.6) ms | 0-14%, stays off |
 | GBA (drain trial) | 99.8%, 5.5 | 9.0 / 17.3 ms | not re-measured |
 | Star Fox 64 | not re-measured | not re-measured | 4%, 4% |
-| Ocarina of Time (20 fps) | 99.3%, 9.7 (one run, retry-415) | 11.1 / 36.1 ms (real minimum 33.3) | 0-4%, not on the device bench |
-| Double Dash | 99.8%, 7.3 (0-168 by where its stamps sit against the clock, see the November 6 entry) | 18.1 / 26.6 (14.8 / 23.1) ms | 17%, 7% |
-| NSMBU Deluxe | 99.7%, 10.9 (0-20 over 9 runs on 3.2.156 and 3.2.157 builds) | 18.8 / 27.1 (16.3 / 24.6) ms | world map 14%, 7% |
-| Link's Awakening (beach scene, one run, retry-418; the older 94.3% was its intro movie) | 98.3%, 59 | 24.0 / 32.6 (24.9 / 34.3) ms | 6%, 11% |
-| Wind Waker HD (title flight, 30 fps source, two runs, retry-418; 87-91% with this table's QA options, see the November 6 entry) | 76.7%, 418; 47.5%, 929 | 27.6 / 44.3 (23.2 / 40.0), 19.3 / 36.1 (19.3 / 37.3) ms | 11%, 0% |
-| SM3DW (3.2.156; 94.7% with the QA options on retry-421) | 93.7% in its play window | 12.0 / 21.0 ms | 0%, not on the device bench |
+| Ocarina of Time (20 fps) | 99.6%, 4.9 | 11.6 / 36.6 ms (real minimum 33.3) | 0-4%, not on the device bench |
+| Double Dash, two runs | 99.8%, 5.5; 99.8%, 7.3 | 19.5 / 27.9 (16.6 / 24.9), 11.2 / 19.6 (13.4 / 21.7) ms | 17%, 7% |
+| NSMBU Deluxe | 99.9%, 3.7 (0-20 over earlier builds) | 19.9 / 28.2 (19.8 / 28.1) ms | world map 14%, 7% |
+| Link's Awakening (about 40 s in, likely the beach scene; the older 94.3% was its intro movie) | 98.4%, 55 | 23.1 / 30.7 (22.7 / 31.0) ms | 6%, 11% |
+| Wind Waker HD (title flight, 30 fps source, two runs) | 98.2%, 32; 96.6%, 60 | 27.7 / 44.3 ms | 11%, 0% |
+| SM3DW | 98.6% in its play window | 13.8 / 23.0 ms | 0%, not on the device bench |
 
 Nothing is at 10/10 on all three measures yet. Whether a run reaches the compositor's fast state is close to chance, and it is worth about 8 ms.
 
@@ -267,7 +267,43 @@ Nothing is at 10/10 on all three measures yet. Whether a run reaches the composi
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 6 (latest) **— Measured on purpose: Double Dash is cleaner with its stamps behind the clock, under the firmware's pin, than held by the phase lock. That is now Dolphin's default in the tree. Cemu's future stamp is rejected.**
+November 6 (latest) **— 3.2.158 (232, `cd183b4d`, retry-433): Dolphin under the firmware's pin, the phase lock no longer sticks, real images drawn ahead and placed by arrival, Cemu's 30 fps rhythm steady. Still not 10/10 on any system.**
+
+- **What ships for frame generation, all on by default:**
+  - Dolphin's stamps start a second behind the clock, so the firmware always paces it; the drain also acts on it. The phase lock on hardware cores is QA only.
+  - The phase lock takes the remainder as the phase when an image misses the callback just after it arrives, instead of resetting and staying stuck (`bb3990c`). Dread, 36 nudges and 85% when stuck.
+  - A pair's real image is drawn right after its generated image's swap, and is placed by the time between arrivals rather than by stamps.
+  - The queue gives a scan back on the earlier scan's deadline once the compositor is seen latching unfinished frames.
+  - Cemu at a multi-scan output doesn't wait for the uniqueness check after 120 unique verdicts in a row, and keeps at least one extra scan with the early guard on. This trades latency for rhythm: Wind Waker HD went from 87-92% on cadence at about 17 / 33 ms to 96.6-98.2% at 27.6 / 44.3 ms. It settles two scans deep, not one, so about 11 ms of that is above what the rhythm alone should need.
+- **The gate, candidate on the Thor, default settings, cool starts (53 C or below), one or two runs:**
+
+  | Game | On cadence | Hitches per 30 s | Fast mode | First generated / real, mean |
+  | --- | --- | --- | --- | --- |
+  | NES | 99.9% | 3.7 | 88% | 9.9 / 18.3 ms |
+  | Mega Drive | 99.8% | 5.5 | 100% | 8.9 / 17.2 ms |
+  | NSMBU Deluxe | 99.9% | 3.7 | 2% | 19.8 / 28.1 ms |
+  | Double Dash, two runs | 99.8%, 99.8% | 5.5, 7.3 | 36%, 77% | 16.6 / 24.9, 13.4 / 21.7 ms |
+  | Ocarina of Time | 99.6% | 4.9 | 100% | 11.6 / 36.7 ms |
+  | Wind Waker HD, title flight, two runs | 98.2%, 96.6% | 31.9, 60 | 99%, 98% | 27.7 / 44.3, 27.4 / 44.2 ms |
+  | Metroid Dread, title | 91.1% | 155.8 | 99% | 10.9 / 27.4 ms |
+  | Link's Awakening, about 40 s in | 98.4% | 55.2 | 18% | 22.7 / 31.0 ms |
+  | SM3DW | 98.6% in its play window | not comparable | 77% | 13.8 / 23.0 ms |
+  | WipEout 3 (PAL, PS1, hardware session) | 99.7% on intended | not comparable | 99% | 11.2 / 28.0 ms |
+
+  - **Dread:** the same settings on retry-432 gave 97.8% and 98.7%. This run's misses fall in a stretch where the source itself comes late, likely the title's glitch effect. Its title is not gameplay.
+  - **WipEout 3:** 25 fps doesn't divide the 120 Hz panel evenly, so its 2- and 3-scan mix is planned; the cadence figure means little there.
+  - **The other stream's checks on this candidate:** PS1 widescreen toggle on Twisted Metal and the Switch (Native) Wonder pack launch both passed.
+- **Against the 10/10 targets:**
+  - Smoothness: Ocarina is within both. NES, NSMBU Deluxe and, in some runs, Mega Drive are too on this one run. Double Dash and the others are not.
+  - Latency: NES and Mega Drive reach it in the fast state. Wind Waker HD is much further away than before, by choice.
+  - Artifacts: not re-measured in this release; nothing here changes the picture.
+- **Rejected today:** Cemu's future stamp and nudge (latency up, nudges 0), the late take-up, the take-up lattice on a 30 fps source (51%), a fixed one-scan depth for Cemu (53%), the assumed check on Dolphin (52 hitches), the phase lock against the pin on Dolphin, the pixel-art unchanged-pixel rule.
+- **Next:**
+  - Why Cemu's depth settles at two scans, not one: each recovery to one was restored within about a second by a frame marked late. One scan would give back about 8 ms.
+  - Double Dash and NSMBU Deluxe spend most of a clean run in the slow compositor state.
+  - Mega Drive's artifacts (46%) probably need motion data from the emulator itself.
+
+November 6 **— Measured on purpose: Double Dash is cleaner with its stamps behind the clock, under the firmware's pin, than held by the phase lock. That is now Dolphin's default in the tree. Cemu's future stamp is rejected.**
 
 - **The Thor's USB drop:** it came back at about 15:19 with 5 days of uptime, so it did not reboot, and the package's identity was intact. The cause is not known. The runs `g4`, `h1` and `h2` started with no device and are not results.
 - **Double Dash, retry-427, predraw and arrival span on, one run a row:**
@@ -284,7 +320,7 @@ November 6 (latest) **— Measured on purpose: Double Dash is cleaner with its s
   | Lock, lead kept | 99.9% | 3.6 | 84% | 12.6 / 20.9 ms | 4.1 (3.5-5.8) | 60 C |
 
   Two of these started at 60 C, because another stream's turn warmed the Thor while they waited for the lock, so they count for less. The script now checks the temperature again once it holds the lock. The drain made no move inside the two 16-s windows it was on for, so those two rows show a clean run left in the slow state, not the drain working; the 0 hitches may owe nothing to it. Its share of time in the fast state over a longer session is not measured.
-- **Decision:** stamps behind. The worst run is 14.5 against 32.5 hitches, the latency is about the same when the fast state holds, and it needs no nudges. `97db551`: Dolphin's stamps start a second behind the clock, the phase lock is QA only (`emufusion_framegen_hardware_phase_lock=1`), and the compositor drain also acts on a core the firmware paces. As a default it has not run yet.
+- **Decision:** stamps behind. The worst run is 14.5 against 32.5 hitches, the latency is about the same when the fast state holds, and it needs no nudges. `97db551`: Dolphin's stamps start a second behind the clock, the phase lock is QA only (`emufusion_framegen_hardware_phase_lock=1`), and the compositor drain also acts on a core the firmware paces.
 - **Cemu's future stamp and phase nudge: rejected.** Wind Waker HD, retry-427, both QA options on: with them 91.1%, 160 hitches, 31.1 / 48.3 ms; without 91.8%, 148 hitches, 18.8 / 35.4 ms. The stamp ended the firmware's pin (a wait spread over 0-8 ms), and the phase lock took no nudges, 0 in the run, for a reason not yet looked into.
 
 - **Dolphin's default on retry-428, no QA for the stamp:** it does engage (stamps 942 ms behind, 0 nudges): 99.6%, 12.7 hitches, 8% fast, 19.0 / 27.4 ms, one run.
