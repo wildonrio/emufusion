@@ -1765,6 +1765,18 @@
     "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification.apk": {
       "sha256": "8eaa304ba68a2f76d295520e664e837d7d5b9b6319a131a9c0b51b250ea09c69",
       "reason": "Superseded 3.2.158 (232); 3.2.159 is the rollback for 3.2.160, 2026-11-07."
+    },
+    "unified-android/build/emufusion-3.2.160-phase2-phase3-qualification-05a74359712a40fe19581c61d89b678603843758b383cc51bbac40c5d7ccc3db.apk": {
+      "sha256": "05a74359712a40fe19581c61d89b678603843758b383cc51bbac40c5d7ccc3db",
+      "reason": "retry-460 built only to prune; same code as the 3.2.160 release"
+    },
+    "unified-android/build/emufusion-3.2.160-phase2-phase3-qualification-8b55e2bc7212026a4f0d16c4e296f33b0fef5f94af1ba6ff6d07ff2ca218996a.apk": {
+      "sha256": "8b55e2bc7212026a4f0d16c4e296f33b0fef5f94af1ba6ff6d07ff2ca218996a",
+      "reason": "retry-461 QA build: overlay rule at level 26, no gain live"
+    },
+    "unified-android/build/emufusion-3.2.160-phase2-phase3-qualification-00655b7c5d4e680e97784b3194ad991d5bad0b871e2f49efd35ee97e339fb63a.apk": {
+      "sha256": "00655b7c5d4e680e97784b3194ad991d5bad0b871e2f49efd35ee97e339fb63a",
+      "reason": "retry-462 built only to prune; same code as the 3.2.160 release"
     }
   }
 }
