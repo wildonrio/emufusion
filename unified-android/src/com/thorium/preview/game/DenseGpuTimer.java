@@ -54,6 +54,29 @@ final class DenseGpuTimer implements AutoCloseable {
 
     private DenseGpuTimer(long handle) { this.handle = handle; }
 
+    /** The lowest-clocked cluster's CPUs, 0 on uniform CPUs. */
+    static synchronized long smallCoreMask() {
+        if (!libraryLoaded) {
+            System.loadLibrary("emufusion_framegen_timer");
+            libraryLoaded = true;
+        }
+        return nativeSmallCoreMask();
+    }
+
+    /** The calling thread at the lowest priority on these CPUs: the mask, or -errno. */
+    static long occupyCurrentThread(long mask) {
+        return nativeOccupy(mask);
+    }
+
+    /** Stays on this CPU for this long in a low-power wait, seen as running. */
+    static void waitOccupied(long ns) {
+        nativeWaitOccupied(ns);
+    }
+
+    private static native long nativeSmallCoreMask();
+    private static native long nativeOccupy(long mask);
+    private static native void nativeWaitOccupied(long ns);
+
     /**
      * Keeps the calling thread off the lowest-clocked CPU cluster: the mask
      * applied, 0 on uniform CPUs, or -errno.

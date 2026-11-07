@@ -8,15 +8,7 @@
  	const uint64_t emufusionFgState = s_emufusionFgPresentation.Snapshot();
  	if (EmuFusionFgPresentationGate::Enabled(emufusionFgState) &&
  		m_featureControl.deviceExtensions.display_timing && mainWindow)
-@@ -3352,6 +3353,7 @@
- 		struct timespec now;
- 		clock_gettime(CLOCK_MONOTONIC, &now);
- 		const int64_t nowNs = (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
-+		s_emufusionTvPresentNs = nowNs;
- 		if (kEmuFusionStampPeriodNs != s_emufusionStampPeriodNs)
- 		{
- 			s_emufusionStampPeriodNs = kEmuFusionStampPeriodNs;
-@@ -3383,6 +3385,46 @@
+@@ -3383,10 +3384,59 @@
  		{
  			s_emufusionStampLogged = true;
  			cemuLog_log(LogType::Force, "EmuFusion: immutable source timestamps via VK_GOOGLE_display_timing stampHz={:.6f} firstStampNs={}", 1000000000.0 / (double)kEmuFusionStampPeriodNs, stampNs);
@@ -51,8 +43,9 @@
 +		{
 +			static uint32_t s_emufusionPadPresentId = 0;
 +			emufusionPresentTime.presentID = ++s_emufusionPadPresentId;
-+			// From the TV image's present, the generator's arrival: under GPU load the Pad's comes later
-+			// (image check on: 26% of real images late when counted from here).
++			// From the return of the TV image's present, where the generator gets it (the firmware's
++			// sleep is inside that call, about 4 ms). Under GPU load the Pad's own present comes later:
++			// counted from there, with the image check on, 26% of real images were late.
 +			const int64_t baseNs = sinceTvNs >= 0 && sinceTvNs < 16000000LL ? s_emufusionTvPresentNs : nowNs;
 +			emufusionPresentTime.desiredPresentTime = (uint64_t)(baseNs + s_emufusionPadAheadNs);
 +			emufusionPresentTimes.sType = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE;
@@ -63,3 +56,15 @@
  		}
  	}
  #endif
+ 	VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
++#if BOOST_PLAT_ANDROID
++	if (mainWindow)
++	{
++		struct timespec returned;
++		clock_gettime(CLOCK_MONOTONIC, &returned);
++		s_emufusionTvPresentNs = (int64_t)returned.tv_sec * 1000000000LL + returned.tv_nsec;
++	}
++#endif
+ 	if (result < 0 && result != VK_ERROR_OUT_OF_DATE_KHR
+ #if BOOST_PLAT_ANDROID
+ 		&& result != VK_ERROR_SURFACE_LOST_KHR

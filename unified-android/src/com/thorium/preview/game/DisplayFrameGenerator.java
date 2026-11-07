@@ -4481,6 +4481,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 finally {
                     workHint.close();
                     workHint = FrameWorkHint.NONE;
+                    smallCoreOccupancy.close();
+                    smallCoreOccupancy = SmallCoreOccupancy.NONE;
                     surfaceRetirement.complete(cleanupFailure);
                     thread.quitSafely();
                 }
@@ -4560,6 +4562,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             workHint = FrameWorkHint.forCurrentThread("frame-generator",
                     workHintTargetNs(refreshHz));
             pinFrameThreadToFastCores();
+            if (externalTransport == null) smallCoreOccupancy = SmallCoreOccupancy.start();
             choreographer = Choreographer.getInstance();
             healthWindowStartNanos = System.nanoTime();
             updateSchedulerHealthBaseline();
@@ -10493,6 +10496,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         builtInLastCommittedTargetNs = deadline.contentPresentationTimeNs();
         heldSwapCadence.committed(System.nanoTime(), plannedSooner,
                 presentationScansPerOutput() * frameRate.panelPeriodNs());
+        if (timelineActive && heldSwapOutput()) smallCoreOccupancy.frame();
         if (physicalFramePrepared && !densePhysicalFrameCommitted)
             logPhysicalPresentationFailure(physicalTracker);
         if (densePyramidEnabled) {
@@ -15092,6 +15096,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     // emufusion_framegen_fast_cores=0 leaves placement to the scheduler.
     private long fastCoreMask;
     private boolean fastCorePinUnavailable;
+    private SmallCoreOccupancy smallCoreOccupancy = SmallCoreOccupancy.NONE;
 
     private void pinFrameThreadToFastCores() {
         if (fastCorePinUnavailable || !TimelineSchedulerSwitch.fastCores() ||

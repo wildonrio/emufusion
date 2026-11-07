@@ -1580,6 +1580,7 @@ Java_com_thorium_preview_game_PhysicalPresentationTracker_nativeDestroy(
 #if defined(__ANDROID__) || defined(__linux__)
 #include <errno.h>
 #include <sys/syscall.h>
+#include <time.h>
 
 /* Every CPU outside the lowest-clocked cluster; read once, clocks are fixed. */
 static unsigned long long fast_cpu_mask(void) {
@@ -1613,19 +1614,73 @@ static unsigned long long fast_cpu_mask(void) {
 
 /*
  * Restricts the calling thread to every CPU outside the lowest-clocked
- * cluster (each CPU's cpuinfo_max_freq), within the CPUs it may use now.
- * Returns the mask applied, 0 when the CPUs are uniform or nothing would
- * remain, or -errno. A 64-bit mask covers every phone and handheld SoC.
+ * cluster (each CPU's cpuinfo_max_freq). The kernel keeps it within the
+ * app's CPU set. Returns the mask applied, 0 when the CPUs are uniform or
+ * none of them is in the CPU set now (background), or -errno. A 64-bit mask
+ * covers every phone and handheld SoC.
+ *
+ * Not starting from sched_getaffinity: that leaves out CPUs core control has
+ * paused at this moment, and applying it once a second narrowed the thread
+ * for good, 0xf8 to 0x38 to 0x18 within seconds, on the two cores the
+ * compositor and the engine also want (Thor, 2026-11-07).
  */
 JNIEXPORT jlong JNICALL
 Java_com_thorium_preview_game_DenseGpuTimer_nativePinFastCores(JNIEnv *env, jclass type) {
     (void) env;
     (void) type;
-    unsigned long long allowed = 0;
-    if (syscall(__NR_sched_getaffinity, 0, sizeof allowed, &allowed) < 0) return -errno;
-    unsigned long long fast = fast_cpu_mask() & allowed;
+    unsigned long long fast = fast_cpu_mask();
     if (fast == 0) return 0;
-    if (syscall(__NR_sched_setaffinity, 0, sizeof fast, &fast) < 0) return -errno;
+    if (syscall(__NR_sched_setaffinity, 0, sizeof fast, &fast) < 0)
+        return errno == EINVAL ? 0 : -errno;
     return (jlong) fast;
+}
+
+/* The CPUs of the lowest-clocked cluster, 0 when the CPUs are uniform. */
+JNIEXPORT jlong JNICALL
+Java_com_thorium_preview_game_DenseGpuTimer_nativeSmallCoreMask(JNIEnv *env, jclass type) {
+    (void) env;
+    (void) type;
+    unsigned long long fast = fast_cpu_mask();
+    if (fast == 0) return 0;
+    unsigned long long known = 0;
+    for (int cpu = 0; cpu < 64; ++cpu) {
+        char path[96];
+        snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", cpu);
+        if (access(path, R_OK) == 0) known |= 1ULL << cpu;
+    }
+    return (jlong) (known & ~fast);
+}
+
+/* The calling thread at the lowest priority on these CPUs: the mask applied, or -errno. */
+JNIEXPORT jlong JNICALL
+Java_com_thorium_preview_game_DenseGpuTimer_nativeOccupy(JNIEnv *env, jclass type, jlong mask) {
+    (void) env;
+    (void) type;
+    unsigned long long wanted = (unsigned long long) mask;
+    if (syscall(__NR_setpriority, 0 /* PRIO_PROCESS */, 0, 19) < 0) return -errno;
+    if (syscall(__NR_sched_setaffinity, 0, sizeof wanted, &wanted) < 0) return -errno;
+    return mask;
+}
+
+/*
+ * Stays on the CPU this long without executing: a low-power wait for an event. The
+ * arch timer's event stream and every interrupt end the wait, and any other thread
+ * that wants the CPU preempts this one. The scheduler sees a running thread.
+ */
+JNIEXPORT void JNICALL
+Java_com_thorium_preview_game_DenseGpuTimer_nativeWaitOccupied(JNIEnv *env, jclass type, jlong ns) {
+    (void) env;
+    (void) type;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    long long end = (long long) now.tv_sec * 1000000000LL + now.tv_nsec + ns;
+    long long at;
+    do {
+#if defined(__aarch64__)
+        __asm__ volatile("wfe");
+#endif
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        at = (long long) now.tv_sec * 1000000000LL + now.tv_nsec;
+    } while (at < end);
 }
 #endif

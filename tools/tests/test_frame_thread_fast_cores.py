@@ -42,7 +42,10 @@ class FrameThreadFastCoresTest(unittest.TestCase):
         body = source[source.index('Java_com_thorium_preview_game_DenseGpuTimer_nativePinFastCores'):]
         self.assertIn('cpuinfo_max_freq', source)
         self.assertIn('if (freq[cpu] > lowest) fast |= 1ULL << cpu;', source)
-        self.assertIn('unsigned long long fast = fast_cpu_mask() & allowed;', body)
+        self.assertIn('unsigned long long fast = fast_cpu_mask();', body)
+        # sched_getaffinity leaves out cores paused right now: applying it again narrows for good.
+        self.assertNotIn('sched_getaffinity', body[:body.index('#endif')])
+        self.assertIn('return errno == EINVAL ? 0 : -errno;', body)
         mask = source[source.index('static unsigned long long fast_cpu_mask('):]
         self.assertIn('if (known) return cached;', mask)
         self.assertRegex(body, re.escape('if (fast == 0) return 0;'))

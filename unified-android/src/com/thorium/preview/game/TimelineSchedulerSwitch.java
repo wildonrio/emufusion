@@ -401,6 +401,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         fastCores = fast;
+        boolean occupy = true;
+        try {
+            if (context != null) occupy = Settings.Global.getInt(
+                    context.getContentResolver(), SMALL_CORES_GLOBAL, 1) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        smallCores = occupy;
         boolean quiet = false;
         try {
             if (context != null) quiet = Settings.Global.getInt(
@@ -902,6 +910,11 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean fastCores = true;
 
     static boolean fastCores() { return fastCores; }
+    static final String SMALL_CORES_GLOBAL = "emufusion_framegen_small_cores";
+    private static volatile boolean smallCores = true;
+
+    /** The small cores kept full during Cemu's held output (SmallCoreOccupancy); QA 0 for none. */
+    static boolean smallCores() { return smallCores; }
 
     /**
      * QA opt-in (emufusion_framegen_quiet_skip=1, 2026-11-04): compositor
