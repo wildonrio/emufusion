@@ -1,5 +1,5 @@
 diff --git a/platforms/libretro/libretro.cpp b/platforms/libretro/libretro.cpp
-index c1ad656..4eb1e01 100644
+index c1ad656..aef5c5b 100644
 --- a/platforms/libretro/libretro.cpp
 +++ b/platforms/libretro/libretro.cpp
 @@ -72,6 +72,109 @@ static bool libretro_supports_bitmasks = false;
@@ -112,7 +112,15 @@ index c1ad656..4eb1e01 100644
  static int current_screen_height = 0;
  static float current_aspect_ratio = 0;
  
-@@ -268,6 +371,7 @@ void retro_run(void)
+@@ -89,6 +192,7 @@ static void apply_controller_device(unsigned port, unsigned device, bool log_dev
+ static void release_controller_input(unsigned port);
+ static void update_input(void);
+ static void check_variables(void);
++static void ef_patches_apply(void);
+ 
+ static void fallback_log(enum retro_log_level level, const char *fmt, ...)
+ {
+@@ -268,6 +372,7 @@ void retro_run(void)
      update_input();
  
      audio_sample_count = 0;
@@ -120,7 +128,7 @@ index c1ad656..4eb1e01 100644
      core->RunToVBlank(frame_buffer, audio_buf, &audio_sample_count);
  
      GS_RuntimeInfo runtime_info;
-@@ -286,7 +390,10 @@ void retro_run(void)
+@@ -286,7 +391,10 @@ void retro_run(void)
          info.geometry.base_height  = runtime_info.screen_height;
          info.geometry.max_width    = GS_RESOLUTION_MAX_WIDTH_WITH_OVERSCAN;
          info.geometry.max_height   = GS_RESOLUTION_MAX_HEIGHT_WITH_OVERSCAN;
@@ -132,7 +140,15 @@ index c1ad656..4eb1e01 100644
  
          environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info.geometry);
      }
-@@ -437,6 +544,8 @@ void *retro_get_memory_data(unsigned id)
+@@ -363,6 +471,7 @@ bool retro_load_game(const struct retro_game_info *info)
+         log_cb(RETRO_LOG_ERROR, "Invalid or corrupted ROM.\n");
+         return false;
+     }
++    ef_patches_apply();
+ 
+     enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
+     if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
+@@ -437,6 +546,8 @@ void *retro_get_memory_data(unsigned id)
              return core->GetMemory()->GetCurrentRule()->GetRamBanks();
          case RETRO_MEMORY_SYSTEM_RAM:
              return core->GetMemory()->GetMemoryMap() + 0xC000;
@@ -141,7 +157,7 @@ index c1ad656..4eb1e01 100644
      }
  
      return NULL;
-@@ -450,6 +559,8 @@ size_t retro_get_memory_size(unsigned id)
+@@ -450,6 +561,8 @@ size_t retro_get_memory_size(unsigned id)
              return core->GetMemory()->GetCurrentRule()->GetRamSize();
          case RETRO_MEMORY_SYSTEM_RAM:
              return 0x2000;
@@ -150,7 +166,89 @@ index c1ad656..4eb1e01 100644
      }
  
      return 0;
-@@ -892,6 +1003,42 @@ static void check_variables(void)
+@@ -888,10 +1001,155 @@ static void update_input(void)
+     core->SetReset(reset_pressed);
+ }
+ 
++// emufusion_ws_patch: "ADDR:OLD>NEW;..." in hex, ROM file offsets: small changes to a game's own map
++// loaders, so they draw as far as the wide picture. Every OLD is checked first and a ROM that differs
++// stays narrow. Undone when the picture goes narrow, except code placed in free space, which the
++// processor could be inside at that moment.
++static char ef_patch_text[1024];
++
++static int ef_hex_byte(const char* text)
++{
++    int value = 0;
++    for (int i = 0; i < 2; i++)
++    {
++        char c = text[i];
++        int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'A' && c <= 'F' ? c - 'A' + 10 : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
++        if (digit < 0)
++            return -1;
++        value = value * 16 + digit;
++    }
++    return value;
++}
++
++static bool ef_patch_walk(u8* rom, int size, bool write, bool wide)
++{
++    const char* p = ef_patch_text;
++    while (*p)
++    {
++        char* end;
++        unsigned long addr = strtoul(p, &end, 16);
++        if (end == p || *end != ':')
++            return false;
++        const char* before = end + 1;
++        const char* sep = strchr(before, '>');
++        if (!sep || (sep - before) % 2)
++            return false;
++        int count = (int)(sep - before) / 2;
++        const char* after = sep + 1;
++        if ((int)strlen(after) < count * 2 || (long)addr + count > size)
++            return false;
++        bool free_space = true;
++        for (int i = 0; i < count; i++)
++        {
++            int old_byte = ef_hex_byte(before + i * 2), new_byte = ef_hex_byte(after + i * 2);
++            if (old_byte < 0 || new_byte < 0 || (rom[addr + i] != old_byte && rom[addr + i] != new_byte))
++                return false;
++            if (old_byte != 0 && old_byte != 0xFF)
++                free_space = false;
++        }
++        if (write && (wide || !free_space))
++            for (int i = 0; i < count; i++)
++            {
++                rom[addr + i] = (u8)ef_hex_byte((wide ? after : before) + i * 2);
++                // The console's fixed first 1 KB is fetched from the memory map, not the ROM.
++                if (addr + i < 0x400)
++                    core->GetMemory()->Load((u16)(addr + i), rom[addr + i]);
++            }
++        p = after + count * 2;
++        if (*p == ';')
++            p++;
++        else if (*p)
++            return false;
++    }
++    return true;
++}
++
++static void ef_patches_apply(void)
++{
++    u8* rom = core->GetCartridge()->GetROM();
++    int size = core->GetCartridge()->GetROMSize();
++    if (!ef_patch_text[0] || !rom || size <= 0)
++        return;
++    if (!ef_patch_walk(rom, size, false, false))
++    {
++        core->GetVideo()->SetWideExt(0);
++        ef_wide_ext = 0;
++        return;
++    }
++    ef_patch_walk(rom, size, true, ef_wide_ext > 0);
++}
++
+ static void check_variables(void)
  {
      struct retro_variable var = {0};
  
@@ -186,18 +284,91 @@ index c1ad656..4eb1e01 100644
 +    {
 +        int milli = environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? atoi(var.value) : 0;
 +        int ext = milli > 1000 ? (milli * GS_RESOLUTION_GG_HEIGHT / 1000 - GS_RESOLUTION_GG_WIDTH) / 2 : 0;
++        // emufusion_ws_maxext: new columns a side, where a game's map only reaches so far.
++        var.key = "emufusion_ws_maxext";
++        var.value = NULL;
++        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && atoi(var.value) > 0 && ext > atoi(var.value))
++            ext = atoi(var.value);
 +        core->GetVideo()->SetWideExt(ext);
 +        ef_wide_ext = core->GetVideo()->GetWideExt();
 +    }
++
++    // emufusion_ws_freepc: "A-B;C-D" in hex, processor addresses, only while wide.
++    var.key = "emufusion_ws_freepc";
++    var.value = NULL;
++    {
++        extern int g_efFreeCount;
++        extern u16 g_efFree[8][2];
++        g_efFreeCount = 0;
++        const char* cursor = ef_wide_ext && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "";
++        while (*cursor && g_efFreeCount < 8)
++        {
++            unsigned first, last;
++            if (sscanf(cursor, "%x-%x", &first, &last) != 2)
++                break;
++            g_efFree[g_efFreeCount][0] = (u16)first;
++            g_efFree[g_efFreeCount][1] = (u16)last;
++            g_efFreeCount++;
++            cursor = strchr(cursor, ';');
++            cursor = cursor ? cursor + 1 : "";
++        }
++    }
++
++    var.key = "emufusion_ws_patch";
++    var.value = NULL;
++    snprintf(ef_patch_text, sizeof(ef_patch_text), "%s", environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "");
++    ef_patches_apply();
 +
      var.key = "gearsystem_up_down_allowed";
      var.value = NULL;
  
 diff --git a/src/GearsystemCore.cpp b/src/GearsystemCore.cpp
-index e2475ca..cb3d3a2 100644
+index e2475ca..561dd8b 100644
 --- a/src/GearsystemCore.cpp
 +++ b/src/GearsystemCore.cpp
-@@ -351,7 +351,7 @@ bool GearsystemCore::GetRuntimeInfo(GS_RuntimeInfo& runtime_info)
+@@ -164,6 +164,19 @@ void GearsystemCore::Init(GS_Color_Format pixelFormat)
+     InitMemoryRules();
+ }
+ 
++// EmuFusion Widescreen Hack: map loaders a recipe has lengthened take no console time, so the longer
++// picture costs the game no frames. Set from emufusion_ws_freepc.
++int g_efFreeCount = 0;
++u16 g_efFree[8][2];
++
++static inline bool efFreeCharge(u16 pc)
++{
++    for (int i = 0; i < g_efFreeCount; i++)
++        if (pc >= g_efFree[i][0] && pc <= g_efFree[i][1])
++            return true;
++    return false;
++}
++
+ bool GearsystemCore::RunToVBlank(u8* pFrameBuffer, s16* pSampleBuffer, int* pSampleCount, GS_Debug_Run* debug)
+ {
+     m_pFrameBuffer = pFrameBuffer;
+@@ -184,7 +197,10 @@ bool GearsystemCore::RunToVBlank(u8* pFrameBuffer, s16* pSampleBuffer, int* pSam
+ 
+         do
+         {
++            bool efFree = g_efFreeCount && efFreeCharge(m_pProcessor->GetState()->PC->GetValue());
+             unsigned int clockCycles = debug_enable && debug->step_debugger ? m_pProcessor->RunInstruction() : m_pProcessor->RunFor(1);
++            if (efFree)
++                clockCycles = 0;
+             instruction_completed = true;
+             vblank = m_pVideo->Tick(clockCycles);
+             m_pAudio->Tick(clockCycles);
+@@ -225,7 +241,10 @@ bool GearsystemCore::RunToVBlank(u8* pFrameBuffer, s16* pSampleBuffer, int* pSam
+ 
+         do
+         {
++            bool efFree = g_efFreeCount && efFreeCharge(m_pProcessor->GetState()->PC->GetValue());
+             unsigned int clockCycles = m_pProcessor->RunFor(1);
++            if (efFree)
++                clockCycles = 0;
+             vblank = m_pVideo->Tick(clockCycles);
+             m_pAudio->Tick(clockCycles);
+             m_master_clock_cycles += clockCycles;
+@@ -351,7 +370,7 @@ bool GearsystemCore::GetRuntimeInfo(GS_RuntimeInfo& runtime_info)
      {
          if (m_pCartridge->IsGameGear() && !m_pCartridge->IsGameGearInSMSMode())
          {

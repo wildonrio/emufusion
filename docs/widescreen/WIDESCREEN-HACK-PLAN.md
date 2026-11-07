@@ -572,6 +572,28 @@ left its logo; Quake, whose menus show wrapped logos and a stray strip, with pla
 whose race was not reached. Nine of the 40 have not run: San Francisco Rush 2049, Pokémon Stadium, WrestleMania 2000, NFL Blitz, Tetrisphere,
 Rayman 2, Army Men: Sarge's Heroes, Forsaken 64 and Star Soldier.
 
+### Game Gear: asking the game to draw further (2026-11-07)
+
+The earlier notes on Cool Spot and Ecco were wrong about the cause. Tracing their writes to the video map showed Cool Spot keeps a correct
+32-column window, but starts it at the old left edge, so the far right of that window wraps round into the new left columns. Ecco's loaders stop
+two columns past the old screen. Neither needs a map reader. A few bytes make the game itself draw the real level there:
+
+`emufusion_ws_patch=ADDR:OLD>NEW;...` in hex, ROM file offsets. Every OLD is checked first and a ROM that differs stays narrow, so another revision
+cannot be damaged. It is undone when the picture goes narrow, except code placed in free space. `emufusion_ws_freepc=A-B;C-D` gives lengthened
+loaders no console time, so the wider picture costs no frames. `emufusion_ws_maxext=N` limits the new columns where a game's map reaches only so far.
+
+| Game | Change | Check |
+| --- | --- | --- |
+| Cool Spot | All loaders six tiles further left: map position, tile within the block, place in video memory, including the routine that draws a level's first screen | 60 random-input shots match the original exactly in the old screen area. Video map matches the level in work RAM, 468 of 468 cells seen |
+| Ecco the Dolphin | Columns load from six left to 25 right of the camera, not 0 and 22. Rows fill 32 cells, not 23. Three shifts made arithmetic, or a row near the level's left edge loads wrong across the whole picture | 160 random-input shots match exactly against a run with the same timing and no patch. The first version showed that fault only when the reference state came from the original game |
+
+The test that matters is lockstep. Random inputs through the original and the patched game, then every pixel of the old 160x144 area compared. A
+state saved by a patched run must not be used as the reference: its video memory carries the fault into the original. Comparing a frame's side
+columns with a later frame of the same run proves nothing, since it is the same cell.
+
+Micro Machines and its sequel really do load only 22 cells across and 15 to 19 down, so they may need more than this. Both recipes are QA only until
+they have passed on the Thor.
+
 ### The top 20 on the way to the Thor (2026-11-06, evening)
 
 A count of the top-20 lists found how few had run on the Thor: SNES 1 of 20, Mega Drive and Game Gear none, NES 5. Blind menu presses on the

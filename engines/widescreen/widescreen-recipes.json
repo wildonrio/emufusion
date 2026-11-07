@@ -581,9 +581,13 @@
           "tested": "2026-11-05 host: first stage fight, enemies walk in through the new columns; the status bar is drawn in the map and stays centred"
         },
         "Cool Spot": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: beach level: map rows are refreshed only across the old screen, so revealed columns show old tiles. Needs a map reader to widen"
+          "strategy": "testing",
+          "options": {
+            "emufusion_ws_patch": "0044:000000000000000000000000>2AF4D02B3A03D1FE02D02BC9;0050:000000000000>3AFFD0D630C9;0056:0000000000000000>3A03D1C602E603C9;0E8E:2AF4D0>CD4400;0EB8:2AF4D0>CD4400;0F62:2AF4D0>CD4400;0F99:2AF4D0>CD4400;4BA7:3AFFD0>CD5000;107C:3AFFD0>CD5000;1094:3AFFD0>CD5000;10AC:3AFFD0>CD5000;10C6:3AFFD0>CD5000;0EE0:3A03D1>CD5600;0F22:3A03D1>CD5600;0F68:3A03D1>CD5600;0F8A:3A03D1>CD5600",
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_hud": "obj:29-29:48-80:-1:10-12;obj:37-37:48-80:-1:01-0C;obj:29-29:176-204:1:0D-0F;obj:37-37:176-204:1:01-0B;obj:141-149:48-64:-1:13-16;obj:157-157:52-60:-1:01-0C;obj:157-157:152-200:1:01-0C"
+          },
+          "tested": "2026-11-07 host: first level played. The sides showed the map's far right, because the game keeps a correct 32-column window starting at the old left edge. A patch moves its loaders' window six tiles left, so the game draws the real level there itself. 60 random-input shots match the original exactly in the old screen area, and the video map matches the level in work RAM. Time, cool, lives and score moved to the corners. QA only until it passes on the Thor; later levels not reached"
         },
         "Micro Machines 2: Turbo Tournament": {
           "strategy": "fixed-screen",
@@ -591,9 +595,15 @@
           "tested": "2026-11-06 host: driven: the sides show broken pieces of the track for the same reason. Stays narrow. A map reader could open it up"
         },
         "Ecco the Dolphin": {
-          "strategy": "fixed-screen",
-          "options": {},
-          "tested": "2026-11-05 host: first bay: rows refresh only across the old screen, rock slices hang in the revealed columns. Needs a map reader to widen"
+          "strategy": "testing",
+          "options": {
+            "emufusion_ws_patch": "0010:000000000000000000000000>01FAFFCB5A280301190009C9;0CA4:CB5A280401160009>CD10000000000000;0C2F:0617>0620;0CBA:CB3C>CB2C;0CBE:CB3C>CB2C;0CC2:CB3C>CB2C",
+            "emufusion_ws_maxext": "40",
+            "emufusion_ws_freepc": "0010-001B;0BC6-0DEB",
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_hud": "obj:28-28:52-80:-1:72-76;obj:36-36:52-80:-1:72-76"
+          },
+          "tested": "2026-11-07 host: first bay swum. Its loaders stopped two columns past the old screen. A patch makes them load from six tiles left of the camera to 25 past it and fill whole rows, and those loaders take no console time, so nothing is lost to the longer rows. 160 random-input shots match exactly in the old screen area against the same timing without the patch. Health and air moved to the corner. Width capped at 240 because this game does not mask its first column. Off the level's left edge the sides show the end of the row above. QA only until it passes on the Thor"
         },
         "Fatal Fury Special": {
           "strategy": "widen",
