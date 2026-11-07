@@ -3599,7 +3599,7 @@
         "Mario Kart 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture, meters where the game puts them. Not played through"
+          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture, meters where the game puts them. Not played through. 2026-11-07 Thor, real race at full size: steered off the road and along the walls on the first course; walls, trees and road reach both edges, the race order and map keep their shape"
         },
         "Mario Golf": {
           "strategy": "widen",
@@ -3682,9 +3682,9 @@
           "tested": "2026-11-06 Thor, library pass: first level flying; 3D is wide. Not played through"
         },
         "Cruis'n USA": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: a race; the road and scenery fill the wide picture. Not played through"
+          "tested": "2026-11-06 Thor, library pass: a race; the road and scenery fill the wide picture. Not played through. 2026-11-07 Thor, real race at full size: the sky stops short of the sides, leaving hard black blocks in both top corners, seen with the car standing still. That earlier widen came from a short view. Narrow"
         },
         "Duke Nukem 64": {
           "strategy": "widen",
@@ -3694,7 +3694,7 @@
         "Extreme-G": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: a race; the track fills the wide picture. Not played through"
+          "tested": "2026-11-06 Thor, library pass: a race; the track fills the wide picture. Not played through. 2026-11-07 Thor, real race at full size: the bike did not move under the script, so only a standing view: track and rocks reach both edges, meters in shape. Not driven"
         },
         "Gex 64: Enter the Gecko": {
           "strategy": "widen",
@@ -3734,12 +3734,12 @@
         "Ridge Racer 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture. Not played through"
+          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture. Not played through. 2026-11-07 Thor, real race at full size: steered through the first corners and tunnel; stands, signs and road reach both edges inside the game's thin border, the dials and mirror keep their shape"
         },
         "RR64 - Ridge Racer 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture. Not played through"
+          "tested": "2026-11-06 Thor, library pass: a race; the track and scenery fill the wide picture. Not played through. 2026-11-07 Thor, real race at full size: steered through the first corners and tunnel; stands, signs and road reach both edges inside the game's thin border, the dials and mirror keep their shape"
         },
         "Rocket: Robot on Wheels": {
           "strategy": "widen",
@@ -3759,7 +3759,7 @@
         "Wipeout 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor, library pass: a race; the track fills the wide picture. Not played through"
+          "tested": "2026-11-06 Thor, library pass: a race; the track fills the wide picture. Not played through. 2026-11-07 Thor, real race at full size: steered, running the wrong way; track and scenery reach the edges of the window the game draws in, with sky and a dim band showing outside that window. Whether that band shows narrow was not compared"
         },
         "Resident Evil 2": {
           "strategy": "fixed-screen",
