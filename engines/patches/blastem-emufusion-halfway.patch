@@ -24,7 +24,7 @@ new file mode 100644
 index 0000000..cfa4f8b
 --- /dev/null
 +++ b/ef_mid.inc
-@@ -0,0 +1,416 @@
+@@ -0,0 +1,432 @@
 +// Included at the end of vdp.c, after ef_wide.inc. See ef_mid.h.
 +//
 +// Each line is drawn as the VDP finishes the real one, so registers, colours and the
@@ -88,11 +88,27 @@ index 0000000..cfa4f8b
 +	return ((d + span / 2) & mask) - span / 2;
 +}
 +
-+// Toward the last value by half the shorter way round; d >> 1 rounds down, the same for
-+// planes and sprites, so a sprite fixed to a plane stays fixed to it.
-+static inline int ef_mid_halfway(int last, int now, int mask)
++// A plane repeats: a scroll and the same scroll plus a whole plane show the same picture, and a game
++// may write either (NBA Jam TE's floor lines). So the short way round is round the plane's size, not
++// the register's: round the register, half of such a jump showed a part of the map half a plane away.
++static inline int ef_mid_h_repeat(const vdp_context *c)
 +{
-+	return (last + (ef_mid_wrap(now - last, mask) >> 1)) & mask;
++	static const uint16_t cell_masks[] = {0x1F, 0x3F, 0x1F, 0x7F};
++	return (cell_masks[c->regs[REG_SCROLL] & 3] + 1) * 8 - 1;
++}
++
++static inline int ef_mid_v_repeat(const vdp_context *c)
++{
++	return 0xFF | (c->regs[REG_SCROLL] & 0x30) << 4;
++}
++
++// Toward the last value by half the shorter way round; d >> 1 rounds down, the same for
++// planes and sprites, so a sprite fixed to a plane stays fixed to it. Counted back from this
++// frame's value, so the result is in the same whole plane as the one the real line used.
++static inline int ef_mid_halfway(int last, int now, int repeat, int mask)
++{
++	int d = ef_mid_wrap(now - last, repeat);
++	return (now - d + (d >> 1)) & mask;
 +}
 +
 +static void ef_mid_scroll(vdp_context *c)
@@ -112,7 +128,7 @@ index 0000000..cfa4f8b
 +	int count = 0;
 +	for (int y = 0; y < c->inactive_start && y < EF_MID_LINES; y++) {
 +		if (!ef_mid_last[y].valid) continue;
-+		deltas[count++] = ef_mid_wrap((ef_hscroll(c, y, 0) & 0x3FF) - (ef_mid_last[y].hs[0] & 0x3FF), 0x3FF);
++		deltas[count++] = ef_mid_wrap((ef_hscroll(c, y, 0) & 0x3FF) - (ef_mid_last[y].hs[0] & 0x3FF), ef_mid_h_repeat(c));
 +	}
 +	int best = 0, best_count = 0;
 +	for (int i = 0; i < count; i++) {
@@ -124,7 +140,7 @@ index 0000000..cfa4f8b
 +		}
 +	}
 +	*cam_x = best;
-+	*cam_y = ef_mid_last[0].valid ? -ef_mid_wrap((c->vsram[0] & 0x3FF) - (ef_mid_last[0].vsram[0] & 0x3FF), 0x3FF) : 0;
++	*cam_y = ef_mid_last[0].valid ? -ef_mid_wrap((c->vsram[0] & 0x3FF) - (ef_mid_last[0].vsram[0] & 0x3FF), ef_mid_v_repeat(c)) : 0;
 +}
 +
 +static void ef_mid_read_sprites(vdp_context *c)
@@ -215,7 +231,7 @@ index 0000000..cfa4f8b
 +static inline int ef_mid_vscroll(const vdp_context *c, const ef_mid_scrolls *last, int word, int mask)
 +{
 +	if (ef_mid_mode == EF_MID_EXACT || !last->valid) return c->vsram[word] & mask;
-+	return ef_mid_halfway(last->vsram[word] & mask, c->vsram[word] & mask, mask);
++	return ef_mid_halfway(last->vsram[word] & mask, c->vsram[word] & mask, ef_mid_v_repeat(c), mask);
 +}
 +
 +// One plane over the original columns. Which cell a pixel falls in is read_map_scroll's
@@ -401,8 +417,8 @@ index 0000000..cfa4f8b
 +		memcpy(now->vsram, c->vsram, sizeof(now->vsram));
 +		now->valid = 1;
 +		int exact = ef_mid_mode == EF_MID_EXACT || !last->valid;
-+		int hs_a = exact ? now->hs[0] : ef_mid_halfway(last->hs[0], now->hs[0], 0x3FF);
-+		int hs_b = exact ? now->hs[1] : ef_mid_halfway(last->hs[1], now->hs[1], 0x3FF);
++		int hs_a = exact ? now->hs[0] : ef_mid_halfway(last->hs[0], now->hs[0], ef_mid_h_repeat(c), 0x3FF);
++		int hs_b = exact ? now->hs[1] : ef_mid_halfway(last->hs[1], now->hs[1], ef_mid_h_repeat(c), 0x3FF);
 +		if (ef_mid_started && (c->regs[REG_MODE_2] & BIT_DISP_EN)) {
 +			ef_mid_center(c, line, base_width, hs_a, hs_b, last, source, narrow + BORDER_LEFT);
 +			if (wide) memcpy(wide_out + ext, narrow + BORDER_LEFT, base_width * sizeof(pixel_t));

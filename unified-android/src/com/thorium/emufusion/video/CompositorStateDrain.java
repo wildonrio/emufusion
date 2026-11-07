@@ -17,9 +17,9 @@ package com.thorium.emufusion.video;
  * a late frame at the moves, so its compositor may be what misses), NES's 5-11 s.
  * So the spacing starts at {@link #MIN_SPACING_NS}, which keeps a full cycle to
  * four two-scan intervals in 30 s, doubles when the fast state lasted under
- * {@link #SHORT_STAY_NS}, and halves when it lasted all of the spacing. A stay of
- * 5-11 s keeps the spacing: doubling at half of it left one NES run 30 s from its
- * next try, late for its whole window.</p>
+ * {@link #SHORT_STAY_NS}, and halves when it lasted longer. Halving only after a
+ * stay as long as the spacing left a game that stays 5-11 s at a 60-s spacing
+ * earned at its start, late for most of the minute (Mega Drive, NES, 2026-11-07).</p>
  */
 public final class CompositorStateDrain {
     /** The pipelined state lasts this long before a frame is left out. */
@@ -45,8 +45,8 @@ public final class CompositorStateDrain {
             if (known && awaitingVerdict) {
                 awaitingVerdict = false;
                 long lasted = actualNs - fastSinceNs;
-                if (lasted >= spacingNs) spacingNs = Math.max(MIN_SPACING_NS, spacingNs / 2L);
-                else if (lasted < SHORT_STAY_NS) spacingNs = Math.min(MAX_SPACING_NS, spacingNs * 2L);
+                if (lasted < SHORT_STAY_NS) spacingNs = Math.min(MAX_SPACING_NS, spacingNs * 2L);
+                else spacingNs = Math.max(MIN_SPACING_NS, spacingNs / 2L);
             }
         }
         fast = now;

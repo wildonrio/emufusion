@@ -111,14 +111,14 @@
       "id": "blastem",
       "sourceCommit": "84e567e17b6fb3cea23146c4209c18d50d46cbf0",
       "sourceArchiveSha256": "7bf9a28959fbced50479e59b7832bf9b2a9746bb06620bdd5c28c89d205e8fc7",
-      "recipeSha256": "5aac332a81c59da46c5c130c130d1a73da12c35c20a8a616cf784215fef89f92",
+      "recipeSha256": "42e93d6f8b17d525c7f7f70ebe0f159efb8bea19e2f2258edb39af89d2623f33",
       "patches": {
         "engines/patches/blastem-libretro-android-portability.patch": "4966522359464467f8b9f150356fdc03ba7f056a12f24ca822f71a9c8b173eed",
         "engines/patches/blastem-new-core-frame-end-rebase-hang.patch": "d899b13fe0728e5e927e30736e1c1c7c57d2906a6814c6150823e911cc73686c",
         "engines/patches/blastem-emufusion-widescreen.patch": "8fa218db72309c94f3e27dbd7fb5b0e663a8a8b38ad11eb2d6055f78f91a1c31",
-        "engines/patches/blastem-emufusion-halfway.patch": "b485834b90688542fe876b2932793cb9efe2f233c0dcfbcdca908d019d17b892"
+        "engines/patches/blastem-emufusion-halfway.patch": "6cb84b26277c5e32864c91385bc00a7f18d7ff812cae011ad4ba396d53805f88"
       },
-      "artifactSha256": "7669e047115882b465913836e6b6f926c1273c45dbfbea4665903db5359010cb",
+      "artifactSha256": "95cc359e84919c145f7f75a23ad13a8d936b347b04f6c635d996c8344e4c8511",
       "independentBuilds": 2,
       "byteIdentical": true,
       "proofDate": "2026-11-07",

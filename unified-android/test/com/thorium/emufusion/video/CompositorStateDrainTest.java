@@ -76,11 +76,11 @@ public final class CompositorStateDrainTest {
         check(drain.drain(132L * SECOND), "second");
         fast(drain, 132L * SECOND);
         pipelined(drain, 150L * SECOND);
-        check(drain.spacingNs() == 30L * SECOND, "over the short stay: unchanged");
-        check(drain.drain(162L * SECOND), "third");
-        fast(drain, 162L * SECOND);
+        check(drain.spacingNs() == 15L * SECOND, "over the short stay: halved");
+        check(drain.drain(152L * SECOND), "third");
+        fast(drain, 152L * SECOND);
         pipelined(drain, 200L * SECOND);
-        check(drain.spacingNs() == 15L * SECOND, "all of it: halved");
+        check(drain.spacingNs() == 15L * SECOND, "never under the minimum");
     }
 
     private static void aDrainThatChangesNothingDoublesTheSpacing() {
