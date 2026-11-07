@@ -122,6 +122,11 @@ struct emufusion_retro_host {
     unsigned video_height;
     size_t video_pitch;
     uint64_t video_sequence;
+    /* The core's halfway image for the frame in video_bytes, where it has one. */
+    const void *(*halfway_image)(unsigned *width, unsigned *height, size_t *pitch);
+    uint8_t *halfway_bytes;
+    size_t halfway_size;
+    bool halfway_valid;
     int16_t *audio_ring;
     size_t audio_read;
     size_t audio_count;
@@ -1239,6 +1244,22 @@ static void video_callback(const void *data, unsigned width, unsigned height,
     active_host->video_height = height;
     active_host->video_pitch = pitch;
     active_host->video_sequence++;
+    active_host->halfway_valid = false;
+    if (active_host->halfway_image) {
+        unsigned halfway_width = 0, halfway_height = 0;
+        size_t halfway_pitch = 0;
+        const void *halfway = active_host->halfway_image(&halfway_width, &halfway_height, &halfway_pitch);
+        if (halfway && halfway_width == width && halfway_height == height && halfway_pitch == pitch) {
+            if (size != active_host->halfway_size) {
+                replacement = (uint8_t *)realloc(active_host->halfway_bytes, size);
+                if (!replacement) return;
+                active_host->halfway_bytes = replacement;
+                active_host->halfway_size = size;
+            }
+            memcpy(active_host->halfway_bytes, halfway, size);
+            active_host->halfway_valid = true;
+        }
+    }
 }
 
 static void push_audio_sample(int16_t sample) {
@@ -1596,6 +1617,7 @@ emufusion_retro_host *emufusion_retro_create_with_preferences(
     RESOLVE(host, load_game, "retro_load_game");
     RESOLVE(host, load_game_special, "retro_load_game_special");
     RESOLVE(host, unload_game, "retro_unload_game");
+    resolve_optional_symbol(host->library, "emufusion_halfway_image", &host->halfway_image);
     resolve_optional_symbol(host->library, "retro_emufusion_prepare_exit_autosave",
                             &host->prepare_exit);
     RESOLVE(host, get_region, "retro_get_region");
@@ -2443,6 +2465,21 @@ bool emufusion_retro_copy_video_frame(const emufusion_retro_host *host, void *bu
     RETURN_UNLOCKED(true);
 }
 
+bool emufusion_retro_has_halfway_image(const emufusion_retro_host *host) {
+    lock_host();
+    RETURN_UNLOCKED(host && host->halfway_image);
+}
+
+bool emufusion_retro_copy_halfway_frame(const emufusion_retro_host *host, void *buffer,
+                                     size_t size) {
+    lock_host();
+    if (!host || !buffer || !host->halfway_valid || !host->video_bytes ||
+            host->halfway_size != host->video_size || size < host->halfway_size)
+        RETURN_UNLOCKED(false);
+    memcpy(buffer, host->halfway_bytes, host->halfway_size);
+    RETURN_UNLOCKED(true);
+}
+
 size_t emufusion_retro_drain_audio(emufusion_retro_host *host, int16_t *samples,
                                 size_t max_frames) {
     size_t available_samples;
@@ -2872,6 +2909,7 @@ void emufusion_retro_destroy(emufusion_retro_host *host) {
     if (active_host == host) active_host = NULL;
     free(host->game_bytes);
     free(host->video_bytes);
+    free(host->halfway_bytes);
     free(host->audio_ring);
     free(host->runahead_state);
     free(host->runahead_scratch);

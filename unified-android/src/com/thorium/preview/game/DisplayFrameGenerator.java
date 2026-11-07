@@ -3302,6 +3302,77 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return true;
     }
 
+    // The core's own halfway images, by the submission of the frame each leads up to. The
+    // last few, because a pair can be drawn after the next frame has already arrived.
+    private final int[] halfwayTextures = new int[3];
+    private final int[] halfwaySubmissions = new int[3];
+    private int halfwayNext, halfwayWidth, halfwayHeight;
+    private android.graphics.Bitmap halfwayBitmap;
+    private long halfwayUploads, halfwayDraws, halfwayMisses;
+
+    @Override public boolean submitHalfwayFrame(int[] colors, int frameWidth, int frameHeight,
+                                                int left, int top, int right, int bottom) {
+        if (closed.get() || colors == null || frameWidth < 1 || frameHeight < 1 ||
+                left < 0 || top < 0 || right <= left || bottom <= top ||
+                right > frameWidth || bottom > frameHeight ||
+                colors.length < (long) frameWidth * frameHeight) return false;
+        final int width = right - left;
+        final int height = bottom - top;
+        final int[] snapshot = acquireSoftwareSnapshot(width * height);
+        for (int row = 0; row < height; ++row)
+            System.arraycopy(colors, (bottom - 1 - row) * frameWidth + left,
+                    snapshot, row * width, width);
+        handler.post(() -> uploadHalfwayFrame(snapshot, width, height));
+        return true;
+    }
+
+    private void uploadHalfwayFrame(int[] colors, int width, int height) {
+        try {
+            if (closed.get() || externalPresentationFailed) return;
+            if (width != halfwayWidth || height != halfwayHeight) {
+                if (halfwayTextures[0] == 0) GLES20.glGenTextures(3, halfwayTextures, 0);
+                for (int i = 0; i < 3; ++i) {
+                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, halfwayTextures[i]);
+                    textureParameters(GLES20.GL_TEXTURE_2D);
+                    GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA,
+                            width, height, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, null);
+                    halfwaySubmissions[i] = 0;
+                }
+                if (halfwayBitmap != null) halfwayBitmap.recycle();
+                halfwayBitmap = android.graphics.Bitmap.createBitmap(
+                        width, height, android.graphics.Bitmap.Config.ARGB_8888);
+                halfwayWidth = width;
+                halfwayHeight = height;
+            }
+            int slot = halfwayNext;
+            halfwayNext = (halfwayNext + 1) % 3;
+            halfwayBitmap.setPixels(colors, 0, width, 0, 0, width, height);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, halfwayTextures[slot]);
+            GLUtils.texSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, halfwayBitmap);
+            checkGl("upload halfway image");
+            // The real frame was posted right after this one: it takes the next number.
+            halfwaySubmissions[slot] = submittedFrameCount + 1;
+            ++halfwayUploads;
+        } catch (RuntimeException failure) {
+            failRuntimePresentation("Unable to consume the core's halfway image", failure);
+        } finally {
+            releaseSoftwareSnapshot(colors);
+        }
+    }
+
+    /** Over the generated image, while this is being tried: the pair's work is otherwise unchanged. */
+    private void drawHalfwayImage() {
+        if (halfwayUploads == 0L) return;
+        for (int i = 0; i < 3; ++i) {
+            if (activeRightSubmission > 0 && halfwaySubmissions[i] == activeRightSubmission) {
+                drawTexture2d(halfwayTextures[i]);
+                ++halfwayDraws;
+                return;
+            }
+        }
+        ++halfwayMisses;
+    }
+
     // Recycled crop snapshots for software cores. A fresh full-frame int[]
     // per frame (150 KB - 1.2 MB: 9-73 MB/s) went to ART's large-object space
     // and drove frequent collections that compete with the presenter. A
@@ -10237,6 +10308,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 }
             }
             else drawTexture2d(historyTextures[previousIndex]);
+            if (renderedSynthetic) drawHalfwayImage();
             if (renderedSynthetic) drawProofMark();
             proofPhase = phase;
             // Admission above permits one exact midpoint for this retained pair.
@@ -15211,6 +15283,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
                 " heldSwaps=" + heldSwaps + "/" + heldSwapCadence.pairs() +
                 " arrivalQuiets=" + arrivalQuiets +
+                " halfway=" + halfwayUploads + "/" + halfwayDraws + "/" + halfwayMisses +
                 " realPredraws=" + realPredraws + "/" + realPredrawHits +
                 " assumedUnique=" + assumedUnique + "/" + assumedWrong +
                 " compositorDrains=" + compositorStateDrain.drains() + "/" +

@@ -309,6 +309,7 @@ public final class LibretroEngineSession implements EngineSession,
     private boolean primaryRecoverySurfaceCanvas;
     private Bitmap frameBitmap;
     private int[] frameColors;
+    private int[] halfwayColors;
     private int[] dsPhoneColors;
     private final Rect primarySourceRect = new Rect();
     private final Rect secondarySourceRect = new Rect();
@@ -448,6 +449,8 @@ public final class LibretroEngineSession implements EngineSession,
                 try {
                     opened.loadGame(game);
                     opened.setRunAheadFrames(runAheadFrames());
+                    if (TimelineSchedulerSwitch.halfwayWanted(appContext) && opened.enableHalfwayImage())
+                        Log.i(TAG, "Halfway image from the core engine=" + entry.id);
                     // Loading resets port 0 to a plain RetroPad. Systems whose
                     // controller is something else must say so now: Dolphin
                     // only attaches the Wii Nunchuk for RETRO_DEVICE_WIIMOTE_NC,
@@ -2161,6 +2164,13 @@ public final class LibretroEngineSession implements EngineSession,
             frameBitmap.setPixels(presentationColors, 0, presentationWidth,
                     0, 0, presentationWidth, presentationHeight);
         }
+        if (primaryGenerator != null && frame.halfwayValid && presentationColors == frameColors) {
+            if (halfwayColors == null || halfwayColors.length != pixelCount)
+                halfwayColors = new int[pixelCount];
+            decodePixels(frame, frame.halfwayPixels, halfwayColors);
+            primaryGenerator.submitHalfwayFrame(halfwayColors, presentationWidth, presentationHeight,
+                    primarySource.left, primarySource.top, primarySource.right, primarySource.bottom);
+        }
         boolean presented = primaryGenerator != null
                 ? primaryGenerator.submitSoftwareFrame(presentationColors,
                         presentationWidth, presentationHeight,
@@ -2397,7 +2407,10 @@ public final class LibretroEngineSession implements EngineSession,
     }
 
     private static void decodePixels(LibretroHost.VideoFrame frame, int[] output) {
-        byte[] bytes = frame.pixels;
+        decodePixels(frame, frame.pixels, output);
+    }
+
+    private static void decodePixels(LibretroHost.VideoFrame frame, byte[] bytes, int[] output) {
         int bytesPerPixel = frame.pixelFormat == 1 ? 4 : 2;
         for (int y = 0; y < frame.height; y++) {
             int source = y * frame.pitch;

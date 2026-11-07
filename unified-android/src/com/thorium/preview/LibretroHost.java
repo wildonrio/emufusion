@@ -25,6 +25,9 @@ public final class LibretroHost implements Closeable {
         public int sequence;
         public int byteSize;
         public byte[] pixels;
+        /** The core's image halfway to this frame, same layout, when halfwayValid. */
+        public byte[] halfwayPixels;
+        public boolean halfwayValid;
         /** Scheduled core-clock due time (System.nanoTime domain) or zero. */
         public long producerTimestampNs;
 
@@ -345,6 +348,12 @@ public final class LibretroHost implements Closeable {
             recycleVideoFrame(frame);
             return null;
         }
+        frame.halfwayValid = false;
+        if (halfwayWanted) {
+            if (frame.halfwayPixels == null || frame.halfwayPixels.length < frame.pixels.length)
+                frame.halfwayPixels = new byte[frame.pixels.length];
+            frame.halfwayValid = nativeCopyHalfwayFrameInto(handle, frame.halfwayPixels);
+        }
         return frame;
     }
 
@@ -370,6 +379,17 @@ public final class LibretroHost implements Closeable {
     }
 
     /** Changes a core option during play; the core reads it on its next frame. */
+    private boolean halfwayWanted;
+
+    /** Asks a core that can draw a halfway image to do so; false for any other core. */
+    public synchronized boolean enableHalfwayImage() {
+        checkOpen();
+        if (!nativeHasHalfwayImage(handle) ||
+                !nativeSetCoreOption(handle, "emufusion_fg_halfway", "on")) return false;
+        halfwayWanted = true;
+        return true;
+    }
+
     public synchronized boolean setCoreOption(String key, String value) {
         checkOpen();
         return nativeSetCoreOption(handle, key, value);
@@ -465,6 +485,8 @@ public final class LibretroHost implements Closeable {
                                                 boolean pressed);
     private static native boolean nativeReadVideoInfo(long handle, int[] result);
     private static native boolean nativeCopyVideoFrameInto(long handle, byte[] destination);
+    private static native boolean nativeHasHalfwayImage(long handle);
+    private static native boolean nativeCopyHalfwayFrameInto(long handle, byte[] destination);
     private static native short[] nativeDrainAudio(long handle, int maxFrames);
     private static native double[] nativeAvInfo(long handle);
     private static native boolean nativeSetCoreOption(long handle, String key, String value);

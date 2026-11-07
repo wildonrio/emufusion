@@ -206,6 +206,11 @@ bool emufusion_retro_latest_video_info(const emufusion_retro_host *host,
 /* Copies the active byte_size bytes; a larger reusable destination is valid. */
 bool emufusion_retro_copy_video_frame(const emufusion_retro_host *host, void *buffer,
                                    size_t size);
+/* Whether the core offers a halfway image (emufusion_halfway_image, optional). */
+bool emufusion_retro_has_halfway_image(const emufusion_retro_host *host);
+/* That image for the frame emufusion_retro_copy_video_frame copies, same layout; false when none. */
+bool emufusion_retro_copy_halfway_frame(const emufusion_retro_host *host, void *buffer,
+                                     size_t size);
 size_t emufusion_retro_drain_audio(emufusion_retro_host *host, int16_t *samples,
                                 size_t max_frames);
 bool emufusion_retro_set_core_option(emufusion_retro_host *host, const char *key,

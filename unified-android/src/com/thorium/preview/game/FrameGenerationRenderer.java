@@ -212,6 +212,15 @@ public interface FrameGenerationRenderer extends AutoCloseable {
                 right, bottom, contentAspect);
     }
 
+    /**
+     * The core's own image halfway to the frame submitted next, in the same layout
+     * as that frame. False when this renderer has no use for it.
+     */
+    default boolean submitHalfwayFrame(int[] colors, int frameWidth, int frameHeight,
+                                       int left, int top, int right, int bottom) {
+        return false;
+    }
+
     /** Resizes without replacing the producer Surface or restarting a core. */
     void resize(int newInputWidth, int newInputHeight,
                 int newOutputWidth, int newOutputHeight, float newRefreshHz);

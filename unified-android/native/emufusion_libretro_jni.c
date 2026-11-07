@@ -237,6 +237,29 @@ Java_com_thorium_preview_LibretroHost_nativeCopyVideoFrameInto(
     return copied ? JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_LibretroHost_nativeHasHalfwayImage(
+        JNIEnv *env, jclass type, jlong handle) {
+    (void)env;
+    (void)type;
+    return emufusion_retro_has_halfway_image(from_handle(handle)) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_thorium_preview_LibretroHost_nativeCopyHalfwayFrameInto(
+        JNIEnv *env, jclass type, jlong handle, jbyteArray destination) {
+    (void)type;
+    if (destination == NULL) return JNI_FALSE;
+    jsize size = (*env)->GetArrayLength(env, destination);
+    if (size <= 0) return JNI_FALSE;
+    jbyte *bytes = (*env)->GetPrimitiveArrayCritical(env, destination, NULL);
+    if (bytes == NULL) return JNI_FALSE;
+    bool copied = emufusion_retro_copy_halfway_frame(
+            from_handle(handle), bytes, (size_t)size);
+    (*env)->ReleasePrimitiveArrayCritical(env, destination, bytes, 0);
+    return copied ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT jshortArray JNICALL
 Java_com_thorium_preview_LibretroHost_nativeDrainAudio(
         JNIEnv *env, jclass type, jlong handle, jint max_frames) {
