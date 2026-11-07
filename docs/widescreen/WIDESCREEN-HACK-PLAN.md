@@ -582,7 +582,27 @@ Looking at full frames of those states found real faults the earlier passes had 
 | Survival Kids | Junk beside story scenes | Rule `C131=04`: only the island widens |
 | NHL Hockey (Mega Drive) | Flat patches of ice beside the rink ends | Narrow |
 
-Yoshi's Island's table was found without reading code, since its columns are built through Super FX RAM: search the ROM for the four tile words of blocks on screen, then search RAM for numbers whose differences follow those table positions. SNES colour math can tint closed sides: the game adds a fixed colour over the black. The engine now writes closed sides as black in the
+Yoshi's Island's table was found without reading code, since its columns are built through Super FX RAM: search the ROM for the four tile words of blocks on screen, then search RAM for numbers whose differences follow those table positions. Then every top game was walked far enough to reach the column-loading edge, which found more:
+
+| Game | Fault | Now |
+| --- | --- | --- |
+| International Superstar Soccer Deluxe | Flat green strips | No strict rule: pitch and goal reach both edges |
+| Sonic 2, Sonic & Knuckles | Streaks beside the SEGA screen | Rule `FFF600=0C`: only levels widen |
+| Castle of Illusion | Slices of picture beside the intro, which scrolls | Rule `FF0005!=DD` with the scroll rule. Other stages not seen |
+| Contra: Hard Corps | Font tiles beside story screens | Scroll rule |
+| Donkey Kong Country (Color), Wario Land II (Game Boy) | Stale tiles beside static scenes | Scroll rule |
+| NHL 94 (Mega Drive) | Coloured tile junk in the crowd | Narrow |
+| Monster World IV | Black blocks in the clouds, in play | Narrow |
+
+Open: Donkey Kong Country and DKC 2 still cut the near ground at the leading edge. Without the strict rule that edge shows hard seams from stale
+columns, and level cards show junk. DKC's blocks are 4x4 tiles in ROM bank 19 but only about half match on screen, so some are probably stored
+flipped. NHL '94 on the SNES shows flat ice at the rink corners. Castlevania II on the Game Boy has digits cut off at the far edges of its status bar.
+
+A state restored into a game with the strict rule stays narrow on a static screen until the next redraw (Jimmy Connors, Mortal Kombat II), so those
+need judging from a route. A state restored before BlastEm's first frame is lost, on the Mac harness only: the app runs a frame first, and the Thor
+restored Sonic & Knuckles correctly. Mac states did load on the Android cores on the Thor for all six engines tried.
+
+SNES colour math can tint closed sides: the game adds a fixed colour over the black. The engine now writes closed sides as black in the
 finished line. A high share of filled side pixels does not mean a game is right, so each frame was looked at. All of this is Mac only so far.
 
 ## Game files that are not there

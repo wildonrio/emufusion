@@ -1659,7 +1659,7 @@
         "Castlevania II: Belmont's Revenge": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: Crystal Castle stage played; the columns are real scenery"
+          "tested": "2026-11-05 host: Crystal Castle stage played; the columns are real scenery. 2026-11-06: the status bar shows digits cut off at the far edges, left as is"
         },
         "Donkey Kong Land": {
           "strategy": "fixed-screen",
@@ -1698,8 +1698,10 @@
         },
         "Wario Land II": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: castle opening; deeper play still to do"
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-05 host: castle opening; deeper play still to do. 2026-11-06: the opening room keeps bars; treasure bags floated in a grey block at the side"
         },
         "Pokémon Red Version": {
           "strategy": "widen",
@@ -2273,8 +2275,10 @@
         },
         "Donkey Kong Country": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: Jungle Hijinxs played, the jungle reaches both edges"
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-05 host: Jungle Hijinxs played, the jungle reaches both edges. 2026-11-06: static scenes keep bars; the cave showed stale tiles at the side"
         },
         "The Legend of Zelda: Oracle of Ages": {
           "strategy": "fixed-screen",
