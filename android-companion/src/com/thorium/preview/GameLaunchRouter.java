@@ -23,41 +23,13 @@ public final class GameLaunchRouter {
     private GameLaunchRouter() {}
 
     public static boolean supportsSystem(Context context, String system) {
-        if (isSwitchNative(system)) return switchNativeBundled(context);
+        if (SwitchNativeRoute.handles(system)) return SwitchNativeRoute.bundled(context);
         return !engineIdForSystem(context, system).isEmpty();
     }
 
-    private static boolean isSwitchNative(String system) {
-        String canonical = EngineSystemIdResolver.canonical(system);
-        return "switchnative".equals(canonical) || "switch2".equals(canonical);
-    }
-
-    /**
-     * The one route that does not follow the same-window contract above. The Switch
-     * (Native) and Switch 2 systems' host runs the game's own threads and global state
-     * and can only end by ending its process, so it has an Activity in a process of its
-     * own; it is still inside this package and starts no other app. A build made with
-     * EMUFUSION_INCLUDE_NXNATIVE=0 declares no Activity, and these systems have no route.
-     */
-    private static boolean switchNativeBundled(Context context) {
-        if (android.os.Build.VERSION.SDK_INT < 30) return false;
-        try {
-            context.getPackageManager().getActivityInfo(new android.content.ComponentName(
-                    context.getPackageName(), SWITCH_NATIVE_ACTIVITY), 0);
-            return true;
-        } catch (android.content.pm.PackageManager.NameNotFoundException absent) {
-            return false;
-        }
-    }
-
-    private static final String SWITCH_NATIVE_ACTIVITY = "com.thorium.nxnative.NxActivity";
-
     public static String metadataCommand(Context context, String system) {
         String canonical = EngineSystemIdResolver.canonical(system);
-        if (isSwitchNative(canonical)) {
-            return "am start -n " + context.getPackageName() + "/" + SWITCH_NATIVE_ACTIVITY
-                    + " --es nxpack \"{file.path}\"";
-        }
+        if (SwitchNativeRoute.handles(canonical)) return SwitchNativeRoute.command(context);
         String engineId = engineIdForSystem(context, canonical);
         return MetadataGameLaunchCommand.build(
                 canonical, engineId, InWindowGameHost.ACTION_LAUNCH);

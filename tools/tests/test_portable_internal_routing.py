@@ -55,6 +55,11 @@ class NativeAdapterPrerequisites {
   // A new installation has no readiness preference, regardless of bundled engines.
   static boolean isReady(Context c,String s){return false;}
 }
+class SwitchNativeRoute {
+  static boolean handles(String s){return false;}
+  static boolean bundled(Context c){return false;}
+  static String command(Context c){return "";}
+}
 class InWindowGameHost {static final String ACTION_LAUNCH="com.thorium.preview.LAUNCH_INTERNAL_GAME";}
 class CustomEmulatorStore {
   static final String ID="custom";

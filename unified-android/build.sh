@@ -123,6 +123,7 @@ INCLUDE_PHASE3_CEMU=${EMUFUSION_INCLUDE_PHASE3_CEMU:-0}
 INCLUDE_NXNATIVE=${EMUFUSION_INCLUDE_NXNATIVE:-1}
 NXNATIVE_HOST="$ROOT_DIR/engines/build/nxnative/libdmhost.so"
 NXNATIVE_LICENSE="$ROOT_DIR/engines/compliance/nxnative/LICENSE"
+NXNATIVE_THIRD_PARTY="$ROOT_DIR/engines/compliance/nxnative/THIRD-PARTY.txt"
 PHASE3_CEMU_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/libemufusion_native_adapter_cemu.so"
 # PS3 is a built-in EmuFusion system, not an external-app fallback. The pinned,
 # hash-verified adapter is therefore part of normal builds; an explicit 0 is
@@ -950,6 +951,7 @@ fi
 if [ "$INCLUDE_NXNATIVE" = 1 ]; then
     cp "$NXNATIVE_HOST" "$DECODED/lib/arm64-v8a/libdmhost.so"
     cp "$NXNATIVE_LICENSE" "$DECODED/assets/LICENSE-MIT-NXNATIVE.txt"
+    cp "$NXNATIVE_THIRD_PARTY" "$DECODED/assets/LICENSE-NXNATIVE-THIRD-PARTY.txt"
 fi
 if [ "$INCLUDE_PHASE3_APS3E" = 1 ]; then
     cp "$PHASE3_APS3E_ADAPTER" \

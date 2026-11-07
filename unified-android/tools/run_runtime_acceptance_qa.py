@@ -74,7 +74,7 @@ MAIN_ACTIVITY = "com.thorium.preview/org.pegasus_frontend.android.MainActivity"
 # generation mode, and for the "Allow 4X" frame-rate option (2026-10-12), and
 # for the app-open update gate on game launches (2026-10-27); the theme.qml
 # byte identity otherwise stays the reviewed product source.
-FROZEN_THEME_QML = "28c18e8eaeb922048537006db81907b0b89e70b4efc19def6f0e7917c8e18c67"
+FROZEN_THEME_QML = "27a075d041b247e5e21ebc406f05a5b84c0b2f8643ce95931e2bd5da210e9338"
 FROZEN_THEME_CFG = "b10228b77ed33c77cf0c2856d57cb10e7769e5a3457a397a7d880ff2928d4cc9"
 ROUTE = re.compile(r"In-window route accepted engine=([^ ]+) system=([^\s]+)")
 RETURN = re.compile(
