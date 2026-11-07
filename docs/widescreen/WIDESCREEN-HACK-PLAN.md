@@ -59,9 +59,9 @@ canonical title).
 | gc | 43 | Dolphin | some | Per-game Gecko codes + widening |
 | wii | 16 | Dolphin | most | Only where the game lacks it |
 | ps2 | 25 | ARMSX2 | some | Per-game patches |
-| nds | 6 | melonDS DS | no | Dual screen: research |
+| nds | 4 games | melonDS DS | no | Nothing to widen on the top screen, see below |
 | psp | 5 | PPSSPP | yes | Skip |
-| 3ds, n3ds | 10 | Azahar | near (5:3) | Research |
+| 3ds, n3ds | 10 | Azahar | near (5:3) | Skip, see below |
 | wiiu | 9 | Cemu | yes | Skip |
 | switch | 20 | Eden | yes | Skip |
 | ps3 | 1 | aPS3e | yes | Skip |
@@ -669,6 +669,19 @@ repeat in the sides. Final Fantasy III keeps it off too, since its dialogue text
 
 Open: FF3's scattered squares at Narshe's far left are what its map holds there, not a wrap; that the camera never shows them is inferred, and no limit is set for it. DKC 2's climbing levels are
 read differently and not yet seen. Wario Land II on the Game Boy Color stays narrow in its opening rooms.
+
+### Systems decided without a widening (2026-11-07)
+
+**DS.** The owner asked for the top screen only. Played on the Thor with both panels captured, Castlevania: Dawn of Sorrow runs its action on the touch screen,
+which is the Thor's lower panel, and keeps only a status page or map on the top screen. Widening that page would add nothing, so no 2D side pass was built. Portrait
+of Ruin and Order of Ecclesia are expected to match but were not run. The fourth game is a Metroid Prime Hunters kiosk demo, 3-D on the top screen, not worth a renderer change.
+A player can swap the panels per game, which puts the action on the top screen at its own 4:3 with bars. If that ever matters, each line can be drawn three times with the
+scroll shifted, keeping the outer columns of the two extra passes, and the lower panel cropped back to its own width through its source rectangle.
+
+**3DS.** Its top screen is 5:3 against the Thor's 16:9, so a wide picture would add about 60 of 1920 pixels a side. Not worth per-game work. Decided from the numbers, not from a device run.
+
+**PC Engine CD.** The one game, Castlevania: Rondo of Blood, needs a System Card (`syscard3.pce` in `ROMs/pcenginecd/BIOS`), which the Thor does not have and the app never
+downloads. Without it the game does not start, so it cannot be tested. The widening code in the working copy has not drawn a frame.
 
 ## Game files that are not there
 
