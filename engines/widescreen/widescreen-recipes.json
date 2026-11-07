@@ -2400,7 +2400,7 @@
         "Micro Machines V3": {
           "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-05 host: a race played; the sides show stale pieces of other track until they refresh"
+          "tested": "2026-11-05 host: a race played; the sides show stale pieces of other track until they refresh. 2026-11-07 host: with the scroll gate, menus and race starts are clean and most of a race is right, but stale pieces still show in the outermost columns. The game keeps its whole map in work RAM, updated from many unrolled routines, and sends it all to video memory by DMA, so it needs more than a small loader patch. Not pursued; it stays narrow"
         },
         "Emperor's New Groove, The": {
           "strategy": "widen",
