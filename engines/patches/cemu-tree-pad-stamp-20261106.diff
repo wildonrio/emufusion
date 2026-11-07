@@ -1,0 +1,45 @@
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+@@ -3383,6 +3383,42 @@
+ 		{
+ 			s_emufusionStampLogged = true;
+ 			cemuLog_log(LogType::Force, "EmuFusion: immutable source timestamps via VK_GOOGLE_display_timing stampHz={:.6f} firstStampNs={}", 1000000000.0 / (double)kEmuFusionStampPeriodNs, stampNs);
++		}
++	}
++	// EmuFusion (2026-11-06): the GamePad image is a second layer. Queued on its own it takes a
++	// compositor pass of its own, a scan before the generated image's pass, and the display's commit
++	// for that image then waits on the pass's frame-done interrupt and misses its scan (Wind Waker HD,
++	// 54 of 1,000 generated images late; asked for 28 ms on, 116 real images instead). Asked for 23 ms
++	// on, it falls in the generated image's pass: 1 late of 1,000, 99.7% on cadence. Only at a steady
++	// 30 fps, whose passes are a scan apart with an empty one between; at 60 the images share one
++	// anyway. QA: setprop debug.emufusion.cemu_pad_stamp_us N, 0 for none.
++	else if (EmuFusionFgPresentationGate::Enabled(emufusionFgState) &&
++		m_featureControl.deviceExtensions.display_timing && !mainWindow)
++	{
++		static const int64_t s_emufusionPadAheadNs = []
++		{
++			char value[PROP_VALUE_MAX] = {};
++			const int length = __system_property_get("debug.emufusion.cemu_pad_stamp_us", value);
++			return (length > 0 ? (int64_t)atoll(value) : 23000LL) * 1000LL;
++		}();
++		static int64_t s_emufusionPadLastNs = 0;
++		static int s_emufusionPadSteady = 0;
++		struct timespec now;
++		clock_gettime(CLOCK_MONOTONIC, &now);
++		const int64_t nowNs = (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
++		const int64_t sinceNs = nowNs - s_emufusionPadLastNs;
++		s_emufusionPadLastNs = nowNs;
++		s_emufusionPadSteady = sinceNs >= 28000000LL && sinceNs <= 38000000LL ? s_emufusionPadSteady + 1 : 0;
++		if (s_emufusionPadAheadNs > 0 && s_emufusionPadSteady >= 2)
++		{
++			static uint32_t s_emufusionPadPresentId = 0;
++			emufusionPresentTime.presentID = ++s_emufusionPadPresentId;
++			emufusionPresentTime.desiredPresentTime = (uint64_t)(nowNs + s_emufusionPadAheadNs);
++			emufusionPresentTimes.sType = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE;
++			emufusionPresentTimes.swapchainCount = 1;
++			emufusionPresentTimes.pTimes = &emufusionPresentTime;
++			emufusionPresentTimes.pNext = presentInfo.pNext;
++			presentInfo.pNext = &emufusionPresentTimes;
+ 		}
+ 	}
+ #endif
