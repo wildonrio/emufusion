@@ -45,23 +45,24 @@ reviewed before this revision; its work was not discarded.
 
 The 3-D failures are fast near objects: Double Dash's karts tear at their edges, and the per-phase field is 1/8 of a 1080p picture.
 
-**Status, November 7 (Thor, 3.2.159 from a cool start, 16-s windows scaled to 30 s, except 33 s for Wind Waker HD and 49 s for Ocarina; see the November 7 entries).**
+**Status, November 7 (Thor, 3.2.160 from a cool start, 16-s windows scaled to 30 s, except 33 s for Wind Waker HD and 49 s for Ocarina; Link's Awakening and SM3DW from the 3.2.159 gate; see the November 7 entries).**
 
 | System | On cadence, hitches per 30 s | First generated / real, median (mean) | Frames with invented content, replay bench: now, with the 160-wide image check (QA) |
 | --- | --- | --- | --- |
-| NES | 99.9%, 1.8 (fast 60%) | 9.5 / 17.9 (12.6 / 20.9) ms | 0%, stays off |
-| Mega Drive | 99.9%, 1.8 (fast 88%) | 9.1 / 17.4 (10.0 / 18.3) ms | the core's own image: 0-36% by set, shipped generator 3-74%; the owner's check is pending |
+| NES, two runs | 99.9%, 1.8 (fast 50%); 100%, 0 (fast 0%) | 15.4 / 24.4 (13.4 / 21.8); 17.4 / 25.7 ms | 0%, stays off |
+| Mega Drive, two runs | 99.9%, 1.8 (fast 99%); 99.9%, 1.8 (fast 88%) | 8.6 / 17.0; 9.0 / 17.3 (10.0 / 18.3) ms | the core's own image: 0-36% by set, shipped generator 3-74%; the owner's check is pending |
 | SNES (drain trial) | 99.9%, 2 | 17.7 / 26.1 (17.3 / 25.6) ms | 0-14%, stays off |
 | GBA (drain trial) | 99.8%, 5.5 | 9.0 / 17.3 ms | not re-measured |
 | Star Fox 64 | not re-measured | not re-measured | 4%, 4% |
-| Ocarina of Time (20 fps), three runs | 96.4%, 43; 99.3%, 8.5; 98.0%, 24 | 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench |
-| Double Dash | 99.8%, 5.5 (fast 94%) | 11.2 / 19.5 (11.6 / 19.9) ms | 17%, 7% |
-| NSMBU Deluxe | 99.9%, 3.7 (fast 89%) | 10.5 / 18.8 (11.8 / 20.2) ms | world map 14%, 7% |
+| Ocarina of Time (20 fps) | 98.7%, 15 (3.2.159: 96.4-99.3%) | 11.2 / 36.2 ms (real minimum 33.3) | 0-4%, not on the device bench |
+| Double Dash | 99.8%, 5.5 (fast 73%) | 11.2 / 19.5 (13.4 / 21.8) ms | 17%, 7% |
+| NSMBU Deluxe | 99.9%, 1.8 (fast 28%) | 18.9 / 27.2 (17.0 / 25.3) ms | world map 14%, 7% |
 | Link's Awakening (about 40 s in, likely the beach scene) | 98.0%, 70 (fast 5%) | 24.3 / 32.9 (25.2 / 33.6) ms | 6%, 11% |
-| Wind Waker HD (title flight, 30 fps source, two runs) | 99.4%, 10; 99.2%, 14 | 19.4 / 36.1 ms | 11%, 0% |
+| Wind Waker HD (title flight, 30 fps source) | 99.2%, 14 (3.2.159: 99.4%, 10; 99.2%, 14) | 19.4 / 36.0 ms | 11%, 0% |
+| Mario Kart 64 and Wipeout 64 (wide, driving; new sets) | not measured in play | not measured in play | 32% and 25%; excess area 1.68% and 0.10% |
 | SM3DW | 53.5% over the whole 47-s window, which includes loads (98.6% in its play window on 3.2.158) | 11.2 / 19.6 (14.4 / 23.3) ms | 0%, not on the device bench |
 
-Nothing is at 10/10 on all three measures yet. The compositor's fast state, worth about 8 ms, now holds 60-94% of the time on these runs; each fall from it costs a hitch at the drain.
+Nothing is at 10/10 on all three measures yet. Over the last two gates the compositor's fast state, worth about 8 ms, held 88-99% of the time on Mega Drive, 73-94% on Double Dash, 28-89% on NSMBU Deluxe and 0-60% on NES; each fall from it costs a hitch at the drain.
 
 **10/10 targets, per tested system in gameplay (loads and keep-alive frames excluded):**
 - **Smoothness:** at least 99.5% of output intervals at the intended cadence, and at most 5 Present-rhythm hitches per 30 s.
@@ -267,7 +268,40 @@ Nothing is at 10/10 on all three measures yet. The compositor's fast state, wort
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 7 (latest) **— 3.2.159 (233, `b2f516d7`, retry-454): Wind Waker HD at 99.4% and a scan less latency, the halfway image default on for BlastEm, and the frame thread's CPU mask no longer collapses. On retry-454, cool starts: Wind Waker HD 99.4%, 99.2%; Mega Drive 99.9%, 9.1 / 17.4 ms; NES 99.9%, 9.5 / 17.9 ms; NSMBU Deluxe 99.9%, 10.5 / 18.8 ms; Double Dash 99.8%, 11.2 / 19.5 ms.**
+November 7 (latest) **— 3.2.160 (234, `60676ca6`, retry-459): the fast state was the mask; a half-plane jump in the halfway image, fixed; two reported N64 artifacts closed, and two new ones open.**
+
+- **Separating the mask from paused cores (3.2.159 as released, core control logged twice a second).** Mega Drive with core control holding gold at 3 active and prime at 0: fast 100%, 88%, at 8.7 / 17.1 ms (0.4 ms above the structural minimum). So the paused cores were not the cause: the narrowed mask was. NES fast 38% in one run, 60% in the gate; the drain's spacing had doubled to 30 s early in that run.
+- **Keeping every core occupied, from the shell (not adopted):** eight spinners at the lowest priority stopped core control's pausing (gold 4, prime 1 throughout) and no falls from the fast state, but Mega Drive went to 97.5, 97.9%, 88, 75 hitches per 30 s, 11.2-12.7 / 19.5-21.0 ms, and NES to 96.9%, 98 hitches. The sources' own timing suffered.
+- **The halfway image jumped half a plane (bug, fixed; patch `6cb84b26`, core `95cc359e`).** NBA Jam TE writes floor-line scrolls that differ by a whole plane now and then. Those show the same picture, but the halfway scroll went round the 10-bit register rather than the plane, so such a line landed half a plane away and spectators from the far end of the map appeared on the floor. Found looking at the widescreen stream's states at the ends of the court; the exact test can't see it, since it uses real positions. The short way round now uses the plane's size, for horizontal and vertical scroll and the camera estimate.
+  - After the fix, all 27 halfway images at that court end are free of it. The exact test is unchanged on all 17 states. Real frames and save states stay byte-identical, on and off, narrow, wide and band.
+  - The worst frame of each of the 17 Mega Drive states by invented area, viewed: no gross faults. The high readings (up to 48%) are fine detail moving and sprite animation (Sonic curling), which this rough measure counts.
+  - At the rink and court ends, black column edges in the halfway image match the real middle frame where checked.
+- **Reported wide N64 artifacts, closed:**
+  - Vigilante 8's white blocks and jagged edges are in the real frames (48 full-size triplets), a sawtooth at both sides. The cause isn't proven. The widescreen stream returned it to `fixed-screen`.
+  - Turok 3's holes did not reproduce under its own recipe: 18 moving triplets, shipped generator, 0% of frames with invented content, 0.001% excess area. The earlier frames ran under Mario 64's recipe.
+  - So frames landing outside the picture are not yet shown to be a problem. The clamp in the composite stays as it is until a capture shows otherwise.
+  - **Mario Kart 64 and Wipeout 64, wide, driving: real generator artifacts, open.** The widescreen stream's frames show the HUD melted ("8th" as a red blob, the position boxes and map broken) and the picture ragged in fast turns. Captured 44 scored triplets of each on its driving route. Shipped generator: frames with invented content 32% and 25%, excess area 1.68% and 0.10%, error 0.550 and 0.692 of a cross-fade. The real frames are clean. The HUD is static, but the scene moving under it decides the warp. A count of real frames each pixel stayed unchanged exists as QA (level 26, `emufusion_framegen_static_overlay`); it did nothing useful on 2-D sets in October and hasn't been tried on these.
+- **The drain's spacing:** a fast state lasting 4 s or more now halves it. Before, it only came down after a stay as long as itself, which left games at a 60-s spacing earned at their start.
+- **The gate, retry-458, default settings, cool starts. Retry-459 differs only in the recipe table.** Host tests pass (Java, 409 Python).
+
+  | Game | On cadence | Hitches per 30 s | Fast | First generated / real, median (mean) |
+  | --- | --- | --- | --- | --- |
+  | Mega Drive, two runs | 99.9, 99.9% | 1.8, 1.8 | 99, 88% | 8.6 / 17.0, 9.0 / 17.3 (10.0 / 18.3) ms |
+  | NES, two runs | 99.9, 100% | 1.8, 0 | 50, 0% | 15.4 / 24.4 (13.4 / 21.8), 17.4 / 25.7 ms |
+  | NSMBU Deluxe | 99.9% | 1.8 | 28% | 18.9 / 27.2 (17.0 / 25.3) ms |
+  | Double Dash | 99.8% | 5.5 | 73% | 11.2 / 19.5 (13.4 / 21.8) ms |
+  | Wind Waker HD | 99.2% | 13.7 | 100% | 19.4 / 36.0 ms |
+  | Ocarina of Time | 98.7% | 15.2 | 99% | 11.2 / 36.2 ms |
+
+  - Hitches left: Wind Waker HD's follow late arrivals from Cemu (7-10 of 1,000 more than 4 ms late). Link's Awakening's too (65 of 957). Ocarina's arrivals are even, 50.0 +-1 ms, but its pinned phase (11.2 ms before the slot) sometimes drifts for about 10 s, and each crossing of a scan boundary is a cluster of hitches.
+  - NES can still spend a whole 16-s window slow (5 drains over the run, none reached it in the window). Why is open.
+- **Next:**
+  1. Mario Kart 64 and Wipeout 64: level 26 live on these routes, the image check again now that the mask bug is gone, and a held HUD whose edges are covered too.
+  2. Why NES and NSMBU Deluxe's fast state comes and goes when Mega Drive's holds.
+  3. Ocarina's phase drift.
+- **Disk:** about 1.1 GiB of QA APKs this stretch on top of the 7 GiB above; captures of 4 wide N64 sets (about 0.5 GiB) are kept for the bench.
+
+November 7 **— 3.2.159 (233, `b2f516d7`, retry-454): Wind Waker HD at 99.4% and a scan less latency, the halfway image default on for BlastEm, and the frame thread's CPU mask no longer collapses. On retry-454, cool starts: Wind Waker HD 99.4%, 99.2%; Mega Drive 99.9%, 9.1 / 17.4 ms; NES 99.9%, 9.5 / 17.9 ms; NSMBU Deluxe 99.9%, 10.5 / 18.8 ms; Double Dash 99.8%, 11.2 / 19.5 ms.**
 
 - **Why identical code gave 1 or 190 late real images in Wind Waker HD.** After the Pad stamp, real images were 1-4 of 1,000 late through the evening, and 22-264 from the next morning. The stamp's base made no difference (from the Pad's own present: 27, 29; from the TV image's: 22, 32).
   - **What decides it:** a real image's pass starts at the same time either way (S-1.5 ms) and its main-display commit ends S-0.03 when it makes the scan and S+0.29 when it does not. The commit has about 0.1 ms to spare. CPU clocks are not the variable: `performance_mode=2` fixes them at 2016, 2803 and 3187 MHz, and DDR stayed at 4224 MHz with L3 and LLCC showing no link to late frames (`fg/freqpoll.sh`, `fg/ctlpoll.sh`).
