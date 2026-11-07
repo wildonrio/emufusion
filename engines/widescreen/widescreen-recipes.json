@@ -3792,9 +3792,9 @@
           "tested": "2026-11-07 Thor, library pass at full size: first level; the room extends inside the window the game draws in, ammo and health keep their shape. Not played through"
         },
         "Vigilante 8": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-07 Thor, library pass at full size: demo battles; ground and mountains reach the edges, radar stays round and the meters keep their shape. Not played by hand"
+          "tested": "2026-11-07 Thor, library pass at full size: demo battles; ground and mountains reach the edges, radar stays round and the meters keep their shape. Not played by hand. 2026-11-07 Thor, driven with the stick on 3.2.159's candidate, real frames at full size: slopes end in a sawtooth at both sides and white ground is cut into steps. That earlier verdict came from demo battles only. It looks like terrain the game does not draw outside its old view, not proven. Narrow until that can be opened"
         },
         "Bomberman Hero": {
           "strategy": "widen",
