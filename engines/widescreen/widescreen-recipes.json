@@ -3743,6 +3743,41 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-06 Thor, library pass: bars of noise beside the picture"
+        },
+        "Turok 3: Shadow of Oblivion": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-07 Thor, library pass at full size: first level; the room extends inside the window the game draws in, ammo and health keep their shape. Not played through"
+        },
+        "Vigilante 8": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-07 Thor, library pass at full size: demo battles; ground and mountains reach the edges, radar stays round and the meters keep their shape. Not played by hand"
+        },
+        "Bomberman Hero": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-07 Thor, library pass at full size: attract ride, planet map and first stage start; the stage extends, meters and counters keep their shape. Not played through"
+        },
+        "Glover": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-07 Thor, library pass at full size: title, name entry and a castle scene; ground and cliffs extend, hearts and counters keep their shape. Faint dashes above the ring counter, not yet compared with narrow. Not played through"
+        },
+        "Goemon's Great Adventure": {
+          "strategy": "widen",
+          "options": {},
+          "tested": "2026-11-07 Thor, library pass at full size: side-scrolling play and a room; the scene extends inside the game's window and the panel stays centred. A forest scene before a stage shows bare white past its backdrop at the far sides"
+        },
+        "Castlevania: Legacy of Darkness": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-07 Thor, library pass at full size: Player Select shows a slab the game keeps off-screen, and its red backdrop stops short of the right edge. Play not reached"
+        },
+        "Mega Man 64": {
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-07 Thor, library pass at full size: the intro sky stops short with black on both sides, and the item menu sits off-centre with a black strip on the left"
         }
       },
       "release": true

@@ -562,8 +562,15 @@ A second batch of 40 is under way, with the first 27 reviewed. Widen: Buck Bumbl
 Heaven, Indiana Jones and the Infernal Machine, Mario Party, Mortal Kombat 4, Mystical Ninja Starring Goemon, Quake II, Ridge Racer 64,
 Rocket: Robot on Wheels, Shadow Man, Shadows of the Empire and Wipeout 64. Stay narrow: Resident Evil 2 and Top Gear Rally (bars of noise),
 San Francisco Rush (flat bands down both edges), Snowboard Kids (a narrow box) and Space Station Silicon Valley (stray slices of picture).
-Undecided: Goemon's Great Adventure (white gaps in one scene), plus Bomberman 64, Glover, Mega Man 64, Quake and Episode I: Racer, which
-reached only menus or logos. All from short runs, none played through.
+All from short runs, none played through.
+
+Three more of the 40 ran before the batch stopped so frame generation could have the Thor, and the undecided games were looked at again at full
+size (2026-11-07). Widen: Turok 3, Vigilante 8, Bomberman Hero, Glover and Goemon's Great Adventure, whose forest scene before a stage shows bare
+white past its backdrop at the far sides. Stay narrow: Mega Man 64 (the intro sky stops short and the item menu sits off-centre) and Castlevania:
+Legacy of Darkness (Player Select shows a slab the game keeps off-screen, and its backdrop stops short). Still undecided: Bomberman 64, which never
+left its logo; Quake, whose menus show wrapped logos and a stray strip, with play not reached; and Episode I: Racer, whose menus are right but
+whose race was not reached. Nine of the 40 have not run: San Francisco Rush 2049, Pokémon Stadium, WrestleMania 2000, NFL Blitz, Tetrisphere,
+Rayman 2, Army Men: Sarge's Heroes, Forsaken 64 and Star Soldier.
 
 ### The top 20 on the way to the Thor (2026-11-06, evening)
 
