@@ -601,7 +601,11 @@ columns with a later frame of the same run proves nothing, since it is the same 
 Micro Machines 2 has a rewritten engine whose row buffer holds only 36 cells. It draws its first screen by scrolling row by row, so the row loader covers
 that too. The console has no spare RAM: every stretch that looked free was either addressed by the game or part of a table that happens to be zero on one
 track. `emufusion_ws_xram=1` makes the first page of the RAM mirror at E000 its own memory while wide, and the row buffer moves there. Random-input
-lockstep, 140 shots: only the first shots after loading a state saved narrow differ. All four recipes are QA only until they have passed on the Thor.
+lockstep, 140 shots: only the first shots after loading a state saved narrow differ.
+
+All four passed on the Thor on 2026-11-07 (3.2.159 candidate retry-452, core `4a6f9456`): from a state saved narrow in play, tapped wide, moved at once, swiped
+narrow and tapped wide again, clean at full size with no crashes. They now reach players with the next release. Only the first level or course of each has
+been seen, and the right-hand walls have not been reached.
 
 ### The top 20 on the way to the Thor (2026-11-06, evening)
 
