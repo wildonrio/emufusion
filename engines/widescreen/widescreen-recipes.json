@@ -45,9 +45,10 @@
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1,bg2"
+            "emufusion_ws_strict": "bg1,bg2",
+            "emufusion_ws_map": "dkc"
           },
-          "tested": "2026-11-04 host: menus, map, Jungle Hijinxs"
+          "tested": "2026-11-06 host: Jungle Hijinxs run through and replayed, near layer drawn from the game's map at both edges, checked against the picture's middle each frame. Map, cabin, game over and title keep bars"
         },
         "Donkey Kong Country 2: Diddy's Kong Quest": {
           "strategy": "widen",
@@ -56,9 +57,10 @@
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1"
+            "emufusion_ws_strict": "bg1",
+            "emufusion_ws_map": "dkc2"
           },
-          "tested": "2026-11-04 host: menus, Pirate Panic"
+          "tested": "2026-11-06 host: Pirate Panic run through and replayed, near layer drawn from the game's map at both edges. Map and menus keep bars. Climbing levels are read a different way and not yet seen"
         },
         "Super Mario World 2: Yoshi's Island": {
           "strategy": "widen",
@@ -94,9 +96,9 @@
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "off",
             "emufusion_ws_strict": "bg2",
-            "emufusion_ws_scene": "7E0FF4!=00"
+            "emufusion_ws_gate": "scroll"
           },
-          "tested": "2026-11-06 host: Super Mario Bros. 1-1 walked with jumps and block hits; ground, pipes, blocks and hills reach both edges. The World screen and the game select keep bars. The rule was found in Super Mario Bros. only, so the other three games may stay narrow"
+          "tested": "2026-11-06: the old rule's byte was the controller, so the sides opened only while a button was held; the Thor showed it. Scroll rule now, host: 1-1 walked and stood still, the World card keeps bars, and a level opens up once the camera has moved"
         },
         "NHL '94": {
           "strategy": "widen",
@@ -556,7 +558,7 @@
           "options": {
             "emufusion_ws_hud": "obj:24-32:48-48:-1:10-1F"
           },
-          "tested": "2026-11-05 host: Building round played, fights in the new columns; the energy bar moves out. Level start shows the backdrop past its left end"
+          "tested": "2026-11-05 host: Building round played, fights in the new columns; the energy bar moves out. Level start shows the backdrop past its left end. 2026-11-06: a second entry from the library pass, under the same title, was overriding this one on the Thor; removed"
         },
         "Streets of Rage 2": {
           "strategy": "widen",
@@ -681,13 +683,6 @@
           "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
         },
         "Revenge of Drancon": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_gate": "scroll"
-          },
-          "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
-        },
-        "Shinobi II - The Silent Fury": {
           "strategy": "widen",
           "options": {
             "emufusion_ws_gate": "scroll"

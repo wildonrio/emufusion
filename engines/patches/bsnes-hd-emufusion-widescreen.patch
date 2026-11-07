@@ -1,9 +1,9 @@
 diff --git a/bsnes/emulator/efwide.hpp b/bsnes/emulator/efwide.hpp
 new file mode 100644
-index 0000000..48f898d
+index 0000000..6f128f5
 --- /dev/null
 +++ b/bsnes/emulator/efwide.hpp
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,71 @@
 +#pragma once
 +// EmuFusion Widescreen Hack: per-game state set by the recipe through core options.
 +// emufusion_ws_width  total picture width in pixels (0 = original 256)
@@ -62,6 +62,10 @@ index 0000000..48f898d
 +  // tileX, tileY: 8x8 cells from the top-left cell the screen shows, may be negative.
 +  enum : int { MapNothing = -2 };
 +  int mapCell(int layer, int cellX, int cellY);
++  // A reader placing cells from the picture's scroll, and checked against the tile map as it draws.
++  bool mapSelfChecks();
++  int mapCellAt(unsigned hscroll, unsigned vscroll, int x, int y, bool checked);
++  void mapCheck(bool same);
 +  extern int mapGame;
 +  void setBounds(const char *value);
 +  bool outside(int x);
@@ -72,7 +76,7 @@ index 0000000..48f898d
 +  int moved(int layer, int y, int x, int tile, int amount);
 +}
 diff --git a/bsnes/sfc/ppu-fast/background.cpp b/bsnes/sfc/ppu-fast/background.cpp
-index 4eac82f..0d4ba8a 100644
+index 4eac82f..909fddc 100644
 --- a/bsnes/sfc/ppu-fast/background.cpp
 +++ b/bsnes/sfc/ppu-fast/background.cpp
 @@ -29,6 +29,10 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
@@ -86,7 +90,7 @@ index 4eac82f..0d4ba8a 100644
    bool windowAbove[1024];
    bool windowBelow[1024];
    renderWindow(self.window, self.window.aboveEnable, windowAbove,
-@@ -72,10 +76,24 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -72,10 +76,30 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
  
    auto luma = ppu.lightTable[io.displayBrightness];
    bool lastCropped = false;
@@ -96,6 +100,12 @@ index 4eac82f..0d4ba8a 100644
 +  bool strict = ws > 0 && !hudLine && !hires && !offsetPerTileMode && (EfWide::strictLayers >> hudLayer & 1);
 +  bool bounded = ws > 0 && !hudLine && EfWide::bounded;
 +  uint strictShift = 3 + self.tileSize;
++  bool mapAt = useMap && hudLayer == 0 && EfWide::mapSelfChecks();
++  if(mapAt) {
++    for(int sx = 16 - (int)(hscroll & 7); sx < 240; sx += 32) {
++      EfWide::mapCheck(EfWide::mapCellAt(hscroll, vscroll, sx, y, false) == (int)getTile(self, (sx + hscroll) & hmask, (y + vscroll) & vmask));
++    }
++  }
    while(x < (width + ws)) {
      uint hoffset = x + hscroll;
      uint voffset = y + vscroll;
@@ -112,7 +122,7 @@ index 4eac82f..0d4ba8a 100644
      if(offsetPerTileMode) {
        uint validBit = 0x2000 << source;
        uint offsetX = x + (hscroll & 7);
-@@ -104,6 +122,21 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -104,6 +128,21 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
      voffset &= vmask;
  
      uint tileNumber = getTile(self, hoffset, voffset);
@@ -122,7 +132,7 @@ index 4eac82f..0d4ba8a 100644
 +      // of the scroll, which the game keeps tile-aligned with its $0541 counter.
 +      int cellX = (x + (int)(hscroll & 15)) >> 3;
 +      int cellY = ((int)y + (int)(vscroll & 15)) >> 3;
-+      int word = EfWide::mapCell(hudLayer, cellX, cellY);
++      int word = mapAt ? EfWide::mapCellAt(hscroll, vscroll, x, y, true) : EfWide::mapCell(hudLayer, cellX, cellY);
 +      if(word >= 0) {
 +        tileNumber = word;
 +        fromMap = true;
@@ -134,7 +144,7 @@ index 4eac82f..0d4ba8a 100644
      uint mirrorY = tileNumber & 0x8000 ? 7 : 0;
      uint mirrorX = tileNumber & 0x4000 ? 7 : 0;
      uint8 tilePriority = self.priority[bool(tileNumber & 0x2000)];
-@@ -125,6 +158,8 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -125,6 +164,8 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
  
      for(uint tileX = 0; tileX < 8; tileX++, x++) {
        if(x < -ws || x >= width + ws) continue;   //if(x & width) continue;  //x < 0 || x >= width
@@ -143,7 +153,7 @@ index 4eac82f..0d4ba8a 100644
        if(--mosaicCounter == 0) {
          uint color, shift = mirrorX ? tileX : 7 - tileX;
        /*if(self.tileMode >= TileMode::BPP2)*/ {
-@@ -156,6 +191,13 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -156,6 +197,13 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
  
        uint32 mctc = luma[mosaicColor];
  
@@ -157,7 +167,7 @@ index 4eac82f..0d4ba8a 100644
        if(!hires) {
          if(ppufast.hires() && ppufast.hd()) {
            // In hires mode non-hires backgrounds seem to be rendered on every second pixel (see water in Kirby)
-@@ -185,6 +227,15 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
+@@ -185,6 +233,15 @@ auto PPU::Line::renderBackground(PPU::IO::Background& self, uint8 source) -> voi
    }
  }
  
@@ -175,10 +185,10 @@ index 4eac82f..0d4ba8a 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..48adf2a
+index 0000000..770a8d2
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,323 @@
+@@ -0,0 +1,396 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -324,10 +334,10 @@ index 0000000..48adf2a
 +  }
 +
 +  int mapGame = 0;
-+  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3, MapCT = 4, MapYI = 5 };
++  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3, MapCT = 4, MapYI = 5, MapDKC = 6, MapDKC2 = 7 };
 +
 +  void setMap(const char *value) {
-+    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : !strcmp(value, "ct") ? MapCT : !strcmp(value, "yi") ? MapYI : MapNone;
++    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : !strcmp(value, "ct") ? MapCT : !strcmp(value, "yi") ? MapYI : !strcmp(value, "dkc") ? MapDKC : !strcmp(value, "dkc2") ? MapDKC2 : MapNone;
 +  }
 +
 +  // Super Mario World, horizontal levels: layer 1 is 16x16 tiles, their numbers at 7E:C800 (low)
@@ -347,6 +357,73 @@ index 0000000..48adf2a
 +    unsigned entry = (0x0D << 15 | (pointer & 0x7FFF)) + ((cellX & 1) ? 4 : 0) + ((cellY & 1) ? 2 : 0);
 +    if(entry + 1 >= rom.size()) return MapNothing;
 +    return rom.data()[entry] | rom.data()[entry + 1] << 8;
++  }
++
++  // Donkey Kong Country's near layer is 32x32 blocks of 4x4 8x8 words. The picture's own scroll places a
++  // cell: the game's camera, which runs a frame ahead of it, only supplies the bits the scroll lacks.
++  static int mapChecked = 0, mapMissed = 0;
++  static bool mapTrusted = false;
++  static int dkc2Layout = 0;
++
++  static int nearCamera(int scroll, int camera, int period) {
++    return scroll + ((camera + period / 2 - scroll) & ~(period - 1));
++  }
++
++  static unsigned dkWord(unsigned bank, unsigned address) {
++    address &= 0xFFFF;
++    if(bank == 0x7E || bank == 0x7F) {
++      unsigned page = (bank & 1) << 16;
++      return wram[page + address] | wram[page + ((address + 1) & 0xFFFF)] << 8;
++    }
++    auto &rom = SuperFamicom::cartridge.rom;
++    unsigned at = (bank & 0x3F) << 16 | address;
++    if(at + 1 >= rom.size()) return 0;
++    return rom.data()[at] | rom.data()[at + 1] << 8;
++  }
++
++  // A map number's bits 14 and 15 flip its whole block; its 16 words run in rows of 4.
++  static int dkCell(unsigned bank, unsigned mapAddress, unsigned table, int tileX, int tileY) {
++    unsigned number = dkWord(bank, mapAddress);
++    int inX = tileX & 3, inY = tileY & 3;
++    if(number & 0x4000) inX = 3 - inX;
++    if(number & 0x8000) inY = 3 - inY;
++    return dkWord(bank, table + (number & 0x3FFF) * 32 + inY * 8 + inX * 2) ^ (number & 0xC000);
++  }
++
++  // 81:8706: 16 numbers a column at [$D3], the blocks at $1B11 in the same bank. $088B/$0895 are the camera,
++  // which 80:9C9D keeps from $1B23 to $1B25.
++  static int dkcCell(unsigned hscroll, unsigned vscroll, int x, int y) {
++    auto word = [](unsigned address) { return wram[address] | wram[address + 1] << 8; };
++    int worldX = nearCamera(hscroll & 1023, word(0x88B), 1024) + x;
++    int worldY = nearCamera(vscroll & 255, word(0x895), 256) + y;
++    if(worldX < word(0x1B23) || worldX >= word(0x1B25) + 0x100) return MapNothing;
++    int tileX = worldX >> 3, tileY = worldY >> 3;
++    return dkCell(wram[0xD5], word(0xD3) + (tileX >> 2) * 32 + ((tileY >> 2) & 15) * 2, word(0x1B11), tileX, tileY);
++  }
++
++  // B5:ACA0 and B5:B100: the map at [$98] and the blocks at $17B4 in the same bank, in work RAM. A level is
++  // 16 numbers a column, or for one that climbs, 16 numbers a row. $17BA/$17C0 are the camera plus 256;
++  // B5:EEB8 keeps the first from 256 to $0AFC.
++  static int dkc2Cell(unsigned hscroll, unsigned vscroll, int x, int y) {
++    auto word = [](unsigned address) { return wram[address] | wram[address + 1] << 8; };
++    int worldX = nearCamera(hscroll & 1023, word(0x17BA), 1024) - 0x100 + x;
++    int worldY = nearCamera(vscroll & 255, word(0x17C0), 256) - 0x100 + y;
++    if(worldX < 0 || worldX >= word(0xAFC) || worldY < 0) return MapNothing;
++    int tileX = worldX >> 3, tileY = worldY >> 3;
++    unsigned offset = dkc2Layout ? (tileX >> 2) * 2 + (tileY >> 2) * 32 : (tileX >> 2) * 32 + ((tileY >> 2) & 15) * 2;
++    return dkCell(wram[0x9A], word(0x98) + offset, word(0x17B4), tileX, tileY);
++  }
++
++  bool mapSelfChecks() { return mapGame == MapDKC || mapGame == MapDKC2; }
++
++  int mapCellAt(unsigned hscroll, unsigned vscroll, int x, int y, bool checked) {
++    if(!wram || (checked && !mapTrusted)) return -1;
++    return mapGame == MapDKC ? dkcCell(hscroll, vscroll, x, y) : dkc2Cell(hscroll, vscroll, x, y);
++  }
++
++  void mapCheck(bool same) {
++    __atomic_add_fetch(&mapChecked, 1, __ATOMIC_RELAXED);
++    if(!same) __atomic_add_fetch(&mapMissed, 1, __ATOMIC_RELAXED);
 +  }
 +
 +  // Yoshi's Island's levels: layer 1 is 16x16 tiles, their numbers at 7F:8000, 256 to a screen in rows of
@@ -465,6 +542,12 @@ index 0000000..48adf2a
 +  }
 +
 +  void evaluate(int bgMode, bool mode7) {
++    // Only a reader that agreed with the middle of the last picture draws the new columns.
++    if(mapChecked) {
++      mapTrusted = mapMissed * 8 <= mapChecked;
++      if(!mapTrusted && mapGame == MapDKC2) dkc2Layout ^= 1;
++      mapChecked = mapMissed = 0;
++    }
 +    if(bounded && wram) {
 +      auto word = [](unsigned address) { return wram[address & 0x1ffff] | wram[(address + 1) & 0x1ffff] << 8; };
 +      camera = word(boundsCamera);

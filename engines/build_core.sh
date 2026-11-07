@@ -630,7 +630,7 @@ case "$ENGINE" in
         # Widescreen Hack: exact picture width, per-game scene and HUD rules.
         apply_locked_patch "$staged_source" \
             engines/patches/bsnes-hd-emufusion-widescreen.patch \
-            98a1d8aac49f1e3d9c6cb1d2ed3937b2cc4a4ad9ab42aa63518551a081477497
+            961fcfb67598bd411fe7a55b1a494301ac223b3bfc407360960047baef47ca34
         "$NDK_DIR/ndk-build" -C "$staged_source/bsnes/target-libretro/jni" \
             NDK_PROJECT_PATH="$staged_source/bsnes/target-libretro" \
             APP_BUILD_SCRIPT="$staged_source/bsnes/target-libretro/jni/Android.mk" \
