@@ -724,6 +724,41 @@
             "emufusion_ws_gate": "scroll"
           },
           "tested": "2026-11-06 host, library pass: the frames that scrolled looked clean, side columns arrive in the picture; not played through. The sides stay black until the scene scrolls"
+        },
+        "Addams Family": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Jungle Book": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mega Man": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Terminator 2 - Judgment Day": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Vampire - Master of Darkness": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
         }
       },
       "release": true,
@@ -2243,6 +2278,118 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-06 host: first mission played: the map is built only just past the old screen, so the sides stay mostly black"
+        },
+        "Action Man: Search For Base X": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Atlantis - The Lost Empire": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Dropzone": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "FIFA 2000": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Jungle Book, The - Mowgli's Wild Adventure": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Land Before Time, The": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Marble Madness": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Megaman Xtreme 2": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "NBA Jam 99": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Pocket Bomberman": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Rampage 2: Universal Tour": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Resident Evil Gaiden": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Rugrats: Totally Angelica": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Sesame Street Sports": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "SpongeBob SquarePants - Legend of the Lost Spatula": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Walt Disney World Quest: Magical Racing Tour": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
         }
       },
       "release": true,
