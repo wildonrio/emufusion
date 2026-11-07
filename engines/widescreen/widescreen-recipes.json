@@ -3879,9 +3879,9 @@
           "tested": "2026-11-06 Thor: the game draws its own wide letterbox; widened further its band looks too wide, so it is left as the game made it"
         },
         "Eternal Darkness: Sanity's Requiem": {
-          "strategy": "widen",
+          "strategy": "fixed-screen",
           "options": {},
-          "tested": "2026-11-06 Thor: logos, title and save screens keep their shape. Play not reached"
+          "tested": "2026-11-06 Thor: logos, title and save screens keep their shape. Play not reached. 2026-11-07 Thor, opening cut-scenes at full size: the black letterbox bars stay at the old width, because they are 2D and the GameCube patch keeps 2D in its old shape, while the scene widens behind them. So the scene shows above and below the bars at both sides, with a hard vertical edge. Play not reached. Narrow until full-width bars are drawn full width"
         },
         "Mario Kart: Double Dash!!": {
           "strategy": "widen",
