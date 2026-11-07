@@ -1,5 +1,5 @@
 diff --git a/platforms/libretro/libretro.cpp b/platforms/libretro/libretro.cpp
-index c1ad656..056e651 100644
+index c1ad656..4eb1e01 100644
 --- a/platforms/libretro/libretro.cpp
 +++ b/platforms/libretro/libretro.cpp
 @@ -72,6 +72,109 @@ static bool libretro_supports_bitmasks = false;
@@ -150,7 +150,7 @@ index c1ad656..056e651 100644
      }
  
      return 0;
-@@ -892,6 +1003,29 @@ static void check_variables(void)
+@@ -892,6 +1003,42 @@ static void check_variables(void)
  {
      struct retro_variable var = {0};
  
@@ -167,6 +167,19 @@ index c1ad656..056e651 100644
 +    var.key = "emufusion_ws_hud";
 +    var.value = NULL;
 +    ef_set_hud(core, environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++
++    // emufusion_ws_band: "y0-y1" in VDP lines, where the new columns stay black beside a status panel.
++    var.key = "emufusion_ws_band";
++    var.value = NULL;
++    {
++        int first = 1000, last = -1;
++        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && sscanf(var.value, "%d-%d", &first, &last) != 2)
++        {
++            first = 1000;
++            last = -1;
++        }
++        core->GetVideo()->SetWideBand(first, last);
++    }
 +
 +    var.key = "emufusion_ws_aspect";
 +    var.value = NULL;
@@ -194,10 +207,10 @@ index e2475ca..cb3d3a2 100644
          }
          else
 diff --git a/src/Video.cpp b/src/Video.cpp
-index 18f0c16..7d21b51 100644
+index 18f0c16..0d3ade5 100644
 --- a/src/Video.cpp
 +++ b/src/Video.cpp
-@@ -121,6 +121,25 @@ void Video::SetNoSpriteLimit(bool noSpriteLimit)
+@@ -121,6 +121,41 @@ void Video::SetNoSpriteLimit(bool noSpriteLimit)
      m_bNoSpriteLimit = noSpriteLimit;
  }
  
@@ -213,6 +226,22 @@ index 18f0c16..7d21b51 100644
 +        m_iScreenWidth = GS_RESOLUTION_GG_WIDTH + 2 * m_iWideExt;
 +}
 +
++void Video::SetWideBand(int first, int last)
++{
++    m_iWideBandFirst = first;
++    m_iWideBandLast = last;
++}
++
++// Columns the console never showed, closed on this line: a narrow scene, a status panel the map
++// does not extend, and the column the game masks, mirrored so the picture stays centred.
++bool Video::WideColumnClosed(int line, int x)
++{
++    if (x >= GS_RESOLUTION_GG_X_OFFSET && x < GS_RESOLUTION_GG_X_OFFSET + GS_RESOLUTION_GG_WIDTH)
++        return false;
++    return !m_bWideScene || (line >= m_iWideBandFirst && line <= m_iWideBandLast) ||
++        (IsSetBit(m_VdpRegister[0], 5) && (x < 8 || x >= 248));
++}
++
 +void Video::SetWideHud(const WideHudRule* rules, int count)
 +{
 +    m_iWideHudCount = count < 16 ? count : 16;
@@ -223,7 +252,7 @@ index 18f0c16..7d21b51 100644
  void Video::Reset(bool bGameGear, bool bPAL, int iGGASIC, bool bGameGearSMSMode)
  {
      m_bGameGear = bGameGear;
-@@ -187,7 +206,7 @@ void Video::Reset(bool bGameGear, bool bPAL, int iGGASIC, bool bGameGearSMSMode)
+@@ -187,7 +222,7 @@ void Video::Reset(bool bGameGear, bool bPAL, int iGGASIC, bool bGameGearSMSMode)
      m_iVdpRegister10Counter = m_VdpRegister[10];
      m_iRenderLine = 0;
  
@@ -232,7 +261,7 @@ index 18f0c16..7d21b51 100644
  
      m_bTMS9918 = false;
      m_iTMS9918Mode = 0;
-@@ -761,7 +780,7 @@ void Video::RenderBackgroundSMSGG(int line)
+@@ -761,7 +796,7 @@ void Video::RenderBackgroundSMSGG(int line)
  
      int palette_color = 0;
  
@@ -241,12 +270,11 @@ index 18f0c16..7d21b51 100644
      int scx_end = scx_begin + m_iScreenWidth - m_iHideLeftBarOffset;
  
      int max_height = m_bExtendedMode224 ? 224 : 192;
-@@ -772,6 +791,15 @@ void Video::RenderBackgroundSMSGG(int line)
+@@ -772,6 +807,14 @@ void Video::RenderBackgroundSMSGG(int line)
          int pixel_screen = line_width_screen + scx_diff;
          int pixel_info = line_width_info + scx_diff;
  
-+        // A scene the recipe keeps narrow, and columns the console always hid: black bars.
-+        if (m_iWideExt && !m_bWideScene && (scx < GS_RESOLUTION_GG_X_OFFSET || scx >= GS_RESOLUTION_GG_X_OFFSET + GS_RESOLUTION_GG_WIDTH))
++        if (m_iWideExt && WideColumnClosed(line, scx))
 +        {
 +            if ((line >= y_offset) && (line < (y_offset + GS_RESOLUTION_GG_HEIGHT)))
 +                m_pFrameBuffer[pixel_screen] = 0;
@@ -257,7 +285,7 @@ index 18f0c16..7d21b51 100644
          if (line < max_height)
          {
              if (IsSetBit(m_VdpRegister[0], 5) && scx < 8)
-@@ -916,7 +944,7 @@ void Video::RenderSpritesSMSGG(int line)
+@@ -916,7 +959,7 @@ void Video::RenderSpritesSMSGG(int line)
  
      int render_sprite_count = m_bNoSpriteLimit ? 64 : 8;
  
@@ -266,7 +294,7 @@ index 18f0c16..7d21b51 100644
      int scx_end = scx_begin + (m_iScreenWidth - m_iHideLeftBarOffset);
  
      for (int i = render_sprite_count - 1; i >= 0; i--)
-@@ -941,6 +969,19 @@ void Video::RenderSpritesSMSGG(int line)
+@@ -941,6 +984,19 @@ void Video::RenderSpritesSMSGG(int line)
              continue;
  
          int sprite_tile = m_pVdpVRAM[sprite_info_address + 1];
@@ -286,16 +314,16 @@ index 18f0c16..7d21b51 100644
          sprite_tile &= sprite_height_16 ? 0xFE : 0xFF;
          int sprite_tile_addr = sprite_tiles_address + (sprite_tile << 5) +  (((line - sprite_y) >> (sprite_zoom ? 1 : 0)) << 2);
  
-@@ -953,6 +994,8 @@ void Video::RenderSpritesSMSGG(int line)
+@@ -953,6 +1009,8 @@ void Video::RenderSpritesSMSGG(int line)
                  continue;
              if (IsSetBit(m_VdpRegister[0], 5) && (sprite_pixel_x < 8))
                  continue;
-+            if (m_iWideExt && !m_bWideScene && (sprite_pixel_x < GS_RESOLUTION_GG_X_OFFSET || sprite_pixel_x >= GS_RESOLUTION_GG_X_OFFSET + GS_RESOLUTION_GG_WIDTH))
++            if (m_iWideExt && WideColumnClosed(line, sprite_pixel_x))
 +                continue;
  
              int x_diff = sprite_pixel_x - scx_begin;
              int pixel_screen = line_width_screen + x_diff;
-@@ -988,7 +1031,10 @@ void Video::RenderSpritesSMSGG(int line)
+@@ -988,7 +1046,10 @@ void Video::RenderSpritesSMSGG(int line)
  
              if ((m_pInfoBuffer[pixel_info] & 0x01) != 0)
              {
@@ -308,10 +336,10 @@ index 18f0c16..7d21b51 100644
                      sprite_collision = true;
                      sprite_collision_x = sprite_pixel_x;
 diff --git a/src/Video.h b/src/Video.h
-index 79880c1..bd5f337 100644
+index 79880c1..ecd85d3 100644
 --- a/src/Video.h
 +++ b/src/Video.h
-@@ -87,6 +87,12 @@ public:
+@@ -87,6 +87,14 @@ public:
      int GetTMS9918Mode();
      u16 ColorFromPalette(int palette_color);
      u16* GetFrameBuffer();
@@ -320,14 +348,18 @@ index 79880c1..bd5f337 100644
 +    // A HUD sprite in this box moves out by the added width: emufusion_ws_hud.
 +    struct WideHudRule { int y0, y1, x0, x1, dir, t0, t1; };
 +    void SetWideHud(const WideHudRule* rules, int count);
++    void SetWideBand(int first, int last);
++    bool WideColumnClosed(int line, int x);
 +    int GetWideExt() const { return m_iWideExt; }
      void Render32bit(u16* srcFrameBuffer, u8* dstFrameBuffer, GS_Color_Format pixelFormat, int size, bool overscan = false);
      void Render16bit(u16* srcFrameBuffer, u8* dstFrameBuffer, GS_Color_Format pixelFormat, int size, bool overscan = false);
      void SetOverscan(Overscan overscan);
-@@ -169,6 +175,10 @@ private:
+@@ -169,6 +177,12 @@ private:
  
      int m_iRenderLine;
      int m_iScreenWidth;
++    int m_iWideBandFirst = 1000;
++    int m_iWideBandLast = -1;
 +    int m_iWideExt = 0;
 +    bool m_bWideScene = true;
 +    WideHudRule m_WideHud[16];

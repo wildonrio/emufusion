@@ -339,6 +339,8 @@ A Link to the Past matched 192 of 192 visible tiles.
 | Super Mario World | `smw` | 7E:C800 and 7F:C800, 27 rows per screen | $0FBE pointers into bank 0D |
 | Chrono Trigger, world map | `ct` | 7E:4000 and 7E:5800, 96 per row, wraps | 7E:3000 and 7E:3800, 8 bytes per tile |
 | Yoshi's Island | `yi` | 7F:8000, screens of 256 in rows of 16; 7E:0CE1 gives each level position its screen | Super FX ROM: page offsets at file C32A4, 8 bytes per entry from C33F2 |
+| Donkey Kong Country | `dkc` | [$D3], 16 numbers a column, bits 14 and 15 flip the block; the camera stays from $1B23 to $1B25 | $1B11 in the same bank, 16 words a block in rows of 4 |
+| Donkey Kong Country 2 | `dkc2` | [$98] in work RAM, 16 a column or for climbing levels 16 a row; the camera ($17BA less 256) stops at $0AFC | $17B4 in the same bank, as above |
 
 Not done yet: Star Ocean, Live A Live, Super Mario RPG. Towns and rooms in Chrono Trigger, houses
 and dungeons in A Link to the Past keep bars until they get decoders of their own.
@@ -604,6 +606,48 @@ restored Sonic & Knuckles correctly. Mac states did load on the Android cores on
 
 SNES colour math can tint closed sides: the game adds a fixed colour over the black. The engine now writes closed sides as black in the
 finished line. A high share of filled side pixels does not mean a game is right, so each frame was looked at. All of this is Mac only so far.
+
+### First full-size pass of the top 20 on the Thor (2026-11-06, night)
+
+All 72 games ran on the Thor from Mac save states as a player would: prompt, tap, walk both ways, swipe off, tap on, at 60 to 120 fps. Prompt, tap and
+swipe worked on every one. Save states from all six Mac cores load on the Android cores. Looking at the frames full size found these, none of which the
+Mac pass had shown:
+
+| Game | Fault on the Thor | Now |
+| --- | --- | --- |
+| Donkey Kong Country, DKC 2 | Near layer cut off at the leading edge, and DKC 2's cabin floating in open sea | Map readers `dkc` and `dkc2`, next section. Mac only so far |
+| Super Mario All-Stars | Narrow unless a button was held: the rule's byte was the controller, and Mac shots were taken with one held | Scroll rule. A level opens once the camera has moved |
+| Shinobi II (Game Gear) | A library entry under the same title overrode the tested one | Duplicate removed. A check of every system found no other conflicting duplicates |
+| Road Rash (Game Gear) | Dotted blocks and road beside the panel; a pale strip at the left | `emufusion_ws_band`, and the masked column is now black and mirrored in every Game Gear game |
+| Lightening Force, Castle of Illusion | Scrambled tiles or grey blocks beside the status bar | `emufusion_ws_band` |
+| Super Mario Kart | The game's black rows stopped at its own columns | `emufusion_ws_band` |
+| Mortal Kombat II | A wrapped wall and a gap at the arena's left end | `emufusion_ws_bounds` with a fixed edge. One arena seen |
+| NHL '94 (SNES) | The ice colour past the crowd | `emufusion_ws_bounds` with the rink's measured ends |
+| Gunstar Heroes | Pieces of the logo beside the title, black blocks in the select screens | Scroll rule |
+| Star Ocean | The text window's gradient across the empty sides | `emufusion_ws_backdrop=black` |
+| NBA Jam, NBA Jam TE | Once played past the menus: black wedges and repeated crowd, and TE's rule only held at tip-off | Fixed screen |
+| Micro Machines, Micro Machines 2 | Once driven: stale pieces of track and hard-edged bubbles at the sides, since the game updates its map only near the old window | Fixed screen, until a map reader |
+
+The games that had stayed on menus were then played into real play, and their states replaced: Super Mario Bros. 3, Micro Machines, Madden NFL 95,
+Jungle Strike, Desert Strike, Contra: Hard Corps, Gunstar Heroes, both NBA Jams, Final Fantasy Tactics Advance. Star Ocean has reached its first
+house but not yet walked outdoors. Those states have not yet run on the Thor.
+
+Lessons:
+
+- A rule found from shots taken while a button is held can be the controller. Check rules with no button down.
+- A tile map can start lower than the column writes suggest. DKC's looked broken for hours because its first page is at 6C00, not 7000.
+- Tracing every read on the frame a column is drawn found both DKC maps in minutes, where searching memory for the numbers had failed. The trace core's
+  `EF_READ=000000-FFFFFF` does it, and `EF_SCROLLDUMP` gives each frame's scrolls and bank 7E to find a camera word.
+- A reader that checks itself can be general. The DKC readers compare the middle of each picture with the real tile map, and anywhere they disagree the
+  old closed sides return: the map screen, cabins, a game over.
+- They place cells from the picture's own scroll, because the game's camera in RAM is already a frame ahead when the line is drawn.
+
+Layer 3 can hold scenery, so every SNES top game was run with it on and off. Yoshi's Island's foreground flowers and DKC 2's ropes were stopping at the
+old edge, and now widen, as do All-Stars' clouds. Mortal Kombat II and International Superstar Soccer keep it off: it holds their status text, which would
+repeat in the sides. Final Fantasy III keeps it off too, since its dialogue text is there, at the cost of steam that stops at the old edge.
+
+Open: FF3's scattered squares at Narshe's far left are what its map holds there, not a wrap; that the camera never shows them is inferred, and no limit is set for it. DKC 2's climbing levels are
+read differently and not yet seen. Wario Land II on the Game Boy Color stays narrow in its opening rooms.
 
 ## Game files that are not there
 

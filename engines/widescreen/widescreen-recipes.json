@@ -20,9 +20,10 @@
           "options": {
             "emufusion_ws_scene": "bgmode=7",
             "bsnes_mode7_wsobj": "unsafe",
-            "emufusion_ws_hud": "obj:80-100:176-222:1:04E-0B7"
+            "emufusion_ws_hud": "obj:80-100:176-222:1:04E-0B7",
+            "emufusion_ws_band": "0-2;114-114"
           },
-          "tested": "2026-11-04 host: Mushroom Cup round 1; race and map widen, menus keep bars"
+          "tested": "2026-11-04 host: Mushroom Cup round 1; race and map widen, menus keep bars. 2026-11-06: the game blacks these rows only across its own columns; the sides match now"
         },
         "Super Mario World": {
           "strategy": "widen",
@@ -56,11 +57,11 @@
             "bsnes_mode7_wsobj": "unsafe",
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
-            "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1",
+            "bsnes_mode7_wsbg3": "on",
+            "emufusion_ws_strict": "bg1,bg3",
             "emufusion_ws_map": "dkc2"
           },
-          "tested": "2026-11-06 host: Pirate Panic run through and replayed, near layer drawn from the game's map at both edges. Map and menus keep bars. Climbing levels are read a different way and not yet seen"
+          "tested": "2026-11-06 host: Pirate Panic run through and replayed, near layer drawn from the game's map at both edges. Map and menus keep bars. Climbing levels are read a different way and not yet seen. Ropes cut at the old edge are on layer 3; widened, with the strict rule so screens without a map stay closed"
         },
         "Super Mario World 2: Yoshi's Island": {
           "strategy": "widen",
@@ -68,12 +69,12 @@
             "bsnes_mode7_wsobj": "unsafe",
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
-            "bsnes_mode7_wsbg3": "off",
+            "bsnes_mode7_wsbg3": "on",
             "emufusion_ws_strict": "bg1",
             "emufusion_ws_map": "yi",
             "emufusion_ws_scene": "7E0118=0F|7E0118=10|7E0118=11|7E0118=12"
           },
-          "tested": "2026-11-06 host: 1-1 walked both ways; a map reader draws the near layer from the game's own map, 238 of 238 on-screen blocks predicted; mountains and sky reach both edges. Only levels widen. Other levels not played"
+          "tested": "2026-11-06 host: 1-1 walked both ways; a map reader draws the near layer from the game's own map, 238 of 238 on-screen blocks predicted; mountains and sky reach both edges. Only levels widen. Other levels not played. 2026-11-06: the foreground flowers stopped at the old edge because they are on layer 3; widened, walked both ways. Hint block text not yet seen"
         },
         "Super Metroid": {
           "strategy": "widen",
@@ -94,11 +95,11 @@
             "bsnes_mode7_wsobj": "unsafe",
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
-            "bsnes_mode7_wsbg3": "off",
+            "bsnes_mode7_wsbg3": "on",
             "emufusion_ws_strict": "bg2",
             "emufusion_ws_gate": "scroll"
           },
-          "tested": "2026-11-06: the old rule's byte was the controller, so the sides opened only while a button was held; the Thor showed it. Scroll rule now, host: 1-1 walked and stood still, the World card keeps bars, and a level opens up once the camera has moved"
+          "tested": "2026-11-06: the old rule's byte was the controller, so the sides opened only while a button was held; the Thor showed it. Scroll rule now, host: 1-1 walked and stood still, the World card keeps bars, and a level opens up once the camera has moved. The clouds stopped dead at the old edge because they are on layer 3; widened now, the status text is unmoved"
         },
         "NHL '94": {
           "strategy": "widen",
@@ -107,9 +108,10 @@
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1,bg2"
+            "emufusion_ws_strict": "bg1,bg2",
+            "emufusion_ws_bounds": "7E07DA:=0,=380"
           },
-          "tested": "2026-11-04 host: menus, faceoff and play at center ice"
+          "tested": "2026-11-04 host: menus, faceoff and play at center ice. 2026-11-06: past the crowd the sides showed the ice colour; black now, from the rink's measured ends"
         },
         "Madden NFL 95": {
           "strategy": "widen",
@@ -120,7 +122,7 @@
             "bsnes_mode7_wsbg3": "off",
             "emufusion_ws_strict": "bg1,bg2"
           },
-          "tested": "2026-11-04 host: menus, kickoff, snap"
+          "tested": "2026-11-04 host: menus, kickoff, snap. 2026-11-06: kickoff and snap walked, clean; setup keeps bars"
         },
         "Jimmy Connors Pro Tennis Tour": {
           "strategy": "widen",
@@ -135,15 +137,9 @@
           "tested": "2026-11-04 host: grass court match. 2026-11-06: menus keep bars, only a match widens. After Quick Resume a match stays narrow until the next redraw, from the strict rule"
         },
         "NBA Jam": {
-          "strategy": "widen",
-          "options": {
-            "bsnes_mode7_wsobj": "unsafe",
-            "bsnes_mode7_wsbg1": "on",
-            "bsnes_mode7_wsbg2": "on",
-            "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1,bg2"
-          },
-          "tested": "2026-11-04 host: menus, tip-off, play"
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host: played from tip-off. The sides show large black wedges and slices of crowd at the court's angled ends. Stays narrow"
         },
         "NBA Live 95": {
           "strategy": "widen",
@@ -214,9 +210,10 @@
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1,bg2"
+            "emufusion_ws_strict": "bg1,bg2",
+            "emufusion_ws_bounds": "7EC8AA:=-223,=1000"
           },
-          "tested": "2026-11-05 host: first fight, the arena extends to both edges"
+          "tested": "2026-11-05 host: first fight, the arena extends to both edges. 2026-11-06: at the arena's left end the sides showed a wrapped wall and a gap; black past the camera's limit now. Seen in one arena only"
         },
         "Super Mario RPG: Legend of the Seven Stars": {
           "strategy": "fixed-screen",
@@ -329,9 +326,10 @@
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1,bg2,center"
+            "emufusion_ws_strict": "bg1,bg2,center",
+            "emufusion_ws_backdrop": "black"
           },
-          "tested": "2026-11-06 host: opening house played; rooms sit in black and the text window stays in the middle. Outdoors not reached"
+          "tested": "2026-11-06 host: opening house played; rooms sit in black and the text window stays in the middle. Outdoors not reached. 2026-11-06: the text window's teal gradient ran across the empty sides; black now"
         },
         "Live A Live": {
           "strategy": "untested",
@@ -411,8 +409,10 @@
         },
         "Gunstar Heroes": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: first stage"
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-05 host: first stage. 2026-11-06: the title showed pieces of the logo at the sides and the select screens had black blocks; scroll rule, so menus keep bars and play opens up after a few steps"
         },
         "Flashback: The Quest for Identity": {
           "strategy": "fixed-screen",
@@ -421,16 +421,19 @@
         },
         "Lightening Force: Quest for the Darkstar": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: stage select, first stage with enemies"
+          "options": {
+            "emufusion_ws_band": "0-31"
+          },
+          "tested": "2026-11-05 host: stage select, first stage with enemies. 2026-11-06: scrambled tiles beside the status bar; black now"
         },
         "Castle of Illusion Starring Mickey Mouse": {
           "strategy": "widen",
           "options": {
             "emufusion_ws_gate": "scroll",
-            "emufusion_ws_scene": "FF0005!=DD"
+            "emufusion_ws_scene": "FF0005!=DD",
+            "emufusion_ws_band": "192-223"
           },
-          "tested": "2026-11-06 host: the toy land stage walked, edge to edge. The intro and menus keep bars"
+          "tested": "2026-11-06 host: the toy land stage walked, edge to edge. The intro and menus keep bars. 2026-11-06: grey blocks beside the status bar; black now"
         },
         "Ristar": {
           "strategy": "widen",
@@ -463,12 +466,12 @@
         "Desert Strike: Return to the Gulf": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: frigate takeoff; mission screen keeps its bars"
+          "tested": "2026-11-05 host: frigate takeoff; mission screen keeps its bars. 2026-11-06: flown off the frigate, clean"
         },
         "Jungle Strike": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: White House lawn takeoff"
+          "tested": "2026-11-05 host: White House lawn takeoff. 2026-11-06: flown across the lawn, clean; map screen keeps bars"
         },
         "Contra: Hard Corps": {
           "strategy": "widen",
@@ -488,11 +491,9 @@
           "tested": "2026-11-06 host: walked in play; coloured tile junk in the crowd beside the rink"
         },
         "NBA Jam Tournament Edition": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_scene": "FF2D15=01"
-          },
-          "tested": "2026-11-05 host: tip-off, attract screens keep bars"
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host: played from tip-off. The old rule held only at the tip-off, so play was narrow anyway. Opening the sides shows repeated crowd at the court's end and a black wedge with the strict rule. Stays narrow"
         },
         "NHL 96": {
           "strategy": "widen",
@@ -571,11 +572,9 @@
           "tested": "2026-11-05 host: beach level: map rows are refreshed only across the old screen, so revealed columns show old tiles. Needs a map reader to widen"
         },
         "Micro Machines 2: Turbo Tournament": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_hud": "obj:28-88:52-60:-1:97-A2"
-          },
-          "tested": "2026-11-05 host: first race; the race order moves out"
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host: driven: the sides show broken pieces of the track for the same reason. Stays narrow. A map reader could open it up"
         },
         "Ecco the Dolphin": {
           "strategy": "fixed-screen",
@@ -590,9 +589,10 @@
         "Road Rash": {
           "strategy": "widen",
           "options": {
-            "emufusion_ws_scene": "C025!=67|C026!=10"
+            "emufusion_ws_scene": "C025!=67|C026!=10",
+            "emufusion_ws_band": "132-167"
           },
-          "tested": "2026-11-05 host: Sierra Nevada race, scenery extends; the panel is drawn in the map and stays centred; the title stays narrow"
+          "tested": "2026-11-05 host: Sierra Nevada race, scenery extends; the panel is drawn in the map and stays centred; the title stays narrow. 2026-11-06: the sides beside the panel showed road and dotted blocks; black now. The console's masked column showed as a pale strip; black and mirrored for every game"
         },
         "Lucky Dime Caper starring Donald Duck": {
           "strategy": "widen",
@@ -616,11 +616,9 @@
           "tested": "2026-11-05 host: runs in Master System mode at 256x192: it already shows everything the console draws"
         },
         "Micro Machines": {
-          "strategy": "widen",
-          "options": {
-            "emufusion_ws_hud": "obj:40-90:52-68:-1:94-A7"
-          },
-          "tested": "2026-11-05 host: powerboat race; the race order moves out"
+          "strategy": "fixed-screen",
+          "options": {},
+          "tested": "2026-11-06 host: driven round the bath: bubbles at the sides end in hard rectangles because the game updates its map only near the old window. Stays narrow. A map reader could open it up"
         },
         "Lemmings": {
           "strategy": "fixed-screen",

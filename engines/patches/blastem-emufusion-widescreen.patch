@@ -1,9 +1,9 @@
 diff --git a/ef_wide.h b/ef_wide.h
 new file mode 100644
-index 0000000..fcb4010
+index 0000000..327e69f
 --- /dev/null
 +++ b/ef_wide.h
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,28 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. BlastEm's renderer still draws the original 320 or 256
@@ -16,6 +16,7 @@ index 0000000..fcb4010
 +// emufusion_ws_hud     moves HUD sprites to the new edges: "obj:y0-y1:x0-x1:dir[:t0-t1];..."
 +// emufusion_ws_gate    "scroll", for games nobody has played through: the new columns stay closed
 +//                      until the scene has scrolled far enough to fill them, and close on a cut
++// emufusion_ws_band    "y0-y1": lines where the new columns stay black, beside a status bar
 +#include <stdint.h>
 +#define EF_WIDE_MAX_EXT 136
 +#define EF_WIDE_FB_WIDTH (320 + 2 * EF_WIDE_MAX_EXT)
@@ -25,6 +26,7 @@ index 0000000..fcb4010
 +void ef_wide_set_scene(const char *value);
 +void ef_wide_set_hud(const char *value);
 +void ef_wide_set_gate(const char *value);
++void ef_wide_set_band(const char *value);
 +void ef_wide_set_ram(const uint8_t *work_ram);
 +int ef_wide_on(void);
 +int ef_wide_ext(int base_width);
@@ -32,10 +34,10 @@ index 0000000..fcb4010
 +#endif
 diff --git a/ef_wide.inc b/ef_wide.inc
 new file mode 100644
-index 0000000..550df66
+index 0000000..e4f2c38
 --- /dev/null
 +++ b/ef_wide.inc
-@@ -0,0 +1,427 @@
+@@ -0,0 +1,438 @@
 +// Included at the end of vdp.c; uses its static helpers.
 +#include "ef_wide.h"
 +uint32_t ef_wide_fb[EF_WIDE_FB_WIDTH * 294];
@@ -369,6 +371,16 @@ index 0000000..550df66
 +	ef_gate_travel = 0;
 +}
 +
++static int ef_band_first = 1000, ef_band_last = -1;
++
++void ef_wide_set_band(const char *value)
++{
++	if (!value || sscanf(value, "%d-%d", &ef_band_first, &ef_band_last) != 2) {
++		ef_band_first = 1000;
++		ef_band_last = -1;
++	}
++}
++
 +// Once a frame. The middle of the picture stands for the camera: a status bar at the top does not scroll.
 +static void ef_gate_frame(vdp_context *c)
 +{
@@ -412,7 +424,8 @@ index 0000000..550df66
 +	pixel_t *out = ef_wide_fb + row * EF_WIDE_FB_WIDTH;
 +	memcpy(out + ext, source + BORDER_LEFT, base_width * sizeof(pixel_t));
 +	pixel_t back = active && ef_scene_wide ? c->colors[c->regs[REG_BG_COLOR] & 0x3F] : 0;
-+	if (!active || !(c->regs[REG_MODE_2] & BIT_DISP_EN) || !ef_scene_wide) {
++	if ((int)line >= ef_band_first && (int)line <= ef_band_last) back = 0;
++	if (!active || !(c->regs[REG_MODE_2] & BIT_DISP_EN) || !ef_scene_wide || ((int)line >= ef_band_first && (int)line <= ef_band_last)) {
 +		for (int i = 0; i < ext; i++) {
 +			out[i] = back;
 +			out[ext + base_width + i] = back;
@@ -464,7 +477,7 @@ index 0000000..550df66
 +	}
 +}
 diff --git a/libblastem.c b/libblastem.c
-index c239267..a5216b2 100644
+index c239267..78182d1 100644
 --- a/libblastem.c
 +++ b/libblastem.c
 @@ -7,6 +7,7 @@
@@ -511,7 +524,7 @@ index c239267..a5216b2 100644
  	switch (id) {
  	case RETRO_MEMORY_SYSTEM_RAM:
  		switch (stype) {
-@@ -473,6 +480,34 @@ void render_destroy_window(uint8_t which)
+@@ -473,6 +480,35 @@ void render_destroy_window(uint8_t which)
  	//not supported in lib build
  }
  
@@ -531,6 +544,7 @@ index c239267..a5216b2 100644
 +	loaded = 1;
 +	ef_read_option("emufusion_ws_strict", ef_wide_set_strict);
 +	ef_read_option("emufusion_ws_gate", ef_wide_set_gate);
++	ef_read_option("emufusion_ws_band", ef_wide_set_band);
 +	ef_read_option("emufusion_ws_scene", ef_wide_set_scene);
 +	ef_read_option("emufusion_ws_hud", ef_wide_set_hud);
 +	ef_read_option("emufusion_ws_aspect", ef_wide_set_aspect);
@@ -546,7 +560,7 @@ index c239267..a5216b2 100644
  static uint32_t fb[LINEBUF_SIZE * 294 * 2];
  static uint8_t last_fb;
  uint32_t *render_get_framebuffer(uint8_t which, int *pitch)
-@@ -494,6 +529,25 @@ void render_framebuffer_updated(uint8_t which, int width)
+@@ -494,6 +530,25 @@ void render_framebuffer_updated(uint8_t which, int width)
  	unsigned height = (video_standard == VID_NTSC ? 243 : 294) - (overscan_top + overscan_bot);
  	width -= (overscan_left + overscan_right);
  	unsigned base_height = height;
@@ -572,7 +586,7 @@ index c239267..a5216b2 100644
  	if (which != last_fb) {
  		height *= 2;
  		last_fb = which;
-@@ -502,7 +556,7 @@ void render_framebuffer_updated(uint8_t which, int width)
+@@ -502,7 +557,7 @@ void render_framebuffer_updated(uint8_t which, int width)
  		struct retro_game_geometry geometry = {
  			.base_width = width,
  			.base_height = height,

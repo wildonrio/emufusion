@@ -721,7 +721,7 @@ case "$ENGINE" in
             cp -R "$source/." "$build/"
             apply_locked_patch "$build" \
                 engines/patches/gearsystem-emufusion-widescreen.patch \
-                92d11dad8ed1f8cf71482c0555b58be5a8669b8f6b2daef1cf0a369857d51148
+                21e74111479a426f5d777b1e83c249241d8a0bdcc5e069737a41197c3b3bc7fa
             source="$build"
         fi
         if [ "$ENGINE" = gearcoleco ]; then
@@ -805,7 +805,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$source" \
             engines/patches/blastem-emufusion-widescreen.patch \
-            3373cf3fe51caa79777ad2a2ba35d5179eb0b093fde001a0ee2541f8e126a964
+            5307c5bbbecf33fbb7efc4c60297889ef2d59db9704e17e7374d654613764068
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'BlastEm recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;
