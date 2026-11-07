@@ -621,6 +621,7 @@ Mac pass had shown:
 | Shinobi II (Game Gear) | A library entry under the same title overrode the tested one | Duplicate removed. A check of every system found no other conflicting duplicates |
 | Road Rash (Game Gear) | Dotted blocks and road beside the panel; a pale strip at the left | `emufusion_ws_band`, and the masked column is now black and mirrored in every Game Gear game |
 | Lightening Force, Castle of Illusion | Scrambled tiles or grey blocks beside the status bar | `emufusion_ws_band` |
+| Castlevania II (Game Boy) | Digits cut off at the sides of the status bar | `emufusion_ws_band`: on the Game Boy, plain background rather than black |
 | Super Mario Kart | The game's black rows stopped at its own columns | `emufusion_ws_band` |
 | Mortal Kombat II | A wrapped wall and a gap at the arena's left end | `emufusion_ws_bounds` with a fixed edge. One arena seen |
 | NHL '94 (SNES) | The ice colour past the crowd | `emufusion_ws_bounds` with the rink's measured ends |

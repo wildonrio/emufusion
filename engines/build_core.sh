@@ -659,7 +659,7 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$build" \
             engines/patches/sameboy-emufusion-widescreen.patch \
-            3f1f96a1a3f5a7022aa57ae80d6442eb922db5f7e4faee0b03ab5c92bef294bf
+            e004ac7301114ac7eb3903c479efbf6e962cc1fddf54b0918de1c2f87cd2da44
         source="$build"
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;

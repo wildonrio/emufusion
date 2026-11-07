@@ -26,10 +26,10 @@ index 5eff0cd..ca5f2f8 100644
 +#include "ef_wide.inc"
 diff --git a/Core/ef_wide.h b/Core/ef_wide.h
 new file mode 100644
-index 0000000..3b3b8d3
+index 0000000..f345e5f
 --- /dev/null
 +++ b/Core/ef_wide.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,19 @@
 +#ifndef EF_WIDE_H_
 +#define EF_WIDE_H_
 +// EmuFusion Widescreen Hack. The background map is 256 pixels wide and the handheld shows 160
@@ -44,16 +44,18 @@ index 0000000..3b3b8d3
 +void ef_wide_set_scene(const char *value);
 +void ef_wide_set_map(const char *value);
 +void ef_wide_set_gate(const char *value);
++void ef_wide_set_band(const char *value);
 +int ef_wide_ext(void);
 +int ef_wide_milli(void);
 +const uint32_t *ef_wide_compose(const uint32_t *picture);
 +#endif
 diff --git a/Core/ef_wide.inc b/Core/ef_wide.inc
 new file mode 100644
-index 0000000..a5b6cad
+index 0000000..e941551
 --- /dev/null
 +++ b/Core/ef_wide.inc
-@@ -0,0 +1,322 @@
+@@ -0,0 +1,338 @@
++#include <stdio.h>
 +// Included at the end of display.c.
 +#include "ef_wide.h"
 +static uint32_t ef_fb[EF_WIDE_WIDTH * LINES];
@@ -308,6 +310,16 @@ index 0000000..a5b6cad
 +}
 +
 +// The line just finished in the original columns: draw the new ones beside it.
++static int ef_band_first = 1000, ef_band_last = -1;
++
++void ef_wide_set_band(const char *value)
++{
++    if (!value || sscanf(value, "%d-%d", &ef_band_first, &ef_band_last) != 2) {
++        ef_band_first = 1000;
++        ef_band_last = -1;
++    }
++}
++
 +static void ef_wide_line(GB_gameboy_t *gb)
 +{
 +    if (!ef_ext || gb->current_line >= LINES || gb->sgb) return;
@@ -331,6 +343,11 @@ index 0000000..a5b6cad
 +        return;
 +    }
 +    uint8_t bgp = gb->io_registers[GB_IO_BGP];
++    if (line >= ef_band_first && line <= ef_band_last) {
++        uint32_t plain = gb->cgb_mode ? gb->background_palettes_rgb[0] : gb->background_palettes_rgb[bgp & 3];
++        for (int i = 0; i < ef_ext; i++) out[i] = out[ef_ext + 160 + i] = plain;
++        return;
++    }
 +    uint8_t window_line = (lcdc & GB_LCDC_WIN_ENABLE) && line >= gb->io_registers[GB_IO_WY] &&
 +                          gb->io_registers[GB_IO_WX] < 167;
 +    uint8_t height = lcdc & GB_LCDC_OBJ_SIZE ? 16 : 8;
@@ -377,7 +394,7 @@ index 0000000..a5b6cad
 +    return ef_fb;
 +}
 diff --git a/libretro/libretro.c b/libretro/libretro.c
-index bb298ff..2568302 100644
+index bb298ff..708d432 100644
 --- a/libretro/libretro.c
 +++ b/libretro/libretro.c
 @@ -18,6 +18,7 @@
@@ -388,7 +405,7 @@ index bb298ff..2568302 100644
  #include "libretro_core_options.inc"
  
  #ifdef _WIN32
-@@ -750,6 +751,23 @@ static GB_model_t string_to_model(const char *string)
+@@ -750,6 +751,26 @@ static GB_model_t string_to_model(const char *string)
  
  static void check_variables()
  {
@@ -399,6 +416,9 @@ index bb298ff..2568302 100644
 +        ef_var.key = "emufusion_ws_gate";
 +        ef_var.value = NULL;
 +        ef_wide_set_gate(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
++        ef_var.key = "emufusion_ws_band";
++        ef_var.value = NULL;
++        ef_wide_set_band(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
 +        ef_var.key = "emufusion_ws_map";
 +        ef_var.value = NULL;
 +        ef_wide_set_map(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &ef_var) ? ef_var.value : NULL);
@@ -412,7 +432,7 @@ index bb298ff..2568302 100644
      struct retro_variable var = {0};
      if (emulated_devices == 1) {
  
-@@ -1296,6 +1314,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
+@@ -1296,6 +1317,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
          geom.base_width = GB_get_screen_width(&gameboy[0]);
          geom.base_height = GB_get_screen_height(&gameboy[0]);
          geom.aspect_ratio = (double)GB_get_screen_width(&gameboy[0]) / GB_get_screen_height(&gameboy[0]);
@@ -423,7 +443,7 @@ index bb298ff..2568302 100644
      }
  
      geom.max_width = MAX_VIDEO_WIDTH * emulated_devices;
-@@ -1436,6 +1458,10 @@ void retro_run(void)
+@@ -1436,6 +1461,10 @@ void retro_run(void)
              video_cb(frame_buf_copy, GB_get_screen_width(&gameboy[0]) * emulated_devices, GB_get_screen_height(&gameboy[0]), GB_get_screen_width(&gameboy[0]) * emulated_devices * sizeof(uint32_t));
          }
      }

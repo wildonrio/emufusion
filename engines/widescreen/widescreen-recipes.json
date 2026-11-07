@@ -1652,8 +1652,10 @@
       "games": {
         "Castlevania II: Belmont's Revenge": {
           "strategy": "widen",
-          "options": {},
-          "tested": "2026-11-05 host: Crystal Castle stage played; the columns are real scenery. 2026-11-06: the status bar shows digits cut off at the far edges, left as is"
+          "options": {
+            "emufusion_ws_band": "128-143"
+          },
+          "tested": "2026-11-05 host: Crystal Castle stage played; the columns are real scenery. 2026-11-06: digits cut off at the sides of the status bar; plain background beside it now"
         },
         "Donkey Kong Land": {
           "strategy": "fixed-screen",
