@@ -1653,6 +1653,10 @@
     "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-8f22f32ab24db25233631880dd72df7ba2dbcae6bc7dee92a8d83bf68d838cf9.apk": {
       "sha256": "8f22f32ab24db25233631880dd72df7ba2dbcae6bc7dee92a8d83bf68d838cf9",
       "reason": "Retry-431: QA trial build, superseded by retry-432."
+    },
+    "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification-1a74aef36296e95da1d9f9d7b869660b5ea8083f680d34a5fb3ba7f26dc1177b.apk": {
+      "sha256": "1a74aef36296e95da1d9f9d7b869660b5ea8083f680d34a5fb3ba7f26dc1177b",
+      "reason": "Retry-432: QA trial build, superseded by the 3.2.158 candidate."
     }
   }
 }
