@@ -69,7 +69,7 @@ public class StartupFallbackTest {
         float requestedPanelHz;
         void close(){closes++;if(failClose)throw new IllegalStateException("close unresolved");if(input!=null)input.release();}
         void setAuthoritativeSourceHz(double h){} void setProducerTimelineHz(double h){}
-        void setDiscreteContent(boolean v){} void setSwitchContent(boolean v){}
+        void setDiscreteContent(boolean v){} void setSwitchContent(boolean v){} void setCemuContent(boolean v){}
         void setSlotLatticeProducer(boolean enabled){}
         void setLockToThirtyTierPolicy(boolean enabled){}
         void setRequestedPanelRefreshHz(float hz){requestedPanelHz=hz;}
@@ -113,7 +113,7 @@ public class StartupFallbackTest {
         FrameGenerationBackendPolicy.Backend activeBackend=FrameGenerationBackendPolicy.Backend.DIRECT;
         FrameGenerationSettings.Mode launchMode;
         Handler mainHandler=new Handler(); Listener listener=new Listener();
-        Object frameRateListener; Runnable firstSubmittedFrameListener; double authoritativeSourceHz,producerTimelineHz; boolean discreteContent,switchContent;
+        Object frameRateListener; Runnable firstSubmittedFrameListener; double authoritativeSourceHz,producerTimelineHz; boolean discreteContent,switchContent,cemuContent;
         Primary(FrameGenerationSettings.Mode mode){launchMode=mode;}
         Object getContext(){return this;} int displayId(){return 0;}
         float refreshRate(){return 120f;}

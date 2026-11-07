@@ -111,7 +111,7 @@ public final class GameSurfaceView extends SurfaceView
             };
     private Runnable firstSubmittedFrameListener;
     private double authoritativeSourceHz;
-    private boolean discreteContent, switchContent;
+    private boolean discreteContent, switchContent, cemuContent;
     private double producerTimelineHz;
     private float directPresentationHz = 60.0f;
     // FIXED_SOURCE for a source clock, DEFAULT for the panel mode itself.
@@ -293,6 +293,13 @@ public final class GameSurfaceView extends SurfaceView
         discreteContent = value;
         FrameGenerationRenderer generator = frameGenerator;
         if (generator != null) generator.setDiscreteContent(value);
+    }
+
+    /** A Cemu session: at a multi-scan output, steady rather than sooner. */
+    public void setCemuContent(boolean value) {
+        cemuContent = value;
+        FrameGenerationRenderer generator = frameGenerator;
+        if (generator != null) generator.setCemuContent(value);
     }
 
     /** A Switch (Eden) session: the generator's Switch motion candidates. */
@@ -526,6 +533,7 @@ public final class GameSurfaceView extends SurfaceView
             generator.setAuthoritativeSourceHz(authoritativeSourceHz);
             generator.setDiscreteContent(discreteContent);
             generator.setSwitchContent(switchContent);
+            generator.setCemuContent(cemuContent);
             generator.setProducerTimelineHz(producerTimelineHz);
             generator.setStatsListener(frameRateListener);
             generator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);
@@ -671,6 +679,7 @@ public final class GameSurfaceView extends SurfaceView
             frameGenerator.setAuthoritativeSourceHz(authoritativeSourceHz);
             frameGenerator.setDiscreteContent(discreteContent);
             frameGenerator.setSwitchContent(switchContent);
+            frameGenerator.setCemuContent(cemuContent);
             frameGenerator.setProducerTimelineHz(producerTimelineHz);
             frameGenerator.setStatsListener(frameRateListener);
             frameGenerator.setFirstSubmittedFrameListener(firstSubmittedFrameListener);

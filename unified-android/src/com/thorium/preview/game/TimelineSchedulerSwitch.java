@@ -343,42 +343,26 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         hardwarePhaseLock = hardwareLock;
-        int queueFloor = 0;
+        boolean steadyCemu = true;
         try {
-            if (context != null) queueFloor = Settings.Global.getInt(
-                    context.getContentResolver(), MIN_QUEUE_SCANS_GLOBAL, queueFloor);
+            if (context != null) steadyCemu = Settings.Global.getInt(
+                    context.getContentResolver(), STEADY_CEMU_GLOBAL, 1) != 0;
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
-        minQueueScans = queueFloor;
-        boolean uniqueAssumed = false;
-        try {
-            if (context != null) uniqueAssumed = Settings.Global.getInt(
-                    context.getContentResolver(), ASSUME_UNIQUE_GLOBAL, 0) != 0;
-        } catch (RuntimeException ignored) {
-            // Unreadable settings keep the default.
-        }
-        assumeUnique = uniqueAssumed;
-        int cemuWaitUs = 5_500;
-        try {
-            if (context != null) cemuWaitUs = Settings.Global.getInt(
-                    context.getContentResolver(), CEMU_PHASE_WAIT_GLOBAL, cemuWaitUs);
-        } catch (RuntimeException ignored) {
-            // Unreadable settings keep the default.
-        }
-        cemuPhaseWaitNs = cemuWaitUs * 1000L;
-        boolean pairArrivalSpan = false;
+        steadyCemuOutput = steadyCemu;
+        boolean pairArrivalSpan = true;
         try {
             if (context != null) pairArrivalSpan = Settings.Global.getInt(
-                    context.getContentResolver(), ARRIVAL_SPAN_GLOBAL, 0) != 0;
+                    context.getContentResolver(), ARRIVAL_SPAN_GLOBAL, 1) != 0;
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
         arrivalSpan = pairArrivalSpan;
-        boolean predraw = false;
+        boolean predraw = true;
         try {
             if (context != null) predraw = Settings.Global.getInt(
-                    context.getContentResolver(), REAL_PREDRAW_GLOBAL, 0) != 0;
+                    context.getContentResolver(), REAL_PREDRAW_GLOBAL, 1) != 0;
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
@@ -818,44 +802,39 @@ public final class TimelineSchedulerSwitch {
         return hardwarePhaseLock < 0 && pinnedByDefault;
     }
 
-    /** QA emufusion_framegen_min_queue_scans: the shallowest queue for a multi-scan output, with the early guard on. */
-    static final String MIN_QUEUE_SCANS_GLOBAL = "emufusion_framegen_min_queue_scans";
-    private static volatile int minQueueScans = 0;
+    /**
+     * Cemu at a multi-scan output (a 30 fps game): a pair does not wait for its uniqueness
+     * check after a long run of unique verdicts, and the queue keeps a scan or more back with the
+     * early guard on. Wind Waker HD's arrival sits 3.6 ms before the callback and the check
+     * finishes around it, behind Cemu's GPU work, so its generated image toggled between 11 and
+     * 19 ms, 87-92% on cadence. With this 98.9%, at 27.6 / 44.3 ms against about 17 / 33 ms: a
+     * steady rhythm first (Thor, 2026-11-06). QA emufusion_framegen_steady_cemu=0 turns it off.
+     */
+    static final String STEADY_CEMU_GLOBAL = "emufusion_framegen_steady_cemu";
+    private static volatile boolean steadyCemuOutput = true;
 
-    static int minQueueScans() { return minQueueScans; }
-
-    /** QA emufusion_framegen_assume_unique=1: after a long run of unique verdicts, a callback does not wait for the check. */
-    static final String ASSUME_UNIQUE_GLOBAL = "emufusion_framegen_assume_unique";
-    private static volatile boolean assumeUnique = false;
-
-    static boolean assumeUnique() { return assumeUnique; }
-
-    /** QA emufusion_framegen_cemu_phase_wait_us: the wait Cemu's phase lock holds (its nudge is QA too). */
-    static final String CEMU_PHASE_WAIT_GLOBAL = "emufusion_framegen_cemu_phase_wait_us";
-    private static volatile long cemuPhaseWaitNs = 5_500_000L;
-
-    static long cemuPhaseWaitNs() { return cemuPhaseWaitNs; }
+    static boolean steadyCemuOutput() { return steadyCemuOutput; }
 
     /**
-     * QA emufusion_framegen_arrival_span=1: arrival pacing places a pair's real
-     * image by the time between its images' arrivals, not their timestamps.
+     * Arrival pacing places a pair's real image by the time between its images'
+     * arrivals, not their timestamps (QA emufusion_framegen_arrival_span=0 for those).
      * Wind Waker HD's images arrive an even 33.3 ms apart, but Cemu's 60 Hz stamp
      * lattice reads some 16.7 and 50 ms apart near a slot boundary, so real images
      * come one or three scans after the generated image (Thor, 2026-11-06).
      */
     static final String ARRIVAL_SPAN_GLOBAL = "emufusion_framegen_arrival_span";
-    private static volatile boolean arrivalSpan = false;
+    private static volatile boolean arrivalSpan = true;
 
     static boolean arrivalSpan() { return arrivalSpan; }
 
     /**
-     * QA emufusion_framegen_real_predraw=1: a pair's real image is drawn into
-     * the back buffer right after its generated image's swap, so its own
-     * callback only swaps it. Wind Waker HD's real images finish 3 ms after
+     * A pair's real image is drawn into the back buffer right after its
+     * generated image's swap, so its own callback only swaps it (QA
+     * emufusion_framegen_real_predraw=0 turns this off). Wind Waker HD's real images finish 3 ms after
      * their scan behind Cemu's GPU work, one scan late every time (Thor, 2026-11-06).
      */
     static final String REAL_PREDRAW_GLOBAL = "emufusion_framegen_real_predraw";
-    private static volatile boolean realPredraw = false;
+    private static volatile boolean realPredraw = true;
 
     static boolean realPredraw() { return realPredraw; }
 

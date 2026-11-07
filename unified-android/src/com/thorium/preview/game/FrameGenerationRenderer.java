@@ -93,8 +93,8 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default long takeHardwareSourcePhaseNudgeNs() { return 0L; }
 
-    /** The wait before the panel callback the source's phase lock should hold, or zero for its own. */
-    default void setSourcePhaseWaitNs(long ns) {}
+    /** The source is Cemu: at a multi-scan output, steady rather than sooner (TimelineSchedulerSwitch). */
+    default void setCemuContent(boolean value) {}
 
     /** How far ahead a hardware core should stamp its images; negative, behind (the firmware paces only those). */
     default long hardwareStampAheadNs(boolean pinnedByDefault) { return 0L; }

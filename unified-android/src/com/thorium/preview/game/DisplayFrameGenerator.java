@@ -3077,9 +3077,13 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private volatile boolean hardwarePhaseSource;
     // Its stamps start behind the clock: the firmware's pacing holds its phase, so a drain can hold too.
     private volatile boolean firmwarePacedSource;
-    private volatile long sourcePhaseWaitNs;
+    private volatile boolean cemuContent;
 
-    @Override public void setSourcePhaseWaitNs(long ns) { sourcePhaseWaitNs = ns; }
+    @Override public void setCemuContent(boolean value) { cemuContent = value; }
+
+    private boolean steadyCemuOutput() {
+        return cemuContent && TimelineSchedulerSwitch.steadyCemuOutput() && presentationScansPerOutput() >= 2;
+    }
 
     @Override public long hardwareStampAheadNs(boolean pinnedByDefault) {
         if (TimelineSchedulerSwitch.hardwarePhaseLock()) return 10_000_000L;
@@ -3621,8 +3625,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             consumeExternalEndpointDiscontinuities();
             pollPhysicalPresentations();
             if (externalTransport == null) pollSignatureOnVsync();
-            if (externalTransport == null && TimelineSchedulerSwitch.assumeUnique())
-                assumePendingSignatureUnique();
+            if (externalTransport == null && steadyCemuOutput()) assumePendingSignatureUnique();
             if (externalTransport == null) {
                 frameRate.setGenerationAvailable(builtinClockAdmissionReady(
                         densePyramidEnabled, densePyramidUnavailable, displayId,
@@ -5583,7 +5586,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private void prepareArrivalPairEarly() {
         // On arrival, not at the callback: the pair's solve starts now and can make that callback's slot.
         if (externalTransport == null && timelineActive && timeline.arrivalPacing() &&
-                TimelineSchedulerSwitch.assumeUnique()) assumePendingSignatureUnique();
+                steadyCemuOutput()) assumePendingSignatureUnique();
         if (externalTransport != null || !timelineActive || !timeline.arrivalPacing() ||
                 activeLeftSequence <= 0L || endpointFifoCount <= 0 ||
                 observedBufferedPresentationEpoch != schedulerPresentationEpoch()) return;
@@ -7499,13 +7502,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         if (TimelineSchedulerSwitch.earliestLatch() && builtinQueueReserve.extraScans() == 0)
             builtinBacklogCatchUp.observe(result.desiredNs, result.actualNs, result.panelPeriodNs,
                     result.actualNs);
-        int minQueueScans = presentationScansPerOutput() >= 2 ? TimelineSchedulerSwitch.minQueueScans() : 0;
+        int minQueueScans = steadyCemuOutput() ? 1 : 0;
         builtinQueueReserve.setMinExtraScans(minQueueScans);
-        // Negative in QA: that floor, and no deeper.
-        if (minQueueScans < 0) {
-            builtinQueueReserve.setMaxExtraScans(-minQueueScans);
-            builtinQueueReserve.setMinExtraScans(-minQueueScans);
-        }
         if (minQueueScans != 0 && compositorEarlyGuard.activate())
             Log.i(TAG, "Compositor early guard on generator=" + generatorId + " reason=queue-floor");
         int previous = builtinQueueReserve.extraScans();
@@ -9863,7 +9861,6 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // them per 16 s missed their callback, at 3.9 ms 3.
                 if (switchContent || hardwarePhaseSource)
                     sourcePhaseLock.setTargetWaitNs(TimelineSchedulerSwitch.switchPhaseWaitNs());
-                if (sourcePhaseWaitNs > 0L) sourcePhaseLock.setTargetWaitNs(sourcePhaseWaitNs);
                 sourcePhaseAdvisor.observe(waitNs, panelPeriodNs);
                 sourcePhaseLock.observe(waitNs, panelPeriodNs);
             }

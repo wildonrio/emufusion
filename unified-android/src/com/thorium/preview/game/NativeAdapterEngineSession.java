@@ -605,10 +605,6 @@ final class NativeAdapterEngineSession implements EngineSession,
         if (!physicalFgClockApplied || phaseNudgeUnsupported) return;
         FrameGenerationRenderer owner = physicalFgClockOwner;
         if (owner == null) return;
-        // Cemu's pairs often miss the callback 3.6 ms after arrival (Wind Waker HD, Thor,
-        // 2026-11-06): 19 ms instead of 11 from arrival to the generated image, for seconds
-        // at a time. A longer wait should let them make it; QA until measured.
-        if ("cemu".equals(entry.id)) owner.setSourcePhaseWaitNs(TimelineSchedulerSwitch.cemuPhaseWaitNs());
         long nudgeNs = owner.takeSourcePhaseNudgeNs();
         if (nudgeNs == 0L) return;
         if (!active.nudgeVideoPhase(nudgeNs)) {
