@@ -3504,7 +3504,7 @@
         "Banjo-Kazooie": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title compared narrow and wide; logo the same width, world extends. A jigsaw-shaped wipe looks odd on black, to compare with narrow. 2026-11-07 Thor, with the real stick: long opening scene; the room reaches both edges, the text and portrait keep their shape. Spiral Mountain still not reached. 2026-11-07 Thor, with the real stick: the whole long opening again; right to both edges. Spiral Mountain seen only narrow, after the swipe"
+          "tested": "2026-11-05 Thor: title compared narrow and wide; logo the same width, world extends. A jigsaw-shaped wipe looks odd on black, to compare with narrow. 2026-11-07 Thor, with the real stick: long opening scene; the room reaches both edges, the text and portrait keep their shape. Spiral Mountain still not reached. 2026-11-07 Thor, with the real stick: the whole long opening again; right to both edges. Spiral Mountain seen only narrow, after the swipe. 2026-11-07 Thor, longer route with the stick: real play at last: Spiral Mountain outside Banjo's house and inside it; the house, garden and room reach both edges, no gaps"
         },
         "Super Mario 64": {
           "strategy": "widen",
@@ -3514,7 +3514,7 @@
         "Banjo-Tooie": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: file room and story text compared narrow and wide; text the same width, room and sky extend. A world not played yet. 2026-11-07 Thor, with the real stick: the opening card game; wide inside its letterbox, text in shape. A world not reached"
+          "tested": "2026-11-06 Thor: file room and story text compared narrow and wide; text the same width, room and sky extend. A world not played yet. 2026-11-07 Thor, with the real stick: the opening card game; wide inside its letterbox, text in shape. A world not reached. 2026-11-07 Thor, longer route with the stick: the long opening again, wide inside its letterbox; a world still not reached"
         },
         "Blast Corps": {
           "strategy": "widen",
@@ -3524,7 +3524,7 @@
         "Conker's Bad Fur Day": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: intro and first scenes in 3D at 16:9, title text keeps its shape. Play not reached. 2026-11-07 Thor, with the real stick: opening only, right to both edges. Play not reached"
+          "tested": "2026-11-05 Thor: intro and first scenes in 3D at 16:9, title text keeps its shape. Play not reached. 2026-11-07 Thor, with the real stick: opening only, right to both edges. Play not reached. 2026-11-07 Thor, longer route with the stick: the opening phone scene; rooms reach both edges, speech bubbles keep their shape. Play still not reached"
         },
         "Diddy Kong Racing": {
           "strategy": "widen",
@@ -3559,7 +3559,7 @@
         "The Legend of Zelda: Majora's Mask": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title and file menus compared narrow and wide; logo and panels the same width, sky extends. Play not reached. 2026-11-07 Thor, with the real stick: name entry, wide with the panel in shape. Stopped there because the name stayed empty, so play still not reached"
+          "tested": "2026-11-05 Thor: title and file menus compared narrow and wide; logo and panels the same width, sky extends. Play not reached. 2026-11-07 Thor, with the real stick: name entry, wide with the panel in shape. Stopped there because the name stayed empty, so play still not reached. 2026-11-07 Thor, longer route with the stick: real play at last: Link in the woods after the opening; trees and ground reach both edges, hearts and buttons keep their shape. Clock Town not reached"
         },
         "Perfect Dark": {
           "strategy": "widen",
@@ -3569,7 +3569,7 @@
         "International Superstar Soccer '98": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: menus compared narrow and wide, the same width and sitting in bars. A match not played yet. 2026-11-07 Thor, with the real stick: menus sit in bars in shape. The match started just as the script swiped, so it has been seen only narrow"
+          "tested": "2026-11-06 Thor: menus compared narrow and wide, the same width and sitting in bars. A match not played yet. 2026-11-07 Thor, with the real stick: menus sit in bars in shape. The match started just as the script swiped, so it has been seen only narrow. 2026-11-07 Thor, longer route with the stick: a real match and a goal replay: pitch, goal and stands reach both edges, score and radar in shape"
         },
         "Tony Hawk's Pro Skater": {
           "strategy": "fixed-screen",
@@ -3594,7 +3594,7 @@
         "International Superstar Soccer 64": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-06 Thor: attract match wide with players in shape; title and menus keep their shape in bars. A match of my own not played. 2026-11-07 Thor, with the real stick: team, stadium and line-up menus sit in bars in shape. A match not reached yet"
+          "tested": "2026-11-06 Thor: attract match wide with players in shape; title and menus keep their shape in bars. A match of my own not played. 2026-11-07 Thor, with the real stick: team, stadium and line-up menus sit in bars in shape. A match not reached yet. 2026-11-07 Thor, longer route with the stick: a real match: pitch, stands and boards reach both edges, the score, radar and player names keep their shape; the corner-kick banner too"
         },
         "Mario Kart 64": {
           "strategy": "widen",
