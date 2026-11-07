@@ -57,7 +57,7 @@ canonical title).
 | psx | 14 | SwanStation | no | GTE widening + per-game |
 | dreamcast | 27 | Flycast | some | Per-game widescreen cheat table + widening |
 | gc | 43 | Dolphin | some | Per-game Gecko codes + widening |
-| wii | 16 | Dolphin | most | Only where the game lacks it |
+| wii | 16 | Dolphin | most | Nothing to do, see below |
 | ps2 | 25 | ARMSX2 | some | Per-game patches |
 | nds | 4 games | melonDS DS | no | Nothing to widen on the top screen, see below |
 | psp | 5 | PPSSPP | yes | Skip |
@@ -671,6 +671,8 @@ Open: FF3's scattered squares at Narshe's far left are what its map holds there,
 read differently and not yet seen. Wario Land II on the Game Boy Color stays narrow in its opening rooms.
 
 ### Systems decided without a widening (2026-11-07)
+
+**Wii.** Twelve top games ran on the Thor (2026-11-07) as far as their titles and menus. Super Mario Galaxy and Galaxy 2, Twilight Princess, Donkey Kong Country Returns, New Super Mario Bros. Wii, Punch-Out!!, Mario Kart Wii, Muramasa and Pandora's Tower draw 16:9 by themselves. Excite Truck ended on a heat stop at its first menu, which also fills the screen. Castlevania: The Adventure ReBirth is 2D at 4:3 and stays so; Contra ReBirth stopped at its save prompt, so it was not seen, but is expected to match. None of these were played past their menus, since nothing needs widening.
 
 **DS.** The owner asked for the top screen only. Played on the Thor with both panels captured, Castlevania: Dawn of Sorrow runs its action on the touch screen,
 which is the Thor's lower panel, and keeps only a status page or map on the top screen. Widening that page would add nothing, so no 2D side pass was built. Portrait
