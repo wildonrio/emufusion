@@ -1739,8 +1739,8 @@
       "reason": "Superseded rollback 3.2.157 (231); 3.2.158 is the rollback for 3.2.159, 2026-11-07."
     },
     "unified-android/build/emufusion-3.2.157-phase2-phase3-qualification.apk": {
-      "sha256": "ca6959588d60cd876f8f529e5eef850da1c8118d7745f045d5d77ca09149e98e",
-      "reason": "Superseded rollback 3.2.157 (231); 3.2.158 is the rollback for 3.2.159, 2026-11-07."
+      "sha256": "1a74aef36296e95da1d9f9d7b869660b5ea8083f680d34a5fb3ba7f26dc1177b",
+      "reason": "Last plain-named 3.2.157 copy, a QA build; 3.2.158 is the rollback for 3.2.159, 2026-11-07."
     },
     "unified-android/build/emufusion-3.2.159-phase2-phase3-qualification-3b9f30bdacaba7ff3eca8641cb6ea8e01a767a12cb9325f925df4e7c1d63a26b.apk": {
       "sha256": "3b9f30bdacaba7ff3eca8641cb6ea8e01a767a12cb9325f925df4e7c1d63a26b",
