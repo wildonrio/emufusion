@@ -389,6 +389,11 @@ Rage, Wakeboarding Unleashed), cockpits narrower than the view (F-14, Super Horn
 played through. A separate search for level grids in work RAM over 61 games found about ten, nearly all minor licensed titles, so
 it was not followed up. On the GBA the new columns are 22 pixels a side at 16:9, so a reader does less here than on the NES or SNES.
 
+Game Boy, Game Boy Color, Game Gear and NES, 2026-11-06: the same longer run went over 524, 450, 201 and 1,030 games. Two frames of each
+game that scrolled were looked at on the Mac, and 35, 16, 5 and 24 games were added with the scroll rule, among them Mega Man IV and V,
+Bionic Commando, Mr. Gimmick, Ninja Gaiden, Chip 'n Dale and Blades of Steel. None has been played through and none of these has run on
+the Thor, so a game here can still be wrong beyond the stretch those two frames show.
+
 Mega Drive, 2026-11-06: all 748 games checked. 104 scrolled in the automatic run: 55 pass, and most low scorers still look right, their
 score lowered by parallax and animation. The engine gained the scroll rule too, so the library fallback keeps titles and menus narrow.
 Exo-Squad (black column), Caesars Palace (black gaps) and Warrior of Rome II (title wraps behind its menu) have narrow entries.
@@ -548,6 +553,13 @@ pieces beside menus), Jet Force Gemini (stray pieces beside the title), Pilotwin
 of the corners on some courses) and Body Harvest (plays inside a narrow box). Only menus reached so far, so no entry yet: Smash Bros, Beetle
 Adventure Racing, WWF No Mercy and Rogue Squadron. With about a quarter failing, the N64 gets no fallback: each game needs a look. On GameCube,
 Mario Party 4 and Star Fox Assault did not get past their memory card prompts. Katamari Damacy on PS2 showed no picture in two minutes.
+
+A second batch of 40 is under way, with the first 27 reviewed. Widen: Buck Bumble, Cruis'n USA, Duke Nukem 64, Extreme-G, Gex 64, Hybrid
+Heaven, Indiana Jones and the Infernal Machine, Mario Party, Mortal Kombat 4, Mystical Ninja Starring Goemon, Quake II, Ridge Racer 64,
+Rocket: Robot on Wheels, Shadow Man, Shadows of the Empire and Wipeout 64. Stay narrow: Resident Evil 2 and Top Gear Rally (bars of noise),
+San Francisco Rush (flat bands down both edges), Snowboard Kids (a narrow box) and Space Station Silicon Valley (stray slices of picture).
+Undecided: Goemon's Great Adventure (white gaps in one scene), plus Bomberman 64, Glover, Mega Man 64, Quake and Episode I: Racer, which
+reached only menus or logos. All from short runs, none played through.
 
 ## Game files that are not there
 
