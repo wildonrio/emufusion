@@ -385,7 +385,6 @@ public class RuntimeFailureTest {
         void releaseSoftwareSnapshot(int[] snapshot){}
         static class FrameWorkHint {static long threadCpuNs(){return 0L;} static long cpuSince(long s){return 0L;}}
         void clearNativeClassifiedObservation(){}
-        void quietUntilLatch(long nowNs){}
         void classifyLatestNativeObservation(){}
         void finishNativeClassifiedObservation(boolean unique){nativeClassificationFinishes++;}
         void copyExternalTo(int texture){copies++;}

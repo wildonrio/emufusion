@@ -3533,7 +3533,6 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             // phase depend on Android callback jitter. A missing PTS is
             // explicitly counted as an unqualified fallback below.
             long producerArrivalNs = System.nanoTime();
-            quietUntilLatch(producerArrivalNs);
             inputTexture.updateTexImage();
             long producerBufferTimestampNs = inputTexture.getTimestamp();
             long producerTimestampNs = producerBufferTimestampNs > 0L ?
@@ -9356,22 +9355,6 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final com.thorium.emufusion.video.HeldSwapCadence heldSwapCadence =
             new com.thorium.emufusion.video.HeldSwapCadence();
     private boolean plannedSooner;
-
-    private long arrivalQuiets;
-
-    /**
-     * QA (emufusion_framegen_arrival_quiet=1). In Wind Waker HD at one extra scan the real
-     * image's latch comes about 1 ms after the next image's arrival; it runs 0.1 ms later than
-     * the generated image's, and the misses (7 in 1,000) are at 1.6 ms or less. Tests whether
-     * our own arrival work is what delays it.
-     */
-    private void quietUntilLatch(long nowNs) {
-        if (!TimelineSchedulerSwitch.arrivalQuiet()) return;
-        long waitNs = builtInLastCommittedTargetNs - 1_500_000L - nowNs;
-        if (waitNs <= 0L || waitNs > 2_000_000L) return;
-        java.util.concurrent.locks.LockSupport.parkNanos(waitNs);
-        ++arrivalQuiets;
-    }
 
     private boolean heldSwapOutput() {
         return TimelineSchedulerSwitch.heldSwap() && steadyCemuOutput();
@@ -15282,7 +15265,6 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 " arrivalEarlyPairs=" + arrivalEarlyPairs +
                 " verdictWaits=" + verdictWaits + "/" + verdictWaitHits +
                 " heldSwaps=" + heldSwaps + "/" + heldSwapCadence.pairs() +
-                " arrivalQuiets=" + arrivalQuiets +
                 " halfway=" + halfwayUploads + "/" + halfwayDraws + "/" + halfwayMisses +
                 " realPredraws=" + realPredraws + "/" + realPredrawHits +
                 " assumedUnique=" + assumedUnique + "/" + assumedWrong +

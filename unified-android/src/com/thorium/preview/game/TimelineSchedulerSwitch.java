@@ -360,14 +360,6 @@ public final class TimelineSchedulerSwitch {
         }
         heldSwap = holdSwap != 0;
         heldSwapEverySource = holdSwap == 2;
-        boolean arrivalWaits = false;
-        try {
-            if (context != null) arrivalWaits = Settings.Global.getInt(
-                    context.getContentResolver(), ARRIVAL_QUIET_GLOBAL, 0) != 0;
-        } catch (RuntimeException ignored) {
-            // Unreadable settings keep the default.
-        }
-        arrivalQuiet = arrivalWaits;
         boolean pairArrivalSpan = true;
         try {
             if (context != null) pairArrivalSpan = Settings.Global.getInt(
@@ -852,11 +844,6 @@ public final class TimelineSchedulerSwitch {
         }
     }
 
-    static final String ARRIVAL_QUIET_GLOBAL = "emufusion_framegen_arrival_quiet";
-    private static volatile boolean arrivalQuiet;
-
-    /** QA: an image arriving just before the compositor's latch waits for it to pass. */
-    static boolean arrivalQuiet() { return arrivalQuiet; }
 
     /** QA emufusion_framegen_held_swap=2: every source's frame waits for its GPU work before the swap. */
     static boolean heldSwapEverySource() { return heldSwapEverySource; }

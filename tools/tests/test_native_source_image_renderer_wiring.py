@@ -226,7 +226,6 @@ public class WiringFixture {
     boolean failQuery;int failures,consumes,notifications;
     long consumedPts,consumedImage,consumedMetadata;boolean consumedUnique,consumedKnown;
     void copyExternalTo(int texture){trace.add("copyExternal");textureImage.put(texture,inputTexture.timestamp);}
-    void quietUntilLatch(long nowNs) {}
     void uploadBitmap(int texture){trace.add("uploadBitmap");textureImage.put(texture,(long)softwareUploadBitmap.firstPixel);}
     void copyTexture(int from,int to){trace.add("copyCandidate:"+to);textureImage.put(to,textureImage.get(from));}
     void notifyFirstSubmittedFrame(){notifications++;}
