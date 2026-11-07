@@ -389,8 +389,9 @@ Rage, Wakeboarding Unleashed), cockpits narrower than the view (F-14, Super Horn
 played through. A separate search for level grids in work RAM over 61 games found about ten, nearly all minor licensed titles, so
 it was not followed up. On the GBA the new columns are 22 pixels a side at 16:9, so a reader does less here than on the NES or SNES.
 
-Mega Drive, 2026-11-06: the first 182 of 750 files checked before the Thor dropped off USB. 10 pass, and Blaster Master 2, Caesars
-Palace and Bugs Bunny in Double Trouble score low. Most of the rest did not scroll in the automatic run, so they say little.
+Mega Drive, 2026-11-06: all 748 games checked. 104 scrolled in the automatic run: 55 pass, and most low scorers still look right, their
+score lowered by parallax and animation. The engine gained the scroll rule too, so the library fallback keeps titles and menus narrow.
+Exo-Squad (black column), Caesars Palace (black gaps) and Warrior of Rome II (title wraps behind its menu) have narrow entries.
 
 ## GBA map reader (2026-11-06)
 
