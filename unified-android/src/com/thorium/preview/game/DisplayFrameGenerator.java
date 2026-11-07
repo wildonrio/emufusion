@@ -12727,6 +12727,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         return true;
     }
 
+    /** QA: with this marker the hold-out keeps its generated images at the history's size, to be looked at. */
+    private static final java.io.File HOLDOUT_FULL_MARKER =
+            new java.io.File("/data/local/tmp/emufusion-holdout-full");
+
     private boolean ensureHoldoutResources() {
         if (holdoutResourcesReady) return true;
         if (holdoutUnavailable || historyWidth <= 0 || historyHeight <= 0) return false;
@@ -12734,7 +12738,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             GLES20.glGenTextures(HOLDOUT_REFERENCES, holdoutReferenceTextures, 0);
             for (int texture : holdoutReferenceTextures)
                 allocateTexture(texture, historyWidth, historyHeight);
-            holdoutWidth = Math.min(320, historyWidth);
+            holdoutWidth = HOLDOUT_FULL_MARKER.exists() ? historyWidth : Math.min(320, historyWidth);
             holdoutHeight = Math.max(1, Math.round((float) holdoutWidth * historyHeight / historyWidth));
             GLES20.glGenTextures(HOLDOUT_LEVELS, holdoutGeneratedTextures, 0);
             GLES20.glGenFramebuffers(HOLDOUT_LEVELS, holdoutGeneratedFramebuffers, 0);
@@ -13775,7 +13779,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             } else {
                 flow.setDiscrete(discreteContent);
                 flow.setStaticFrames(synthesisLevel == TimelineSchedulerSwitch.DIS_PHASE_OVERLAY_SYNTHESIS_LEVEL ?
-                        TimelineSchedulerSwitch.OVERLAY_LEVEL_FRAMES : TimelineSchedulerSwitch.staticOverlayFrames());
+                        TimelineSchedulerSwitch.OVERLAY_LEVEL_FRAMES : TimelineSchedulerSwitch.staticOverlayFrames(discreteContent));
                 flow.bindGeneratePhase(historyTextures[previousIndex], historyTextures[currentIndex], phase,
                         structure ? structureMaskTexture : 0, 2f * structureStepPixels(), flow.cutTexture());
                 bindQuad(flow.generatePhaseProgram());
