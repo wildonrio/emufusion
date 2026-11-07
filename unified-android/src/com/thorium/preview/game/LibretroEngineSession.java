@@ -551,6 +551,7 @@ public final class LibretroEngineSession implements EngineSession,
                                         " system=" + launch.systemId, rejectedState);
                             }
                         }
+                        if (!launch.qualificationSession.isEmpty()) restoreQaStartState(opened);
                         checkpointScheduler = new CheckpointScheduler(
                                 CheckpointScheduler.DEFAULT_INTERVAL_MILLIS, previousActive);
                     }
@@ -2874,6 +2875,30 @@ public final class LibretroEngineSession implements EngineSession,
                     (attempt == 0L ? "" : " attempt=" + attempt) +
                     " source=stored selectionRetained=true effectProofRequired=true" +
                     " marker=cheat-apply-failure", failure);
+        }
+    }
+
+    /**
+     * QA only: global "emufusion_qa_start_state" names a state file captured elsewhere, so a test begins in
+     * gameplay instead of replaying menus by blind presses. A state the core refuses boots the game normally.
+     */
+    private void restoreQaStartState(LibretroHost core) {
+        String path = null;
+        try {
+            path = android.provider.Settings.Global.getString(
+                    appContext.getContentResolver(), "emufusion_qa_start_state");
+        } catch (RuntimeException ignored) {
+            // Unreadable settings: no start state.
+        }
+        if (path == null || path.isEmpty()) return;
+        File file = new File(path);
+        try (java.io.DataInputStream in = new java.io.DataInputStream(new FileInputStream(file))) {
+            byte[] state = new byte[(int) file.length()];
+            in.readFully(state);
+            core.unserialize(state);
+            Log.w(TAG, "QA start state restored bytes=" + state.length);
+        } catch (Throwable rejected) {
+            Log.w(TAG, "QA start state refused path=" + path, rejected);
         }
     }
 

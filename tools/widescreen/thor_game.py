@@ -138,6 +138,12 @@ def main():
     # THOR_QA_WIDESCREEN=0 runs the game as a player would see it while its system is still hidden.
     if os.environ.get('THOR_QA_WIDESCREEN') != '0':
         shell('settings put global emufusion_qa_widescreen_all 1')
+    # THOR_START_STATE starts the game from a state captured on the Mac, already in gameplay.
+    start_state = os.environ.get('THOR_START_STATE')
+    if start_state:
+        shell('mkdir -p /sdcard/EmuFusionQA')
+        subprocess.run(ADB + ['push', start_state, '/sdcard/EmuFusionQA/start.state'], capture_output=True, timeout=60)
+        shell('settings put global emufusion_qa_start_state /sdcard/EmuFusionQA/start.state')
     # The recipe table is cached per app process, so a running app would not see the setting.
     # Wake first and let it settle: the firmware rebuilds the lower display at the upper panel's
     # size if an app's display mode change lands just before a wake (thor-lower-panel-squeeze).
@@ -173,6 +179,9 @@ def main():
         for line in re.findall(r'Widescreen[^\n]*', text)[:12]:
             print(line[:150])
         shell('settings delete global emufusion_qa_widescreen_all')
+        if start_state:
+            shell('settings delete global emufusion_qa_start_state')
+            shell('rm -f /sdcard/EmuFusionQA/start.state')
         release_thor()
     return 0
 
