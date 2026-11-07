@@ -267,7 +267,57 @@ Nothing is at 10/10 on all three measures yet. Whether a run reaches the composi
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 6 (latest) **— 3.2.158 (232, `cd183b4d`, retry-433): Dolphin under the firmware's pin, the phase lock no longer sticks, real images drawn ahead and placed by arrival, Cemu's 30 fps rhythm steady. Still not 10/10 on any system.**
+November 7 (latest) **— Why Wind Waker HD could not hold one scan: the GamePad image takes its own compositor pass. In the tree: Cemu's Pad stamp and the held swap, 19.3 / 35.9 ms against 27.7 / 44.3 ms. A halfway image from BlastEm itself, QA.**
+
+- **The cause, from a 6-s system trace (`ATRACE=path` in `pace_move.py`; `fg/trsf3.py` joins it to the physical trace by the swaps).**
+  - The Wii U GamePad image is a second layer: PreviewActivity's SurfaceView on the lower panel, its own `QueuePresentKHR`. Queued alone, its buffer reached the compositor about 9 ms after the TV image's arrival and took a pass of its own, a scan before the generated image's.
+  - The compositor commits every display on every pass. On a late frame the main display's commit blocked for about a millisecond (`DRMAtomicReq::Commit` 0.97 ms against 0.16; the display's thread in `sde_encoder_helper_wait_for_irq`) and ended 0.51 ms past the slot against -0.36. A commit in the scan before is not enough by itself: NES commits every scan and stays in the fast state. What the wait depends on beyond the GamePad's pass is not known.
+  - The frame after that pass is the late one, and only that frame. Stamped 28 ms ahead, the pass moved a scan later and 116 real images were late with 3 generated. With no extra scan or two, the pass coincides with one of our frames: that is why only one scan failed, and the earlier reading (Cemu's frame finishing too late) was wrong.
+- **The fix, default on for Cemu at a steady 30 fps (library `7e235d78`): the Pad image asks for a present 23 ms on,** which falls in the generated image's pass (the window is arrival + 19.5 to + 27.8 ms: the trace's `vsyncIn` shows expected present = wake + 10.2 ms). QA `debug.emufusion.cemu_pad_stamp_us`, 0 for none.
+- **The held swap (`e840cd1`, default on for Cemu at a multi-scan output): frames are drawn at the one-scan callback, wait for their GPU work, and are queued 6.3 ms before the slot.** One late pair may go without the extra scan (`HeldSwapCadence`), and the real image comes a fixed output after the generated one. Depth is capped at one scan here. QA `emufusion_framegen_held_swap=0`.
+- **Wind Waker HD, title flight, 33 s, cool starts:**
+
+| Build | On cadence | Hitches per 30 s | G / R ms | Fast state |
+| --- | --- | --- | --- | --- |
+| 3.2.158 | 96.6-98.2% | 32-60 | 27.7 / 44.3 | |
+| Fixed one scan, no hold | 53% | 835 | 23.2 / 36.1 | |
+| Hold, no stamp (6 runs) | 97.2, 98.6, 97.4, 98.0, 91.1*, 89.1† | 25-50 | 19.3 / 36.0 | 99% |
+| Stamp 23 ms, no hold | 97.5% | 44.7 | 20.0 / 36.5 | 99% |
+| Stamp 23 ms and hold (3 runs) | 99.7, 98.9, 99.3 | 4.5, 19.9, 12.7 | 19.3 / 36.0 | 99-100% |
+
+  * Overlay drawn after the hold, so the fence was still pending at the swap. † With the system trace running.
+  The hitches left are Cemu's: source gaps of 80-110 ms (`R->R` 10 and 14 scans) and images arriving a scan late, in both this run and the release gate.
+- **Tried and not adopted:**
+  - Delaying arrival work past the real image's latch (QA, removed): 99.3% then 79.7%. The first run was luck; the trace found the cause.
+  - Every source's swap waiting for its GPU work (QA `held_swap=2`, kept for now): NES 100%, 0 hitches, 9.8 / 18.2 ms, fast 100% (gate 99.9%, 3.7, 9.9 / 18.3, 88%); Mega Drive 99.9%, 1.8, 9.1 / 17.4, fast 100% (gate 99.8%, 5.5, 8.9 / 17.2); Ocarina 99.5%, 6.1, 11.4 / 36.5 (gate 99.6%, 4.9, 11.6 / 36.7). One run each, so no call yet. Double Dash is not helped: 99.9, 96.4, 99.4% with it against 100.0% without, and it spreads widely by chance. NSMBU Deluxe deepened at start and sat at 20.5 / 28.9 ms, no better than the pipelined state; forced to no extra scan, 99.0%, 34 hitches, 13.2 / 21.5 ms.
+  - The Cemu future stamp and phase nudge from November 6 are out of the tree (`cf79956`).
+- **A note on measuring:** a QA game left running by another stream's interrupted pass heated the Thor to 71 C and held the lock for 21 minutes, from 01:04. Runs started after the cool-down are not affected; the check on xo-therm did its job.
+
+**The halfway image (BlastEm, patch `b485834b`, core `7bc3f614`).** The emulator knows exactly what moved, so for each frame it also draws the image halfway to the last one: each line is drawn again as the real one finishes, by the VDP's rules on the same tiles and colours, with plane scroll and sprite positions halfway. Nothing is estimated. Sprites are matched by tile and by where the camera would have taken them.
+
+- Drawn at the real positions it must equal the real frame: 15 of 17 gameplay states are pixel-identical; Shinobi III differs on 0.08% of pixels and Jungle Strike 0.004%, on busy sprite lines. Also identical with widescreen on (Sonic 2 with the status-row band, Gunstar).
+- It changes nothing else: real frames and save states byte-identical to the core without the patch, on and off, narrow and wide (Sonic 2, Gunstar, Lightening Force, 360 frames, 4 states each).
+- About 0.45 ms a frame on the Mac, on top of about 1 ms for the core.
+- **Like-for-like: the same triplets from the core, the same measure.** Frames two apart, so the real one between them is the answer; 37-75 triplets a set. Frames with invented content, then mean excess area. The bench's replay softens its input images, so the generator is scored against the bench's frames and the halfway image against the sharp originals, each with its own real frame as the floor. Sonic 2 is the only wide set.
+
+| Set | Shipped generator | Halfway image |
+| --- | --- | --- |
+| Sonic 2, Emerald Hill | 71.8%, 0.498% | 0.0%, 0.005% |
+| Sonic 2, wide | 57.3%, 0.363% | 1.3%, 0.008% |
+| Sonic 2, Casino Night | 74.4%, 0.766% | 35.9%, 0.269% |
+| Gunstar (raster scroll) | 38.5%, 0.156% | 10.3%, 0.039% |
+| Shinobi III (raster scroll) | 69.2%, 0.215% | 12.8%, 0.039% |
+| Lightening Force (raster scroll) | 2.6%, 0.012% | 0.0%, 0.002% |
+| Contra Hard Corps | 35.9%, 0.149% | 20.5%, 0.080% |
+| Ristar | 54.1%, 0.124% | 8.1%, 0.020% |
+
+  What is left is mostly the measure's reach: it looks for each patch within 12 pixels, and Casino Night's camera moves further than that across two frames. Those frames look clean in the sheets, as the real middle frame does (its own floor is 0.70%).
+- **On the Thor, narrow:** Sonic 2 with the generator's work still running underneath: every generated image in play came from the core, no misses, 99.7-99.9%. With it taken out (the dense stages stay bracketed but empty, so the timers and the pair ledger are satisfied): 99.8%, 7.3 hitches per 30 s, plan to GPU done 0.9 ms median against 3.5 ms. That run sat in the pipelined state after an early miss (fast 20%, 15.4 / 23.8 ms), so the latency comparison needs more runs.
+- **On the Thor, wide:** Sonic 2, Gunstar and Lightening Force with widescreen switched on by the prompt, frame generation on, from states: 426x224, no fatals, 1,436-1,816 images from the core and no misses, status bar on black on Lightening Force. Screenshots look right. They cannot tell a halfway image from a real one, so the owner's visual check is still to come.
+- **Default on for BlastEm in the tree; QA `emufusion_framegen_halfway=0` for none.** Not computed with frame generation off. Interlace, Mode 4, 32X and the first frame fall back to the generator.
+- Other 2-D systems could do the same; each needs its own renderer pass on top of its widescreen patch.
+
+November 6 **— 3.2.158 (232, `cd183b4d`, retry-433): Dolphin under the firmware's pin, the phase lock no longer sticks, real images drawn ahead and placed by arrival, Cemu's 30 fps rhythm steady. Still not 10/10 on any system.**
 
 - **What ships for frame generation, all on by default:**
   - Dolphin's stamps start a second behind the clock, so the firmware always paces it; the drain also acts on it. The phase lock on hardware cores is QA only.

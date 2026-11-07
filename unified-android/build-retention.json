@@ -1677,6 +1677,26 @@
     "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-c401b73c9af1408f7a3fda6cd34e098ccf9537f2931f16aacb83b669c49fb3f6.apk": {
       "sha256": "c401b73c9af1408f7a3fda6cd34e098ccf9537f2931f16aacb83b669c49fb3f6",
       "reason": "retry-439 QA build replaced by retry-440 on the Thor"
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-ae600b42508ed7d00f04bd9302519a64eab2745248aefbf4c64627b28ce32b17.apk": {
+      "sha256": "ae600b42508ed7d00f04bd9302519a64eab2745248aefbf4c64627b28ce32b17",
+      "reason": "retry-440 and 441 QA builds replaced by retry-442 on the Thor"
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-c5b6c83f0ecb5596df579bae26862e7efe4047970d1a7b7bd03010aea427ca2c.apk": {
+      "sha256": "c5b6c83f0ecb5596df579bae26862e7efe4047970d1a7b7bd03010aea427ca2c",
+      "reason": "retry-440 and 441 QA builds replaced by retry-442 on the Thor"
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-d68c89952cff955bef74c0128206bedf7fbc474cb2d06be177ea9e87a670aa0a.apk": {
+      "sha256": "d68c89952cff955bef74c0128206bedf7fbc474cb2d06be177ea9e87a670aa0a",
+      "reason": "retry-443 superseded before it was installed"
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-f4634ef3869cb752ae5576d61ab19813f9f60d94f7973ca65334d074e751c226.apk": {
+      "sha256": "f4634ef3869cb752ae5576d61ab19813f9f60d94f7973ca65334d074e751c226",
+      "reason": "retry-442 and 444 QA builds replaced by retry-445"
+    },
+    "unified-android/build/emufusion-3.2.158-phase2-phase3-qualification-3a9562347d5a780bfd5c690326c3a3582e941c28ae19fcb5214c1d919b774971.apk": {
+      "sha256": "3a9562347d5a780bfd5c690326c3a3582e941c28ae19fcb5214c1d919b774971",
+      "reason": "retry-442 and 444 QA builds replaced by retry-445"
     }
   }
 }

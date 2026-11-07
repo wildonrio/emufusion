@@ -832,13 +832,13 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean heldSwap = true;
     private static volatile boolean heldSwapEverySource;
     /**
-     * QA emufusion_framegen_halfway=1: a core that can draw its own image halfway between
-     * frames (BlastEm) does, and it replaces the generated image.
+     * A core that can draw its own image halfway between frames (BlastEm) does, in place of
+     * the generated image and of the work that goes into it. QA emufusion_framegen_halfway=0 for none.
      */
     static boolean halfwayWanted(Context context) {
         try {
             return context != null && Settings.Global.getInt(
-                    context.getContentResolver(), "emufusion_framegen_halfway", 0) != 0;
+                    context.getContentResolver(), "emufusion_framegen_halfway", 1) != 0;
         } catch (RuntimeException ignored) {
             return false;
         }

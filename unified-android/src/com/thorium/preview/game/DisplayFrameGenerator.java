@@ -3360,17 +3360,28 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         }
     }
 
-    /** Over the generated image, while this is being tried: the pair's work is otherwise unchanged. */
-    private void drawHalfwayImage() {
-        if (halfwayUploads == 0L) return;
-        for (int i = 0; i < 3; ++i) {
-            if (activeRightSubmission > 0 && halfwaySubmissions[i] == activeRightSubmission) {
-                drawTexture2d(halfwayTextures[i]);
-                ++halfwayDraws;
-                return;
-            }
+    private boolean pairFromCore, halfwayDrawn;
+
+    /** The core's image for the active pair in place of a warp; false to warp. */
+    private boolean drawHalfwayImage() {
+        int slot = holdoutMode ? -1 : halfwaySlot(activeRightSubmission);
+        if (slot >= 0) {
+            drawTexture2d(halfwayTextures[slot]);
+            ++halfwayDraws;
+            halfwayDrawn = true;
+            return true;
         }
+        if (!pairFromCore) return false;
+        // Evicted: the pair waited past three newer frames. No estimate to warp with.
         ++halfwayMisses;
+        drawTexture2d(historyTextures[previousIndex]);
+        return true;
+    }
+
+    private int halfwaySlot(int submission) {
+        if (submission <= 0 || halfwayUploads == 0L) return -1;
+        for (int i = 0; i < 3; ++i) if (halfwaySubmissions[i] == submission) return i;
+        return -1;
     }
 
     // Recycled crop snapshots for software cores. A fresh full-frame int[]
@@ -6588,6 +6599,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             throw copyFailure;
         }
         try {
+            // The core drew this pair's in-between image: nothing to estimate.
+            pairFromCore = externalTransport == null && !holdoutMode &&
+                    halfwaySlot(activeRightSubmission) >= 0;
             if (externalTransport != null) {
                 ExternalFrameGenerationTransport.GenerationReadiness readiness =
                         externalTransport.generationReadiness(
@@ -6617,6 +6631,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                 // presentation without computing or exposing old motion.
                 motionEstimateReady = false;
                 denseTemporalGuideReady = false;
+            } else if (pairFromCore) {
+                motionEstimateReady = true;
             } else {
                 estimateMotion();
             }
@@ -7200,6 +7216,10 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void estimateDenseMotion() {
+        if (pairFromCore) {
+            emptyDensePromotion();
+            return;
+        }
         long start = System.nanoTime();
         // The validated textures still contain the preceding pair until the
         // final validation draws below.  Preserve that ownership explicitly;
@@ -7307,6 +7327,19 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         // before the callback that shows it, and reading the queries took
         // 0.37 ms (up to 2.3 ms) of that, holding the callback past its vsync
         // (3.2.139; Eden, NSMBU Deluxe in play).
+    }
+
+    /** A pair with the core's image: the stages stay bracketed so the timer's pairs stay complete. */
+    private void emptyDensePromotion() {
+        for (int stage : new int[] {DenseGpuTimer.PYRAMID, DenseGpuTimer.FORWARD_SOLVE,
+                DenseGpuTimer.REVERSE_SOLVE, DenseGpuTimer.VALIDATION}) {
+            beginDenseStage(stage);
+            endDenseStage();
+        }
+        denseTemporalGuideReady = false;
+        motionEstimateReady = true;
+        ++densePromotions;
+        densePasses += densePassesPerPromotion();
     }
 
     private void beginDenseStage(int stage) {
@@ -9430,6 +9463,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     private void drawPreparedOrMotionFrame(float phase) {
+        if (drawHalfwayImage()) return;
         boolean atInput = preparedAtInputSize();
         if (preparedFrameValid && preparedFrameTexture != 0 &&
                 phase == TimelineFrameScheduler.ARRIVAL_PHASE &&
@@ -10259,6 +10293,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                     activeRightTimestampNs - activeLeftTimestampNs;
             boolean sustainable = timelineActive ? builtinGenerationPlanned() :
                     frameRate.hasSustainableGenerationRate();
+            halfwayDrawn = false;
             if (sustainable) {
                 if (densePyramidEnabled) {
                     try {
@@ -10286,12 +10321,11 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
                         drawTexture2d(historyTextures[previousIndex]);
                     }
                 } else {
-                    drawMotionFrame(phase);
+                    if (!drawHalfwayImage()) drawMotionFrame(phase);
                     renderedSynthetic = true;
                 }
             }
             else drawTexture2d(historyTextures[previousIndex]);
-            if (renderedSynthetic) drawHalfwayImage();
             if (renderedSynthetic) drawProofMark();
             proofPhase = phase;
             // Admission above permits one exact midpoint for this retained pair.
@@ -13196,7 +13230,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private void enqueueGeneratedVerification(float phase) {
         ++verifyPresented;
         ++verifyWindowGenerated;
-        if (!ensureVerifyResources()) return;
+        if (halfwayDrawn || !ensureVerifyResources()) return;
         pollGeneratedVerification();
         if (verifyPending == VERIFY_RING) {
             ++verifySkipped;  // never counted without its evidence

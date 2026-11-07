@@ -449,7 +449,9 @@ public final class LibretroEngineSession implements EngineSession,
                 try {
                     opened.loadGame(game);
                     opened.setRunAheadFrames(runAheadFrames());
-                    if (TimelineSchedulerSwitch.halfwayWanted(appContext) && opened.enableHalfwayImage())
+                    // Not with frame generation off: it would be drawn for nothing.
+                    if (launch.frameGenerationMode != FrameGenerationSettings.Mode.OFF &&
+                            TimelineSchedulerSwitch.halfwayWanted(appContext) && opened.enableHalfwayImage())
                         Log.i(TAG, "Halfway image from the core engine=" + entry.id);
                     // Loading resets port 0 to a plain RetroPad. Systems whose
                     // controller is something else must say so now: Dolphin
