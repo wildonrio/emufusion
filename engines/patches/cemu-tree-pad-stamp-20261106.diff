@@ -1,6 +1,22 @@
 --- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
 +++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
-@@ -3383,6 +3383,42 @@
+@@ -3320,6 +3320,7 @@
+ 	// therefore skips a slot, which the generator treats as a held frame.
+ 	VkPresentTimesInfoGOOGLE emufusionPresentTimes = {};
+ 	VkPresentTimeGOOGLE emufusionPresentTime = {};
++	static int64_t s_emufusionTvPresentNs = 0;
+ 	const uint64_t emufusionFgState = s_emufusionFgPresentation.Snapshot();
+ 	if (EmuFusionFgPresentationGate::Enabled(emufusionFgState) &&
+ 		m_featureControl.deviceExtensions.display_timing && mainWindow)
+@@ -3352,6 +3353,7 @@
+ 		struct timespec now;
+ 		clock_gettime(CLOCK_MONOTONIC, &now);
+ 		const int64_t nowNs = (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
++		s_emufusionTvPresentNs = nowNs;
+ 		if (kEmuFusionStampPeriodNs != s_emufusionStampPeriodNs)
+ 		{
+ 			s_emufusionStampPeriodNs = kEmuFusionStampPeriodNs;
+@@ -3383,6 +3385,46 @@
  		{
  			s_emufusionStampLogged = true;
  			cemuLog_log(LogType::Force, "EmuFusion: immutable source timestamps via VK_GOOGLE_display_timing stampHz={:.6f} firstStampNs={}", 1000000000.0 / (double)kEmuFusionStampPeriodNs, stampNs);
@@ -28,13 +44,17 @@
 +		clock_gettime(CLOCK_MONOTONIC, &now);
 +		const int64_t nowNs = (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
 +		const int64_t sinceNs = nowNs - s_emufusionPadLastNs;
++		const int64_t sinceTvNs = nowNs - s_emufusionTvPresentNs;
 +		s_emufusionPadLastNs = nowNs;
 +		s_emufusionPadSteady = sinceNs >= 28000000LL && sinceNs <= 38000000LL ? s_emufusionPadSteady + 1 : 0;
 +		if (s_emufusionPadAheadNs > 0 && s_emufusionPadSteady >= 2)
 +		{
 +			static uint32_t s_emufusionPadPresentId = 0;
 +			emufusionPresentTime.presentID = ++s_emufusionPadPresentId;
-+			emufusionPresentTime.desiredPresentTime = (uint64_t)(nowNs + s_emufusionPadAheadNs);
++			// From the TV image's present, the generator's arrival: under GPU load the Pad's comes later
++			// (image check on: 26% of real images late when counted from here).
++			const int64_t baseNs = sinceTvNs >= 0 && sinceTvNs < 16000000LL ? s_emufusionTvPresentNs : nowNs;
++			emufusionPresentTime.desiredPresentTime = (uint64_t)(baseNs + s_emufusionPadAheadNs);
 +			emufusionPresentTimes.sType = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE;
 +			emufusionPresentTimes.swapchainCount = 1;
 +			emufusionPresentTimes.pTimes = &emufusionPresentTime;
