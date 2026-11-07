@@ -70,10 +70,14 @@ public final class SourcePhaseLock {
 
     /** One newly taken-up image: arrival to the callback that took it up. */
     public synchronized void observe(long waitNs, long panelPeriodNs) {
-        if (abandoned || panelPeriodNs <= 0L || waitNs < 0L || waitNs > panelPeriodNs) {
+        if (abandoned || panelPeriodNs <= 0L || waitNs < 0L || waitNs > 2L * panelPeriodNs) {
             if (!abandoned) reset();
             return;
         }
+        // Taken up a callback later than its arrival allowed: the phase is what is left. An image
+        // arriving just before a callback misses it, and resetting here left that phase stuck for
+        // good: Metroid Dread at a 0.2-ms wait, 36 nudges in 33 s, 85% on cadence (Thor, 2026-11-06).
+        if (waitNs > panelPeriodNs) waitNs -= panelPeriodNs;
         double period = panelPeriodNs;
         if (observed == 0) {
             waitEma = waitNs;

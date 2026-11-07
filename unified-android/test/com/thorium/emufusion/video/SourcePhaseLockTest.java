@@ -6,6 +6,7 @@ public final class SourcePhaseLockTest {
     public static void main(String[] args) {
         aDriftingCoreIsHeldAtTheTarget();
         anImageJustAfterACallbackMovesEarlier();
+        anImageTakenUpACallbackLateStillMovesTheSource();
         aSourceThatDoesNotFollowIsLeftAlone();
         holdsFromAnyStartPhaseDriftAndJitter();
         System.out.println("SourcePhaseLockTest passed");
@@ -78,6 +79,22 @@ public final class SourcePhaseLockTest {
     }
 
     /** Ocarina on the hardware-core loop: its arrivals keep their own phase. */
+    private static void anImageTakenUpACallbackLateStillMovesTheSource() {
+        SourcePhaseLock lock = new SourcePhaseLock();
+        long period = 8_333_333L;
+        long moved = 0L;
+        for (int i = 0; i < 60; ++i) {
+            lock.observe(period + 200_000L, period);
+            moved += lock.take();
+        }
+        check(moved < 0L, "a phase just before a callback moves the source earlier: " + moved);
+        SourcePhaseLock stalled = new SourcePhaseLock();
+        for (int i = 0; i < 60; ++i) {
+            stalled.observe(3L * period, period);
+            check(stalled.take() == 0L, "a stall is no phase");
+        }
+    }
+
     private static void aSourceThatDoesNotFollowIsLeftAlone() {
         SourcePhaseLock lock = new SourcePhaseLock();
         run(lock, 0, 1_000_000_000L + 5_000_000L, 1_000_000L, 0L, 3600, 100, false);
