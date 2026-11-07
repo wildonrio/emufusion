@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "engineId": "nxnative",
+  "systems": [
+    "switchnative",
+    "switch2"
+  ],
+  "note": "Runs Switch and Switch 2 games' own ARM code directly on the device. Tested on one Switch 1 game on one device. No Switch 2 game has run on it: not yet tested. See dm/android/KNOWN_ISSUES.md and dm/android/SWITCH2.md in the repository.",
+  "repository": "https://github.com/wildonrio/nxnative-android.git",
+  "upstream": "https://github.com/seedds/nxnative at b2d46b86",
+  "license": "MIT",
+  "commit": "c131a166e7c6317b8dbe54df66016f17f1c2deed",
+  "ndk": "27.0.12077973",
+  "libdmhostSha256": "aab8a7460dc32fbfc6c1969352b35c69efa1aeb5265130f60cdc140c545dd2c0"
+}

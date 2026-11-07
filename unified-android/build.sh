@@ -43,7 +43,7 @@ fi
 # gates. Refuse the build outright when a caller sets an unprefixed name.
 for stray_flag in INCLUDE_EXPERIMENTAL_CORES AUTOSELECT_EXPERIMENTAL_CORES \
         REUSE_QUALIFICATION_CORES INCLUDE_PHASE2_PPSSPP REUSE_PHASE2_PPSSPP \
-        INCLUDE_PHASE3_EDEN INCLUDE_PHASE3_CEMU INCLUDE_PHASE3_APS3E \
+        INCLUDE_PHASE3_EDEN INCLUDE_PHASE3_CEMU INCLUDE_PHASE3_APS3E INCLUDE_NXNATIVE \
         INCLUDE_RIFE_FRAMEGEN \
         KEYSTORE STORE_PASS KEY_PASS KEY_ALIAS; do
     if eval "[ \"\${$stray_flag+set}\" = set ]"; then
@@ -74,6 +74,7 @@ for emufusion_flag in $(env | LC_ALL=C sed -n 's/^\(EMUFUSION_[A-Za-z0-9_]*\)=.*
         EMUFUSION_INCLUDE_PHASE3_EDEN) ;;
         EMUFUSION_INCLUDE_PHASE3_CEMU) ;;
         EMUFUSION_INCLUDE_PHASE3_APS3E) ;;
+        EMUFUSION_INCLUDE_NXNATIVE) ;;
         EMUFUSION_INCLUDE_RIFE_FRAMEGEN) ;;
         EMUFUSION_INCLUDE_*|EMUFUSION_REUSE_*|EMUFUSION_AUTOSELECT_*)
             printf 'Refusing to build: unknown build flag %s (known flags: EMUFUSION_INCLUDE_EXPERIMENTAL_CORES EMUFUSION_AUTOSELECT_EXPERIMENTAL_CORES EMUFUSION_REUSE_QUALIFICATION_CORES EMUFUSION_INCLUDE_PHASE2_PPSSPP EMUFUSION_REUSE_PHASE2_PPSSPP EMUFUSION_INCLUDE_PHASE3_EDEN EMUFUSION_INCLUDE_PHASE3_CEMU EMUFUSION_INCLUDE_PHASE3_APS3E EMUFUSION_INCLUDE_RIFE_FRAMEGEN)\n' \
@@ -114,6 +115,15 @@ PHASE3_EDEN_MAIN_HOOK="$ROOT_DIR/engines/build/arm64-v8a/libmain_hook.so"
 # driver and plain-dlopens libvulkan otherwise. It also needs no keys, no
 # firmware, and no Java shim classes, so this is just the adapter.
 INCLUDE_PHASE3_CEMU=${EMUFUSION_INCLUDE_PHASE3_CEMU:-0}
+# Switch (Native) and Switch 2: the host library, staged from the commit that
+# engines/nxnative-source-lock.json pins by tools/stage_nxnative_host.py, which builds
+# it only when the staged copy is absent and refuses bytes that differ from the lock.
+# Part of the normal build. EMUFUSION_INCLUDE_NXNATIVE=0 leaves out the Activity, the
+# library and both systems' routes, for a deliberately reduced diagnostic.
+INCLUDE_NXNATIVE=${EMUFUSION_INCLUDE_NXNATIVE:-1}
+NXNATIVE_HOST="$ROOT_DIR/engines/build/nxnative/libdmhost.so"
+NXNATIVE_LICENSE="$ROOT_DIR/engines/compliance/nxnative/LICENSE"
+NXNATIVE_THIRD_PARTY="$ROOT_DIR/engines/compliance/nxnative/THIRD-PARTY.txt"
 PHASE3_CEMU_ADAPTER="$ROOT_DIR/engines/build/arm64-v8a/libemufusion_native_adapter_cemu.so"
 # PS3 is a built-in EmuFusion system, not an external-app fallback. The pinned,
 # hash-verified adapter is therefore part of normal builds; an explicit 0 is
@@ -262,6 +272,13 @@ if [ "$INCLUDE_PHASE3_EDEN" = 1 ]; then
             exit 1
         fi
     done
+fi
+case "$INCLUDE_NXNATIVE" in
+    0|1) ;;
+    *) printf 'EMUFUSION_INCLUDE_NXNATIVE must be 0 or 1\n' >&2; exit 1 ;;
+esac
+if [ "$INCLUDE_NXNATIVE" = 1 ]; then
+    python3 "$PROJECT_DIR/tools/stage_nxnative_host.py"
 fi
 case "$INCLUDE_PHASE3_CEMU" in
     0|1) ;;
@@ -575,6 +592,13 @@ printf '%s\n' \
 '        <provider android:name="com.thorium.preview.RomFileProvider" android:authorities="com.thorium.preview.roms" android:exported="false" android:grantUriPermissions="true"/>' \
 '        <receiver android:name="com.thorium.preview.BootReceiver" android:enabled="true" android:exported="true"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/><action android:name="android.intent.action.MY_PACKAGE_REPLACED"/></intent-filter></receiver>' \
     > "$MANIFEST_COMPONENTS"
+if [ "$INCLUDE_NXNATIVE" = 1 ]; then
+    # Its own process: the host's threads and global state end only with the process.
+    # Non-exported: only this package's library launch can start it.
+    printf '%s\n' \
+'        <activity android:name="com.thorium.nxnative.NxActivity" android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" android:excludeFromRecents="true" android:exported="false" android:launchMode="singleTask" android:process=":nxnative" android:screenOrientation="sensorLandscape" android:taskAffinity="com.thorium.preview.nxnative" android:theme="@android:style/Theme.NoTitleBar.Fullscreen"/>' \
+        >> "$MANIFEST_COMPONENTS"
+fi
 # The component fragment is interpolated into Perl source below.  Resource
 # references contain '@' (for example @xml/external_stop_accessibility), which
 # Perl would otherwise treat as an array variable and silently rewrite to an
@@ -923,6 +947,11 @@ if [ "$INCLUDE_PHASE3_CEMU" = 1 ]; then
         --artifact-kind native-adapter \
         --expected-count "$PHASE3_STAGED_ADAPTER_COUNT" \
         --output "$DECODED/assets/phase3-engine-artifacts.json"
+fi
+if [ "$INCLUDE_NXNATIVE" = 1 ]; then
+    cp "$NXNATIVE_HOST" "$DECODED/lib/arm64-v8a/libdmhost.so"
+    cp "$NXNATIVE_LICENSE" "$DECODED/assets/LICENSE-MIT-NXNATIVE.txt"
+    cp "$NXNATIVE_THIRD_PARTY" "$DECODED/assets/LICENSE-NXNATIVE-THIRD-PARTY.txt"
 fi
 if [ "$INCLUDE_PHASE3_APS3E" = 1 ]; then
     cp "$PHASE3_APS3E_ADAPTER" \

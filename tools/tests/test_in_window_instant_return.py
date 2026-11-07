@@ -84,11 +84,13 @@ class InWindowInstantReturnTest(unittest.TestCase):
         # (owner, 2026-10-24); library chrome only.
         # Game launches wait for the app-open update check and show its
         # download (owner, 2026-10-27); library update gate only.
+        # The Switch (Native) and Nintendo Switch 2 rail entries are library chrome
+        # only: their games leave through an Activity of their own.
         # The pin exists so unrelated runtime-return work cannot alter the theme
         # unnoticed.
         self.assertEqual(
             hashlib.sha256(THEME.read_bytes()).hexdigest(),
-            "28c18e8eaeb922048537006db81907b0b89e70b4efc19def6f0e7917c8e18c67",
+            "27a075d041b247e5e21ebc406f05a5b84c0b2f8643ce95931e2bd5da210e9338",
         )
 
     def test_no_preparing_or_saving_interstitial_is_visible(self):

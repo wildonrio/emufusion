@@ -1249,6 +1249,15 @@ final class ImportManager {
         if (!visited.add(canonical)) return;
         File[] entries = directory.listFiles();
         if (entries == null) return;
+        // A converted Switch or Switch 2 game is one folder, listed by one small file.
+        // Whatever else the folder holds, its modules and DLC among them, is not a game.
+        for (File entry : entries) {
+            String packExtension = extension(entry.getName());
+            if (entry.isFile() && ("nxpack".equals(packExtension) || "nx2pack".equals(packExtension))) {
+                entries = new File[] {entry};
+                break;
+            }
+        }
         Arrays.sort(entries, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
         for (File entry : entries) {
             if (inspected[0]++ > 250000) return;
@@ -3668,7 +3677,8 @@ final class ImportManager {
      * entire catalog. A page is accepted only when its title matches the ROM.
      */
     private NintendoMedia nintendoMedia(GameSystems.SystemDef system, String title, File cacheRoot) {
-        if (system == null || !"switch".equals(system.folder)) return null;
+        if (system == null || !("switch".equals(system.folder) || "switchnative".equals(system.folder)
+                || "switch2".equals(system.folder))) return null;
         String slug = nintendoSlug(title);
         if (slug.isEmpty()) return null;
         try {

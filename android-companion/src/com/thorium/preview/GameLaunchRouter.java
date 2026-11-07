@@ -23,11 +23,13 @@ public final class GameLaunchRouter {
     private GameLaunchRouter() {}
 
     public static boolean supportsSystem(Context context, String system) {
+        if (SwitchNativeRoute.handles(system)) return SwitchNativeRoute.bundled(context);
         return !engineIdForSystem(context, system).isEmpty();
     }
 
     public static String metadataCommand(Context context, String system) {
         String canonical = EngineSystemIdResolver.canonical(system);
+        if (SwitchNativeRoute.handles(canonical)) return SwitchNativeRoute.command(context);
         String engineId = engineIdForSystem(context, canonical);
         return MetadataGameLaunchCommand.build(
                 canonical, engineId, InWindowGameHost.ACTION_LAUNCH);
