@@ -1468,6 +1468,174 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-06 host: cave and dialog reached with the Japanese release: sides stay black, the map is one screen wide"
+        },
+        "Attack of the Killer Tomatoes": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Back to the Future Part II & III": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Blades of Steel": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Captain America and the Avengers": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Chip 'n Dale - Rescue Rangers": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Circus Caper": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Ice Hockey": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Joy Mech Fight": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Labyrinth": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "M.U.S.C.L.E.": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mario Is Missing!": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Metal Fighter": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mickey's Adventure in Numberland": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mr. Gimmick": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Mystery Quest": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Ninja Gaiden": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Operation Wolf": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Saiyuuki World 2: Tenjoukai no Majin": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Spartan X": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Star Trek: 25th Anniversary": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Star Wars": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Tecmo NBA Basketball": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Whomp 'Em": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
+        },
+        "Yume Penguin Monogatari": {
+          "strategy": "widen",
+          "options": {
+            "emufusion_ws_gate": "scroll"
+          },
+          "tested": "2026-11-06 host, longer library pass: two frames of play looked clean; titles and menus stay narrow behind the scroll rule. Not played through"
         }
       },
       "release": true
