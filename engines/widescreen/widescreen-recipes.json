@@ -97,9 +97,10 @@
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "on",
             "emufusion_ws_strict": "bg2",
-            "emufusion_ws_gate": "scroll"
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_band": "192-223@7E022D=C5"
           },
-          "tested": "2026-11-06: the old rule's byte was the controller, so the sides opened only while a button was held; the Thor showed it. Scroll rule now, host: 1-1 walked and stood still, the World card keeps bars, and a level opens up once the camera has moved. The clouds stopped dead at the old edge because they are on layer 3; widened now, the status text is unmoved"
+          "tested": "2026-11-06: the old rule's byte was the controller, so the sides opened only while a button was held; the Thor showed it. Scroll rule now, host: 1-1 walked and stood still, the World card keeps bars, and a level opens up once the camera has moved. The clouds stopped dead at the old edge because they are on layer 3; widened now, the status text is unmoved. Mario 3 walked with its status bar on black: 7E022D reads C5 only in Mario 3 across 78 RAM samples of all four games. Mario 2 stays narrow in its opening climb; its side-scrolling parts are not yet seen. The Lost Levels looks like Mario 1"
         },
         "NHL '94": {
           "strategy": "widen",

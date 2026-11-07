@@ -617,6 +617,7 @@ Mac pass had shown:
 | --- | --- | --- |
 | Donkey Kong Country, DKC 2 | Near layer cut off at the leading edge, and DKC 2's cabin floating in open sea | Map readers `dkc` and `dkc2`, next section. Mac only so far |
 | Super Mario All-Stars | Narrow unless a button was held: the rule's byte was the controller, and Mac shots were taken with one held | Scroll rule. A level opens once the camera has moved |
+| All-Stars' Mario 3 | Sky-blue blocks beside its status bar, which Mario 1 does not have | `emufusion_ws_band=192-223@7E022D=C5`: a band can depend on a byte, here one only Mario 3 sets |
 | Shinobi II (Game Gear) | A library entry under the same title overrode the tested one | Duplicate removed. A check of every system found no other conflicting duplicates |
 | Road Rash (Game Gear) | Dotted blocks and road beside the panel; a pale strip at the left | `emufusion_ws_band`, and the masked column is now black and mirrored in every Game Gear game |
 | Lightening Force, Castle of Illusion | Scrambled tiles or grey blocks beside the status bar | `emufusion_ws_band` |

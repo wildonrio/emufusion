@@ -188,10 +188,10 @@ index 4eac82f..909fddc 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..e79e6ff
+index 0000000..9226301
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,434 @@
+@@ -0,0 +1,438 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -525,8 +525,8 @@ index 0000000..e79e6ff
 +    }
 +  }
 +
-+  // "y0-y1;y0-y1": picture rows where the new columns stay black.
-+  static int bandFirst[4], bandLast[4];
++  // "y0-y1;y0-y1@ADDR=VV": picture rows where the new columns stay black, optionally only while a work RAM byte holds a value.
++  static int bandFirst[4], bandLast[4], bandAddress[4], bandValue[4];
 +  static int bandCount = 0;
 +
 +  void setBand(const char *value) {
@@ -534,9 +534,13 @@ index 0000000..e79e6ff
 +    const char *cursor = value ? value : "";
 +    while(*cursor && bandCount < 4) {
 +      int first, last;
-+      if(sscanf(cursor, "%d-%d", &first, &last) == 2) {
++      unsigned address = 0, wanted = 0;
++      int fields = sscanf(cursor, "%d-%d@%x=%x", &first, &last, &address, &wanted);
++      if(fields == 2 || fields == 4) {
 +        bandFirst[bandCount] = first;
 +        bandLast[bandCount] = last;
++        bandAddress[bandCount] = fields == 4 ? (int)(address & 0x1ffff) : -1;
++        bandValue[bandCount] = (int)wanted;
 +        bandCount++;
 +      }
 +      const char *next = strchr(cursor, ';');
@@ -547,7 +551,7 @@ index 0000000..e79e6ff
 +
 +  bool bandRow(int row) {
 +    for(int i = 0; i < bandCount; i++)
-+      if(row >= bandFirst[i] && row <= bandLast[i]) return true;
++      if(row >= bandFirst[i] && row <= bandLast[i] && (bandAddress[i] < 0 || (wram && wram[bandAddress[i]] == bandValue[i]))) return true;
 +    return false;
 +  }
 +
