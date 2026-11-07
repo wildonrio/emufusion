@@ -15,6 +15,7 @@ usage: thor_game.py OUT SYSTEM ENGINE ROM_PATH SCRIPT
 """
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -24,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] /
                        'docs/qa/android-portability-2026-10-08-current-build-survey'))
 import thor_smoke as smoke
 
-ADB = ['/tmp/claude-501/thor']
-LOCK = '/tmp/claude-501/thor.lock'
+ADB = os.environ.get('THOR_ADB', '/tmp/claude-501/thor').split()
+LOCK = os.environ.get('THOR_LOCK', '/tmp/claude-501/thor.lock')
 TOP = '4630946441858561667'
 PAD = '/dev/input/event9'
 ACTIVITY = 'com.thorium.preview/org.pegasus_frontend.android.MainActivity'
@@ -131,10 +132,53 @@ def play(step, log_dir):
     return True
 
 
+def clean_marker(pid):
+    return f'{LOCK}.clean-{pid}'
+
+
+def start_guard():
+    """If this run dies without leaving properly, a process of its own closes the game and frees the device."""
+    subprocess.Popen([sys.executable, __file__, '--guard', str(os.getpid())], start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def guard(pid):
+    while True:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(2)
+    if os.path.exists(clean_marker(pid)):
+        os.unlink(clean_marker(pid))
+        return
+    try:
+        shell('am force-stop com.thorium.preview')
+        shell('input keyevent KEYCODE_SLEEP')
+        shell('settings delete global emufusion_qa_widescreen_all')
+        shell('settings delete global emufusion_qa_start_state')
+        shell('rm -f /sdcard/EmuFusionQA/start.state')
+    finally:
+        release_thor()
+
+
+def stop_on_signal(_signal, _frame):
+    # The cleanup below must finish, so a second signal does not interrupt it.
+    for name in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(name, signal.SIG_IGN)
+    raise SystemExit(1)
+
+
 def main():
+    if sys.argv[1:2] == ['--guard']:
+        guard(int(sys.argv[2]))
+        return 0
     out, system, engine, rom, script = Path(sys.argv[1]), *sys.argv[2:6]
     out.mkdir(parents=True, exist_ok=True)
     take_cool_thor()
+    start_guard()
+    for name in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(name, stop_on_signal)
     # THOR_QA_WIDESCREEN=0 runs the game as a player would see it while its system is still hidden.
     if os.environ.get('THOR_QA_WIDESCREEN') != '0':
         shell('settings put global emufusion_qa_widescreen_all 1')
@@ -182,6 +226,7 @@ def main():
         if start_state:
             shell('settings delete global emufusion_qa_start_state')
             shell('rm -f /sdcard/EmuFusionQA/start.state')
+        Path(clean_marker(os.getpid())).touch()
         release_thor()
     return 0
 
