@@ -188,10 +188,10 @@ index 4eac82f..909fddc 100644
    uint tileHeight = 3 + self.tileSize;
 diff --git a/bsnes/sfc/ppu-fast/efwide.cpp b/bsnes/sfc/ppu-fast/efwide.cpp
 new file mode 100644
-index 0000000..9226301
+index 0000000..15e3fe9
 --- /dev/null
 +++ b/bsnes/sfc/ppu-fast/efwide.cpp
-@@ -0,0 +1,438 @@
+@@ -0,0 +1,447 @@
 +#include <emulator/efwide.hpp>
 +#include <cstdlib>
 +#include <cstring>
@@ -268,7 +268,7 @@ index 0000000..9226301
 +  }
 +
 +  void setWidth(const char *value) {
-+    if(!value || !*value) { ext = -1; return; }
++    if(!value || !*value) { ext = 0; return; }
 +    int width = atoi(value);
 +    ext = width <= 256 ? 0 : (width - 256) / 2;
 +  }
@@ -339,10 +339,10 @@ index 0000000..9226301
 +  }
 +
 +  int mapGame = 0;
-+  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3, MapCT = 4, MapYI = 5, MapDKC = 6, MapDKC2 = 7 };
++  enum { MapNone = 0, MapFF6 = 1, MapLttP = 2, MapSMW = 3, MapCT = 4, MapYI = 5, MapDKC = 6, MapDKC2 = 7, MapDKC3 = 8 };
 +
 +  void setMap(const char *value) {
-+    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : !strcmp(value, "ct") ? MapCT : !strcmp(value, "yi") ? MapYI : !strcmp(value, "dkc") ? MapDKC : !strcmp(value, "dkc2") ? MapDKC2 : MapNone;
++    mapGame = !value ? MapNone : !strcmp(value, "ff6") ? MapFF6 : !strcmp(value, "lttp") ? MapLttP : !strcmp(value, "smw") ? MapSMW : !strcmp(value, "ct") ? MapCT : !strcmp(value, "yi") ? MapYI : !strcmp(value, "dkc") ? MapDKC : !strcmp(value, "dkc2") ? MapDKC2 : !strcmp(value, "dkc3") ? MapDKC3 : MapNone;
 +  }
 +
 +  // Super Mario World, horizontal levels: layer 1 is 16x16 tiles, their numbers at 7E:C800 (low)
@@ -406,24 +406,33 @@ index 0000000..9226301
 +    return dkCell(wram[0xD5], word(0xD3) + (tileX >> 2) * 32 + ((tileY >> 2) & 15) * 2, word(0x1B11), tileX, tileY);
 +  }
 +
-+  // B5:ACA0 and B5:B100: the map at [$98] and the blocks at $17B4 in the same bank, in work RAM. A level is
-+  // 16 numbers a column, or for one that climbs, 16 numbers a row. $17BA/$17C0 are the camera plus 256;
-+  // B5:EEB8 keeps the first from 256 to $0AFC.
-+  static int dkc2Cell(unsigned hscroll, unsigned vscroll, int x, int y) {
++  // DKC 2 (B5:ACA0 on) and DKC 3 (F7:B630 on): a map and its blocks in one bank, usually work RAM. A level uses one of
++  // six shapes, each with its own column writer, so the reader tries them until one matches the picture. The camera
++  // words hold the camera plus 256, and the game's clamp stops the first at the limit word.
++  struct DkEngine { unsigned cameraX, cameraY, map, bank, table, limitX; };
++  static const DkEngine dkc2Engine = {0x17BA, 0x17C0, 0x98, 0x9A, 0x17B4, 0xAFC};
++  static const DkEngine dkc3Engine = {0x196D, 0x1973, 0x8C, 0x8E, 0x1967, 0x4BC};
++  struct DkShape { int column, row, rows; };
++  static const DkShape dkShapes[] = {{32, 2, 16}, {64, 2, 32}, {2, 32, 0}, {2, 64, 0}, {2, 160, 0}, {2, 192, 0}};
++
++  static int dkc2Cell(const DkEngine &engine, unsigned hscroll, unsigned vscroll, int x, int y) {
 +    auto word = [](unsigned address) { return wram[address] | wram[address + 1] << 8; };
-+    int worldX = nearCamera(hscroll & 1023, word(0x17BA), 1024) - 0x100 + x;
-+    int worldY = nearCamera(vscroll & 255, word(0x17C0), 256) - 0x100 + y;
-+    if(worldX < 0 || worldX >= word(0xAFC) || worldY < 0) return MapNothing;
++    int worldX = nearCamera(hscroll & 1023, word(engine.cameraX), 1024) - 0x100 + x;
++    int worldY = nearCamera(vscroll & 255, word(engine.cameraY), 256) - 0x100 + y;
++    if(worldX < 0 || worldX >= word(engine.limitX) || worldY < 0) return MapNothing;
 +    int tileX = worldX >> 3, tileY = worldY >> 3;
-+    unsigned offset = dkc2Layout ? (tileX >> 2) * 2 + (tileY >> 2) * 32 : (tileX >> 2) * 32 + ((tileY >> 2) & 15) * 2;
-+    return dkCell(wram[0x9A], word(0x98) + offset, word(0x17B4), tileX, tileY);
++    const DkShape &shape = dkShapes[dkc2Layout];
++    int row = tileY >> 2;
++    if(shape.rows) row &= shape.rows - 1;
++    return dkCell(wram[engine.bank], word(engine.map) + (tileX >> 2) * shape.column + row * shape.row, word(engine.table), tileX, tileY);
 +  }
 +
-+  bool mapSelfChecks() { return mapGame == MapDKC || mapGame == MapDKC2; }
++  bool mapSelfChecks() { return mapGame == MapDKC || mapGame == MapDKC2 || mapGame == MapDKC3; }
 +
 +  int mapCellAt(unsigned hscroll, unsigned vscroll, int x, int y, bool checked) {
 +    if(!wram || (checked && !mapTrusted)) return -1;
-+    return mapGame == MapDKC ? dkcCell(hscroll, vscroll, x, y) : dkc2Cell(hscroll, vscroll, x, y);
++    if(mapGame == MapDKC) return dkcCell(hscroll, vscroll, x, y);
++    return dkc2Cell(mapGame == MapDKC3 ? dkc3Engine : dkc2Engine, hscroll, vscroll, x, y);
 +  }
 +
 +  void mapCheck(bool same) {
@@ -586,7 +595,7 @@ index 0000000..9226301
 +    // Only a reader that agreed with the middle of the last picture draws the new columns.
 +    if(mapChecked) {
 +      mapTrusted = mapMissed * 8 <= mapChecked;
-+      if(!mapTrusted && mapGame == MapDKC2) dkc2Layout ^= 1;
++      if(!mapTrusted && mapGame != MapDKC) dkc2Layout = (dkc2Layout + 1) % 6;
 +      mapChecked = mapMissed = 0;
 +    }
 +    if(bounded && wram) {

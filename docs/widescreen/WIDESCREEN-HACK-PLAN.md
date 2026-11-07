@@ -340,7 +340,8 @@ A Link to the Past matched 192 of 192 visible tiles.
 | Chrono Trigger, world map | `ct` | 7E:4000 and 7E:5800, 96 per row, wraps | 7E:3000 and 7E:3800, 8 bytes per tile |
 | Yoshi's Island | `yi` | 7F:8000, screens of 256 in rows of 16; 7E:0CE1 gives each level position its screen | Super FX ROM: page offsets at file C32A4, 8 bytes per entry from C33F2 |
 | Donkey Kong Country | `dkc` | [$D3], 16 numbers a column, bits 14 and 15 flip the block; the camera stays from $1B23 to $1B25 | $1B11 in the same bank, 16 words a block in rows of 4 |
-| Donkey Kong Country 2 | `dkc2` | [$98] in work RAM, 16 a column or for climbing levels 16 a row; the camera ($17BA less 256) stops at $0AFC | $17B4 in the same bank, as above |
+| Donkey Kong Country 2 | `dkc2` | [$98] in work RAM; six shapes (16 or 32 a column, or 16, 32, 80 or 96 a row), one column writer each, tried until one matches the picture; the camera ($17BA less 256) stops at $0AFC | $17B4 in the same bank, as above |
+| Donkey Kong Country 3 | `dkc3` | As DKC 2, with [$8C], camera $196D and limit $04BC | $1967 |
 
 Not done yet: Star Ocean, Live A Live, Super Mario RPG. Towns and rooms in Chrono Trigger, houses
 and dungeons in A Link to the Past keep bars until they get decoders of their own.
@@ -633,6 +634,24 @@ Mac pass had shown:
 The games that had stayed on menus were then played into real play, and their states replaced: Super Mario Bros. 3, Micro Machines, Madden NFL 95,
 Jungle Strike, Desert Strike, Contra: Hard Corps, Gunstar Heroes, both NBA Jams, Final Fantasy Tactics Advance. Star Ocean has reached its first
 house but not yet walked outdoors. Those states have not yet run on the Thor.
+
+All of those then ran again on the Thor (2026-11-07, QA build retry-441): 28 games, no crash, every state restored. Right on the device: both Donkey Kong
+Country games, All-Stars, Super Mario Kart, Mortal Kombat II, Star Ocean, Road Rash, Shinobi II, Castlevania II, Lightening Force, Castle of Illusion, Gunstar
+Heroes, Jungle Strike, Desert Strike, Contra: Hard Corps, Sonic & Knuckles and Donkey Kong Country on the Color. What that run found:
+
+- A Game Gear state stores the picture width, so one saved wide scrambled Micro Machines once it became a narrow game. Fixed in the core: it could reach a player
+  whose Quick Resume dates from before the change.
+- bsnes-hd with no recipe drew its own 16:9 frame, which the app fitted into 4:3, squeezing the picture by a quarter. Players were not affected, because a narrow
+  SNES game runs on Mesen-S and only a recipe moves one to bsnes-hd; the test forced that engine. The core now stays narrow without a recipe, so picking bsnes-hd
+  by hand cannot squeeze a game either.
+- Madden NFL 95's play-call screen had flat green beside it: its backdrop, closed with `emufusion_ws_backdrop=black`. NHL '94 cannot use that, since its ice is
+  the backdrop, so a small ice-coloured patch stays above the crowd at the rink's corners.
+- The Mega Drive side pass drew sprites one line off the old picture, a notch in anything crossing the old edge. The frame-generation agent spotted it. Fixed.
+- Two test states were bad, not the games: Sonic's was saved paused, and Yoshi's Island's was branched from an old state that restored to black. Six generations of
+  load, play and save from a clean start all came back fine, so Quick Resume itself is sound there.
+
+Donkey Kong Country 3 joined the readers, seen in its attract levels only: its world map roams freely and a level was not reached by hand. Super Mario Bros. 3 on the
+NES did not get past the first Goomba on the Thor, so its wide level is still judged from the Mac.
 
 Lessons:
 

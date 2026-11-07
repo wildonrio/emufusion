@@ -23,7 +23,7 @@
             "emufusion_ws_hud": "obj:80-100:176-222:1:04E-0B7",
             "emufusion_ws_band": "0-2;114-114"
           },
-          "tested": "2026-11-04 host: Mushroom Cup round 1; race and map widen, menus keep bars. 2026-11-06: the game blacks these rows only across its own columns; the sides match now"
+          "tested": "2026-11-04 host: Mushroom Cup round 1; race and map widen, menus keep bars. 2026-11-06: the game blacks these rows only across its own columns; the sides match now. Thor 2026-11-07: clean"
         },
         "Super Mario World": {
           "strategy": "widen",
@@ -49,7 +49,7 @@
             "emufusion_ws_strict": "bg1,bg2",
             "emufusion_ws_map": "dkc"
           },
-          "tested": "2026-11-06 host: Jungle Hijinxs run through and replayed, near layer drawn from the game's map at both edges, checked against the picture's middle each frame. Map, cabin, game over and title keep bars"
+          "tested": "2026-11-06 host: Jungle Hijinxs run through and replayed, near layer drawn from the game's map at both edges, checked against the picture's middle each frame. Map, cabin, game over and title keep bars. Thor 2026-11-07: jungle to both edges at 60 to 120, map screen narrow"
         },
         "Donkey Kong Country 2: Diddy's Kong Quest": {
           "strategy": "widen",
@@ -61,7 +61,7 @@
             "emufusion_ws_strict": "bg1,bg3",
             "emufusion_ws_map": "dkc2"
           },
-          "tested": "2026-11-06 host: Pirate Panic run through and replayed, near layer drawn from the game's map at both edges. Map and menus keep bars. Climbing levels are read a different way and not yet seen. Ropes cut at the old edge are on layer 3; widened, with the strict rule so screens without a map stay closed"
+          "tested": "2026-11-06 host: Pirate Panic run through and replayed, near layer drawn from the game's map at both edges. Map and menus keep bars. Climbing levels are read a different way and not yet seen. Ropes cut at the old edge are on layer 3; widened, with the strict rule so screens without a map stay closed. Thor 2026-11-07: deck and ropes to both edges at 60 to 120. Bare sea past the stern at the level start"
         },
         "Super Mario World 2: Yoshi's Island": {
           "strategy": "widen",
@@ -100,7 +100,7 @@
             "emufusion_ws_gate": "scroll",
             "emufusion_ws_band": "192-223@7E022D=C5"
           },
-          "tested": "2026-11-06: the old rule's byte was the controller, so the sides opened only while a button was held; the Thor showed it. Scroll rule now, host: 1-1 walked and stood still, the World card keeps bars, and a level opens up once the camera has moved. The clouds stopped dead at the old edge because they are on layer 3; widened now, the status text is unmoved. Mario 3 walked with its status bar on black: 7E022D reads C5 only in Mario 3 across 78 RAM samples of all four games. Mario 2 stays narrow in its opening climb; its side-scrolling parts are not yet seen. The Lost Levels looks like Mario 1"
+          "tested": "2026-11-06: the old rule's byte was the controller, so the sides opened only while a button was held; the Thor showed it. Scroll rule now, host: 1-1 walked and stood still, the World card keeps bars, and a level opens up once the camera has moved. The clouds stopped dead at the old edge because they are on layer 3; widened now, the status text is unmoved. Mario 3 walked with its status bar on black: 7E022D reads C5 only in Mario 3 across 78 RAM samples of all four games. Mario 2 stays narrow in its opening climb; its side-scrolling parts are not yet seen. The Lost Levels looks like Mario 1. Thor 2026-11-07: narrow until the camera moves, then clouds and ground to both edges"
         },
         "NHL '94": {
           "strategy": "widen",
@@ -112,7 +112,7 @@
             "emufusion_ws_strict": "bg1,bg2",
             "emufusion_ws_bounds": "7E07DA:=0,=380"
           },
-          "tested": "2026-11-04 host: menus, faceoff and play at center ice. 2026-11-06: past the crowd the sides showed the ice colour; black now, from the rink's measured ends"
+          "tested": "2026-11-04 host: menus, faceoff and play at center ice. 2026-11-06: past the crowd the sides showed the ice colour; black now, from the rink's measured ends. Thor 2026-11-07: black past the rink ends. A small ice-coloured patch stays above the crowd at the corners, because the ice itself is backdrop"
         },
         "Madden NFL 95": {
           "strategy": "widen",
@@ -121,9 +121,10 @@
             "bsnes_mode7_wsbg1": "on",
             "bsnes_mode7_wsbg2": "on",
             "bsnes_mode7_wsbg3": "off",
-            "emufusion_ws_strict": "bg1,bg2"
+            "emufusion_ws_strict": "bg1,bg2",
+            "emufusion_ws_backdrop": "black"
           },
-          "tested": "2026-11-04 host: menus, kickoff, snap. 2026-11-06: kickoff and snap walked, clean; setup keeps bars"
+          "tested": "2026-11-04 host: menus, kickoff, snap. 2026-11-06: kickoff and snap walked, clean; setup keeps bars. On the Thor the play-call screen had flat green beside it, which is its backdrop; black now, and the field, drawn from its layers, is unchanged"
         },
         "Jimmy Connors Pro Tennis Tour": {
           "strategy": "widen",
@@ -214,7 +215,7 @@
             "emufusion_ws_strict": "bg1,bg2",
             "emufusion_ws_bounds": "7EC8AA:=-223,=1000"
           },
-          "tested": "2026-11-05 host: first fight, the arena extends to both edges. 2026-11-06: at the arena's left end the sides showed a wrapped wall and a gap; black past the camera's limit now. Seen in one arena only"
+          "tested": "2026-11-05 host: first fight, the arena extends to both edges. 2026-11-06: at the arena's left end the sides showed a wrapped wall and a gap; black past the camera's limit now. Seen in one arena only. Thor 2026-11-07: black past the arena end, clean"
         },
         "Super Mario RPG: Legend of the Seven Stars": {
           "strategy": "fixed-screen",
@@ -330,7 +331,7 @@
             "emufusion_ws_strict": "bg1,bg2,center",
             "emufusion_ws_backdrop": "black"
           },
-          "tested": "2026-11-06 host: opening house played; rooms sit in black and the text window stays in the middle. Outdoors not reached. 2026-11-06: the text window's teal gradient ran across the empty sides; black now"
+          "tested": "2026-11-06 host: opening house played; rooms sit in black and the text window stays in the middle. Outdoors not reached. 2026-11-06: the text window's teal gradient ran across the empty sides; black now. Thor 2026-11-07: text window clean, room in black"
         },
         "Live A Live": {
           "strategy": "untested",
@@ -366,6 +367,18 @@
           "strategy": "fixed-screen",
           "options": {},
           "tested": "2026-11-06 host, library pass: a stale black strip at the side"
+        },
+        "Donkey Kong Country 3: Dixie Kong's Double Trouble!": {
+          "strategy": "widen",
+          "options": {
+            "bsnes_mode7_wsobj": "unsafe",
+            "bsnes_mode7_wsbg1": "on",
+            "bsnes_mode7_wsbg2": "on",
+            "bsnes_mode7_wsbg3": "on",
+            "emufusion_ws_gate": "scroll",
+            "emufusion_ws_map": "dkc3"
+          },
+          "tested": "2026-11-07 host: the two attract levels, mill and lake, reach both edges with the near layer from the game's map; the lake's reflection is on layer 3. Logos stay narrow behind the scroll rule. Not played by hand: its world map roams freely and a level was not reached"
         }
       },
       "release": true,
@@ -398,7 +411,7 @@
             "emufusion_ws_hud": "obj:0-224:0-120:-1:6CA-6FF;obj:0-224:0-80:-1:7D0-7FF",
             "emufusion_ws_scene": "FFF600=0C"
           },
-          "tested": "2026-11-05 host: Mushroom Hill act 1, running and jumping. 2026-11-06: only levels widen, the SEGA screen showed streaks at the sides"
+          "tested": "2026-11-05 host: Mushroom Hill act 1, running and jumping. 2026-11-06: only levels widen, the SEGA screen showed streaks at the sides. Thor 2026-11-07: clean, status moved to the corner"
         },
         "Sonic the Hedgehog": {
           "strategy": "widen",
@@ -413,7 +426,7 @@
           "options": {
             "emufusion_ws_gate": "scroll"
           },
-          "tested": "2026-11-05 host: first stage. 2026-11-06: the title showed pieces of the logo at the sides and the select screens had black blocks; scroll rule, so menus keep bars and play opens up after a few steps"
+          "tested": "2026-11-05 host: first stage. 2026-11-06: the title showed pieces of the logo at the sides and the select screens had black blocks; scroll rule, so menus keep bars and play opens up after a few steps. Thor 2026-11-07: wide in play after a few steps"
         },
         "Flashback: The Quest for Identity": {
           "strategy": "fixed-screen",
@@ -425,7 +438,7 @@
           "options": {
             "emufusion_ws_band": "0-31"
           },
-          "tested": "2026-11-05 host: stage select, first stage with enemies. 2026-11-06: scrambled tiles beside the status bar; black now"
+          "tested": "2026-11-05 host: stage select, first stage with enemies. 2026-11-06: scrambled tiles beside the status bar; black now. Thor 2026-11-07: status bar on black"
         },
         "Castle of Illusion Starring Mickey Mouse": {
           "strategy": "widen",
@@ -434,7 +447,7 @@
             "emufusion_ws_scene": "FF0005!=DD",
             "emufusion_ws_band": "192-223"
           },
-          "tested": "2026-11-06 host: the toy land stage walked, edge to edge. The intro and menus keep bars. 2026-11-06: grey blocks beside the status bar; black now"
+          "tested": "2026-11-06 host: the toy land stage walked, edge to edge. The intro and menus keep bars. 2026-11-06: grey blocks beside the status bar; black now. Thor 2026-11-07: status bar on black"
         },
         "Ristar": {
           "strategy": "widen",
@@ -467,19 +480,19 @@
         "Desert Strike: Return to the Gulf": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: frigate takeoff; mission screen keeps its bars. 2026-11-06: flown off the frigate, clean"
+          "tested": "2026-11-05 host: frigate takeoff; mission screen keeps its bars. 2026-11-06: flown off the frigate, clean. Thor 2026-11-07: clean"
         },
         "Jungle Strike": {
           "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 host: White House lawn takeoff. 2026-11-06: flown across the lawn, clean; map screen keeps bars"
+          "tested": "2026-11-05 host: White House lawn takeoff. 2026-11-06: flown across the lawn, clean; map screen keeps bars. Thor 2026-11-07: clean"
         },
         "Contra: Hard Corps": {
           "strategy": "widen",
           "options": {
             "emufusion_ws_gate": "scroll"
           },
-          "tested": "2026-11-05 host: first stage. 2026-11-06: story screens keep bars; they showed font tiles at the sides"
+          "tested": "2026-11-05 host: first stage. 2026-11-06: story screens keep bars; they showed font tiles at the sides. Thor 2026-11-07: street fight wide, game over narrow"
         },
         "John Madden Football '92": {
           "strategy": "widen",
@@ -560,7 +573,7 @@
           "options": {
             "emufusion_ws_hud": "obj:24-32:48-48:-1:10-1F"
           },
-          "tested": "2026-11-05 host: Building round played, fights in the new columns; the energy bar moves out. Level start shows the backdrop past its left end. 2026-11-06: a second entry from the library pass, under the same title, was overriding this one on the Thor; removed"
+          "tested": "2026-11-05 host: Building round played, fights in the new columns; the energy bar moves out. Level start shows the backdrop past its left end. 2026-11-06: a second entry from the library pass, under the same title, was overriding this one on the Thor; removed. Thor 2026-11-07: wide with the tested recipe"
         },
         "Streets of Rage 2": {
           "strategy": "widen",
@@ -593,7 +606,7 @@
             "emufusion_ws_scene": "C025!=67|C026!=10",
             "emufusion_ws_band": "132-167"
           },
-          "tested": "2026-11-05 host: Sierra Nevada race, scenery extends; the panel is drawn in the map and stays centred; the title stays narrow. 2026-11-06: the sides beside the panel showed road and dotted blocks; black now. The console's masked column showed as a pale strip; black and mirrored for every game"
+          "tested": "2026-11-05 host: Sierra Nevada race, scenery extends; the panel is drawn in the map and stays centred; the title stays narrow. 2026-11-06: the sides beside the panel showed road and dotted blocks; black now. The console's masked column showed as a pale strip; black and mirrored for every game. Thor 2026-11-07: panel on black, no pale strip"
         },
         "Lucky Dime Caper starring Donald Duck": {
           "strategy": "widen",
@@ -1655,7 +1668,7 @@
           "options": {
             "emufusion_ws_band": "128-143"
           },
-          "tested": "2026-11-05 host: Crystal Castle stage played; the columns are real scenery. 2026-11-06: digits cut off at the sides of the status bar; plain background beside it now"
+          "tested": "2026-11-05 host: Crystal Castle stage played; the columns are real scenery. 2026-11-06: digits cut off at the sides of the status bar; plain background beside it now. Thor 2026-11-07: status bar clean"
         },
         "Donkey Kong Land": {
           "strategy": "fixed-screen",

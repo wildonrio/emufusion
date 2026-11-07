@@ -207,7 +207,7 @@ index e2475ca..cb3d3a2 100644
          }
          else
 diff --git a/src/Video.cpp b/src/Video.cpp
-index 18f0c16..0d3ade5 100644
+index 18f0c16..c57915a 100644
 --- a/src/Video.cpp
 +++ b/src/Video.cpp
 @@ -121,6 +121,41 @@ void Video::SetNoSpriteLimit(bool noSpriteLimit)
@@ -335,6 +335,16 @@ index 18f0c16..0d3ade5 100644
                  {
                      sprite_collision = true;
                      sprite_collision_x = sprite_pixel_x;
+@@ -1706,6 +1767,9 @@ void Video::LoadState(std::istream& stream, int version)
+     stream.read(reinterpret_cast<char*> (&m_bGameGear), sizeof(m_bGameGear));
+     stream.read(reinterpret_cast<char*> (&m_bPAL), sizeof(m_bPAL));
+     stream.read(reinterpret_cast<char*> (&m_iScreenWidth), sizeof(m_iScreenWidth));
++    // A state saved with another width of widened picture still describes this game: keep today's.
++    if (m_bGameGear && !m_bGameGearSMSMode)
++        m_iScreenWidth = GS_RESOLUTION_GG_WIDTH + 2 * m_iWideExt;
+     stream.read(reinterpret_cast<char*> (&m_bTMS9918), sizeof(m_bTMS9918));
+     stream.read(reinterpret_cast<char*> (&m_iTMS9918Mode), sizeof(m_iTMS9918Mode));
+     stream.read(reinterpret_cast<char*> (&m_Timing), sizeof(m_Timing));
 diff --git a/src/Video.h b/src/Video.h
 index 79880c1..ecd85d3 100644
 --- a/src/Video.h

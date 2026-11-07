@@ -454,7 +454,7 @@ index e4f2c38..1f50736 100644
 +static void ef_sprites(vdp_context *c, uint32_t line, int ext, int base_width, uint8_t *wide, uint8_t *hud,
 +	const int16_t *at_x, const int16_t *at_y)
  {
- 	uint32_t y_line = (line + 1 + 128) & 0x1FF;
+ 	uint32_t y_line = (line + 128) & 0x1FF;
  	uint32_t table = mode5_sat_address(c);
 @@ -274,6 +276,7 @@ static void ef_sprites(vdp_context *c, uint32_t line, int ext, int base_width, u
  	for (uint32_t count = 0; count < limit; count++) {

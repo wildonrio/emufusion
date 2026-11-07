@@ -34,7 +34,7 @@ index 0000000..327e69f
 +#endif
 diff --git a/ef_wide.inc b/ef_wide.inc
 new file mode 100644
-index 0000000..e4f2c38
+index 0000000..2354540
 --- /dev/null
 +++ b/ef_wide.inc
 @@ -0,0 +1,438 @@
@@ -306,7 +306,7 @@ index 0000000..e4f2c38
 +// Sprites over the whole wide line, in table order: the first one drawn wins, as on the VDP.
 +static void ef_sprites(vdp_context *c, uint32_t line, int ext, int base_width, uint8_t *wide, uint8_t *hud)
 +{
-+	uint32_t y_line = (line + 1 + 128) & 0x1FF;
++	uint32_t y_line = (line + 128) & 0x1FF;
 +	uint32_t table = mode5_sat_address(c);
 +	uint32_t limit = c->regs[REG_MODE_4] & BIT_H40 ? MAX_SPRITES_FRAME : MAX_SPRITES_FRAME_H32;
 +	uint32_t index = 0;

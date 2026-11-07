@@ -630,7 +630,7 @@ case "$ENGINE" in
         # Widescreen Hack: exact picture width, per-game scene and HUD rules.
         apply_locked_patch "$staged_source" \
             engines/patches/bsnes-hd-emufusion-widescreen.patch \
-            61be41300b5381b3a092e11cb6a26827a7ca6186fd3b7d713b289185f58e15ea
+            bf3a2d8d3176f6cd57bc60373afb4f2d37817e381758dcb4afb49f463421c883
         "$NDK_DIR/ndk-build" -C "$staged_source/bsnes/target-libretro/jni" \
             NDK_PROJECT_PATH="$staged_source/bsnes/target-libretro" \
             APP_BUILD_SCRIPT="$staged_source/bsnes/target-libretro/jni/Android.mk" \
@@ -721,7 +721,7 @@ case "$ENGINE" in
             cp -R "$source/." "$build/"
             apply_locked_patch "$build" \
                 engines/patches/gearsystem-emufusion-widescreen.patch \
-                21e74111479a426f5d777b1e83c249241d8a0bdcc5e069737a41197c3b3bc7fa
+                87bcb4bb44b950e628253cfba32f6d385a32d3c13ccda6136288679f4064db2f
             source="$build"
         fi
         if [ "$ENGINE" = gearcoleco ]; then
@@ -805,11 +805,11 @@ case "$ENGINE" in
         # Widescreen Hack: new columns drawn beside the untouched original picture.
         apply_locked_patch "$source" \
             engines/patches/blastem-emufusion-widescreen.patch \
-            5307c5bbbecf33fbb7efc4c60297889ef2d59db9704e17e7374d654613764068
+            6e973d9704d5324039f903f8fd40ca8de343d4013ba1ff7777d7b1605ee8ced7
         # Frame generation: the image halfway between frames, by the VDP's own rules, when asked for.
         apply_locked_patch "$source" \
             engines/patches/blastem-emufusion-halfway.patch \
-            00e6f2c4d2e3a8fac5fd045f6c9a7a0d8ea8a4da1532564d3bdd66dfc66439ad
+            b485834b90688542fe876b2932793cb9efe2f233c0dcfbcdca908d019d17b892
         case "$ABI" in
             arm64-v8a) target=aarch64-linux-android ;;
             *) printf 'BlastEm recipe currently supports arm64-v8a only\n' >&2; exit 1 ;;
