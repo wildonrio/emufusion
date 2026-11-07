@@ -579,14 +579,20 @@ The earlier notes on Cool Spot and Ecco were wrong about the cause. Tracing thei
 two columns past the old screen. Neither needs a map reader. A few bytes make the game itself draw the real level there:
 
 `emufusion_ws_patch=ADDR:OLD>NEW;...` in hex, ROM file offsets. Every OLD is checked first and a ROM that differs stays narrow, so another revision
-cannot be damaged. It is undone when the picture goes narrow, except code placed in free space. `emufusion_ws_freepc=A-B;C-D` gives lengthened
-loaders no console time, so the wider picture costs no frames. `emufusion_ws_maxext=N` limits the new columns where a game's map reaches only so far.
+cannot be damaged. Patches stay on from load, also while narrow: the old screen is unchanged, and video memory is then already right whenever the player
+goes wide. `emufusion_ws_freepc=A-B;C-D` gives lengthened loaders no console time, so the wider picture costs no frames. `emufusion_ws_maxext=N` limits
+the new columns where a game's map reaches only so far. `emufusion_ws_bounds=CAM:MIN:MAX` names the camera word and its limits, each `=VALUE`, `@ADDR` or
+`@ADDR-OFFSET`: where the camera stops the world ends, so columns past it stay black instead of showing another row of the map. A status display moved to a
+corner stays visible there.
 
 | Game | Change | Check |
 | --- | --- | --- |
 | Cool Spot | All loaders six tiles further left: map position, tile within the block, place in video memory, including the routine that draws a level's first screen | 60 random-input shots match the original exactly in the old screen area. Video map matches the level in work RAM, 468 of 468 cells seen |
 | Micro Machines | The game's own Master System lengths: 32-cell rows. Map window five columns left, right column five further out, and a first screen drawn across all 32 columns in the space of the old routine, which drew 21 | Random-input lockstep, 210 shots: only the first shot after loading a state saved narrow differs. The test found the first screen and a second row path |
 | Ecco the Dolphin | Columns load from six left to 25 right of the camera, not 0 and 22. Rows fill 32 cells, not 23. Three shifts made arithmetic, or a row near the level's left edge loads wrong across the whole picture | 160 random-input shots match exactly against a run with the same timing and no patch. The first version showed that fault only when the reference state came from the original game |
+
+The first run on the Thor found what the Mac runs could not, because they all started wide: a game started narrow and tapped wide kept old map pieces in
+the middle of the picture, since the patches only came on at the tap. Test the way a player plays: start narrow, tap in play, move straight away.
 
 The test that matters is lockstep. Random inputs through the original and the patched game, then every pixel of the old 160x144 area compared. A
 state saved by a patched run must not be used as the reference: its video memory carries the fault into the original. Comparing a frame's side

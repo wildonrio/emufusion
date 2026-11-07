@@ -585,9 +585,10 @@
           "options": {
             "emufusion_ws_patch": "0044:000000000000000000000000>2AF4D02B3A03D1FE02D02BC9;0050:000000000000>3AFFD0D630C9;0056:0000000000000000>3A03D1C602E603C9;0E8E:2AF4D0>CD4400;0EB8:2AF4D0>CD4400;0F62:2AF4D0>CD4400;0F99:2AF4D0>CD4400;4BA7:3AFFD0>CD5000;107C:3AFFD0>CD5000;1094:3AFFD0>CD5000;10AC:3AFFD0>CD5000;10C6:3AFFD0>CD5000;0EE0:3A03D1>CD5600;0F22:3A03D1>CD5600;0F68:3A03D1>CD5600;0F8A:3A03D1>CD5600",
             "emufusion_ws_gate": "scroll",
-            "emufusion_ws_hud": "obj:29-29:48-80:-1:10-12;obj:37-37:48-80:-1:01-0C;obj:29-29:176-204:1:0D-0F;obj:37-37:176-204:1:01-0B;obj:141-149:48-64:-1:13-16;obj:157-157:52-60:-1:01-0C;obj:157-157:152-200:1:01-0C"
+            "emufusion_ws_hud": "obj:29-29:48-80:-1:10-12;obj:37-37:48-80:-1:01-0C;obj:29-29:176-204:1:0D-0F;obj:37-37:176-204:1:01-0B;obj:141-149:48-64:-1:13-16;obj:157-157:52-60:-1:01-0C;obj:157-157:152-200:1:01-0C",
+            "emufusion_ws_bounds": "D0FF:@D0E6-50:@D0E4-50"
           },
-          "tested": "2026-11-07 host: first level played. The sides showed the map's far right, because the game keeps a correct 32-column window starting at the old left edge. A patch moves its loaders' window six tiles left, so the game draws the real level there itself. 60 random-input shots match the original exactly in the old screen area, and the video map matches the level in work RAM. Time, cool, lives and score moved to the corners. QA only until it passes on the Thor; later levels not reached"
+          "tested": "2026-11-07 host: first level played. The sides showed the map's far right, because the game keeps a correct 32-column window starting at the old left edge. A patch moves its loaders' window six tiles left, so the game draws the real level there itself. 60 random-input shots match the original exactly in the old screen area, and the video map matches the level in work RAM. Time, cool, lives and score moved to the corners. QA only until it passes on the Thor; later levels not reached. Thor 2026-11-07: ran with no crashes, and a game tapped wide mid-level kept old map pieces in the middle, so the patch now stays on from load. Past the level's walls the sides are now black, and the status display stays visible; not yet rerun on the Thor"
         },
         "Micro Machines 2: Turbo Tournament": {
           "strategy": "testing",
@@ -598,7 +599,7 @@
             "emufusion_ws_gate": "scroll",
             "emufusion_ws_hud": "obj:33-33:56-56:-1;obj:43-79:55-55:-1:9F-A2"
           },
-          "tested": "2026-11-07 host: billiard-table course driven. A rewritten engine whose row buffer holds 36 cells. A patch moves its map window five columns left, adds a fourth block to each row and uses a 256-byte buffer the emulator provides at E000 while wide, because the console has no RAM to spare. Random-input lockstep: 140 shots, and only the first shots after loading a state saved narrow differ in the old screen area. Lap markers moved to the left side. QA only until it passes on the Thor; other track types not seen"
+          "tested": "2026-11-07 host: billiard-table course driven. A rewritten engine whose row buffer holds 36 cells. A patch moves its map window five columns left, adds a fourth block to each row and uses a 256-byte buffer the emulator provides at E000 while wide, because the console has no RAM to spare. Random-input lockstep: 140 shots, and only the first shots after loading a state saved narrow differ in the old screen area. Lap markers moved to the left side. QA only until it passes on the Thor; other track types not seen. Thor 2026-11-07: a real race, tapped wide, swiped narrow and tapped wide again, clean with no crashes. The patch now stays on from load; not yet rerun on the Thor"
         },
         "Ecco the Dolphin": {
           "strategy": "testing",
@@ -607,9 +608,10 @@
             "emufusion_ws_maxext": "40",
             "emufusion_ws_freepc": "0010-001B;0BC6-0DEB",
             "emufusion_ws_gate": "scroll",
-            "emufusion_ws_hud": "obj:28-28:52-80:-1:72-76;obj:36-36:52-80:-1:72-76"
+            "emufusion_ws_hud": "obj:28-28:52-80:-1:72-76;obj:36-36:52-80:-1:72-76",
+            "emufusion_ws_bounds": "CAB4:=0:@CBF5"
           },
-          "tested": "2026-11-07 host: first bay swum. Its loaders stopped two columns past the old screen. A patch makes them load from six tiles left of the camera to 25 past it and fill whole rows, and those loaders take no console time, so nothing is lost to the longer rows. 160 random-input shots match exactly in the old screen area against the same timing without the patch. Health and air moved to the corner. Width capped at 240 because this game does not mask its first column. Off the level's left edge the sides show the end of the row above. QA only until it passes on the Thor"
+          "tested": "2026-11-07 host: first bay swum. Its loaders stopped two columns past the old screen. A patch makes them load from six tiles left of the camera to 25 past it and fill whole rows, and those loaders take no console time, so nothing is lost to the longer rows. 160 random-input shots match exactly in the old screen area against the same timing without the patch. Health and air moved to the corner. Width capped at 240 because this game does not mask its first column. QA only until it passes on the Thor. Thor 2026-11-07: ran with no crashes, and a game tapped wide mid-level kept old map pieces in the middle, so the patch now stays on from load. Past the level's walls the sides are now black; not yet rerun on the Thor"
         },
         "Fatal Fury Special": {
           "strategy": "widen",
@@ -653,7 +655,7 @@
             "emufusion_ws_gate": "scroll",
             "emufusion_ws_hud": "obj:49-49:52-66:-1:A4-AC;obj:57-120:56-56:-1:94-97;obj:57-81:64-64:-1:A4-A7"
           },
-          "tested": "2026-11-07 host: bath course driven, including fresh race starts from attract. The game has its own Master System path with 32-cell rows; a patch uses those lengths and moves its map window five columns left, and draws the first screen across all of it. Random-input lockstep: 210 shots, and only the first shot after each load of a state saved narrow differs in the old screen area. Rank markers moved to the left side. QA only until it passes on the Thor; other track types not seen"
+          "tested": "2026-11-07 host: bath course driven, including fresh race starts from attract. The game has its own Master System path with 32-cell rows; a patch uses those lengths and moves its map window five columns left, and draws the first screen across all of it. Random-input lockstep: 210 shots, and only the first shot after each load of a state saved narrow differs in the old screen area. Rank markers moved to the left side. QA only until it passes on the Thor; other track types not seen. Thor 2026-11-07: ran with no crashes, and a game tapped wide mid-race kept a block of old map in the middle, so the patch now stays on from load; not yet rerun on the Thor"
         },
         "Lemmings": {
           "strategy": "fixed-screen",

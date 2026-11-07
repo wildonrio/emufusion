@@ -1,8 +1,8 @@
 diff --git a/platforms/libretro/libretro.cpp b/platforms/libretro/libretro.cpp
-index c1ad656..e07d700 100644
+index c1ad656..cc49856 100644
 --- a/platforms/libretro/libretro.cpp
 +++ b/platforms/libretro/libretro.cpp
-@@ -72,6 +72,109 @@ static bool libretro_supports_bitmasks = false;
+@@ -72,6 +72,159 @@ static bool libretro_supports_bitmasks = false;
  static bool categories_supported = false;
  static float aspect_ratio = 0.0f;
  static int current_screen_width = 0;
@@ -91,6 +91,56 @@ index c1ad656..e07d700 100644
 +    return ef_scene_travel >= ef_wide_ext + 16;
 +}
 +
++// emufusion_ws_bounds: "CAM:MIN:MAX" in hex: the camera's word and its limits, each "=VALUE" or
++// "@ADDR" or "@ADDR-OFFSET". Where the camera stops the world ends, so columns past it stay black
++// rather than showing another row of the map.
++struct EfLimit { bool from_ram; unsigned value, offset; };
++static unsigned ef_bounds_camera = 0;
++static EfLimit ef_bounds_min, ef_bounds_max;
++
++static const char* ef_parse_limit(const char* text, EfLimit* limit)
++{
++    if (*text != '=' && *text != '@') return NULL;
++    limit->from_ram = *text == '@';
++    char* end;
++    limit->value = strtoul(text + 1, &end, 16);
++    limit->offset = 0;
++    if (*end == '-')
++        limit->offset = strtoul(end + 1, &end, 16);
++    return end;
++}
++
++static void ef_set_bounds(const char* value)
++{
++    ef_bounds_camera = 0;
++    if (!value) return;
++    char* end;
++    unsigned camera = strtoul(value, &end, 16);
++    if (*end != ':') return;
++    const char* cursor = ef_parse_limit(end + 1, &ef_bounds_min);
++    if (!cursor || *cursor != ':') return;
++    if (!ef_parse_limit(cursor + 1, &ef_bounds_max)) return;
++    ef_bounds_camera = camera;
++}
++
++static int ef_ram_word(GearsystemCore* core, unsigned address)
++{
++    return core->GetMemory()->Retrieve(address) | core->GetMemory()->Retrieve(address + 1) << 8;
++}
++
++static int ef_limit_value(GearsystemCore* core, const EfLimit& limit)
++{
++    return limit.from_ram ? ef_ram_word(core, limit.value) - (int)limit.offset : (int)limit.value;
++}
++
++static void ef_update_world(GearsystemCore* core)
++{
++    if (!ef_bounds_camera) return;
++    int camera = ef_ram_word(core, ef_bounds_camera);
++    core->GetVideo()->SetWideWorld(GS_RESOLUTION_GG_X_OFFSET - (camera - ef_limit_value(core, ef_bounds_min)),
++                                   GS_RESOLUTION_GG_X_OFFSET + GS_RESOLUTION_GG_WIDTH + (ef_limit_value(core, ef_bounds_max) - camera));
++}
++
 +static bool ef_scene_wide(GearsystemCore* core)
 +{
 +    if (!ef_term_count) return true;
@@ -112,7 +162,7 @@ index c1ad656..e07d700 100644
  static int current_screen_height = 0;
  static float current_aspect_ratio = 0;
  
-@@ -89,6 +192,7 @@ static void apply_controller_device(unsigned port, unsigned device, bool log_dev
+@@ -89,6 +242,7 @@ static void apply_controller_device(unsigned port, unsigned device, bool log_dev
  static void release_controller_input(unsigned port);
  static void update_input(void);
  static void check_variables(void);
@@ -120,15 +170,16 @@ index c1ad656..e07d700 100644
  
  static void fallback_log(enum retro_log_level level, const char *fmt, ...)
  {
-@@ -268,6 +372,7 @@ void retro_run(void)
+@@ -268,6 +422,8 @@ void retro_run(void)
      update_input();
  
      audio_sample_count = 0;
 +    if (ef_wide_ext) core->GetVideo()->SetWideScene(ef_gate_open(core) && ef_scene_wide(core));
++    ef_update_world(core);
      core->RunToVBlank(frame_buffer, audio_buf, &audio_sample_count);
  
      GS_RuntimeInfo runtime_info;
-@@ -286,7 +391,10 @@ void retro_run(void)
+@@ -286,7 +442,10 @@ void retro_run(void)
          info.geometry.base_height  = runtime_info.screen_height;
          info.geometry.max_width    = GS_RESOLUTION_MAX_WIDTH_WITH_OVERSCAN;
          info.geometry.max_height   = GS_RESOLUTION_MAX_HEIGHT_WITH_OVERSCAN;
@@ -140,7 +191,7 @@ index c1ad656..e07d700 100644
  
          environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info.geometry);
      }
-@@ -363,6 +471,7 @@ bool retro_load_game(const struct retro_game_info *info)
+@@ -363,6 +522,7 @@ bool retro_load_game(const struct retro_game_info *info)
          log_cb(RETRO_LOG_ERROR, "Invalid or corrupted ROM.\n");
          return false;
      }
@@ -148,7 +199,7 @@ index c1ad656..e07d700 100644
  
      enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
      if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
-@@ -437,6 +546,8 @@ void *retro_get_memory_data(unsigned id)
+@@ -437,6 +597,8 @@ void *retro_get_memory_data(unsigned id)
              return core->GetMemory()->GetCurrentRule()->GetRamBanks();
          case RETRO_MEMORY_SYSTEM_RAM:
              return core->GetMemory()->GetMemoryMap() + 0xC000;
@@ -157,7 +208,7 @@ index c1ad656..e07d700 100644
      }
  
      return NULL;
-@@ -450,6 +561,8 @@ size_t retro_get_memory_size(unsigned id)
+@@ -450,6 +612,8 @@ size_t retro_get_memory_size(unsigned id)
              return core->GetMemory()->GetCurrentRule()->GetRamSize();
          case RETRO_MEMORY_SYSTEM_RAM:
              return 0x2000;
@@ -166,15 +217,21 @@ index c1ad656..e07d700 100644
      }
  
      return 0;
-@@ -888,10 +1001,164 @@ static void update_input(void)
+@@ -888,10 +1052,172 @@ static void update_input(void)
      core->SetReset(reset_pressed);
  }
  
 +// emufusion_ws_patch: "ADDR:OLD>NEW;..." in hex, ROM file offsets: small changes to a game's own map
 +// loaders, so they draw as far as the wide picture. Every OLD is checked first and a ROM that differs
-+// stays narrow. Undone when the picture goes narrow, except code placed in free space, which the
-+// processor could be inside at that moment.
++// stays narrow. They stay on while narrow: the old screen is unchanged, and video memory is then
++// already right whenever the picture goes wide.
 +static char ef_patch_text[1024];
++static bool ef_patch_refused = false;
++static bool ef_xram_wanted = false;
++extern u8* g_efXram;
++extern int g_efFreeCount;
++extern u16 g_efFree[8][2];
++static u8 ef_xram[256];
 +
 +static int ef_hex_byte(const char* text)
 +{
@@ -190,7 +247,7 @@ index c1ad656..e07d700 100644
 +    return value;
 +}
 +
-+static bool ef_patch_walk(u8* rom, int size, bool write, bool wide)
++static bool ef_patch_walk(u8* rom, int size, bool write)
 +{
 +    const char* p = ef_patch_text;
 +    while (*p)
@@ -207,19 +264,16 @@ index c1ad656..e07d700 100644
 +        const char* after = sep + 1;
 +        if ((int)strlen(after) < count * 2 || (long)addr + count > size)
 +            return false;
-+        bool free_space = true;
 +        for (int i = 0; i < count; i++)
 +        {
 +            int old_byte = ef_hex_byte(before + i * 2), new_byte = ef_hex_byte(after + i * 2);
 +            if (old_byte < 0 || new_byte < 0 || (rom[addr + i] != old_byte && rom[addr + i] != new_byte))
 +                return false;
-+            if (old_byte != 0 && old_byte != 0xFF)
-+                free_space = false;
 +        }
-+        if (write && (wide || !free_space))
++        if (write)
 +            for (int i = 0; i < count; i++)
 +            {
-+                rom[addr + i] = (u8)ef_hex_byte((wide ? after : before) + i * 2);
++                rom[addr + i] = (u8)ef_hex_byte(after + i * 2);
 +                // The console's fixed first 1 KB is fetched from the memory map, not the ROM.
 +                if (addr + i < 0x400)
 +                    core->GetMemory()->Load((u16)(addr + i), rom[addr + i]);
@@ -239,13 +293,17 @@ index c1ad656..e07d700 100644
 +    int size = core->GetCartridge()->GetROMSize();
 +    if (!ef_patch_text[0] || !rom || size <= 0)
 +        return;
-+    if (!ef_patch_walk(rom, size, false, false))
++    ef_patch_refused = !ef_patch_walk(rom, size, false);
++    if (ef_patch_refused)
 +    {
 +        core->GetVideo()->SetWideExt(0);
 +        ef_wide_ext = 0;
++        g_efXram = NULL;
++        g_efFreeCount = 0;
 +        return;
 +    }
-+    ef_patch_walk(rom, size, true, ef_wide_ext > 0);
++    ef_patch_walk(rom, size, true);
++    g_efXram = ef_xram_wanted ? ef_xram : NULL;
 +}
 +
  static void check_variables(void)
@@ -253,6 +311,11 @@ index c1ad656..e07d700 100644
      struct retro_variable var = {0};
  
 +    // EmuFusion Widescreen Hack: target picture aspect x 1000, 0 = the original screen.
++    var.key = "emufusion_ws_bounds";
++    var.value = NULL;
++    ef_set_bounds(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
++    if (!ef_bounds_camera) core->GetVideo()->SetWideWorld(0, 1000);
++
 +    var.key = "emufusion_ws_scene";
 +    var.value = NULL;
 +    ef_set_scene(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL);
@@ -293,14 +356,12 @@ index c1ad656..e07d700 100644
 +        ef_wide_ext = core->GetVideo()->GetWideExt();
 +    }
 +
-+    // emufusion_ws_freepc: "A-B;C-D" in hex, processor addresses, only while wide.
++    // emufusion_ws_freepc: "A-B;C-D" in hex, processor addresses: lengthened loaders take no console time.
 +    var.key = "emufusion_ws_freepc";
 +    var.value = NULL;
++    g_efFreeCount = 0;
 +    {
-+        extern int g_efFreeCount;
-+        extern u16 g_efFree[8][2];
-+        g_efFreeCount = 0;
-+        const char* cursor = ef_wide_ext && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "";
++        const char* cursor = environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "";
 +        while (*cursor && g_efFreeCount < 8)
 +        {
 +            unsigned first, last;
@@ -314,18 +375,16 @@ index c1ad656..e07d700 100644
 +        }
 +    }
 +
-+    // emufusion_ws_xram: "1" gives a lengthened loader 256 bytes of its own at E000, only while wide.
++    // emufusion_ws_xram: "1" gives a lengthened loader 256 bytes of its own at E000.
 +    var.key = "emufusion_ws_xram";
 +    var.value = NULL;
-+    {
-+        extern u8* g_efXram;
-+        static u8 ef_xram[256];
-+        g_efXram = ef_wide_ext && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && atoi(var.value) ? ef_xram : NULL;
-+    }
++    ef_xram_wanted = environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && atoi(var.value);
 +
 +    var.key = "emufusion_ws_patch";
 +    var.value = NULL;
 +    snprintf(ef_patch_text, sizeof(ef_patch_text), "%s", environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "");
++    if (!ef_patch_text[0])
++        g_efXram = NULL;
 +    ef_patches_apply();
 +
      var.key = "gearsystem_up_down_allowed";
@@ -420,10 +479,10 @@ index 22eea6f..9132618 100644
      m_pProcessor->CheckMemoryBreakpoints(Processor::GS_BREAKPOINT_TYPE_ROMRAM, address, false);
      #endif
 diff --git a/src/Video.cpp b/src/Video.cpp
-index 18f0c16..c57915a 100644
+index 18f0c16..19c458d 100644
 --- a/src/Video.cpp
 +++ b/src/Video.cpp
-@@ -121,6 +121,41 @@ void Video::SetNoSpriteLimit(bool noSpriteLimit)
+@@ -121,6 +121,47 @@ void Video::SetNoSpriteLimit(bool noSpriteLimit)
      m_bNoSpriteLimit = noSpriteLimit;
  }
  
@@ -445,13 +504,19 @@ index 18f0c16..c57915a 100644
 +    m_iWideBandLast = last;
 +}
 +
++void Video::SetWideWorld(int left, int right)
++{
++    m_iWideWorldLeft = left;
++    m_iWideWorldRight = right;
++}
++
 +// Columns the console never showed, closed on this line: a narrow scene, a status panel the map
 +// does not extend, and the column the game masks, mirrored so the picture stays centred.
-+bool Video::WideColumnClosed(int line, int x)
++bool Video::WideColumnClosed(int line, int x, bool inWorld)
 +{
 +    if (x >= GS_RESOLUTION_GG_X_OFFSET && x < GS_RESOLUTION_GG_X_OFFSET + GS_RESOLUTION_GG_WIDTH)
 +        return false;
-+    return !m_bWideScene || (line >= m_iWideBandFirst && line <= m_iWideBandLast) ||
++    return !m_bWideScene || (line >= m_iWideBandFirst && line <= m_iWideBandLast) || (inWorld && (x < m_iWideWorldLeft || x >= m_iWideWorldRight)) ||
 +        (IsSetBit(m_VdpRegister[0], 5) && (x < 8 || x >= 248));
 +}
 +
@@ -465,7 +530,7 @@ index 18f0c16..c57915a 100644
  void Video::Reset(bool bGameGear, bool bPAL, int iGGASIC, bool bGameGearSMSMode)
  {
      m_bGameGear = bGameGear;
-@@ -187,7 +222,7 @@ void Video::Reset(bool bGameGear, bool bPAL, int iGGASIC, bool bGameGearSMSMode)
+@@ -187,7 +228,7 @@ void Video::Reset(bool bGameGear, bool bPAL, int iGGASIC, bool bGameGearSMSMode)
      m_iVdpRegister10Counter = m_VdpRegister[10];
      m_iRenderLine = 0;
  
@@ -474,7 +539,7 @@ index 18f0c16..c57915a 100644
  
      m_bTMS9918 = false;
      m_iTMS9918Mode = 0;
-@@ -761,7 +796,7 @@ void Video::RenderBackgroundSMSGG(int line)
+@@ -761,7 +802,7 @@ void Video::RenderBackgroundSMSGG(int line)
  
      int palette_color = 0;
  
@@ -483,13 +548,14 @@ index 18f0c16..c57915a 100644
      int scx_end = scx_begin + m_iScreenWidth - m_iHideLeftBarOffset;
  
      int max_height = m_bExtendedMode224 ? 224 : 192;
-@@ -772,6 +807,14 @@ void Video::RenderBackgroundSMSGG(int line)
+@@ -772,6 +813,15 @@ void Video::RenderBackgroundSMSGG(int line)
          int pixel_screen = line_width_screen + scx_diff;
          int pixel_info = line_width_info + scx_diff;
  
 +        if (m_iWideExt && WideColumnClosed(line, scx))
 +        {
-+            if ((line >= y_offset) && (line < (y_offset + GS_RESOLUTION_GG_HEIGHT)))
++            // Each line's sprites are drawn before its background, and only those meant to show.
++            if ((line >= y_offset) && (line < (y_offset + GS_RESOLUTION_GG_HEIGHT)) && !(m_pInfoBuffer[pixel_info] & 0x01))
 +                m_pFrameBuffer[pixel_screen] = 0;
 +            m_pInfoBuffer[pixel_info] = 0;
 +            continue;
@@ -498,7 +564,7 @@ index 18f0c16..c57915a 100644
          if (line < max_height)
          {
              if (IsSetBit(m_VdpRegister[0], 5) && scx < 8)
-@@ -916,7 +959,7 @@ void Video::RenderSpritesSMSGG(int line)
+@@ -916,7 +966,7 @@ void Video::RenderSpritesSMSGG(int line)
  
      int render_sprite_count = m_bNoSpriteLimit ? 64 : 8;
  
@@ -507,10 +573,11 @@ index 18f0c16..c57915a 100644
      int scx_end = scx_begin + (m_iScreenWidth - m_iHideLeftBarOffset);
  
      for (int i = render_sprite_count - 1; i >= 0; i--)
-@@ -941,6 +984,19 @@ void Video::RenderSpritesSMSGG(int line)
+@@ -941,6 +991,22 @@ void Video::RenderSpritesSMSGG(int line)
              continue;
  
          int sprite_tile = m_pVdpVRAM[sprite_info_address + 1];
++        bool in_world = true;
 +        if (m_iWideExt && m_bWideScene)
 +        {
 +            for (int rule = 0; rule < m_iWideHudCount; rule++)
@@ -520,6 +587,8 @@ index 18f0c16..c57915a 100644
 +                    sprite_tile >= hud.t0 && sprite_tile <= hud.t1)
 +                {
 +                    sprite_x += hud.dir * m_iWideExt;
++                    // A status display stays on screen past the end of the world.
++                    in_world = false;
 +                    break;
 +                }
 +            }
@@ -527,16 +596,16 @@ index 18f0c16..c57915a 100644
          sprite_tile &= sprite_height_16 ? 0xFE : 0xFF;
          int sprite_tile_addr = sprite_tiles_address + (sprite_tile << 5) +  (((line - sprite_y) >> (sprite_zoom ? 1 : 0)) << 2);
  
-@@ -953,6 +1009,8 @@ void Video::RenderSpritesSMSGG(int line)
+@@ -953,6 +1019,8 @@ void Video::RenderSpritesSMSGG(int line)
                  continue;
              if (IsSetBit(m_VdpRegister[0], 5) && (sprite_pixel_x < 8))
                  continue;
-+            if (m_iWideExt && WideColumnClosed(line, sprite_pixel_x))
++            if (m_iWideExt && WideColumnClosed(line, sprite_pixel_x, in_world))
 +                continue;
  
              int x_diff = sprite_pixel_x - scx_begin;
              int pixel_screen = line_width_screen + x_diff;
-@@ -988,7 +1046,10 @@ void Video::RenderSpritesSMSGG(int line)
+@@ -988,7 +1056,10 @@ void Video::RenderSpritesSMSGG(int line)
  
              if ((m_pInfoBuffer[pixel_info] & 0x01) != 0)
              {
@@ -548,7 +617,7 @@ index 18f0c16..c57915a 100644
                  {
                      sprite_collision = true;
                      sprite_collision_x = sprite_pixel_x;
-@@ -1706,6 +1767,9 @@ void Video::LoadState(std::istream& stream, int version)
+@@ -1706,6 +1777,9 @@ void Video::LoadState(std::istream& stream, int version)
      stream.read(reinterpret_cast<char*> (&m_bGameGear), sizeof(m_bGameGear));
      stream.read(reinterpret_cast<char*> (&m_bPAL), sizeof(m_bPAL));
      stream.read(reinterpret_cast<char*> (&m_iScreenWidth), sizeof(m_iScreenWidth));
@@ -559,10 +628,10 @@ index 18f0c16..c57915a 100644
      stream.read(reinterpret_cast<char*> (&m_iTMS9918Mode), sizeof(m_iTMS9918Mode));
      stream.read(reinterpret_cast<char*> (&m_Timing), sizeof(m_Timing));
 diff --git a/src/Video.h b/src/Video.h
-index 79880c1..ecd85d3 100644
+index 79880c1..fbf5304 100644
 --- a/src/Video.h
 +++ b/src/Video.h
-@@ -87,6 +87,14 @@ public:
+@@ -87,6 +87,15 @@ public:
      int GetTMS9918Mode();
      u16 ColorFromPalette(int palette_color);
      u16* GetFrameBuffer();
@@ -572,17 +641,20 @@ index 79880c1..ecd85d3 100644
 +    struct WideHudRule { int y0, y1, x0, x1, dir, t0, t1; };
 +    void SetWideHud(const WideHudRule* rules, int count);
 +    void SetWideBand(int first, int last);
-+    bool WideColumnClosed(int line, int x);
++    void SetWideWorld(int left, int right);
++    bool WideColumnClosed(int line, int x, bool inWorld = true);
 +    int GetWideExt() const { return m_iWideExt; }
      void Render32bit(u16* srcFrameBuffer, u8* dstFrameBuffer, GS_Color_Format pixelFormat, int size, bool overscan = false);
      void Render16bit(u16* srcFrameBuffer, u8* dstFrameBuffer, GS_Color_Format pixelFormat, int size, bool overscan = false);
      void SetOverscan(Overscan overscan);
-@@ -169,6 +177,12 @@ private:
+@@ -169,6 +178,14 @@ private:
  
      int m_iRenderLine;
      int m_iScreenWidth;
 +    int m_iWideBandFirst = 1000;
 +    int m_iWideBandLast = -1;
++    int m_iWideWorldLeft = 0;
++    int m_iWideWorldRight = 1000;
 +    int m_iWideExt = 0;
 +    bool m_bWideScene = true;
 +    WideHudRule m_WideHud[16];
