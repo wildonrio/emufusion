@@ -816,7 +816,9 @@ three save prompts measure 1.095 to 1.099 picture heights wide against 1.093 to 
 Eternal Darkness's cutscenes widen with full-width bars; Sunshine, Melee and Metroid Prime keep menus, logos
 and prompts at their size while 3D widens; films stay 4:3 in bars. Still wrong: Eternal Darkness's establishing
 shots are full-screen pictures over a live 3D room, which shows past them at both sides, so it stays fixed-screen.
-A full-screen picture over 3D needs the sides blanked, not yet done.
+Clearing the sides at the XFB copy when a textured full-screen 2D picture is drawn over 3D was tried on the
+bench: limited to opaque pictures it never fires on Eternal Darkness (its shots fade, so they blend), and with
+blended pictures allowed it fires in 5,257 frames of Metroid Prime's 3D intro and pillarboxes it. Not shipped.
 
 ## Game files that are not there
 
