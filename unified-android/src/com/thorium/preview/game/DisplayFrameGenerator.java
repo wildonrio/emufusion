@@ -7631,6 +7631,7 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         int previous = builtinQueueReserve.extraScans();
         builtinQueueReserve.setEarlyGuardAvailable(TimelineSchedulerSwitch.earlyGuard() &&
                 !compositorEarlyGuard.active() && !compositorEarlyGuard.disabled());
+        builtinQueueReserve.setRestoreAfterEarlyRecovery(TimelineSchedulerSwitch.queueRestoreAfterEarly());
         com.thorium.emufusion.video.BuiltinQueueReserve.Change change = builtinQueueReserve.observe(
                 result.outcome == GpuPhysicalHeadroomLedger.Outcome.DEADLINE_MISS,
                 result.desiredNs, result.actualNs,

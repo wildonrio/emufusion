@@ -392,6 +392,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         coreHoldUntilGenerated = untilGenerated;
+        boolean restore = false;
+        try {
+            if (context != null) restore = Settings.Global.getInt(
+                    context.getContentResolver(), QUEUE_RESTORE_AFTER_EARLY_GLOBAL, 0) != 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        queueRestoreAfterEarly = restore;
         int check = 0;
         try {
             if (context != null) check = Settings.Global.getInt(
@@ -934,6 +942,12 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean coreHoldUntilGenerated = true;
 
     static boolean coreHoldUntilGenerated() { return coreHoldUntilGenerated; }
+
+    /** QA: BuiltinQueueReserve#setRestoreAfterEarlyRecovery (off by default). */
+    static final String QUEUE_RESTORE_AFTER_EARLY_GLOBAL = "emufusion_framegen_queue_restore_after_early";
+    private static volatile boolean queueRestoreAfterEarly;
+
+    static boolean queueRestoreAfterEarly() { return queueRestoreAfterEarly; }
 
     /**
      * QA emufusion_framegen_image_check: a preview of each generated image is

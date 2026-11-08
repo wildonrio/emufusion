@@ -126,6 +126,11 @@ public final class BuiltinQueueReserve {
     private long deepenings, recoveries, failedRecoveries, earlyRecoveries, heldDeepenings,
             rejectedTrials, guardRequests;
     private boolean earlyGuardAvailable;
+    // QA (setRestoreAfterEarlyRecovery): an early recovery whose late bursts come back restores the depth.
+    private boolean restoreAfterEarly;
+    private long earlyRecoveredAtNs, earlyRecoveryAllowedAtNs;
+    private long earlyBlockNs = DEEPEN_HOLDOFF_NS;
+    private long restoredAfterEarly;
 
     public int extraScans() { return extraScans; }
 
@@ -166,6 +171,17 @@ public final class BuiltinQueueReserve {
     public void setEarlyGuardAvailable(boolean available) { earlyGuardAvailable = available; }
 
     /**
+     * QA (emufusion_framegen_queue_restore_after_early=1): a burst of rendering-late frames during the
+     * hold-off that follows an early recovery restores the depth at once, and early recoveries then
+     * wait {@link #DEEPEN_HOLDOFF_NS}, doubling each time. Ocarina wide (Thor, 2026-11-08): runs
+     * that gave the scan back early then held 7-8 late bursts (88.9%, 94.3% on cadence); runs that
+     * kept the depth were even (98.7-99.2%, a scan later).
+     */
+    public void setRestoreAfterEarlyRecovery(boolean restore) { restoreAfterEarly = restore; }
+
+    public long restoredAfterEarly() { return restoredAfterEarly; }
+
+    /**
      * The reserve to plan a frame with (PhysicalPresentationDeadline.nextEgl):
      * the handoff margin, and each extra scan counted from the callback rather
      * than from when planning happened to run.
@@ -200,7 +216,8 @@ public final class BuiltinQueueReserve {
             boolean shownEarly = actualNs > 0L && desiredNs - actualNs >= panelPeriodNs / 2L;
             if (windowFrames > 1 && shownEarly != previousEarly) ++earlySwitches;
             previousEarly = shownEarly;
-            if (shownEarly && ++earlyFrames >= EARLY_TO_RECOVER) {
+            if (shownEarly && ++earlyFrames >= EARLY_TO_RECOVER &&
+                    (!restoreAfterEarly || nowNs >= earlyRecoveryAllowedAtNs)) {
                 if (earlyGuardAvailable && earlySwitches >= SWITCHES_FOR_GUARD) {
                     // The guard stops ready frames from showing a scan early;
                     // a running trial restarts on frames planned with it.
@@ -220,6 +237,7 @@ public final class BuiltinQueueReserve {
                 // Not a recovery trial: the depth was not holding frames
                 // back, so one late frame later is no reason to restore it.
                 recoveredAtNs = 0L;
+                earlyRecoveredAtNs = nowNs;
                 holdOffDeepening(nowNs);
                 change(nowNs, -1);
                 return Change.RECOVERED;
@@ -231,6 +249,7 @@ public final class BuiltinQueueReserve {
                 ++recoveries;
                 ++rejectedTrials;
                 recoveredAtNs = 0L;
+                earlyRecoveredAtNs = 0L;
                 holdOffDeepening(nowNs);
                 change(nowNs, -1);
                 return Change.RECOVERED;
@@ -279,6 +298,16 @@ public final class BuiltinQueueReserve {
             missNs[misses++] = nowNs;
             if (misses < MISSES_TO_DEEPEN || extraScans >= maxExtraScans) return Change.NONE;
             if (nowNs < deepenAllowedAtNs) {
+                if (restoreAfterEarly && earlyRecoveredAtNs != 0L) {
+                    // The scan given back early was holding frames: take it again and keep it.
+                    earlyRecoveredAtNs = 0L;
+                    ++restoredAfterEarly;
+                    deepenAllowedAtNs = 0L;
+                    earlyRecoveryAllowedAtNs = nowNs + earlyBlockNs;
+                    earlyBlockNs = Math.min(MAX_DEEPEN_HOLDOFF_NS, 2L * earlyBlockNs);
+                    change(nowNs, 1);
+                    return Change.RESTORED;
+                }
                 ++heldDeepenings;
                 return Change.NONE;
             }

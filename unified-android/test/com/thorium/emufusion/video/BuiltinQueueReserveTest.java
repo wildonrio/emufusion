@@ -21,6 +21,7 @@ public final class BuiltinQueueReserveTest {
         framesShownEarlyGiveTheScanBack();
         occasionalEarlyFramesKeepTheDepth();
         earlyRecoveriesHoldOffDeepening();
+        lateBurstsAfterAnEarlyRecoveryRestoreTheDepthWhenAsked();
         earlyFramesTurnTheGuardOnInsteadOfGivingTheScanBack();
         aDeepeningThatAddsNothingIsGivenBack();
         aDeepeningThatHelpsIsKept();
@@ -472,6 +473,51 @@ public final class BuiltinQueueReserveTest {
         eq(6L, r.earlyRecoveries(), "six early recoveries");
         check(r.heldDeepenings() > 0L, "bursts were held");
         eq(6L, r.deepenings(), "one deepening after each hold-off");
+    }
+
+    /** Ocarina wide, 2026-11-08 (QA): the scan given back early was holding frames. */
+    private static void lateBurstsAfterAnEarlyRecoveryRestoreTheDepthWhenAsked() {
+        BuiltinQueueReserve r = new BuiltinQueueReserve();
+        r.setRestoreAfterEarlyRecovery(true);
+        long[] clock = {50_000_000_000L};
+        burst(r, clock);
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        BuiltinQueueReserve.Change change = BuiltinQueueReserve.Change.NONE;
+        int frames = 0;
+        while (change != BuiltinQueueReserve.Change.RECOVERED && frames < 1_000) {
+            change = frames % 4 < 2 ? early(r, clock) : onTime(r, clock, 1_000_000L);
+            ++frames;
+        }
+        check(change == BuiltinQueueReserve.Change.RECOVERED, "given back early");
+        eq(0L, r.extraScans(), "earliest scan");
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        late(r, clock);
+        late(r, clock);
+        check(late(r, clock) == BuiltinQueueReserve.Change.RESTORED, "a late burst in the hold-off restores");
+        eq(1L, r.extraScans(), "a scan deeper again");
+        eq(1L, r.restoredAfterEarly(), "counted");
+        advance(clock, BuiltinQueueReserve.SETTLE_NS);
+        // Early frames no longer give it back while the block lasts.
+        for (int i = 0; i < 2 * BuiltinQueueReserve.EARLY_WINDOW; ++i)
+            check((i % 4 < 2 ? early(r, clock) : onTime(r, clock, 1_000_000L)) !=
+                    BuiltinQueueReserve.Change.RECOVERED, "early recovery blocked");
+        eq(1L, r.extraScans(), "kept");
+        // Off (the default): the same burst is held, as before.
+        BuiltinQueueReserve off = new BuiltinQueueReserve();
+        long[] c2 = {50_000_000_000L};
+        burst(off, c2);
+        advance(c2, BuiltinQueueReserve.SETTLE_NS);
+        change = BuiltinQueueReserve.Change.NONE;
+        frames = 0;
+        while (change != BuiltinQueueReserve.Change.RECOVERED && frames < 1_000) {
+            change = frames % 4 < 2 ? early(off, c2) : onTime(off, c2, 1_000_000L);
+            ++frames;
+        }
+        advance(c2, BuiltinQueueReserve.SETTLE_NS);
+        late(off, c2);
+        late(off, c2);
+        check(late(off, c2) == BuiltinQueueReserve.Change.NONE, "held by default");
+        eq(0L, off.extraScans(), "default keeps the earliest scan");
     }
 
     private static void occasionalEarlyFramesKeepTheDepth() {
