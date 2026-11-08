@@ -219,10 +219,10 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         pixelFade = fade;
-        int overlayFrames = -1;
+        int overlayFrames = 0;
         try {
             if (context != null) overlayFrames = Settings.Global.getInt(
-                    context.getContentResolver(), STATIC_OVERLAY_GLOBAL, -1);
+                    context.getContentResolver(), STATIC_OVERLAY_GLOBAL, 0);
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
@@ -651,17 +651,19 @@ public final class TimelineSchedulerSwitch {
     /**
      * Static overlays: a pixel unchanged for this many real frames in a row is
      * shown unwarped (a HUD over a moving scene; dis_gles.py STATIC_OVERLAY).
-     * On by default for 3-D at 60 frames since 3.2.161: in live captures it held
+     * QA -1 (3-D at 60 frames, pixel art off) was the candidate default for 3.2.161: in live captures it held
      * Mario Kart 64's lap and position text where the warp shredded them, and moved
      * no figure the wrong way (excess area: Mario Kart 64 0.106 -> 0.095%, Wipeout 64
      * 0.027 -> 0.025%, Ocarina 0.006 -> 0.003%, Double Dash 0.032 -> 0.032%). Pixel art
      * stays off: on SNES it moved 95% of the pixels it changed farther from the real
-     * frame (still for a second, then moving at the midpoint). QA:
-     * emufusion_framegen_static_overlay=N frames for every source, 0 for none.
+     * frame (still for a second, then moving at the midpoint). Off by default until
+     * Ocarina's and NSMBU Deluxe's drop in that gate (88.6% and 99.4%) is explained.
+     * QA: emufusion_framegen_static_overlay=-1 for that default, N frames for every
+     * source, 0 for none.
      */
     static final String STATIC_OVERLAY_GLOBAL = "emufusion_framegen_static_overlay";
     static final int STATIC_OVERLAY_3D_FRAMES = 60;
-    private static volatile int staticOverlayFrames = -1;
+    private static volatile int staticOverlayFrames;
 
     static int staticOverlayFrames(boolean discrete) {
         int frames = staticOverlayFrames;
