@@ -542,9 +542,9 @@
       "build": {
         "recipe": "engines/build_core.sh flycast",
         "proofArtifactPath": "engines/build/arm64-v8a/flycast_libretro.so",
-        "proofArtifactSha256": "e20094b23d4e2dac1551a7518e4fa6becc2686326f887b1b82a1bd6f993dec8b",
+        "proofArtifactSha256": "671650ea86c877a466f705f81068f56961599566127ae4d0e84acfc84e1143c5",
         "reproducible": false,
-        "notes": "2026-10-04: 16 KiB shared/module linking and normalized build paths retain the Android shared-memory and cheat patches. A fresh separate build matches the exact 5a25 core tested in the simulator; normal staging now uses that core. Old 938 is rejected by the strict 16 KiB loader; 5a25 loads. Bounded Sonic Adventure boss entry and save recovery are recorded, not sustained gameplay/audio acceptance. See docs/qa/android-portability-2026-10-04-portable-integration/build-comparison.json and the flycast-input-compare/state-growth evidence. Production runtime/release gates remain unchanged. Previous 4 KiB artifact 938709bb4f39c788a3938d4906806ff0358b98b0abd4eafbdb9f766f36f7c5f2 is backed up."
+        "notes": "2026-11-08: adds engines/patches/flycast-emufusion-flat-layers.patch (Widescreen Hack only: flat full-width layers reach the new edges, frames with no 3D stay at the old width); two consecutive builds byte-identical at 671650ea. 2026-10-04: 16 KiB shared/module linking and normalized build paths retain the Android shared-memory and cheat patches. A fresh separate build matches the exact 5a25 core tested in the simulator; normal staging now uses that core. Old 938 is rejected by the strict 16 KiB loader; 5a25 loads. Bounded Sonic Adventure boss entry and save recovery are recorded, not sustained gameplay/audio acceptance. See docs/qa/android-portability-2026-10-04-portable-integration/build-comparison.json and the flycast-input-compare/state-growth evidence. Production runtime/release gates remain unchanged. Previous 4 KiB artifact 938709bb4f39c788a3938d4906806ff0358b98b0abd4eafbdb9f766f36f7c5f2 is backed up."
       },
       "gates": {
         "source": true,

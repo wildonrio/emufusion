@@ -1,0 +1,147 @@
+--- a/core/hw/pvr/ta_ctx.h
++++ b/core/hw/pvr/ta_ctx.h
+@@ -248,6 +248,8 @@
+ 
+ 	bool isRTT;
+ 	bool clearFramebuffer;
++	// EmuFusion: a widescreen frame with no 3D, shown at the old width.
++	bool emufusionNarrow;
+ 	
+ 	glm::ivec2 globClip;
+ 	SCALER_CTL_type scaler_ctl;
+@@ -299,6 +301,7 @@
+ 		matrices.clear();
+ 		lightModels.clear();
+ 		clearFramebuffer = false;
++		emufusionNarrow = false;
+ 	}
+ 
+ 	void newRenderPass();
+--- a/core/hw/pvr/ta_vtx.cpp
++++ b/core/hw/pvr/ta_vtx.cpp
+@@ -11,6 +11,8 @@
+ #include "cfg/option.h"
+ 
+ #include <algorithm>
++#include <cmath>
++#include <cstring>
+ #include <utility>
+ 
+ #define TACALL DYNACALL
+@@ -1218,6 +1220,65 @@
+ 	ctx.tileClip.size.y = ymax - ctx.tileClip.origin.y;
+ }
+ 
++// EmuFusion: with the widescreen hack the picture shows past the old screen's edges, and a fade, a
++// pause screen's dimming or a letterbox bar drawn across exactly the old width stopped there in a hard
++// edge. A flat layer, at one depth and one colour along each row, that spans the whole old width is
++// carried out to the new edges. It has no picture of its own, so nothing is stretched; textures, 3D
++// and colour that changes across the screen are left as the game drew them. Returns how many of the
++// polygons are 3D, their depth changing across them.
++static int emufusionWidenFlatLayers(std::vector<PolyParam>& polys, size_t from, rend_context& rc)
++{
++	const float width = (float)rc.globClip.x;
++	int threeD = 0;
++	for (size_t p = from; p < polys.size(); p++)
++	{
++		const PolyParam& pp = polys[p];
++		if (pp.count < 3 || pp.first + pp.count > rc.verts.size())
++			continue;
++		Vertex *begin = &rc.verts[pp.first];
++		Vertex *end = begin + pp.count;
++		bool flatDepth = true;
++		for (Vertex *v = begin; v != end && flatDepth; v++)
++			flatDepth = v->z == begin->z;
++		if (!flatDepth)
++		{
++			threeD++;
++			continue;
++		}
++		if (pp.pcw.Texture || pp.count > 64)
++			continue;
++		float left = begin->x;
++		float right = begin->x;
++		bool flat = true;
++		for (Vertex *v = begin; v != end && flat; v++)
++		{
++			flat = std::isfinite(v->x) && std::isfinite(v->y);
++			left = std::min(left, v->x);
++			right = std::max(right, v->x);
++			for (Vertex *w = begin; w != v && flat; w++)
++				if (std::fabs(w->y - v->y) < 0.5f)
++					flat = std::memcmp(w->col, v->col, sizeof(v->col)) == 0
++							&& std::memcmp(w->spc, v->spc, sizeof(v->spc)) == 0;
++		}
++		if (!flat || left > 1.f || right < width - 1.f)
++			continue;
++		// The scissor keeps the layer to the wide picture.
++		for (Vertex *v = begin; v != end; v++)
++		{
++			if (v->x <= left + 0.5f)
++				v->x = -width;
++			else if (v->x >= right - 0.5f)
++				v->x = 2.f * width;
++		}
++	}
++	return threeD;
++}
++
++// A menu, title or film is drawn flat. Off the old screen it may keep pieces waiting to slide in, so a
++// frame with no 3D for a while is shown at the old width, with the sides cleared.
++constexpr int EMUFUSION_3D_POLYS = 16;
++constexpr int EMUFUSION_FRAMES_TO_2D = 8;
++
+ static void ta_parse_vdrc(TA_context* ctx, bool primRestart)
+ {
+ 	verify(vd_ctx == nullptr);
+@@ -1232,6 +1293,8 @@
+ 	TA_context *childCtx = ctx;
+ 	int pass = 0;
+ 	RenderPass previousPass{};
++	const bool emufusionWide = config::Widescreen && !config::Rotate90 && !config::EmulateFramebuffer && !ctx->rend.isRTT;
++	int threeD = 0;
+ 
+ 	while (childCtx != nullptr)
+ 	{
+@@ -1245,6 +1308,13 @@
+ 				break;
+ 			}
+ 
++		if (emufusionWide)
++		{
++			threeD += emufusionWidenFlatLayers(vd_rc.global_param_op, previousPass.op_count, vd_rc);
++			threeD += emufusionWidenFlatLayers(vd_rc.global_param_pt, previousPass.pt_count, vd_rc);
++			threeD += emufusionWidenFlatLayers(vd_rc.global_param_tr, previousPass.tr_count, vd_rc);
++		}
++
+ 		// Disable blending for opaque polys of the first pass
+ 		if (pass == 0)
+ 		{
+@@ -1277,6 +1347,15 @@
+ 		pass++;
+ 	}
+ 
++	if (emufusionWide)
++	{
++		static int framesWithout3D = 0;
++		framesWithout3D = threeD >= EMUFUSION_3D_POLYS ? 0 : std::min(framesWithout3D + 1, EMUFUSION_FRAMES_TO_2D);
++		ctx->rend.emufusionNarrow = framesWithout3D >= EMUFUSION_FRAMES_TO_2D;
++		if (ctx->rend.emufusionNarrow)
++			ctx->rend.clearFramebuffer = true;
++	}
++
+ 	setTileClipping(ctx->rend);
+ 	vd_ctx = nullptr;
+ }
+--- a/core/rend/transform_matrix.cpp
++++ b/core/rend/transform_matrix.cpp
+@@ -146,7 +146,8 @@
+ Rect TransformMatrix::getBaseScissor() const
+ {
+ 	const bool widescreen = !renderingContext->isRTT && config::Widescreen
+-			&& !isClipped() && !config::Rotate90 && !config::EmulateFramebuffer;
++			&& !isClipped() && !config::Rotate90 && !config::EmulateFramebuffer
++			&& !renderingContext->emufusionNarrow;
+ 	if (widescreen)
+ 	{
+ 		return Rect{

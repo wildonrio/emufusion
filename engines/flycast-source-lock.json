@@ -30,6 +30,11 @@
       "path": "engines/patches/flycast-android-shared-memory.patch",
       "sha256": "61335599add3e70cbaab2e8a3dad8062eb0cae97df2cf15c54935b87e8c95f62",
       "purpose": "Resolve the public ASharedMemory_create API from libandroid when the API-24 libretro core's weak reference is null; retain the pre-26 fallback and descriptor ownership."
+    },
+    {
+      "path": "engines/patches/flycast-emufusion-flat-layers.patch",
+      "sha256": "6798dcfbec2359d3743e870d2147513c6cc8a90a8bf800e4f736cc7450f3a299",
+      "purpose": "EmuFusion Widescreen Hack, active only with reicast_widescreen_hack on: a flat untextured layer (one depth, one colour per row) spanning exactly the old screen width is carried to the new edges, so fades, pause dimming and letterbox bars cover the wide picture without stretching anything; a frame with fewer than 16 polygons of varying depth for 8 frames (menus, titles, films) is scissored to the old width with the sides cleared, so pieces games park off screen never show."
     }
   ],
   "dependencies": [

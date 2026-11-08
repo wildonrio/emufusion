@@ -2,6 +2,15 @@
 
 Date: 2026-08-07
 
+November 8 Widescreen Hack: staged core is now
+`671650ea86c877a466f705f81068f56961599566127ae4d0e84acfc84e1143c5`, two
+consecutive builds byte-identical. `engines/patches/flycast-emufusion-flat-layers.patch`
+acts only with `reicast_widescreen_hack` on: a flat untextured layer across exactly
+the old width (fades, pause dimming, letterbox bars) is carried to the new edges,
+and a frame with no 3D for 8 frames is scissored to the old width with the sides
+cleared, so menus never show what games park off screen. With widescreen off the
+core draws as before. Not yet run on the Thor.
+
 October 4 normal integration: staged core is now
 `e20094b23d4e2dac1551a7518e4fa6becc2686326f887b1b82a1bd6f993dec8b`.
 The ordinary source recipe's 16 KiB shared/module link flags and path maps

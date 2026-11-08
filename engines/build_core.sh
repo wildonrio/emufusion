@@ -1318,6 +1318,9 @@ case "$ENGINE" in
         apply_locked_patch "$staged_source" \
             engines/patches/flycast-android-shared-memory.patch \
             61335599add3e70cbaab2e8a3dad8062eb0cae97df2cf15c54935b87e8c95f62
+        apply_locked_patch "$staged_source" \
+            engines/patches/flycast-emufusion-flat-layers.patch \
+            6798dcfbec2359d3743e870d2147513c6cc8a90a8bf800e4f736cc7450f3a299
 
         path_map_flags="-ffile-prefix-map=$ROOT=. -fdebug-prefix-map=$ROOT=. -fmacro-prefix-map=$ROOT=. -ffile-prefix-map=$build=flycast-build -fdebug-prefix-map=$build=flycast-build -fmacro-prefix-map=$build=flycast-build -ffile-prefix-map=$staged_source=flycast-source -fdebug-prefix-map=$staged_source=flycast-source -fmacro-prefix-map=$staged_source=flycast-source"
         LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1750281767 \
