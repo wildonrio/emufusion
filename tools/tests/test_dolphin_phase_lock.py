@@ -16,7 +16,7 @@ class DolphinStampTest(unittest.TestCase):
     def test_only_dolphin_starts_behind_by_default(self):
         registry = (GAME / 'FrameGenerationRendererRegistry.java').read_text()
         self.assertIn('public static boolean stampBehindByDefault(String coreFileName) {', registry)
-        self.assertIn('return "libemufusion_core_dolphin.so".equals(coreFileName);', registry)
+        self.assertIn('return "libemufusion_core_dolphin.so".equals(coreFileName) ||\n                "libemufusion_core_mupen64plus_next.so".equals(coreFileName);', registry)
 
     def test_both_hosts_ask_for_it(self):
         # Both runtimes: Dolphin on GameCube and Wii runs the Vulkan host.

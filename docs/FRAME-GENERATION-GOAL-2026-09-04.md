@@ -293,7 +293,8 @@ November 7 (latest) **— 3.2.161 (235, `b445d1b8`): GameCube widening off for p
   | Mega Drive | 99.9% | 3.7 | 41% | 17.2 / 25.6 ms |
 
 - **After the release, same hour, turn about, on 3.2.161 (QA -1 for the overlay):** Ocarina 97.9% and 94.5% with it, 99.4% and 92.7% without; its pinned phase wandered in the second pair either way, so that was the drop. NSMBU Deluxe 99.8% with it, 99.7% without. So the overlay goes back on by default for 3-D in the tree for 3.2.162.
-- **Next:** Ocarina's phase drift: about half its runs lose the firmware's pin for 10-20 s. Then Lakitu's sign and big fast sprites over a swinging scene at full size, NES and NSMBU Deluxe's fast state, and Ocarina's phase drift.
+- **Ocarina's phase drift, found and fixed for 3.2.162.** The N64 core's stamps follow its run sequence, as Dolphin's did, so a burst leaves them ahead of the clock and the firmware stops pacing it. Its arrival then wanders from 11.2 ms before the slot until a scan boundary is crossed, and each crossing is a cluster of hitches. Same hour, turn about, on 3.2.161 with QA `debug.emufusion.stamp_ahead_ms=-1000`: 99.4% (6.7 per 30 s) and 99.3% (7.9), arrival 11.2 ms throughout, against 98.7% (15.7) and 95.9% (48.6) as they fall. Mupen64Plus-Next now starts its stamps a second behind by default, as Dolphin has since 3.2.158. QA `emufusion_framegen_hardware_phase_lock=0` stamps as they fall.
+- **Next:** Lakitu's sign and big fast sprites over a swinging scene, at full size. Then Lakitu's sign and big fast sprites over a swinging scene at full size, NES and NSMBU Deluxe's fast state, and Ocarina's phase drift.
 
 November 7 **— 3.2.160 (234, `60676ca6`, retry-459): the fast state was the mask; a half-plane jump in the halfway image, fixed; two reported N64 artifacts closed, and two new ones open.**
 

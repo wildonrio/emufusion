@@ -27,10 +27,13 @@ public final class FrameGenerationRendererRegistry {
     /**
      * Whether this core's stamps start behind the clock unless QA says otherwise, so the firmware
      * always paces it. Double Dash swings from clean to over 100 hitches per 30 s by where its
-     * stamps fall.
+     * stamps fall. Ocarina too (2026-11-07, same hour, turn about): 99.4% and 99.3% on cadence
+     * with its arrival held 11.2 ms before the slot throughout, against 98.7% and 95.9% when a
+     * burst left its stamps ahead and its phase wandered for 10-20 s.
      */
     public static boolean stampBehindByDefault(String coreFileName) {
-        return "libemufusion_core_dolphin.so".equals(coreFileName);
+        return "libemufusion_core_dolphin.so".equals(coreFileName) ||
+                "libemufusion_core_mupen64plus_next.so".equals(coreFileName);
     }
 
     /** How far ahead a hardware core feeding this Surface should stamp its images, or zero. */
