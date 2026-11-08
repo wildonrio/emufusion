@@ -1,0 +1,10 @@
+--- a/Source/Core/VideoCommon/VideoConfig.cpp
++++ b/Source/Core/VideoCommon/VideoConfig.cpp
+@@ -56,5 +56,7 @@
+ void VideoConfig::Refresh()
+ {
++  if (const char* emufusion_2d = getenv("EMUFUSION_WS_2D"))
++    fEmufusion2DScale = static_cast<float>(atof(emufusion_2d));
+   if (!s_config_changed_callback_id.has_value())
+   {
+     // There was a race condition between the video thread and the host thread here, if

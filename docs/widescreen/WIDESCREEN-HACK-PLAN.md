@@ -809,7 +809,9 @@ the frame (an effect over the picture itself; XFB copies count, Eternal Darkness
 frame an untextured draw across the whole screen (fades, letterbox bars). Everything else is narrowed.
 Tested on a Mac `dolphin-emu-nogui` built from the same locked source and patches plus two bench-only patches
 (2D scale and a frame-dump interval from the environment), driven through Dolphin's pipe input:
-`~/.cache/emufusion-widescreen/host-build/dolphin-mac`, scripts kept with the session scratch. Wind Waker's
+`tools/widescreen/dolphin_mac_bench.sh` builds it into `~/.cache/emufusion-widescreen/host-build/dolphin-mac`, and
+`tools/widescreen/gc_bench.py GAME OUT narrow|wide SCRIPT` plays a game and keeps every Nth frame at its display shape.
+Games come from the Thor's library into `~/.cache/emufusion-widescreen/roms/gc`, never the repository. Wind Waker's
 three save prompts measure 1.095 to 1.099 picture heights wide against 1.093 to 1.097 narrow in every frame;
 Eternal Darkness's cutscenes widen with full-width bars; Sunshine, Melee and Metroid Prime keep menus, logos
 and prompts at their size while 3D widens; films stay 4:3 in bars. Still wrong: Eternal Darkness's establishing

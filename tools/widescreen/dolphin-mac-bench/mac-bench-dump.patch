@@ -1,0 +1,24 @@
+--- a/Source/Core/VideoCommon/Present.cpp
++++ b/Source/Core/VideoCommon/Present.cpp
+@@ -2,6 +2,9 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+ #include "VideoCommon/Present.h"
++
++#include <algorithm>
++#include <cstdlib>
+ 
+ #include "Common/ChunkFile.h"
+ #include "Core/Config/GraphicsSettings.h"
+@@ -282,6 +285,11 @@
+ 
+ void Presenter::ProcessFrameDumping(u64 ticks) const
+ {
++  // EmuFusion Mac bench only: keep every Nth frame.
++  static int emufusion_frame = 0;
++  if (const char* every = getenv("EMUFUSION_DUMP_EVERY"))
++    if (emufusion_frame++ % std::max(1, atoi(every)) != 0)
++      return;
+   if (g_frame_dumper->IsFrameDumping() && m_xfb_entry)
+   {
+     MathUtil::Rectangle<int> target_rect;
