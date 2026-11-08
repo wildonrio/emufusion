@@ -214,7 +214,10 @@ The 3D engines' generic hacks are where this bites:
   and 2D logos, HUDs and menus stretched 33%. Fixed for the hardware renderer, see "PS1" below.
 - N64 (GLideN64 `16:9 adjusted`) scales 2D back: Ocarina's title logo is the same width narrow and wide.
   Each game still needs that compared, because some draw 2D as polygons.
-- GameCube and Dreamcast: not evaluated yet, and a generic hack is only acceptable under the same test.
+- GameCube: Dolphin's widening draws 2D through a narrower viewport; which 2D keeps its width is the
+  hard part, see "Still-screen stretch audit" below. Off for players until its new rule passes on the Thor.
+- Dreamcast: Flycast's widening shows more of the screen space and never scales anything, so it cannot
+  stretch; its faults are seams and pieces parked off screen, handled in the core (same section).
 
 ## On the Thor (2026-11-05)
 
@@ -764,6 +767,55 @@ scroll shifted, keeping the outer columns of the two extra passes, and the lower
 **PC Engine CD.** The one game, Castlevania: Rondo of Blood, needs a System Card (`syscard3.pce` in `ROMs/pcenginecd/BIOS`), which the Thor does not have and the app never
 downloads. Without it the game does not start, so it cannot be tested. The widening code in the working copy has not drawn a frame.
 
+### Still-screen stretch audit (2026-11-07 and 08)
+
+On 2026-11-07 the owner watched the Thor and saw a stretched picture: "THE IMAGE CAN NEVER BE STRETCHED".
+Yoshi's Story and Wipeout 64 drew menus a third too wide under N64 widening, and Wind Waker's save prompt was
+stretched in one run and not another. GameCube went off for players (`release: false`), and every 3D game
+offered wide on N64, PS1 and Dreamcast was held to QA (`strategy: testing`, `heldFrom: widen`) until a narrow
+and a wide picture of the same paused screen measured alike.
+
+Method: pause, photograph wide, swipe to narrow, photograph, tap wide, photograph; `tools/widescreen/stretch_check.py`
+compares horizontal edges in the middle of each pair over scales 0.90 to 1.45, and every pair is also looked at
+full size. Moving screens prove little: a stretched "Select Yoshi" scored no match at all. On PS1 a tap onto a
+paused 3D scene relaunches into a frame with no 3D, which the keep-2D rule shows at 4:3: that second wide photo
+looks narrow and is right.
+
+- N64: 36 widen. Yoshi's Story and Wipeout 64 fixed-screen (1.33). Held: Pokémon Snap (repeats its menu at the
+  new edges), Shadow Man (ring display drawn twice), Quake II (extra frame bars), Goemon's Great Adventure (a
+  stray triangle at the edge); Banjo-Tooie, Rayman 2, Kirby 64 and Hybrid Heaven have no clean pair yet.
+- PS1: Wipeout XL, Spyro: Year of the Dragon and Die Hard Trilogy widen. Twisted Metal measured 1.33 on two
+  screens: its 3D is not narrowed by the GTE hack yet counts as a 3D scene, so the whole picture was shown
+  stretched. Tekken's city backdrop is a 2D draw narrowed like a HUD, leaving smeared fighters in the new sides.
+  Both fixed-screen. WipEout 3's narrow picture broke on its pause screen; Bushido Blade had no matching pair.
+- Dreamcast: Soul Calibur, Code Veronica, Crazy Taxi, Shenmue, Soul Reaver and MDK 2 widen on the flat-layer core
+  below. Rayman 2 and Jet Grind Radio stay held: their pause dimming stops at the old edges in a seam, and it is
+  not a flat layer (textured, or a modifier volume). Skies of Arcadia waits for its title banner on the new core.
+  Sonic Adventure 1 and 2, Ecco, Star Wars Racer and Fighting Force 2 are still to run.
+- 2D engines: the app shows bsnes-hd's wide picture unstretched (Super Metroid, A Link to the Past widen with
+  sprites and HUD at the same pixel size). The rest of that sample is still to run.
+
+**Dreamcast core (`flycast-emufusion-flat-layers.patch`, 671650ea).** With the widescreen hack on, a flat
+untextured layer (one depth, one colour along each row) that spans exactly the old width is carried to the new
+edges: fades, dimming and letterbox bars, which have no picture to stretch. A frame with fewer than 16 polygons of
+varying depth for 8 frames (menus, titles, films) is scissored to the old width with the sides cleared, so pieces
+parked off screen never show. Soul Calibur's hint band now runs the full width; Crazy Taxi's name entry and
+Shenmue's start menu are clean.
+
+**GameCube rule (`dolphin-emufusion-keep-2d-shape.patch`, ce0d325d).** The old rule left the first N 2D draws
+of a frame full width, N counted from the frame before, and a frame built differently from the one before
+stretched its 2D: that was Wind Waker's prompt. Now only two kinds of 2D keep their width: a draw from a copy of
+the frame (an effect over the picture itself; XFB copies count, Eternal Darkness's films need that), and in a 3D
+frame an untextured draw across the whole screen (fades, letterbox bars). Everything else is narrowed.
+Tested on a Mac `dolphin-emu-nogui` built from the same locked source and patches plus two bench-only patches
+(2D scale and a frame-dump interval from the environment), driven through Dolphin's pipe input:
+`~/.cache/emufusion-widescreen/host-build/dolphin-mac`, scripts kept with the session scratch. Wind Waker's
+three save prompts measure 1.095 to 1.099 picture heights wide against 1.093 to 1.097 narrow in every frame;
+Eternal Darkness's cutscenes widen with full-width bars; Sunshine, Melee and Metroid Prime keep menus, logos
+and prompts at their size while 3D widens; films stay 4:3 in bars. Still wrong: Eternal Darkness's establishing
+shots are full-screen pictures over a live 3D room, which shows past them at both sides, so it stays fixed-screen.
+A full-screen picture over 3D needs the sides blanked, not yet done.
+
 ## Game files that are not there
 
 Many top-rated files on the Thor are 4 to 7 MB stubs, which the app refuses. They cannot be played, so they have no recipe:
@@ -776,7 +828,7 @@ mistake: what looked like a stub was a macOS `._` sidecar, and the real file is 
 Each system in the recipe table has `"release"`. Nothing shows to players until it is true, which
 needs a system's games to have run on the Thor in real play.
 
-On since 2026-11-05: Mega Drive, Game Gear, NES, SNES, Game Boy Color, GBA; v3.2.155 was the first public release to carry them. Next release adds Game Boy (Pokemon Red walked on the Thor) and Dreamcast (Crazy Taxi and Soul Calibur in real play, 2D the same width narrow and wide, swipe and tap both relaunch). It also adds N64 (compared narrow and wide per game; Excitebike 64 failed and stays narrow) and GameCube (Double Dash raced; 2D keeps its shape through the viewport patch). Titles not yet compared stay narrow. Each has at least one
+On since 2026-11-05: Mega Drive, Game Gear, NES, SNES, Game Boy Color, GBA; v3.2.155 was the first public release to carry them. Next release adds Game Boy (Pokemon Red walked on the Thor) and Dreamcast (Crazy Taxi and Soul Calibur in real play, 2D the same width narrow and wide, swipe and tap both relaunch). It also adds N64 (compared narrow and wide per game; Excitebike 64 failed and stays narrow) and GameCube (Double Dash raced; 2D keeps its shape through the viewport patch). Titles not yet compared stay narrow. GameCube went off again on 2026-11-07 (3.2.161) after a stretched prompt, and 3D titles on N64, PS1 and Dreamcast went to QA until the still-screen audit passed them one by one; see that section. Each has at least one
 game played on the Thor, with frame generation on, and Sonic & Knuckles and Contra also with it off.
 `settings put global
 emufusion_qa_widescreen_all 1` still enables everything for testing.
