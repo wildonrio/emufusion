@@ -54,6 +54,18 @@ public final class FrameGenerationRendererRegistry {
         return renderer == null ? 0L : renderer.coreHoldAfterPresentNs();
     }
 
+    /** Whether this Surface's renderer ends a core hold once the next generated image is queued. */
+    public static boolean coreHoldUntilGenerated(Surface surface) {
+        FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
+        return renderer != null && renderer.coreHoldUntilGenerated();
+    }
+
+    /** Whether this Surface's renderer has queued a generated image at or after this time. */
+    public static boolean generatedQueuedSince(Surface surface, long nanoTime) {
+        FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
+        return renderer == null || renderer.generatedQueuedSince(nanoTime);
+    }
+
     static void register(FrameGenerationRenderer renderer) {
         if (renderer == null) throw new NullPointerException("renderer");
         Surface surface = renderer.inputSurface();

@@ -1847,6 +1847,9 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     private final Handler handler;
     private final CountDownLatch started = new CountDownLatch(1);
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    /** When the last generated image was queued, and whether a core should hold for the next (core hold). */
+    private volatile long lastGeneratedQueuedNs = Long.MIN_VALUE / 2;
+    private volatile boolean coreHoldEligible;
     private final SurfaceRetirement surfaceRetirement = new SurfaceRetirement();
     private final AdaptiveFrameRateController frameRate;
     private volatile FrameGenerationRenderer.StatsListener statsListener;
@@ -3098,7 +3101,15 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
     }
 
     @Override public long coreHoldAfterPresentNs() {
-        return closed.get() ? 0L : TimelineSchedulerSwitch.coreHoldNs();
+        return closed.get() || !coreHoldEligible ? 0L : TimelineSchedulerSwitch.coreHoldNs();
+    }
+
+    @Override public boolean coreHoldUntilGenerated() {
+        return TimelineSchedulerSwitch.coreHoldUntilGenerated();
+    }
+
+    @Override public boolean generatedQueuedSince(long nanoTime) {
+        return lastGeneratedQueuedNs - nanoTime >= 0L;
     }
 
     @Override public long takeSourcePhaseNudgeNs() {
@@ -10443,6 +10454,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
             fail("eglSwapBuffers");
         }
         long denseSwapReturnedNs = densePyramidEnabled ? System.nanoTime() : 0L;
+        if (renderedSynthetic) lastGeneratedQueuedNs = System.nanoTime();
+        coreHoldEligible = timelineActive && frameRate.generatesIntermediateFrames();
         boolean densePhysicalFrameCommitted = physicalFramePrepared && physicalTracker.commitPrepared(
                 presentationScansPerOutput(), frameRate.panelPeriodNs());
         if (densePhysicalFrameCommitted && timelineActive && timeline.pendingKeepAlive())

@@ -1079,7 +1079,7 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                     // QA: let the generated image this one completes reach the GPU first.
                     long holdNs = pacedCoreHz > 0.0 ?
                             FrameGenerationRendererRegistry.coreHoldAfterPresentNs(attachedSurface) : 0L;
-                    if (holdNs > 0L) java.util.concurrent.locks.LockSupport.parkNanos(holdNs);
+                    if (holdNs > 0L) holdAfterPresent(holdNs);
                 } else if (host.didRunFrame()) {
                     // Guest PCM must not depend on whether its image was swapped.
                     // This callback is deliberately NOT a presentation claim.
@@ -1123,6 +1123,23 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
             scheduleFrame();
         }, delayNanos, TimeUnit.NANOSECONDS);
     }
+
+    /**
+     * Holds the next guest step after a present: until the generator has queued its next generated
+     * image (by then that image's GPU work is ahead of this core's), at most capNs.
+     */
+    private void holdAfterPresent(long capNs) {
+        long from = System.nanoTime();
+        if (!FrameGenerationRendererRegistry.coreHoldUntilGenerated(attachedSurface)) {
+            java.util.concurrent.locks.LockSupport.parkNanos(capNs);
+            return;
+        }
+        while (System.nanoTime() - from < capNs &&
+                !FrameGenerationRendererRegistry.generatedQueuedSince(attachedSurface, from))
+            java.util.concurrent.locks.LockSupport.parkNanos(HOLD_POLL_NS);
+    }
+
+    private static final long HOLD_POLL_NS = 200_000L;
 
     private boolean canRecoverPresentation() {
         return host != null && host.supportsPresentationRecovery() &&

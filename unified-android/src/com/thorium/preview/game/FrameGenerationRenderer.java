@@ -99,6 +99,12 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default long coreHoldAfterPresentNs() { return 0L; }
 
+    /** Whether the hold may end early, once {@link #generatedQueuedSince} says the image is in. */
+    default boolean coreHoldUntilGenerated() { return false; }
+
+    /** Whether a generated image has been queued to the display at or after this time. */
+    default boolean generatedQueuedSince(long nanoTime) { return true; }
+
     /** The source is Cemu: at a multi-scan output, steady rather than sooner (TimelineSchedulerSwitch). */
     default void setCemuContent(boolean value) {}
 

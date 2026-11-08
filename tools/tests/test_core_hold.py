@@ -24,13 +24,28 @@ class CoreHoldTest(unittest.TestCase):
         body = body[:body.index('} else if (host.didRunFrame())')]
         self.assertIn('long holdNs = pacedCoreHz > 0.0 ?', body)
         self.assertIn('FrameGenerationRendererRegistry.coreHoldAfterPresentNs(attachedSurface) : 0L;', body)
-        self.assertIn('if (holdNs > 0L) java.util.concurrent.locks.LockSupport.parkNanos(holdNs);', body)
+        self.assertIn('if (holdNs > 0L) holdAfterPresent(holdNs);', body)
+
+    def test_the_hold_ends_once_the_generated_image_is_queued(self):
+        loop = (SRC / 'ExperimentalGlesRenderLoop.java').read_text()
+        hold = loop[loop.index('private void holdAfterPresent(long capNs)'):]
+        hold = hold[:hold.index('private static final long HOLD_POLL_NS')]
+        self.assertIn('FrameGenerationRendererRegistry.coreHoldUntilGenerated(attachedSurface)', hold)
+        self.assertIn('while (System.nanoTime() - from < capNs &&', hold)
+        self.assertIn('!FrameGenerationRendererRegistry.generatedQueuedSince(attachedSurface, from))', hold)
+        switch = (SRC / 'game/TimelineSchedulerSwitch.java').read_text()
+        self.assertIn('CORE_HOLD_FIXED_GLOBAL = "emufusion_framegen_core_hold_fixed"', switch)
+        self.assertIn('context.getContentResolver(), CORE_HOLD_FIXED_GLOBAL, 0) == 0;', switch)
+        generator = (SRC / 'game/DisplayFrameGenerator.java').read_text()
+        self.assertIn('if (renderedSynthetic) lastGeneratedQueuedNs = System.nanoTime();', generator)
+        self.assertIn('coreHoldEligible = timelineActive && frameRate.generatesIntermediateFrames();', generator)
+        self.assertIn('return lastGeneratedQueuedNs - nanoTime >= 0L;', generator)
 
     def test_the_attached_generator_answers(self):
         renderer = (SRC / 'game/FrameGenerationRenderer.java').read_text()
         self.assertIn('default long coreHoldAfterPresentNs() { return 0L; }', renderer)
         generator = (SRC / 'game/DisplayFrameGenerator.java').read_text()
-        self.assertIn('return closed.get() ? 0L : TimelineSchedulerSwitch.coreHoldNs();', generator)
+        self.assertIn('return closed.get() || !coreHoldEligible ? 0L : TimelineSchedulerSwitch.coreHoldNs();', generator)
         registry = (SRC / 'game/FrameGenerationRendererRegistry.java').read_text()
         self.assertIn('return renderer == null ? 0L : renderer.coreHoldAfterPresentNs();', registry)
 

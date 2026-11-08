@@ -384,6 +384,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         coreHoldUs = Math.max(0, Math.min(MAX_CORE_HOLD_US, hold));
+        boolean untilGenerated = true;
+        try {
+            if (context != null) untilGenerated = Settings.Global.getInt(
+                    context.getContentResolver(), CORE_HOLD_FIXED_GLOBAL, 0) == 0;
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        coreHoldUntilGenerated = untilGenerated;
         int check = 0;
         try {
             if (context != null) check = Settings.Global.getInt(
@@ -916,6 +924,16 @@ public final class TimelineSchedulerSwitch {
     private static volatile int coreHoldUs;
 
     static long coreHoldNs() { return coreHoldUs * 1_000L; }
+
+    /**
+     * The hold ends as soon as the next generated image has been queued (default), so the core
+     * waits only as long as that image needs; QA emufusion_framegen_core_hold_fixed=1 always
+     * holds the whole time.
+     */
+    static final String CORE_HOLD_FIXED_GLOBAL = "emufusion_framegen_core_hold_fixed";
+    private static volatile boolean coreHoldUntilGenerated = true;
+
+    static boolean coreHoldUntilGenerated() { return coreHoldUntilGenerated; }
 
     /**
      * QA emufusion_framegen_image_check: a preview of each generated image is
