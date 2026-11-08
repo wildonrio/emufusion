@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "b445d1b82fc3f43f55e0d3295a26c05551ba43bfe7167d7e19d45a474eb30817": "Rollback 3.2.161 (235), released and Thor-tested 2026-11-07.",
-    "1b82592e7c55e5b5a583d666c4dae08d2e87d5f020d8f3cfba97f904889f4e87": "Release 3.2.162 (236), GitHub v3.2.162, Thor-tested from a cool start 2026-11-07."
+    "1b82592e7c55e5b5a583d666c4dae08d2e87d5f020d8f3cfba97f904889f4e87": "Rollback 3.2.162 (236), released and Thor-tested 2026-11-07.",
+    "5c3099d7c53b44ae761bb5156978dbaea1ce5f78907fde760ecdf32039fa8e49": "Release 3.2.163 (237), GitHub v3.2.163, Thor-tested from a cool start 2026-11-08."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -1801,6 +1801,26 @@
     "unified-android/build/emufusion-3.2.160-phase2-phase3-qualification.apk": {
       "sha256": "aec75de888cdf2abf276f323f6575aecad8d319a8500339548445865e86efb15",
       "reason": "Superseded 3.2.160 (234); 3.2.161 is the rollback for 3.2.162, 2026-11-07."
+    },
+    "unified-android/build/emufusion-3.2.161-phase2-phase3-qualification-b445d1b82fc3f43f55e0d3295a26c05551ba43bfe7167d7e19d45a474eb30817.apk": {
+      "sha256": "b445d1b82fc3f43f55e0d3295a26c05551ba43bfe7167d7e19d45a474eb30817",
+      "reason": "Superseded 3.2.161 (235); 3.2.162 is the rollback for 3.2.163, 2026-11-08."
+    },
+    "unified-android/build/emufusion-3.2.161-phase2-phase3-qualification.apk": {
+      "sha256": "b445d1b82fc3f43f55e0d3295a26c05551ba43bfe7167d7e19d45a474eb30817",
+      "reason": "Superseded 3.2.161 (235) plain copy; 3.2.162 is the rollback for 3.2.163, 2026-11-08."
+    },
+    "unified-android/build/emufusion-3.2.162-phase2-phase3-qualification-9e0374dca337161f34799b06b66e95ed660bcd72c48b30ce3241131442ffc7ec.apk": {
+      "sha256": "9e0374dca337161f34799b06b66e95ed660bcd72c48b30ce3241131442ffc7ec",
+      "reason": "Closed NES drain/small-core trial candidate retry-468, 2026-11-08."
+    },
+    "unified-android/build/emufusion-3.2.162-phase2-phase3-qualification-7edac32d55c070cd3bfd3ba3ec9c52b4922ef16d5bb6a849d0029393808e700f.apk": {
+      "sha256": "7edac32d55c070cd3bfd3ba3ec9c52b4922ef16d5bb6a849d0029393808e700f",
+      "reason": "Closed widescreen-prompt trial candidate retry-469, 2026-11-08; released as 3.2.163 from retry-470."
+    },
+    "unified-android/build/emufusion-3.2.162-phase2-phase3-qualification.apk": {
+      "sha256": "7edac32d55c070cd3bfd3ba3ec9c52b4922ef16d5bb6a849d0029393808e700f",
+      "reason": "Plain copy of trial candidate retry-469, 2026-11-08; 3.2.162 itself stays as its hash-named copy."
     }
   }
 }

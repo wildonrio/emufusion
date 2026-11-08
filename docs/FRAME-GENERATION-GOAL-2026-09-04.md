@@ -268,7 +268,41 @@ Nothing is at 10/10 on all three measures yet. Over the last two gates the compo
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 7 (latest) **— 3.2.162 (236, `1b82592e`): N64 stamps behind the clock, 3-D overlays held, a failed drain retried; N64, PlayStation and Dreamcast widescreen paused for players.**
+November 8 (latest) **— 3.2.163 (237, `5c3099d7`, retry-470): the widescreen prompt held NES in the slower compositor state for its first 10-20 s; with it redrawn only on change, NES is fast from its first second. A short fast stay is retried before the drain backs off.**
+
+- **Why NES's fast state came and went.** Every SMB3 run on retry-468 started slow and stayed slow for 10-13 s. The drains at +3 and +5 s failed, which doubled the drain spacing to 30 s, so the fast state only came by itself at +20-22 s. A layer poller (`fg/sfpoll.py`: each app-window layer's frames in the last second, from `dumpsys SurfaceFlinger --latency` against the game surface) showed the app window queuing 75-99 frames a second until +7 s, then none. That was the widescreen prompt: it redrew every vsync (`postInvalidateOnAnimation`) for its 7.7 s of glow and fade. The widescreen stream now redraws it only when it changes, six times per prompt or hint (ddaa09c).
+
+  | SMB3, poller on | Fast in the 16-s window | First generated / real, median |
+  | --- | --- | --- |
+  | retry-468, three runs | 48%, 38%, 34% | 16.4-17.6 / 24.8-25.9 ms |
+  | retry-469 (prompt fix), three runs | 100%, 94%, 88% | 9.0-9.1 / 17.4 ms |
+
+  On 469 the fast state started in the first second with no drain, and the app window queued 3-5 frames at the start and none after. Short falls in steady play remain: about 1 s at +7 and +26 s that recovered alone, and one 2-s fall that the next drain fixed, all with the app window idle. The poller's own compositor reads may cause some of them.
+- **Drain:** a fast state that falls back within 4 s gets one retry as soon as the slower state has lasted 2 s, before the spacing doubles (fc883f4). It was aimed at the start-of-play case above, whose cause turned out to be the prompt.
+- **Small cores kept full for every output, not adopted** (QA `emufusion_framegen_small_cores=2`, fcf27ce): NES reached the fast state at +8, +31 and +20 s, against +11, +12 and +13 s by default, and was fast for 79%, 22% and 53% of the window against 100%, 100% and 98%. On NES the compositor's commit on a small core isn't what drops the state.
+- **Check on the release build (retry-470), cool starts, default settings (Ocarina wide and Star Fox 64 narrow, the owner's choices):**
+
+  | Game | On cadence | Hitches per 30 s | Fast | First generated / real, median |
+  | --- | --- | --- | --- | --- |
+  | Wind Waker HD | 99.6% | 7.3 | 100% | 19.4 / 36.0 ms |
+  | Mega Drive | 99.8% | 5.5 | 85% | 8.8 / 17.1 ms |
+  | NES (SMB3), two runs | 99.9%, 99.9% | 1.8, 1.8 | 94%, 94% | 9.1 / 17.5, 9.1 / 17.4 ms |
+  | NSMBU Deluxe | 99.9% | 3.6 | 55% | 10.6 / 19.0 ms |
+  | Star Fox 64 (narrow) | 98.3% | 31.0 | 99% | 11.2 / 27.8 ms |
+  | Ocarina of Time (wide) | 94.3% | 68.1 | 99% | 11.1 / 36.1 ms |
+
+  - Ocarina, now wide: the first 28 s held 3 scans on every frame at 20 fps, then the phase wandered (2- and 4-scan pairs), the drift signature that the N64 stamp change had removed narrow (99.4%, 99.3%). A pair on the title's attract demo, both arms in fresh QA sessions (the wide arm taps a side bar), points at the wide picture: the per-second median arrival left the pinned 11.2 +-0.5 ms in 12 of 24 s wide and 0 of 25 s narrow (the gate's wide run: 21 of 51 s at 10.0-10.4 ms; a narrow run from 3.2.162: 4 of 52 s). The wide frame arrives about a millisecond later. Ocarina stays wide; the fix belongs to frame generation.
+  - Star Fox 64: all its late frames fell in the first 6 s of the window.
+  - Wind Waker HD: two earlier runs aren't frame-generation results. My gate queue left out its title-screen settings (`NOMOVE=1 SETTLE=12 WARMUP_SECONDS=55`), so the harness's inputs left the title for a static menu; with them, the table's 99.6%.
+- **Harness:**
+  - A Metroid run (a case added for a game without a recipe) never presented, and pace_card's cleanup failed on the settings server before it could sleep the panels. Both panels stayed on from 06:03 to about 06:08 until the next run took the lock. The cleanup now sleeps the panels first and always, and `onerun.sh` force-stops and sleeps the Thor if it is still awake when a run ends.
+  - The run tools wrote a fixed brightness setting of 70 afterward. They now restore the value they found, and nothing writes 70. The owner's own value isn't recorded anywhere; the setting was put back from 1 to 70, its value before the failed run.
+  - `thor_smoke.py` takes an optional `FG_QA_SESSION`, which launches the game in a qualification session (`--ez qualification_only true` with `--es qualification_session`; the app refuses the session alone, which cost the first Ocarina pair): its own saves and widescreen choices, never the owner's. Gate runs stay in the owner's namespace, as before: they restore and commit each test game's Quick Resume, which the owner's 2026-10-23 permission covers.
+- **Host tests:** Java passes. Python: 39 files timed out under a load average near 380 from other work on the Mac, and all 39 pass when rerun one at a time, so 410 of 410.
+- **Next:** Ocarina's drift wide; the steady-play falls on NES without the poller; Mario Kart 64 at play speed with the image check off and on; then Lakitu's sign.
+- **Disk:** 0.8 GB of NES system traces removed now; 3.2.161 (two copies) and the 468 and 469 trial APKs (three files) are recorded for retirement, about 2.0 GB, removed by the next build's cleanup.
+
+November 7 **— 3.2.162 (236, `1b82592e`): N64 stamps behind the clock, 3-D overlays held, a failed drain retried; N64, PlayStation and Dreamcast widescreen paused for players.**
 
 - **Why now:** the widescreen stream found menus stretched from 4:3 to 16:9 in Yoshi's Story and Wipeout 64, and couldn't prove the other 3-D games unstretched. So 65 N64, PlayStation and Dreamcast games went to QA until their menus, pause screens and HUDs measure 1.00.
 - **Frame generation in this release** (details in the 3.2.161 entry below):
