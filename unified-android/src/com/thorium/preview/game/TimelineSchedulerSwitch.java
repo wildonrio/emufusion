@@ -376,6 +376,14 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         realPredraw = predraw;
+        int hold = 0;
+        try {
+            if (context != null) hold = Settings.Global.getInt(
+                    context.getContentResolver(), CORE_HOLD_GLOBAL, 0);
+        } catch (RuntimeException ignored) {
+            // Unreadable settings keep the default.
+        }
+        coreHoldUs = Math.max(0, Math.min(MAX_CORE_HOLD_US, hold));
         int check = 0;
         try {
             if (context != null) check = Settings.Global.getInt(
@@ -895,6 +903,19 @@ public final class TimelineSchedulerSwitch {
     private static volatile boolean realPredraw = true;
 
     static boolean realPredraw() { return realPredraw; }
+
+    /**
+     * QA emufusion_framegen_core_hold_us (default 0, off): after a paced hardware core presents an
+     * image, hold its next step this long, so its GPU work for the next image queues behind the
+     * generated image that the new one completes. Ocarina wide (Thor, 2026-11-08): the generated
+     * image's plan to done went from 2.8 ms narrow to 5.0 ms wide, and 215 of 464 finished after
+     * the compositor's latch (narrow: 0 and 11).
+     */
+    static final String CORE_HOLD_GLOBAL = "emufusion_framegen_core_hold_us";
+    static final int MAX_CORE_HOLD_US = 12_000;
+    private static volatile int coreHoldUs;
+
+    static long coreHoldNs() { return coreHoldUs * 1_000L; }
 
     /**
      * QA emufusion_framegen_image_check: a preview of each generated image is

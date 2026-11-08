@@ -1076,6 +1076,10 @@ public final class ExperimentalGlesRenderLoop implements Closeable {
                 if (presented) {
                     hasPresentedSinceClockReset = true;
                     listener.onFramePresented();
+                    // QA: let the generated image this one completes reach the GPU first.
+                    long holdNs = pacedCoreHz > 0.0 ?
+                            FrameGenerationRendererRegistry.coreHoldAfterPresentNs(attachedSurface) : 0L;
+                    if (holdNs > 0L) java.util.concurrent.locks.LockSupport.parkNanos(holdNs);
                 } else if (host.didRunFrame()) {
                     // Guest PCM must not depend on whether its image was swapped.
                     // This callback is deliberately NOT a presentation claim.

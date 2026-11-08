@@ -93,6 +93,12 @@ public interface FrameGenerationRenderer extends AutoCloseable {
      */
     default long takeHardwareSourcePhaseNudgeNs() { return 0L; }
 
+    /**
+     * How long a paced hardware core should wait after presenting an image before its next step,
+     * so its GPU work does not hold up the generated image that image completes; zero for none.
+     */
+    default long coreHoldAfterPresentNs() { return 0L; }
+
     /** The source is Cemu: at a multi-scan output, steady rather than sooner (TimelineSchedulerSwitch). */
     default void setCemuContent(boolean value) {}
 

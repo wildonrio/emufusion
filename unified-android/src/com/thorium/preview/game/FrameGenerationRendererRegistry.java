@@ -48,6 +48,12 @@ public final class FrameGenerationRendererRegistry {
         return renderer == null ? 0L : renderer.takeHardwareSourcePhaseNudgeNs();
     }
 
+    /** How long a paced hardware core feeding this Surface should hold after presenting, or zero. */
+    public static long coreHoldAfterPresentNs(Surface surface) {
+        FrameGenerationRenderer renderer = surface != null && surface.isValid() ? find(surface) : null;
+        return renderer == null ? 0L : renderer.coreHoldAfterPresentNs();
+    }
+
     static void register(FrameGenerationRenderer renderer) {
         if (renderer == null) throw new NullPointerException("renderer");
         Surface surface = renderer.inputSurface();
