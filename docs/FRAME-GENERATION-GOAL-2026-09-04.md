@@ -268,7 +268,33 @@ Nothing is at 10/10 on all three measures yet. Over the last two gates the compo
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 7 (latest) **— 3.2.160 (234, `60676ca6`, retry-459): the fast state was the mask; a half-plane jump in the halfway image, fixed; two reported N64 artifacts closed, and two new ones open.**
+November 7 (latest) **— 3.2.161 (235, `b445d1b8`): GameCube widening off for players (some screens stretched); static overlays for 3-D tested and held back.**
+
+- **Why this release:** the widescreen stream saw The Wind Waker's save prompt stretched from 4:3 to 16:9 in one run. So GameCube widening is off for players (`systems.gamecube.release = false`) until 2-D can never stretch. The frame generation code for players is 3.2.160's. The only additions are a QA marker that keeps hold-out images at full size (`/data/local/tmp/emufusion-holdout-full`) and the 3-D overlay default behind QA.
+- **Mario Kart 64 and Wipeout 64, live and full size.** Captured on the widescreen stream's route (weaving off the road into the wall). At full size the shipped generator shreds "LAP 1/3", the timer, the "8th", the mini-map and Lakitu's "REVERSE" sign when the scene swings under them. Scored at 320 wide the excess is small (Mario Kart 64 0.106%, 19% of frames over 0.1%), so the measure underweights thin HUD text.
+- **How still the HUD is (full-size real frames, 24 pairs):** the "8th" is still in every pair for 93% of its pixels. Most of the LAP text holds. The position portraits and the map's dots change too often to count as overlay.
+- **Static overlays for 3-D (a pixel unchanged for 60 real frames shown unwarped; QA `emufusion_framegen_static_overlay=-1`).** Live, the shipped level and the overlay on the same pairs:
+
+  | Set | Excess area without -> with | Frames over 0.1% |
+  | --- | --- | --- |
+  | Mario Kart 64, full size | 0.106 -> 0.095% | 19% -> 19% |
+  | Wipeout 64, full size | 0.027 -> 0.025% | 11% -> 11% |
+  | Ocarina | 0.006 -> 0.003% | 0% -> 0% |
+  | Double Dash | 0.032 -> 0.032% | 16% -> 16% |
+
+  At full size it keeps "LAP 1/3" and the timer's frame crisp where the shipped level smears them. It doesn't help Lakitu's sign, the portraits or a pulsing "8th".
+  - **Held back:** with it on by default (retry-464), the gate had Ocarina at 88.6% with 135 hitches per 30 s, because its pinned phase wandered for two stretches as in some 3.2.159 runs, and a keep-alive stretch. NSMBU Deluxe was at 99.4% with 20 hitches. Wind Waker HD 98.8%, 21.9; Double Dash 100%, 0; Mega Drive 99.9%, 1.8; NES 100%, 0. Until a same-hour comparison shows the drop isn't the overlay, it stays QA.
+- **Tried and not adopted:** a warp sample landing on a long-static pixel replaced by the other frame's, so the scene can't drag a copy of the HUD: no gain live (Mario Kart 64 10 -> 8% of frames, Wipeout 64 19 -> 21%). The image check on the replay of the driving sets: frames 32 -> 16% but area 1.68 -> 3.70%.
+- **Check on the release build (retry-465), cool starts:**
+
+  | Game | On cadence | Hitches per 30 s | Fast | First generated / real, median |
+  | --- | --- | --- | --- | --- |
+  | Wind Waker HD | 99.3% | 11.8 | 100% | 19.4 / 36.0 ms |
+  | Mega Drive | 99.9% | 3.7 | 41% | 17.2 / 25.6 ms |
+
+- **Next:** Ocarina and NSMBU Deluxe with the overlay on and off, turn about. Then Lakitu's sign and big fast sprites over a swinging scene at full size, NES and NSMBU Deluxe's fast state, and Ocarina's phase drift.
+
+November 7 **— 3.2.160 (234, `60676ca6`, retry-459): the fast state was the mask; a half-plane jump in the halfway image, fixed; two reported N64 artifacts closed, and two new ones open.**
 
 - **Separating the mask from paused cores (3.2.159 as released, core control logged twice a second).** Mega Drive with core control holding gold at 3 active and prime at 0: fast 100%, 88%, at 8.7 / 17.1 ms (0.4 ms above the structural minimum). So the paused cores were not the cause: the narrowed mask was. NES fast 38% in one run, 60% in the gate; the drain's spacing had doubled to 30 s early in that run.
 - **Keeping every core occupied, from the shell (not adopted):** eight spinners at the lowest priority stopped core control's pausing (gold 4, prime 1 throughout) and no falls from the fast state, but Mega Drive went to 97.5, 97.9%, 88, 75 hitches per 30 s, 11.2-12.7 / 19.5-21.0 ms, and NES to 96.9%, 98 hitches. The sources' own timing suffered.
