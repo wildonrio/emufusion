@@ -19,12 +19,20 @@ import java.util.List;
  * bar that fades as the game starts, a brief hint once it is on, and a swipe in from
  * either edge to turn it off. It sits over the game but draws nothing and claims no touch
  * outside those moments and places, so it never costs a frame during play.
+ *
+ * It redraws only when what it shows changes: a few steps of fade in and out, nothing while
+ * it holds still. Each redraw is a frame of this window beside the game, and redrawing every
+ * frame kept the compositor on its slow path for the prompt's whole seven seconds.
  */
 final class WidescreenOverlayView extends View {
     private static final long PROMPT_MS = 7000L;
     private static final long HINT_MS = 3500L;
+    private static final long FADE_IN_MS = 250L;
     private static final long FADE_MS = 700L;
-    private static final long GLOW_PERIOD_MS = 1600L;
+    private static final int FADE_IN_STEPS = 2;
+    private static final int FADE_OUT_STEPS = 4;
+    // The prompt's glow, held still: the halo's share of the text size and its strength.
+    private static final float GLOW = 0.6f;
     private static final String[] PROMPT_LINES = {"Tap here", "for", "widescreen"};
     private static final String HINT = "Swipe in from the edge to disable widescreen";
 
@@ -162,12 +170,12 @@ final class WidescreenOverlayView extends View {
 
     @Override protected void onDraw(Canvas canvas) {
         long now = SystemClock.uptimeMillis();
-        boolean animating = false;
+        long next = Long.MAX_VALUE;
         if (promptStartMs != 0L) {
             long age = now - promptStartMs;
             if (age < PROMPT_MS + FADE_MS) {
                 drawPrompt(canvas, age);
-                animating = true;
+                next = Math.min(next, untilNextStep(age, PROMPT_MS));
             } else {
                 promptStartMs = 0L;
             }
@@ -176,25 +184,41 @@ final class WidescreenOverlayView extends View {
             long age = now - hintStartMs;
             if (age < HINT_MS + FADE_MS) {
                 drawHint(canvas, age);
-                animating = true;
+                next = Math.min(next, untilNextStep(age, HINT_MS));
             } else {
                 hintStartMs = 0L;
             }
         }
-        if (animating) postInvalidateOnAnimation();
+        if (next != Long.MAX_VALUE) postInvalidateDelayed(Math.max(1L, next));
     }
 
+    /** Opacity in a few steps, so a fade costs a handful of redraws, not one every frame. */
     private static float fade(long age, long shownMs) {
-        if (age < 250L) return age / 250f;
-        if (age > shownMs) return Math.max(0f, 1f - (age - shownMs) / (float) FADE_MS);
-        return 1f;
+        if (age < FADE_IN_MS) return (age * FADE_IN_STEPS / FADE_IN_MS + 1) / (float) FADE_IN_STEPS;
+        if (age < shownMs) return 1f;
+        long step = (age - shownMs) * FADE_OUT_STEPS / FADE_MS + 1;
+        return Math.max(0f, 1f - step / (float) FADE_OUT_STEPS);
+    }
+
+    /** How long until fade() next gives a different opacity, the last time being when it is gone. */
+    private static long untilNextStep(long age, long shownMs) {
+        if (age < FADE_IN_MS) {
+            long step = FADE_IN_MS / FADE_IN_STEPS;
+            long boundary = (age / step + 1) * step;
+            // Fully faded in at the last step: the next change is the fade out.
+            return (boundary < FADE_IN_MS ? boundary : shownMs) - age;
+        }
+        if (age < shownMs) return shownMs - age;
+        long step = FADE_MS / FADE_OUT_STEPS;
+        long boundary = shownMs + ((age - shownMs) / step + 1) * step;
+        // The last step would show nothing: go straight to the redraw that clears it.
+        return (boundary < shownMs + FADE_MS - step ? boundary : shownMs + FADE_MS) - age;
     }
 
     private void drawPrompt(Canvas canvas, long age) {
         float bar = barWidth();
         if (bar < barMinimumPixels) return;
-        float glow = 0.5f + 0.5f * (float) Math.sin(2.0 * Math.PI * age / GLOW_PERIOD_MS);
-        float alpha = fade(age, PROMPT_MS) * (0.75f + 0.25f * glow);
+        float alpha = fade(age, PROMPT_MS) * (0.75f + 0.25f * GLOW);
         float size = getResources().getDisplayMetrics().scaledDensity * 20f;
         text.setShadowLayer(0f, 0f, 0f, 0);
         text.setTextSize(size);
@@ -204,7 +228,7 @@ final class WidescreenOverlayView extends View {
         if (widest > room) size *= room / widest;
         text.setTextSize(size);
         text.setColor(Color.argb(Math.round(255f * alpha), 0xE8, 0xF6, 0xFF));
-        float radius = size * (0.35f + 0.55f * glow);
+        float radius = size * (0.35f + 0.55f * GLOW);
         text.setShadowLayer(radius, 0f, 0f, Color.argb(Math.round(240f * alpha), 0x5C, 0xC8, 0xFF));
         float lineHeight = size * 1.3f;
         float top = (getHeight() - lineHeight * PROMPT_LINES.length) / 2f + size;
