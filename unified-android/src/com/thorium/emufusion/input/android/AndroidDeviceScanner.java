@@ -1,6 +1,8 @@
 package com.thorium.emufusion.input.android;
 
 import android.os.Build;
+import android.os.SystemClock;
+import android.util.Log;
 import android.view.InputDevice;
 
 import com.thorium.emufusion.input.AndroidInputCodes;
@@ -13,6 +15,7 @@ import java.util.Set;
 
 /** Thin Android adapter; all matching and policy decisions remain host-JVM testable. */
 public final class AndroidDeviceScanner {
+    private static final String TAG = "EmuFusionInput";
     private static final int[] KNOWN_KEYS = {
             AndroidInputCodes.DPAD_UP, AndroidInputCodes.DPAD_DOWN,
             AndroidInputCodes.DPAD_LEFT, AndroidInputCodes.DPAD_RIGHT,
@@ -30,7 +33,7 @@ public final class AndroidDeviceScanner {
 
     public static List<GamepadDescriptor> scan() {
         List<GamepadDescriptor> result = new ArrayList<>();
-        for (int id : InputDevice.getDeviceIds()) {
+        for (int id : deviceIds()) {
             InputDevice device = InputDevice.getDevice(id);
             if (device == null || device.isVirtual()) continue;
             int sources = device.getSources();
@@ -50,5 +53,24 @@ public final class AndroidDeviceScanner {
                     keys, axes));
         }
         return result;
+    }
+
+    /**
+     * Android can refuse the list for a moment while a game starts ("already registered an
+     * InputDevicesChangedListener", once in 345 Thor launches), and the game then failed to start.
+     * Try again briefly, then go on with none: a pad's first input scans again.
+     */
+    private static int[] deviceIds() {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return InputDevice.getDeviceIds();
+            } catch (SecurityException refused) {
+                if (attempt == 4) {
+                    Log.w(TAG, "Input devices unavailable; scanning again on first input", refused);
+                    return new int[0];
+                }
+                SystemClock.sleep(25L << attempt);
+            }
+        }
     }
 }
