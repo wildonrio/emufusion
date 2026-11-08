@@ -3937,21 +3937,20 @@
       "offOptions": {},
       "games": {
         "Crazy Taxi": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: a real fare driven at 16:9; the city extends, PRESS START keeps its width, HUD holds its shape. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
-          "heldFrom": "widen"
+          "tested": "2026-11-05 Thor: a real fare driven at 16:9; the city extends, PRESS START keeps its width, HUD holds its shape. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: the race pause measures 1.00. On the old core the name entry showed menu pieces parked off screen at both sides; the flat-layer core shows that 2D screen at the old width with black sides. Not stretched. Needs the flat-layer Flycast core (671650ea, 3.2.164 on)"
         },
         "Jet Grind Radio": {
           "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: attract and comic intro; logo and text keep their shape, the city extends. Real play still to do. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
+          "tested": "2026-11-05 Thor: attract and comic intro; logo and text keep their shape, the city extends. Real play still to do. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: the pause menu over play measures 1.00, but its dimming stops at the old edges in a hard seam, on the flat-layer core too. Held",
           "heldFrom": "widen"
         },
         "Rayman 2: The Great Escape": {
           "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: name screen, 3D wide behind 2D text that keeps its shape. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
+          "tested": "2026-11-05 Thor: name screen, 3D wide behind 2D text that keeps its shape. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: the pause menu measures 1.00, but its dimming stops at the old edges in a visible seam (brightness 40 to 47), on the flat-layer core too: the dimming is not a flat layer that can be carried out. Held",
           "heldFrom": "widen"
         },
         "Sonic Adventure": {
@@ -3961,21 +3960,19 @@
           "heldFrom": "widen"
         },
         "Soul Calibur": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: fights in attract mode at 16:9; the arena extends, health bars and text keep their shape. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
-          "heldFrom": "widen"
+          "tested": "2026-11-05 Thor: fights in attract mode at 16:9; the arena extends, health bars and text keep their shape. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: a paused fight measures 1.00 narrow against wide on both the old and the flat-layer core; the arena reaches both edges, the pause menu and health bars keep their width, and the hint band behind \"Closes this window.\" now runs the full width. Not stretched. Needs the flat-layer Flycast core (671650ea, 3.2.164 on)"
         },
         "Resident Evil: Code Veronica": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: title keeps its shape in bars, demo play in 3D at 16:9. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
-          "heldFrom": "widen"
+          "tested": "2026-11-05 Thor: title keeps its shape in bars, demo play in 3D at 16:9. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: the title measures 1.00 and keeps its shape in bars. Not stretched. Needs the flat-layer Flycast core (671650ea, 3.2.164 on)"
         },
         "Skies of Arcadia": {
           "strategy": "testing",
           "options": {},
-          "tested": "2026-11-05 Thor: title logo keeps its shape; its plate stops at the old edges while clouds run on. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
+          "tested": "2026-11-05 Thor: title logo keeps its shape; its plate stops at the old edges while clouds run on. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: a dialogue scene measures 1.00 and the room widens behind a text box of the same width, but the title banner that stopped at the old edges on 2026-11-05 has not been seen on the flat-layer core. Held",
           "heldFrom": "widen"
         },
         "Marvel vs. Capcom 2": {
@@ -3984,22 +3981,19 @@
           "tested": "2026-11-05 Thor: title background is cut at the sides; a 2D fighter, a fight not reached"
         },
         "Shenmue": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: opening scene in 3D at 16:9. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
-          "heldFrom": "widen"
+          "tested": "2026-11-05 Thor: opening scene in 3D at 16:9. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: the start menu measures 1.00; the old core filled its sides with white, the flat-layer core shows that 2D screen at the old width with black sides. Not stretched. Needs the flat-layer Flycast core (671650ea, 3.2.164 on)"
         },
         "Legacy of Kain: Soul Reaver": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: only the opening movie, 4:3 in bars. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
-          "heldFrom": "widen"
+          "tested": "2026-11-05 Thor: only the opening movie, 4:3 in bars. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: the pause screen in play measures 1.00; the level reaches both edges and the pause box keeps its width. Not stretched. Needs the flat-layer Flycast core (671650ea, 3.2.164 on)"
         },
         "MDK 2": {
-          "strategy": "testing",
+          "strategy": "widen",
           "options": {},
-          "tested": "2026-11-05 Thor: comic intro fills the width, judged by eye; no narrow frame of it to compare. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py",
-          "heldFrom": "widen"
+          "tested": "2026-11-05 Thor: comic intro fills the width, judged by eye; no narrow frame of it to compare. Play not reached. 2026-11-07: held to QA only by the stretch audit. On the Thor, Yoshi's Story and Wipeout 64 drew their menus a third too wide (4:3 stretched to 16:9) under this system's widening, and no 2D screen of this game has yet been measured narrow against wide. Back to widen once its menus, pause screen and HUD measure 1.00 with tools/widescreen/stretch_check.py. 2026-11-08 Thor, stretch audit on still screens: the main menu measures 1.00 and keeps its shape in bars. Not stretched. Needs the flat-layer Flycast core (671650ea, 3.2.164 on)"
         },
         "Sonic Adventure 2": {
           "strategy": "testing",
