@@ -1,7 +1,7 @@
 """The small cores are kept full during Cemu's held output (3.2.159).
 
 Checks the QA switch, that the occupancy starts and stops with the frame thread and only that output
-keeps it going, that its threads stay at the lowest priority on one small core each without executing,
+keeps it going unless QA 2 asks for every output, that its threads stay at the lowest priority on one small core each without executing,
 and that the native mask is the lowest-clocked cluster and empty on uniform CPUs."""
 from pathlib import Path
 import unittest
@@ -16,7 +16,11 @@ class SmallCoreOccupancyTest(unittest.TestCase):
         switch = (GAME / 'TimelineSchedulerSwitch.java').read_text()
         self.assertIn('SMALL_CORES_GLOBAL = "emufusion_framegen_small_cores"', switch)
         self.assertIn('private static volatile boolean smallCores = true;', switch)
-        self.assertIn('context.getContentResolver(), SMALL_CORES_GLOBAL, 1) != 0;', switch)
+        self.assertIn('context.getContentResolver(), SMALL_CORES_GLOBAL, 1);', switch)
+        self.assertIn('smallCores = occupy != 0;', switch)
+        # QA 2: every timeline output, for the NES compositor-state trial (2026-11-08).
+        self.assertIn('smallCoresEveryOutput = occupy == 2;', switch)
+        self.assertIn('private static volatile boolean smallCoresEveryOutput;', switch)
         occupancy = (GAME / 'SmallCoreOccupancy.java').read_text()
         self.assertIn('if (!TimelineSchedulerSwitch.smallCores()) return NONE;', occupancy)
 
@@ -29,7 +33,8 @@ class SmallCoreOccupancyTest(unittest.TestCase):
 
     def test_only_the_held_output_keeps_it_going(self):
         generator = (GAME / 'DisplayFrameGenerator.java').read_text()
-        self.assertIn('if (timelineActive && heldSwapOutput()) smallCoreOccupancy.frame();', generator)
+        self.assertIn('if (timelineActive && (heldSwapOutput() || TimelineSchedulerSwitch.smallCoresEveryOutput()))\n'
+                      '            smallCoreOccupancy.frame();', generator)
         self.assertEqual(generator.count('smallCoreOccupancy.frame()'), 1)
 
     def test_threads_give_way_and_stop_when_nothing_is_planned(self):

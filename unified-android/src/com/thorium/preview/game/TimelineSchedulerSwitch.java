@@ -401,14 +401,15 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         fastCores = fast;
-        boolean occupy = true;
+        int occupy = 1;
         try {
             if (context != null) occupy = Settings.Global.getInt(
-                    context.getContentResolver(), SMALL_CORES_GLOBAL, 1) != 0;
+                    context.getContentResolver(), SMALL_CORES_GLOBAL, 1);
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
-        smallCores = occupy;
+        smallCores = occupy != 0;
+        smallCoresEveryOutput = occupy == 2;
         boolean quiet = false;
         try {
             if (context != null) quiet = Settings.Global.getInt(
@@ -926,9 +927,17 @@ public final class TimelineSchedulerSwitch {
     static boolean fastCores() { return fastCores; }
     static final String SMALL_CORES_GLOBAL = "emufusion_framegen_small_cores";
     private static volatile boolean smallCores = true;
+    private static volatile boolean smallCoresEveryOutput;
 
     /** The small cores kept full during Cemu's held output (SmallCoreOccupancy); QA 0 for none. */
     static boolean smallCores() { return smallCores; }
+
+    /**
+     * QA emufusion_framegen_small_cores=2: the small cores kept full for every timeline output,
+     * not only Cemu's held one, to see whether the compositor's commit on a small core is what
+     * drops NES from the fast state.
+     */
+    static boolean smallCoresEveryOutput() { return smallCoresEveryOutput; }
 
     /**
      * QA opt-in (emufusion_framegen_quiet_skip=1, 2026-11-04): compositor

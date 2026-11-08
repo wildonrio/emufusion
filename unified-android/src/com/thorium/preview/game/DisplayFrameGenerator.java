@@ -10496,7 +10496,8 @@ public final class DisplayFrameGenerator implements FrameGenerationRenderer,
         builtInLastCommittedTargetNs = deadline.contentPresentationTimeNs();
         heldSwapCadence.committed(System.nanoTime(), plannedSooner,
                 presentationScansPerOutput() * frameRate.panelPeriodNs());
-        if (timelineActive && heldSwapOutput()) smallCoreOccupancy.frame();
+        if (timelineActive && (heldSwapOutput() || TimelineSchedulerSwitch.smallCoresEveryOutput()))
+            smallCoreOccupancy.frame();
         if (physicalFramePrepared && !densePhysicalFrameCommitted)
             logPhysicalPresentationFailure(physicalTracker);
         if (densePyramidEnabled) {
