@@ -268,7 +268,28 @@ Nothing is at 10/10 on all three measures yet. Over the last two gates the compo
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
-November 7 (latest) **— 3.2.161 (235, `b445d1b8`): GameCube widening off for players (some screens stretched); static overlays for 3-D tested and held back.**
+November 7 (latest) **— 3.2.162 (236, `1b82592e`): N64 stamps behind the clock, 3-D overlays held, a failed drain retried; N64, PlayStation and Dreamcast widescreen paused for players.**
+
+- **Why now:** the widescreen stream found menus stretched from 4:3 to 16:9 in Yoshi's Story and Wipeout 64, and couldn't prove the other 3-D games unstretched. So 65 N64, PlayStation and Dreamcast games went to QA until their menus, pause screens and HUDs measure 1.00.
+- **Frame generation in this release** (details in the 3.2.161 entry below):
+  - N64 stamps start a second behind the clock, so the firmware always paces the core (Ocarina 99.4/99.3% against 98.7/95.9%).
+  - Static overlays are held for 3-D (a pixel unchanged for 60 real frames is shown unwarped).
+  - A compositor drain that brings no fast state is tried once more after 2 s before its spacing doubles. On the check below, NES's slow run had a drain that reached the fast state briefly and then fell, which this doesn't cover.
+- **Check on the release build (retry-467), cool starts:**
+
+  | Game | On cadence | Hitches per 30 s | Fast | First generated / real, median |
+  | --- | --- | --- | --- | --- |
+  | Wind Waker HD | 99.6% | 6.4 | 100% | 19.3 / 36.0 ms |
+  | Mega Drive | 99.7% | 9.1 | 100% | 9.2 / 17.6 ms |
+  | NES, two runs | 99.9%, 99.9% | 1.8, 1.8 | 57%, 7% | 9.6 / 17.9, 17.4 / 25.7 ms |
+  | Ocarina | 96.4% | 41.7 | 100% | 11.2 / 36.2 ms |
+
+  - Ocarina's 96.4% is source gaps, not phase: its arrival held 11.2 ms before the slot throughout. The intervals off were planned 4-, 5- and 6-scan gaps where the game ran under 20 fps.
+  - NES's fast state still comes and goes (57% and 7%).
+- **Host tests:** Java passes. Python 408 of 410: `test_ps3_config_trial` (a temporary folder not yet empty at teardown) and `test_native_endpoint_provenance` (a subprocess timing out) failed on a heavily loaded Mac. Neither touches this change. Both passed on the same tree's earlier runs today. The Python runner itself had been removed from `/tmp/claude-501` along with the Thor adb wrapper, and was recreated in the session scratchpad.
+- **Next:** why NES falls from the fast state within seconds when Mega Drive holds it. Mega Drive's in-between image comes from the core with almost no GPU work, while NES runs the generator. Then the checkered wall's aliasing in Mario Kart 64's fast pans.
+
+November 7 **— 3.2.161 (235, `b445d1b8`): GameCube widening off for players (some screens stretched); static overlays for 3-D tested and held back.**
 
 - **Why this release:** the widescreen stream saw The Wind Waker's save prompt stretched from 4:3 to 16:9 in one run. So GameCube widening is off for players (`systems.gamecube.release = false`) until 2-D can never stretch. The frame generation code for players is 3.2.160's. The only additions are a QA marker that keeps hold-out images at full size (`/data/local/tmp/emufusion-holdout-full`) and the 3-D overlay default behind QA.
 - **Mario Kart 64 and Wipeout 64, live and full size.** Captured on the widescreen stream's route (weaving off the road into the wall). At full size the shipped generator shreds "LAP 1/3", the timer, the "8th", the mini-map and Lakitu's "REVERSE" sign when the scene swings under them. Scored at 320 wide the excess is small (Mario Kart 64 0.106%, 19% of frames over 0.1%), so the measure underweights thin HUD text.

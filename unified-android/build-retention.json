@@ -2,8 +2,8 @@
   "keep_per_flavor": 1,
   "minimum_age_days": 1,
   "pinned_sha256": {
-    "60676ca62aeced4dfdb47ad484c63eafd7f65530cd9396efd11924ac253ed15b": "Rollback 3.2.160 (234), released and Thor-tested 2026-11-07.",
-    "b445d1b82fc3f43f55e0d3295a26c05551ba43bfe7167d7e19d45a474eb30817": "Release 3.2.161 (235), GitHub v3.2.161, Thor-tested from a cool start 2026-11-07."
+    "b445d1b82fc3f43f55e0d3295a26c05551ba43bfe7167d7e19d45a474eb30817": "Rollback 3.2.161 (235), released and Thor-tested 2026-11-07.",
+    "1b82592e7c55e5b5a583d666c4dae08d2e87d5f020d8f3cfba97f904889f4e87": "Release 3.2.162 (236), GitHub v3.2.162, Thor-tested from a cool start 2026-11-07."
   },
   "retired_diagnostic_apks": {
     "docs/qa/android-portability-2026-10-07-ps3-input-lifetime/emufusion-ps3-input-lifetime.apk": {
@@ -1793,6 +1793,14 @@
     "unified-android/build/emufusion-3.2.161-phase2-phase3-qualification-a5d81576f0847b3476fcac28094d74c6f0c7f7d5ac237d84ad9f38bb0c23480e.apk": {
       "sha256": "a5d81576f0847b3476fcac28094d74c6f0c7f7d5ac237d84ad9f38bb0c23480e",
       "reason": "retry-464 candidate with the overlay default, held back; 3.2.161 shipped as retry-465"
+    },
+    "unified-android/build/emufusion-3.2.160-phase2-phase3-qualification-60676ca62aeced4dfdb47ad484c63eafd7f65530cd9396efd11924ac253ed15b.apk": {
+      "sha256": "60676ca62aeced4dfdb47ad484c63eafd7f65530cd9396efd11924ac253ed15b",
+      "reason": "Superseded 3.2.160 (234); 3.2.161 is the rollback for 3.2.162, 2026-11-07."
+    },
+    "unified-android/build/emufusion-3.2.160-phase2-phase3-qualification.apk": {
+      "sha256": "aec75de888cdf2abf276f323f6575aecad8d319a8500339548445865e86efb15",
+      "reason": "Superseded 3.2.160 (234); 3.2.161 is the rollback for 3.2.162, 2026-11-07."
     }
   }
 }
