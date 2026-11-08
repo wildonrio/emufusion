@@ -392,10 +392,10 @@ public final class TimelineSchedulerSwitch {
             // Unreadable settings keep the default.
         }
         coreHoldUntilGenerated = untilGenerated;
-        boolean restore = false;
+        boolean restore = true;
         try {
             if (context != null) restore = Settings.Global.getInt(
-                    context.getContentResolver(), QUEUE_RESTORE_AFTER_EARLY_GLOBAL, 0) != 0;
+                    context.getContentResolver(), QUEUE_RESTORE_AFTER_EARLY_GLOBAL, 1) != 0;
         } catch (RuntimeException ignored) {
             // Unreadable settings keep the default.
         }
@@ -943,9 +943,12 @@ public final class TimelineSchedulerSwitch {
 
     static boolean coreHoldUntilGenerated() { return coreHoldUntilGenerated; }
 
-    /** QA: BuiltinQueueReserve#setRestoreAfterEarlyRecovery (off by default). */
+    /**
+     * BuiltinQueueReserve#setRestoreAfterEarlyRecovery: on for the 3.2.164 candidate (Ocarina wide
+     * runs under 95% all gave the scan back early, then held its late bursts); QA 0 turns it off.
+     */
     static final String QUEUE_RESTORE_AFTER_EARLY_GLOBAL = "emufusion_framegen_queue_restore_after_early";
-    private static volatile boolean queueRestoreAfterEarly;
+    private static volatile boolean queueRestoreAfterEarly = true;
 
     static boolean queueRestoreAfterEarly() { return queueRestoreAfterEarly; }
 
