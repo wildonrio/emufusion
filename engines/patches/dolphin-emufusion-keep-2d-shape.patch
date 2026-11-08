@@ -17,28 +17,8 @@ index f7ba162..f942762 100644
    if (Libretro::Options::IsUpdated(Libretro::Options::gfx_settings::WIDESCREEN_HACK))
    {
      g_Config.bWidescreenHack = Libretro::Options::GetCached<bool>(
-diff --git a/Source/Core/VideoCommon/BPStructs.cpp b/Source/Core/VideoCommon/BPStructs.cpp
-index 180bc86..b297d38 100644
---- a/Source/Core/VideoCommon/BPStructs.cpp
-+++ b/Source/Core/VideoCommon/BPStructs.cpp
-@@ -36,6 +36,7 @@
- #include "VideoCommon/TextureCacheBase.h"
- #include "VideoCommon/TextureDecoder.h"
- #include "VideoCommon/VideoBackendBase.h"
-+#include "VideoCommon/VertexManagerBase.h"
- #include "VideoCommon/VideoCommon.h"
- #include "VideoCommon/VideoConfig.h"
- #include "VideoCommon/VideoEvents.h"
-@@ -303,6 +304,7 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager&
-       // Check if we are to copy from the EFB or draw to the XFB
-       if (PE_copy.copy_to_xfb == 0)
-       {
-+        g_vertex_manager->EmufusionNoteEfbCopy();
-         // bpmem.zcontrol.pixel_format to PixelFormat::Z24 is when the game wants to copy from
-         // ZBuffer (Zbuffer uses 24-bit Format)
-         bool is_depth_copy = bpmem.zcontrol.pixel_format == PixelFormat::Z24;
 diff --git a/Source/Core/VideoCommon/VertexManagerBase.cpp b/Source/Core/VideoCommon/VertexManagerBase.cpp
-index 2bc6d58..8d366e8 100644
+index 2bc6d58..1f4ef02 100644
 --- a/Source/Core/VideoCommon/VertexManagerBase.cpp
 +++ b/Source/Core/VideoCommon/VertexManagerBase.cpp
 @@ -3,6 +3,9 @@
@@ -59,16 +39,17 @@ index 2bc6d58..8d366e8 100644
  #include "VideoCommon/NativeVertexFormat.h"
  #include "VideoCommon/OpcodeDecoding.h"
  #include "VideoCommon/PerfQueryBase.h"
-@@ -323,10 +327,71 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
+@@ -323,10 +327,65 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
    }
  }
  
-+// EmuFusion: the 3D is wider, the picture is shown wider, and 2D must keep its shape. So 2D is drawn
-+// through a narrower viewport, which also clips what a game keeps just off its old screen. Not all of
-+// it: what comes before a copy of the frame to a texture is the input of an effect (the count comes
-+// from the frame before, which looks the same), and in a 3D frame whatever spans the screen is a sky,
-+// a fade or the frame itself going through an effect. A frame with no 3D at all is a 2D screen: it
-+// keeps its shape, with bars.
++// EmuFusion: the 3D is wider, the picture is shown wider, and 2D must keep its shape, so 2D is drawn
++// through a narrower viewport, which also clips what a game keeps just off its old screen. Two kinds
++// of 2D are the picture itself rather than something on it, and keep their width: a draw from a copy
++// of the frame (a blur, a glow, the frame going through an effect), and in a 3D frame an untextured
++// draw across the whole screen (a fade or letterbox bars), which has no picture to stretch. Anything
++// textured from the game's own art, panels and text included, is narrowed. A frame with no 3D is a 2D
++// screen and keeps its shape, with bars.
 +bool VertexManagerBase::EmufusionBatchCoversScreen() const
 +{
 +  const NativeVertexFormat* format = VertexLoaderManager::GetCurrentVertexFormat();
@@ -96,21 +77,16 @@ index 2bc6d58..8d366e8 100644
 +  return high - low >= 1.8f;
 +}
 +
-+void VertexManagerBase::EmufusionPlace2D()
++void VertexManagerBase::EmufusionPlace2D(bool textured, bool frame_copy)
 +{
 +  const float narrower = g_ActiveConfig.fEmufusion2DScale;
 +  if (narrower >= 1.0f)
 +    return;
 +  float wanted = 1.0f;
 +  if (xfmem.projection.type == ProjectionType::Perspective)
-+  {
 +    m_emufusion_saw_3d = true;
-+  }
-+  else if (m_emufusion_2d_batches++ >= m_emufusion_2d_effects &&
-+           !(m_emufusion_scene_3d && EmufusionBatchCoversScreen()))
-+  {
++  else if (!frame_copy && (textured || !m_emufusion_scene_3d || !EmufusionBatchCoversScreen()))
 +    wanted = narrower;
-+  }
 +  auto& system = Core::System::GetInstance();
 +  auto& shader_manager = system.GetVertexShaderManager();
 +  if (shader_manager.emufusion_2d_scale != wanted)
@@ -124,42 +100,53 @@ index 2bc6d58..8d366e8 100644
  {
    const auto result = m_flush_statistics;
    m_flush_statistics = {};
-+  m_emufusion_2d_effects = m_emufusion_2d_before_copy;
-+  m_emufusion_2d_batches = m_emufusion_2d_before_copy = 0;
 +  m_emufusion_scene_3d = m_emufusion_saw_3d;
 +  m_emufusion_saw_3d = false;
    return result;
  }
  
-@@ -596,6 +661,7 @@ void VertexManagerBase::Flush()
+@@ -562,6 +621,7 @@ void VertexManagerBase::Flush()
+   std::vector<std::string> texture_names;
+   Common::SmallVector<u32, 8> texture_units;
+   std::array<SamplerState, 8> samplers;
++  bool emufusion_frame_copy = false;
+   if (!m_cull_all)
+   {
+     if (!g_ActiveConfig.bGraphicMods)
+@@ -571,6 +631,7 @@ void VertexManagerBase::Flush()
+         const auto cache_entry = g_texture_cache->Load(i);
+         if (!cache_entry)
+           continue;
++        emufusion_frame_copy |= cache_entry->IsCopy();
+         const float custom_tex_scale = cache_entry->GetWidth() / float(cache_entry->native_width);
+         samplers[i] = TextureCacheBase::GetSamplerState(
+             i, custom_tex_scale, cache_entry->is_custom_tex, cache_entry->has_arbitrary_mips);
+@@ -583,6 +644,7 @@ void VertexManagerBase::Flush()
+         const auto cache_entry = g_texture_cache->Load(i);
+         if (cache_entry)
+         {
++          emufusion_frame_copy |= cache_entry->IsCopy();
+           if (!Common::Contains(texture_names, cache_entry->texture_info_name))
+           {
+             texture_names.push_back(cache_entry->texture_info_name);
+@@ -596,6 +658,7 @@ void VertexManagerBase::Flush()
        }
      }
    }
-+  EmufusionPlace2D();
++  EmufusionPlace2D(used_textures.Count() > 0, emufusion_frame_copy);
    vertex_shader_manager.SetConstants(texture_names, xf_state_manager);
    if (!bpmem.genMode.zfreeze)
    {
 diff --git a/Source/Core/VideoCommon/VertexManagerBase.h b/Source/Core/VideoCommon/VertexManagerBase.h
-index 715dbee..77dc23f 100644
+index 715dbee..dbeba01 100644
 --- a/Source/Core/VideoCommon/VertexManagerBase.h
 +++ b/Source/Core/VideoCommon/VertexManagerBase.h
-@@ -124,6 +124,7 @@ public:
-   void DoState(PointerWrap& p);
- 
-   FlushStatistics ResetFlushAspectRatioCount();
-+  void EmufusionNoteEfbCopy() { m_emufusion_2d_before_copy = m_emufusion_2d_batches; }
- 
-   // State setters, called from register update functions.
-   void SetRasterizationStateChanged() { m_rasterization_state_changed = true; }
-@@ -196,6 +197,13 @@ protected:
+@@ -196,6 +196,10 @@ protected:
  
    BitSet32 UsedTextures() const;
  
-+  void EmufusionPlace2D();
++  void EmufusionPlace2D(bool textured, bool frame_copy);
 +  bool EmufusionBatchCoversScreen() const;
-+  u32 m_emufusion_2d_batches = 0;
-+  u32 m_emufusion_2d_before_copy = 0;
-+  u32 m_emufusion_2d_effects = 0;
 +  bool m_emufusion_saw_3d = false;
 +  bool m_emufusion_scene_3d = false;
    u8* m_cur_buffer_pointer = nullptr;

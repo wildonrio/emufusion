@@ -1456,7 +1456,7 @@ case "$ENGINE" in
             bb52313363b569cf87ad57eb8673d76bc7a8290b68b75eb94f3b41292c593624
         apply_locked_patch "$staged_source" \
             engines/patches/dolphin-emufusion-keep-2d-shape.patch \
-            b1632104908f582f64db767c7ff17916bae23ae4f14642d15cb8020afc0184b6
+            19f40f90d04a76d01d4c1de17e40a9b73e5beff0018f3ea91cea05bea28f6a48
 
         while IFS='|' read -r dep_path dep_repository dep_commit dep_sha; do
             [ -n "$dep_path" ] || continue
@@ -1544,7 +1544,7 @@ DOLPHIN_DEPENDENCIES
         rm -f "$stripped_core"
         normalized_sha=$(shasum -a 256 "$normalized_core" | awk '{print $1}')
         if [ "$normalized_sha" != \
-                17977691339b434812ca5dec9b45759b3a777c63e441447043c4b4e465fe3fc2 ]; then
+                ce0d325d156ede4520150496a1910192506d9d4fa0971af1a92919f7e356ea4b ]; then
             printf 'Normalized Dolphin core checksum mismatch: %s\n' \
                 "$normalized_sha" >&2
             rm -rf "$candidate_dir"

@@ -90,7 +90,7 @@ DOLPHIN_REPOSITORY = "https://github.com/libretro/dolphin"
 DOLPHIN_COMMIT = "0ff12a5a2835762e0665afe6a161a648b433f996"
 DOLPHIN_ARCHIVE_SHA = "3c6698d6da772065194be118871ce24620f0fdc76894bc568e34d48f93de7494"
 DOLPHIN_DEPENDENCY_LOCK = "engines/dolphin-source-lock.json"
-DOLPHIN_ARTIFACT_SHA = "17977691339b434812ca5dec9b45759b3a777c63e441447043c4b4e465fe3fc2"
+DOLPHIN_ARTIFACT_SHA = "ce0d325d156ede4520150496a1910192506d9d4fa0971af1a92919f7e356ea4b"
 DOLPHIN_PATCH = "engines/patches/dolphin-libretro-submit-rendered-duplicate-xfb.patch"
 DOLPHIN_PATCH_SHA = "5dd844b8546eea62706a4dd84304077cddaf83c68987459a532f6055f2f5919b"
 DOLPHIN_STACK_PATCH = "engines/patches/dolphin-libretro-own-signal-stack.patch"
@@ -100,7 +100,7 @@ DOLPHIN_DESCRIPTOR_PATCH_SHA = "d508e5c96869b925a8a1c01139c76ee2ae13abcd74a0475c
 DOLPHIN_PRIORITY_PATCH = "engines/patches/dolphin-libretro-low-queue-priority.patch"
 DOLPHIN_PRIORITY_PATCH_SHA = "bb52313363b569cf87ad57eb8673d76bc7a8290b68b75eb94f3b41292c593624"
 DOLPHIN_KEEP_2D_PATCH = "engines/patches/dolphin-emufusion-keep-2d-shape.patch"
-DOLPHIN_KEEP_2D_PATCH_SHA = "b1632104908f582f64db767c7ff17916bae23ae4f14642d15cb8020afc0184b6"
+DOLPHIN_KEEP_2D_PATCH_SHA = "19f40f90d04a76d01d4c1de17e40a9b73e5beff0018f3ea91cea05bea28f6a48"
 SCUMMVM_COMMIT = "6aa8fa9b6f9e5a7ae670cc355af1b727ff75c995"
 SCUMMVM_ARCHIVE_SHA = "8e2080a442b4e78c045795714ac4b699023f631e2045fb133d496cd29419fa67"
 SCUMMVM_DEPENDENCY_LOCK = "engines/scummvm-source-lock.json"
@@ -623,7 +623,7 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                         "normalizedByRemovingSection": ".note.gnu.build-id",
                         "normalizedArtifactSha256": DOLPHIN_ARTIFACT_SHA,
                         "rawBuildIds": [
-                            "c4d6d4b8f59d7b0da24455612c1299b07dec195b",
+                            "4f14b3e754d4773794a76f22aca4fb146ceb9a6a",
                         ],
                     }
                     if lock.get("cmakeOptions") != expected_options:
@@ -665,7 +665,9 @@ def validate(path: Path, *, verify_artifacts: bool = False,
                         "sha256": DOLPHIN_KEEP_2D_PATCH_SHA,
                         "purpose": (
                             "Widescreen Hack: when the picture is shown wider than the game drew it, draw 2D "
-                            "narrower by the same amount so it keeps its shape. Off unless the emufusion_ws_2d "
+                            "narrower by the same amount so it keeps its shape. Only two kinds of 2D keep their "
+                            "width: draws from a copy of the frame (effects), and in a 3D frame untextured draws "
+                            "across the whole screen (fades, letterbox bars). Off unless the emufusion_ws_2d "
                             "option is set."
                         ),
                     }]

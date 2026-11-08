@@ -26,9 +26,9 @@
     "ENABLE_QT": false,
     "androidMaxPageSize": 16384,
     "normalizedByRemovingSection": ".note.gnu.build-id",
-    "normalizedArtifactSha256": "17977691339b434812ca5dec9b45759b3a777c63e441447043c4b4e465fe3fc2",
+    "normalizedArtifactSha256": "ce0d325d156ede4520150496a1910192506d9d4fa0971af1a92919f7e356ea4b",
     "rawBuildIds": [
-      "c4d6d4b8f59d7b0da24455612c1299b07dec195b"
+      "4f14b3e754d4773794a76f22aca4fb146ceb9a6a"
     ]
   },
   "patches": [
@@ -54,8 +54,8 @@
     },
     {
       "path": "engines/patches/dolphin-emufusion-keep-2d-shape.patch",
-      "sha256": "b1632104908f582f64db767c7ff17916bae23ae4f14642d15cb8020afc0184b6",
-      "purpose": "Widescreen Hack: when the picture is shown wider than the game drew it, draw 2D narrower by the same amount so it keeps its shape. Off unless the emufusion_ws_2d option is set."
+      "sha256": "19f40f90d04a76d01d4c1de17e40a9b73e5beff0018f3ea91cea05bea28f6a48",
+      "purpose": "Widescreen Hack: when the picture is shown wider than the game drew it, draw 2D narrower by the same amount so it keeps its shape. Only two kinds of 2D keep their width: draws from a copy of the frame (effects), and in a 3D frame untextured draws across the whole screen (fades, letterbox bars). Off unless the emufusion_ws_2d option is set."
     }
   ],
   "dependencies": [
