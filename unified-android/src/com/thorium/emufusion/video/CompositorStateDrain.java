@@ -27,12 +27,14 @@ public final class CompositorStateDrain {
     public static final long MIN_SPACING_NS = 15_000_000_000L;
     public static final long MAX_SPACING_NS = 240_000_000_000L;
     public static final long SHORT_STAY_NS = 4_000_000_000L;
+    /** Still pipelined this long after a drain: it did nothing. */
+    public static final long VERDICT_NS = 2_000_000_000L;
 
     private boolean fast, known;
     private long pipelinedSinceNs, fastSinceNs;
     private long lastDrainNs = Long.MIN_VALUE;
     private long spacingNs = MIN_SPACING_NS;
-    private boolean awaitingVerdict;
+    private boolean awaitingVerdict, retried;
     private long drains;
 
     /** A frame reached the panel: was it shown in the scan right after its latch? */
@@ -44,6 +46,7 @@ public final class CompositorStateDrain {
             pipelinedSinceNs = actualNs;
             if (known && awaitingVerdict) {
                 awaitingVerdict = false;
+                retried = false;
                 long lasted = actualNs - fastSinceNs;
                 if (lasted < SHORT_STAY_NS) spacingNs = Math.min(MAX_SPACING_NS, spacingNs * 2L);
                 else spacingNs = Math.max(MIN_SPACING_NS, spacingNs / 2L);
@@ -53,16 +56,32 @@ public final class CompositorStateDrain {
         known = true;
     }
 
-    /** A generated frame about to be queued: whether it stays out, ending the pipelined state. */
+    /**
+     * A generated frame about to be queued: whether it stays out, ending the pipelined state.
+     * One that brings no fast state within {@link #VERDICT_NS} is tried once more straight
+     * away; only a second failure doubles the spacing. Doubling at once left NES slow for whole
+     * 16-s windows after a drain early in a run that did nothing, while the next, 30 s later,
+     * worked (Thor, 2026-11-07, system trace).
+     */
     public boolean drain(long nowNs) {
         if (fast || !known || nowNs - pipelinedSinceNs < DRAIN_AFTER_NS) return false;
-        if (lastDrainNs != Long.MIN_VALUE && nowNs - lastDrainNs < spacingNs) return false;
         if (awaitingVerdict) {
+            if (nowNs - lastDrainNs < VERDICT_NS) return false;
             // The last one never reached the fast state.
             awaitingVerdict = false;
+            if (!retried) {
+                retried = true;
+                return leaveOut(nowNs);
+            }
+            retried = false;
             spacingNs = Math.min(MAX_SPACING_NS, spacingNs * 2L);
             return false;
         }
+        if (lastDrainNs != Long.MIN_VALUE && nowNs - lastDrainNs < spacingNs) return false;
+        return leaveOut(nowNs);
+    }
+
+    private boolean leaveOut(long nowNs) {
         lastDrainNs = nowNs;
         awaitingVerdict = true;
         ++drains;

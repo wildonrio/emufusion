@@ -88,9 +88,13 @@ public final class CompositorStateDrainTest {
         pipelined(drain, 100L * SECOND);
         check(drain.drain(102L * SECOND), "left out");
         pipelined(drain, 103L * SECOND);
-        check(!drain.drain(117L * SECOND), "no fast state came of it");
+        check(!drain.drain(103L * SECOND), "too soon to tell");
+        check(drain.drain(104L * SECOND), "no fast state came of it: once more at once");
+        check(drain.spacingNs() == 15L * SECOND, "not doubled yet");
+        check(!drain.drain(106L * SECOND), "nor of that");
         check(drain.spacingNs() == 30L * SECOND, "doubled");
-        check(drain.drain(132L * SECOND), "tries again later");
+        check(!drain.drain(120L * SECOND), "spaced");
+        check(drain.drain(134L * SECOND), "tries again later");
     }
 
     private static void aMiddlingStayKeepsTheSpacing() {
