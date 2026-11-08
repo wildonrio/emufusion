@@ -34,7 +34,7 @@ public final class CompositorStateDrain {
     private long pipelinedSinceNs, fastSinceNs;
     private long lastDrainNs = Long.MIN_VALUE;
     private long spacingNs = MIN_SPACING_NS;
-    private boolean awaitingVerdict, retried;
+    private boolean awaitingVerdict, retried, retryDue;
     private long drains;
 
     /** A frame reached the panel: was it shown in the scan right after its latch? */
@@ -46,10 +46,19 @@ public final class CompositorStateDrain {
             pipelinedSinceNs = actualNs;
             if (known && awaitingVerdict) {
                 awaitingVerdict = false;
-                retried = false;
                 long lasted = actualNs - fastSinceNs;
-                if (lasted < SHORT_STAY_NS) spacingNs = Math.min(MAX_SPACING_NS, spacingNs * 2L);
-                else spacingNs = Math.max(MIN_SPACING_NS, spacingNs / 2L);
+                if (lasted >= SHORT_STAY_NS) {
+                    retried = false;
+                    spacingNs = Math.max(MIN_SPACING_NS, spacingNs / 2L);
+                } else if (!retried) {
+                    // Fell straight back (NES at the start of play, 2026-11-07: fast for a few
+                    // seconds, then slow for the doubled 30 s): once more before doubling.
+                    retried = true;
+                    retryDue = true;
+                } else {
+                    retried = false;
+                    spacingNs = Math.min(MAX_SPACING_NS, spacingNs * 2L);
+                }
             }
         }
         fast = now;
@@ -58,13 +67,18 @@ public final class CompositorStateDrain {
 
     /**
      * A generated frame about to be queued: whether it stays out, ending the pipelined state.
-     * One that brings no fast state within {@link #VERDICT_NS} is tried once more straight
-     * away; only a second failure doubles the spacing. Doubling at once left NES slow for whole
-     * 16-s windows after a drain early in a run that did nothing, while the next, 30 s later,
-     * worked (Thor, 2026-11-07, system trace).
+     * One that brings no fast state within {@link #VERDICT_NS}, or one shorter than
+     * {@link #SHORT_STAY_NS}, is tried once more as soon as the pipelined state has lasted
+     * {@link #DRAIN_AFTER_NS}; only a second failure doubles the spacing. Doubling at once left
+     * NES slow for whole 16-s windows after a drain early in a run that did nothing, while the
+     * next, 30 s later, worked (Thor, 2026-11-07, system trace).
      */
     public boolean drain(long nowNs) {
         if (fast || !known || nowNs - pipelinedSinceNs < DRAIN_AFTER_NS) return false;
+        if (retryDue) {
+            retryDue = false;
+            return leaveOut(nowNs);
+        }
         if (awaitingVerdict) {
             if (nowNs - lastDrainNs < VERDICT_NS) return false;
             // The last one never reached the fast state.

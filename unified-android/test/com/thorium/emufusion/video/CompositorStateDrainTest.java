@@ -61,9 +61,14 @@ public final class CompositorStateDrainTest {
         check(drain.drain(102L * SECOND), "left out");
         fast(drain, 102L * SECOND);
         pipelined(drain, 105L * SECOND);
+        check(drain.spacingNs() == CompositorStateDrain.MIN_SPACING_NS, "not doubled yet");
+        check(!drain.drain(106L * SECOND), "the pipelined state must last first");
+        check(drain.drain(107L * SECOND), "once more");
+        fast(drain, 107L * SECOND);
+        pipelined(drain, 108L * SECOND);
         check(drain.spacingNs() == 2L * CompositorStateDrain.MIN_SPACING_NS, "doubled");
         check(!drain.drain(120L * SECOND), "not at the old spacing");
-        check(drain.drain(132L * SECOND), "at the new spacing");
+        check(drain.drain(137L * SECOND), "at the new spacing");
     }
 
     private static void spacingHalvesAgainOnceItLasts() {
@@ -72,13 +77,16 @@ public final class CompositorStateDrainTest {
         check(drain.drain(102L * SECOND), "first");
         fast(drain, 102L * SECOND);
         pipelined(drain, 104L * SECOND);
+        check(drain.drain(106L * SECOND), "once more");
+        fast(drain, 106L * SECOND);
+        pipelined(drain, 107L * SECOND);
         check(drain.spacingNs() == 30L * SECOND, "doubled");
-        check(drain.drain(132L * SECOND), "second");
-        fast(drain, 132L * SECOND);
-        pipelined(drain, 150L * SECOND);
+        check(drain.drain(136L * SECOND), "second");
+        fast(drain, 136L * SECOND);
+        pipelined(drain, 154L * SECOND);
         check(drain.spacingNs() == 15L * SECOND, "over the short stay: halved");
-        check(drain.drain(152L * SECOND), "third");
-        fast(drain, 152L * SECOND);
+        check(drain.drain(156L * SECOND), "third");
+        fast(drain, 156L * SECOND);
         pipelined(drain, 200L * SECOND);
         check(drain.spacingNs() == 15L * SECOND, "never under the minimum");
     }
