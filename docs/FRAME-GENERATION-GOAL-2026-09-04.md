@@ -268,6 +268,32 @@ Nothing is at 10/10 on all three measures yet. Over the last two gates the compo
    - The 2026-10-27 replay dumps (`pca/big-*`) and evaluation scripts were in the session scratchpad, which a reboot cleared. Re-dumping needs the Thor over adb (replay bench, panels off). The ports (`genport/phase.py` options `DENS_SHRINK`, `DENS_TAPS`; `endpoint.py` `hessian`, `brk`, `reject`; `ocv.py`) are kept in `~/Code/emufusion-qa-tools/genport`.
 8. **A3** Owner visual check of `LATE_NEAR` holds in fast 3-D scenes (Sonic Adventure, Star Fox 64, Mario Kart Wii).
 
+November 8 **— After 3.2.163: at play speed the image check cuts Mario Kart 64's frames with invented content from 29-56% to 4-8%. Ocarina wide is GPU contention: its generated images run late at the early scan, and the queue's early recovery and hold-off make it worse; a core hold doesn't fix it reliably.**
+
+- **Mario Kart 64 at play speed, image check off and on** (held turns on the widescreen stream's route, 320-wide hold-out of the shipped level, `fg/capdrive2.py`; 3.2.163 and retry-471, whose generator is the same):
+
+  | Image check | Frames over 0.1% invented | Mean excess area |
+  | --- | --- | --- |
+  | Off (wck0b, wck0c) | 56%, 29% | 0.362%, 0.100% |
+  | On (wck1a, wck1b) | 8%, 4% | 0.024%, 0.008% |
+
+  The worst frame with the check off (wck0b 0013, driving into the wall while Lakitu shows REVERSE) has the checkered wall shredded, the sign and the mini-map icons scattered, and the 4th portrait smeared. Next: whether the check costs smoothness in play (3-D systems, paired runs), then a default.
+- **Ocarina wide, why it isn't smooth.** Narrow, a generated image's plan to done is 2.8 ms with 0-11 of ~470 finishing after the compositor's latch; wide, 4.8-5.0 ms with 155-215 after it (attract-demo pairs in fresh QA sessions, `fg/gwork.py`). The generator's own GPU time per pair is about the same (3.8-4.4 ms, timer queries), so the wait is behind the core's heavier wide rendering. Our context is already high priority (granted 0x3101), and the GPU doesn't preempt.
+  - What decides each run is the queue reserve (`BuiltinQueueReserve`), Ocarina in the owner's namespace as in the gate:
+
+    | Run | Core hold (QA) | On cadence | Hitches per 30 s | First generated / real, median | Deepenings, early recoveries, held | Generated after latch |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | g9oot (gate) | none | 94.3% | 68.1 | 11.1 / 36.1 ms | 2, 2, 8 | 396 |
+    | ch0a | none | 99.2% | 9.1 | 19.5 / 44.5 ms | 1, 0, 0 | 0 |
+    | ch0b | none | 98.7% | 15.7 | 11.2 / 36.2 ms | 2, 2, 0 | 89 |
+    | ah0a | none | 88.9% | 132.1 | 11.2 / 36.2 ms | 1, 1, 7 | 204 |
+    | ch6a | 6 ms fixed | 98.8% | 13.9 | 11.1 / 36.1 ms | 1, 1, 1 | 1 |
+    | ch6b | 6 ms fixed | 99.0% | 12.2 | 11.3 / 36.3 ms | 3, 3, 0 | 238 |
+    | ah8a | until generated, cap 8 ms | 98.7% | 15.7 | 19.5 / 44.5 ms | 1, 0, 0 | 0 |
+
+  - Runs that stayed a scan deeper were even (+8.3 ms); the worst runs gave the scan back early (frames shown a scan early at the extra depth), and then the hold-off held 7-8 bursts of late frames. A hold after the core's present (QA `emufusion_framegen_core_hold_us`, 471/472) helped once and not the next time, so it stays off. Most source-rate dips in these runs are the game's own (4-7 two-second bins under 20 fps).
+  - Next: an early recovery whose bursts of late frames come back during the hold-off should restore the depth (QA first; the hold-off was written for Wind Waker HD's early judder, which the early guard now handles), then the gate.
+
 November 8 (latest) **— 3.2.163 (237, `5c3099d7`, retry-470): the widescreen prompt held NES in the slower compositor state for its first 10-20 s; with it redrawn only on change, NES is fast from its first second. A short fast stay is retried before the drain backs off.**
 
 - **Why NES's fast state came and went.** Every SMB3 run on retry-468 started slow and stayed slow for 10-13 s. The drains at +3 and +5 s failed, which doubled the drain spacing to 30 s, so the fast state only came by itself at +20-22 s. A layer poller (`fg/sfpoll.py`: each app-window layer's frames in the last second, from `dumpsys SurfaceFlinger --latency` against the game surface) showed the app window queuing 75-99 frames a second until +7 s, then none. That was the widescreen prompt: it redrew every vsync (`postInvalidateOnAnimation`) for its 7.7 s of glow and fade. The widescreen stream now redraws it only when it changes, six times per prompt or hint (ddaa09c).
