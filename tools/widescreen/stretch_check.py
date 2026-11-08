@@ -4,7 +4,8 @@
 Both are full-screen captures of the same moment, one narrow and one wide. Widening must add picture at
 the sides and leave everything already there at its own size, so the middle of the narrow capture should
 match the middle of the wide one at a horizontal scale of 1.0. A picture stretched from 4:3 to 16:9
-matches at about 1.33. Prints the best scale and how well it matched; a weak match means the two
+matches at about 1.33. It compares horizontal edges, so smooth skies and fades cannot match at every
+scale. Prints the best scale, how well it matched and the match at 1.00; a weak match means the two
 moments differ and the pair proves nothing.
 """
 import sys
@@ -16,7 +17,11 @@ SCALES = np.round(np.arange(0.90, 1.46, 0.01), 2)
 
 
 def grey(path):
-    return np.asarray(Image.open(path).convert('L'), dtype=np.float32)
+    image = np.asarray(Image.open(path).convert('L'), dtype=np.float32)
+    # Horizontal edges: a stretch moves them apart, while smooth skies and fades carry nothing to measure.
+    edges = np.zeros_like(image)
+    edges[:, 1:] = np.abs(np.diff(image, axis=1))
+    return edges
 
 
 def best_scale(narrow, wide):
@@ -38,7 +43,9 @@ def best_scale(narrow, wide):
         sample = sample - sample.mean()
         denominator = np.sqrt((sample * sample).sum() * (target * target).sum())
         results.append((float((sample * target).sum() / denominator) if denominator else 0.0, float(scale)))
-    return max(results)
+    at_one = next(match for match, scale in results if scale == 1.0)
+    match, scale = max(results)
+    return match, scale, at_one
 
 
 def main():
@@ -47,10 +54,17 @@ def main():
         sys.exit(__doc__)
     worst = 0.0
     for narrow_path, wide_path in zip(paths[::2], paths[1::2]):
-        match, scale = best_scale(grey(narrow_path), grey(wide_path))
-        verdict = 'no match' if match < 0.6 else 'STRETCHED' if scale > 1.08 else 'ok'
-        print(f'{scale:.2f} match {match:.2f} {verdict}  {narrow_path} {wide_path}')
-        if match >= 0.6:
+        match, scale, at_one = best_scale(grey(narrow_path), grey(wide_path))
+        if match < 0.5:
+            verdict = 'no match'
+        elif scale > 1.08 and scale < SCALES[-1] and match - at_one > 0.15:
+            verdict = 'STRETCHED'
+        elif scale <= 1.08:
+            verdict = 'ok'
+        else:
+            verdict = 'unclear'
+        print(f'{scale:.2f} match {match:.2f} (at 1.00: {at_one:.2f}) {verdict}  {narrow_path} {wide_path}')
+        if verdict == 'STRETCHED':
             worst = max(worst, scale)
     return 1 if worst > 1.08 else 0
 
