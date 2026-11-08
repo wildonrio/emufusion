@@ -1789,6 +1789,10 @@
     "unified-android/build/emufusion-3.2.159-phase2-phase3-qualification.apk": {
       "sha256": "a7adfbb199fdd074c080c637d72e1bac3e98cff5b3dd7e73031fbab6f13b39d8",
       "reason": "Superseded 3.2.159 (233); 3.2.160 is the rollback for 3.2.161, 2026-11-07."
+    },
+    "unified-android/build/emufusion-3.2.161-phase2-phase3-qualification-a5d81576f0847b3476fcac28094d74c6f0c7f7d5ac237d84ad9f38bb0c23480e.apk": {
+      "sha256": "a5d81576f0847b3476fcac28094d74c6f0c7f7d5ac237d84ad9f38bb0c23480e",
+      "reason": "retry-464 candidate with the overlay default, held back; 3.2.161 shipped as retry-465"
     }
   }
 }

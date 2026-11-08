@@ -292,7 +292,8 @@ November 7 (latest) **— 3.2.161 (235, `b445d1b8`): GameCube widening off for p
   | Wind Waker HD | 99.3% | 11.8 | 100% | 19.4 / 36.0 ms |
   | Mega Drive | 99.9% | 3.7 | 41% | 17.2 / 25.6 ms |
 
-- **Next:** Ocarina and NSMBU Deluxe with the overlay on and off, turn about. Then Lakitu's sign and big fast sprites over a swinging scene at full size, NES and NSMBU Deluxe's fast state, and Ocarina's phase drift.
+- **After the release, same hour, turn about, on 3.2.161 (QA -1 for the overlay):** Ocarina 97.9% and 94.5% with it, 99.4% and 92.7% without; its pinned phase wandered in the second pair either way, so that was the drop. NSMBU Deluxe 99.8% with it, 99.7% without. So the overlay goes back on by default for 3-D in the tree for 3.2.162.
+- **Next:** Ocarina's phase drift: about half its runs lose the firmware's pin for 10-20 s. Then Lakitu's sign and big fast sprites over a swinging scene at full size, NES and NSMBU Deluxe's fast state, and Ocarina's phase drift.
 
 November 7 **— 3.2.160 (234, `60676ca6`, retry-459): the fast state was the mask; a half-plane jump in the halfway image, fixed; two reported N64 artifacts closed, and two new ones open.**
 
